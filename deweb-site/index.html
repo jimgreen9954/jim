@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TAPELIQUID</title>
+  <meta name="description" content="BEM spot and a shared perpetual on BSC and X Layer, with a TapeOut wafer." />
+  <link rel="icon" href="favicon.svg" />
+  <style>
+    :root { color-scheme: light; --paper: #f7f5f0; --ink: #1a140c; --gold: #a6843d; --card: #fffdf8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.6 "IBM Plex Sans", "Noto Sans SC", sans-serif; }
+    main { max-width: 760px; margin: 0 auto; padding: 28px 16px 64px; }
+    header { display: flex; gap: 14px; align-items: center; }
+    img { width: 64px; height: 64px; object-fit: cover; border: 1px solid var(--gold); }
+    h1 { font-family: Georgia, serif; font-style: italic; font-weight: 560; font-size: 42px; line-height: 1; margin: 0; }
+    .kicker { color: var(--gold); letter-spacing: 0.16em; font-size: 12px; margin: 0 0 4px; }
+    a { color: inherit; }
+    section { border-top: 1px solid var(--gold); margin-top: 22px; padding-top: 14px; }
+    h2 { font-family: Georgia, serif; font-style: italic; font-size: 26px; margin: 0 0 8px; }
+    p, li { margin: 0 0 8px; }
+    code, .addr { font-family: ui-monospace, monospace; font-size: 13px; word-break: break-all; }
+    .card { background: var(--card); border: 1px solid var(--gold); padding: 12px 14px; margin: 8px 0; }
+    .go { display: inline-block; min-height: 44px; line-height: 44px; padding: 0 16px; background: var(--ink); color: var(--paper); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <img src="mark.jpg" alt="" />
+      <div>
+        <p class="kicker">X LAYER × TAPEOUT</p>
+        <h1>TAPELIQUID</h1>
+      </div>
+    </header>
+    <p>BEM 现货、两本共享永续账，和一枚已经流片的 X Layer 晶圆。订单在合约里，不在这个静态页里。</p>
+    <p><a class="go" href="https://clover-cedar-solar-prism.grok.me/">打开交易台</a></p>
+
+    <section>
+      <h2>这份页面</h2>
+      <p>DeWeb 只保存文件，不能跑交易台后面的服务器。钱包下单、吃单、返佣登记，用上面的交易台。这一页给评审和访客核对链上地址。</p>
+    </section>
+
+    <section>
+      <h2>处理器</h2>
+      <div class="card">
+        <p>名字 TAPELIQUID。工厂部署在 X Layer。</p>
+        <p>晶体管上限 2,100,000。已铸造 261。单价 0.00066 OKB。协议费 0.00066 OKB。</p>
+        <p>电路 <span class="addr">0x69F663931209096037474d7C20402232E5C762cA</span></p>
+        <p>晶体管 <span class="addr">0x3FA393d3081AcCff9E7989619B688235F6d3EE3F</span></p>
+        <p>已流片电路 #1。部署并持有的钱包 <span class="addr">0x585d2DF4B8fDDA783B074555e6F3787e3fCB39D7</span></p>
+        <p><a href="https://tapeout.net/#l2/xlayer/0x69F663931209096037474d7C20402232E5C762cA">在 TapeOut 打开</a></p>
+      </div>
+    </section>
+
+    <section>
+      <h2>交易</h2>
+      <div class="card">
+        <p>现货是 BSC 上 PancakeSwap 的 BEM / USDT。币在你钱包里，签了才动。</p>
+        <p>BSC 永续，全站一份，保证金 USDT。</p>
+        <p class="addr">0xB98D14333a93D49a4E05478d002FC3944D88A3b7</p>
+        <p>X Layer 永续，全站一份，保证金 USDT0，gas 是 OKB。标记价从 BSC 的 BEM 池推进。</p>
+        <p class="addr">0xa0344f5B0518D31B7CFa6CaC266b4eDd289821ce</p>
+        <p>标记价 <span class="addr">0xc35C8cB9FFaC92F25cAFaEdC82F03144b24bCb1d</span></p>
+        <p>同一条链上的人能看见并吃彼此的单。两条链不能合成一笔。撮合和撤单各收保证金的 0.2%。推荐码目前只登在 X Layer 这份合约上。</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>代码</h2>
+      <p><a href="https://github.com/jimgreen9954/jim">github.com/jimgreen9954/jim</a></p>
+    </section>
+  </main>
+</body>
+</html>

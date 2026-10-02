@@ -1,32 +1,37 @@
 import { useEffect, useState } from "react";
 import { copy } from "@/lib/copy";
+import { pretty } from "@/lib/bsc";
 import { useExchange } from "@/lib/exchange-store";
 import { nickOf, readNicks, writeNick } from "@/lib/nicks";
-import { bindCode, claimRebate, claimTier, CLAIM_STEPS, deployPerp, hasRebates, lookupCode, OLD_CLAIM_STEPS, readRebate, registerCode, savedRebate, usdtText, usdtUnits } from "@/lib/perp";
+import { getRebateBook, type RebateBook } from "@/lib/rebate-index";
+import {
+  bindCode,
+  bookOf,
+  claimRebate,
+  claimTier,
+  CLAIM_STEPS,
+  codeText,
+  hasRebates,
+  lookupCode,
+  OLD_CLAIM_STEPS,
+  readRebate,
+  registerCode,
+  type Desk,
+} from "@/lib/perp";
 
 const zero = "0x0000000000000000000000000000000000000000";
-
-function codeText(code: string): string {
-  if (!code || /^0x0{64}$/.test(code)) return "";
-  const raw = code.slice(2).replace(/(00)+$/, "");
-  if (!raw) return "";
-  const bytes = raw.match(/.{2}/g)?.map((h) => Number.parseInt(h, 16)) ?? [];
-  try {
-    return new TextDecoder().decode(new Uint8Array(bytes));
-  } catch {
-    return "";
-  }
-}
 
 export function MineDesk({
   account,
   busy,
   addresses,
+  chain,
   run,
 }: {
   account: string | null;
   busy: boolean;
   addresses: string[];
+  chain: Desk;
   run: (task: (from: string) => Promise<unknown>) => Promise<void>;
 }) {
   const lang = useExchange((s) => s.lang);
@@ -35,7 +40,6 @@ export function MineDesk({
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [code, setCode] = useState("");
   const [bind, setBind] = useState("");
-  const [perp, setPerp] = useState("");
   const [live, setLive] = useState(false);
   const [accrued, setAccrued] = useState(0n);
   const [referrer, setReferrer] = useState("");
@@ -44,6 +48,9 @@ export function MineDesk({
   const [who, setWho] = useState("");
   const [ask, setAsk] = useState("");
   const [bindNote, setBindNote] = useState("");
+  const [book, setBook] = useState<RebateBook | null>(null);
+  const perp = bookOf(chain);
+  const dec = chain === "xlayer" ? 6 : 18;
 
   useEffect(() => {
     const saved = readNicks();
@@ -54,18 +61,16 @@ export function MineDesk({
   }, [addresses]);
 
   useEffect(() => {
-    const addr = savedRebate();
-    setPerp(addr);
-    if (!addr) return;
+    if (!/^0x[a-fA-F0-9]{40}$/.test(perp)) return;
     let dead = false;
-    hasRebates(addr).then((ok) => {
+    hasRebates(chain).then((ok) => {
       if (!dead) setLive(ok);
     });
-    claimTier(addr).then((next) => {
+    claimTier(chain).then((next) => {
       if (!dead) setTier(next);
     });
     if (account) {
-      readRebate(addr, account)
+      readRebate(chain, account)
         .then((row) => {
           if (dead) return;
           setAccrued(row.accrued);
@@ -77,7 +82,25 @@ export function MineDesk({
     return () => {
       dead = true;
     };
-  }, [account, busy]);
+  }, [account, busy, chain, perp]);
+
+  useEffect(() => {
+    if (chain !== "xlayer" || !account) return;
+    let dead = false;
+    const tick = () => {
+      getRebateBook({ data: { account } })
+        .then((next) => {
+          if (!dead) setBook(next);
+        })
+        .catch(() => undefined);
+    };
+    tick();
+    const timer = window.setInterval(tick, 5000);
+    return () => {
+      dead = true;
+      window.clearInterval(timer);
+    };
+  }, [account, chain, busy]);
 
   const locked = Boolean(referrer && referrer !== zero);
   const steps = tier >= 2 ? CLAIM_STEPS : OLD_CLAIM_STEPS;
@@ -87,9 +110,9 @@ export function MineDesk({
     setWho("");
     setAsk("");
     try {
-      const owner = await lookupCode(perp, bind);
+      const owner = await lookupCode(chain, bind);
       if (!owner || owner.toLowerCase() === zero) {
-        setBindNote(c.rebateMissing);
+        setBindNote(c.rebateNone);
         return;
       }
       if (account && owner.toLowerCase() === account.toLowerCase()) {
@@ -99,7 +122,7 @@ export function MineDesk({
       setAsk(bind.trim());
       setWho(owner);
     } catch {
-      setBindNote(c.rebateMissing);
+      setBindNote(c.rebateNone);
     }
   }
 
@@ -136,17 +159,13 @@ export function MineDesk({
         <p className="text-xs tracking-widest text-gold">{c.rebateTitle}</p>
         <p className="mt-1 text-sm leading-relaxed text-ink/70">{c.rebateHint}</p>
         {!live ? (
-          <>
-            <p className="mt-2 text-sm leading-relaxed">{c.rebateNeed}</p>
-            <button type="button" className="mt-2 min-h-12 bg-ink px-3 text-paper" disabled={busy} onClick={() => run((from) => deployPerp(from))}>
-              {c.rebateUpgrade}
-            </button>
-          </>
+          <p className="mt-2 text-sm leading-relaxed">{c.rebateBsc}</p>
         ) : (
           <>
+            <p className="mt-2 text-sm leading-relaxed">{c.rebateShared}</p>
             <p className="mt-2 break-all font-mono text-xs">{perp}</p>
             <p className="mt-2 text-sm">
-              {c.rebateAccrued} <span className="font-mono">{usdtText(accrued)} USDT</span>
+              {c.rebateAccrued} <span className="font-mono">{pretty(accrued, dec, 2)} USDT</span>
             </p>
             <div className="mt-2 grid grid-cols-4 gap-2">
               {steps.map((step) => (
@@ -154,26 +173,19 @@ export function MineDesk({
                   key={step}
                   type="button"
                   className="min-h-11 border border-gold font-mono text-xs"
-                  disabled={busy || accrued < usdtUnits(step)}
-                  onClick={() => run((from) => claimRebate(from, perp, step))}
+                  disabled={busy || accrued < BigInt(step) * 10n ** BigInt(dec)}
+                  onClick={() => run((from) => claimRebate(from, chain, step))}
                 >
                   {step}
                 </button>
               ))}
             </div>
-            {tier < 2 ? (
-              <>
-                <p className="mt-2 text-sm leading-relaxed">{c.rebateOld}</p>
-                <button type="button" className="mt-2 min-h-12 bg-ink px-3 text-paper" disabled={busy} onClick={() => run((from) => deployPerp(from))}>
-                  {c.rebateUpgrade}
-                </button>
-              </>
-            ) : null}
+            {tier < 2 ? <p className="mt-2 text-sm leading-relaxed">{c.rebateOld}</p> : null}
             <label className="mt-3 block text-sm">
               {c.rebateCode}
               <span className="mt-1 flex gap-2">
                 <input value={mine || code} onChange={(event) => setCode(event.target.value.slice(0, 16))} disabled={Boolean(mine)} className="min-h-11 min-w-0 flex-1 border border-gold bg-transparent px-2 font-mono outline-none" />
-                <button type="button" className="min-h-11 bg-ink px-3 text-paper" disabled={busy || Boolean(mine)} onClick={() => run((from) => registerCode(from, perp, code))}>
+                <button type="button" className="min-h-11 bg-ink px-3 text-paper" disabled={busy || Boolean(mine)} onClick={() => run((from) => registerCode(from, chain, code))}>
                   {c.nickSave}
                 </button>
               </span>
@@ -191,7 +203,7 @@ export function MineDesk({
                   <span className="mt-1 block break-all font-mono text-xs">{who}</span>
                   <span className="mt-1 block font-mono text-xs">{ask}</span>
                   <span className="mt-1 flex gap-2">
-                    <button type="button" className="min-h-11 bg-ink px-3 text-paper" disabled={busy} onClick={() => run((from) => bindCode(from, perp, ask))}>
+                    <button type="button" className="min-h-11 bg-ink px-3 text-paper" disabled={busy} onClick={() => run((from) => bindCode(from, chain, ask))}>
                       {c.rebateGo}
                     </button>
                     <button type="button" className="min-h-11 border border-gold px-3" disabled={busy} onClick={() => { setWho(""); setAsk(""); }}>
@@ -211,6 +223,29 @@ export function MineDesk({
                 </span>
               )}
             </label>
+            <div className="mt-3 border-t border-gold/40 pt-3">
+              <p className="text-xs tracking-widest text-gold">{c.inviteTitle}</p>
+              {!book || !book.caughtUp ? (
+                <p className="mt-2 text-sm leading-relaxed">{book && !book.live ? c.inviteGap : c.inviteChecking}</p>
+              ) : book.invitees.length === 0 ? (
+                <p className="mt-2 text-sm">{c.inviteEmpty}</p>
+              ) : (
+                <>
+                  <p className="mt-2 text-sm">
+                    {book.invitees.length}
+                    <span className="ml-3 font-mono">{c.inviteCounted} {pretty(BigInt(book.counted), dec, 4)} USDT</span>
+                  </p>
+                  {book.invitees.map((row) => (
+                    <p key={row.user} className="mt-2 break-all font-mono text-xs leading-relaxed">
+                      {row.user}
+                      <span className="mt-1 block">
+                        {c.inviteMargin} {pretty(BigInt(row.margin), dec, 2)} · {c.inviteNotional} {pretty(BigInt(row.notional), dec, 2)} · {c.inviteReward} {pretty(BigInt(row.reward), dec, 4)}
+                      </span>
+                    </p>
+                  ))}
+                </>
+              )}
+            </div>
           </>
         )}
       </section>

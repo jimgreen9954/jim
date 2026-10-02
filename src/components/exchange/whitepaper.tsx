@@ -82,8 +82,8 @@ const zh: Section[] = [
   {
     h: "返佣",
     ps: [
-      "返佣在链上，不在客服手里。你先登记一个推荐码。别人填你的码，要再确认一次。确认之后，推荐关系写进合约，不能改，也不能换成别人。",
-      "提现只收整数。档位是 1、10、20、50、100、300、500 美元。不到一整档就留在合约里。BSC 提到 BSC 的 USDT，X Layer 提到 X Layer 的 USDT0。",
+      "返佣在链上，不在客服手里。推荐码只登在当前这条链的全站合约上。BSC 那份已经锁定的合约是返佣之前部署的，码写不进去。现在要在 X Layer 的全站合约上登记。登在私人合约里的码，别人一定会看到不存在。别人填你的码，要再确认一次。确认之后，推荐关系写进合约，不能改。",
+      "页面按成交和撤单当时的绑定关系，用合约同一套公式列出你邀请了谁、他们拿出的保证金、名义价值和记给你的返佣。可提余额以合约里的数字为准。提现只收整数。档位是 1、10、20、50、100、300、500 美元。X Layer 提到 USDT0。",
     ],
   },
   {
@@ -206,8 +206,8 @@ const en: Section[] = [
   {
     h: "Rebates",
     ps: [
-      "Rebates are on chain, not with a support desk. You register a code. Someone else enters it and confirms a second time. After that confirmation the link is in the contract. It cannot be changed and cannot be pointed at someone else.",
-      "Claims are whole amounts only: 1, 10, 20, 50, 100, 300, or 500 USD. Anything short of a whole step stays in the contract. BSC pays BSC USDT. X Layer pays USDT0.",
+      "Rebates are on chain. A code is registered on that chain's shared contract only. The locked BSC contract was deployed before rebates, so a code cannot be written there. Register on the X Layer contract. A code on a private contract shows up as missing for everyone else. The other person confirms once. After that the link cannot be changed.",
+      "The page lists who bound your code, the margin they posted, the notional, and the rebate credited to you, using the contract's own formula at the block of the fill or cancel. The claimable balance is the number stored in the contract. Claims are whole amounts of 1, 10, 20, 50, 100, 300, or 500 USD, paid in USDT0 on X Layer.",
     ],
   },
   {

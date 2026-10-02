@@ -223,6 +223,12 @@ const erc20 = [
   },
 ] as const;
 
+async function deskClient(which: Desk) {
+  const { createPublicClient, http } = await import("viem");
+  const rpc = which === "xlayer" ? XLAYER.rpc : BSC.rpc;
+  return createPublicClient({ transport: http(rpc) });
+}
+
 async function client() {
   const { createPublicClient, http } = await import("viem");
   const rpc = desk === "xlayer" ? XLAYER.rpc : BSC.rpc;
@@ -894,17 +900,19 @@ export function savedRebate(): string {
   return window.localStorage.getItem(REBATE_KEY) ?? "";
 }
 
-export async function hasRebates(addr: string): Promise<boolean> {
+export async function hasRebates(which: Desk): Promise<boolean> {
+  const addr = bookOf(which);
   if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) return false;
   try {
-    return await (await client()).readContract({ address: addr as Hex, abi: rebateAbi, functionName: "rebates" });
+    return await (await deskClient(which)).readContract({ address: addr as Hex, abi: rebateAbi, functionName: "rebates" });
   } catch {
     return false;
   }
 }
 
-export async function readRebate(addr: string, account: string): Promise<{ accrued: bigint; referrer: string; code: Hex }> {
-  const c = await client();
+export async function readRebate(which: Desk, account: string): Promise<{ accrued: bigint; referrer: string; code: Hex }> {
+  const addr = bookOf(which);
+  const c = await deskClient(which);
   const [accrued, referrer, code] = await Promise.all([
     c.readContract({ address: addr as Hex, abi: rebateAbi, functionName: "accrued", args: [account as Hex] }),
     c.readContract({ address: addr as Hex, abi: rebateAbi, functionName: "referrerOf", args: [account as Hex] }),
@@ -921,29 +929,43 @@ function asCode(text: string): Hex {
   return (hex + "0".repeat(66 - hex.length)) as Hex;
 }
 
-export async function registerCode(from: string, perp: string, text: string): Promise<Hex> {
-  const data = encodeFunctionData({ abi: rebateAbi, functionName: "register", args: [asCode(text)] });
-  return send(from, perp as Hex, data);
+export async function registerCode(from: string, which: Desk, text: string): Promise<Hex> {
+  const was = desk;
+  desk = which;
+  try {
+    const data = encodeFunctionData({ abi: rebateAbi, functionName: "register", args: [asCode(text)] });
+    return await send(from, bookOf(which) as Hex, data);
+  } finally {
+    desk = was;
+  }
 }
 
-export async function bindCode(from: string, perp: string, text: string): Promise<Hex> {
-  const data = encodeFunctionData({ abi: rebateAbi, functionName: "bind", args: [asCode(text)] });
-  return send(from, perp as Hex, data);
+export async function bindCode(from: string, which: Desk, text: string): Promise<Hex> {
+  const was = desk;
+  desk = which;
+  try {
+    const data = encodeFunctionData({ abi: rebateAbi, functionName: "bind", args: [asCode(text)] });
+    return await send(from, bookOf(which) as Hex, data);
+  } finally {
+    desk = was;
+  }
 }
 
 export function usdtUnits(dollars: number): bigint {
   return BigInt(dollars) * tokenUnit();
 }
 
-export async function lookupCode(perp: string, text: string): Promise<string> {
-  const c = await client();
+export async function lookupCode(which: Desk, text: string): Promise<string> {
+  const perp = bookOf(which);
+  const c = await deskClient(which);
   return c.readContract({ address: perp as Hex, abi: rebateAbi, functionName: "codeOwner", args: [asCode(text)] });
 }
 
-export async function claimTier(addr: string): Promise<number> {
+export async function claimTier(which: Desk): Promise<number> {
+  const addr = bookOf(which);
   if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) return 1;
   try {
-    const tier = await (await client()).readContract({ address: addr as Hex, abi: rebateAbi, functionName: "tierSet" });
+    const tier = await (await deskClient(which)).readContract({ address: addr as Hex, abi: rebateAbi, functionName: "tierSet" });
     return Number(tier);
   } catch {
     return 1;
@@ -954,10 +976,27 @@ export const CLAIM_STEPS = [1, 10, 20, 50, 100, 300, 500] as const;
 export const OLD_CLAIM_STEPS = [1, 10, 100, 1000] as const;
 export type ClaimStep = (typeof CLAIM_STEPS)[number] | (typeof OLD_CLAIM_STEPS)[number];
 
-export async function claimRebate(from: string, perp: string, dollars: ClaimStep): Promise<Hex> {
-  const amount = usdtUnits(dollars);
-  const data = encodeFunctionData({ abi: rebateAbi, functionName: "claim", args: [amount] });
-  return send(from, perp as Hex, data);
+export async function claimRebate(from: string, which: Desk, dollars: ClaimStep): Promise<Hex> {
+  const was = desk;
+  desk = which;
+  try {
+    const amount = usdtUnits(dollars);
+    const data = encodeFunctionData({ abi: rebateAbi, functionName: "claim", args: [amount] });
+    return await send(from, bookOf(which) as Hex, data);
+  } finally {
+    desk = was;
+  }
 }
 
-export { readBalances };
+export function codeText(code: string): string {
+  if (!code || /^0x0+$/i.test(code)) return "";
+  const raw = code.slice(2).replace(/(00)+$/i, "");
+  if (raw.length % 2 !== 0) return "";
+  const bytes = raw.match(/.{2}/g)?.map((h) => Number.parseInt(h, 16)) ?? [];
+  if (bytes.some((n) => Number.isNaN(n))) return "";
+  try {
+    return new TextDecoder().decode(new Uint8Array(bytes));
+  } catch {
+    return "";
+  }
+}

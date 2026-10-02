@@ -552,6 +552,7 @@ export function RealPerp() {
                   <MineDesk
                     account={account}
                     busy={busy}
+                    chain={chain}
                     run={run}
                     addresses={Array.from(
                       new Map(

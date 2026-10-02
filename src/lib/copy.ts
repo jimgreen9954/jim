@@ -192,6 +192,17 @@ export type Copy = {
   rebateLocked: string;
   rebateMissing: string;
   rebateOld: string;
+  rebateBsc: string;
+  rebateShared: string;
+  rebateNone: string;
+  inviteTitle: string;
+  inviteEmpty: string;
+  inviteChecking: string;
+  inviteMargin: string;
+  inviteNotional: string;
+  inviteReward: string;
+  inviteCounted: string;
+  inviteGap: string;
   cancelFee: string;
   refund: string;
   perpAddr: string;
@@ -453,6 +464,17 @@ export const copy: Record<Lang, Copy> = {
     rebateLocked: "已确认，不能再改",
     rebateMissing: "这个推荐码还不存在",
     rebateOld: "这份合约还是旧提现档，只能提 1、10、100、1000。升级之前先把这里的返佣提走。升级之后才能提 20、50、300、500，之后的返佣记在新合约上。",
+    rebateBsc: "BSC 这份全站合约是返佣上线前部署的，推荐码写不进去，别人也查不到。切到 X Layer，登在下面这一份全站合约上。不要再部署私人合约，那份码只有你自己的浏览器认。",
+    rebateShared: "全站只认这一份合约。你以前若登在别的合约上，别人一定会看到不存在。在这里再登记一次。",
+    rebateNone: "全站合约上没有这个码。",
+    inviteTitle: "我邀请的人",
+    inviteEmpty: "还没有人绑定你的码。",
+    inviteChecking: "正在从链上逐块核对。对完之前不显示人数，避免把没看完的账当成全部。",
+    inviteMargin: "保证金",
+    inviteNotional: "名义",
+    inviteReward: "返佣",
+    inviteCounted: "已记返佣",
+    inviteGap: "有一笔链上记录对不上，人数先不显示，避免算错。",
     cancelFee: "撤单费",
     refund: "退回",
     perpAddr: "BSC 永续合约",
@@ -728,6 +750,17 @@ export const copy: Record<Lang, Copy> = {
     rebateLocked: "Confirmed. It cannot be changed.",
     rebateMissing: "That code does not exist",
     rebateOld: "This contract still uses the old claim sizes: 1, 10, 100, 1000. Claim what is here before you upgrade. After that, 20, 50, 300, and 500 work, and new rebates accrue on the new contract.",
+    rebateBsc: "This BSC contract was deployed before rebates. A code cannot be written here, so other people cannot find it. Switch to X Layer and register on the shared contract below. Do not deploy a private contract. Only your browser can see that one.",
+    rebateShared: "The whole site recognizes only this contract. A code registered on any other contract shows up as missing. Register it again here.",
+    rebateNone: "That code is not on the shared contract.",
+    inviteTitle: "People I invited",
+    inviteEmpty: "Nobody has bound your code.",
+    inviteChecking: "Reading the chain block by block. The count stays hidden until the read is finished, so a half-read book is not shown as the total.",
+    inviteMargin: "Margin",
+    inviteNotional: "Notional",
+    inviteReward: "Rebate",
+    inviteCounted: "Rebates recorded",
+    inviteGap: "One on-chain record does not line up. The count stays hidden so it is not wrong.",
     cancelFee: "Cancel fee",
     refund: "Back",
     perpAddr: "BSC perp contract",
