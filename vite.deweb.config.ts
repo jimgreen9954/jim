@@ -1,0 +1,27 @@
+import { fileURLToPath } from "node:url";
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
+
+const src = fileURLToPath(new URL("./src", import.meta.url));
+
+export default defineConfig({
+  root: fileURLToPath(new URL("./deweb-app", import.meta.url)),
+  publicDir: fileURLToPath(new URL("./deweb-public", import.meta.url)),
+  plugins: [react(), tailwindcss()],
+  base: "./",
+  resolve: {
+    alias: [
+      { find: "@/lib/candles", replacement: fileURLToPath(new URL("./src/lib/candles.browser.ts", import.meta.url)) },
+      { find: "@/lib/tapeout-live", replacement: fileURLToPath(new URL("./src/lib/tapeout-live.browser.ts", import.meta.url)) },
+      { find: "@/lib/rebate-index", replacement: fileURLToPath(new URL("./src/lib/rebate-index.browser.ts", import.meta.url)) },
+      { find: "@", replacement: src },
+    ],
+  },
+  server: { fs: { allow: [fileURLToPath(new URL(".", import.meta.url))] } },
+  build: {
+    outDir: fileURLToPath(new URL("./deweb-dist", import.meta.url)),
+    emptyOutDir: true,
+    chunkSizeWarningLimit: 2500,
+  },
+});
