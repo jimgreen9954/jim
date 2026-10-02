@@ -1,4 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
+import { pullPaper, type PaperFrame } from "@/lib/candle-book";
+
+export type { Ohlc, PaperFrame } from "@/lib/candle-book";
+export { PAPER_FRAMES, paperLabel } from "@/lib/candle-book";
 
 export type Candle = { o: number; h: number; l: number; c: number };
 export type CandleFrame = "15s" | "1m" | "5m" | "15m" | "1h" | "4h";
@@ -40,3 +44,7 @@ export const getCandles = createServerFn({ method: "GET" })
     cache.set(data, { at: Date.now(), rows: next });
     return next;
   });
+
+export const getPaperCandles = createServerFn({ method: "GET" })
+  .validator((frame: PaperFrame) => (frame === "5m" || frame === "10m" || frame === "1h" || frame === "4h" || frame === "1d" || frame === "1w" ? frame : "1m"))
+  .handler(async ({ data }) => pullPaper(data));

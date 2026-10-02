@@ -1,3 +1,12 @@
+export type { Ohlc, PaperFrame } from "@/lib/candle-book";
+export { PAPER_FRAMES, paperLabel } from "@/lib/candle-book";
+import { pullPaper, type PaperFrame } from "@/lib/candle-book";
+
+export async function getPaperCandles(input: { data: PaperFrame } | PaperFrame) {
+  const frame = typeof input === "string" ? input : input.data;
+  return pullPaper(frame);
+}
+
 export type Candle = { o: number; h: number; l: number; c: number };
 export type CandleFrame = "15s" | "1m" | "5m" | "15m" | "1h" | "4h";
 

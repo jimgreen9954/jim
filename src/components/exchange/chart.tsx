@@ -1,22 +1,45 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { copy } from "@/lib/copy";
 import { useExchange } from "@/lib/exchange-store";
 import { fmtPx, fmtSz } from "@/lib/format";
+import { getPaperCandles, PAPER_FRAMES, paperLabel, type Ohlc, type PaperFrame } from "@/lib/candles";
 
 const VB_W = 800;
 const VB_H = 360;
 const PAD = { l: 12, r: 72, t: 16, b: 18 };
 
 export function TraceChart() {
-  const candles = useExchange((s) => s.engine.candles);
-  const tf = useExchange((s) => s.tf);
-  const setTf = useExchange((s) => s.setTf);
+  const live = useExchange((s) => s.chainBem);
   const lang = useExchange((s) => s.lang);
   const c = copy[lang];
+  const [frame, setFrame] = useState<PaperFrame>("1m");
+  const [rows, setRows] = useState<Ohlc[]>([]);
   const [hover, setHover] = useState<number | null>(null);
-  const view = candles.slice(-64);
-  const rawMin = Math.min(...view.map((x) => x.l));
-  const rawMax = Math.max(...view.map((x) => x.h));
+
+  useEffect(() => {
+    let dead = false;
+    setRows([]);
+    const pull = () => {
+      getPaperCandles({ data: frame })
+        .then((next) => {
+          if (!dead && next.length > 0) setRows(next);
+        })
+        .catch(() => undefined);
+    };
+    pull();
+    const id = window.setInterval(pull, frame === "1m" ? 15_000 : 60_000);
+    return () => {
+      dead = true;
+      window.clearInterval(id);
+    };
+  }, [frame]);
+
+  const view = rows.map((candle, index) => {
+    if (index !== rows.length - 1 || !(live && live > 0)) return candle;
+    return { ...candle, c: live, h: Math.max(candle.h, live), l: Math.min(candle.l, live) };
+  });
+  const rawMin = view.length ? Math.min(...view.map((x) => x.l)) : 0;
+  const rawMax = view.length ? Math.max(...view.map((x) => x.h)) : 1;
   const span0 = Math.max(1e-6, rawMax - rawMin);
   const min = rawMin - span0 * 0.12;
   const max = rawMax + span0 * 0.12;
@@ -37,21 +60,15 @@ export function TraceChart() {
     <section className="border border-gold bg-card shadow-plate">
       <div className="flex items-center justify-between gap-2 border-b border-gold/40 px-3 py-2">
         <p className="text-xs tracking-widest text-gold">{c.paper}</p>
-        <div className="flex gap-1">
-          {(
-            [
-              [4000, c.tfFast],
-              [8000, c.tfMid],
-              [16000, c.tfSlow],
-            ] as const
-          ).map(([ms, label]) => (
+        <div className="flex flex-wrap justify-end gap-1">
+          {PAPER_FRAMES.map((item) => (
             <button
-              key={ms}
+              key={item}
               type="button"
-              onClick={() => setTf(ms)}
-              className={`min-h-9 px-2 text-xs ${tf === ms ? "bg-foil text-ink" : "text-ink"}`}
+              onClick={() => setFrame(item)}
+              className={`min-h-9 px-2 text-xs ${frame === item ? "bg-foil text-ink" : "text-ink"}`}
             >
-              {label}
+              {paperLabel(item, lang)}
             </button>
           ))}
         </div>
@@ -65,6 +82,7 @@ export function TraceChart() {
           <span>V {fmtSz(hi.v)}</span>
         </p>
       ) : null}
+      {view.length === 0 ? <p className="px-3 py-6 text-sm text-ink/60">{lang === "zh" ? "K线还在读池子。" : "Reading the pool candles."}</p> : null}
       <svg
         viewBox={`0 0 ${VB_W} ${VB_H}`}
         className="h-64 w-full lg:h-96"
@@ -114,7 +132,7 @@ export function TraceChart() {
           const cx = x + w / 2;
           const vh = (candle.v / maxV) * innerH * 0.14;
           return (
-            <g key={candle.t}>
+            <g key={`${candle.t}-${i}`}>
               <line
                 x1={cx}
                 x2={cx}
