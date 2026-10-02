@@ -1,0 +1,121 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #f7f5f0;
+  --color-card: #fffcf8;
+  --color-ink: #14110d;
+  --color-gold: #6e5014;
+  --color-foil: #e4c56b;
+  --color-sell: #9e1b12;
+  --font-sans: "IBM Plex Mono", ui-monospace, monospace;
+  --font-display: "Fraunces", Georgia, serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --shadow-plate: 0 18px 40px -28px rgb(20 17 13 / 0.45);
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-gold);
+    outline-offset: 2px;
+  }
+  h1,
+  h2 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+}
+
+.misreg {
+  text-shadow:
+    2px 0 color-mix(in srgb, var(--color-foil) 95%, var(--color-sell)),
+    -1px 0 color-mix(in srgb, var(--color-sell) 50%, transparent);
+}
+
+.crop {
+  position: fixed;
+  width: 12px;
+  height: 12px;
+  z-index: 40;
+  pointer-events: none;
+  border-color: var(--color-gold);
+}
+.crop-tl {
+  top: 8px;
+  left: 8px;
+  border-top: 1px solid;
+  border-left: 1px solid;
+}
+.crop-tr {
+  top: 8px;
+  right: 8px;
+  border-top: 1px solid;
+  border-right: 1px solid;
+}
+.crop-bl {
+  bottom: 8px;
+  left: 8px;
+  border-bottom: 1px solid;
+  border-left: 1px solid;
+}
+.crop-br {
+  bottom: 8px;
+  right: 8px;
+  border-bottom: 1px solid;
+  border-right: 1px solid;
+}
+
+@media (max-width: 1023px) {
+  .crop-bl,
+  .crop-br {
+    display: none;
+  }
+}
+
+@keyframes sweep {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes seal-in {
+  from {
+    transform: rotate(-14deg) scale(1.35);
+    opacity: 0;
+  }
+  to {
+    transform: rotate(-14deg) scale(1);
+    opacity: 0.92;
+  }
+}
+.sweep {
+  transform-origin: left center;
+  animation: sweep 0.55s ease-out;
+}
+.seal-pop {
+  transform: rotate(-14deg);
+  animation: seal-in 0.45s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sweep,
+  .seal-pop {
+    animation: none;
+  }
+}
