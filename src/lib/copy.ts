@@ -203,6 +203,7 @@ export type Copy = {
   inviteReward: string;
   inviteCounted: string;
   inviteGap: string;
+  inviteExact: string;
   cancelFee: string;
   refund: string;
   perpAddr: string;
@@ -363,7 +364,7 @@ export const copy: Record<Lang, Copy> = {
       "黑客松要你自己的钱包在 X Layer 上部署处理器。签名在 OKX 或 MetaMask 里完成。这个页面不收私钥，也不把别人的充值转到任何交易所地址。",
     walletConnect: "连接钱包",
     walletDeploy: "部署 TAPELIQUID",
-    walletNo: "这个页面没有插件。点连接钱包会跳到 OKX App，确认后再回到这里。",
+    walletNo: "没检测到对应钱包。OKX 会打开 App。币安请用币安 App 里的钱包浏览器打开这个页面后再点币安。",
     walletReject: "你在钱包里取消了。",
     walletBusy: "等钱包确认…",
     walletFee: "工厂创建费",
@@ -475,6 +476,7 @@ export const copy: Record<Lang, Copy> = {
     inviteReward: "返佣",
     inviteCounted: "已记返佣",
     inviteGap: "有一笔链上记录对不上，人数先不显示，避免算错。",
+    inviteExact: "人数和已记返佣是链上对完之后，用合约同一套公式算的。上面的可提是合约里还没提走的余额，提现只认这个数。",
     cancelFee: "撤单费",
     refund: "退回",
     perpAddr: "BSC 永续合约",
@@ -649,7 +651,7 @@ export const copy: Record<Lang, Copy> = {
       "The hackathon needs your own wallet to deploy the processor on X Layer. You sign in OKX or MetaMask. This page never takes a private key and never forwards anyone's deposit.",
     walletConnect: "Connect wallet",
     walletDeploy: "Deploy TAPELIQUID",
-    walletNo: "This page has no plugin. Connect wallet opens the OKX app. Approve there, then come back.",
+    walletNo: "That wallet is not in this browser. OKX opens its app. For Binance, open this page in the Binance App wallet browser, then tap Binance.",
     walletReject: "You cancelled in the wallet.",
     walletBusy: "Waiting for the wallet…",
     walletFee: "Factory fee",
@@ -761,6 +763,7 @@ export const copy: Record<Lang, Copy> = {
     inviteReward: "Rebate",
     inviteCounted: "Rebates recorded",
     inviteGap: "One on-chain record does not line up. The count stays hidden so it is not wrong.",
+    inviteExact: "The count and recorded rebates use the contract's own formula after the chain has been read through. Claimable is the balance still in the contract. A withdrawal uses only that number.",
     cancelFee: "Cancel fee",
     refund: "Back",
     perpAddr: "BSC perp contract",

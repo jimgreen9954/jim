@@ -1,7 +1,26 @@
-type Eth = { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> };
+type Eth = {
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+  on?: (event: string, cb: (accounts: string[]) => void) => void;
+};
+
+export type WalletKind = "okx" | "binance";
 
 let openLink: string | null = null;
 const linkListeners = new Set<(next: string | null) => void>();
+let current: Eth | null = null;
+let account: string | null = null;
+let kind: WalletKind = "okx";
+const listeners = new Set<(next: string | null) => void>();
+
+export function currentAccount(): string | null {
+  return account;
+}
+
+export function onAccount(cb: (next: string | null) => void): () => void {
+  listeners.add(cb);
+  cb(account);
+  return () => listeners.delete(cb);
+}
 
 export function onOpenLink(cb: (next: string | null) => void): () => void {
   linkListeners.add(cb);
@@ -14,6 +33,39 @@ function publishLink(next: string | null) {
   linkListeners.forEach((cb) => cb(next));
 }
 
+function remember(next: string | null) {
+  account = next;
+  listeners.forEach((cb) => cb(next));
+}
+
+export function rememberAccount(next: string) {
+  remember(next);
+}
+
+type Host = Window & {
+  okxwallet?: Eth;
+  binancew3w?: { ethereum?: Eth };
+  ethereum?: Eth & { isOkxWallet?: boolean; isBinance?: boolean };
+};
+
+function host(): Host {
+  return window as Host;
+}
+
+export function okxInjected(): Eth | null {
+  const w = host();
+  if (w.okxwallet) return w.okxwallet;
+  if (w.ethereum?.isOkxWallet) return w.ethereum;
+  return null;
+}
+
+export function binanceInjected(): Eth | null {
+  const w = host();
+  if (w.binancew3w?.ethereum) return w.binancew3w.ethereum;
+  if (w.ethereum?.isBinance) return w.ethereum;
+  return null;
+}
+
 function captureOkxOpen() {
   const original = window.open.bind(window);
   window.open = (url?: string | URL, target?: string, features?: string) => {
@@ -24,27 +76,6 @@ function captureOkxOpen() {
     }
     return original(url, target, features);
   };
-  const proto = Object.getPrototypeOf(window.location) as Location;
-  const desc = Object.getOwnPropertyDescriptor(proto, "href");
-  if (desc?.set && desc.configurable) {
-    try {
-      Object.defineProperty(proto, "href", {
-        configurable: true,
-        enumerable: desc.enumerable,
-        get: desc.get,
-        set(value: string) {
-          const text = String(value);
-          if (text.includes("okx") || text.includes("topic=") || text.includes("/ul/connect")) {
-            publishLink(text);
-            return;
-          }
-          desc.set?.call(this, value);
-        },
-      });
-    } catch {
-      /* keep the original setter */
-    }
-  }
 }
 
 let armed = false;
@@ -54,41 +85,18 @@ function armCapture() {
   armed = true;
   captureOkxOpen();
 }
-let current: Eth | null = null;
-let account: string | null = null;
-const listeners = new Set<(next: string | null) => void>();
 
-export function currentAccount(): string | null {
-  return account;
+async function useInjected(eth: Eth): Promise<string> {
+  current = eth;
+  const accounts = (await eth.request({ method: "eth_requestAccounts" })) as string[];
+  const next = accounts[0];
+  if (!next) throw new Error("nowallet");
+  remember(next);
+  eth.on?.("accountsChanged", (rows) => remember(rows[0] ?? null));
+  return next;
 }
 
-export function onAccount(cb: (next: string | null) => void): () => void {
-  listeners.add(cb);
-  return () => listeners.delete(cb);
-}
-
-export function rememberAccount(next: string) {
-  account = next;
-  listeners.forEach((cb) => cb(next));
-}
-
-function injected(): Eth | null {
-  if (typeof window === "undefined") return null;
-  const eth = (window as Window & { ethereum?: Eth }).ethereum;
-  return eth?.request ? eth : null;
-}
-
-export function getProvider(): Eth | null {
-  return current ?? injected();
-}
-
-export async function ensureProvider(): Promise<Eth> {
-  const plugged = injected();
-  if (plugged) {
-    current = plugged;
-    return plugged;
-  }
-  if (current) return current;
+async function connectOkxRemote(): Promise<string> {
   const { OKXUniversalProvider, OpenAppLinkType } = await import("@okxconnect/universal-provider");
   const okx = await OKXUniversalProvider.init({
     dappMetaData: {
@@ -133,9 +141,6 @@ export async function ensureProvider(): Promise<Eth> {
     });
     publishLink(null);
   }
-  if (signClient) {
-    signClient.sessionConfig = { ...(signClient.sessionConfig ?? {}), openUniversalUrl: true, redirect: "back" };
-  }
   const wrapped: Eth = {
     request: async (args) => {
       armCapture();
@@ -156,15 +161,40 @@ export async function ensureProvider(): Promise<Eth> {
   };
   current = wrapped;
   const accounts = (await wrapped.request({ method: "eth_requestAccounts" })) as string[];
-  if (accounts[0]) rememberAccount(accounts[0]);
-  return wrapped;
+  const next = accounts[0];
+  if (!next) throw new Error("nowallet");
+  remember(next);
+  return next;
+}
+
+export async function connectKind(which: WalletKind): Promise<string> {
+  kind = which;
+  const plugged = which === "binance" ? binanceInjected() : okxInjected();
+  if (plugged) return useInjected(plugged);
+  if (which === "binance") {
+    publishLink(`https://app.binance.com/cedefi/dapp?url=${encodeURIComponent(window.location.href)}`);
+    throw new Error("binanceapp");
+  }
+  return connectOkxRemote();
+}
+
+export function getProvider(): Eth | null {
+  return current;
+}
+
+export async function ensureProvider(): Promise<Eth> {
+  if (current) return current;
+  const plugged = kind === "binance" ? binanceInjected() : okxInjected();
+  if (plugged) {
+    current = plugged;
+    return plugged;
+  }
+  if (kind === "binance") throw new Error("binanceapp");
+  await connectOkxRemote();
+  if (!current) throw new Error("nowallet");
+  return current;
 }
 
 export async function connectAny(): Promise<string> {
-  const eth = await ensureProvider();
-  const accounts = (await eth.request({ method: "eth_requestAccounts" })) as string[];
-  const next = accounts[0];
-  if (!next) throw new Error("nowallet");
-  rememberAccount(next);
-  return next;
+  return connectKind(kind);
 }

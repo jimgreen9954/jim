@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { connectAny, currentAccount, onAccount, onOpenLink } from "@/lib/wallet";
+import { connectKind, currentAccount, onAccount, onOpenLink } from "@/lib/wallet";
 import { copy } from "@/lib/copy";
 import { useExchange } from "@/lib/exchange-store";
 import {
@@ -28,31 +28,46 @@ export function ConnectButton() {
   useEffect(() => onAccount(setAccount), []);
   useEffect(() => onOpenLink(setLink), []);
   if (link) {
+    const binance = link.includes("binance.com");
     return (
       <a href={link} className="inline-flex min-h-11 items-center border border-gold bg-ink px-3 text-sm text-paper">
-        {lang === "zh" ? "打开 OKX" : "Open OKX"}
+        {binance ? (lang === "zh" ? "打开币安" : "Open Binance") : lang === "zh" ? "打开 OKX" : "Open OKX"}
       </a>
     );
   }
+  if (account) {
+    return (
+      <button type="button" className="min-h-11 max-w-40 truncate border border-gold px-3 text-sm" disabled>
+        {short(account)}
+      </button>
+    );
+  }
   return (
-    <button
-      type="button"
-      className="min-h-11 max-w-40 truncate border border-gold px-3 text-sm"
-      disabled={busy}
-      onClick={() => {
-        setBusy(true);
-        setNote(null);
-        connectAny()
-          .catch((err: unknown) => {
-            const code = (err as { code?: number }).code;
-            const message = err instanceof Error ? err.message : "";
-            setNote(code === 4001 ? c.walletReject : message || c.walletNo);
-          })
-          .finally(() => setBusy(false));
-      }}
-    >
-      {note ?? (account ? short(account) : c.walletConnect)}
-    </button>
+    <span className="flex gap-2">
+      {(["okx", "binance"] as const).map((which) => (
+        <button
+          key={which}
+          type="button"
+          className="min-h-11 border border-gold px-3 text-sm"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            setNote(null);
+            connectKind(which)
+              .catch((err: unknown) => {
+                if (err instanceof Error && err.message === "binanceapp") return;
+                const code = (err as { code?: number }).code;
+                const message = err instanceof Error ? err.message : "";
+                setNote(code === 4001 ? c.walletReject : message || c.walletNo);
+              })
+              .finally(() => setBusy(false));
+          }}
+        >
+          {which === "okx" ? "OKX" : lang === "zh" ? "币安" : "Binance"}
+        </button>
+      ))}
+      {note ? <span className="self-center text-xs text-sell">{note}</span> : null}
+    </span>
   );
 }
 

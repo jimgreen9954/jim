@@ -176,7 +176,7 @@ export function MineDesk({
                   disabled={busy || accrued < BigInt(step) * 10n ** BigInt(dec)}
                   onClick={() => run((from) => claimRebate(from, chain, step))}
                 >
-                  {step}
+                  {c.rebateClaim} {step}
                 </button>
               ))}
             </div>
@@ -235,6 +235,7 @@ export function MineDesk({
                     {book.invitees.length}
                     <span className="ml-3 font-mono">{c.inviteCounted} {pretty(BigInt(book.counted), dec, 4)} USDT</span>
                   </p>
+                  <p className="mt-1 text-xs leading-relaxed text-ink/60">{c.inviteExact}</p>
                   {book.invitees.map((row) => (
                     <p key={row.user} className="mt-2 break-all font-mono text-xs leading-relaxed">
                       {row.user}
