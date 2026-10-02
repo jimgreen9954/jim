@@ -3,6 +3,7 @@ import {
   cancelOrder,
   closePosition,
   initialEngine,
+  markTo,
   maxSize,
   placeOrder,
   resetEngine,
@@ -160,7 +161,8 @@ export const useExchange = create<Store>((set, get) => ({
   },
   tick: (dt) => {
     const s = get();
-    const next = step(s.engine, dt, s.tf);
+    let next = step(s.engine, dt, s.tf);
+    if (s.chainBem && s.chainBem > 0) next = markTo({ ...next, anchor: s.chainBem }, s.chainBem);
     const liq = next.fuse !== s.engine.fuse;
     set({
       engine: next,

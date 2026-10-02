@@ -35,6 +35,8 @@ export function SpotDesk() {
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [amount, setAmount] = useState("");
   const [price, setPrice] = useState<string | null>(null);
+  const live = useExchange((s) => s.chainBem);
+  const shown = live && live > 0 ? live.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : price;
   const [out, setOut] = useState<string | null>(null);
   const [account, setAccount] = useState<string | null>(currentAccount());
   const [balances, setBalances] = useState<Balances | null>(null);
@@ -128,7 +130,7 @@ export function SpotDesk() {
       <div className="grid gap-0 lg:grid-cols-12">
         <div className="border-b border-gold/40 p-3 lg:col-span-7 lg:border-r lg:border-b-0">
           <p className="text-xs tracking-widest text-gold">BEM / USDT</p>
-          <p className="font-display text-5xl italic leading-none tabular-nums">{price ? `$${price}` : "—"}</p>
+          <p className="font-display text-5xl italic leading-none tabular-nums">{shown ? `$${shown}` : "—"}</p>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink/80">{c.realNote}</p>
           <h2 className="mt-4 text-xs tracking-widest text-gold">{c.poolPrints}</h2>
           <ul className="mt-2 divide-y divide-gold/30">

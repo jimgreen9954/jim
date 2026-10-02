@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { formatUnits } from "viem";
+import { formatUnits, parseUnits } from "viem";
 import { copy } from "@/lib/copy";
 import { BSC, connectBsc, pretty, units, type Balances } from "@/lib/bsc";
 import { getCandles, type Candle, type CandleFrame } from "@/lib/candles";
@@ -107,6 +107,7 @@ function PkTape({ candles, entry, mark }: { candles: Candle[]; entry: number; ma
 
 export function RealPerp() {
   const lang = useExchange((s) => s.lang);
+  const live = useExchange((s) => s.chainBem);
   const c = copy[lang];
   const [chain, setChain] = useState<Desk>(savedDesk());
   const [perp, setPerp] = useState(savedDesk() === "xlayer" ? bookOf("xlayer") : KNOWN_PERP);
@@ -256,9 +257,10 @@ export function RealPerp() {
         { id: "push", margin: "10", lev: 2 },
       ]
     : presets;
-  const split = view?.dealOpen ? splitEquity(view.dealBase, view.dealEntry, view.mark, view.marginL, view.marginS) : null;
+  const markN = live && live > 0 ? live : view && view.mark > 0n ? Number(formatUnits(view.mark, 18)) : 0;
+  const markWei = markN > 0 ? parseUnits(markN.toFixed(8), 18) : 0n;
+  const split = view?.dealOpen ? splitEquity(view.dealBase, view.dealEntry, markWei, view.marginL, view.marginS) : null;
   const lead = split ? (split.eqL === split.eqS ? "flat" : split.eqL > split.eqS ? "long" : "short") : null;
-  const markN = view && view.mark > 0n ? Number(formatUnits(view.mark, 18)) : 0;
   const entryN = view && view.dealEntry > 0n ? Number(formatUnits(view.dealEntry, 18)) : 0;
   const pick = (nextMargin: string, nextLev: number) => {
     setMargin(nextMargin);
@@ -342,7 +344,7 @@ export function RealPerp() {
         <div className="grid grid-cols-2 gap-2">
           <p className="border border-gold/40 px-3 py-2">
             <span className="block text-xs tracking-widest text-gold">{c.perpMark}</span>
-            <span className="font-mono text-2xl tabular-nums">{view && view.mark > 0n ? `$${pxText(view.mark)}` : "—"}</span>
+            <span className="font-mono text-2xl tabular-nums">{markN > 0 ? `$${markN.toFixed(2)}` : "—"}</span>
           </p>
           <p className="border border-gold/40 px-3 py-2">
             <span className="block text-xs tracking-widest text-gold">{c.yourEq}</span>

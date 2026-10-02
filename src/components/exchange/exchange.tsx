@@ -14,6 +14,7 @@ import { SpotDesk } from "@/components/exchange/spot-desk";
 import { ConnectButton, WalletBar } from "@/components/exchange/wallet-bar";
 import { Whitepaper } from "@/components/exchange/whitepaper";
 import { KNOWN_PERP, KNOWN_XPERP } from "@/lib/perp";
+import { bemPrice } from "@/lib/bsc";
 import { XLAYER } from "@/lib/xlayer";
 
 type Pane = "spot" | "paper" | "perp" | "wafer" | "brief";
@@ -54,14 +55,34 @@ function Crops() {
 
 function SimClock() {
   const tick = useExchange((s) => s.tick);
+  const follow = useExchange((s) => s.setChainBem);
   useEffect(() => {
     const stop = startPersistence();
     const id = window.setInterval(() => tick(400), 400);
+    let dead = false;
+    let pending = false;
+    const pull = () => {
+      if (pending) return;
+      pending = true;
+      bemPrice()
+        .then((text) => {
+          const n = Number(text.replace(/,/g, ""));
+          if (!dead && n > 0) follow(n);
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          pending = false;
+        });
+    };
+    pull();
+    const priceId = window.setInterval(pull, 1000);
     return () => {
+      dead = true;
       window.clearInterval(id);
+      window.clearInterval(priceId);
       stop();
     };
-  }, [tick]);
+  }, [tick, follow]);
   return null;
 }
 
@@ -249,7 +270,8 @@ function MarketBar() {
   const engine = useExchange((s) => s.engine);
   const c = copy[lang];
   const change = sessionChange(engine);
-  const [whole, frac] = fmtPx(engine.price).split(".");
+  const text = engine.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const [whole, frac = "00"] = text.split(".");
   return (
     <section className="flex flex-col gap-3">
       <div className="grid grid-cols-2 gap-2">

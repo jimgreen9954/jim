@@ -14,12 +14,9 @@ function fmtTs(ts: number): string {
 
 export function LiveBoard() {
   const lang = useExchange((s) => s.lang);
-  const booted = useExchange((s) => s.booted);
   const fills = useExchange((s) => s.engine.fills.length);
   const orders = useExchange((s) => s.engine.orders.length);
   const position = useExchange((s) => s.engine.position);
-  const rebase = useExchange((s) => s.rebaseIfFresh);
-  const setChainBem = useExchange((s) => s.setChainBem);
   const c = copy[lang];
   const [data, setData] = useState<TapeoutLive | null>(null);
   const [failed, setFailed] = useState(false);
@@ -57,13 +54,6 @@ export function LiveBoard() {
       window.clearTimeout(timer);
     };
   }, []);
-
-  useEffect(() => {
-    const usd = data?.bem?.usd;
-    if (!booted || !(usd && usd > 0)) return;
-    setChainBem(usd);
-    rebase(usd);
-  }, [booted, data, rebase, setChainBem]);
 
   const rows = useMemo(() => {
     const all = data?.rows ?? [];
