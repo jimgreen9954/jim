@@ -22,6 +22,13 @@ export default defineConfig({
   build: {
     outDir: fileURLToPath(new URL("./deweb-dist", import.meta.url)),
     emptyOutDir: true,
-    chunkSizeWarningLimit: 2500,
+    cssCodeSplit: false,
+    assetsInlineLimit: 100000,
+    chunkSizeWarningLimit: 4000,
+    rollupOptions: {
+      output: {
+        inlineDynamicImports: true,
+      },
+    },
   },
 });
