@@ -1,4 +1,7 @@
 @import "tailwindcss";
+@source "./components";
+@source "./deweb.tsx";
+@source "./lib";
 
 @theme {
   --color-paper: #f7f5f0;
