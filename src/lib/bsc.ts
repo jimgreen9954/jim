@@ -91,7 +91,7 @@ export function pretty(amount: bigint, decimals: number, digits = 4): string {
 
 export async function bemPrice(): Promise<string> {
   const out = await quoteExact(BSC.bem, BSC.usdt, 10n ** BigInt(BSC.bemDecimals));
-  return pretty(out, BSC.usdtDecimals, 2);
+  return pretty(out, BSC.usdtDecimals, 4);
 }
 
 export async function quoteExact(tokenIn: Hex, tokenOut: Hex, amountIn: bigint): Promise<bigint> {
@@ -125,8 +125,16 @@ export type PoolPrint = {
 
 export async function recentPrints(): Promise<PoolPrint[]> {
   const head = await client.getBlockNumber();
-  const from = head > 2000n ? head - 2000n : 0n;
-  const logs = await client.getLogs({ address: BSC.pool, event: swapEvent, fromBlock: from, toBlock: head });
+  let logs: Awaited<ReturnType<typeof client.getLogs<typeof swapEvent>>> = [];
+  for (const span of [400n, 120n, 40n]) {
+    const from = head > span ? head - span : 0n;
+    try {
+      logs = await client.getLogs({ address: BSC.pool, event: swapEvent, fromBlock: from, toBlock: head });
+      break;
+    } catch {
+      logs = [];
+    }
+  }
   return logs
     .slice(-12)
     .reverse()

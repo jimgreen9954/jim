@@ -29,7 +29,7 @@ const zh: Section[] = [
     ps: [
       "交易对是 BEM / USDT。池子是 BNB Smart Chain 上的 PancakeSwap V3。报价来自链上 Quoter，成交走 SwapRouter。签名之前，币留在你的钱包。本台不托管现货。",
       "页面上能看到这个钱包的 BEM、USDT 和 BNB。买入和卖出可以按余额的百分比下。滑点按页面上的保护价。池子手续费和 BNB gas 付给链和池子，不进永续合约，也不进返佣。",
-      "现货价格是永续标记价的来源。它不是永续的成交价。永续的成交价是挂单上写的那个价。",
+      "现货价格每秒从 Pancake 池子的报价读出，首页显示到小数点后 4 位，所以价格在动时能看见。池子最近的成交大约每 4 秒重读一次。它是永续标记价的来源，不是永续的成交价。永续的成交价是挂单上写的那个价。",
     ],
   },
   {
@@ -68,7 +68,7 @@ const zh: Section[] = [
     h: "晶体管合约",
     ps: [
       "合约和晶圆中间这一页只做六个标：TapeOut、Behemoth、Genesis CPU，各有 NAND 和 LATCH。右上角是官网参考价，每秒更新。中间的盘口是本站自己的。开多、开空、吃单、撤单、平仓都要钱包签名，从钱包划走或退回 BSC 的 USDT，最少 1，最多 500。没有签名的单不算。",
-      "下单前页面先把官网价推进合约。合约里的价 10 秒最多动一半，用来挡住一笔交易把结算价改飞。成交按挂单价。平仓按合约里已经推进的价，不按你填的限价。",
+      "下单、吃单、平仓之前，页面先看合约里的结算价。和官网价相差不超过 3% 才继续。差得更多就先把官网价推进去。推进不了，或者推进之后仍超过 3%，这一笔不做，避免按错价分钱。合约本身仍是第一次写入可以由任何人定，页面不跟那个错价。写进去之后，链上每 10 秒最多再动一半。成交按挂单价。",
       "手续费是用掉的保证金的千分之二。有推荐人时，交易者少付其中 4%，推荐人记其中 6%，剩下的进开发者地址。比例和 BEM 永续相同，但是推荐码要在这份晶体管合约上重新确认一次，不能拿 BEM 那份码直接用。提到的是 BSC 的 USDT，不能和 BEM 的返佣混提。门槛是 1、10、20、50、100、300、500。",
       "确认自己的码之后，页面生成邀请链接，形式是当前网址加 #gate=你的码。朋友打开会进晶体管页，码已经填好，仍要点绑定才写上链。只打开链接不会绑定。BEM 和 X Layer 的链接仍是 #ref=，两套码不要混用。",
       "全站只有这一份晶体管永续：0xe380b8449280a1da46952dba0de0418e0958d668。任何地址、任何时候挂的单都在这一本账上，别人随时可以吃。页面不再让用户另外部署。部署过的人不能改规则，也不能动别人还锁着的保证金。三个标的的现货合约仍是 TapeOut 0xCC42ba5De07f01B472a5b14cF45aBcCA79Eb8087、Behemoth 0xE2DfD802081C7a05341E20b6582b04b908e8550c、Genesis CPU 0x1d23Bf70ec6bAAD95f396Ea38f8A8415119dFDE6。那是官网的现货，不是我们的永续。",
@@ -166,7 +166,7 @@ const en: Section[] = [
     ps: [
       "The pair is BEM / USDT in a PancakeSwap V3 pool on BNB Smart Chain. Quotes come from the on-chain quoter. Swaps use the SwapRouter. Tokens stay in your wallet until you sign. This desk does not custody spot.",
       "The page shows this wallet's BEM, USDT, and BNB. Buys and sells can use a percent of the balance. Protection is the slippage shown on the page. The pool fee and BNB gas go to the pool and the chain, not to the perpetual and not to rebates.",
-      "The spot price feeds the perpetual mark. It is not the perpetual fill. The fill is the price written on the order.",
+      "The spot price is read from the Pancake pool quote every second. The home page shows four decimal places so a moving price is visible. Recent pool trades are reread about every 4 seconds. That quote feeds the perpetual mark. It is not the perpetual fill. The fill is the price written on the order.",
     ],
   },
   {
@@ -205,7 +205,7 @@ const en: Section[] = [
     h: "Transistor contracts",
     ps: [
       "The page between the perpetual and the wafer lists six markets only: TapeOut, Behemoth, and Genesis CPU, each with NAND and LATCH. The official mark sits at the top and updates every second. The book in the middle is ours. A long, short, take, cancel, or close asks the wallet to sign and moves BSC USDT, from 1 to 500. An order without a signature does not count.",
-      "Before an order, the page pushes the official price into the contract. That stored price can move by at most half every 10 seconds, so one transaction cannot throw the settlement. A fill uses the resting price. A close uses the price already pushed, not the limit you typed.",
+      "Before an open, a take, or a close, the page reads the mark stored in the contract. It continues only when that mark is within 3% of the official price. A wider gap is pushed toward the official price first. If the push cannot land inside 3%, the order does not go through, so money is not split at the wrong price. The contract still lets anyone write the first mark. This page will not follow a wrong one. After a mark is stored, the chain allows at most a 50% move every 10 seconds. A fill uses the resting price.",
       "The fee is 0.2% of the margin that was used. With a referrer, the trader pays 4% less of that fee and the referrer is credited 6%. The rest goes to the developer. The split matches the BEM perpetual, but the code has to be confirmed again on this transistor contract. A BEM code does not carry over. Claims are BSC USDT and cannot be mixed with a BEM rebate. The steps are 1, 10, 20, 50, 100, 300, and 500.",
       "After the code is confirmed, the page makes an invite link: the current address plus #gate= and the code. A friend who opens it lands on the transistor page with the code filled in, and still has to press bind. Opening the link does not bind by itself. BEM and X Layer links stay #ref=. The two codes are not interchangeable.",
       "There is one transistor perpetual for the whole desk: 0xe380b8449280a1da46952dba0de0418e0958d668. An order from any address, at any time, sits on that one book and can be taken. The page does not ask anyone to deploy another copy. The deployer cannot change the rules and cannot take margin that is still locked. The spot contracts remain TapeOut 0xCC42ba5De07f01B472a5b14cF45aBcCA79Eb8087, Behemoth 0xE2DfD802081C7a05341E20b6582b04b908e8550c, and Genesis CPU 0x1d23Bf70ec6bAAD95f396Ea38f8A8415119dFDE6. Those are the official spot tokens, not this perpetual.",

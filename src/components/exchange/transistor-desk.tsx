@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { bindGate, cancelGateChain, claimGate, closeGateChain, gateAddress, openGate, readGateChain, readGateRebate, registerGate, takeGateChain, type ChainDeal, type ChainOrder } from "@/lib/gate-chain";
+import { bindGate, cancelGateChain, claimGate, closeGateChain, gateAddress, gateMark, openGate, readGateChain, readGateRebate, registerGate, takeGateChain, type ChainDeal, type ChainOrder } from "@/lib/gate-chain";
 import { getTransistorDesk, type TransistorDesk } from "@/lib/transistor-market";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import { useExchange } from "@/lib/exchange-store";
@@ -62,6 +62,7 @@ export function TransistorDesk() {
   const [lev, setLev] = useState(10);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [chainMark, setChainMark] = useState(0);
   const [mineCode, setMineCode] = useState("");
   const [friend, setFriend] = useState("");
   const [rebate, setRebate] = useState({ accrued: 0, code: "", referrer: "" });
@@ -89,6 +90,7 @@ export function TransistorDesk() {
       }).catch(() => undefined);
       const who = currentAccount();
       if (who) readGateRebate(who).then((next) => { if (!dead) setRebate(next); }).catch(() => undefined);
+      gateMark(addr, marketOf(pick.token, pick.id)).then((next) => { if (!dead) setChainMark(next); }).catch(() => undefined);
     };
     pull();
     const timer = window.setInterval(pull, 1000);
@@ -129,7 +131,7 @@ export function TransistorDesk() {
       setNote(zh ? "链上挂单成功。USDT 已从钱包划进合约。单子在下面，别人可以吃。" : "Posted on chain. USDT moved from the wallet into the contract. The order is below.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "";
-      setNote(message === "usdt" ? (zh ? "USDT 不够。最少 1。" : "Not enough USDT. Minimum 1.") : message === "margin" ? (zh ? "保证金要在 1 到 500 USDT。" : "Margin is 1 to 500 USDT.") : zh ? "钱包没有完成这笔交易。" : "The wallet did not finish the transaction.");
+      setNote(message === "usdt" ? (zh ? "USDT 不够。最少 1。" : "Not enough USDT. Minimum 1.") : message === "margin" ? (zh ? "保证金要在 1 到 500 USDT。" : "Margin is 1 to 500 USDT.") : message === "mark" ? (zh ? "合约里的结算价和官网价差超过 3%，这一笔先不做。等价格靠近再试。" : "The contract mark is more than 3% from the official price. This order waits.") : zh ? "钱包没有完成这笔交易。" : "The wallet did not finish the transaction.");
     } finally {
       setBusy(false);
     }
@@ -140,13 +142,14 @@ export function TransistorDesk() {
     if (!user || !perp) return;
     setBusy(true);
     try {
-      await takeGateChain(user, perp, BigInt(row.id), margin, lev);
+      await takeGateChain(user, perp, BigInt(row.id), margin, lev, row.market, markFor(row.market));
       const next = await readGateChain(perp);
       setOrders(next.orders);
       setDeals(next.deals);
       setNote(zh ? "吃单成功。持仓在下面，盈亏按官网参考价推进后的合约价。" : "Filled. The position is below.");
-    } catch {
-      setNote(zh ? "吃单没有完成。" : "The take did not finish.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      setNote(message === "mark" ? (zh ? "结算价离官网价太远，先不吃。" : "The mark is too far from the official price. Not taking.") : zh ? "吃单没有完成。" : "The take did not finish.");
     } finally {
       setBusy(false);
     }
@@ -174,13 +177,14 @@ export function TransistorDesk() {
     if (!user || !perp) return;
     setBusy(true);
     try {
-      await closeGateChain(user, perp, BigInt(row.id));
+      await closeGateChain(user, perp, BigInt(row.id), row.market, markFor(row.market));
       const next = await readGateChain(perp);
       setOrders(next.orders);
       setDeals(next.deals);
       setNote(zh ? "已平仓。USDT 按合约里的参考价退回钱包。" : "Closed. USDT was returned at the mark stored in the contract.");
-    } catch {
-      setNote(zh ? "平仓没有完成。" : "The close did not finish.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      setNote(message === "mark" ? (zh ? "结算价离官网价太远，先不平，避免按错价分钱。" : "The mark is too far from the official price. Not closing, so the split is not wrong.") : zh ? "平仓没有完成。" : "The close did not finish.");
     } finally {
       setBusy(false);
     }
@@ -222,6 +226,7 @@ export function TransistorDesk() {
             <div className="text-right">
               <p className="text-xs tracking-widest text-gold">{zh ? "官网参考价" : "Official mark"}</p>
               <p className="font-mono text-2xl tabular-nums">{px(mark)} BNB</p>
+              <p className={`font-mono text-xs ${chainMark > 0 && mark > 0 && (chainMark / mark < 0.97 || chainMark / mark > 1.03) ? "text-sell" : "text-ink/50"}`}>{zh ? "合约结算" : "Contract"} {chainMark > 0 ? px(chainMark) : "—"}</p>
             </div>
           </div>
           <div className="grid grid-cols-[5rem_1fr_4.5rem_auto] gap-2 px-2 py-1 text-xs text-ink/50">

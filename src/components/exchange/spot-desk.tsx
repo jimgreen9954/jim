@@ -36,7 +36,7 @@ export function SpotDesk() {
   const [amount, setAmount] = useState("");
   const [price, setPrice] = useState<string | null>(null);
   const live = useExchange((s) => s.chainBem);
-  const shown = live && live > 0 ? live.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : price;
+  const shown = live && live > 0 ? live.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : price;
   const [out, setOut] = useState<string | null>(null);
   const [account, setAccount] = useState<string | null>(currentAccount());
   const [balances, setBalances] = useState<Balances | null>(null);
@@ -48,14 +48,26 @@ export function SpotDesk() {
 
   useEffect(() => onAccount(setAccount), []);
 
-  const refresh = (addr: string | null) => {
-    bemPrice().then(setPrice).catch(() => setPrice(null));
-    recentPrints().then(setPrints).catch(() => setPrints([]));
-    if (addr) readBalances(addr).then(setBalances).catch(() => setBalances(null));
-  };
-
   useEffect(() => {
-    refresh(account);
+    let dead = false;
+    const pull = () => {
+      bemPrice().then((text) => {
+        if (!dead) setPrice(text);
+      }).catch(() => undefined);
+      recentPrints().then((rows) => {
+        if (!dead) setPrints(rows);
+      }).catch(() => undefined);
+      const who = account ?? currentAccount();
+      if (who) readBalances(who).then((next) => {
+        if (!dead) setBalances(next);
+      }).catch(() => undefined);
+    };
+    pull();
+    const timer = window.setInterval(pull, 4000);
+    return () => {
+      dead = true;
+      window.clearInterval(timer);
+    };
   }, [account, hash]);
 
   useEffect(() => {
@@ -131,6 +143,7 @@ export function SpotDesk() {
         <div className="border-b border-gold/40 p-3 lg:col-span-7 lg:border-r lg:border-b-0">
           <p className="text-xs tracking-widest text-gold">BEM / USDT</p>
           <p className="font-display text-5xl italic leading-none tabular-nums">{shown ? `$${shown}` : "—"}</p>
+          <p className="mt-1 font-mono text-xs text-ink/50">{lang === "zh" ? "Pancake 池子报价 · 每秒从链上读" : "Pancake pool quote · read every second"}</p>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink/80">{c.realNote}</p>
           <h2 className="mt-4 text-xs tracking-widest text-gold">{c.poolPrints}</h2>
           <ul className="mt-2 divide-y divide-gold/30">
