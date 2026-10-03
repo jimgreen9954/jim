@@ -66,9 +66,10 @@ const zh: Section[] = [
   {
     h: "晶体管合约",
     ps: [
-      "合约和晶圆中间这一页只做六个标：TapeOut、Behemoth、Genesis CPU，各有 NAND 和 LATCH。官网参考价每秒读 TapeOut 交易市场。中间的盘口是本站自己的挂单，不是官网那本。开多开空挂在这里，别人能看见并吃。个人未成交的单在「我的挂单」，成交后的多空在「我的持仓」，盈亏按官网参考价。",
-      "红的是官网卖单，绿的是官网买单。右边开的是本站合约，按那根参考价结算，不进 BEM 的订单簿。手续费是保证金的千分之二。有推荐人时，交易者少付其中 4%，推荐人记其中 6%，比例和 BEM 永续相同。",
-      "这三个处理器的晶体管合约地址分别是 TapeOut 0xCC42ba5De07f01B472a5b14cF45aBcCA79Eb8087、Behemoth 0xE2DfD802081C7a05341E20b6582b04b908e8550c、Genesis CPU 0x1d23Bf70ec6bAAD95f396Ea38f8A8415119dFDE6。",
+      "合约和晶圆中间这一页只做六个标：TapeOut、Behemoth、Genesis CPU，各有 NAND 和 LATCH。右上角是官网参考价，每秒更新。中间的盘口是本站自己的。开多、开空、吃单、撤单、平仓都要钱包签名，从钱包划走或退回 BSC 的 USDT，最少 1，最多 500。没有签名的单不算。",
+      "下单前页面先把官网价推进合约。合约里的价 10 秒最多动一半，用来挡住一笔交易把结算价改飞。成交按挂单价。平仓按合约里已经推进的价，不按你填的限价。",
+      "手续费是用掉的保证金的千分之二。有推荐人时，交易者少付其中 4%，推荐人记其中 6%，剩下的进开发者地址。比例和 BEM 永续相同，但是记在晶体管这份合约里，提到 BSC 的 USDT，不能和 BEM 的返佣混提。",
+      "全站只能有一份晶体管合约。页面第一次会请你部署。部署的人不能改规则，也不能动别人还锁着的保证金。部署出来的地址要写回这一页，别人才能看见并吃你的单。三个标的的现货合约仍是 TapeOut 0xCC42ba5De07f01B472a5b14cF45aBcCA79Eb8087、Behemoth 0xE2DfD802081C7a05341E20b6582b04b908e8550c、Genesis CPU 0x1d23Bf70ec6bAAD95f396Ea38f8A8415119dFDE6。那是官网的现货，不是我们的永续。",
     ],
   },
   {
@@ -200,9 +201,10 @@ const en: Section[] = [
   {
     h: "Transistor contracts",
     ps: [
-      "The page between the perpetual and the wafer lists six markets only: TapeOut, Behemoth, and Genesis CPU, each with NAND and LATCH. The official mark is read every second. The book in the middle is ours, not the official one. Longs and shorts rest there and can be taken. Open orders are under My orders. Filled longs and shorts are under My positions, and PnL follows the official mark.",
-      "Red rows are the official asks. Green rows are the official bids. The ticket is this desk's contract, settled at that mark. It does not enter the BEM book. The fee is 0.2% of margin. With a referrer, the trader pays 4% less of that fee and the referrer is credited 6%, the same split as the BEM perpetual.",
-      "The transistor contracts are TapeOut 0xCC42ba5De07f01B472a5b14cF45aBcCA79Eb8087, Behemoth 0xE2DfD802081C7a05341E20b6582b04b908e8550c, and Genesis CPU 0x1d23Bf70ec6bAAD95f396Ea38f8A8415119dFDE6.",
+      "The page between the perpetual and the wafer lists six markets only: TapeOut, Behemoth, and Genesis CPU, each with NAND and LATCH. The official mark sits at the top and updates every second. The book in the middle is ours. A long, short, take, cancel, or close asks the wallet to sign and moves BSC USDT, from 1 to 500. An order without a signature does not count.",
+      "Before an order, the page pushes the official price into the contract. That stored price can move by at most half every 10 seconds, so one transaction cannot throw the settlement. A fill uses the resting price. A close uses the price already pushed, not the limit you typed.",
+      "The fee is 0.2% of the margin that was used. With a referrer, the trader pays 4% less of that fee and the referrer is credited 6%. The rest goes to the developer. The split matches the BEM perpetual, but it is stored in the transistor contract and claimed in BSC USDT. It cannot be mixed with a BEM rebate.",
+      "There is one transistor contract for the whole desk. The page asks for that deployment once. The deployer cannot change the rules and cannot take margin that is still locked. The deployed address has to be written back into this page before other people can see and take the orders. The spot contracts remain TapeOut 0xCC42ba5De07f01B472a5b14cF45aBcCA79Eb8087, Behemoth 0xE2DfD802081C7a05341E20b6582b04b908e8550c, and Genesis CPU 0x1d23Bf70ec6bAAD95f396Ea38f8A8415119dFDE6. Those are the official spot tokens, not this perpetual.",
     ],
   },
   {

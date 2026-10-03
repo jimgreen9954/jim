@@ -1,12 +1,22 @@
 import { useEffect, useState } from "react";
-import { cancelGate, closeGate, getGateBook, postGate, takeGate, type GateBook } from "@/lib/gate-book";
-import { dealPnl, type GateDeal, type GateOrder } from "@/lib/gate-core";
+import { cancelGateChain, closeGateChain, deployGate, gateAddress, openGate, readGateChain, takeGateChain, type ChainDeal, type ChainOrder } from "@/lib/gate-chain";
 import { getTransistorDesk, type TransistorDesk } from "@/lib/transistor-market";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import { useExchange } from "@/lib/exchange-store";
 
-const FIRST = { token: "0xCC42ba5De07f01B472a5b14cF45aBcCA79Eb8087", id: 0 };
-const LEVS = [1, 5, 10, 20, 50, 100];
+const GATES = [
+  ["0xcc42ba5de07f01b472a5b14cf45abcca79eb8087", 0],
+  ["0xcc42ba5de07f01b472a5b14cf45abcca79eb8087", 1],
+  ["0xe2dfd802081c7a05341e20b6582b04b908e8550c", 0],
+  ["0xe2dfd802081c7a05341e20b6582b04b908e8550c", 1],
+  ["0x1d23bf70ec6baad95f396ea38f8a8415119dfde6", 0],
+  ["0x1d23bf70ec6baad95f396ea38f8a8415119dfde6", 1],
+] as const;
+
+function marketOf(token: string, id: number): number {
+  const found = GATES.findIndex((row) => row[0] === token.toLowerCase() && row[1] === id);
+  return found < 0 ? 0 : found;
+}
 
 function px(value: number): string {
   if (!(value > 0)) return "—";
@@ -19,8 +29,18 @@ function short(user: string): string {
   return `${user.slice(0, 6)}…${user.slice(-4)}`;
 }
 
-function feeOf(margin: number): number {
-  return margin * 0.002;
+const NAMES = ["TapeOut NAND", "TapeOut LATCH", "Behemoth NAND", "Behemoth LATCH", "Genesis NAND", "Genesis LATCH"];
+const FIRST = { token: "0xCC42ba5De07f01B472a5b14cF45aBcCA79Eb8087", id: 0 };
+const LEVS = [1, 5, 10, 20, 50, 100];
+
+function pnlOf(row: ChainDeal, user: string, mark: number): number {
+  if (!(mark > 0) || !(row.entry > 0)) return 0;
+  const long = row.longUser.toLowerCase() === user.toLowerCase();
+  const margin = long ? row.marginL : row.marginS;
+  const lev = long ? row.levL : row.levS;
+  const other = long ? row.marginS : row.marginL;
+  const raw = margin * lev * ((mark - row.entry) / row.entry) * (long ? 1 : -1);
+  return Math.max(-margin, Math.min(other, raw));
 }
 
 export function TransistorDesk() {
@@ -29,13 +49,17 @@ export function TransistorDesk() {
   const [account, setAccount] = useState<string | null>(null);
   const [pick, setPick] = useState(FIRST);
   const [desk, setDesk] = useState<TransistorDesk | null>(null);
-  const [book, setBook] = useState<GateBook>({ orders: [], deals: [] });
-  const [margin, setMargin] = useState("0.01");
+  const [perp, setPerp] = useState("");
+  const [orders, setOrders] = useState<ChainOrder[]>([]);
+  const [deals, setDeals] = useState<ChainDeal[]>([]);
+  const [margin, setMargin] = useState("1");
   const [limit, setLimit] = useState("");
   const [lev, setLev] = useState(10);
   const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => onAccount(setAccount), []);
+  useEffect(() => setPerp(gateAddress()), []);
 
   useEffect(() => {
     let dead = false;
@@ -43,8 +67,13 @@ export function TransistorDesk() {
       getTransistorDesk({ data: pick }).then((next) => {
         if (!dead) setDesk(next);
       }).catch(() => undefined);
-      getGateBook().then((next) => {
-        if (!dead) setBook(next);
+      const addr = gateAddress();
+      if (!addr) return;
+      readGateChain(addr).then((next) => {
+        if (!dead) {
+          setOrders(next.orders);
+          setDeals(next.deals);
+        }
       }).catch(() => undefined);
     };
     pull();
@@ -57,63 +86,115 @@ export function TransistorDesk() {
 
   const gate = desk?.gates.find((row) => row.transistors.toLowerCase() === pick.token.toLowerCase() && row.tokenId === pick.id);
   const mark = gate?.price ?? 0;
-  const market = `${pick.token.toLowerCase()}:${pick.id}`;
+  const market = marketOf(pick.token, pick.id);
   const mine = (account ?? currentAccount() ?? "").toLowerCase();
-  const resting = book.orders.filter((row) => row.market === market);
+  const resting = orders.filter((row) => row.market === market);
   const asks = resting.filter((row) => !row.long).sort((a, b) => b.price - a.price);
   const bids = resting.filter((row) => row.long).sort((a, b) => b.price - a.price);
-  const mineOrders = book.orders.filter((row) => row.user.toLowerCase() === mine);
-  const mineDeals = book.deals.filter((row) => row.longUser.toLowerCase() === mine || row.shortUser.toLowerCase() === mine);
+  const mineOrders = orders.filter((row) => row.user.toLowerCase() === mine);
+  const mineDeals = deals.filter((row) => row.longUser.toLowerCase() === mine || row.shortUser.toLowerCase() === mine);
 
   async function send(long: boolean) {
     const user = account ?? currentAccount();
     if (!user || !gate) {
-      setNote(zh ? "先连接钱包，单子才会记在你的地址上。" : "Connect a wallet so the order is stored under your address.");
+      setNote(zh ? "先连接钱包。" : "Connect a wallet.");
+      return;
+    }
+    if (!perp) {
+      setNote(zh ? "先部署全站这份晶体管合约。只部署一次，部署之后开多开空才会从钱包扣 USDT。" : "Deploy the shared contract once. After that, longs and shorts take USDT from the wallet.");
       return;
     }
     const price = Number(limit) > 0 ? Number(limit) : mark;
-    const amount = Number(margin);
-    if (!(price > 0) || !(amount > 0)) return;
+    if (!(price > 0)) return;
+    setBusy(true);
     try {
-      const next = await postGate({ data: { user, market, name: gate.name, kind: gate.kind, long, price, margin: amount, lev } });
-      setBook(next);
-      const crossed = next.deals.some((row) => row.market === market && (row.longUser.toLowerCase() === user.toLowerCase() || row.shortUser.toLowerCase() === user.toLowerCase()));
-      const fee = feeOf(amount);
-      setNote(crossed
-        ? (zh ? `吃到对手单了。手续费 ${fee.toFixed(6)} BNB，其中 6% 按 BEM 的比例记给推荐人。持仓在下面。` : `Filled. Fee ${fee.toFixed(6)} BNB. 6% of it is the referrer's share, the same split as BEM. The position is below.`)
-        : (zh ? "挂到我们自己的盘口了。别人可以吃。你的挂单在下面。" : "Resting on our book. Someone else can take it. Your order is below."));
-    } catch {
-      setNote(zh ? "这张单没挂上。" : "The order was not posted.");
+      await openGate(user, perp, market, long, margin, lev, price);
+      const next = await readGateChain(perp);
+      setOrders(next.orders);
+      setDeals(next.deals);
+      setNote(zh ? "链上挂单成功。USDT 已从钱包划进合约。单子在下面，别人可以吃。" : "Posted on chain. USDT moved from the wallet into the contract. The order is below.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      setNote(message === "usdt" ? (zh ? "USDT 不够。最少 1。" : "Not enough USDT. Minimum 1.") : message === "margin" ? (zh ? "保证金要在 1 到 500 USDT。" : "Margin is 1 to 500 USDT.") : zh ? "钱包没有完成这笔交易。" : "The wallet did not finish the transaction.");
+    } finally {
+      setBusy(false);
     }
   }
 
-  async function take(row: GateOrder) {
+  async function deploy() {
     const user = account ?? currentAccount();
-    if (!user) return;
-    const amount = Number(margin);
-    if (!(amount > 0)) return;
-    setBook(await takeGate({ data: { user, id: row.id, margin: amount, lev } }));
-    setNote(zh ? "已成交，持仓在下面。" : "Filled. The position is below.");
+    if (!user) {
+      setNote(zh ? "先连接钱包。" : "Connect a wallet.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const addr = await deployGate(user);
+      setPerp(addr);
+      setNote(zh ? `已部署 ${addr}。把这个地址发出来，全站才能吃同一本账。` : `Deployed ${addr}. Share this address so everyone uses the same book.`);
+    } catch {
+      setNote(zh ? "部署没有完成。" : "Deploy did not finish.");
+    } finally {
+      setBusy(false);
+    }
   }
 
-  async function cancel(row: GateOrder) {
+  async function take(row: ChainOrder) {
     const user = account ?? currentAccount();
-    if (!user) return;
-    setBook(await cancelGate({ data: { user, id: row.id } }));
-    setNote(zh ? `已撤。撤单费 ${feeOf(row.margin).toFixed(6)} BNB，和 BEM 一样是保证金的千分之二。` : `Cancelled. Fee ${feeOf(row.margin).toFixed(6)} BNB, 0.2% of margin, same as BEM.`);
+    if (!user || !perp) return;
+    setBusy(true);
+    try {
+      await takeGateChain(user, perp, BigInt(row.id), margin, lev);
+      const next = await readGateChain(perp);
+      setOrders(next.orders);
+      setDeals(next.deals);
+      setNote(zh ? "吃单成功。持仓在下面，盈亏按官网参考价推进后的合约价。" : "Filled. The position is below.");
+    } catch {
+      setNote(zh ? "吃单没有完成。" : "The take did not finish.");
+    } finally {
+      setBusy(false);
+    }
   }
 
-  async function close(row: GateDeal) {
+  async function cancel(row: ChainOrder) {
     const user = account ?? currentAccount();
-    if (!user) return;
-    const pnl = dealPnl(row, user, markOf(row));
-    setBook(await closeGate({ data: { user, id: row.id } }));
-    setNote(zh ? `已平。盈亏 ${pnl >= 0 ? "+" : ""}${pnl.toFixed(6)} BNB，按官网参考价。` : `Closed. PnL ${pnl >= 0 ? "+" : ""}${pnl.toFixed(6)} BNB at the official mark.`);
+    if (!user || !perp) return;
+    setBusy(true);
+    try {
+      await cancelGateChain(user, perp, BigInt(row.id));
+      const next = await readGateChain(perp);
+      setOrders(next.orders);
+      setDeals(next.deals);
+      setNote(zh ? "已撤。撤单费是保证金的千分之二，从退回的 USDT 里扣。" : "Cancelled. The 0.2% fee is taken from the USDT returned.");
+    } catch {
+      setNote(zh ? "撤单没有完成。" : "The cancel did not finish.");
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function markOf(row: GateDeal): number {
-    const found = desk?.gates.find((item) => `${item.transistors.toLowerCase()}:${item.tokenId}` === row.market);
-    return found?.price ?? (row.market === market ? mark : 0);
+  async function close(row: ChainDeal) {
+    const user = account ?? currentAccount();
+    if (!user || !perp) return;
+    setBusy(true);
+    try {
+      await closeGateChain(user, perp, BigInt(row.id));
+      const next = await readGateChain(perp);
+      setOrders(next.orders);
+      setDeals(next.deals);
+      setNote(zh ? "已平仓。USDT 按合约里的参考价退回钱包。" : "Closed. USDT was returned at the mark stored in the contract.");
+    } catch {
+      setNote(zh ? "平仓没有完成。" : "The close did not finish.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function markFor(id: number): number {
+    const row = GATES[id];
+    if (!row) return mark;
+    const found = desk?.gates.find((item) => item.transistors.toLowerCase() === row[0] && item.tokenId === row[1]);
+    return found?.price ?? 0;
   }
 
   return (
@@ -173,7 +254,7 @@ export function TransistorDesk() {
             <input value={limit} onChange={(event) => setLimit(event.target.value)} inputMode="decimal" placeholder={px(mark)} className="mt-1 w-full border border-gold bg-transparent px-2 py-2 font-mono outline-none" />
           </label>
           <label className="text-sm">
-            {zh ? "保证金 BNB" : "Margin BNB"}
+            {zh ? "保证金 USDT" : "Margin USDT"}
             <input value={margin} onChange={(event) => setMargin(event.target.value)} inputMode="decimal" className="mt-1 w-full border border-gold bg-transparent px-2 py-2 font-mono outline-none" />
           </label>
           <div className="grid grid-cols-3 gap-1">
@@ -182,10 +263,17 @@ export function TransistorDesk() {
             ))}
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => send(true)} className="min-h-11 bg-ink text-paper">{zh ? "开多" : "Long"}</button>
-            <button type="button" onClick={() => send(false)} className="min-h-11 border border-gold">{zh ? "开空" : "Short"}</button>
+            {perp ? (
+              <>
+                <button type="button" disabled={busy} onClick={() => send(true)} className="min-h-11 bg-ink text-paper disabled:opacity-50">{zh ? "开多" : "Long"}</button>
+                <button type="button" disabled={busy} onClick={() => send(false)} className="min-h-11 border border-gold disabled:opacity-50">{zh ? "开空" : "Short"}</button>
+              </>
+            ) : (
+              <button type="button" disabled={busy} onClick={deploy} className="col-span-2 min-h-11 bg-ink text-paper disabled:opacity-50">{zh ? "部署全站合约" : "Deploy the shared contract"}</button>
+            )}
           </div>
-          <p className="text-xs leading-relaxed text-ink/60">{zh ? "成交价按挂单价。盈亏按官网参考价，最多赢光对手保证金，最多亏光自己的。手续费是保证金的千分之二。有推荐人时，交易者少付其中 4%，推荐人记其中 6%。" : "Fills use the resting price. PnL uses the official mark, capped by both margins. The fee is 0.2% of margin. With a referrer, the trader pays 4% less of it and the referrer is credited 6%."}</p>
+          <p className="text-xs leading-relaxed text-ink/60">{zh ? "开多开空会让钱包先授权再划走 BSC 的 USDT，最少 1。官网价先推进合约，之后盈亏按合约里的价结算，不按你填的限价。手续费千分之二。有推荐人时，交易者少付其中 4%，推荐人记其中 6%，和 BEM 一样，提到这份合约的 USDT。" : "A long or short asks the wallet to approve and then move BSC USDT, from 1. The official price is pushed into the contract first. PnL uses that stored price, not your limit. The fee is 0.2%. With a referrer, the trader pays 4% less of it and the referrer is credited 6%, paid in this contract's USDT."}</p>
+          {perp ? <p className="break-all font-mono text-xs">{perp}</p> : null}
           {note ? <p className="text-sm">{note}</p> : null}
         </div>
       </section>
@@ -195,7 +283,7 @@ export function TransistorDesk() {
           {mineOrders.length === 0 ? <p className="mt-2 text-sm text-ink/60">{zh ? "还没有未成交的单。" : "No resting orders."}</p> : null}
           {mineOrders.map((row) => (
             <div key={row.id} className="mt-2 flex items-center justify-between gap-2 border-t border-gold/30 pt-2 text-sm">
-              <p className="font-mono">{row.name} {row.kind} · {row.long ? (zh ? "多" : "Long") : zh ? "空" : "Short"} · {px(row.price)} · {row.margin} BNB · {row.lev}×</p>
+              <p className="font-mono">{NAMES[row.market]} · {row.long ? (zh ? "多" : "Long") : zh ? "空" : "Short"} · {px(row.price)} · {row.margin} USDT · {row.lev}×</p>
               <button type="button" className="min-h-9 border border-gold px-2" onClick={() => cancel(row)}>{zh ? "撤单" : "Cancel"}</button>
             </div>
           ))}
@@ -204,14 +292,14 @@ export function TransistorDesk() {
           <p className="text-xs tracking-widest text-gold">{zh ? "我的持仓" : "My positions"}</p>
           {mineDeals.length === 0 ? <p className="mt-2 text-sm text-ink/60">{zh ? "成交之后，多单和空单在这里，盈亏跟着官网参考价变。" : "After a fill, longs and shorts stay here. PnL follows the official mark."}</p> : null}
           {mineDeals.map((row) => {
-            const live = markOf(row);
-            const pnl = dealPnl(row, mine, live);
+            const live = markFor(row.market);
+            const pnl = pnlOf(row, mine, live);
             const long = row.longUser.toLowerCase() === mine;
             return (
               <div key={row.id} className="mt-2 border-t border-gold/30 pt-2 text-sm">
-                <p className="font-mono">{row.name} {row.kind} · {long ? (zh ? "多" : "Long") : zh ? "空" : "Short"} · {zh ? "开仓" : "Entry"} {px(row.entry)} · {zh ? "现价" : "Mark"} {px(live)}</p>
+                <p className="font-mono">{NAMES[row.market]} · {long ? (zh ? "多" : "Long") : zh ? "空" : "Short"} · {zh ? "开仓" : "Entry"} {px(row.entry)} · {zh ? "现价" : "Mark"} {px(live)}</p>
                 <p className="font-mono text-xs text-ink/50">{zh ? "对手" : "Against"} {short(long ? row.shortUser : row.longUser)}</p>
-                <p className={`font-mono ${pnl >= 0 ? "text-gold" : "text-sell"}`}>{pnl >= 0 ? "+" : ""}{pnl.toFixed(6)} BNB</p>
+                <p className={`font-mono ${pnl >= 0 ? "text-gold" : "text-sell"}`}>{pnl >= 0 ? "+" : ""}{pnl.toFixed(4)} USDT</p>
                 <button type="button" className="mt-1 min-h-9 border border-gold px-2" onClick={() => close(row)}>{zh ? "平仓" : "Close"}</button>
               </div>
             );
@@ -222,7 +310,7 @@ export function TransistorDesk() {
   );
 }
 
-function OrderRow({ row, mine, zh, onTake, onCancel }: { row: GateOrder; mine: string; zh: boolean; onTake: () => void; onCancel: () => void }) {
+function OrderRow({ row, mine, zh, onTake, onCancel }: { row: ChainOrder; mine: string; zh: boolean; onTake: () => void; onCancel: () => void }) {
   const own = row.user.toLowerCase() === mine;
   return (
     <div className="grid grid-cols-[5rem_1fr_4.5rem_auto] items-center gap-2 px-2 py-1 font-mono text-sm tabular-nums">
