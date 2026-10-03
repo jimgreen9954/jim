@@ -167,7 +167,7 @@ function DeskLadder({
             <span className="px-2 text-xs text-ink/50">我的</span>
           ) : (
             <button type="button" disabled={busy} onClick={(event) => { event.stopPropagation(); onTake(row.perp, row.quote); }} className={`min-h-9 px-3 text-paper ${buy ? "bg-sell" : "bg-[#1b6b45]"}`}>
-              {buy ? "买入" : "卖出"}
+              {buy ? "开多吃" : "开空吃"}
             </button>
           )}
           <a className="text-xs text-ink/50 underline" href={`${scan}/address/${row.quote.user}`} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
@@ -523,7 +523,7 @@ export function RealPerp() {
             named={named}
             onTake={(book, quote) => run((from) => takePerp(from, book, quote.id, formatUnits(quote.margin, dec), quote.lev, quote.price > 0n))}
           />
-          <p className="px-3 py-2 text-xs text-ink/50">K 线和盘口用的是同一口价。别人的单点整行就能吃。自己的单写着「我的」。靠近现价的各留 5 张，其余可以展开。</p>
+          <p className="px-3 py-2 text-xs text-ink/50">上面红的是空单，点整行或「开多吃」。下面绿的是多单，点整行或「开空吃」。自己的单写着「我的」。靠近现价的各留 5 张，其余可以展开。</p>
         </div>
         <div className="border border-gold/40 p-3">
           <p className="text-xs tracking-widest text-gold">{c.pkTitle}</p>
@@ -599,7 +599,7 @@ export function RealPerp() {
                 </div>
                 <p className="text-sm leading-relaxed text-ink/80">{c.feeNote}</p>
                 {sheet === "book" ? (
-                  <p className="text-sm text-ink/60">挂单在上面的盘口里。红的买入，绿的卖出，中间那根就是现在的价。</p>
+                  <p className="text-sm text-ink/60">挂单在上面的盘口里。红的空单点开多吃，绿的多单点开空吃，中间那根就是现在的价。</p>
                 ) : (
                   <>
                     {view.quotes.filter((quote) => account && quote.user.toLowerCase() === account.toLowerCase()).length === 0 ? (
