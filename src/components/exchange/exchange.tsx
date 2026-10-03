@@ -11,13 +11,14 @@ import { Ticket } from "@/components/exchange/ticket";
 import { LiveBoard } from "@/components/exchange/live-board";
 import { RealPerp } from "@/components/exchange/real-perp";
 import { SpotDesk } from "@/components/exchange/spot-desk";
+import { TransistorDesk } from "@/components/exchange/transistor-desk";
 import { ConnectButton, WalletBar } from "@/components/exchange/wallet-bar";
 import { Whitepaper } from "@/components/exchange/whitepaper";
 import { KNOWN_PERP, KNOWN_XPERP } from "@/lib/perp";
 import { bemPrice } from "@/lib/bsc";
 import { XLAYER } from "@/lib/xlayer";
 
-type Pane = "spot" | "paper" | "perp" | "wafer" | "brief";
+type Pane = "spot" | "paper" | "perp" | "gate" | "wafer" | "brief";
 
 export function Exchange() {
   const [pane, setPane] = useState<Pane>("spot");
@@ -32,6 +33,7 @@ export function Exchange() {
         {pane === "spot" ? <SpotDesk /> : null}
         {pane === "paper" ? <PaperFloor /> : null}
         {pane === "perp" ? <RealPerp /> : null}
+        {pane === "gate" ? <TransistorDesk /> : null}
         {pane === "wafer" ? <WaferFloor /> : null}
         {pane === "brief" ? <Whitepaper /> : null}
         <NextStep pane={pane} setPane={setPane} />
@@ -138,6 +140,7 @@ function Header({ pane, setPane }: { pane: Pane; setPane: (pane: Pane) => void }
     ["spot", c.deskSpot, c.chainSpot],
     ["paper", c.deskPaper, c.chainPaper],
     ["perp", c.deskPerp, c.chainPerp],
+    ["gate", c.deskGate, c.chainGate],
     ["wafer", c.deskWafer, c.chainWafer],
     ["brief", c.deskBrief, c.chainBrief],
   ] as const;
@@ -173,7 +176,7 @@ function Header({ pane, setPane }: { pane: Pane; setPane: (pane: Pane) => void }
           ) : null}
         </div>
       </div>
-      <div className="grid grid-cols-2 border border-gold sm:grid-cols-5">
+      <div className="grid grid-cols-3 border border-gold sm:grid-cols-6">
         {tabs.map(([id, label, hint]) => (
           <button
             key={id}
@@ -193,8 +196,8 @@ function Header({ pane, setPane }: { pane: Pane; setPane: (pane: Pane) => void }
 function NextStep({ pane, setPane }: { pane: Pane; setPane: (pane: Pane) => void }) {
   const lang = useExchange((s) => s.lang);
   const c = copy[lang];
-  const order: Pane[] = ["spot", "paper", "perp", "wafer", "brief"];
-  const labels = [c.deskSpot, c.deskPaper, c.deskPerp, c.deskWafer, c.deskBrief];
+  const order: Pane[] = ["spot", "paper", "perp", "gate", "wafer", "brief"];
+  const labels = [c.deskSpot, c.deskPaper, c.deskPerp, c.deskGate, c.deskWafer, c.deskBrief];
   const index = order.indexOf(pane);
   const next = order[(index + 1) % order.length];
   return (

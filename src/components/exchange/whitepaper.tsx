@@ -64,6 +64,14 @@ const zh: Section[] = [
     ],
   },
   {
+    h: "晶体管合约",
+    ps: [
+      "合约和晶圆中间这一页只做六个标：TapeOut、Behemoth、Genesis CPU，各有 NAND 和 LATCH。价格和盘口每秒读 TapeOut 官网的交易市场，参考价和官网是同一个数。",
+      "红的是官网卖单，绿的是官网买单。右边开的是本站合约，按那根参考价结算，不进 BEM 的订单簿。手续费是保证金的千分之二。有推荐人时，交易者少付其中 4%，推荐人记其中 6%，比例和 BEM 永续相同。",
+      "这三个处理器的晶体管合约地址分别是 TapeOut 0xCC42ba5De07f01B472a5b14cF45aBcCA79Eb8087、Behemoth 0xE2DfD802081C7a05341E20b6582b04b908e8550c、Genesis CPU 0x1d23Bf70ec6bAAD95f396Ea38f8A8415119dFDE6。",
+    ],
+  },
+  {
     h: "标记价",
     ps: [
       "BSC 的标记价直接读 BEM / USDT 池的大约 10 分钟均价。短线成交价和结算价会不一致，这是故意的，用来挡住瞬时插针。",
@@ -187,6 +195,14 @@ const en: Section[] = [
       "X Layer has its own contract and does not share the BSC book. Margin is USDT0 on this chain, 6 decimals, from 1 USD. Gas is OKB. BSC USDT and BNB are not spent on this tab.",
       "Longs, shorts, takes, cancels, and closes all use this one address. People who stay on X Layer can see and take each other's orders. An X Layer order cannot fill a BSC order.",
       "Leverage, fees, rebate steps, and liquidation match BSC. The two books settle separately. A rebate cannot be claimed on the other chain.",
+    ],
+  },
+  {
+    h: "Transistor contracts",
+    ps: [
+      "The page between the perpetual and the wafer lists six markets only: TapeOut, Behemoth, and Genesis CPU, each with NAND and LATCH. The price and the book are read from the TapeOut official market every second. The mark is the same number.",
+      "Red rows are the official asks. Green rows are the official bids. The ticket is this desk's contract, settled at that mark. It does not enter the BEM book. The fee is 0.2% of margin. With a referrer, the trader pays 4% less of that fee and the referrer is credited 6%, the same split as the BEM perpetual.",
+      "The transistor contracts are TapeOut 0xCC42ba5De07f01B472a5b14cF45aBcCA79Eb8087, Behemoth 0xE2DfD802081C7a05341E20b6582b04b908e8550c, and Genesis CPU 0x1d23Bf70ec6bAAD95f396Ea38f8A8415119dFDE6.",
     ],
   },
   {

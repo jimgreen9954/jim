@@ -112,11 +112,13 @@ export type Copy = {
   deskSpot: string;
   deskPaper: string;
   deskPerp: string;
+  deskGate: string;
   deskWafer: string;
   deskBrief: string;
   chainSpot: string;
   chainPaper: string;
   chainPerp: string;
+  chainGate: string;
   chainWafer: string;
   chainBrief: string;
   nextStep: string;
@@ -399,11 +401,13 @@ export const copy: Record<Lang, Copy> = {
     deskSpot: "现货",
     deskPaper: "模拟",
     deskPerp: "合约",
+    deskGate: "晶体管",
     deskWafer: "晶圆",
     deskBrief: "白皮书",
     chainSpot: "钱包里真买卖",
     chainPaper: "不花真钱练手",
     chainPerp: "同一份合约对赌",
+    chainGate: "六个标",
     chainWafer: "X Layer 上流片",
     chainBrief: "规则和费用",
     nextStep: "下一步",
@@ -702,11 +706,13 @@ export const copy: Record<Lang, Copy> = {
     deskSpot: "Spot",
     deskPaper: "Paper",
     deskPerp: "Perp",
+    deskGate: "Transistors",
     deskWafer: "Wafer",
     deskBrief: "Brief",
     chainSpot: "Real wallet trades",
     chainPaper: "Practice with no funds",
     chainPerp: "One shared contract",
+    chainGate: "Six markets",
     chainWafer: "Tape-out on X Layer",
     chainBrief: "Rules and fees",
     nextStep: "Next",
