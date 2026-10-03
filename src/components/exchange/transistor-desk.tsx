@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { cancelGateChain, closeGateChain, deployGate, gateAddress, openGate, readGateChain, takeGateChain, type ChainDeal, type ChainOrder } from "@/lib/gate-chain";
+import { bindGate, cancelGateChain, claimGate, closeGateChain, gateAddress, openGate, readGateChain, readGateRebate, registerGate, takeGateChain, type ChainDeal, type ChainOrder } from "@/lib/gate-chain";
 import { getTransistorDesk, type TransistorDesk } from "@/lib/transistor-market";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import { useExchange } from "@/lib/exchange-store";
@@ -57,6 +57,9 @@ export function TransistorDesk() {
   const [lev, setLev] = useState(10);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [mineCode, setMineCode] = useState("");
+  const [friend, setFriend] = useState("");
+  const [rebate, setRebate] = useState({ accrued: 0, code: "", referrer: "" });
 
   useEffect(() => onAccount(setAccount), []);
   useEffect(() => setPerp(gateAddress()), []);
@@ -75,6 +78,8 @@ export function TransistorDesk() {
           setDeals(next.deals);
         }
       }).catch(() => undefined);
+      const who = currentAccount();
+      if (who) readGateRebate(who).then((next) => { if (!dead) setRebate(next); }).catch(() => undefined);
     };
     pull();
     const timer = window.setInterval(pull, 1000);
@@ -101,14 +106,14 @@ export function TransistorDesk() {
       return;
     }
     if (!perp) {
-      setNote(zh ? "先部署全站这份晶体管合约。只部署一次，部署之后开多开空才会从钱包扣 USDT。" : "Deploy the shared contract once. After that, longs and shorts take USDT from the wallet.");
+      setNote(zh ? "全站合约还没写进页面。" : "The shared contract is not in the page yet.");
       return;
     }
-    const price = Number(limit) > 0 ? Number(limit) : mark;
-    if (!(price > 0)) return;
+    const limitPx = Number(limit) > 0 ? Number(limit) : mark;
+    if (!(limitPx > 0) || !(mark > 0)) return;
     setBusy(true);
     try {
-      await openGate(user, perp, market, long, margin, lev, price);
+      await openGate(user, perp, market, long, margin, lev, limitPx, mark);
       const next = await readGateChain(perp);
       setOrders(next.orders);
       setDeals(next.deals);
@@ -116,24 +121,6 @@ export function TransistorDesk() {
     } catch (err) {
       const message = err instanceof Error ? err.message : "";
       setNote(message === "usdt" ? (zh ? "USDT 不够。最少 1。" : "Not enough USDT. Minimum 1.") : message === "margin" ? (zh ? "保证金要在 1 到 500 USDT。" : "Margin is 1 to 500 USDT.") : zh ? "钱包没有完成这笔交易。" : "The wallet did not finish the transaction.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function deploy() {
-    const user = account ?? currentAccount();
-    if (!user) {
-      setNote(zh ? "先连接钱包。" : "Connect a wallet.");
-      return;
-    }
-    setBusy(true);
-    try {
-      const addr = await deployGate(user);
-      setPerp(addr);
-      setNote(zh ? `已部署 ${addr}。把这个地址发出来，全站才能吃同一本账。` : `Deployed ${addr}. Share this address so everyone uses the same book.`);
-    } catch {
-      setNote(zh ? "部署没有完成。" : "Deploy did not finish.");
     } finally {
       setBusy(false);
     }
@@ -263,17 +250,51 @@ export function TransistorDesk() {
             ))}
           </div>
           <div className="grid grid-cols-2 gap-2">
-            {perp ? (
-              <>
-                <button type="button" disabled={busy} onClick={() => send(true)} className="min-h-11 bg-ink text-paper disabled:opacity-50">{zh ? "开多" : "Long"}</button>
-                <button type="button" disabled={busy} onClick={() => send(false)} className="min-h-11 border border-gold disabled:opacity-50">{zh ? "开空" : "Short"}</button>
-              </>
-            ) : (
-              <button type="button" disabled={busy} onClick={deploy} className="col-span-2 min-h-11 bg-ink text-paper disabled:opacity-50">{zh ? "部署全站合约" : "Deploy the shared contract"}</button>
-            )}
+            <button type="button" disabled={busy} onClick={() => send(true)} className="min-h-11 bg-ink text-paper disabled:opacity-50">{zh ? "开多" : "Long"}</button>
+            <button type="button" disabled={busy} onClick={() => send(false)} className="min-h-11 border border-gold disabled:opacity-50">{zh ? "开空" : "Short"}</button>
           </div>
           <p className="text-xs leading-relaxed text-ink/60">{zh ? "开多开空会让钱包先授权再划走 BSC 的 USDT，最少 1。官网价先推进合约，之后盈亏按合约里的价结算，不按你填的限价。手续费千分之二。有推荐人时，交易者少付其中 4%，推荐人记其中 6%，和 BEM 一样，提到这份合约的 USDT。" : "A long or short asks the wallet to approve and then move BSC USDT, from 1. The official price is pushed into the contract first. PnL uses that stored price, not your limit. The fee is 0.2%. With a referrer, the trader pays 4% less of it and the referrer is credited 6%, paid in this contract's USDT."}</p>
           {perp ? <p className="break-all font-mono text-xs">{perp}</p> : null}
+          <p className="text-xs tracking-widest text-gold">{zh ? "这份合约上的推荐" : "Referral on this contract"}</p>
+          {rebate.code ? <p className="font-mono text-sm">{rebate.code}</p> : (
+            <div className="flex gap-2">
+              <input value={mineCode} onChange={(event) => setMineCode(event.target.value)} className="min-h-10 flex-1 border border-gold bg-transparent px-2 outline-none" placeholder={zh ? "我的码" : "My code"} />
+              <button type="button" disabled={busy} className="min-h-10 border border-gold px-2 text-sm" onClick={async () => {
+                const user = account ?? currentAccount();
+                if (!user) return;
+                setBusy(true);
+                try { await registerGate(user, mineCode); setNote(zh ? "推荐码已写上这份合约。确认后不能改。" : "Code written on this contract. It cannot be changed."); }
+                catch { setNote(zh ? "推荐码没写上。可能已被占用，或这个地址已经有码。" : "The code was not written. It may be taken, or this address already has one."); }
+                finally { setBusy(false); }
+              }}>{zh ? "确认" : "Confirm"}</button>
+            </div>
+          )}
+          {rebate.referrer && rebate.referrer !== "0x0000000000000000000000000000000000000000" ? <p className="font-mono text-xs">{short(rebate.referrer)}</p> : (
+            <div className="flex gap-2">
+              <input value={friend} onChange={(event) => setFriend(event.target.value)} className="min-h-10 flex-1 border border-gold bg-transparent px-2 outline-none" placeholder={zh ? "对方的码" : "Their code"} />
+              <button type="button" disabled={busy} className="min-h-10 border border-gold px-2 text-sm" onClick={async () => {
+                const user = account ?? currentAccount();
+                if (!user) return;
+                setBusy(true);
+                try { await bindGate(user, friend); setNote(zh ? "已绑定。不能再改。" : "Bound. It cannot be changed."); }
+                catch { setNote(zh ? "绑定失败。对方要先在这份合约上确认过自己的码。" : "Bind failed. They must confirm their code on this contract first."); }
+                finally { setBusy(false); }
+              }}>{zh ? "绑定" : "Bind"}</button>
+            </div>
+          )}
+          <p className="font-mono text-sm">{zh ? "可提" : "Claimable"} {rebate.accrued.toFixed(2)} USDT</p>
+          <div className="grid grid-cols-4 gap-1">
+            {[1, 10, 20, 50, 100, 300, 500].map((step) => (
+              <button key={step} type="button" disabled={busy || rebate.accrued + 1e-9 < step} className="min-h-9 border border-gold font-mono text-xs disabled:opacity-40" onClick={async () => {
+                const user = account ?? currentAccount();
+                if (!user) return;
+                setBusy(true);
+                try { await claimGate(user, BigInt(step) * 10n ** 18n); setNote(zh ? `已提 ${step} USDT。` : `Claimed ${step} USDT.`); }
+                catch { setNote(zh ? "提现没有完成。" : "The claim did not finish."); }
+                finally { setBusy(false); }
+              }}>{step}</button>
+            ))}
+          </div>
           {note ? <p className="text-sm">{note}</p> : null}
         </div>
       </section>

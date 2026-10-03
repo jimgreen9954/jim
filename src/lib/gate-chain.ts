@@ -4,6 +4,7 @@ import { GATE_BYTECODE } from "@/lib/gate-artifact";
 import { getProvider } from "@/lib/wallet";
 
 const KEY = "tapeliquid-gate-perp";
+export const GATE = "0xe380b8449280a1da46952dba0de0418e0958d668";
 const USDT = BSC.usdt;
 
 const abi = parseAbi([
@@ -18,6 +19,13 @@ const abi = parseAbi([
   "function take(uint256 quoteId, uint256 margin, uint16 lev)",
   "function cancel(uint256 quoteId)",
   "function close(uint256 id)",
+  "function register(bytes32 code)",
+  "function bind(bytes32 code)",
+  "function claim(uint256 amount)",
+  "function accrued(address) view returns (uint256)",
+  "function codeOf(address) view returns (bytes32)",
+  "function referrerOf(address) view returns (address)",
+  "function codeOwner(bytes32) view returns (address)",
 ]);
 
 const erc20 = parseAbi([
@@ -29,8 +37,7 @@ export type ChainOrder = { id: string; market: number; user: string; long: boole
 export type ChainDeal = { id: string; market: number; longUser: string; shortUser: string; entry: number; marginL: number; marginS: number; base: number; levL: number; levS: number };
 
 export function gateAddress(): string {
-  if (typeof window === "undefined") return "";
-  return window.localStorage.getItem(KEY) ?? "";
+  return GATE;
 }
 
 function priceWei(price: number): bigint {
@@ -109,14 +116,14 @@ export async function pushMark(from: string, perp: string, market: number, price
   await send(from, perp as Hex, data, 120_000n);
 }
 
-export async function openGate(from: string, perp: string, market: number, long: boolean, margin: string, lev: number, price: number) {
+export async function openGate(from: string, perp: string, market: number, long: boolean, margin: string, lev: number, limit: number, mark: number) {
   const amount = parseUnits(margin, 18);
   if (amount < parseUnits("1", 18) || amount > parseUnits("500", 18)) throw new Error("margin");
   const balances = await readBalances(from);
   if (balances.usdt < amount) throw new Error("usdt");
-  await pushMark(from, perp, market, price);
+  await pushMark(from, perp, market, mark);
   await approve(from, perp, amount);
-  const px = priceWei(price);
+  const px = priceWei(limit);
   const data = encodeFunctionData({ abi, functionName: "open", args: [market, long, amount, lev, px] });
   return send(from, perp as Hex, data, 350_000n);
 }
@@ -139,6 +146,40 @@ export async function cancelGateChain(from: string, perp: string, id: bigint) {
 export async function closeGateChain(from: string, perp: string, id: bigint) {
   const data = encodeFunctionData({ abi, functionName: "close", args: [id] });
   return send(from, perp as Hex, data, 250_000n);
+}
+
+function asCode(text: string): Hex {
+  const bytes = new TextEncoder().encode(text.trim());
+  if (bytes.length < 1 || bytes.length > 16) throw new Error("code");
+  const hex = `0x${Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("")}`;
+  return (hex + "0".repeat(66 - hex.length)) as Hex;
+}
+
+export async function registerGate(from: string, text: string) {
+  const data = encodeFunctionData({ abi, functionName: "register", args: [asCode(text)] });
+  return send(from, GATE as Hex, data, 150_000n);
+}
+
+export async function bindGate(from: string, text: string) {
+  const data = encodeFunctionData({ abi, functionName: "bind", args: [asCode(text)] });
+  return send(from, GATE as Hex, data, 120_000n);
+}
+
+export async function claimGate(from: string, amount: bigint) {
+  const data = encodeFunctionData({ abi, functionName: "claim", args: [amount] });
+  return send(from, GATE as Hex, data, 180_000n);
+}
+
+export async function readGateRebate(account: string): Promise<{ accrued: number; code: string; referrer: string }> {
+  const c = await client();
+  const [accrued, code, referrer] = await Promise.all([
+    c.readContract({ address: GATE as Hex, abi, functionName: "accrued", args: [account as Hex] }),
+    c.readContract({ address: GATE as Hex, abi, functionName: "codeOf", args: [account as Hex] }),
+    c.readContract({ address: GATE as Hex, abi, functionName: "referrerOf", args: [account as Hex] }),
+  ]);
+  const raw = code.replace(/^0x/, "").replace(/(00)+$/, "");
+  const text = raw ? new TextDecoder().decode(Uint8Array.from(raw.match(/.{2}/g)?.map((b) => Number.parseInt(b, 16)) ?? [])) : "";
+  return { accrued: num(accrued), code: text, referrer };
 }
 
 function num(value: bigint): number {
