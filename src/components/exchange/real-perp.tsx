@@ -238,9 +238,18 @@ export function RealPerp() {
   }, [account, perp, view?.myDeal, view?.mark, live, hash]);
 
   useEffect(() => {
-    activeBook()
-      .then(setPerp)
-      .catch(() => setPerp(bookOf()));
+    if (typeof window !== "undefined") {
+      const ref = new URLSearchParams(window.location.hash.replace(/^#/, "")).get("ref") || new URLSearchParams(window.location.search).get("ref");
+      if (ref) {
+        selectDesk("xlayer");
+        setChain("xlayer");
+        setPerp(bookOf("xlayer"));
+      } else {
+        activeBook()
+          .then(setPerp)
+          .catch(() => setPerp(bookOf()));
+      }
+    }
     const stopAccount = onAccount(setAccount);
     const stopLink = onOpenLink(setLink);
     return () => {
@@ -308,7 +317,9 @@ export function RealPerp() {
     else if (message === "margin") setNote(`${floor}–500 USDT`);
     else if (message === "price") setNote(c.badPrice);
     else if (message === "lev") setNote(c.levCap);
-    else if (message === "code") setNote(c.rebateCode);
+    else if (message === "code") setNote(lang === "zh" ? "推荐码用 1 到 16 个英文字，汉字最多 5 个。" : "Use 1 to 16 English characters, or up to 5 Chinese characters.");
+    else if (message === "taken") setNote(c.rebateTaken);
+    else if (message === "have") setNote(c.rebateHave);
     else setNote(message || c.walletReject);
     setBad(true);
   };
@@ -617,24 +628,27 @@ export function RealPerp() {
                     </div>
                   );
                 })}
-                {sheet === "mine" ? (
-                  <MineDesk
-                    account={account}
-                    busy={busy}
-                    chain={chain}
-                    run={run}
-                    onBook={(addr) => setPerp(addr)}
-                    addresses={Array.from(
-                      new Map(
-                        [...(view?.quotes ?? []).map((quote) => quote.user), ...(view?.liveDeals ?? []).flatMap((deal) => [deal.long, deal.short])]
-                          .filter((addr) => account && addr.toLowerCase() !== account.toLowerCase() && addr !== zero)
-                          .map((addr) => [addr.toLowerCase(), addr]),
-                      ).values(),
-                    )}
-                  />
-                ) : null}
               </>
             ) : null}
+            <MineDesk
+              account={account}
+              busy={busy}
+              chain={chain}
+              run={run}
+              onBook={(addr) => setPerp(addr)}
+              onChain={(next) => {
+                selectDesk(next);
+                setChain(next);
+                setPerp(bookOf(next));
+              }}
+              addresses={Array.from(
+                new Map(
+                  [...(view?.quotes ?? []).map((quote) => quote.user), ...(view?.liveDeals ?? []).flatMap((deal) => [deal.long, deal.short])]
+                    .filter((addr) => account && addr.toLowerCase() !== account.toLowerCase() && addr !== zero)
+                    .map((addr) => [addr.toLowerCase(), addr]),
+                ).values(),
+              )}
+            />
             {(view?.book ? sheet === "book" : !inDeal && !mine) ? (
               <>
                 <p className="text-sm leading-relaxed text-ink/80">{chain === "xlayer" ? c.perpStepsX : c.perpSteps}</p>

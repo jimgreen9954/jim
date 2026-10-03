@@ -29,6 +29,7 @@ export function MineDesk({
   chain,
   run,
   onBook,
+  onChain,
 }: {
   account: string | null;
   busy: boolean;
@@ -36,6 +37,7 @@ export function MineDesk({
   chain: Desk;
   run: (task: (from: string) => Promise<unknown>) => Promise<void>;
   onBook?: (addr: string) => void;
+  onChain?: (next: Desk) => void;
 }) {
   const lang = useExchange((s) => s.lang);
   const c = copy[lang];
@@ -52,6 +54,10 @@ export function MineDesk({
   const [ask, setAsk] = useState("");
   const [bindNote, setBindNote] = useState("");
   const [book, setBook] = useState<RebateBook | null>(null);
+  const urlRef = useState(() => {
+    if (typeof window === "undefined") return "";
+    return (new URLSearchParams(window.location.hash.replace(/^#/, "")).get("ref") || new URLSearchParams(window.location.search).get("ref") || "").trim().slice(0, 16);
+  })[0];
   const perp = bookOf(chain);
   const dec = chain === "xlayer" ? 6 : 18;
 
@@ -86,6 +92,32 @@ export function MineDesk({
       dead = true;
     };
   }, [account, busy, chain, perp]);
+
+  useEffect(() => {
+    if (!live || !urlRef || (referrer && referrer !== zero)) return;
+    let dead = false;
+    setBind(urlRef);
+    lookupCode(chain, urlRef)
+      .then((owner) => {
+        if (dead) return;
+        if (!owner || owner.toLowerCase() === zero) {
+          setBindNote(c.rebateNone);
+          return;
+        }
+        if (account && owner.toLowerCase() === account.toLowerCase()) {
+          setBindNote(lang === "zh" ? "这是你自己的码" : "This is your own code");
+          return;
+        }
+        setAsk(urlRef);
+        setWho(owner);
+      })
+      .catch(() => {
+        if (!dead) setBindNote(c.rebateNone);
+      });
+    return () => {
+      dead = true;
+    };
+  }, [live, chain, urlRef, referrer, account, c.rebateNone, lang]);
 
   useEffect(() => {
     if (chain !== "xlayer" || !account) return;
@@ -163,10 +195,13 @@ export function MineDesk({
         <p className="mt-1 text-sm leading-relaxed text-ink/70">{c.rebateHint}</p>
         {!live && chain === "bsc" ? (
           <div className="mt-2 flex flex-col gap-2">
+            <button type="button" className="min-h-11 bg-ink px-3 text-paper" onClick={() => onChain?.("xlayer")}>
+              {c.inviteGo}
+            </button>
             <p className="text-sm leading-relaxed">{c.rebateBsc}</p>
             <button
               type="button"
-              className="min-h-11 bg-ink px-3 text-paper"
+              className="min-h-11 border border-gold px-3"
               disabled={busy}
               onClick={() =>
                 run(async (from) => {
@@ -207,11 +242,31 @@ export function MineDesk({
               {c.rebateCode}
               <span className="mt-1 flex gap-2">
                 <input value={mine || code} onChange={(event) => setCode(event.target.value.slice(0, 16))} disabled={Boolean(mine)} className="min-h-11 min-w-0 flex-1 border border-gold bg-transparent px-2 font-mono outline-none" />
-                <button type="button" className="min-h-11 bg-ink px-3 text-paper" disabled={busy || Boolean(mine)} onClick={() => run((from) => registerCode(from, chain, code))}>
-                  {c.nickSave}
+                <button type="button" className="min-h-11 bg-ink px-3 text-paper" disabled={busy || Boolean(mine) || !code.trim()} onClick={() => run((from) => registerCode(from, chain, code))}>
+                  {c.rebateRegister}
                 </button>
               </span>
             </label>
+            {mine ? (
+              <div className="mt-3">
+                <p className="text-xs tracking-widest text-gold">{c.inviteLink}</p>
+                <input
+                  readOnly
+                  value={`${typeof window === "undefined" ? "" : window.location.origin + window.location.pathname}#ref=${encodeURIComponent(mine)}`}
+                  className="mt-1 w-full border border-gold bg-transparent px-2 py-2 font-mono text-xs outline-none"
+                />
+                <button
+                  type="button"
+                  className="mt-2 min-h-11 border border-gold px-3"
+                  onClick={() => {
+                    const link = `${window.location.origin}${window.location.pathname}#ref=${encodeURIComponent(mine)}`;
+                    navigator.clipboard.writeText(link).then(() => setBindNote(c.inviteCopied)).catch(() => setBindNote(link));
+                  }}
+                >
+                  {c.inviteCopy}
+                </button>
+              </div>
+            ) : null}
             <label className="mt-3 block text-sm">
               {c.rebateBind}
               {locked ? (

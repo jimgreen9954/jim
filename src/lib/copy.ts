@@ -201,6 +201,13 @@ export type Copy = {
   stopArmed: string;
   stopClear: string;
   bscDeploy: string;
+  rebateRegister: string;
+  rebateTaken: string;
+  rebateHave: string;
+  inviteLink: string;
+  inviteCopy: string;
+  inviteCopied: string;
+  inviteGo: string;
   rebateShared: string;
   rebateNone: string;
   inviteTitle: string;
@@ -482,6 +489,13 @@ export const copy: Record<Lang, Copy> = {
     stopArmed: "已挂上",
     stopClear: "取消止盈止损",
     bscDeploy: "部署 BSC 返佣合约",
+    rebateRegister: "登记",
+    rebateTaken: "这个码已经有人登记了，换一个。",
+    rebateHave: "这个地址已经登记过码，不能再改。",
+    inviteLink: "邀请链接",
+    inviteCopy: "复制链接",
+    inviteCopied: "链接已复制。朋友打开后核对，再点确认。",
+    inviteGo: "推荐码在 X Layer。点这里去登记，不用部署新合约。",
     rebateShared: "全站只认这一份合约。你以前若登在别的合约上，别人一定会看到不存在。在这里再登记一次。",
     rebateNone: "全站合约上没有这个码。",
     inviteTitle: "我邀请的人",
@@ -777,6 +791,13 @@ export const copy: Record<Lang, Copy> = {
     stopArmed: "Armed",
     stopClear: "Clear stops",
     bscDeploy: "Deploy BSC rebate contract",
+    rebateRegister: "Register",
+    rebateTaken: "Someone already registered that code. Pick another.",
+    rebateHave: "This address already has a code. It cannot be changed.",
+    inviteLink: "Invite link",
+    inviteCopy: "Copy link",
+    inviteCopied: "Link copied. Your friend opens it, checks, then confirms.",
+    inviteGo: "Codes live on X Layer. Go there to register. You do not need a new contract.",
     rebateShared: "The whole site recognizes only this contract. A code registered on any other contract shows up as missing. Register it again here.",
     rebateNone: "That code is not on the shared contract.",
     inviteTitle: "People I invited",

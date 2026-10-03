@@ -967,7 +967,13 @@ export async function registerCode(from: string, which: Desk, text: string): Pro
   const was = desk;
   desk = which;
   try {
-    const data = encodeFunctionData({ abi: rebateAbi, functionName: "register", args: [asCode(text)] });
+    const trimmed = text.trim();
+    if (new TextEncoder().encode(trimmed).length < 1 || new TextEncoder().encode(trimmed).length > 16) throw new Error("code");
+    const row = await readRebate(which, from);
+    if (codeText(row.code)) throw new Error("have");
+    const owner = await lookupCode(which, trimmed);
+    if (owner && owner !== "0x0000000000000000000000000000000000000000") throw new Error("taken");
+    const data = encodeFunctionData({ abi: rebateAbi, functionName: "register", args: [asCode(trimmed)] });
     return await send(from, bookOf(which) as Hex, data);
   } finally {
     desk = was;
