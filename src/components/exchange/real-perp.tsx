@@ -106,6 +106,79 @@ function PkTape({ candles, entry, mark }: { candles: Candle[]; entry: number; ma
   );
 }
 
+function DeskLadder({
+  rows,
+  mark,
+  account,
+  busy,
+  dec,
+  scan,
+  named,
+  onTake,
+}: {
+  rows: { perp: string; quote: BookQuote }[];
+  mark: number;
+  account: string | null;
+  busy: boolean;
+  dec: number;
+  scan: string;
+  named: (addr: string) => string;
+  onTake: (book: string, quote: BookQuote) => void;
+}) {
+  const drawn = rows.map(({ perp, quote }) => {
+    const px = quote.price > 0n ? Number(formatUnits(quote.price, 18)) : mark;
+    const margin = Number(formatUnits(quote.margin, dec));
+    const size = px > 0 ? (margin * quote.lev) / px : 0;
+    return { perp, quote, px, margin, size };
+  });
+  const asks = drawn.filter((row) => !row.quote.long).sort((a, b) => b.px - a.px);
+  const bids = drawn.filter((row) => row.quote.long).sort((a, b) => b.px - a.px);
+  const max = Math.max(1, ...drawn.map((row) => row.size));
+  const line = (row: (typeof drawn)[number], buy: boolean) => {
+    const mine = Boolean(account && row.quote.user.toLowerCase() === account.toLowerCase());
+    const width = `${Math.max(8, Math.round((row.size / max) * 100))}%`;
+    return (
+      <div key={`${row.perp}-${row.quote.id}`} className="relative grid grid-cols-[4.5rem_1fr_1fr_auto] items-center gap-2 px-2 py-1.5 font-mono text-sm tabular-nums">
+        <span className="absolute inset-y-1 left-0" style={{ width, background: buy ? "rgba(158,27,18,0.12)" : "rgba(30,110,70,0.14)" }} />
+        <span className={`relative ${buy ? "text-sell" : "text-[#1b6b45]"}`}>{row.px > 0 ? row.px.toFixed(4) : "—"}</span>
+        <span className="relative">{row.size.toFixed(2)}</span>
+        <span className="relative">{row.margin.toFixed(2)}</span>
+        <span className="relative flex items-center gap-1">
+          <span className="hidden border border-gold/40 px-1 text-xs sm:inline">≤{Math.max(1, Math.round(row.size))}</span>
+          {mine ? (
+            <span className="px-2 text-xs text-ink/50">我的</span>
+          ) : (
+            <button type="button" disabled={busy} onClick={() => onTake(row.perp, row.quote)} className={`min-h-9 px-3 text-paper ${buy ? "bg-sell" : "bg-[#1b6b45]"}`}>
+              {buy ? "买入" : "卖出"}
+            </button>
+          )}
+          <a className="text-xs text-ink/50 underline" href={`${scan}/address/${row.quote.user}`} target="_blank" rel="noreferrer">
+            {named(row.quote.user).slice(0, 6)}
+          </a>
+        </span>
+      </div>
+    );
+  };
+  return (
+    <div>
+      <div className="grid grid-cols-[4.5rem_1fr_1fr_auto] gap-2 px-2 py-1 text-xs text-ink/50">
+        <span>价格</span>
+        <span>数量 BEM</span>
+        <span>保证金</span>
+        <span className="text-right">指定成交</span>
+      </div>
+      {asks.length === 0 && bids.length === 0 ? <p className="px-2 py-3 text-sm text-ink/60">这口价附近还没有挂单。</p> : null}
+      {asks.map((row) => line(row, true))}
+      <p className="my-1 flex items-center gap-3 px-2 font-mono text-sm text-ink/70">
+        <span className="h-px flex-1 bg-gold/40" />
+        <span>{mark > 0 ? `${mark.toFixed(4)} USD` : "—"}</span>
+        <span className="h-px flex-1 bg-gold/40" />
+      </p>
+      {bids.map((row) => line(row, false))}
+    </div>
+  );
+}
+
 export function RealPerp() {
   const lang = useExchange((s) => s.lang);
   const live = useExchange((s) => s.chainBem);
@@ -385,36 +458,36 @@ export function RealPerp() {
             <span className="font-mono text-2xl tabular-nums">{view && account ? usdtText(view.equity) : "—"}</span>
           </p>
         </div>
-        <div className="border border-gold p-3">
-          <p className="text-xs tracking-widest text-gold">{c.bookTake}</p>
-          <p className="mt-1 break-all font-mono text-xs">{perp || "—"}</p>
-          <p className="mt-2 text-sm leading-relaxed">{c.eatHint}</p>
-          {board.length === 0 ? <p className="mt-2 text-sm text-ink/60">{c.pkEmpty}</p> : null}
-          {board.map(({ perp: book, quote }) => {
-            const mineQuote = Boolean(account && quote.user.toLowerCase() === account.toLowerCase());
-            return (
-              <div key={`${book}-${quote.id}`} className="mt-2 grid grid-cols-[1fr_auto] items-center gap-2 border border-gold/40 px-2 py-2">
-                <p>
-                  <span className="font-mono text-xs">{named(quote.user)}{mineQuote ? " · 我的" : ""}</span>
-                  <span className="mt-1 block font-mono text-sm">
-                    {quote.long ? c.postLong : c.postShort} · {usdtText(quote.margin)} USDT · {quote.lev}×{quote.price > 0n ? ` · $${pxText(quote.price)}` : ""}
-                  </span>
-                </p>
-                {mineQuote ? (
-                  <span className="px-2 text-xs text-ink/60">{c.myOrders}</span>
-                ) : (
-                  <button
-                    type="button"
-                    className="min-h-12 bg-ink px-3 text-paper"
-                    disabled={busy}
-                    onClick={() => run((from) => takePerp(from, book, quote.id, formatUnits(quote.margin, dec), quote.lev, quote.price > 0n))}
-                  >
-                    {c.bookTake}
-                  </button>
-                )}
-              </div>
-            );
-          })}
+        <div className="border border-gold bg-card">
+          <div className="flex flex-wrap items-end justify-between gap-3 border-b border-gold/30 px-3 py-3">
+            <div>
+              <p className="font-display text-2xl italic">BEM / USDT</p>
+              <p className="mt-1 break-all font-mono text-xs text-ink/60">{perp || "—"}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs tracking-widest text-gold">参考价</p>
+              <p className="font-mono text-2xl tabular-nums">{markN > 0 ? markN.toFixed(4) : "—"}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-6 gap-1 px-2 pt-2">
+            {(["15s", "1m", "5m", "15m", "1h", "4h"] as const).map((item) => (
+              <button key={item} type="button" onClick={() => setFrame(item)} className={`min-h-9 border border-gold font-mono text-xs ${frame === item ? "bg-ink text-paper" : ""}`}>
+                {item}
+              </button>
+            ))}
+          </div>
+          <PkTape candles={prices} entry={entryN} mark={markN} />
+          <DeskLadder
+            rows={view?.book ? view.quotes.map((quote) => ({ perp, quote })) : board}
+            mark={markN}
+            account={account}
+            busy={busy}
+            dec={dec}
+            scan={scan}
+            named={named}
+            onTake={(book, quote) => run((from) => takePerp(from, book, quote.id, formatUnits(quote.margin, dec), quote.lev, quote.price > 0n))}
+          />
+          <p className="px-3 py-2 text-xs text-ink/50">K 线和盘口用的是同一口价。上面红的是空单，点买入接多。下面绿的是多单，点卖出接空。</p>
         </div>
         <div className="border border-gold/40 p-3">
           <p className="text-xs tracking-widest text-gold">{c.pkTitle}</p>
@@ -441,15 +514,6 @@ export function RealPerp() {
             {lead === "long" ? `${c.pkLong}${c.pkLead}` : lead === "short" ? `${c.pkShort}${c.pkLead}` : c.pkFlat}
             {entryN > 0 ? ` · ${entryN.toFixed(2)} → ${markN.toFixed(2)}` : markN > 0 ? ` · $${markN.toFixed(2)}` : ""}
           </p>
-          <p className="mt-2 font-mono text-lg tabular-nums">{markN > 0 ? `$${markN.toFixed(2)}` : "—"}</p>
-          <div className="mt-2 grid grid-cols-6 gap-1">
-            {(["15s", "1m", "5m", "15m", "1h", "4h"] as const).map((item) => (
-              <button key={item} type="button" onClick={() => setFrame(item)} className={`min-h-9 border border-gold font-mono text-xs ${frame === item ? "bg-ink text-paper" : ""}`}>
-                {item}
-              </button>
-            ))}
-          </div>
-          <PkTape candles={prices} entry={entryN} mark={markN} />
           <p className="text-xs leading-relaxed text-ink/60">{c.pkNote}</p>
         </div>
         <p className="text-sm leading-relaxed text-ink/80">{chain === "xlayer" ? c.sharedBookX : c.sharedBook}</p>
@@ -499,38 +563,7 @@ export function RealPerp() {
                 </div>
                 <p className="text-sm leading-relaxed text-ink/80">{c.feeNote}</p>
                 {sheet === "book" ? (
-                  <>
-                    {view.quotes.length === 0 ? <p className="text-sm text-ink/60">{c.pkEmpty}</p> : null}
-                    {view.quotes.map((quote) => {
-                      const mineQuote = Boolean(account && quote.user.toLowerCase() === account.toLowerCase());
-                      return (
-                        <div key={String(quote.id)} className="grid grid-cols-[1fr_auto] items-center gap-2 border border-gold/40 px-2 py-2">
-                          <p className="min-w-0">
-                            <a className="font-mono text-xs underline decoration-gold" href={`${scan}/address/${quote.user}`} target="_blank" rel="noreferrer">
-                              {named(quote.user)}
-                            </a>
-                            <span className="mt-1 block font-mono text-sm">
-                              {quote.long ? c.postLong : c.postShort} · {usdtText(quote.margin)} USDT · {quote.lev}×{quote.price > 0n ? ` · $${pxText(quote.price)}` : ""}
-                            </span>
-                          </p>
-                          {mineQuote ? (
-                            <button type="button" className="min-h-11 border border-gold px-2" onClick={() => setSheet("mine")}>
-                              {c.myOrders}
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              className="min-h-11 bg-ink px-2 text-paper"
-                              disabled={busy || !levOk || !marginOk}
-                              onClick={() => run((from) => takePerp(from, perp, quote.id, formatUnits(quote.margin, dec), quote.lev, Boolean(view?.priced)))}
-                            >
-                              {c.bookTake}
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </>
+                  <p className="text-sm text-ink/60">挂单在上面的盘口里。红的买入，绿的卖出，中间那根就是现在的价。</p>
                 ) : (
                   <>
                     {view.quotes.filter((quote) => account && quote.user.toLowerCase() === account.toLowerCase()).length === 0 ? (
