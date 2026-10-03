@@ -22,6 +22,10 @@ type Pane = "spot" | "paper" | "perp" | "gate" | "wafer" | "brief";
 
 export function Exchange() {
   const [pane, setPane] = useState<Pane>("spot");
+  useEffect(() => {
+    const gate = new URLSearchParams(window.location.hash.replace(/^#/, "")).get("gate");
+    if (gate) setPane("gate");
+  }, []);
   return (
     <div className="min-h-screen overflow-x-hidden bg-paper text-ink">
       <Crops />

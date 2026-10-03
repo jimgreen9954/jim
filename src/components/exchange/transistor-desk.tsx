@@ -25,6 +25,11 @@ function px(value: number): string {
   return value.toFixed(2);
 }
 
+function inviteLink(code: string): string {
+  if (typeof window === "undefined") return `#gate=${encodeURIComponent(code)}`;
+  return `${window.location.origin}${window.location.pathname}#gate=${encodeURIComponent(code)}`;
+}
+
 function short(user: string): string {
   return `${user.slice(0, 6)}…${user.slice(-4)}`;
 }
@@ -63,6 +68,10 @@ export function TransistorDesk() {
 
   useEffect(() => onAccount(setAccount), []);
   useEffect(() => setPerp(gateAddress()), []);
+  useEffect(() => {
+    const gate = new URLSearchParams(window.location.hash.replace(/^#/, "")).get("gate");
+    if (gate) setFriend(gate.trim().slice(0, 16));
+  }, []);
 
   useEffect(() => {
     let dead = false;
@@ -256,7 +265,17 @@ export function TransistorDesk() {
           <p className="text-xs leading-relaxed text-ink/60">{zh ? "开多开空会让钱包先授权再划走 BSC 的 USDT，最少 1。官网价先推进合约，之后盈亏按合约里的价结算，不按你填的限价。手续费千分之二。有推荐人时，交易者少付其中 4%，推荐人记其中 6%，和 BEM 一样，提到这份合约的 USDT。" : "A long or short asks the wallet to approve and then move BSC USDT, from 1. The official price is pushed into the contract first. PnL uses that stored price, not your limit. The fee is 0.2%. With a referrer, the trader pays 4% less of it and the referrer is credited 6%, paid in this contract's USDT."}</p>
           {perp ? <p className="break-all font-mono text-xs">{perp}</p> : null}
           <p className="text-xs tracking-widest text-gold">{zh ? "这份合约上的推荐" : "Referral on this contract"}</p>
-          {rebate.code ? <p className="font-mono text-sm">{rebate.code}</p> : (
+          {rebate.code ? (
+            <div>
+              <p className="font-mono text-sm">{rebate.code}</p>
+              <p className="mt-2 text-xs tracking-widest text-gold">{zh ? "邀请链接" : "Invite link"}</p>
+              <input readOnly value={inviteLink(rebate.code)} className="mt-1 w-full border border-gold bg-transparent px-2 py-2 font-mono text-xs outline-none" />
+              <button type="button" className="mt-2 min-h-10 border border-gold px-3 text-sm" onClick={() => {
+                const link = inviteLink(rebate.code);
+                navigator.clipboard.writeText(link).then(() => setNote(zh ? "链接已复制。朋友打开后核对，再点绑定。" : "Link copied. Your friend opens it, checks, then binds.")).catch(() => setNote(link));
+              }}>{zh ? "复制链接" : "Copy link"}</button>
+            </div>
+          ) : (
             <div className="flex gap-2">
               <input value={mineCode} onChange={(event) => setMineCode(event.target.value)} className="min-h-10 flex-1 border border-gold bg-transparent px-2 outline-none" placeholder={zh ? "我的码" : "My code"} />
               <button type="button" disabled={busy} className="min-h-10 border border-gold px-2 text-sm" onClick={async () => {
