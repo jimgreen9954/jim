@@ -54,6 +54,8 @@ export function MineDesk({
   const [ask, setAsk] = useState("");
   const [bindNote, setBindNote] = useState("");
   const [book, setBook] = useState<RebateBook | null>(null);
+  const [nickOpen, setNickOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const urlRef = useState(() => {
     if (typeof window === "undefined") return "";
     return (new URLSearchParams(window.location.hash.replace(/^#/, "")).get("ref") || new URLSearchParams(window.location.search).get("ref") || "").trim().slice(0, 16);
@@ -167,7 +169,7 @@ export function MineDesk({
         <p className="text-xs tracking-widest text-gold">{c.nickTitle}</p>
         <p className="mt-1 text-sm leading-relaxed text-ink/70">{c.nickHint}</p>
         {addresses.length === 0 ? <p className="mt-2 text-sm text-ink/60">—</p> : null}
-        {addresses.map((addr) => (
+        {(nickOpen ? addresses : addresses.slice(0, 4)).map((addr) => (
           <label key={addr} className="mt-2 block">
             <span className="break-all font-mono text-xs">{nickOf(addr, nicks) ? `${nickOf(addr, nicks)} · ` : ""}{addr}</span>
             <span className="mt-1 flex gap-2">
@@ -189,6 +191,11 @@ export function MineDesk({
             </span>
           </label>
         ))}
+        {addresses.length > 4 ? (
+          <button type="button" className="mt-2 min-h-11 border border-gold px-3 text-sm" onClick={() => setNickOpen((value) => !value)}>
+            {nickOpen ? "收起" : `展开其余 ${addresses.length - 4} 个地址`}
+          </button>
+        ) : null}
       </section>
       <section className="border border-gold p-3">
         <p className="text-xs tracking-widest text-gold">{c.rebateTitle}</p>
@@ -294,7 +301,7 @@ export function MineDesk({
                     <span className="ml-3 font-mono">{c.inviteCounted} {pretty(BigInt(book.counted), dec, 4)} USDT</span>
                   </p>
                   <p className="mt-1 text-xs leading-relaxed text-ink/60">{c.inviteExact}</p>
-                  {book.invitees.map((row) => (
+                  {(inviteOpen ? book.invitees : book.invitees.slice(0, 4)).map((row) => (
                     <p key={row.user} className="mt-2 break-all font-mono text-xs leading-relaxed">
                       {row.user}
                       <span className="mt-1 block">
@@ -302,6 +309,11 @@ export function MineDesk({
                       </span>
                     </p>
                   ))}
+                  {book.invitees.length > 4 ? (
+                    <button type="button" className="mt-2 min-h-11 border border-gold px-3 text-sm" onClick={() => setInviteOpen((value) => !value)}>
+                      {inviteOpen ? "收起" : `展开其余 ${book.invitees.length - 4} 人`}
+                    </button>
+                  ) : null}
                 </>
               )}
             </div>

@@ -133,12 +133,30 @@ function DeskLadder({
   });
   const asks = drawn.filter((row) => !row.quote.long).sort((a, b) => b.px - a.px);
   const bids = drawn.filter((row) => row.quote.long).sort((a, b) => b.px - a.px);
+  const [open, setOpen] = useState(false);
+  const askRows = open ? asks : asks.slice(-5);
+  const bidRows = open ? bids : bids.slice(0, 5);
+  const hidden = asks.length + bids.length - askRows.length - bidRows.length;
   const max = Math.max(1, ...drawn.map((row) => row.size));
   const line = (row: (typeof drawn)[number], buy: boolean) => {
     const mine = Boolean(account && row.quote.user.toLowerCase() === account.toLowerCase());
     const width = `${Math.max(8, Math.round((row.size / max) * 100))}%`;
     return (
-      <div key={`${row.perp}-${row.quote.id}`} className="relative grid grid-cols-[4.5rem_1fr_1fr_auto] items-center gap-2 px-2 py-1.5 font-mono text-sm tabular-nums">
+      <div
+        key={`${row.perp}-${row.quote.id}`}
+        role={mine ? undefined : "button"}
+        tabIndex={mine ? undefined : 0}
+        onClick={() => {
+          if (!mine && !busy) onTake(row.perp, row.quote);
+        }}
+        onKeyDown={(event) => {
+          if (!mine && !busy && (event.key === "Enter" || event.key === " ")) {
+            event.preventDefault();
+            onTake(row.perp, row.quote);
+          }
+        }}
+        className={`relative grid w-full grid-cols-[4.5rem_1fr_1fr_auto] items-center gap-2 px-2 py-1.5 text-left font-mono text-sm tabular-nums ${mine ? "" : "cursor-pointer"}`}
+      >
         <span className="absolute inset-y-1 left-0" style={{ width, background: buy ? "rgba(158,27,18,0.12)" : "rgba(30,110,70,0.14)" }} />
         <span className={`relative ${buy ? "text-sell" : "text-[#1b6b45]"}`}>{row.px > 0 ? row.px.toFixed(4) : "—"}</span>
         <span className="relative">{row.size.toFixed(2)}</span>
@@ -148,11 +166,11 @@ function DeskLadder({
           {mine ? (
             <span className="px-2 text-xs text-ink/50">我的</span>
           ) : (
-            <button type="button" disabled={busy} onClick={() => onTake(row.perp, row.quote)} className={`min-h-9 px-3 text-paper ${buy ? "bg-sell" : "bg-[#1b6b45]"}`}>
+            <button type="button" disabled={busy} onClick={(event) => { event.stopPropagation(); onTake(row.perp, row.quote); }} className={`min-h-9 px-3 text-paper ${buy ? "bg-sell" : "bg-[#1b6b45]"}`}>
               {buy ? "买入" : "卖出"}
             </button>
           )}
-          <a className="text-xs text-ink/50 underline" href={`${scan}/address/${row.quote.user}`} target="_blank" rel="noreferrer">
+          <a className="text-xs text-ink/50 underline" href={`${scan}/address/${row.quote.user}`} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
             {named(row.quote.user).slice(0, 6)}
           </a>
         </span>
@@ -168,13 +186,20 @@ function DeskLadder({
         <span className="text-right">指定成交</span>
       </div>
       {asks.length === 0 && bids.length === 0 ? <p className="px-2 py-3 text-sm text-ink/60">这口价附近还没有挂单。</p> : null}
-      {asks.map((row) => line(row, true))}
+      {asks.length > askRows.length ? <p className="px-2 py-1 text-xs text-ink/50">上面还有 {asks.length - askRows.length} 张</p> : null}
+      {askRows.map((row) => line(row, true))}
       <p className="my-1 flex items-center gap-3 px-2 font-mono text-sm text-ink/70">
         <span className="h-px flex-1 bg-gold/40" />
         <span>{mark > 0 ? `${mark.toFixed(4)} USD` : "—"}</span>
         <span className="h-px flex-1 bg-gold/40" />
       </p>
-      {bids.map((row) => line(row, false))}
+      {bidRows.map((row) => line(row, false))}
+      {bids.length > bidRows.length ? <p className="px-2 py-1 text-xs text-ink/50">下面还有 {bids.length - bidRows.length} 张</p> : null}
+      {hidden > 0 || (open && asks.length + bids.length > 10) ? (
+        <button type="button" className="min-h-11 w-full border-t border-gold/40 text-sm" onClick={() => setOpen((value) => !value)}>
+          {open ? "收起" : `展开其余 ${hidden} 张`}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -498,7 +523,7 @@ export function RealPerp() {
             named={named}
             onTake={(book, quote) => run((from) => takePerp(from, book, quote.id, formatUnits(quote.margin, dec), quote.lev, quote.price > 0n))}
           />
-          <p className="px-3 py-2 text-xs text-ink/50">K 线和盘口用的是同一口价。上面红的是空单，点买入接多。下面绿的是多单，点卖出接空。</p>
+          <p className="px-3 py-2 text-xs text-ink/50">K 线和盘口用的是同一口价。别人的单点整行就能吃。自己的单写着「我的」。靠近现价的各留 5 张，其余可以展开。</p>
         </div>
         <div className="border border-gold/40 p-3">
           <p className="text-xs tracking-widest text-gold">{c.pkTitle}</p>
@@ -630,6 +655,7 @@ export function RealPerp() {
                 })}
               </>
             ) : null}
+            {sheet === "mine" || !view?.book ? (
             <MineDesk
               account={account}
               busy={busy}
@@ -649,6 +675,7 @@ export function RealPerp() {
                 ).values(),
               )}
             />
+            ) : null}
             {(view?.book ? sheet === "book" : !inDeal && !mine) ? (
               <>
                 <p className="text-sm leading-relaxed text-ink/80">{chain === "xlayer" ? c.perpStepsX : c.perpSteps}</p>

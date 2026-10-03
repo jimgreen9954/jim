@@ -19,7 +19,8 @@ const zh: Section[] = [
     ps: [
       "现货：买进或卖出 BEM。成交对手是 Pancake 的池子，不是另一个用户的挂单。",
       "模拟：用来看盘口、下纸单、试爆仓。重熔只清空这台设备上的模拟账，不动 USDT、USDT0，也不动永续合约。",
-      "合约：先选 BSC 或 X Layer。挂单写进那一条链的固定合约。别人打开同一页，就能看见并吃单。吃到的是对手，不是池子。",
+      "合约：先选 BSC 或 X Layer。挂单写进那一条链的固定合约。别人打开同一页，就能看见并吃单。吃到的是对手，不是池子。点盘口里别人的整行就吃。靠近现价的上下各留 5 张，其余折起来。",
+      "对手昵称、链上返佣、自己的推荐码、填写别人的码、邀请名单，都在「我的订单」。市场页只留盘口、K 线和开仓。昵称和邀请人多了也可以展开。",
       "晶圆：铸造 NAND，在画布上流片。烧的是 OKB 和晶体管。流片不能撤回。电路不结算永续。",
     ],
   },
@@ -155,7 +156,8 @@ const en: Section[] = [
     ps: [
       "Spot: buy or sell BEM. The counterparty is the Pancake pool, not another person's order.",
       "Paper: the book, paper tickets, and practice liquidations. Remelt clears only the paper book on this device. It does not move USDT, USDT0, or a live order.",
-      "Perp: pick BSC or X Layer. The order is written to that chain's fixed contract. Anyone who opens the page can see it and take it. The counterparty is a person.",
+      "Perp: pick BSC or X Layer. The order is written to that chain's fixed contract. Anyone who opens the page can see it and take it. The counterparty is a person. Click someone else's whole row to take it. Five quotes stay on each side of the mark. The rest fold.",
+      "Nicknames, on-chain rebates, your code, someone else's code, and the invite list live under My orders. The market page keeps the book, the chart, and the ticket. Long nickname and invite lists fold too.",
       "Wafer: mint NAND and tape out on the canvas. It spends OKB and transistors. Tape-out cannot be undone. A circuit does not settle the perpetual.",
     ],
   },
