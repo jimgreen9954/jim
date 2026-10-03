@@ -11,6 +11,7 @@ import {
   claimTier,
   CLAIM_STEPS,
   codeText,
+  deployBscBook,
   hasRebates,
   lookupCode,
   OLD_CLAIM_STEPS,
@@ -27,12 +28,14 @@ export function MineDesk({
   addresses,
   chain,
   run,
+  onBook,
 }: {
   account: string | null;
   busy: boolean;
   addresses: string[];
   chain: Desk;
   run: (task: (from: string) => Promise<unknown>) => Promise<void>;
+  onBook?: (addr: string) => void;
 }) {
   const lang = useExchange((s) => s.lang);
   const c = copy[lang];
@@ -158,9 +161,28 @@ export function MineDesk({
       <section className="border border-gold p-3">
         <p className="text-xs tracking-widest text-gold">{c.rebateTitle}</p>
         <p className="mt-1 text-sm leading-relaxed text-ink/70">{c.rebateHint}</p>
-        {!live ? (
-          <p className="mt-2 text-sm leading-relaxed">{c.rebateBsc}</p>
-        ) : (
+        {!live && chain === "bsc" ? (
+          <div className="mt-2 flex flex-col gap-2">
+            <p className="text-sm leading-relaxed">{c.rebateBsc}</p>
+            <button
+              type="button"
+              className="min-h-11 bg-ink px-3 text-paper"
+              disabled={busy}
+              onClick={() =>
+                run(async (from) => {
+                  const addr = await deployBscBook(from);
+                  onBook?.(addr);
+                  setLive(true);
+                  return addr;
+                })
+              }
+            >
+              {c.bscDeploy}
+            </button>
+          </div>
+        ) : null}
+        {!live && chain !== "bsc" ? <p className="mt-2 text-sm leading-relaxed">{c.rebateBsc}</p> : null}
+        {live ? (
           <>
             <p className="mt-2 text-sm leading-relaxed">{c.rebateShared}</p>
             <p className="mt-2 break-all font-mono text-xs">{perp}</p>
@@ -248,7 +270,7 @@ export function MineDesk({
               )}
             </div>
           </>
-        )}
+        ) : null}
       </section>
     </div>
   );

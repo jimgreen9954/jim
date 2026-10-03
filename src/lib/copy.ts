@@ -193,6 +193,14 @@ export type Copy = {
   rebateMissing: string;
   rebateOld: string;
   rebateBsc: string;
+  stopEasy: string;
+  stopPro: string;
+  stopTp: string;
+  stopSl: string;
+  stopNote: string;
+  stopArmed: string;
+  stopClear: string;
+  bscDeploy: string;
   rebateShared: string;
   rebateNone: string;
   inviteTitle: string;
@@ -465,7 +473,15 @@ export const copy: Record<Lang, Copy> = {
     rebateLocked: "已确认，不能再改",
     rebateMissing: "这个推荐码还不存在",
     rebateOld: "这份合约还是旧提现档，只能提 1、10、100、1000。升级之前先把这里的返佣提走。升级之后才能提 20、50、300、500，之后的返佣记在新合约上。",
-    rebateBsc: "BSC 这份全站合约是返佣上线前部署的，推荐码写不进去，别人也查不到。切到 X Layer，登在下面这一份全站合约上。不要再部署私人合约，那份码只有你自己的浏览器认。",
+    rebateBsc: "BSC 旧合约没有返佣函数，改不了。点下面部署一份新的全站合约，池子和 USDT 还是原来的。部署之后这个浏览器就用新合约。把地址写进 bsc-book.js 再传一次，别人也用这一份。",
+    stopEasy: "小白止盈止损",
+    stopPro: "高手止盈止损",
+    stopTp: "止盈价",
+    stopSl: "止损价",
+    stopNote: "小白档按保证金算：止盈赚一倍，止损亏一半。页面开着、价格碰到，会请你的钱包签名平仓。关掉页面就不会自动平。",
+    stopArmed: "已挂上",
+    stopClear: "取消止盈止损",
+    bscDeploy: "部署 BSC 返佣合约",
     rebateShared: "全站只认这一份合约。你以前若登在别的合约上，别人一定会看到不存在。在这里再登记一次。",
     rebateNone: "全站合约上没有这个码。",
     inviteTitle: "我邀请的人",
@@ -752,7 +768,15 @@ export const copy: Record<Lang, Copy> = {
     rebateLocked: "Confirmed. It cannot be changed.",
     rebateMissing: "That code does not exist",
     rebateOld: "This contract still uses the old claim sizes: 1, 10, 100, 1000. Claim what is here before you upgrade. After that, 20, 50, 300, and 500 work, and new rebates accrue on the new contract.",
-    rebateBsc: "This BSC contract was deployed before rebates. A code cannot be written here, so other people cannot find it. Switch to X Layer and register on the shared contract below. Do not deploy a private contract. Only your browser can see that one.",
+    rebateBsc: "The old BSC contract has no rebate functions and cannot be edited. Deploy one new shared contract below. It uses the same pool and USDT. This browser switches to it. Write the address into bsc-book.js and upload that file so everyone else uses it too.",
+    stopEasy: "Simple stop",
+    stopPro: "Manual stop",
+    stopTp: "Take profit",
+    stopSl: "Stop loss",
+    stopNote: "Simple mode uses margin: take profit at a double, stop at a half loss. While this page is open and the price touches either line, your wallet is asked to close. A closed page does not close the trade.",
+    stopArmed: "Armed",
+    stopClear: "Clear stops",
+    bscDeploy: "Deploy BSC rebate contract",
     rebateShared: "The whole site recognizes only this contract. A code registered on any other contract shows up as missing. Register it again here.",
     rebateNone: "That code is not on the shared contract.",
     inviteTitle: "People I invited",

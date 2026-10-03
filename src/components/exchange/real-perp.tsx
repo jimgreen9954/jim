@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatUnits, parseUnits } from "viem";
 import { copy } from "@/lib/copy";
 import { BSC, connectBsc, pretty, units, type Balances } from "@/lib/bsc";
@@ -7,6 +7,7 @@ import { currentAccount, onAccount, onOpenLink } from "@/lib/wallet";
 import { useExchange } from "@/lib/exchange-store";
 import { MineDesk } from "@/components/exchange/mine-desk";
 import { nickOf, readNicks } from "@/lib/nicks";
+import { clearArm, easyBand, readArm, writeArm, type Arm } from "@/lib/stops";
 import {
   cancelPerp,
   closePerp,
@@ -129,6 +130,39 @@ export function RealPerp() {
   const [frame, setFrame] = useState<CandleFrame>("1m");
   const [limit, setLimit] = useState("");
   const [board, setBoard] = useState<{ perp: string; quote: BookQuote }[]>([]);
+  const [guard, setGuard] = useState<"easy" | "pro" | "off">("easy");
+  const [tpText, setTpText] = useState("");
+  const [slText, setSlText] = useState("");
+  const [arm, setArm] = useState<Arm | null>(null);
+  const firing = useRef(false);
+
+  useEffect(() => {
+    if (!account) return;
+    setArm(readArm(account, perp));
+  }, [account, perp, hash]);
+
+  useEffect(() => {
+    if (!account || !view || view.myDeal <= 0n || firing.current) return;
+    const row = readArm(account, perp);
+    if (!row || row.spent) return;
+    const px = live && live > 0 ? live : view.mark > 0n ? Number(formatUnits(view.mark, 18)) : 0;
+    if (!(px > 0)) return;
+    const hit = row.long ? px >= row.tp || px <= row.sl : px <= row.tp || px >= row.sl;
+    if (!hit) return;
+    firing.current = true;
+    const spent = { ...row, spent: true };
+    writeArm(spent);
+    setArm(spent);
+    run((from) => closePerp(from, perp, view.myDeal))
+      .catch(() => {
+        const back = { ...row, spent: false };
+        writeArm(back);
+        setArm(back);
+      })
+      .finally(() => {
+        firing.current = false;
+      });
+  }, [account, perp, view?.myDeal, view?.mark, live, hash]);
 
   useEffect(() => {
     activeBook()
@@ -556,6 +590,7 @@ export function RealPerp() {
                     busy={busy}
                     chain={chain}
                     run={run}
+                    onBook={(addr) => setPerp(addr)}
                     addresses={Array.from(
                       new Map(
                         [...(view?.quotes ?? []).map((quote) => quote.user), ...(view?.liveDeals ?? []).flatMap((deal) => [deal.long, deal.short])]
@@ -656,6 +691,39 @@ export function RealPerp() {
                   {c.useMark}{view?.mark ? ` $${pxText(view.mark)}` : ""}
                 </button>
                 <p className="text-sm leading-relaxed text-ink/70">{c.priceNote}</p>
+                <div className="border border-gold/40 p-3">
+                  <div className="grid grid-cols-3 gap-2">
+                    {(["easy", "pro", "off"] as const).map((item) => (
+                      <button key={item} type="button" onClick={() => setGuard(item)} className={`min-h-11 border border-gold text-sm ${guard === item ? "bg-ink text-paper" : ""}`}>
+                        {item === "easy" ? c.stopEasy : item === "pro" ? c.stopPro : c.stopClear}
+                      </button>
+                    ))}
+                  </div>
+                  {guard === "pro" ? (
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <label className="border border-gold/40 px-2 py-2">
+                        <span className="block text-xs tracking-widest text-gold">{c.stopTp}</span>
+                        <input value={tpText} onChange={(event) => setTpText(event.target.value)} inputMode="decimal" className="w-full bg-transparent font-mono text-xl outline-none" />
+                      </label>
+                      <label className="border border-gold/40 px-2 py-2">
+                        <span className="block text-xs tracking-widest text-gold">{c.stopSl}</span>
+                        <input value={slText} onChange={(event) => setSlText(event.target.value)} inputMode="decimal" className="w-full bg-transparent font-mono text-xl outline-none" />
+                      </label>
+                    </div>
+                  ) : null}
+                  {guard === "easy" && markN > 0 ? (
+                    <p className="mt-2 font-mono text-sm tabular-nums">
+                      {c.stopTp} ${easyBand(Number(limit) || markN, lev || 1, true).tp.toFixed(2)} · {c.stopSl} ${easyBand(Number(limit) || markN, lev || 1, true).sl.toFixed(2)}
+                    </p>
+                  ) : null}
+                  <p className="mt-2 text-xs leading-relaxed text-ink/60">{c.stopNote}</p>
+                  {arm && !arm.spent ? (
+                    <p className="mt-2 font-mono text-sm">
+                      {c.stopArmed} · {c.stopTp} ${arm.tp.toFixed(2)} · {c.stopSl} ${arm.sl.toFixed(2)}
+                      <button type="button" className="ml-2 underline" onClick={() => { if (account) { clearArm(account, perp); setArm(null); } }}>{c.stopClear}</button>
+                    </p>
+                  ) : null}
+                </div>
                 <div className="grid grid-cols-3 gap-2 text-sm">
                   <p className="border border-gold/40 px-2 py-2">
                     <span className="block text-xs tracking-widest text-gold">{c.notional}</span>
@@ -682,7 +750,20 @@ export function RealPerp() {
                     type="button"
                     className="min-h-12 bg-ink text-paper"
                     disabled={busy || !levOk || !marginOk || !priceOk || !view?.priced || Boolean(!view?.book && waiting && view?.pendingLong)}
-                    onClick={() => run((from) => openPerp(from, perp, true, margin, lev, limit))}
+                    onClick={() =>
+                      run(async (from) => {
+                        const entry = Number(limit) || markN;
+                        if (guard !== "off" && entry > 0) {
+                          const band = guard === "easy" ? easyBand(entry, lev || 1, true) : { tp: Number(tpText), sl: Number(slText) };
+                          if (band.tp > 0 && band.sl > 0) {
+                            const next = { account: from, perp, long: true, tp: band.tp, sl: band.sl, spent: false };
+                            writeArm(next);
+                            setArm(next);
+                          }
+                        }
+                        return openPerp(from, perp, true, margin, lev, limit);
+                      })
+                    }
                   >
                     {waiting && view && !view.pendingLong ? c.pullQuote : `${c.postLong} · ${margin || "1"} USDT`}
                   </button>
@@ -690,7 +771,20 @@ export function RealPerp() {
                     type="button"
                     className="min-h-12 border border-gold"
                     disabled={busy || !levOk || !marginOk || !priceOk || !view?.priced || Boolean(!view?.book && waiting && !view?.pendingLong)}
-                    onClick={() => run((from) => openPerp(from, perp, false, margin, lev, limit))}
+                    onClick={() =>
+                      run(async (from) => {
+                        const entry = Number(limit) || markN;
+                        if (guard !== "off" && entry > 0) {
+                          const band = guard === "easy" ? easyBand(entry, lev || 1, false) : { tp: Number(tpText), sl: Number(slText) };
+                          if (band.tp > 0 && band.sl > 0) {
+                            const next = { account: from, perp, long: false, tp: band.tp, sl: band.sl, spent: false };
+                            writeArm(next);
+                            setArm(next);
+                          }
+                        }
+                        return openPerp(from, perp, false, margin, lev, limit);
+                      })
+                    }
                   >
                     {waiting && view?.pendingLong ? c.pullQuote : `${c.postShort} · ${margin || "1"} USDT`}
                   </button>
@@ -703,7 +797,7 @@ export function RealPerp() {
               </button>
             ) : null}
             {inDeal ? (
-              <button type="button" className="min-h-12 bg-ink text-paper" disabled={busy} onClick={() => run((from) => closePerp(from, perp))}>
+              <button type="button" className="min-h-12 bg-ink text-paper" disabled={busy} onClick={() => run((from) => closePerp(from, perp, view && view.myDeal > 0n ? view.myDeal : undefined))}>
                 {c.closeDeal}
               </button>
             ) : null}

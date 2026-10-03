@@ -235,7 +235,7 @@ async function client() {
   return createPublicClient({ transport: http(rpc) });
 }
 
-async function send(from: string, to: Hex | undefined, data: Hex): Promise<Hex> {
+async function send(from: string, to: Hex | undefined, data: Hex, gasLimit?: bigint): Promise<Hex> {
   if (desk === "xlayer") await connectXLayer();
   else await connectBsc();
   const eth = getProvider();
@@ -248,7 +248,7 @@ async function send(from: string, to: Hex | undefined, data: Hex): Promise<Hex> 
     price = desk === "xlayer" ? 1_000_000n : 50_000_000n;
   }
   if (desk === "bsc" && price < 50_000_000n) price = 50_000_000n;
-  const gas = (to ? 800_000n : 2_200_000n).toString(16);
+  const gas = (gasLimit ?? (to ? 800_000n : 2_200_000n)).toString(16);
   if (desk === "xlayer") {
     const plain: {
       from: string;
@@ -392,9 +392,38 @@ export function savedXPerp(): string {
   return window.localStorage.getItem(XPERP_KEY) ?? "";
 }
 
+const BSC_BOOK_KEY = "tapeliquid-bsc-book";
+
 export function bookOf(which: Desk = desk): string {
-  if (which !== "xlayer") return KNOWN_PERP;
-  return /^0x[a-fA-F0-9]{40}$/.test(KNOWN_XPERP) ? KNOWN_XPERP : savedXPerp();
+  if (which === "xlayer") return /^0x[a-fA-F0-9]{40}$/.test(KNOWN_XPERP) ? KNOWN_XPERP : savedXPerp();
+  const wired = typeof window !== "undefined" ? (window as Window & { TAPELIQUID_BSC_BOOK?: string }).TAPELIQUID_BSC_BOOK ?? "" : "";
+  if (/^0x[a-fA-F0-9]{40}$/.test(wired)) return wired;
+  if (typeof window !== "undefined") {
+    const saved = window.localStorage.getItem(BSC_BOOK_KEY) ?? "";
+    if (/^0x[a-fA-F0-9]{40}$/.test(saved)) return saved;
+  }
+  return KNOWN_PERP;
+}
+
+export async function deployBscBook(from: string): Promise<string> {
+  const was = desk;
+  desk = "bsc";
+  try {
+    const args = encodeAbiParameters(
+      [{ type: "address" }, { type: "address" }, { type: "uint256" }],
+      [BSC.usdt, BSC.pool, 10n ** 18n],
+    );
+    const data = (PERP_BYTECODE + args.slice(2)) as Hex;
+    const hash = await send(from, undefined, data, 6_000_000n);
+    const rpc = await client();
+    const receipt = await rpc.waitForTransactionReceipt({ hash, timeout: 120_000, pollingInterval: 2_000 });
+    const addr = receipt.contractAddress ?? "";
+    if (!addr) throw new Error("revert");
+    window.localStorage.setItem(BSC_BOOK_KEY, addr);
+    return addr;
+  } finally {
+    desk = was;
+  }
 }
 
 export async function activeBook(): Promise<string> {
@@ -494,6 +523,7 @@ export type PerpView = {
   marginS: bigint;
   dealBase: bigint;
   dealEntry: bigint;
+  myDeal: bigint;
 };
 
 export function splitEquity(base: bigint, entry: bigint, px: bigint, marginL: bigint, marginS: bigint) {
@@ -646,6 +676,7 @@ export async function readPerp(perp: string, account: string | null): Promise<Pe
       marginS: first?.marginS ?? 0n,
       dealBase: first?.base ?? 0n,
       dealEntry: first?.entry ?? 0n,
+      myDeal: mine?.id ?? 0n,
     };
   } catch {
     // The contract already on chain has one shared quote, not an order book.
@@ -653,10 +684,12 @@ export async function readPerp(perp: string, account: string | null): Promise<Pe
   const pending = await c.readContract({ address: addr, abi, functionName: "pending" });
   const nextId = await c.readContract({ address: addr, abi, functionName: "nextId" });
   let found: readonly [string, string, bigint, bigint, bigint, bigint, boolean] | null = null;
+  let foundId = 0n;
   for (let id = nextId; id > 0n && nextId - id < 6n; id -= 1n) {
     const row = await c.readContract({ address: addr, abi, functionName: "deals", args: [id] });
     if (row[6]) {
       found = row;
+      foundId = id;
       break;
     }
   }
@@ -689,6 +722,7 @@ export async function readPerp(perp: string, account: string | null): Promise<Pe
     marginS: found ? found[3] : 0n,
     dealBase: found ? found[4] : 0n,
     dealEntry: found ? found[5] : 0n,
+    myDeal: foundId,
   };
 }
 
