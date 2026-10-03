@@ -6,13 +6,12 @@ import { nickOf, readNicks, writeNick } from "@/lib/nicks";
 import { getRebateBook, type RebateBook } from "@/lib/rebate-index";
 import {
   bindCode,
-  bookOf,
   claimRebate,
   claimTier,
   CLAIM_STEPS,
   codeText,
-  deployBscBook,
   hasRebates,
+  KNOWN_XPERP,
   lookupCode,
   OLD_CLAIM_STEPS,
   readRebate,
@@ -58,8 +57,8 @@ export function MineDesk({
     if (typeof window === "undefined") return "";
     return (new URLSearchParams(window.location.hash.replace(/^#/, "")).get("ref") || new URLSearchParams(window.location.search).get("ref") || "").trim().slice(0, 16);
   })[0];
-  const perp = bookOf(chain);
-  const dec = chain === "xlayer" ? 6 : 18;
+  const perp = KNOWN_XPERP;
+  const dec = 6;
 
   useEffect(() => {
     const saved = readNicks();
@@ -120,7 +119,7 @@ export function MineDesk({
   }, [live, chain, urlRef, referrer, account, c.rebateNone, lang]);
 
   useEffect(() => {
-    if (chain !== "xlayer" || !account) return;
+    if (!account) return;
     let dead = false;
     const tick = () => {
       getRebateBook({ data: { account } })
@@ -135,7 +134,7 @@ export function MineDesk({
       dead = true;
       window.clearInterval(timer);
     };
-  }, [account, chain, busy]);
+  }, [account, busy]);
 
   const locked = Boolean(referrer && referrer !== zero);
   const steps = tier >= 2 ? CLAIM_STEPS : OLD_CLAIM_STEPS;
@@ -193,37 +192,15 @@ export function MineDesk({
       <section className="border border-gold p-3">
         <p className="text-xs tracking-widest text-gold">{c.rebateTitle}</p>
         <p className="mt-1 text-sm leading-relaxed text-ink/70">{c.rebateHint}</p>
-        {!live && chain === "bsc" ? (
-          <div className="mt-2 flex flex-col gap-2">
-            <button type="button" className="min-h-11 bg-ink px-3 text-paper" onClick={() => onChain?.("xlayer")}>
-              {c.inviteGo}
-            </button>
-            <p className="text-sm leading-relaxed">{c.rebateBsc}</p>
-            <button
-              type="button"
-              className="min-h-11 border border-gold px-3"
-              disabled={busy}
-              onClick={() =>
-                run(async (from) => {
-                  const addr = await deployBscBook(from);
-                  onBook?.(addr);
-                  setLive(true);
-                  return addr;
-                })
-              }
-            >
-              {c.bscDeploy}
-            </button>
-          </div>
-        ) : null}
-        {!live && chain !== "bsc" ? <p className="mt-2 text-sm leading-relaxed">{c.rebateBsc}</p> : null}
+        {!live ? <p className="mt-2 text-sm leading-relaxed">{c.rebateNone}</p> : null}
         {live ? (
           <>
             <p className="mt-2 text-sm leading-relaxed">{c.rebateShared}</p>
             <p className="mt-2 break-all font-mono text-xs">{perp}</p>
             <p className="mt-2 text-sm">
-              {c.rebateAccrued} <span className="font-mono">{pretty(accrued, dec, 2)} USDT</span>
+              {c.rebateAccrued} <span className="font-mono">{pretty(accrued, dec, 2)} USDT0</span>
             </p>
+            {accrued === 0n ? <p className="mt-1 text-sm text-ink/60">现在是 0。有人用你的码成交之后才会增加。是 0 的时候按钮不会转出钱。</p> : null}
             <div className="mt-2 grid grid-cols-4 gap-2">
               {steps.map((step) => (
                 <button
