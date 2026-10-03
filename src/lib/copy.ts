@@ -219,6 +219,7 @@ export type Copy = {
   inviteCounted: string;
   inviteGap: string;
   inviteExact: string;
+  inviteBsc: string;
   cancelFee: string;
   refund: string;
   perpAddr: string;
@@ -496,8 +497,8 @@ export const copy: Record<Lang, Copy> = {
     inviteCopy: "复制链接",
     inviteCopied: "链接已复制。朋友打开后核对，再点确认。",
     inviteGo: "推荐码在 X Layer。点这里去登记，不用部署新合约。",
-    rebateShared: "推荐码和提现只认下面这一份 X Layer 合约。BSC 上另外部署的合约，朋友查不到。确认绑定时钱包会切到 X Layer，用 OKB 付手续费。",
-    rebateNone: "全站这份 X Layer 合约上没有这个码。在别的合约登记过的不算。",
+    rebateShared: "推荐码跟你现在选的链走。停在 BSC，登记、绑定和提现花 BNB，提到 BSC 的 USDT。停在 X Layer，花 OKB，提到 USDT0。两条链的码不通用。",
+    rebateNone: "这条链的全站合约上没有这个码。另一条链上的码不算，私人合约上的码也不算。",
     inviteTitle: "我邀请的人",
     inviteEmpty: "还没有人绑定你的码。",
     inviteChecking: "正在从链上逐块核对。对完之前不显示人数，避免把没看完的账当成全部。",
@@ -507,6 +508,7 @@ export const copy: Record<Lang, Copy> = {
     inviteCounted: "已记返佣",
     inviteGap: "有一笔链上记录对不上，人数先不显示，避免算错。",
     inviteExact: "人数和已记返佣是链上对完之后，用合约同一套公式算的。上面的可提是合约里还没提走的余额，提现只认这个数。",
+    inviteBsc: "BSC 的邀请和 X Layer 分开。名单按 X Layer 那份合约逐块核对。BSC 上谁绑了你，以这份合约里的绑定为准。",
     cancelFee: "撤单费",
     refund: "退回",
     perpAddr: "BSC 永续合约",
@@ -798,8 +800,8 @@ export const copy: Record<Lang, Copy> = {
     inviteCopy: "Copy link",
     inviteCopied: "Link copied. Your friend opens it, checks, then confirms.",
     inviteGo: "Codes live on X Layer. Go there to register. You do not need a new contract.",
-    rebateShared: "Codes and claims use only the X Layer contract below. A code written on a separate BSC contract cannot be found. Confirming switches the wallet to X Layer and pays gas in OKB.",
-    rebateNone: "That code is not on the shared X Layer contract. A code registered somewhere else does not count.",
+    rebateShared: "The code follows the chain you have selected. On BSC, registering, binding, and claiming spend BNB and pay BSC USDT. On X Layer they spend OKB and pay USDT0. A code does not cross chains.",
+    rebateNone: "That code is not on this chain's shared contract. A code on the other chain, or on a private contract, does not count.",
     inviteTitle: "People I invited",
     inviteEmpty: "Nobody has bound your code.",
     inviteChecking: "Reading the chain block by block. The count stays hidden until the read is finished, so a half-read book is not shown as the total.",
@@ -809,6 +811,7 @@ export const copy: Record<Lang, Copy> = {
     inviteCounted: "Rebates recorded",
     inviteGap: "One on-chain record does not line up. The count stays hidden so it is not wrong.",
     inviteExact: "The count and recorded rebates use the contract's own formula after the chain has been read through. Claimable is the balance still in the contract. A withdrawal uses only that number.",
+    inviteBsc: "BSC invitations are separate from X Layer. The scanned list is the X Layer contract. On BSC, the binding stored in this contract is what counts.",
     cancelFee: "Cancel fee",
     refund: "Back",
     perpAddr: "BSC perp contract",

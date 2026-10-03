@@ -489,7 +489,7 @@ export function RealPerp() {
           </div>
           <PkTape candles={prices} entry={entryN} mark={markN} />
           <DeskLadder
-            rows={view?.book ? view.quotes.map((quote) => ({ perp, quote })) : board}
+            rows={board}
             mark={markN}
             account={account}
             busy={busy}

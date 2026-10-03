@@ -1,4 +1,4 @@
-import { KNOWN_PERP, KNOWN_XMARK, KNOWN_XPERP } from "@/lib/perp";
+import { BSC_REBATE, KNOWN_PERP, KNOWN_XMARK, KNOWN_XPERP } from "@/lib/perp";
 import { BSC } from "@/lib/bsc";
 import { DEPLOYED, XLAYER } from "@/lib/xlayer";
 import { useExchange } from "@/lib/exchange-store";
@@ -82,8 +82,9 @@ const zh: Section[] = [
   {
     h: "返佣",
     ps: [
-      "返佣在链上，不在客服手里。推荐码只登在当前这条链的全站合约上。BSC 那份已经锁定的合约是返佣之前部署的，码写不进去。现在要在 X Layer 的全站合约上登记。登在私人合约里的码，别人一定会看到不存在。别人填你的码，要再确认一次。确认之后，推荐关系写进合约，不能改。",
-      "页面按成交和撤单当时的绑定关系，用合约同一套公式列出你邀请了谁、他们拿出的保证金、名义价值和记给你的返佣。可提余额以合约里的数字为准。提现只收整数。档位是 1、10、20、50、100、300、500 美元。X Layer 提到 USDT0。",
+      "返佣在链上，不在客服手里。推荐码只登在你当前这条链的全站合约上。BSC 的登记、绑定和提现花 BNB，记的是 BSC 的 USDT。X Layer 花 OKB，记的是 USDT0。两条链的码不通用，也不能把一边的余额提到另一边。别人填你的码，要再确认一次。确认之后不能改。登在私人合约里的码，别人查不到。",
+      "BSC 上能写推荐码的是带返佣的那一份新合约。更早那份合约没有返佣函数，码写不进去，但它里面已经挂出的单仍然可以吃。新开的 BSC 单进新合约，手续费和返佣都在新合约里结算。",
+      "页面按成交和撤单当时的绑定关系，用合约同一套公式列出你邀请了谁、他们拿出的保证金、名义价值和记给你的返佣。可提余额以合约里的数字为准。提现只收整数。档位是 1、10、20、50、100、300、500 美元。",
     ],
   },
   {
@@ -113,8 +114,9 @@ const zh: Section[] = [
   {
     h: "已经锁死的地址",
     ps: [
-      `BSC 永续 ${KNOWN_PERP}。保证金是 BSC 的 USDT。`,
-      `X Layer 永续 ${KNOWN_XPERP}。保证金是 USDT0。标记价合约 ${KNOWN_XMARK}。`,
+      `BSC 旧永续 ${KNOWN_PERP}。里面已有的挂单还在。这份合约写不进推荐码。`,
+      `BSC 返佣永续 ${BSC_REBATE}。新开的 BSC 单、推荐码和提现都在这里。保证金是 BSC 的 USDT，gas 是 BNB。`,
+      `X Layer 永续 ${KNOWN_XPERP}。保证金是 USDT0，gas 是 OKB。标记价合约 ${KNOWN_XMARK}。`,
       `晶圆电路 ${DEPLOYED.circuits}。晶体管 ${DEPLOYED.transistors}。这是 X Layer 上的处理器，不是永续。`,
       "开发者收费地址 0xb67741A0463779c0dab3fDCFE883bA7572AC0AC2。手续费进这里。它不能改合约，也不能动你还锁着的保证金。",
     ],
@@ -206,8 +208,9 @@ const en: Section[] = [
   {
     h: "Rebates",
     ps: [
-      "Rebates are on chain. A code is registered on that chain's shared contract only. The locked BSC contract was deployed before rebates, so a code cannot be written there. Register on the X Layer contract. A code on a private contract shows up as missing for everyone else. The other person confirms once. After that the link cannot be changed.",
-      "The page lists who bound your code, the margin they posted, the notional, and the rebate credited to you, using the contract's own formula at the block of the fill or cancel. The claimable balance is the number stored in the contract. Claims are whole amounts of 1, 10, 20, 50, 100, 300, or 500 USD, paid in USDT0 on X Layer.",
+      "Rebates are on chain. A code is registered only on the shared contract of the chain you are on. BSC registration, binding, and claims spend BNB and pay BSC USDT. X Layer spends OKB and pays USDT0. A code does not cross, and a balance cannot be claimed on the other chain. The other person confirms once. After that it cannot be changed. A code on a private contract cannot be found.",
+      "The BSC contract that can store a code is the newer one. The older contract has no rebate functions. Orders already posted there can still be taken. A new BSC order goes to the new contract, and its fee and rebate settle there.",
+      "The page lists who bound your code, the margin they posted, the notional, and the rebate credited to you, using the contract's own formula at the block of the fill or cancel. The claimable balance is the number stored in the contract. Claims are whole amounts of 1, 10, 20, 50, 100, 300, or 500 USD.",
     ],
   },
   {
@@ -237,8 +240,9 @@ const en: Section[] = [
   {
     h: "Addresses already locked",
     ps: [
-      `BSC perpetual ${KNOWN_PERP}. Margin is BSC USDT.`,
-      `X Layer perpetual ${KNOWN_XPERP}. Margin is USDT0. Mark ${KNOWN_XMARK}.`,
+      `Older BSC perpetual ${KNOWN_PERP}. Orders already there remain. A code cannot be written on it.`,
+      `BSC rebate perpetual ${BSC_REBATE}. New BSC orders, codes, and claims live here. Margin is BSC USDT. Gas is BNB.`,
+      `X Layer perpetual ${KNOWN_XPERP}. Margin is USDT0. Gas is OKB. Mark ${KNOWN_XMARK}.`,
       `Wafer circuits ${DEPLOYED.circuits}. Transistors ${DEPLOYED.transistors}. This processor is on X Layer. It is not the perpetual.`,
       "Developer fee address 0xb67741A0463779c0dab3fDCFE883bA7572AC0AC2. Fees go here. It cannot change the contract and it cannot take margin that is still locked.",
     ],
@@ -262,8 +266,8 @@ export function Whitepaper() {
         <p className="text-xs tracking-widest text-gold">TAPELIQUID</p>
         <h2 className="font-display text-4xl italic leading-none">{lang === "zh" ? "白皮书" : "White paper"}</h2>
       </header>
-      <p className="break-all font-mono text-xs">BSC {KNOWN_PERP}</p>
-      <a className="text-sm underline decoration-gold underline-offset-4" href={`${BSC.explorer}/address/${KNOWN_PERP}`} target="_blank" rel="noreferrer">
+      <p className="break-all font-mono text-xs">BSC {BSC_REBATE}</p>
+      <a className="text-sm underline decoration-gold underline-offset-4" href={`${BSC.explorer}/address/${BSC_REBATE}`} target="_blank" rel="noreferrer">
         BscScan
       </a>
       <p className="break-all font-mono text-xs">X Layer {KNOWN_XPERP}</p>

@@ -43,6 +43,7 @@ function tokenUnit(): bigint {
   return 10n ** BigInt(tokenDecimals());
 }
 export const KNOWN_PERP = "0xB98D14333a93D49a4E05478d002FC3944D88A3b7";
+export const BSC_REBATE = "0x5753fb0ba5975a2dc0fae5bd0dcf521dbba7cc12";
 export const KNOWN_XPERP = "0xa0344f5B0518D31B7CFa6CaC266b4eDd289821ce";
 export const KNOWN_XMARK = "0xc35C8cB9FFaC92F25cAFaEdC82F03144b24bCb1d";
 export const BOARD = [KNOWN_PERP];
@@ -396,13 +397,7 @@ const BSC_BOOK_KEY = "tapeliquid-bsc-book";
 
 export function bookOf(which: Desk = desk): string {
   if (which === "xlayer") return /^0x[a-fA-F0-9]{40}$/.test(KNOWN_XPERP) ? KNOWN_XPERP : savedXPerp();
-  const wired = typeof window !== "undefined" ? (window as Window & { TAPELIQUID_BSC_BOOK?: string }).TAPELIQUID_BSC_BOOK ?? "" : "";
-  if (/^0x[a-fA-F0-9]{40}$/.test(wired)) return wired;
-  if (typeof window !== "undefined") {
-    const saved = window.localStorage.getItem(BSC_BOOK_KEY) ?? "";
-    if (/^0x[a-fA-F0-9]{40}$/.test(saved)) return saved;
-  }
-  return KNOWN_PERP;
+  return BSC_REBATE;
 }
 
 export async function deployBscBook(from: string): Promise<string> {
@@ -431,14 +426,18 @@ export async function activeBook(): Promise<string> {
 }
 
 export async function readBoard(): Promise<{ perp: string; quote: BookQuote }[]> {
-  const addr = bookOf();
-  if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) return [];
-  try {
-    const view = await readPerp(addr, null);
-    return view.quotes.map((quote) => ({ perp: addr, quote }));
-  } catch {
-    return [];
+  const addrs = desk === "xlayer" ? [bookOf("xlayer")] : [BSC_REBATE, KNOWN_PERP];
+  const rows: { perp: string; quote: BookQuote }[] = [];
+  for (const addr of addrs) {
+    if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) continue;
+    try {
+      const view = await readPerp(addr, null);
+      rows.push(...view.quotes.map((quote) => ({ perp: addr, quote })));
+    } catch {
+      continue;
+    }
   }
+  return rows;
 }
 
 export async function resumeDeploy(): Promise<{ address: string; hash: string }> {
@@ -934,20 +933,26 @@ export function savedRebate(): string {
   return window.localStorage.getItem(REBATE_KEY) ?? "";
 }
 
-export async function hasRebates(_which?: Desk): Promise<boolean> {
+function rebateTarget(which: Desk): { desk: Desk; addr: Hex } {
+  return which === "xlayer" ? { desk: "xlayer", addr: KNOWN_XPERP } : { desk: "bsc", addr: BSC_REBATE };
+}
+
+export async function hasRebates(which: Desk = "bsc"): Promise<boolean> {
+  const target = rebateTarget(which);
   try {
-    return await (await deskClient("xlayer")).readContract({ address: KNOWN_XPERP, abi: rebateAbi, functionName: "rebates" });
+    return await (await deskClient(target.desk)).readContract({ address: target.addr, abi: rebateAbi, functionName: "rebates" });
   } catch {
     return false;
   }
 }
 
-export async function readRebate(_which: Desk, account: string): Promise<{ accrued: bigint; referrer: string; code: Hex }> {
-  const c = await deskClient("xlayer");
+export async function readRebate(which: Desk, account: string): Promise<{ accrued: bigint; referrer: string; code: Hex }> {
+  const target = rebateTarget(which);
+  const c = await deskClient(target.desk);
   const [accrued, referrer, code] = await Promise.all([
-    c.readContract({ address: KNOWN_XPERP, abi: rebateAbi, functionName: "accrued", args: [account as Hex] }),
-    c.readContract({ address: KNOWN_XPERP, abi: rebateAbi, functionName: "referrerOf", args: [account as Hex] }),
-    c.readContract({ address: KNOWN_XPERP, abi: rebateAbi, functionName: "codeOf", args: [account as Hex] }),
+    c.readContract({ address: target.addr, abi: rebateAbi, functionName: "accrued", args: [account as Hex] }),
+    c.readContract({ address: target.addr, abi: rebateAbi, functionName: "referrerOf", args: [account as Hex] }),
+    c.readContract({ address: target.addr, abi: rebateAbi, functionName: "codeOf", args: [account as Hex] }),
   ]);
   return { accrued, referrer, code };
 }
@@ -960,29 +965,31 @@ function asCode(text: string): Hex {
   return (hex + "0".repeat(66 - hex.length)) as Hex;
 }
 
-export async function registerCode(from: string, _which: Desk, text: string): Promise<Hex> {
+export async function registerCode(from: string, which: Desk, text: string): Promise<Hex> {
   const was = desk;
-  desk = "xlayer";
+  const target = rebateTarget(which);
+  desk = target.desk;
   try {
     const trimmed = text.trim();
     if (new TextEncoder().encode(trimmed).length < 1 || new TextEncoder().encode(trimmed).length > 16) throw new Error("code");
-    const row = await readRebate("xlayer", from);
+    const row = await readRebate(which, from);
     if (codeText(row.code)) throw new Error("have");
-    const owner = await lookupCode("xlayer", trimmed);
+    const owner = await lookupCode(which, trimmed);
     if (owner && owner !== "0x0000000000000000000000000000000000000000") throw new Error("taken");
     const data = encodeFunctionData({ abi: rebateAbi, functionName: "register", args: [asCode(trimmed)] });
-    return await send(from, KNOWN_XPERP, data);
+    return await send(from, target.addr, data);
   } finally {
     desk = was;
   }
 }
 
-export async function bindCode(from: string, _which: Desk, text: string): Promise<Hex> {
+export async function bindCode(from: string, which: Desk, text: string): Promise<Hex> {
   const was = desk;
-  desk = "xlayer";
+  const target = rebateTarget(which);
+  desk = target.desk;
   try {
     const data = encodeFunctionData({ abi: rebateAbi, functionName: "bind", args: [asCode(text)] });
-    return await send(from, KNOWN_XPERP, data);
+    return await send(from, target.addr, data);
   } finally {
     desk = was;
   }
@@ -992,14 +999,16 @@ export function usdtUnits(dollars: number): bigint {
   return BigInt(dollars) * tokenUnit();
 }
 
-export async function lookupCode(_which: Desk, text: string): Promise<string> {
-  const c = await deskClient("xlayer");
-  return c.readContract({ address: KNOWN_XPERP, abi: rebateAbi, functionName: "codeOwner", args: [asCode(text)] });
+export async function lookupCode(which: Desk, text: string): Promise<string> {
+  const target = rebateTarget(which);
+  const c = await deskClient(target.desk);
+  return c.readContract({ address: target.addr, abi: rebateAbi, functionName: "codeOwner", args: [asCode(text)] });
 }
 
-export async function claimTier(_which?: Desk): Promise<number> {
+export async function claimTier(which: Desk = "bsc"): Promise<number> {
+  const target = rebateTarget(which);
   try {
-    const tier = await (await deskClient("xlayer")).readContract({ address: KNOWN_XPERP, abi: rebateAbi, functionName: "tierSet" });
+    const tier = await (await deskClient(target.desk)).readContract({ address: target.addr, abi: rebateAbi, functionName: "tierSet" });
     return Number(tier);
   } catch {
     return 1;
@@ -1010,13 +1019,14 @@ export const CLAIM_STEPS = [1, 10, 20, 50, 100, 300, 500] as const;
 export const OLD_CLAIM_STEPS = [1, 10, 100, 1000] as const;
 export type ClaimStep = (typeof CLAIM_STEPS)[number] | (typeof OLD_CLAIM_STEPS)[number];
 
-export async function claimRebate(from: string, _which: Desk, dollars: ClaimStep): Promise<Hex> {
+export async function claimRebate(from: string, which: Desk, dollars: ClaimStep): Promise<Hex> {
   const was = desk;
-  desk = "xlayer";
+  const target = rebateTarget(which);
+  desk = target.desk;
   try {
     const amount = usdtUnits(dollars);
     const data = encodeFunctionData({ abi: rebateAbi, functionName: "claim", args: [amount] });
-    return await send(from, KNOWN_XPERP, data);
+    return await send(from, target.addr, data);
   } finally {
     desk = was;
   }

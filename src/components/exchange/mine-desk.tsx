@@ -11,6 +11,7 @@ import {
   CLAIM_STEPS,
   codeText,
   hasRebates,
+  BSC_REBATE,
   KNOWN_XPERP,
   lookupCode,
   OLD_CLAIM_STEPS,
@@ -57,8 +58,8 @@ export function MineDesk({
     if (typeof window === "undefined") return "";
     return (new URLSearchParams(window.location.hash.replace(/^#/, "")).get("ref") || new URLSearchParams(window.location.search).get("ref") || "").trim().slice(0, 16);
   })[0];
-  const perp = KNOWN_XPERP;
-  const dec = 6;
+  const perp = chain === "xlayer" ? KNOWN_XPERP : BSC_REBATE;
+  const dec = chain === "xlayer" ? 6 : 18;
 
   useEffect(() => {
     const saved = readNicks();
@@ -119,7 +120,7 @@ export function MineDesk({
   }, [live, chain, urlRef, referrer, account, c.rebateNone, lang]);
 
   useEffect(() => {
-    if (!account) return;
+    if (chain !== "xlayer" || !account) return;
     let dead = false;
     const tick = () => {
       getRebateBook({ data: { account } })
@@ -134,7 +135,7 @@ export function MineDesk({
       dead = true;
       window.clearInterval(timer);
     };
-  }, [account, busy]);
+  }, [account, chain, busy]);
 
   const locked = Boolean(referrer && referrer !== zero);
   const steps = tier >= 2 ? CLAIM_STEPS : OLD_CLAIM_STEPS;
@@ -198,9 +199,10 @@ export function MineDesk({
             <p className="mt-2 text-sm leading-relaxed">{c.rebateShared}</p>
             <p className="mt-2 break-all font-mono text-xs">{perp}</p>
             <p className="mt-2 text-sm">
-              {c.rebateAccrued} <span className="font-mono">{pretty(accrued, dec, 2)} USDT0</span>
+              {c.rebateAccrued} <span className="font-mono">{pretty(accrued, dec, 2)} {chain === "xlayer" ? "USDT0" : "USDT"}</span>
             </p>
-            {accrued === 0n ? <p className="mt-1 text-sm text-ink/60">现在是 0。有人用你的码成交之后才会增加。是 0 的时候按钮不会转出钱。</p> : null}
+            <p className="mt-1 text-sm text-ink/60">{chain === "xlayer" ? "这一笔用 OKB 付手续费。" : "这一笔用 BNB 付手续费。"}</p>
+            {accrued === 0n ? <p className="mt-1 text-sm text-ink/60">现在是 0。有人用你的码在这条链成交之后才会增加。是 0 的时候按钮不会转出钱。</p> : null}
             <div className="mt-2 grid grid-cols-4 gap-2">
               {steps.map((step) => (
                 <button
@@ -279,7 +281,9 @@ export function MineDesk({
             </label>
             <div className="mt-3 border-t border-gold/40 pt-3">
               <p className="text-xs tracking-widest text-gold">{c.inviteTitle}</p>
-              {!book || !book.caughtUp ? (
+              {chain !== "xlayer" ? (
+                <p className="mt-2 text-sm leading-relaxed">{c.inviteBsc}</p>
+              ) : !book || !book.caughtUp ? (
                 <p className="mt-2 text-sm leading-relaxed">{book && !book.live ? c.inviteGap : c.inviteChecking}</p>
               ) : book.invitees.length === 0 ? (
                 <p className="mt-2 text-sm">{c.inviteEmpty}</p>
