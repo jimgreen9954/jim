@@ -16,7 +16,7 @@ const zh: Section[] = [
     ],
   },
   {
-    h: "四张桌子",
+    h: "这几张桌子",
     ps: [
       "现货：买进或卖出 BEM。成交对手是 Pancake 的池子，不是另一个用户的挂单。",
       "模拟：用来看盘口、下纸单、试爆仓。重熔只清空这台设备上的模拟账，不动 USDT、USDT0，也不动永续合约。",
@@ -45,9 +45,9 @@ const zh: Section[] = [
     ps: [
       "两张图看的是同一口 PancakeSwap V3 的 BEM / USDT 池，池子地址 0x3098d7a051045000d68ec0360753a40c8cabea31。柱子来自池子成交的开高低收，不是本站订单簿自己撮出来的价。模拟盘的盈亏不按这张图结算。真实合约的盈亏也不按最后一根柱子结算。图用来看价格走过哪里。",
       "模拟图在模拟页。周期是 1 分、5 分、10 分、1 时、4 时、1 日、1 周。1 分大约每 15 秒重读，其余大约每分钟重读。图上是最近约 100 根。阳线空心金边，阴线朱红实心。下面是成交量。金线是 MA7，灰线是 MA25。十字线跟着指针，右边标出价格，底边是新加坡时间。最右边那根的收盘会跟着池子现价走。换浏览器，模拟仓没了，这张图还在，因为它读的是池子，不是你的纸账。",
-      "真实合约图和模拟图是同一套画法，放在盘口上面。周期是 15 秒、1 分、5 分、15 分、1 时、4 时，最近约 100 根，带成交量、MA7 和 MA25。虚金线是已对上仓的开仓价，细线是标记价。十字线只用来读图。池子一时读不到时，若标记价还在，就用开仓价和标记价画一根，这根不是成交。",
+      "真实合约图和模拟图是同一套画法，放在盘口上面。短周期是 15 秒、1 分、5 分、15 分、1 时、4 时。长周期单独一排：一周、一月、三月、一年，按新加坡日历把日线并起来。最近约 100 根，带成交量、MA7 和 MA25。虚金线是已对上仓的开仓价，细线是标记价。十字线只用来读图。池子一时读不到时，若标记价还在，就用开仓价和标记价画一根，这根不是成交。",
       "看图和结算要分开。BSC 上，开仓价是挂单写的价。之后盈亏跟大约 10 分钟的池子均价，不跟图上最后一笔。X Layer 上没有这口 BEM 池，标记价是推进去的，图仍然画 BSC 池子，所以图可以比 X Layer 的结算价快。晶体管页用官网参考价，不用这两张 K 线。",
-      "两张图都可以点「画线」或「区块」，点两次就落上一笔，存在这台浏览器里。图上空白处可以左右拖。放大缩小用按钮，滚动页面不再带动图。拖到最右是最新。线下面是深度，买盘在左，卖盘在右，同样可以左右拖，放大缩小也用按钮。落上之后按住就能拖，拖圆点改端点，点色块换颜色，也可以删除、撤销或清空。旁边的看多或看空，是最近约 36 根 BEM/USDT K 线的倾向。下面的数字是猜的下一截 BEM 价格，不是 0 到 100 的强度，也不是标记价。带服务器的网页由大模型写三句解析。DEWEB 没有模型服务器，浏览器按同一段 K 线自己算出看多或看空，预测价同样离现价不超过 4%。可以隐藏。不保证下一根。",
+      "两张图都可以点「画线」或「区块」，点两次就落上一笔，存在这台浏览器里。图上空白处可以左右拖。滚轮或放大、缩小按钮改一根柱子的粗细。鼠标停在哪一根，左上角写出新加坡时间。真实合约短周期下面另有一排：一周、一月、三月、一年。拖到最右是最新。线下面是深度，买盘在左，卖盘在右，同样可以左右拖，放大缩小也用按钮。落上之后按住就能拖，拖圆点改端点，点色块换颜色，也可以删除、撤销或清空。旁边的看多或看空，是最近约 36 根 BEM/USDT K 线的倾向。下面的数字是猜的下一截 BEM 价格，不是 0 到 100 的强度，也不是标记价。带服务器的网页由大模型写三句解析。DEWEB 没有模型服务器，浏览器按同一段 K 线自己算出看多或看空，预测价同样离现价不超过 4%。可以隐藏。不保证下一根。",
     ],
   },
   {
@@ -167,7 +167,7 @@ const en: Section[] = [
     ],
   },
   {
-    h: "Four desks",
+    h: "The desks",
     ps: [
       "Spot: buy or sell BEM. The counterparty is the Pancake pool, not another person's order.",
       "Paper: the book, paper tickets, and practice liquidations. Remelt clears only the paper book on this device. It does not move USDT, USDT0, or a live order.",
@@ -196,9 +196,9 @@ const en: Section[] = [
     ps: [
       "Both charts read the same PancakeSwap V3 BEM / USDT pool, 0x3098d7a051045000d68ec0360753a40c8cabea31. A candle is the pool's open, high, low, and close. It is not a price invented by this desk's book. Paper PnL does not settle on the chart. The perpetual does not settle on the last candle either. The chart shows where price has been.",
       "The paper chart sits on the paper page. The frames are 1 minute, 5 minutes, 10 minutes, 1 hour, 4 hours, 1 day, and 1 week. The 1-minute frame is reread about every 15 seconds. The others about once a minute. About the last 100 candles are drawn. An up candle is hollow gold. A down candle is solid vermilion. Volume sits underneath. The gold line is MA7 and the grey line is MA25. The crosshair follows the pointer, the price sits on the right, and the clock is Singapore time. The last close follows the live pool quote. Change browsers and the paper position is gone. The chart remains, because it reads the pool, not your paper book.",
-      "The perpetual chart uses the same drawing as the paper chart and sits above the book. The frames are 15 seconds, 1 minute, 5 minutes, 15 minutes, 1 hour, and 4 hours, about the last 100 candles, with volume, MA7, and MA25. The dashed gold line is the entry of a matched position. The thin line is the mark. The crosshair is only for reading. If the pool cannot be read and a mark is still there, one candle is drawn from the entry to the mark. That candle is not a trade.",
+      "The perpetual chart uses the same drawing as the paper chart and sits above the book. Short frames are 15 seconds, 1 minute, 5 minutes, 15 minutes, 1 hour, and 4 hours. A second row is one week, one month, three months, and one year, folded from daily candles on the Singapore calendar. About the last 100 candles are drawn, with volume, MA7, and MA25. The dashed gold line is the entry of a matched position. The thin line is the mark. The crosshair is only for reading. If the pool cannot be read and a mark is still there, one candle is drawn from the entry to the mark. That candle is not a trade.",
       "Looking and settling are different. On BSC the fill is the price written on the order. After that, PnL follows about a 10-minute pool average, not the last print on the chart. X Layer has no BEM pool. Its mark is pushed. The chart still draws the BSC pool, so it can run ahead of the X Layer settlement price. The transistor page uses the official mark. It does not use these two charts.",
-      "Either chart can take a line or a zone. Two taps place one, and it stays in this browser. Empty space drags the chart sideways. The zoom buttons change how many candles fit. Scrolling the page no longer moves the chart. The right edge is the latest. Under the candles is depth: bids on the left, asks on the right. That picture pans the same way, and its zoom is the buttons too. After it is placed, hold it to drag. Drag a dot to reshape it, and pick a color. Delete, undo, and clear remove marks. The long or short beside the chart is a lean on about the last 36 BEM/USDT candles. The figure under it is a guessed next BEM price, not a score from 0 to 100 and not the mark. The hosted site asks the model for three sentences. DEWEB has no model server, so the browser makes the same lean from those candles, and the guess still stays within 4% of the live price. It can be hidden. It does not promise the next candle.",
+      "Either chart can take a line or a zone. Two taps place one, and it stays in this browser. Empty space drags the chart sideways. The wheel or the zoom buttons change how many candles fit. The cursor shows the Singapore time of that candle. The live perpetual has a second row: one week, one month, three months, and one year. The right edge is the latest. Under the candles is depth: bids on the left, asks on the right. That picture pans the same way, and its zoom is the buttons too. After it is placed, hold it to drag. Drag a dot to reshape it, and pick a color. Delete, undo, and clear remove marks. The long or short beside the chart is a lean on about the last 36 BEM/USDT candles. The figure under it is a guessed next BEM price, not a score from 0 to 100 and not the mark. The hosted site asks the model for three sentences. DEWEB has no model server, so the browser makes the same lean from those candles, and the guess still stays within 4% of the live price. It can be hidden. It does not promise the next candle.",
     ],
   },
   {
@@ -242,7 +242,7 @@ const en: Section[] = [
     ps: [
       "The BSC mark is read from the BEM / USDT pool, about a 10-minute average. The last trade and the settlement price can differ. That is intentional. It is there to dull a one-block wick.",
       "X Layer has no BEM pool. The mark lives in a separate contract. The page reads the BSC pool and pushes that tick. It can move at most a small step every 30 seconds. PnL settles on the pushed price. Anyone can pay OKB to push. The contract decides whether the push is early.",
-      "The chart has 15 seconds, 1 minute, 5 minutes, 15 minutes, 1 hour, and 4 hours. The chart is for looking. The result uses the on-chain mark, not the last candle. How the two charts differ is written above, under Two charts.",
+      "The chart has 15 seconds through 4 hours, and a second row for one week, one month, three months, and one year. The chart is for looking. The result uses the on-chain mark, not the last candle. How the two charts differ is written above, under Two charts.",
     ],
   },
   {
@@ -311,29 +311,49 @@ export function Whitepaper() {
   const lang = useExchange((s) => s.lang);
   const sections = lang === "zh" ? zh : en;
   return (
-    <article className="flex flex-col gap-4 border border-gold bg-card p-4">
-      <header>
-        <p className="text-xs tracking-widest text-gold">TAPELIQUID</p>
-        <h2 className="font-display text-4xl italic leading-none">{lang === "zh" ? "白皮书" : "White paper"}</h2>
+    <article className="border border-gold bg-card shadow-plate">
+      <header className="border-b border-gold px-5 py-7 sm:px-8">
+        <p className="text-xs tracking-[0.35em] text-gold">TAPELIQUID</p>
+        <h2 className="mt-3 font-display text-5xl italic leading-none">{lang === "zh" ? "白皮书" : "White paper"}</h2>
+        <p className="mt-4 max-w-2xl text-sm leading-7">
+          {lang === "zh"
+            ? "这一页只写已经锁上链的规则。现货在钱包里成交，永续的保证金进固定合约，晶圆在另一台处理器上。没写在这里的功能，页面不会假装已经开通。"
+            : "This page only states rules that are already locked on chain. Spot fills from the wallet, perpetual margin sits in a fixed contract, and the wafer is another processor. If a feature is not written here, the page does not pretend it is live."}
+        </p>
       </header>
-      <p className="break-all font-mono text-xs">BSC {BSC_REBATE}</p>
-      <a className="text-sm underline decoration-gold underline-offset-4" href={`${BSC.explorer}/address/${BSC_REBATE}`} target="_blank" rel="noreferrer">
-        BscScan
-      </a>
-      <p className="break-all font-mono text-xs">X Layer {KNOWN_XPERP}</p>
-      <a className="text-sm underline decoration-gold underline-offset-4" href={`${XLAYER.explorer}/address/${KNOWN_XPERP}`} target="_blank" rel="noreferrer">
-        OKLink
-      </a>
-      {sections.map((section) => (
-        <section key={section.h} className="border-t border-gold/40 pt-3">
-          <h3 className="font-display text-2xl italic">{section.h}</h3>
-          {section.ps.map((p) => (
-            <p key={p.slice(0, 24)} className="mt-2 text-sm leading-relaxed">
-              {p}
-            </p>
-          ))}
-        </section>
-      ))}
+      <nav className="grid border-b border-gold sm:grid-cols-2" aria-label={lang === "zh" ? "目录" : "Contents"}>
+        {sections.map((section, i) => (
+          <a key={section.h} href={`#paper-${i}`} className="flex min-h-11 items-center gap-3 border-gold/40 px-4 py-2 text-sm hover:bg-paper sm:odd:border-r">
+            <span className="font-mono text-xs text-gold">{String(i + 1).padStart(2, "0")}</span>
+            {section.h}
+          </a>
+        ))}
+      </nav>
+      <div className="grid gap-3 border-b border-gold px-5 py-4 sm:grid-cols-2 sm:px-8">
+        <a className="border border-gold/50 p-3 hover:border-gold" href={`${BSC.explorer}/address/${BSC_REBATE}`} target="_blank" rel="noreferrer">
+          <span className="block text-xs tracking-widest text-gold">BSC · BscScan</span>
+          <span className="mt-1 block break-all font-mono text-xs">{BSC_REBATE}</span>
+        </a>
+        <a className="border border-gold/50 p-3 hover:border-gold" href={`${XLAYER.explorer}/address/${KNOWN_XPERP}`} target="_blank" rel="noreferrer">
+          <span className="block text-xs tracking-widest text-gold">X Layer · OKLink</span>
+          <span className="mt-1 block break-all font-mono text-xs">{KNOWN_XPERP}</span>
+        </a>
+      </div>
+      <div className="flex flex-col gap-8 px-5 py-7 sm:px-8">
+        {sections.map((section, i) => (
+          <section key={section.h} id={`paper-${i}`} className="scroll-mt-28 border-t border-gold/40 pt-4">
+            <h3 className="font-display text-3xl italic">
+              <span className="mr-3 font-mono text-sm not-italic text-gold">{String(i + 1).padStart(2, "0")}</span>
+              {section.h}
+            </h3>
+            {section.ps.map((p) => (
+              <p key={p.slice(0, 32)} className="mt-3 max-w-3xl text-sm leading-7">
+                {p}
+              </p>
+            ))}
+          </section>
+        ))}
+      </div>
     </article>
   );
 }

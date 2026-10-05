@@ -38,6 +38,7 @@ export function Exchange() {
         {pane === "gate" ? <TransistorDesk /> : null}
         {pane === "wafer" ? <WaferFloor /> : null}
         {pane === "brief" ? <Whitepaper /> : null}
+        <DeskFoot />
       </div>
       {pane === "paper" ? <MobileNav /> : null}
     </div>
@@ -125,6 +126,17 @@ function FuseFlash() {
   );
 }
 
+function DeskFoot() {
+  const lang = useExchange((s) => s.lang);
+  return (
+    <p className="border-t border-gold/30 pt-3 text-xs leading-6 text-ink/60">
+      {lang === "zh"
+        ? "现货留在钱包。永续保证金进固定合约。晶圆是另一台处理器。规则和地址写在白皮书，页面不托管资金。"
+        : "Spot stays in the wallet. Perpetual margin sits in a fixed contract. The wafer is another processor. The rules and addresses are in the white paper. This page does not custody funds."}
+    </p>
+  );
+}
+
 function Header({ pane, setPane }: { pane: Pane; setPane: (pane: Pane) => void }) {
   const lang = useExchange((s) => s.lang);
   const setLang = useExchange((s) => s.setLang);
@@ -164,9 +176,9 @@ function Header({ pane, setPane }: { pane: Pane; setPane: (pane: Pane) => void }
     <header className="sticky top-0 z-20 -mx-3 flex flex-col gap-3 bg-paper/95 px-3 py-3 backdrop-blur-sm lg:-mx-6 lg:px-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <img src="/mark.jpg" alt="" className="size-12 shrink-0 bg-[#14110d]" />
+          <img src="/mark.jpg" alt="" className="size-14 shrink-0 border border-gold bg-[#14110d] object-cover" />
           <div className="min-w-0">
-            <h1 className="truncate text-sm tracking-[0.28em] sm:text-base">TAPELIQUID</h1>
+            <h1 className="truncate font-display text-xl italic tracking-wide sm:text-2xl">TAPELIQUID</h1>
             <p className="truncate text-xs tracking-widest text-gold">{c.kicker}</p>
           </div>
         </div>

@@ -55,14 +55,19 @@ function pathOf(values: Array<number | null>, x: (i: number) => number, y: (p: n
 }
 
 function clock(t: number): string {
-  return new Intl.DateTimeFormat("en-GB", {
+  const ms = t > 1e12 ? t : t * 1000;
+  const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Singapore",
+    year: "numeric",
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
     hour12: false,
-  }).format(t * 1000);
+  }).formatToParts(new Date(ms));
+  const bit = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${bit("year")}-${bit("month")}-${bit("day")} ${bit("hour")}:${bit("minute")}:${bit("second")}`;
 }
 
 export function Kline({
@@ -163,8 +168,29 @@ export function Kline({
     };
   }, ["bem-price", biasOn, lang, lastT]);
 
+  const lenRef = useRef(0);
+  lenRef.current = all.length;
+  const plotRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const el = plotRef.current;
+    if (!el) return;
+    const onWheel = (ev: WheelEvent) => {
+      if (ev.deltaY === 0) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      setZoom((value) => {
+        const next = value * Math.exp(ev.deltaY * 0.0016);
+        const cap = Math.max(8, lenRef.current || 8);
+        return Math.min(cap, Math.max(8, Math.round(next)));
+      });
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [all.length]);
+
   if (!all.length) return null;
-  const viewCount = Math.min(all.length, Math.max(16, zoom));
+  const viewCount = Math.min(all.length, Math.max(8, zoom));
   const maxEdge = Math.max(0, all.length - viewCount);
   const shownEdge = Math.min(Math.max(0, edge), maxEdge);
   const startFloat = Math.max(0, all.length - shownEdge - viewCount);
@@ -343,6 +369,15 @@ export function Kline({
             >
               {biasOn ? (zh ? "收起倾向" : "Hide") : zh ? "倾向" : "Lean"}
             </button>
+            <button type="button" onClick={() => setZoom((value) => Math.max(8, Math.round(value * 0.7)))} className="min-h-9 border border-gold px-3 text-xs">
+              {zh ? "放大" : "In"}
+            </button>
+            <button type="button" onClick={() => setZoom((value) => Math.min(Math.max(8, all.length), Math.round(value * 1.4)))} className="min-h-9 border border-gold px-3 text-xs">
+              {zh ? "缩小" : "Out"}
+            </button>
+            <button type="button" onClick={() => { setZoom(48); setEdge(0); }} className="min-h-9 border border-gold px-3 text-xs">
+              {zh ? "最新" : "Now"}
+            </button>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -360,25 +395,14 @@ export function Kline({
               style={{ background: color }}
             />
           ))}
-          <span className="ml-auto flex items-center gap-1 text-xs text-ink/50">
-            <button type="button" onClick={() => setZoom((value) => Math.max(16, Math.round(value * 0.7)))} className="min-h-8 border border-gold px-2 text-ink">
-              {zh ? "放大" : "In"}
-            </button>
-            <button type="button" onClick={() => setZoom((value) => Math.min(all.length, Math.round(value * 1.4)))} className="min-h-8 border border-gold px-2 text-ink">
-              {zh ? "缩小" : "Out"}
-            </button>
-            <button type="button" onClick={() => { setZoom(48); setEdge(0); }} className="min-h-8 px-2">
-              {zh ? "最新" : "Now"}
-            </button>
-            <span>
-              {draft
-                ? zh
-                  ? "再点一次"
-                  : "Tap again"
-                : zh
-                  ? "空白处左右拖。放大缩小用按钮，滚动不再带动图。"
-                  : "Drag empty space. Use the buttons to zoom. Scrolling no longer moves the chart."}
-            </span>
+          <span className="ml-auto text-xs text-ink/50">
+            {draft
+              ? zh
+                ? "再点一次"
+                : "Tap again"
+              : zh
+                ? "空白处左右拖。滚轮或放大缩小改柱子。"
+                : "Drag empty space. Wheel or the buttons zoom."}
           </span>
         </div>
       </div>
@@ -399,8 +423,13 @@ export function Kline({
         ) : null}
         {ma7[safeIdx] != null ? <span className="text-gold">MA7 {fmtPx(ma7[safeIdx])}</span> : null}
         {ma25[safeIdx] != null ? <span className="text-ink/60">MA25 {fmtPx(ma25[safeIdx])}</span> : null}
-        {focus.t ? <span className="text-ink/50">{clock(focus.t)} SGT</span> : null}
+        {focus.t && focus.t > 1e9 ? <span className="text-ink">新加坡 {clock(focus.t)}</span> : null}
       </p>
+      <div ref={plotRef} className="relative">
+      <div className="flex items-center gap-2 px-3 pb-1 text-xs">
+        <span className="font-mono tabular-nums text-ink/60">{zh ? `${viewCount} 根` : `${viewCount}`}</span>
+        {focus.t && focus.t > 1e9 ? <span className="bg-ink px-2 py-0.5 font-mono text-paper">新加坡 {clock(focus.t)}</span> : null}
+      </div>
       <svg
         ref={svgRef}
         viewBox={`0 0 ${VB_W} ${VB_H}`}
@@ -420,11 +449,11 @@ export function Kline({
           if (panning) {
             const shift = (px - panning.x) / slot;
             setEdge(Math.min(maxEdge, Math.max(0, panning.edge + shift)));
-            return;
           }
           const next = Math.floor((px - PAD.l) / slot + slip);
           setHover(next >= 0 && next < n ? next : null);
           setPy(((ev.clientY - rect.top) / rect.height) * VB_H);
+          if (panning) return;
           const moving = dragRef.current;
           if (!moving) return;
           const pt = ptFrom(ev, true);
@@ -473,7 +502,6 @@ export function Kline({
             panRef.current = { x: px, edge: shownEdge };
             setLock({ lo, hi });
             setPicked(null);
-            setHover(null);
             ev.currentTarget.setPointerCapture(ev.pointerId);
             return;
           }
@@ -595,6 +623,14 @@ export function Kline({
             <line x1={PAD.l} x2={VB_W - PAD.r} y1={crossY} y2={crossY} stroke="var(--color-ink)" strokeOpacity="0.35" strokeDasharray="2 3" />
           </>
         ) : null}
+        {hover != null && rows[safeIdx]?.t && (rows[safeIdx].t as number) > 1e9 ? (
+          <g>
+            <rect x={Math.max(PAD.l, Math.min(x(safeIdx) - 107, VB_W - PAD.r - 214))} y={PAD.t + 18} width="214" height="18" fill="var(--color-ink)" />
+            <text x={Math.max(PAD.l, Math.min(x(safeIdx) - 107, VB_W - PAD.r - 214)) + 8} y={PAD.t + 31} fill="var(--color-paper)" fontSize="12" fontFamily="IBM Plex Mono, monospace">
+              {clock(rows[safeIdx].t as number)}
+            </text>
+          </g>
+        ) : null}
         <rect x={VB_W - PAD.r + 2} y={y(last.c) - 8} width={PAD.r - 4} height={16} fill={upLast ? "var(--color-gold)" : "var(--color-sell)"} />
         <text x={VB_W - 6} y={y(last.c) + 4} textAnchor="end" fill="var(--color-paper)" fontSize="11" fontFamily="IBM Plex Mono, monospace">
           {fmtPx(last.c)}
@@ -610,11 +646,12 @@ export function Kline({
         {times.map((i) =>
           rows[i]?.t ? (
             <text key={i} x={x(i)} y={VB_H - 6} textAnchor="middle" fill="var(--color-ink)" fontSize="10" fontFamily="IBM Plex Mono, monospace">
-              {clock(rows[i].t as number)}
+              {clock(rows[i].t as number).slice(5, 16)}
             </text>
           ) : null,
         )}
       </svg>
+      </div>
       </div>
       {biasOn ? (
         <aside className="border-t border-gold/30 bg-paper/60 p-4 lg:border-t-0 lg:border-l">

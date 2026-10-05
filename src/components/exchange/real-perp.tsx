@@ -466,11 +466,34 @@ export function RealPerp() {
               <p className="font-mono text-2xl tabular-nums">{markN > 0 ? markN.toFixed(4) : "—"}</p>
             </div>
           </div>
-          <div className="px-3 pt-2">
-            <div className="flex w-full border border-gold sm:w-fit">
-              {(["15s", "1m", "5m", "15m", "1h", "4h"] as const).map((item) => (
+          <div className="flex flex-col gap-2 px-3 pt-2">
+            <div className="flex w-full flex-wrap border border-gold">
+              {(
+                [
+                  ["15s", "15秒", "15s"],
+                  ["1m", "1分", "1m"],
+                  ["5m", "5分", "5m"],
+                  ["15m", "15分", "15m"],
+                  ["1h", "1时", "1h"],
+                  ["4h", "4时", "4h"],
+                ] as const
+              ).map(([item, zhLabel, enLabel]) => (
                 <button key={item} type="button" onClick={() => setFrame(item)} className={`min-h-9 flex-1 px-2 font-mono text-xs sm:flex-none sm:px-3 ${frame === item ? "bg-ink text-paper" : ""}`}>
-                  {item}
+                  {lang === "zh" ? zhLabel : enLabel}
+                </button>
+              ))}
+            </div>
+            <div className="flex w-full flex-wrap border border-gold">
+              {(
+                [
+                  ["1w", "一周", "1 week"],
+                  ["1M", "一月", "1 month"],
+                  ["3M", "三月", "3 months"],
+                  ["1y", "一年", "1 year"],
+                ] as const
+              ).map(([item, zhLabel, enLabel]) => (
+                <button key={item} type="button" onClick={() => setFrame(item)} className={`min-h-9 flex-1 px-3 text-xs sm:flex-none ${frame === item ? "bg-ink text-paper" : ""}`}>
+                  {lang === "zh" ? zhLabel : enLabel}
                 </button>
               ))}
             </div>
