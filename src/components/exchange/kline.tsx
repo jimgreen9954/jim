@@ -15,8 +15,9 @@ const PAINTS = ["#14110d", "#6e5014", "#e4c56b", "#9e1b12", "#1f6b45", "#1d4e89"
 const VB_W = 860;
 const VB_H = 420;
 const PAD = { l: 8, r: 76, t: 10, b: 22 };
-const PRICE_H = 292;
-const VOL_TOP = PAD.t + PRICE_H + 16;
+const PRICE_H = 276;
+const VOL_TOP = PAD.t + PRICE_H + 14;
+const VOL_H = 78;
 
 function sma(rows: Bar[], n: number): Array<number | null> {
   return rows.map((_, i) => {
@@ -26,6 +27,19 @@ function sma(rows: Bar[], n: number): Array<number | null> {
       const close = rows[i - k]?.c;
       if (!Number.isFinite(close)) return null;
       sum += close;
+    }
+    return sum / n;
+  });
+}
+
+function vma(rows: Bar[], n: number): Array<number | null> {
+  return rows.map((_, i) => {
+    if (i < n - 1) return null;
+    let sum = 0;
+    for (let k = 0; k < n; k += 1) {
+      const vol = rows[i - k]?.v;
+      if (!Number.isFinite(vol)) return null;
+      sum += vol as number;
     }
     return sum / n;
   });
@@ -128,7 +142,7 @@ export function Kline({
           lang,
           bars: bars.flatMap((bar) =>
             bar && Number.isFinite(bar.c) ? [{ o: bar.o, h: bar.h, l: bar.l, c: bar.c }] : [],
-          ),
+          ).slice(-36),
         },
       })
         .then((next) => {
@@ -147,7 +161,7 @@ export function Kline({
       dead = true;
       window.clearInterval(id);
     };
-  }, [biasOn, lang, lastT]);
+  }, ["bem-price", biasOn, lang, lastT]);
 
   if (!all.length) return null;
   const viewCount = Math.min(all.length, Math.max(16, zoom));
@@ -161,6 +175,7 @@ export function Kline({
 
   const ma7 = sma(all, 7).slice(start, start + rows.length);
   const ma25 = sma(all, 25).slice(start, start + rows.length);
+  const volMa = vma(all, 20).slice(start, start + rows.length);
   const lows = rows.map((bar) => bar.l);
   const highs = rows.map((bar) => bar.h);
   let lo = Math.min(...lows);
@@ -376,7 +391,12 @@ export function Kline({
         <span>H {fmtPx(focus.h)}</span>
         <span>L {fmtPx(focus.l)}</span>
         <span>C {fmtPx(focus.c)}</span>
-        {focus.v != null ? <span>V {fmtSz(focus.v)}</span> : null}
+        {focus.v != null ? (
+          <span>
+            V {fmtSz(focus.v)}
+            {volMa[safeIdx] != null ? ` MA20 ${fmtSz(volMa[safeIdx])} ${focus.v >= (volMa[safeIdx] ?? 0) ? (zh ? "放量" : "Up") : zh ? "缩量" : "Down"}` : ""}
+          </span>
+        ) : null}
         {ma7[safeIdx] != null ? <span className="text-gold">MA7 {fmtPx(ma7[safeIdx])}</span> : null}
         {ma25[safeIdx] != null ? <span className="text-ink/60">MA25 {fmtPx(ma25[safeIdx])}</span> : null}
         {focus.t ? <span className="text-ink/50">{clock(focus.t)} SGT</span> : null}
@@ -476,7 +496,11 @@ export function Kline({
             </text>
           </g>
         ))}
-        <line x1={PAD.l} x2={VB_W - PAD.r} y1={VOL_TOP - 8} y2={VOL_TOP - 8} stroke="var(--color-gold)" strokeOpacity="0.35" />
+        <line x1={PAD.l} x2={VB_W - PAD.r} y1={VOL_TOP - 6} y2={VOL_TOP - 6} stroke="var(--color-gold)" strokeOpacity="0.35" />
+        <path d={pathOf(volMa, x, (v) => VOL_TOP + VOL_H - Math.sqrt(Math.max(0, v) / maxV) * VOL_H)} fill="none" stroke="var(--color-ink)" strokeOpacity="0.7" strokeWidth="1.25" />
+        <text x={VB_W - 6} y={VOL_TOP + 11} textAnchor="end" fill="var(--color-ink)" fontSize="10" fontFamily="IBM Plex Mono, monospace">
+          {fmtSz(focus.v ?? last.v ?? 0)}
+        </text>
         {guides.map((guide) => (
           <g key={guide.label}>
             <line x1={PAD.l} x2={VB_W - PAD.r} y1={y(guide.p)} y2={y(guide.p)} stroke={guide.color} strokeDasharray={guide.dash} strokeOpacity="0.8" />
@@ -495,12 +519,24 @@ export function Kline({
           const left = x(i) - bodyW / 2;
           const top = y(Math.max(bar.o, bar.c));
           const body = Math.max(1, Math.abs(y(bar.o) - y(bar.c)));
-          const vh = ((bar.v ?? 0) / maxV) * 62;
+          const vol = bar.v ?? 0;
+          const vh = Math.sqrt(vol / maxV) * VOL_H;
+          const hot = i === safeIdx;
+          const avg = volMa[i];
           return (
             <g key={`${bar.t ?? i}-${i}`}>
               <line x1={x(i)} x2={x(i)} y1={y(bar.h)} y2={y(bar.l)} stroke={color} strokeWidth="1" />
               <rect x={left} y={top} width={bodyW} height={body} fill={up ? "var(--color-card)" : color} stroke={color} />
-              {bar.v != null ? <rect x={left} y={VOL_TOP + 62 - vh} width={bodyW} height={vh} fill={color} opacity="0.4" /> : null}
+              {bar.v != null ? (
+                <rect
+                  x={left}
+                  y={VOL_TOP + VOL_H - vh}
+                  width={bodyW}
+                  height={vh}
+                  fill={color}
+                  opacity={hot ? 0.95 : avg != null && vol >= avg * 1.8 ? 0.8 : 0.4}
+                />
+              ) : null}
             </g>
           );
         })}
@@ -586,17 +622,22 @@ export function Kline({
           <p className={`mt-3 font-display text-4xl italic leading-none ${bias?.side === "short" ? "text-sell" : "text-gold"}`}>
             {biasBusy && !bias ? (zh ? "在看" : "Reading") : lean}
           </p>
-          {bias && bias.price > 0 ? (
-            <>
-              <p className="mt-3 font-mono text-2xl tabular-nums">{fmtPx(bias.price)}</p>
-              <p className="mt-1 text-xs tracking-widest text-gold">{zh ? "猜的 BEM 价格" : "Guessed BEM"}</p>
-            </>
-          ) : null}
+          {(() => {
+            const spot = all[all.length - 1]?.c ?? 0;
+            const guess = bias && bias.price > 0 && spot > 0 && Math.abs(bias.price - spot) / spot <= 0.04 ? bias.price : 0;
+            return (
+              <>
+                <p className="mt-3 font-mono text-2xl tabular-nums">{guess > 0 ? fmtPx(guess) : "—"}</p>
+                <p className="mt-1 text-xs tracking-widest text-gold">{zh ? "预测的 BEM 价格" : "Guessed BEM price"}</p>
+                <p className="mt-1 font-mono text-xs tabular-nums text-ink/60">{zh ? `现价 ${fmtPx(spot)}` : `Now ${fmtPx(spot)}`}</p>
+              </>
+            );
+          })()}
           {bias?.why ? <p className="mt-3 text-sm leading-relaxed">{bias.why}</p> : null}
           <p className="mt-3 text-xs leading-relaxed text-ink/50">
             {zh
-              ? "数字是按最近约 36 根 BEM/USDT K 线猜的下一截价格，不是强度，也不是标记价。不保证下一根会到。约两分钟重看。"
-              : "The figure is a guessed next BEM/USDT price from about the last 36 candles. It is not a score and not the mark. It does not promise the next candle. Rechecked about every two minutes."}
+              ? "预测价必须贴着现价，离现价超过 4% 的数字，比如 65，不会显示。这不是标记价，也不保证下一根会到。约两分钟重看。"
+              : "The guess has to stay within 4% of the live price. A figure like 65 is dropped. It is not the mark, and it does not promise the next candle. Rechecked about every two minutes."}
           </p>
         </aside>
       ) : null}

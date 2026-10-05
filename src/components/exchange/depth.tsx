@@ -67,16 +67,19 @@ export function DepthTape({ bids, asks, lang }: { bids: Level[]; asks: Level[]; 
 
   return (
     <div className="border-t border-gold/30">
-      <div className="flex items-center justify-between gap-2 px-3 py-2">
-        <p className="text-xs tracking-widest text-gold">{zh ? "深度" : "Depth"}</p>
-        <div className="flex items-center gap-1 text-xs">
-          <button type="button" onClick={() => setHalf((value) => Math.max(fitHalf * 0.15, (value ?? fitHalf * 1.15) * 0.7))} className="min-h-8 border border-gold px-2">
+      <div className="flex items-center justify-between gap-2 px-3 py-1">
+        <p className="text-[11px] tracking-widest text-gold">
+          {zh ? "深度" : "Depth"}
+          {prices.length > 0 ? <span className="ml-2 font-mono tabular-nums text-ink/50">{fmtSz(maxCum)}</span> : null}
+        </p>
+        <div className="flex items-center gap-1 text-[11px]">
+          <button type="button" onClick={() => setHalf((value) => Math.max(fitHalf * 0.15, (value ?? fitHalf * 1.15) * 0.7))} className="h-6 border border-gold px-1.5">
             {zh ? "放大" : "In"}
           </button>
-          <button type="button" onClick={() => setHalf((value) => Math.min(fitHalf * 8, (value ?? fitHalf * 1.15) * 1.4))} className="min-h-8 border border-gold px-2">
+          <button type="button" onClick={() => setHalf((value) => Math.min(fitHalf * 8, (value ?? fitHalf * 1.15) * 1.4))} className="h-6 border border-gold px-1.5">
             {zh ? "缩小" : "Out"}
           </button>
-          <button type="button" onClick={() => { setHalf(null); setMid(null); }} className="min-h-8 px-2 text-ink/60">
+          <button type="button" onClick={() => { setHalf(null); setMid(null); }} className="h-6 px-1.5 text-ink/60">
             {zh ? "全貌" : "Fit"}
           </button>
         </div>
@@ -87,7 +90,7 @@ export function DepthTape({ bids, asks, lang }: { bids: Level[]; asks: Level[]; 
         <svg
           ref={svgRef}
           viewBox={`0 0 ${W} ${H}`}
-          className="h-40 w-full touch-none"
+          className="h-24 w-full touch-none"
           role="img"
           aria-label={zh ? "深度图" : "Depth chart"}
           onPointerDown={(ev) => {
@@ -111,15 +114,19 @@ export function DepthTape({ bids, asks, lang }: { bids: Level[]; asks: Level[]; 
             return (
               <g key={step}>
                 <line x1={x(price)} x2={x(price)} y1={PAD.t} y2={PAD.t + innerH} stroke="#6e5014" strokeOpacity="0.15" />
-                <text x={x(price)} y={H - 4} textAnchor="middle" fontSize="10" fill="#14110d" fontFamily="IBM Plex Mono, monospace">
+                <text
+                  x={step === 0 ? PAD.l : step === 1 ? x(price) : W - PAD.r}
+                  y={H - 4}
+                  textAnchor={step === 0 ? "start" : step === 1 ? "middle" : "end"}
+                  fontSize="10"
+                  fill="var(--color-ink)"
+                  fontFamily="IBM Plex Mono, monospace"
+                >
                   {fmtPx(price)}
                 </text>
               </g>
             );
           })}
-          <text x={W - 6} y={PAD.t + 4} textAnchor="end" fontSize="10" fill="#14110d" fontFamily="IBM Plex Mono, monospace">
-            {fmtSz(maxCum)}
-          </text>
         </svg>
       )}
     </div>

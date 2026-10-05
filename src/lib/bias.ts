@@ -4,6 +4,16 @@ export type Bias = { side: "long" | "short" | "flat"; price: number; why: string
 
 type Tick = { o: number; h: number; l: number; c: number };
 
+function project(bars: Tick[]): number {
+  const last = bars[bars.length - 1]?.c ?? 0;
+  if (!(last > 0)) return 0;
+  const sample = bars.slice(-8).map((bar) => bar.c);
+  const first = sample[0] ?? last;
+  const slope = (last - first) / Math.max(1, sample.length - 1);
+  const raw = last + slope * 3;
+  return Math.min(last * 1.04, Math.max(last * 0.96, raw));
+}
+
 function read(text: string): Bias {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
@@ -47,13 +57,15 @@ export const readBias = createServerFn({ method: "POST" })
           {
             role: "system",
             content:
-              "You read one BEM/USDT candle window. Each row is open, high, low, close, oldest first. Reply JSON only: {\"side\":\"long\"|\"short\"|\"flat\",\"price\":number,\"why\":\"...\"}. side is your lean for the next few candles. price is your guessed BEM/USDT close, on the same scale as the last close, never a 0-100 score. why is three sentences in the user's language: what price just did, why you lean that way, and what would cancel the lean. Not a promise.",
+              "You read one BEM/USDT candle window. Each row is open, high, low, close, oldest first. Reply JSON only: {\"side\":\"long\"|\"short\"|\"flat\",\"price\":number,\"why\":\"...\"}. price is a future BEM/USDT close within 4 percent of lastClose. If lastClose is 29.59, price is about 29, never 65 and never a 0-100 score. why is three sentences in the user's language: what the BEM price just did, why you lean that way, and what would cancel the lean. Mention the guessed price in the same units as lastClose. Not a promise.",
           },
           { role: "user", content: JSON.stringify({ lang: data.lang, lastClose: last, candles: window }) },
         ],
       }),
     });
-    if (!res.ok) return { side: "flat", price: 0, why: "" };
+    if (!res.ok) return { side: "flat", price: project(data.bars), why: "" };
     const body = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    return read(body.choices?.[0]?.message?.content ?? "");
+    const parsed = read(body.choices?.[0]?.message?.content ?? "");
+    const near = parsed.price > last * 0.96 && parsed.price < last * 1.04;
+    return { ...parsed, price: near ? parsed.price : project(data.bars) };
   });

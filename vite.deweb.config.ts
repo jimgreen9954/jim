@@ -12,6 +12,7 @@ export default defineConfig({
   base: "./",
   resolve: {
     alias: [
+      { find: "@/lib/candles", replacement: fileURLToPath(new URL("./src/lib/candles.browser.ts", import.meta.url)) },
       { find: "@/lib/bias", replacement: fileURLToPath(new URL("./src/lib/bias.browser.ts", import.meta.url)) },
       { find: "@/lib/tapeout-live", replacement: fileURLToPath(new URL("./src/lib/tapeout-live.browser.ts", import.meta.url)) },
       { find: "@/lib/transistor-market", replacement: fileURLToPath(new URL("./src/lib/transistor-market.browser.ts", import.meta.url)) },
