@@ -25,6 +25,11 @@ const ZERO = "0x0000000000000000000000000000000000000000" as Hex;
 const FACTORY = "0x4e59b44847b379578588920cA78FbF26c0B4956C" as Hex;
 const KEY = "tapeliquid-seal-rebate-v3";
 
+export const LOCKED_REBATE = {
+  xlayer: "0x62abA5CD9B6C371e7c443C79934B8644d60481d7",
+  bsc: "0x0FcC922739a565804Ea57BDB44Bc2503E80Fce7A",
+} as const;
+
 const xClient = createPublicClient({ transport: http(XLAYER.rpc) });
 const bscClient = createPublicClient({ transport: http(BSC.rpc) });
 
@@ -32,6 +37,7 @@ const rebateAbi = [
   { name: "qualify", type: "function", stateMutability: "nonpayable", inputs: [{ name: "a", type: "uint256" }, { name: "b", type: "uint256" }, { name: "c", type: "uint256" }], outputs: [] },
   { name: "pass", type: "function", stateMutability: "nonpayable", inputs: [{ name: "who", type: "address" }], outputs: [] },
   { name: "fund", type: "function", stateMutability: "nonpayable", inputs: [{ name: "amount", type: "uint256" }], outputs: [] },
+  { name: "withdraw", type: "function", stateMutability: "nonpayable", inputs: [{ name: "amount", type: "uint256" }], outputs: [] },
   { name: "claim", type: "function", stateMutability: "nonpayable", inputs: [{ name: "books_", type: "address[]" }, { name: "ids", type: "uint256[]" }], outputs: [] },
   { name: "preview", type: "function", stateMutability: "view", inputs: [{ name: "book", type: "address" }, { name: "dealId", type: "uint256" }, { name: "user", type: "address" }], outputs: [{ name: "", type: "uint256" }] },
   { name: "weekOf", type: "function", stateMutability: "pure", inputs: [{ name: "ts", type: "uint256" }], outputs: [{ name: "", type: "uint256" }] },
@@ -78,13 +84,8 @@ function books(chain: RebateChain): { address: Hex; gate: boolean }[] {
   ];
 }
 
-export function savedRebate(chain: RebateChain): string | null {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(`${KEY}-${chain}`);
-}
-
-function remember(chain: RebateChain, address: string) {
-  window.localStorage.setItem(`${KEY}-${chain}`, address);
+export function savedRebate(chain: RebateChain): string {
+  return LOCKED_REBATE[chain];
 }
 
 async function send(chain: RebateChain, from: string, to: Hex, data: Hex, gas: bigint): Promise<Hex> {
@@ -119,18 +120,10 @@ function predict(init: Hex): Hex {
 }
 
 export async function deployRebate(chain: RebateChain): Promise<string> {
-  const from = chain === "xlayer" ? await connectXLayer() : await connectBsc();
-  const init = initOf(chain);
-  const address = predict(init);
+  const address = LOCKED_REBATE[chain];
   const existing = await client(chain).getBytecode({ address });
-  if (existing && existing !== "0x") {
-    remember(chain, address);
-    return address;
-  }
-  const salt = `0x${"00".repeat(32)}` as Hex;
-  await send(chain, from, FACTORY, `${salt}${init.slice(2)}`, 1_400_000n);
-  remember(chain, address);
-  return address;
+  if (existing && existing !== "0x") return address;
+  throw new Error("locked");
 }
 
 export type RebateState = {
@@ -234,6 +227,18 @@ export async function fundRebate(chain: RebateChain, text: string): Promise<void
     await send(chain, from, token, approve, 80_000n);
   }
   const data = encodeFunctionData({ abi: rebateAbi, functionName: "fund", args: [amount] });
+  await send(chain, from, address as Hex, data, 150_000n);
+}
+
+export async function withdrawRebate(chain: RebateChain, text: string): Promise<void> {
+  const address = savedRebate(chain);
+  const from = chain === "xlayer" ? await connectXLayer() : await connectBsc();
+  const c = client(chain);
+  const token = chain === "xlayer" ? X_USDT : BSC.usdt;
+  const decimals = Number(await c.readContract({ address: token, abi: erc20, functionName: "decimals" }));
+  const amount = parseUnits(text.trim(), decimals);
+  if (amount <= 0n) throw new Error("amount");
+  const data = encodeFunctionData({ abi: rebateAbi, functionName: "withdraw", args: [amount] });
   await send(chain, from, address as Hex, data, 150_000n);
 }
 

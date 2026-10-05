@@ -63,7 +63,7 @@ const zh: Section[] = [
       "市场页列出还没有人接的挂单，带地址、方向、保证金、倍数和开单价。点吃单，你成为对面。两笔保证金锁进同一份合约。",
       "个人订单页只看你自己的挂单和已经对上的仓。还没人接的单可以撤。撤单收这张保证金的千分之二，剩下的退回。对上之后不能撤，只能平仓或等强平。",
       "平仓不再另收一笔手续费。盈亏按平仓时的标记价，把两边的保证金重新切开。你可以给对手地址起一个只存在这台浏览器里的昵称，链上仍然是那个地址。",
-      "三盏印鉴灯不会自动改这千分之二。要减费，先在晶圆页部署领取合约，再把 USDT 或 USDT0 充进池子。收费地址自己扣不了。X Layer 上要这个钱包自己持有三张印鉴，每张 4 个输入、1 个输出、3 个 NAND，点登记才算。BSC 读不到这台处理器，要由部署者把地址记上。登记之后，一个新加坡周只能领一次，从周一 0 点到下周一 0 点。页面按撮合日志把这一周里你做多或做空的已成交加起来，领回每笔保证金上手续费的一半。有推荐人时，按少付之后的手续费再减半。金额用代币小数换成 USDT 显示，不是最小单位。旧订单簿分不出谁是挂单，所以两边都是这一半。同一笔只能进一次。这一周没领，过点作废，下周只算新的成交。晶体管那本账没有撮合时间，不算进这一周。更早部署的领取合约没有按周这一条，要重新部署。",
+      "三盏印鉴灯不会自动改这千分之二。减费在写死的领取合约里，不在收费地址。X Layer 是 0x62abA5CD9B6C371e7c443C79934B8644d60481d7，池子是 USDT0。BSC 是 0x0FcC922739a565804Ea57BDB44Bc2503E80Fce7A，池子是 USDT。页面不再部署新的一份，换浏览器地址也不变。X Layer 上要这个钱包自己持有三张印鉴，每张 4 个输入、1 个输出、3 个 NAND，点登记才算。BSC 读不到这台处理器，要由部署者把地址记上。登记之后，一个新加坡周只能领一次，从周一 0 点到下周一 0 点。页面按撮合日志把这一周里你做多或做空的已成交加起来，领回每笔保证金上手续费的一半。有推荐人时，按少付之后的手续费再减半。金额用代币小数换成 USDT 显示。同一笔只能进一次。这一周没领，过点作废，下周只算新的成交。晶体管那本账没有撮合时间，不算进这一周。池子显示 0 就是这份合约里现在没有币。充进别的地址的钱不会跟着页面搬过来。",
     ],
   },
   {
@@ -113,7 +113,7 @@ const zh: Section[] = [
     ps: [
       "处理器已经在 X Layer 上，地址写在文末，不用再部署一台。铸造有两条路。本页一次铸造 16 颗 NAND，钱包要停在 X Layer，签名在 OKX 或币安钱包里完成，OKB 付给这台处理器。官方入口是 TapeOut 上的同一台处理器，在晶体管市场铸造，收款地址也是这台处理器，不进交易所。",
       "流片有两条路。本页的个人印鉴是 4 个输入、1 个输出、3 个 NAND，点一次烧掉 3 颗 NAND 并支付 0.0013 OKB，亮一盏灯，三盏颜色不同。也可以打开 TapeOut 画布，目标处理器选 TAPELIQUID，自己接线再流片上链。流片不能撤回。电路地址和两份永续不是同一个。",
-      "三盏灯不会改永续里写死的千分之二。另有一份领取合约。池子要先充钱。X Layer 由持有人拿三张合格印鉴登记。BSC 由部署者记地址。一个新加坡周领一次。页面只加总本周撮合日志里的成交，按代币小数显示成 USDT，领的是手续费的一半。有推荐人时按少付后的手续费再减半。过了下周一 0 点没领就作废，下周重新计算。晶体管账没有撮合时间，不进这一周。晶圆上的电路今天不结算永续盈亏，也不增加保证金。",
+      "三盏灯不会改永续里写死的千分之二。领取合约地址已经写死：X Layer 0x62abA5CD9B6C371e7c443C79934B8644d60481d7，BSC 0x0FcC922739a565804Ea57BDB44Bc2503E80Fce7A。池子要先充钱。X Layer 由持有人拿三张合格印鉴登记。BSC 由部署者记地址。一个新加坡周领一次。页面只加总本周撮合日志里的成交，按代币小数显示成 USDT，领的是手续费的一半。有推荐人时按少付后的手续费再减半。过了下周一 0 点没领就作废，下周重新计算。晶体管账没有撮合时间，不进这一周。晶圆上的电路今天不结算永续盈亏，也不增加保证金。",
     ],
   },
   {
@@ -141,6 +141,7 @@ const zh: Section[] = [
       `X Layer 永续 ${KNOWN_XPERP}。保证金是 USDT0，gas 是 OKB。标记价合约 ${KNOWN_XMARK}。`,
       `晶圆电路 ${DEPLOYED.circuits}。晶体管 ${DEPLOYED.transistors}。这是 X Layer 上的处理器，不是永续。`,
       "开发者收费地址 0xb67741A0463779c0dab3fDCFE883bA7572AC0AC2。手续费进这里。它不能改合约，也不能动你还锁着的保证金。",
+      "印鉴领取已经写死。X Layer 0x62abA5CD9B6C371e7c443C79934B8644d60481d7，池子是 USDT0。BSC 0x0FcC922739a565804Ea57BDB44Bc2503E80Fce7A，池子是 USDT。页面不再部署新地址。",
     ],
   },
   {
@@ -211,7 +212,7 @@ const en: Section[] = [
       "The market lists untaken quotes with the address, side, margin, leverage, and price. Taking one makes you the other side. Both margins lock in the same contract.",
       "The personal page shows only your quotes and your open deals. An untaken quote can be cancelled. A cancel costs 0.2% of that margin and returns the rest. A matched deal cannot be cancelled. It is closed or liquidated.",
       "Closing does not add another fee. PnL uses the mark at close and splits the two margins. You can nickname a counterparty on this browser. The chain still stores the address.",
-      "Three seal lamps do not change the 0.2% by themselves. To reduce it, deploy the rebate on the wafer page and fund the pool with USDT or USDT0. The fee address cannot push money in. On X Layer the wallet must own three seals, each with 4 inputs, 1 output, and 3 NAND gates, and register them. BSC cannot read that processor, so the deployer marks the address. After that, one claim is allowed per Singapore week, Monday 00:00 to the next Monday 00:00. The page adds the matched fills in that week where you are long or short, using the match log, and pays half the fee on each margin. With a referrer, that half is of the already discounted fee. The number is shown in USDT after the token decimals, not in raw units. The old book does not record who posted, so both sides get that half. A deal is included once. Miss the week and it is gone. The next week counts only new fills. The transistor book stores no match time, so it is not in the week. An older rebate has no weekly rule and has to be deployed again.",
+      "Three seal lamps do not change the 0.2% by themselves. The rebate addresses are locked. X Layer is 0x62abA5CD9B6C371e7c443C79934B8644d60481d7 and holds USDT0. BSC is 0x0FcC922739a565804Ea57BDB44Bc2503E80Fce7A and holds USDT. The page does not deploy a new one, and another browser does not change the address. On X Layer the wallet must own three seals, each with 4 inputs, 1 output, and 3 NAND gates, and register them. BSC cannot read that processor, so the deployer marks the address. After that, one claim is allowed per Singapore week, Monday 00:00 to the next Monday 00:00. The page adds the matched fills in that week where you are long or short, using the match log, and pays half the fee on each margin. With a referrer, that half is of the already discounted fee. The number is shown in USDT after the token decimals. A deal is included once. Miss the week and it is gone. The next week counts only new fills. The transistor book stores no match time, so it is not in the week. A pool reading 0 means that contract holds nothing. Tokens sent to a different address stay there.",
     ],
   },
   {
@@ -261,7 +262,7 @@ const en: Section[] = [
     ps: [
       "The processor is already on X Layer. The address is at the end of this paper. Do not deploy another one. There are two ways to mint. This page mints 16 NAND at a time. The wallet stays on X Layer, you sign in OKX or Binance Wallet, and the OKB is paid to this processor. The official entrance is the same processor on TapeOut, in the transistor market. That payment also goes to the processor, not to an exchange.",
       "There are two ways to tape out. The seal on this page is four inputs, one output, and three NAND gates. One tap burns 3 NAND and pays 0.0013 OKB, and lights one lamp. The three lamps are different colors. Or open the TapeOut canvas, choose TAPELIQUID as the target processor, wire it yourself, and tape it on chain. Tape-out cannot be undone. The circuit address is not either perpetual.",
-      "Three lamps do not change the 0.2% written into the perpetual. A separate rebate has to be funded. On X Layer the holder registers three qualifying seals. On BSC the deployer marks the address. One claim per Singapore week. The page totals only this week's match-log fills, shows the amount in USDT after the token decimals, and pays half the fee. With a referrer, half of the discounted fee. Unclaimed value is dropped at the next Monday 00:00 and the next week is counted again. The transistor book has no match time, so it is left out. A taped circuit does not settle perpetual PnL and does not add margin.",
+      "Three lamps do not change the 0.2% written into the perpetual. The rebate addresses are locked: X Layer 0x62abA5CD9B6C371e7c443C79934B8644d60481d7, BSC 0x0FcC922739a565804Ea57BDB44Bc2503E80Fce7A. The pool has to be funded. On X Layer the holder registers three qualifying seals. On BSC the deployer marks the address. One claim per Singapore week. The page totals only this week's match-log fills, shows the amount in USDT after the token decimals, and pays half the fee. With a referrer, half of the discounted fee. Unclaimed value is dropped at the next Monday 00:00 and the next week is counted again. The transistor book has no match time, so it is left out. A taped circuit does not settle perpetual PnL and does not add margin.",
     ],
   },
   {
@@ -289,6 +290,7 @@ const en: Section[] = [
       `X Layer perpetual ${KNOWN_XPERP}. Margin is USDT0. Gas is OKB. Mark ${KNOWN_XMARK}.`,
       `Wafer circuits ${DEPLOYED.circuits}. Transistors ${DEPLOYED.transistors}. This processor is on X Layer. It is not the perpetual.`,
       "Developer fee address 0xb67741A0463779c0dab3fDCFE883bA7572AC0AC2. Fees go here. It cannot change the contract and it cannot take margin that is still locked.",
+      "The seal rebate is locked. X Layer 0x62abA5CD9B6C371e7c443C79934B8644d60481d7 holds USDT0. BSC 0x0FcC922739a565804Ea57BDB44Bc2503E80Fce7A holds USDT. The page does not deploy a new address.",
     ],
   },
   {
