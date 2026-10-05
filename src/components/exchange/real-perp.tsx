@@ -6,6 +6,7 @@ import { getCandles, type Candle, type CandleFrame } from "@/lib/candles";
 import { currentAccount, onAccount, onOpenLink } from "@/lib/wallet";
 import { useExchange } from "@/lib/exchange-store";
 import { MineDesk } from "@/components/exchange/mine-desk";
+import { Kline } from "@/components/exchange/kline";
 import { nickOf, readNicks } from "@/lib/nicks";
 import { clearArm, easyBand, readArm, writeArm, type Arm } from "@/lib/stops";
 import {
@@ -57,52 +58,6 @@ function plan(margin: string, lev: number, mark: bigint) {
   const px = Number(formatUnits(mark, 18));
   if (!Number.isFinite(px) || px <= 0) return null;
   return { notional: m * lev, size: (m * lev) / px, adverse: Math.max(1, Math.round(90 / lev)) };
-}
-
-function PkTape({ candles, entry, mark }: { candles: Candle[]; entry: number; mark: number }) {
-  const drawn = candles.length
-    ? candles
-    : mark > 0
-      ? [{ o: entry || mark, h: Math.max(entry || mark, mark), l: Math.min(entry || mark, mark), c: mark }]
-      : [];
-  if (!drawn.length) return null;
-  const highs = drawn.map((candle) => candle.h);
-  const lows = drawn.map((candle) => candle.l);
-  const last = drawn[drawn.length - 1]?.c ?? mark;
-  const refs = entry > 0 ? [...highs, ...lows, entry, last] : [...highs, ...lows, last];
-  const lo = Math.min(...refs);
-  const hi = Math.max(...refs);
-  const span = hi - lo || 1;
-  const w = 320;
-  const h = 148;
-  const pad = 8;
-  const right = 52;
-  const y = (v: number) => pad + ((hi - v) / span) * (h - pad * 2);
-  const cw = (w - pad - right) / drawn.length;
-  const label = (v: number) => v.toFixed(2);
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="h-40 w-full" role="img">
-      <text x={w - 2} y={y(hi) + 4} textAnchor="end" fontSize="10" fill="#6e5014">{label(hi)}</text>
-      <text x={w - 2} y={y(lo)} textAnchor="end" fontSize="10" fill="#9e1b12">{label(lo)}</text>
-      <text x={w - 2} y={Math.min(h - 4, Math.max(12, y(last)))} textAnchor="end" fontSize="10" fill="#1c1408">{label(last)}</text>
-      {entry > 0 ? (
-        <line x1={pad} x2={w - right} y1={y(entry)} y2={y(entry)} stroke="#6e5014" strokeDasharray="3 3" strokeWidth="1" />
-      ) : null}
-      <line x1={pad} x2={w - right} y1={y(last)} y2={y(last)} stroke="#1c1408" strokeDasharray="1 3" strokeWidth="1" />
-      {drawn.map((candle, i) => {
-        const up = candle.c >= candle.o;
-        const color = up ? "#6e5014" : "#9e1b12";
-        const x = pad + i * cw + cw * 0.2;
-        const body = Math.max(1.5, Math.abs(y(candle.o) - y(candle.c)));
-        return (
-          <g key={i}>
-            <line x1={x + cw * 0.3} x2={x + cw * 0.3} y1={y(candle.h)} y2={y(candle.l)} stroke={color} strokeWidth="1" />
-            <rect x={x} y={Math.min(y(candle.o), y(candle.c))} width={Math.max(2, cw * 0.6)} height={body} fill={color} />
-          </g>
-        );
-      })}
-    </svg>
-  );
 }
 
 function DeskLadder({
@@ -510,14 +465,28 @@ export function RealPerp() {
               <p className="font-mono text-2xl tabular-nums">{markN > 0 ? markN.toFixed(4) : "—"}</p>
             </div>
           </div>
-          <div className="grid grid-cols-6 gap-1 px-2 pt-2">
-            {(["15s", "1m", "5m", "15m", "1h", "4h"] as const).map((item) => (
-              <button key={item} type="button" onClick={() => setFrame(item)} className={`min-h-9 border border-gold font-mono text-xs ${frame === item ? "bg-ink text-paper" : ""}`}>
-                {item}
-              </button>
-            ))}
+          <div className="px-3 pt-2">
+            <div className="flex w-full border border-gold sm:w-fit">
+              {(["15s", "1m", "5m", "15m", "1h", "4h"] as const).map((item) => (
+                <button key={item} type="button" onClick={() => setFrame(item)} className={`min-h-9 flex-1 px-2 font-mono text-xs sm:flex-none sm:px-3 ${frame === item ? "bg-ink text-paper" : ""}`}>
+                  {item}
+                </button>
+              ))}
+            </div>
           </div>
-          <PkTape candles={prices} entry={entryN} mark={markN} />
+          <Kline
+            bars={
+              prices.length
+                ? prices
+                : markN > 0
+                  ? [{ o: entryN || markN, h: Math.max(entryN || markN, markN), l: Math.min(entryN || markN, markN), c: markN }]
+                  : []
+            }
+            entry={entryN}
+            mark={markN}
+            lang={lang}
+            desk="perp"
+          />
           <DeskLadder
             rows={board}
             mark={markN}

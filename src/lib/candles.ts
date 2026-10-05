@@ -4,7 +4,7 @@ import { pullPaper, type PaperFrame } from "@/lib/candle-book";
 export type { Ohlc, PaperFrame } from "@/lib/candle-book";
 export { PAPER_FRAMES, paperLabel } from "@/lib/candle-book";
 
-export type Candle = { o: number; h: number; l: number; c: number };
+export type Candle = { t?: number; o: number; h: number; l: number; c: number; v?: number };
 export type CandleFrame = "15s" | "1m" | "5m" | "15m" | "1h" | "4h";
 
 const frames: Record<CandleFrame, { path: string; aggregate: number }> = {
@@ -21,10 +21,10 @@ const cache = new Map<string, { at: number; rows: Candle[] }>();
 function parse(rows: number[][] | undefined): Candle[] {
   if (!Array.isArray(rows)) return [];
   return rows
-    .slice(0, 48)
+    .slice(0, 120)
     .reverse()
     .flatMap((row) => {
-      const candle = { o: Number(row[1]), h: Number(row[2]), l: Number(row[3]), c: Number(row[4]) };
+      const candle = { t: Number(row[0]), o: Number(row[1]), h: Number(row[2]), l: Number(row[3]), c: Number(row[4]), v: Number(row[5] ?? 0) };
       return candle.o > 0 && candle.h > 0 && candle.l > 0 && candle.c > 0 ? [candle] : [];
     });
 }
@@ -35,7 +35,7 @@ export const getCandles = createServerFn({ method: "GET" })
     const hit = cache.get(data);
     if (hit && Date.now() - hit.at < 45_000 && hit.rows.length > 0) return hit.rows;
     const spec = frames[data];
-    const url = `https://api.geckoterminal.com/api/v2/networks/bsc/pools/0x3098d7a051045000d68ec0360753a40c8cabea31/ohlcv/${spec.path}?aggregate=${spec.aggregate}&limit=48&currency=usd`;
+    const url = `https://api.geckoterminal.com/api/v2/networks/bsc/pools/0x3098d7a051045000d68ec0360753a40c8cabea31/ohlcv/${spec.path}?aggregate=${spec.aggregate}&limit=120&currency=usd`;
     const res = await fetch(url, { headers: { accept: "application/json" } });
     if (!res.ok) return hit?.rows ?? [];
     const body = (await res.json()) as { data?: { attributes?: { ohlcv_list?: number[][] } } };
