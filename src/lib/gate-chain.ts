@@ -4,7 +4,7 @@ import { GATE_BYTECODE } from "@/lib/gate-artifact";
 import { getProvider } from "@/lib/wallet";
 
 const KEY = "tapeliquid-gate-perp";
-export const GATE = "0xe380b8449280a1da46952dba0de0418e0958d668";
+export const GATE = "0xc075443ab7ebef86fe044be2c93a4ff4376ffe0b";
 const USDT = BSC.usdt;
 
 const abi = parseAbi([

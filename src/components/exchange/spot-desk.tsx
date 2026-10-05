@@ -6,10 +6,13 @@ import {
   BSC,
   bemPrice,
   connectBsc,
+  DESK_FEE_BPS,
+  FEE_TO,
   pretty,
   quoteExact,
   readBalances,
   recentPrints,
+  splitDeskFee,
   swapBem,
   txUrl,
   units,
@@ -78,7 +81,8 @@ export function SpotDesk() {
         setOut(null);
         return;
       }
-      quoteExact(tokenIn, tokenOut, amountIn)
+      const { swapIn } = splitDeskFee(amountIn);
+      quoteExact(tokenIn, tokenOut, swapIn)
         .then((quoted) => {
           if (!dead) setOut(pretty(quoted, outDecimals, side === "buy" ? 4 : 2));
         })
@@ -226,7 +230,9 @@ export function SpotDesk() {
               {out ?? "—"} {side === "buy" ? "BEM" : "USDT"}
             </span>
           </p>
-          <p className="text-xs text-ink/70">{c.slippage} 1% · PancakeSwap V3</p>
+          <p className="text-xs text-ink/70">
+            {c.slippage} 1% · PancakeSwap V3 · {lang === "zh" ? "台费" : "Desk"} {(DESK_FEE_BPS / 100).toFixed(2)}% · {FEE_TO.slice(0, 6)}…{FEE_TO.slice(-4)}
+          </p>
           <button type="submit" className="min-h-12 bg-ink text-paper" disabled={busy || (Boolean(account) && !amount.trim())}>
             {account ? `${side === "buy" ? c.buy : c.sell} BEM` : c.walletConnect}
           </button>

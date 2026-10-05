@@ -10,9 +10,9 @@ export type RebateBook = {
   counted: string;
 };
 
-const PERP = "0xa0344f5B0518D31B7CFa6CaC266b4eDd289821ce" as const;
-const BIRTH = 72_163_300n;
-const KEY = "tapeliquid-rebate-scan";
+const PERP = "0x0f22b18b67477886311ee0fb7cf684d3f48c5eca" as const;
+const BIRTH = 72_430_087n;
+const KEY = "tapeliquid-rebate-scan-v2";
 const STEP = 99n;
 const client = createPublicClient({ transport: http("https://rpc.xlayer.tech") });
 

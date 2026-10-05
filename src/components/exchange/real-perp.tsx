@@ -15,7 +15,6 @@ import {
   closePerp,
   deployXLayer,
   bookOf,
-  KNOWN_PERP,
   KNOWN_XPERP,
   liquidatePerp,
   openPerp,
@@ -167,7 +166,7 @@ export function RealPerp() {
   const live = useExchange((s) => s.chainBem);
   const c = copy[lang];
   const [chain, setChain] = useState<Desk>(savedDesk());
-  const [perp, setPerp] = useState(savedDesk() === "xlayer" ? bookOf("xlayer") : KNOWN_PERP);
+  const [perp, setPerp] = useState(() => bookOf(savedDesk()));
   const [redeploy, setRedeploy] = useState(false);
   const [account, setAccount] = useState<string | null>(currentAccount());
   const [view, setView] = useState<PerpView | null>(null);
@@ -380,7 +379,7 @@ export function RealPerp() {
             onClick={() => {
               selectDesk("bsc");
               setChain("bsc");
-              setPerp(KNOWN_PERP);
+              setPerp(bookOf("bsc"));
               connectBsc().catch(() => undefined);
             }}
           >

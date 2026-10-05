@@ -13,8 +13,7 @@ import {
   type Hex,
 } from "viem";
 import { BSC, connectBsc } from "@/lib/bsc";
-import { GATE } from "@/lib/gate-chain";
-import { BSC_REBATE, KNOWN_PERP, KNOWN_XPERP, X_USDT } from "@/lib/perp";
+import { X_USDT } from "@/lib/perp";
 import { SEAL_REBATE_BYTECODE } from "@/lib/seal-rebate-artifact";
 import { getProvider } from "@/lib/wallet";
 import { DEPLOYED, connectXLayer, sealIds, XLAYER } from "@/lib/xlayer";
@@ -75,12 +74,17 @@ function client(chain: RebateChain) {
   return chain === "xlayer" ? xClient : bscClient;
 }
 
+const CLAIM_X = "0xa0344f5B0518D31B7CFa6CaC266b4eDd289821ce" as Hex;
+const CLAIM_BSC_OLD = "0xB98D14333a93D49a4E05478d002FC3944D88A3b7" as Hex;
+const CLAIM_BSC = "0x5753fb0ba5975a2dc0fae5bd0dcf521dbba7cc12" as Hex;
+const CLAIM_GATE = "0xe380b8449280a1da46952dba0de0418e0958d668" as Hex;
+
 function books(chain: RebateChain): { address: Hex; gate: boolean }[] {
-  if (chain === "xlayer") return [{ address: KNOWN_XPERP as Hex, gate: false }];
+  if (chain === "xlayer") return [{ address: CLAIM_X, gate: false }];
   return [
-    { address: KNOWN_PERP as Hex, gate: false },
-    { address: BSC_REBATE as Hex, gate: false },
-    { address: GATE as Hex, gate: true },
+    { address: CLAIM_BSC_OLD, gate: false },
+    { address: CLAIM_BSC, gate: false },
+    { address: CLAIM_GATE, gate: true },
   ];
 }
 
@@ -107,8 +111,8 @@ function initOf(chain: RebateChain): Hex {
   const args = encodeAbiParameters(
     [{ type: "address" }, { type: "address" }, { type: "address" }, { type: "address" }, { type: "address" }, { type: "address" }],
     chain === "xlayer"
-      ? [X_USDT, DEPLOYED.circuits, ZERO, KNOWN_XPERP as Hex, ZERO, ZERO]
-      : [BSC.usdt, ZERO, GATE as Hex, KNOWN_PERP as Hex, BSC_REBATE as Hex, ZERO],
+      ? [X_USDT, DEPLOYED.circuits, ZERO, CLAIM_X, ZERO, ZERO]
+      : [BSC.usdt, ZERO, CLAIM_GATE, CLAIM_BSC_OLD, CLAIM_BSC, ZERO],
   );
   return `${SEAL_REBATE_BYTECODE}${args.slice(2)}`;
 }

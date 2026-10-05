@@ -22,7 +22,7 @@ interface IPool {
 contract TapePerp {
     IERC20 public immutable usdt;
     IPool public immutable pool;
-    address public constant FEE_TO = 0xb67741A0463779c0dab3fDCFE883bA7572AC0AC2;
+    address public constant FEE_TO = 0x823b9F6A93Ac44Ce5A469823A336c15b6117054D;
     uint32 public constant TWAP = 600;
     uint256 public immutable MIN_MARGIN;
     uint256 public immutable MAX_MARGIN;

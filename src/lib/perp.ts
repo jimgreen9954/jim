@@ -43,8 +43,8 @@ function tokenUnit(): bigint {
   return 10n ** BigInt(tokenDecimals());
 }
 export const KNOWN_PERP = "0xB98D14333a93D49a4E05478d002FC3944D88A3b7";
-export const BSC_REBATE = "0x5753fb0ba5975a2dc0fae5bd0dcf521dbba7cc12";
-export const KNOWN_XPERP = "0xa0344f5B0518D31B7CFa6CaC266b4eDd289821ce";
+export const BSC_REBATE = "0xce3511b6e909c9694826cfd5dbe434d457920eba";
+export const KNOWN_XPERP = "0x0f22b18b67477886311ee0fb7cf684d3f48c5eca";
 export const KNOWN_XMARK = "0xc35C8cB9FFaC92F25cAFaEdC82F03144b24bCb1d";
 export const BOARD = [KNOWN_PERP];
 
@@ -426,7 +426,7 @@ export async function activeBook(): Promise<string> {
 }
 
 export async function readBoard(): Promise<{ perp: string; quote: BookQuote }[]> {
-  const addrs = desk === "xlayer" ? [bookOf("xlayer")] : [BSC_REBATE, KNOWN_PERP];
+  const addrs = [bookOf(desk)];
   const rows: { perp: string; quote: BookQuote }[] = [];
   for (const addr of addrs) {
     if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) continue;

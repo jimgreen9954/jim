@@ -26,10 +26,19 @@ export const BSC = {
   slippageBps: 100,
 };
 
+export const FEE_TO = "0x823b9F6A93Ac44Ce5A469823A336c15b6117054D" as const;
+export const DESK_FEE_BPS = 20;
+
+export function splitDeskFee(amountIn: bigint): { fee: bigint; swapIn: bigint } {
+  const fee = (amountIn * BigInt(DESK_FEE_BPS)) / 10_000n;
+  return { fee, swapIn: amountIn - fee };
+}
+
 const erc20 = parseAbi([
   "function balanceOf(address) view returns (uint256)",
   "function allowance(address owner, address spender) view returns (uint256)",
   "function approve(address spender, uint256 amount) returns (bool)",
+  "function transfer(address to, uint256 amount) returns (bool)",
 ]);
 
 const quoterAbi = parseAbi([
@@ -203,7 +212,9 @@ export async function swapBem(from: string, side: "buy" | "sell", amount: string
   const decimalsIn = side === "buy" ? BSC.usdtDecimals : BSC.bemDecimals;
   const amountIn = units(amount, decimalsIn);
   if (amountIn <= 0n) throw new Error("amount");
-  const quoted = await quoteExact(tokenIn, tokenOut, amountIn);
+  const { fee, swapIn } = splitDeskFee(amountIn);
+  if (swapIn <= 0n) throw new Error("amount");
+  const quoted = await quoteExact(tokenIn, tokenOut, swapIn);
   const minOut = (quoted * BigInt(10_000 - BSC.slippageBps)) / 10_000n;
   const owner = from as Hex;
   const allowance = await client.readContract({
@@ -212,15 +223,20 @@ export async function swapBem(from: string, side: "buy" | "sell", amount: string
     functionName: "allowance",
     args: [owner, BSC.router],
   });
-  if (allowance < amountIn) {
+  if (allowance < swapIn) {
     if (allowance > 0n) {
       const reset = encodeFunctionData({ abi: erc20, functionName: "approve", args: [BSC.router, 0n] });
       const resetHash = await send(from, tokenIn, reset);
       await waitReceipt(resetHash);
     }
-    const approveData = encodeFunctionData({ abi: erc20, functionName: "approve", args: [BSC.router, amountIn] });
+    const approveData = encodeFunctionData({ abi: erc20, functionName: "approve", args: [BSC.router, swapIn] });
     const approveHash = await send(from, tokenIn, approveData);
     await waitReceipt(approveHash);
+  }
+  if (fee > 0n) {
+    const feeData = encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, fee] });
+    const feeHash = await send(from, tokenIn, feeData);
+    await waitReceipt(feeHash);
   }
   const data = encodeFunctionData({
     abi: routerAbi,
@@ -232,7 +248,7 @@ export async function swapBem(from: string, side: "buy" | "sell", amount: string
         fee: BSC.fee,
         recipient: owner,
         deadline: BigInt(Math.floor(Date.now() / 1000) + 60 * 20),
-        amountIn,
+        amountIn: swapIn,
         amountOutMinimum: minOut,
         sqrtPriceLimitX96: 0n,
       },

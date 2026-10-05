@@ -1,5 +1,6 @@
 import { BSC_REBATE, KNOWN_PERP, KNOWN_XMARK, KNOWN_XPERP } from "@/lib/perp";
-import { BSC } from "@/lib/bsc";
+import { GATE } from "@/lib/gate-chain";
+import { BSC, FEE_TO } from "@/lib/bsc";
 import { DEPLOYED, XLAYER } from "@/lib/xlayer";
 import { useExchange } from "@/lib/exchange-store";
 
@@ -28,9 +29,9 @@ const zh: Section[] = [
   {
     h: "现货",
     ps: [
-      "交易对是 BEM / USDT。池子是 BNB Smart Chain 上的 PancakeSwap V3。报价来自链上 Quoter，成交走 SwapRouter。签名之前，币留在你的钱包。本台不托管现货。",
-      "页面上能看到这个钱包的 BEM、USDT 和 BNB。买入和卖出可以按余额的百分比下。滑点按页面上的保护价。池子手续费和 BNB gas 付给链和池子，不进永续合约，也不进返佣。",
-      "现货价格每秒从 Pancake 池子的报价读出，首页显示到小数点后 4 位，所以价格在动时能看见。池子最近的成交大约每 4 秒重读一次。它是永续标记价的来源，不是永续的成交价。永续的成交价是挂单上写的那个价。",
+      "交易对是 BEM / USDT，池子在 PancakeSwap V3。报价读链上 Quoter，成交走 SwapRouter。本台不托管，签名之前币在你的钱包里。",
+      "本台另收成交金额的千分之二。买入从付出的 USDT 里扣，卖出从付出的 BEM 里扣，打进同一个收费地址。剩下的才进池子。池子自己的手续费留给流动性提供者，gas 付给链，这两笔不进收费地址。",
+      "现货价每秒读这口池子，显示到小数点后 4 位。它只给永续当标记来源。永续的成交价仍是挂单上写的那个价。",
     ],
   },
   {
@@ -83,7 +84,7 @@ const zh: Section[] = [
       "下单、吃单、平仓之前，页面先看合约里的结算价。和官网价相差不超过 3% 才继续。差得更多就先把官网价推进去。推进不了，或者推进之后仍超过 3%，这一笔不做，避免按错价分钱。合约本身仍是第一次写入可以由任何人定，页面不跟那个错价。写进去之后，链上每 10 秒最多再动一半。成交按挂单价。",
       "手续费是用掉的保证金的千分之二。有推荐人时，交易者少付其中 4%，推荐人记其中 6%，剩下的进开发者地址。比例和 BEM 永续相同，但是推荐码要在这份晶体管合约上重新确认一次，不能拿 BEM 那份码直接用。提到的是 BSC 的 USDT，不能和 BEM 的返佣混提。门槛是 1、10、20、50、100、300、500。",
       "确认自己的码之后，页面生成邀请链接，形式是当前网址加 #gate=你的码。朋友打开会进晶体管页，码已经填好，仍要点绑定才写上链。只打开链接不会绑定。BEM 和 X Layer 的链接仍是 #ref=，两套码不要混用。",
-      "全站只有这一份晶体管永续：0xe380b8449280a1da46952dba0de0418e0958d668。任何地址、任何时候挂的单都在这一本账上，别人随时可以吃。页面不再让用户另外部署。部署过的人不能改规则，也不能动别人还锁着的保证金。三个标的的现货合约仍是 TapeOut 0xCC42ba5De07f01B472a5b14cF45aBcCA79Eb8087、Behemoth 0xE2DfD802081C7a05341E20b6582b04b908e8550c、Genesis CPU 0x1d23Bf70ec6bAAD95f396Ea38f8A8415119dFDE6。那是官网的现货，不是我们的永续。",
+      "全站只有这一份晶体管永续：0xc075443ab7ebef86fe044be2c93a4ff4376ffe0b。任何地址、任何时候挂的单都在这一本账上，别人随时可以吃。页面不再让用户另外部署。部署过的人不能改规则，也不能动别人还锁着的保证金。三个标的的现货合约仍是 TapeOut 0xCC42ba5De07f01B472a5b14cF45aBcCA79Eb8087、Behemoth 0xE2DfD802081C7a05341E20b6582b04b908e8550c、Genesis CPU 0x1d23Bf70ec6bAAD95f396Ea38f8A8415119dFDE6。那是官网的现货，不是我们的永续。",
     ],
   },
   {
@@ -97,9 +98,10 @@ const zh: Section[] = [
   {
     h: "费用",
     ps: [
-      "撮合时，双方已用的保证金各收千分之二。这笔钱进开发者地址。撤下一张还没人接的挂单，也收这张保证金的千分之二。平仓不再另收。",
-      "有推荐人时，这笔手续费再拆开：交易者少付其中的 4%，推荐人记上其中的 6%，剩下的仍进开发者地址。比例写在合约里，页面改不了。",
-      "现货不走这套费用。现货只付池子手续费和 gas。",
+      "现货、永续撮合、撤单，本台费率都是千分之二，收款地址只有一个。",
+      "现货在签名时从付出的币里划走千分之二。永续在撮合和撤单时，从已用保证金里收千分之二。平仓不再另收。",
+      "有推荐人时，永续这笔手续费再拆开：交易者少付其中 4%，推荐人记其中 6%，剩下的进收费地址。比例写在合约里。现货不参与返佣。",
+      "Pancake 池子自己的手续费，以及 BNB、OKB 的 gas，不进这个地址。",
     ],
   },
   {
@@ -139,11 +141,12 @@ const zh: Section[] = [
   {
     h: "已经锁死的地址",
     ps: [
-      `BSC 旧永续 ${KNOWN_PERP}。里面已有的挂单还在。这份合约写不进推荐码。`,
-      `BSC 返佣永续 ${BSC_REBATE}。新开的 BSC 单、推荐码和提现都在这里。保证金是 BSC 的 USDT，gas 是 BNB。`,
-      `X Layer 永续 ${KNOWN_XPERP}。保证金是 USDT0，gas 是 OKB。标记价合约 ${KNOWN_XMARK}。`,
+      `BSC 旧永续 ${KNOWN_PERP}。不再收新单。`,
+      `BSC 永续 ${BSC_REBATE}。新开的 BSC 单、推荐码和提现都锁在这里。保证金是 BSC 的 USDT，gas 是 BNB。`,
+      `X Layer 永续 ${KNOWN_XPERP}。新开的 X Layer 单锁在这里。保证金是 USDT0，gas 是 OKB。标记价合约 ${KNOWN_XMARK}。`,
+      `晶体管永续 ${GATE}。六个标的的多空锁在这里。保证金是 BSC 的 USDT。`,
       `晶圆电路 ${DEPLOYED.circuits}。晶体管 ${DEPLOYED.transistors}。这是 X Layer 上的处理器，不是永续。`,
-      "开发者收费地址 0xb67741A0463779c0dab3fDCFE883bA7572AC0AC2。手续费进这里。它不能改合约，也不能动你还锁着的保证金。",
+      `收费地址 ${FEE_TO}。现货和三份永续的千分之二都进这里。它不能改合约，也不能动还锁着的保证金。`,
       "印鉴领取已经写死。X Layer 0x62abA5CD9B6C371e7c443C79934B8644d60481d7，池子是 USDT0。BSC 0x0FcC922739a565804Ea57BDB44Bc2503E80Fce7A，池子是 USDT。页面不再部署新地址。",
     ],
   },
@@ -180,9 +183,9 @@ const en: Section[] = [
   {
     h: "Spot",
     ps: [
-      "The pair is BEM / USDT in a PancakeSwap V3 pool on BNB Smart Chain. Quotes come from the on-chain quoter. Swaps use the SwapRouter. Tokens stay in your wallet until you sign. This desk does not custody spot.",
-      "The page shows this wallet's BEM, USDT, and BNB. Buys and sells can use a percent of the balance. Protection is the slippage shown on the page. The pool fee and BNB gas go to the pool and the chain, not to the perpetual and not to rebates.",
-      "The spot price is read from the Pancake pool quote every second. The home page shows four decimal places so a moving price is visible. Recent pool trades are reread about every 4 seconds. That quote feeds the perpetual mark. It is not the perpetual fill. The fill is the price written on the order.",
+      "The pair is BEM / USDT on PancakeSwap V3. Quotes come from the on-chain quoter. Swaps use the SwapRouter. This desk does not custody. Tokens stay in your wallet until you sign.",
+      "This desk also takes 0.2% of the amount you pay. A buy takes it from USDT. A sell takes it from BEM. It is sent to the one fee address. The rest goes to the pool. The pool's own fee stays with liquidity providers. Gas stays with the chain. Neither of those goes to the fee address.",
+      "The spot price is read from that pool every second and shown to four decimals. It only feeds the perpetual mark. A perpetual fill is still the price written on the order.",
     ],
   },
   {
@@ -235,7 +238,7 @@ const en: Section[] = [
       "Before an open, a take, or a close, the page reads the mark stored in the contract. It continues only when that mark is within 3% of the official price. A wider gap is pushed toward the official price first. If the push cannot land inside 3%, the order does not go through, so money is not split at the wrong price. The contract still lets anyone write the first mark. This page will not follow a wrong one. After a mark is stored, the chain allows at most a 50% move every 10 seconds. A fill uses the resting price.",
       "The fee is 0.2% of the margin that was used. With a referrer, the trader pays 4% less of that fee and the referrer is credited 6%. The rest goes to the developer. The split matches the BEM perpetual, but the code has to be confirmed again on this transistor contract. A BEM code does not carry over. Claims are BSC USDT and cannot be mixed with a BEM rebate. The steps are 1, 10, 20, 50, 100, 300, and 500.",
       "After the code is confirmed, the page makes an invite link: the current address plus #gate= and the code. A friend who opens it lands on the transistor page with the code filled in, and still has to press bind. Opening the link does not bind by itself. BEM and X Layer links stay #ref=. The two codes are not interchangeable.",
-      "There is one transistor perpetual for the whole desk: 0xe380b8449280a1da46952dba0de0418e0958d668. An order from any address, at any time, sits on that one book and can be taken. The page does not ask anyone to deploy another copy. The deployer cannot change the rules and cannot take margin that is still locked. The spot contracts remain TapeOut 0xCC42ba5De07f01B472a5b14cF45aBcCA79Eb8087, Behemoth 0xE2DfD802081C7a05341E20b6582b04b908e8550c, and Genesis CPU 0x1d23Bf70ec6bAAD95f396Ea38f8A8415119dFDE6. Those are the official spot tokens, not this perpetual.",
+      "There is one transistor perpetual for the whole desk: 0xc075443ab7ebef86fe044be2c93a4ff4376ffe0b. An order from any address, at any time, sits on that one book and can be taken. The page does not ask anyone to deploy another copy. The deployer cannot change the rules and cannot take margin that is still locked. The spot contracts remain TapeOut 0xCC42ba5De07f01B472a5b14cF45aBcCA79Eb8087, Behemoth 0xE2DfD802081C7a05341E20b6582b04b908e8550c, and Genesis CPU 0x1d23Bf70ec6bAAD95f396Ea38f8A8415119dFDE6. Those are the official spot tokens, not this perpetual.",
     ],
   },
   {
@@ -249,9 +252,10 @@ const en: Section[] = [
   {
     h: "Fees",
     ps: [
-      "On a match, each side pays 0.2% of the margin that was used. That amount goes to the developer address. Cancelling an untaken quote also costs 0.2% of that margin. Closing does not add another fee.",
-      "With a referrer, the same fee is split: the trader pays 4% less of it, the referrer is credited 6% of it, and the rest still goes to the developer. The rates are in the contract. The page cannot change them.",
-      "Spot does not use this fee. Spot pays the pool fee and gas.",
+      "Spot, a perp match, and a cancel all pay this desk 0.2%. There is one fee address.",
+      "Spot takes 0.2% from the tokens you pay, when you sign. A perp takes 0.2% of the margin used, on a match and on a cancel. Closing does not add another fee.",
+      "With a referrer, the perp fee splits again: the trader pays 4% less of it, the referrer is credited 6% of it, and the rest goes to the fee address. The split is in the contract. Spot does not pay a rebate.",
+      "The Pancake pool's own fee, and gas in BNB or OKB, do not go to this address.",
     ],
   },
   {
@@ -291,11 +295,12 @@ const en: Section[] = [
   {
     h: "Addresses already locked",
     ps: [
-      `Older BSC perpetual ${KNOWN_PERP}. Orders already there remain. A code cannot be written on it.`,
-      `BSC rebate perpetual ${BSC_REBATE}. New BSC orders, codes, and claims live here. Margin is BSC USDT. Gas is BNB.`,
-      `X Layer perpetual ${KNOWN_XPERP}. Margin is USDT0. Gas is OKB. Mark ${KNOWN_XMARK}.`,
+      `Older BSC perpetual ${KNOWN_PERP}. It takes no new orders.`,
+      `BSC perpetual ${BSC_REBATE}. New BSC orders, codes, and claims are locked here. Margin is BSC USDT. Gas is BNB.`,
+      `X Layer perpetual ${KNOWN_XPERP}. New X Layer orders are locked here. Margin is USDT0. Gas is OKB. Mark ${KNOWN_XMARK}.`,
+      `Transistor perpetual ${GATE}. Longs and shorts in the six markets are locked here. Margin is BSC USDT.`,
       `Wafer circuits ${DEPLOYED.circuits}. Transistors ${DEPLOYED.transistors}. This processor is on X Layer. It is not the perpetual.`,
-      "Developer fee address 0xb67741A0463779c0dab3fDCFE883bA7572AC0AC2. Fees go here. It cannot change the contract and it cannot take margin that is still locked.",
+      `Fee address ${FEE_TO}. The 0.2% from spot and from the three perpetuals goes here. It cannot change a contract, and it cannot take margin that is still locked.`,
       "The seal rebate is locked. X Layer 0x62abA5CD9B6C371e7c443C79934B8644d60481d7 holds USDT0. BSC 0x0FcC922739a565804Ea57BDB44Bc2503E80Fce7A holds USDT. The page does not deploy a new address.",
     ],
   },

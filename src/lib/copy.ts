@@ -416,7 +416,7 @@ export const copy: Record<Lang, Copy> = {
     deployX2: "第 2 次签名：把现价写进标记价。",
     deployX3: "第 3 次签名：部署永续合约。签完，地址会出现在下面，发给我。",
     pushMark: "把 BSC 现价推进 X Layer",
-    realNote: "现货在 PancakeSwap V3 上真成交。币一直在你的钱包里，签名之前不会动。练熟了去模拟，要押真金去合约。",
+    realNote: "现货在 PancakeSwap V3 上成交。本台另收千分之二，签名后打进收费地址。币在签名之前留在钱包里。",
     paperNote: "这一页是纸上撮合。成交只记在这台浏览器里，重熔就没了。重熔不会动真实合约。",
     perpWarn:
       "双方 USDT 锁在同一个 BSC 合约里。1 USDT 起，最高 500。杠杆 1 到 1000 倍。成交价是挂单人写的价格，之后盈亏按 Pancake 池 10 分钟标记价。撮合和撤单都收保证金的千分之二。没有管理员，没有审计。只放你亏得起的钱。",
@@ -720,7 +720,7 @@ export const copy: Record<Lang, Copy> = {
     deployX2: "Signature 2 of 3: write the current price into the mark.",
     deployX3: "Signature 3 of 3: deploy the perpetual. The address shows below. Send it to me.",
     pushMark: "Push the BSC price onto X Layer",
-    realNote: "Spot settles on PancakeSwap V3. Tokens stay in your wallet until you sign. Practice on paper, then post real margin on the perp.",
+    realNote: "Spot fills on PancakeSwap V3. This desk takes 0.2% and sends it to the fee address when you sign. Tokens stay in your wallet until then.",
     paperNote: "This page is a paper match. Fills live in this browser and vanish if you remelt. Remelt does not touch the real perp.",
     perpWarn:
       "Both sides lock USDT in one BSC contract. From 1 to 500 USDT. Leverage is 1x to 1000x. The fill is the price on the order. After that, PnL follows the 10-minute Pancake mark. Matches and cancels each take 0.2% of margin. No admin and no audit. Only post what you can lose.",
