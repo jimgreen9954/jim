@@ -19,7 +19,7 @@ const zh: Section[] = [
   {
     h: "这几张桌子",
     ps: [
-      "现货：买进或卖出 BEM。成交对手是 Pancake 的池子，不是另一个用户的挂单。",
+      "现货：买进或卖出 BEM，也可以买卖 BNB。成交对手是 Pancake 的池子，不是另一个用户的挂单。",
       "模拟：用来看盘口、下纸单、试爆仓。重熔只清空这台设备上的模拟账，不动 USDT、USDT0，也不动永续合约。",
       "合约：先选 BSC 或 X Layer。挂单写进那一条链的固定合约。别人打开同一页，就能看见并吃单。吃到的是对手，不是池子。红的是空单，点整行或「开多吃」。绿的是多单，点整行或「开空吃」。和晶体管盘口同一套字。靠近现价的上下各留 5 张，其余折起来。",
       "对手昵称、链上返佣、自己的推荐码、填写别人的码、邀请名单，都在「我的订单」。市场页只留盘口、K 线和开仓。昵称和邀请人多了也可以展开。",
@@ -32,6 +32,7 @@ const zh: Section[] = [
       "交易对是 BEM / USDT，池子在 PancakeSwap V3。报价读链上 Quoter，成交走 SwapRouter。本台不托管，签名之前币在你的钱包里。",
       "本台另收成交金额的千分之二。买入从付出的 USDT 里扣，卖出从付出的 BEM 里扣，打进同一个收费地址。剩下的才进池子。池子自己的手续费留给流动性提供者，gas 付给链，这两笔不进收费地址。",
       "现货价每秒读这口池子，显示到小数点后 4 位。它只给永续当标记来源。永续的成交价仍是挂单上写的那个价。",
+      "BNB 也可以买卖。池子是 PancakeSwap V3 的 BNB / USDT，池费率 0.01%。买到的是钱包里的 BNB，不是包装币。卖出从钱包里的 BNB 扣，并留下约 0.003 BNB 付 gas。台费同样是付出金额的千分之二，进同一个收费地址。",
     ],
   },
   {
@@ -173,7 +174,7 @@ const en: Section[] = [
   {
     h: "The desks",
     ps: [
-      "Spot: buy or sell BEM. The counterparty is the Pancake pool, not another person's order.",
+      "Spot: buy or sell BEM, or buy or sell BNB. The counterparty is the Pancake pool, not another person's order.",
       "Paper: the book, paper tickets, and practice liquidations. Remelt clears only the paper book on this device. It does not move USDT, USDT0, or a live order.",
       "Perp: pick BSC or X Layer. The order is written to that chain's fixed contract. Anyone who opens the page can see it and take it. The counterparty is a person. A red row is a short: click the row or Open long. A green row is a long: click the row or Open short. The words match the transistor book. Five quotes stay on each side of the mark. The rest fold.",
       "Nicknames, on-chain rebates, your code, someone else's code, and the invite list live under My orders. The market page keeps the book, the chart, and the ticket. Long nickname and invite lists fold too.",
@@ -186,6 +187,7 @@ const en: Section[] = [
       "The pair is BEM / USDT on PancakeSwap V3. Quotes come from the on-chain quoter. Swaps use the SwapRouter. This desk does not custody. Tokens stay in your wallet until you sign.",
       "This desk also takes 0.2% of the amount you pay. A buy takes it from USDT. A sell takes it from BEM. It is sent to the one fee address. The rest goes to the pool. The pool's own fee stays with liquidity providers. Gas stays with the chain. Neither of those goes to the fee address.",
       "The spot price is read from that pool every second and shown to four decimals. It only feeds the perpetual mark. A perpetual fill is still the price written on the order.",
+      "BNB can be bought and sold too. The pool is PancakeSwap V3 BNB / USDT, pool fee 0.01%. A buy lands in the wallet as BNB, not the wrapped token. A sell spends BNB and leaves about 0.003 BNB for gas. The desk fee is the same 0.2% of what you pay, to the same fee address.",
     ],
   },
   {

@@ -21,6 +21,9 @@ export const BSC = {
   quoter: "0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997" as const,
   pool: "0x3098D7A051045000d68eC0360753A40C8cABEa31" as const,
   fee: 10000,
+  wbnb: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c" as const,
+  bnbPool: "0x172fcD41E0913e95784454622d1c3724f546f849" as const,
+  bnbFee: 100,
   bemDecimals: 8,
   usdtDecimals: 18,
   slippageBps: 100,
@@ -28,6 +31,7 @@ export const BSC = {
 
 export const FEE_TO = "0x823b9F6A93Ac44Ce5A469823A336c15b6117054D" as const;
 export const DESK_FEE_BPS = 20;
+export const BNB_GAS_RESERVE = 3_000_000_000_000_000n;
 
 export function splitDeskFee(amountIn: bigint): { fee: bigint; swapIn: bigint } {
   const fee = (amountIn * BigInt(DESK_FEE_BPS)) / 10_000n;
@@ -47,7 +51,11 @@ const quoterAbi = parseAbi([
 
 const routerAbi = parseAbi([
   "function exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96) params) payable returns (uint256 amountOut)",
+  "function unwrapWETH9(uint256 amountMinimum, address recipient) payable",
+  "function multicall(bytes[] data) payable returns (bytes[] results)",
 ]);
+
+const wbnbAbi = parseAbi(["function deposit() payable"]);
 
 const swapEvent = parseAbiItem(
   "event Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick, uint128 protocolFeesToken0, uint128 protocolFeesToken1)",
@@ -103,12 +111,17 @@ export async function bemPrice(): Promise<string> {
   return pretty(out, BSC.usdtDecimals, 4);
 }
 
-export async function quoteExact(tokenIn: Hex, tokenOut: Hex, amountIn: bigint): Promise<bigint> {
+export async function bnbPrice(): Promise<string> {
+  const out = await quoteExact(BSC.wbnb, BSC.usdt, 10n ** 18n, BSC.bnbFee);
+  return pretty(out, BSC.usdtDecimals, 2);
+}
+
+export async function quoteExact(tokenIn: Hex, tokenOut: Hex, amountIn: bigint, fee = BSC.fee): Promise<bigint> {
   const result = await client.readContract({
     address: BSC.quoter,
     abi: quoterAbi,
     functionName: "quoteExactInputSingle",
-    args: [{ tokenIn, tokenOut, amountIn, fee: BSC.fee, sqrtPriceLimitX96: 0n }],
+    args: [{ tokenIn, tokenOut, amountIn, fee, sqrtPriceLimitX96: 0n }],
   });
   return result[0];
 }
@@ -132,13 +145,16 @@ export type PoolPrint = {
   tx: Hex;
 };
 
-export async function recentPrints(): Promise<PoolPrint[]> {
+export async function recentPrints(market: "bem" | "bnb" = "bem"): Promise<PoolPrint[]> {
+  const pool = market === "bnb" ? BSC.bnbPool : BSC.pool;
+  const assetDecimals = market === "bnb" ? 18 : BSC.bemDecimals;
+  const spans = market === "bnb" ? [30n, 10n, 3n] : [400n, 120n, 40n];
   const head = await client.getBlockNumber();
   let logs: Awaited<ReturnType<typeof client.getLogs<typeof swapEvent>>> = [];
-  for (const span of [400n, 120n, 40n]) {
+  for (const span of spans) {
     const from = head > span ? head - span : 0n;
     try {
-      logs = await client.getLogs({ address: BSC.pool, event: swapEvent, fromBlock: from, toBlock: head });
+      logs = await client.getLogs({ address: pool, event: swapEvent, fromBlock: from, toBlock: head });
       break;
     } catch {
       logs = [];
@@ -153,7 +169,7 @@ export async function recentPrints(): Promise<PoolPrint[]> {
       return {
         id: `${log.transactionHash}-${log.logIndex}`,
         side: a1 < 0n ? "buy" : "sell",
-        bem: pretty(a1 < 0n ? -a1 : a1, BSC.bemDecimals, 4),
+        bem: pretty(a1 < 0n ? -a1 : a1, assetDecimals, market === "bnb" ? 5 : 4),
         usdt: pretty(a0 < 0n ? -a0 : a0, BSC.usdtDecimals, 2),
         tx: log.transactionHash,
       };
@@ -197,13 +213,29 @@ export async function connectBsc(): Promise<string> {
   return next;
 }
 
-async function send(from: string, to: Hex, data: Hex): Promise<Hex> {
+async function send(from: string, to: Hex, data: Hex, value = 0n): Promise<Hex> {
   const eth = await ensureProvider();
   await ensureBsc();
   return (await eth.request({
     method: "eth_sendTransaction",
-    params: [{ from, to, data, value: "0x0" }],
+    params: [{ from, to, data, value: `0x${value.toString(16)}` }],
   })) as Hex;
+}
+
+async function approveIfNeeded(from: string, token: Hex, need: bigint): Promise<void> {
+  const allowance = await client.readContract({
+    address: token,
+    abi: erc20,
+    functionName: "allowance",
+    args: [from as Hex, BSC.router],
+  });
+  if (allowance >= need) return;
+  if (allowance > 0n) {
+    const reset = encodeFunctionData({ abi: erc20, functionName: "approve", args: [BSC.router, 0n] });
+    await waitReceipt(await send(from, token, reset));
+  }
+  const approveData = encodeFunctionData({ abi: erc20, functionName: "approve", args: [BSC.router, need] });
+  await waitReceipt(await send(from, token, approveData));
 }
 
 export async function swapBem(from: string, side: "buy" | "sell", amount: string): Promise<Hex> {
@@ -217,22 +249,7 @@ export async function swapBem(from: string, side: "buy" | "sell", amount: string
   const quoted = await quoteExact(tokenIn, tokenOut, swapIn);
   const minOut = (quoted * BigInt(10_000 - BSC.slippageBps)) / 10_000n;
   const owner = from as Hex;
-  const allowance = await client.readContract({
-    address: tokenIn,
-    abi: erc20,
-    functionName: "allowance",
-    args: [owner, BSC.router],
-  });
-  if (allowance < swapIn) {
-    if (allowance > 0n) {
-      const reset = encodeFunctionData({ abi: erc20, functionName: "approve", args: [BSC.router, 0n] });
-      const resetHash = await send(from, tokenIn, reset);
-      await waitReceipt(resetHash);
-    }
-    const approveData = encodeFunctionData({ abi: erc20, functionName: "approve", args: [BSC.router, swapIn] });
-    const approveHash = await send(from, tokenIn, approveData);
-    await waitReceipt(approveHash);
-  }
+  await approveIfNeeded(from, tokenIn, swapIn);
   if (fee > 0n) {
     const feeData = encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, fee] });
     const feeHash = await send(from, tokenIn, feeData);
@@ -248,6 +265,77 @@ export async function swapBem(from: string, side: "buy" | "sell", amount: string
         fee: BSC.fee,
         recipient: owner,
         deadline: BigInt(Math.floor(Date.now() / 1000) + 60 * 20),
+        amountIn: swapIn,
+        amountOutMinimum: minOut,
+        sqrtPriceLimitX96: 0n,
+      },
+    ],
+  });
+  return send(from, BSC.router, data);
+}
+
+export async function swapBnb(from: string, side: "buy" | "sell", amount: string): Promise<Hex> {
+  const owner = from as Hex;
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20);
+  if (side === "buy") {
+    const amountIn = units(amount, BSC.usdtDecimals);
+    if (amountIn <= 0n) throw new Error("amount");
+    const { fee, swapIn } = splitDeskFee(amountIn);
+    if (swapIn <= 0n) throw new Error("amount");
+    const quoted = await quoteExact(BSC.usdt, BSC.wbnb, swapIn, BSC.bnbFee);
+    const minOut = (quoted * BigInt(10_000 - BSC.slippageBps)) / 10_000n;
+    await approveIfNeeded(from, BSC.usdt, swapIn);
+    if (fee > 0n) {
+      const feeData = encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, fee] });
+      await waitReceipt(await send(from, BSC.usdt, feeData));
+    }
+    const swapData = encodeFunctionData({
+      abi: routerAbi,
+      functionName: "exactInputSingle",
+      args: [
+        {
+          tokenIn: BSC.usdt,
+          tokenOut: BSC.wbnb,
+          fee: BSC.bnbFee,
+          recipient: BSC.router,
+          deadline,
+          amountIn: swapIn,
+          amountOutMinimum: minOut,
+          sqrtPriceLimitX96: 0n,
+        },
+      ],
+    });
+    const unwrapData = encodeFunctionData({
+      abi: routerAbi,
+      functionName: "unwrapWETH9",
+      args: [minOut, owner],
+    });
+    const data = encodeFunctionData({ abi: routerAbi, functionName: "multicall", args: [[swapData, unwrapData]] });
+    return send(from, BSC.router, data);
+  }
+  const bal = await client.getBalance({ address: owner });
+  const maxSpend = bal > BNB_GAS_RESERVE ? bal - BNB_GAS_RESERVE : 0n;
+  let amountIn = units(amount, 18);
+  if (amountIn > maxSpend) amountIn = maxSpend;
+  if (amountIn <= 0n) throw new Error("amount");
+  const { fee, swapIn } = splitDeskFee(amountIn);
+  if (swapIn <= 0n) throw new Error("amount");
+  const quoted = await quoteExact(BSC.wbnb, BSC.usdt, swapIn, BSC.bnbFee);
+  const minOut = (quoted * BigInt(10_000 - BSC.slippageBps)) / 10_000n;
+  if (fee > 0n) await waitReceipt(await send(from, FEE_TO, "0x", fee));
+  const deposit = encodeFunctionData({ abi: wbnbAbi, functionName: "deposit" });
+  await waitReceipt(await send(from, BSC.wbnb, deposit, swapIn));
+  await approveIfNeeded(from, BSC.wbnb, swapIn);
+  const data = encodeFunctionData({
+    abi: routerAbi,
+    functionName: "exactInputSingle",
+    args: [
+      {
+        tokenIn: BSC.wbnb,
+        tokenOut: BSC.usdt,
+        fee: BSC.bnbFee,
+        recipient: owner,
+        deadline,
         amountIn: swapIn,
         amountOutMinimum: minOut,
         sqrtPriceLimitX96: 0n,

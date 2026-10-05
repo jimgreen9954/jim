@@ -1,8 +1,8 @@
 # TAPELIQUID
 
-BEM spot and a two-chain perpetual, plus a TapeOut wafer on X Layer.
+BEM and BNB spot, a two-chain perpetual, plus a TapeOut wafer on X Layer.
 
-Spot fills on PancakeSwap V3 (BSC). The paper book stays in the browser. Each perpetual is one shared contract, so people on that chain can see and take each other's orders. BSC margin is USDT. X Layer margin is USDT0 and gas is OKB. The wafer does not settle PnL. Mining and the platform token are not deployed.
+Spot fills on PancakeSwap V3 (BSC). BEM uses the 1% pool. BNB uses the 0.01% pool and settles as native BNB. The paper book stays in the browser. Each perpetual is one shared contract, so people on that chain can see and take each other's orders. BSC margin is USDT. X Layer margin is USDT0 and gas is OKB. The wafer does not settle PnL. Mining and the platform token are not deployed.
 
 ## Locked addresses
 
