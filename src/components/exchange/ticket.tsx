@@ -156,11 +156,13 @@ export function Ticket() {
         <dd className="text-right">{fmtSz(bem)}</dd>
         <dt className="text-ink/60">{c.est}</dt>
         <dd className="text-right">{holdBem ? `${fmtSz(hold)} BEM` : fmtUsd(hold)}</dd>
+        <dt className="text-ink/60">{lang === "zh" ? "本单费用" : "This fee"}</dt>
+        <dd className="text-right">{fmtUsd(fee)}</dd>
         <dt className="text-ink/60">
           {c.taker}/{c.maker}
         </dt>
         <dd className="text-right">
-          {takerBps}/{makerBps} bp
+          {(takerBps / 100).toFixed(2)}% / {(makerBps / 100).toFixed(2)}%
         </dd>
       </dl>
 

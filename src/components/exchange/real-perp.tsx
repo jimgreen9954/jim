@@ -344,6 +344,7 @@ export function RealPerp() {
   })();
   const priceOk = ticketPx >= 10n ** 16n && ticketPx <= 100_000n * 10n ** 18n;
   const ticket = plan(margin, levOk ? lev : 1, ticketPx);
+  const liqMove = levOk ? (Math.max(0.05, Math.round(5000 / lev) / 100)).toFixed(2) : null;
   let need = 0n;
   try {
     need = units(margin, dec);
@@ -821,9 +822,23 @@ export function RealPerp() {
                   </p>
                   <p className="border border-gold/40 px-2 py-2">
                     <span className="block text-xs tracking-widest text-gold">{c.liqRough}</span>
-                    <span className="font-mono tabular-nums">{levOk ? `${Math.max(0.05, Math.round((5000 / lev)) / 100)}%` : "—"}</span>
+                    <span className="font-mono tabular-nums">{liqMove ? `${liqMove}%` : "—"}</span>
                   </p>
                 </div>
+                <p className="font-mono text-xs tabular-nums text-ink/70">
+                  {lang === "zh" ? "可用" : "Available"} {bal ? pretty(bal.usdt, dec, 2) : "—"} USDT
+                  {" · "}
+                  {lang === "zh" ? "本单手续费" : "Fee"} {marginOk ? (Number(margin) * 0.002).toFixed(4) : "—"} USDT
+                  {" · "}
+                  {ticket ? `${ticket.size.toFixed(4)} BEM` : "—"}
+                </p>
+                {levOk && lev >= 100 && liqMove ? (
+                  <p className="text-sm text-sell">
+                    {lang === "zh"
+                      ? `${lev} 倍。标记价反向大约 ${liqMove}%，保证金大约亏掉一半，仓可以被强平。`
+                      : `${lev}×. A mark move of about ${liqMove}% can take half the margin and liquidate.`}
+                  </p>
+                ) : null}
                 {!levOk || !marginOk ? <p className="text-sm text-sell">{!levOk ? c.levCap : `${floor}–500 USDT`}</p> : null}
                 {!priceOk ? <p className="text-sm text-sell">{c.badPrice}</p> : null}
                 {bal && marginOk && bal.usdt < need ? (
@@ -834,7 +849,7 @@ export function RealPerp() {
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    className="min-h-12 bg-ink text-paper"
+                    className="min-h-12 bg-ink text-paper disabled:opacity-40"
                     disabled={busy || !levOk || !marginOk || !priceOk || !view?.priced || Boolean(!view?.book && waiting && view?.pendingLong)}
                     onClick={() =>
                       run(async (from) => {
@@ -855,7 +870,7 @@ export function RealPerp() {
                   </button>
                   <button
                     type="button"
-                    className="min-h-12 border border-gold"
+                    className="min-h-12 border border-sell bg-sell text-[#f7f5f0] disabled:opacity-40"
                     disabled={busy || !levOk || !marginOk || !priceOk || !view?.priced || Boolean(!view?.book && waiting && !view?.pendingLong)}
                     onClick={() =>
                       run(async (from) => {

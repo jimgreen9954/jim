@@ -42,6 +42,7 @@ export function SpotDesk() {
   const live = useExchange((s) => s.chainBem);
   const shown = pair === "bem" && live && live > 0 ? live.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : price;
   const [out, setOut] = useState<string | null>(null);
+  const [minOut, setMinOut] = useState<string | null>(null);
   const [account, setAccount] = useState<string | null>(currentAccount());
   const [balances, setBalances] = useState<Balances | null>(null);
   const [prints, setPrints] = useState<PoolPrint[]>([]);
@@ -88,18 +89,27 @@ export function SpotDesk() {
       const amountIn = units(amount || "0", decimals);
       if (amountIn <= 0n) {
         setOut(null);
+        setMinOut(null);
         return;
       }
       const { swapIn } = splitDeskFee(amountIn);
+      const digits = side === "buy" ? (pair === "bnb" ? 6 : 4) : 2;
       quoteExact(tokenIn, tokenOut, swapIn, fee)
         .then((quoted) => {
-          if (!dead) setOut(pretty(quoted, outDecimals, side === "buy" ? (pair === "bnb" ? 6 : 4) : 2));
+          if (!dead) {
+            setOut(pretty(quoted, outDecimals, digits));
+            setMinOut(pretty((quoted * BigInt(10_000 - BSC.slippageBps)) / 10_000n, outDecimals, digits));
+          }
         })
         .catch(() => {
-          if (!dead) setOut(null);
+          if (!dead) {
+            setOut(null);
+            setMinOut(null);
+          }
         });
     } catch {
       setOut(null);
+      setMinOut(null);
     }
     return () => {
       dead = true;
@@ -146,7 +156,18 @@ export function SpotDesk() {
   const payRaw = balances ? (side === "buy" ? balances.usdt : pair === "bnb" ? balances.bnb : balances.bem) : 0n;
   const payDecimals = side === "buy" ? BSC.usdtDecimals : pair === "bnb" ? 18 : BSC.bemDecimals;
   const spendCap = pair === "bnb" && side === "sell" ? (payRaw > BNB_GAS_RESERVE ? payRaw - BNB_GAS_RESERVE : 0n) : undefined;
+  const spendable = spendCap ?? payRaw;
   const base = pair === "bnb" ? "BNB" : "BEM";
+  const payUnit = side === "buy" ? "USDT" : base;
+  const recvUnit = side === "buy" ? base : "USDT";
+  let typed = 0n;
+  try {
+    typed = amount.trim() ? units(amount, payDecimals) : 0n;
+  } catch {
+    typed = 0n;
+  }
+  const deskFee = typed > 0n ? splitDeskFee(typed) : null;
+  const over = Boolean(balances) && typed > spendable;
   const pcts = [25, 50, 75, 100];
 
   return (
@@ -164,6 +185,7 @@ export function SpotDesk() {
                     setPair(key);
                     setAmount("");
                     setOut(null);
+                    setMinOut(null);
                     setPrice(null);
                   }}
                   className={`min-h-8 border border-gold px-3 font-mono text-xs ${pair === key ? "bg-ink text-paper" : ""}`}
@@ -266,14 +288,20 @@ export function SpotDesk() {
           <p className="border border-gold/40 px-3 py-2">
             <span className="block text-xs tracking-widest text-gold">{c.receive}</span>
             <span className="font-mono text-2xl tabular-nums">
-              {out ?? "—"} {side === "buy" ? base : "USDT"}
+              {out ?? "—"} {recvUnit}
             </span>
           </p>
+          <p className="font-mono text-xs tabular-nums text-ink/70">
+            {lang === "zh" ? "本单台费" : "Fee"} {deskFee ? pretty(deskFee.fee, payDecimals, 4) : "—"} {payUnit}
+            {" · "}
+            {lang === "zh" ? "最少到账" : "Min. received"} {minOut ?? "—"} {recvUnit}
+          </p>
+          {over ? <p className="text-sm text-sell">{lang === "zh" ? "余额不够，减一点数量。" : "Not enough balance. Use a smaller size."}</p> : null}
           <p className="text-xs text-ink/70">
             {c.slippage} 1% · PancakeSwap V3 · {lang === "zh" ? "台费" : "Desk"} {(DESK_FEE_BPS / 100).toFixed(2)}% · {FEE_TO.slice(0, 6)}…{FEE_TO.slice(-4)}
             {pair === "bnb" && side === "sell" ? (lang === "zh" ? " · 留下 0.003 BNB 付 gas" : " · 0.003 BNB stays for gas") : ""}
           </p>
-          <button type="submit" className="min-h-12 bg-ink text-paper" disabled={busy || (Boolean(account) && !amount.trim())}>
+          <button type="submit" className="min-h-12 bg-ink text-paper disabled:opacity-40" disabled={busy || over || (Boolean(account) && !amount.trim())}>
             {account ? `${side === "buy" ? c.buy : c.sell} ${base}` : c.walletConnect}
           </button>
           {note ? <p className={`text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
