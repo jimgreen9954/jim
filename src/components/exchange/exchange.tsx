@@ -120,7 +120,7 @@ function FuseFlash() {
   return (
     <div className="pointer-events-none fixed inset-x-0 top-0 z-50">
       <div className="sweep h-1 bg-sell" />
-      <p className="mx-auto mt-3 w-fit bg-sell px-4 py-2 text-sm text-paper">{copy[lang].banners.liq}</p>
+      <p className="mx-auto mt-3 w-fit bg-sell px-4 py-2 text-sm text-[#f7f5f0]">{copy[lang].banners.liq}</p>
     </div>
   );
 }
@@ -131,6 +131,19 @@ function Header({ pane, setPane }: { pane: Pane; setPane: (pane: Pane) => void }
   const reset = useExchange((s) => s.reset);
   const c = copy[lang];
   const [arm, setArm] = useState(false);
+  const [night, setNight] = useState(false);
+  const [nightReady, setNightReady] = useState(false);
+  useEffect(() => {
+    const on = window.localStorage.getItem("tapeliquid-night") === "1";
+    setNight(on);
+    document.documentElement.classList.toggle("night", on);
+    setNightReady(true);
+  }, []);
+  useEffect(() => {
+    if (!nightReady) return;
+    document.documentElement.classList.toggle("night", night);
+    window.localStorage.setItem("tapeliquid-night", night ? "1" : "0");
+  }, [night, nightReady]);
   useEffect(() => {
     document.documentElement.lang = lang === "zh" ? "zh" : "en";
   }, [lang]);
@@ -151,13 +164,16 @@ function Header({ pane, setPane }: { pane: Pane; setPane: (pane: Pane) => void }
     <header className="sticky top-0 z-20 -mx-3 flex flex-col gap-3 bg-paper/95 px-3 py-3 backdrop-blur-sm lg:-mx-6 lg:px-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <img src="/mark.jpg" alt="" className="size-12 shrink-0 bg-ink" />
+          <img src="/mark.jpg" alt="" className="size-12 shrink-0 bg-[#14110d]" />
           <div className="min-w-0">
             <h1 className="truncate text-sm tracking-[0.28em] sm:text-base">TAPELIQUID</h1>
             <p className="truncate text-xs tracking-widest text-gold">{c.kicker}</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <button type="button" className="min-h-11 border border-gold bg-card px-3" onClick={() => setNight((on) => !on)}>
+            {night ? (lang === "zh" ? "白天" : "Day") : lang === "zh" ? "黑夜" : "Night"}
+          </button>
           <button type="button" className="min-h-11 border border-gold bg-card px-3" onClick={() => setLang(lang === "zh" ? "en" : "zh")}>
             {lang === "zh" ? "EN" : "中文"}
           </button>

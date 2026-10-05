@@ -1,12 +1,18 @@
 import { useEffect, useState } from "react";
 import { Kline } from "@/components/exchange/kline";
+import { DepthTape } from "@/components/exchange/depth";
 import { copy } from "@/lib/copy";
 import { useExchange } from "@/lib/exchange-store";
+import { buildBook } from "@/lib/match-engine";
 import { getPaperCandles, PAPER_FRAMES, paperLabel, type Ohlc, type PaperFrame } from "@/lib/candles";
 
 export function TraceChart() {
   const live = useExchange((s) => s.chainBem);
   const lang = useExchange((s) => s.lang);
+  const price = useExchange((s) => s.engine.price);
+  const orders = useExchange((s) => s.engine.orders);
+  const clock = useExchange((s) => s.engine.clock);
+  const market = useExchange((s) => s.market);
   const c = copy[lang];
   const [frame, setFrame] = useState<PaperFrame>("1m");
   const [rows, setRows] = useState<Ohlc[]>([]);
@@ -33,6 +39,7 @@ export function TraceChart() {
     if (index !== rows.length - 1 || !(live && live > 0)) return candle;
     return { ...candle, c: live, h: Math.max(candle.h, live), l: Math.min(candle.l, live) };
   });
+  const book = buildBook(price, orders, market, clock);
 
   return (
     <section className="border border-gold bg-card shadow-plate">
@@ -52,6 +59,7 @@ export function TraceChart() {
         </div>
       </div>
       {view.length === 0 ? <p className="px-3 py-6 text-sm text-ink/60">{lang === "zh" ? "K线还在读池子。" : "Reading the pool candles."}</p> : <Kline bars={view} lang={lang} desk="paper" />}
+      <DepthTape bids={book.bids} asks={book.asks} lang={lang} />
     </section>
   );
 }

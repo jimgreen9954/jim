@@ -7,6 +7,7 @@ import { currentAccount, onAccount, onOpenLink } from "@/lib/wallet";
 import { useExchange } from "@/lib/exchange-store";
 import { MineDesk } from "@/components/exchange/mine-desk";
 import { Kline } from "@/components/exchange/kline";
+import { DepthTape } from "@/components/exchange/depth";
 import { nickOf, readNicks } from "@/lib/nicks";
 import { clearArm, easyBand, readArm, writeArm, type Arm } from "@/lib/stops";
 import {
@@ -123,7 +124,7 @@ function DeskLadder({
           {mine ? (
             <span className="px-2 text-xs text-ink/50">{zh ? "我的" : "Mine"}</span>
           ) : (
-            <button type="button" disabled={busy} onClick={(event) => { event.stopPropagation(); onTake(row.perp, row.quote); }} className={`min-h-9 px-3 text-paper ${buy ? "bg-sell" : "bg-[#1b6b45]"}`}>
+            <button type="button" disabled={busy} onClick={(event) => { event.stopPropagation(); onTake(row.perp, row.quote); }} className={`min-h-9 px-3 text-[#f7f5f0] ${buy ? "bg-sell" : "bg-[#1b6b45]"}`}>
               {buy ? (zh ? "开多吃" : "Buy") : zh ? "开空吃" : "Sell"}
             </button>
           )}
@@ -486,6 +487,25 @@ export function RealPerp() {
             mark={markN}
             lang={lang}
             desk="perp"
+          />
+          <DepthTape
+            lang={lang}
+            bids={board.filter((row) => row.quote.long).map((row) => ({
+              price: row.quote.price > 0n ? Number(formatUnits(row.quote.price, 18)) : markN,
+              size: (() => {
+                const px = row.quote.price > 0n ? Number(formatUnits(row.quote.price, 18)) : markN;
+                const margin = Number(formatUnits(row.quote.margin, dec));
+                return px > 0 ? (margin * row.quote.lev) / px : 0;
+              })(),
+            }))}
+            asks={board.filter((row) => !row.quote.long).map((row) => ({
+              price: row.quote.price > 0n ? Number(formatUnits(row.quote.price, 18)) : markN,
+              size: (() => {
+                const px = row.quote.price > 0n ? Number(formatUnits(row.quote.price, 18)) : markN;
+                const margin = Number(formatUnits(row.quote.margin, dec));
+                return px > 0 ? (margin * row.quote.lev) / px : 0;
+              })(),
+            }))}
           />
           <DeskLadder
             rows={board}

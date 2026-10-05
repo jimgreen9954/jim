@@ -21,6 +21,16 @@
     color-scheme: light;
     -webkit-font-smoothing: antialiased;
   }
+  html.night {
+    color-scheme: dark;
+    --color-paper: #100e0b;
+    --color-card: #1c1814;
+    --color-ink: #f4efe6;
+    --color-gold: #e4c56b;
+    --color-foil: #8a6a2a;
+    --color-sell: #ff8d7a;
+    --shadow-plate: 0 18px 40px -32px rgb(0 0 0 / 0.8);
+  }
   body {
     background: var(--color-paper);
     color: var(--color-ink);

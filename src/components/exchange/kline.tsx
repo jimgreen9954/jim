@@ -1,4 +1,4 @@
-import { useEffect, useState, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { readBias, type Bias } from "@/lib/bias";
 import { fmtPct, fmtPx, fmtSz } from "@/lib/format";
 
@@ -22,7 +22,11 @@ function sma(rows: Bar[], n: number): Array<number | null> {
   return rows.map((_, i) => {
     if (i < n - 1) return null;
     let sum = 0;
-    for (let k = 0; k < n; k += 1) sum += rows[i - k].c;
+    for (let k = 0; k < n; k += 1) {
+      const close = rows[i - k]?.c;
+      if (!Number.isFinite(close)) return null;
+      sum += close;
+    }
     return sum / n;
   });
 }
@@ -66,14 +70,19 @@ export function Kline({
   const [ink, setInk] = useState<Stroke[]>([]);
   const [draft, setDraft] = useState<Pt | null>(null);
   const [picked, setPicked] = useState<number | null>(null);
-  const [drag, setDrag] = useState<Drag | null>(null);
+  const dragRef = useRef<Drag | null>(null);
   const [paint, setPaint] = useState(PAINTS[1]);
   const [ready, setReady] = useState(false);
   const [biasOn, setBiasOn] = useState(false);
   const [bias, setBias] = useState<Bias | null>(null);
   const [biasBusy, setBiasBusy] = useState(false);
-  const rows = bars.slice(-100);
-  const lastT = rows.at(-1)?.t ?? 0;
+  const [zoom, setZoom] = useState(48);
+  const [edge, setEdge] = useState(0);
+  const [lock, setLock] = useState<{ lo: number; hi: number } | null>(null);
+  const panRef = useRef<{ x: number; edge: number } | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const all = bars.filter((bar) => bar && Number.isFinite(bar.o) && Number.isFinite(bar.h) && Number.isFinite(bar.l) && Number.isFinite(bar.c)).slice(-300);
+  const lastT = all.at(-1)?.t ?? 0;
   const zh = lang === "zh";
 
   useEffect(() => {
@@ -95,7 +104,7 @@ export function Kline({
     }
     setDraft(null);
     setPicked(null);
-    setDrag(null);
+    dragRef.current = null;
     setReady(true);
   }, [desk]);
 
@@ -110,21 +119,23 @@ export function Kline({
   }, [biasOn, ready]);
 
   useEffect(() => {
-    if (!biasOn || rows.length < 8) return;
+    if (!biasOn || bars.length < 8) return;
     let dead = false;
     const pull = () => {
       setBiasBusy(true);
       readBias({
         data: {
           lang,
-          bars: rows.slice(-36).map((bar) => ({ o: bar.o, h: bar.h, l: bar.l, c: bar.c })),
+          bars: bars.flatMap((bar) =>
+            bar && Number.isFinite(bar.c) ? [{ o: bar.o, h: bar.h, l: bar.l, c: bar.c }] : [],
+          ),
         },
       })
         .then((next) => {
           if (!dead) setBias(next);
         })
         .catch(() => {
-          if (!dead) setBias({ side: "flat", p: 0, why: "" });
+          if (!dead) setBias({ side: "flat", price: 0, why: "" });
         })
         .finally(() => {
           if (!dead) setBiasBusy(false);
@@ -138,10 +149,18 @@ export function Kline({
     };
   }, [biasOn, lang, lastT]);
 
+  if (!all.length) return null;
+  const viewCount = Math.min(all.length, Math.max(16, zoom));
+  const maxEdge = Math.max(0, all.length - viewCount);
+  const shownEdge = Math.min(Math.max(0, edge), maxEdge);
+  const startFloat = Math.max(0, all.length - shownEdge - viewCount);
+  const start = Math.floor(startFloat);
+  const slip = startFloat - start;
+  const rows = all.slice(start, Math.min(all.length, Math.ceil(startFloat + viewCount))).filter((bar) => Number.isFinite(bar?.c));
   if (!rows.length) return null;
 
-  const ma7 = sma(rows, 7);
-  const ma25 = sma(rows, 25);
+  const ma7 = sma(all, 7).slice(start, start + rows.length);
+  const ma25 = sma(all, 25).slice(start, start + rows.length);
   const lows = rows.map((bar) => bar.l);
   const highs = rows.map((bar) => bar.h);
   let lo = Math.min(...lows);
@@ -156,17 +175,23 @@ export function Kline({
   const pad = Math.max(hi - lo, hi * 0.002) * 0.08;
   lo -= pad;
   hi += pad;
+  if (lock) {
+    lo = Math.min(lo, lock.lo);
+    hi = Math.max(hi, lock.hi);
+  }
   const span = hi - lo || 1;
   const innerW = VB_W - PAD.l - PAD.r;
   const n = rows.length;
-  const slot = innerW / n;
+  const slot = innerW / viewCount;
   const y = (p: number) => PAD.t + ((hi - p) / span) * PRICE_H;
-  const x = (i: number) => PAD.l + i * slot + slot * 0.5;
+  const x = (i: number) => PAD.l + (i - slip) * slot + slot * 0.5;
   const maxV = Math.max(...rows.map((bar) => bar.v ?? 0), 1);
-  const last = rows[n - 1];
-  const idx = hover ?? n - 1;
-  const focus = rows[idx];
-  const prev = idx > 0 ? rows[idx - 1].c : focus.o;
+  const safeIdx = hover != null && hover >= 0 && hover < n ? hover : n - 1;
+  const focus = rows[safeIdx] ?? rows[n - 1];
+  const last = rows[n - 1] ?? focus;
+  const earlier = safeIdx > 0 ? rows[safeIdx - 1] : undefined;
+  if (!focus || !last) return null;
+  const prev = earlier?.c ?? focus.o;
   const chg = focus.c - prev;
   const upLast = last.c >= last.o;
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => lo + (hi - lo) * (1 - t));
@@ -185,15 +210,8 @@ export function Kline({
   const xAt = (t: number) => {
     const first = rows[0]?.t;
     const end = rows[n - 1]?.t;
-    if (first == null || end == null) return x(Math.min(n - 1, Math.max(0, t)));
-    if (t <= first) return x(0);
-    if (t >= end) return x(n - 1);
-    for (let i = 1; i < n; i += 1) {
-      const a = rows[i - 1].t ?? 0;
-      const b = rows[i].t ?? a;
-      if (t <= b) return x(i - 1) + ((x(i) - x(i - 1)) * (t - a)) / (b - a || 1);
-    }
-    return x(n - 1);
+    if (first == null || end == null || end === first) return x(0);
+    return x(0) + ((t - first) / (end - first)) * (x(n - 1) - x(0));
   };
 
   const ptFrom = (ev: PointerEvent<SVGSVGElement>, loose = false): Pt | null => {
@@ -204,7 +222,7 @@ export function Kline({
     if (outside && !loose) return null;
     px = Math.min(VB_W - PAD.r, Math.max(PAD.l, px));
     yy = Math.min(PAD.t + PRICE_H, Math.max(PAD.t, yy));
-    const f = (px - PAD.l) / slot - 0.5;
+    const f = (px - PAD.l) / slot + slip - 0.5;
     const i = Math.min(n - 2, Math.max(0, Math.floor(f)));
     const frac = n < 2 ? 0 : f - i;
     const t0 = rows[Math.max(0, i)].t ?? i;
@@ -220,7 +238,7 @@ export function Kline({
     };
   };
 
-  const near = (px: number, yy: number, cx: number, cy: number) => (px - cx) ** 2 + (yy - cy) ** 2 < 16 ** 2;
+  const near = (px: number, yy: number, cx: number, cy: number) => (px - cx) ** 2 + (yy - cy) ** 2 < 28 ** 2;
 
   const hit = (px: number, yy: number): { i: number; mode: Grip } | null => {
     for (let i = ink.length - 1; i >= 0; i -= 1) {
@@ -243,13 +261,15 @@ export function Kline({
         const len = dx * dx + dy * dy || 1;
         const u = Math.min(1, Math.max(0, ((px - ax) * dx + (yy - ay) * dy) / len));
         const dist = (px - (ax + dx * u)) ** 2 + (yy - (ay + dy * u)) ** 2;
-        if (dist < 14 ** 2) return { i, mode: "move" };
+        if (dist < 28 ** 2) return { i, mode: "move" };
       } else {
         const left = Math.min(ax, bx);
         const right = Math.max(ax, bx);
         const top = Math.min(ay, by);
         const bottom = Math.max(ay, by);
-        if (px >= left && px <= right && yy >= top && yy <= bottom) return { i, mode: "move" };
+        const inside = px >= left - 14 && px <= right + 14 && yy >= top - 14 && yy <= bottom + 14;
+        const onFrame = px <= left + 14 || px >= right - 14 || yy <= top + 14 || yy >= bottom - 14;
+        if (inside && onFrame) return { i, mode: "move" };
       }
     }
     return null;
@@ -325,18 +345,25 @@ export function Kline({
               style={{ background: color }}
             />
           ))}
-          <span className="ml-auto text-xs text-ink/50">
-            {draft
-              ? zh
-                ? "再点一次"
-                : "Tap again"
-              : tool === "look"
+          <span className="ml-auto flex items-center gap-1 text-xs text-ink/50">
+            <button type="button" onClick={() => setZoom((value) => Math.max(16, Math.round(value * 0.7)))} className="min-h-8 border border-gold px-2 text-ink">
+              {zh ? "放大" : "In"}
+            </button>
+            <button type="button" onClick={() => setZoom((value) => Math.min(all.length, Math.round(value * 1.4)))} className="min-h-8 border border-gold px-2 text-ink">
+              {zh ? "缩小" : "Out"}
+            </button>
+            <button type="button" onClick={() => { setZoom(48); setEdge(0); }} className="min-h-8 px-2">
+              {zh ? "最新" : "Now"}
+            </button>
+            <span>
+              {draft
                 ? zh
-                  ? "拖动画线，拖圆点改形状"
-                  : "Drag to move, dots to reshape"
+                  ? "再点一次"
+                  : "Tap again"
                 : zh
-                  ? "点两次"
-                  : "Two taps"}
+                  ? "空白处左右拖。放大缩小用按钮，滚动不再带动图。"
+                  : "Drag empty space. Use the buttons to zoom. Scrolling no longer moves the chart."}
+            </span>
           </span>
         </div>
       </div>
@@ -350,13 +377,16 @@ export function Kline({
         <span>L {fmtPx(focus.l)}</span>
         <span>C {fmtPx(focus.c)}</span>
         {focus.v != null ? <span>V {fmtSz(focus.v)}</span> : null}
-        {ma7[idx] != null ? <span className="text-gold">MA7 {fmtPx(ma7[idx])}</span> : null}
-        {ma25[idx] != null ? <span className="text-ink/60">MA25 {fmtPx(ma25[idx])}</span> : null}
+        {ma7[safeIdx] != null ? <span className="text-gold">MA7 {fmtPx(ma7[safeIdx])}</span> : null}
+        {ma25[safeIdx] != null ? <span className="text-ink/60">MA25 {fmtPx(ma25[safeIdx])}</span> : null}
         {focus.t ? <span className="text-ink/50">{clock(focus.t)} SGT</span> : null}
       </p>
       <svg
+        ref={svgRef}
         viewBox={`0 0 ${VB_W} ${VB_H}`}
-        className="h-72 w-full touch-none lg:h-96"
+        className="h-72 w-full touch-none overflow-hidden lg:h-96"
+        overflow="hidden"
+        style={{ cursor: tool === "look" ? "grab" : "crosshair" }}
         role="img"
         aria-label="BEM candlestick chart"
         onPointerLeave={() => {
@@ -366,43 +396,64 @@ export function Kline({
         onPointerMove={(ev) => {
           const rect = ev.currentTarget.getBoundingClientRect();
           const px = ((ev.clientX - rect.left) / rect.width) * VB_W;
-          const next = Math.floor((px - PAD.l) / slot);
+          const panning = panRef.current;
+          if (panning) {
+            const shift = (px - panning.x) / slot;
+            setEdge(Math.min(maxEdge, Math.max(0, panning.edge + shift)));
+            return;
+          }
+          const next = Math.floor((px - PAD.l) / slot + slip);
           setHover(next >= 0 && next < n ? next : null);
           setPy(((ev.clientY - rect.top) / rect.height) * VB_H);
-          if (!drag) return;
+          const moving = dragRef.current;
+          if (!moving) return;
           const pt = ptFrom(ev, true);
           if (!pt) return;
           setInk((list) =>
             list.map((stroke, i) => {
-              if (i !== drag.i) return stroke;
-              if (drag.mode === "move") {
+              if (i !== moving.i) return stroke;
+              if (moving.mode === "move") {
                 return {
                   ...stroke,
-                  a: { t: drag.a.t + pt.t - drag.origin.t, p: drag.a.p + pt.p - drag.origin.p },
-                  b: { t: drag.b.t + pt.t - drag.origin.t, p: drag.b.p + pt.p - drag.origin.p },
+                  a: { t: moving.a.t + pt.t - moving.origin.t, p: moving.a.p + pt.p - moving.origin.p },
+                  b: { t: moving.b.t + pt.t - moving.origin.t, p: moving.b.p + pt.p - moving.origin.p },
                 };
               }
-              if (drag.mode === "a") return { ...stroke, a: pt };
-              if (drag.mode === "b") return { ...stroke, b: pt };
-              if (drag.mode === "ab") return { ...stroke, a: { t: pt.t, p: stroke.a.p }, b: { t: stroke.b.t, p: pt.p } };
+              if (moving.mode === "a") return { ...stroke, a: pt };
+              if (moving.mode === "b") return { ...stroke, b: pt };
+              if (moving.mode === "ab") return { ...stroke, a: { t: pt.t, p: stroke.a.p }, b: { t: stroke.b.t, p: pt.p } };
               return { ...stroke, a: { t: stroke.a.t, p: pt.p }, b: { t: pt.t, p: stroke.b.p } };
             }),
           );
         }}
-        onPointerUp={() => setDrag(null)}
+        onPointerUp={() => {
+          dragRef.current = null;
+          panRef.current = null;
+          setLock(null);
+        }}
+        onPointerCancel={() => {
+          dragRef.current = null;
+          panRef.current = null;
+          setLock(null);
+        }}
         onPointerDown={(ev) => {
-          if (tool === "look") {
-            const { px, yy } = boxOf(ev);
-            const found = hit(px, yy);
-            if (!found) {
-              setPicked(null);
-              return;
-            }
+          const { px, yy } = boxOf(ev);
+          const found = draft ? null : hit(px, yy);
+          if (found) {
             const stroke = ink[found.i];
             const pt = ptFrom(ev, true);
             if (!stroke || !pt) return;
+            dragRef.current = { i: found.i, mode: found.mode, origin: pt, a: { ...stroke.a }, b: { ...stroke.b } };
             setPicked(found.i);
-            setDrag({ i: found.i, mode: found.mode, origin: pt, a: stroke.a, b: stroke.b });
+            setTool("look");
+            ev.currentTarget.setPointerCapture(ev.pointerId);
+            return;
+          }
+          if (tool === "look") {
+            panRef.current = { x: px, edge: shownEdge };
+            setLock({ lo, hi });
+            setPicked(null);
+            setHover(null);
             ev.currentTarget.setPointerCapture(ev.pointerId);
             return;
           }
@@ -413,6 +464,7 @@ export function Kline({
             setInk((list) => [...list, { kind: tool, a: draft, b: pt, color: paint }]);
             setPicked(ink.length);
             setDraft(null);
+            setTool("look");
           }
         }}
       >
@@ -436,6 +488,7 @@ export function Kline({
         <path d={pathOf(ma25, x, y)} fill="none" stroke="var(--color-ink)" strokeOpacity="0.45" strokeWidth="1.25" />
         <path d={pathOf(ma7, x, y)} fill="none" stroke="var(--color-gold)" strokeWidth="1.25" />
         {rows.map((bar, i) => {
+          if (!bar || !Number.isFinite(bar.c) || !Number.isFinite(bar.o)) return null;
           const up = bar.c >= bar.o;
           const color = up ? "var(--color-gold)" : "var(--color-sell)";
           const bodyW = Math.max(1.4, slot * 0.68);
@@ -502,7 +555,7 @@ export function Kline({
         {draft ? <circle cx={xAt(draft.t)} cy={y(draft.p)} r="3" fill="var(--color-gold)" /> : null}
         {hover != null && tool === "look" ? (
           <>
-            <line x1={x(idx)} x2={x(idx)} y1={PAD.t} y2={VB_H - PAD.b} stroke="var(--color-ink)" strokeOpacity="0.35" strokeDasharray="2 3" />
+            <line x1={x(safeIdx)} x2={x(safeIdx)} y1={PAD.t} y2={VB_H - PAD.b} stroke="var(--color-ink)" strokeOpacity="0.35" strokeDasharray="2 3" />
             <line x1={PAD.l} x2={VB_W - PAD.r} y1={crossY} y2={crossY} stroke="var(--color-ink)" strokeOpacity="0.35" strokeDasharray="2 3" />
           </>
         ) : null}
@@ -533,10 +586,17 @@ export function Kline({
           <p className={`mt-3 font-display text-4xl italic leading-none ${bias?.side === "short" ? "text-sell" : "text-gold"}`}>
             {biasBusy && !bias ? (zh ? "在看" : "Reading") : lean}
           </p>
-          {bias && bias.p > 0 ? <p className="mt-2 font-mono text-sm tabular-nums">{bias.p}</p> : null}
+          {bias && bias.price > 0 ? (
+            <>
+              <p className="mt-3 font-mono text-2xl tabular-nums">{fmtPx(bias.price)}</p>
+              <p className="mt-1 text-xs tracking-widest text-gold">{zh ? "猜的 BEM 价格" : "Guessed BEM"}</p>
+            </>
+          ) : null}
           {bias?.why ? <p className="mt-3 text-sm leading-relaxed">{bias.why}</p> : null}
           <p className="mt-3 text-xs leading-relaxed text-ink/50">
-            {zh ? "不是标记价，不保证下一根。约两分钟重看。" : "Not the mark. Not a promise. Rechecked about every two minutes."}
+            {zh
+              ? "数字是按最近约 36 根 BEM/USDT K 线猜的下一截价格，不是强度，也不是标记价。不保证下一根会到。约两分钟重看。"
+              : "The figure is a guessed next BEM/USDT price from about the last 36 candles. It is not a score and not the mark. It does not promise the next candle. Rechecked about every two minutes."}
           </p>
         </aside>
       ) : null}
