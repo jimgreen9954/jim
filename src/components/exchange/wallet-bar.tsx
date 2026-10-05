@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { connectKind, currentAccount, onAccount, onOpenLink } from "@/lib/wallet";
+import { connectKind, currentAccount, disconnectWallet, onAccount, onOpenLink } from "@/lib/wallet";
 import { copy } from "@/lib/copy";
 import { useExchange } from "@/lib/exchange-store";
 import {
@@ -37,9 +37,12 @@ export function ConnectButton() {
   }
   if (account) {
     return (
-      <button type="button" className="min-h-11 max-w-40 truncate border border-gold px-3 text-sm" disabled>
-        {short(account)}
-      </button>
+      <span className="flex gap-2">
+        <span className="inline-flex min-h-11 max-w-40 items-center truncate border border-gold bg-card px-3 font-mono text-sm">{short(account)}</span>
+        <button type="button" className="min-h-11 border border-gold px-3 text-sm" onClick={() => void disconnectWallet()}>
+          {lang === "zh" ? "退出" : "Disconnect"}
+        </button>
+      </span>
     );
   }
   return (
@@ -181,6 +184,9 @@ export function WalletBar() {
           </button>
           <a className="inline-flex min-h-11 items-center border border-gold px-3" href={CANVAS} target="_blank" rel="noreferrer">
             {c.openCanvas}
+          </a>
+          <a className="inline-flex min-h-11 items-center border border-gold px-3" href={processorUrl()} target="_blank" rel="noreferrer">
+            {c.walletOfficial}
           </a>
           {!account ? (
             <button type="button" className="min-h-11 border border-gold px-3" disabled={busy} onClick={connect}>

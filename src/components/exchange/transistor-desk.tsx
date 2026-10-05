@@ -267,7 +267,7 @@ export function TransistorDesk() {
             <button type="button" disabled={busy} onClick={() => send(true)} className="min-h-11 bg-ink text-paper disabled:opacity-50">{zh ? "开多" : "Long"}</button>
             <button type="button" disabled={busy} onClick={() => send(false)} className="min-h-11 border border-gold disabled:opacity-50">{zh ? "开空" : "Short"}</button>
           </div>
-          <p className="text-xs leading-relaxed text-ink/60">{zh ? "开多开空会让钱包先授权再划走 BSC 的 USDT，最少 1。官网价先推进合约，之后盈亏按合约里的价结算，不按你填的限价。手续费千分之二。有推荐人时，交易者少付其中 4%，推荐人记其中 6%，和 BEM 一样，提到这份合约的 USDT。" : "A long or short asks the wallet to approve and then move BSC USDT, from 1. The official price is pushed into the contract first. PnL uses that stored price, not your limit. The fee is 0.2%. With a referrer, the trader pays 4% less of it and the referrer is credited 6%, paid in this contract's USDT."}</p>
+          <p className="text-xs leading-relaxed text-ink/60">{zh ? "划走 BSC 的 USDT。盈亏按推进后的官网价，不按限价。" : "Moves BSC USDT. PnL uses the pushed official price, not your limit."}</p>
           {perp ? <p className="break-all font-mono text-xs">{perp}</p> : null}
           <p className="text-xs tracking-widest text-gold">{zh ? "这份合约上的推荐" : "Referral on this contract"}</p>
           {rebate.code ? (

@@ -21,7 +21,7 @@ const zh: Section[] = [
       "模拟：用来看盘口、下纸单、试爆仓。重熔只清空这台设备上的模拟账，不动 USDT、USDT0，也不动永续合约。",
       "合约：先选 BSC 或 X Layer。挂单写进那一条链的固定合约。别人打开同一页，就能看见并吃单。吃到的是对手，不是池子。红的是空单，点整行或「开多吃」。绿的是多单，点整行或「开空吃」。和晶体管盘口同一套字。靠近现价的上下各留 5 张，其余折起来。",
       "对手昵称、链上返佣、自己的推荐码、填写别人的码、邀请名单，都在「我的订单」。市场页只留盘口、K 线和开仓。昵称和邀请人多了也可以展开。",
-      "晶圆：铸造 NAND，在画布上流片。烧的是 OKB 和晶体管。流片不能撤回。电路不结算永续。",
+      "晶圆：处理器已经部署。铸造 NAND 可以在本页签，也可以去 TapeOut 官方的这台处理器。流片烧的是 OKB 和晶体管，不能撤回。电路不结算永续。",
     ],
   },
   {
@@ -54,6 +54,7 @@ const zh: Section[] = [
       "市场页列出还没有人接的挂单，带地址、方向、保证金、倍数和开单价。点吃单，你成为对面。两笔保证金锁进同一份合约。",
       "个人订单页只看你自己的挂单和已经对上的仓。还没人接的单可以撤。撤单收这张保证金的千分之二，剩下的退回。对上之后不能撤，只能平仓或等强平。",
       "平仓不再另收一笔手续费。盈亏按平仓时的标记价，把两边的保证金重新切开。你可以给对手地址起一个只存在这台浏览器里的昵称，链上仍然是那个地址。",
+      "三盏印鉴灯不会自动改这千分之二。要减费，先在晶圆页部署领取合约，再把 USDT 或 USDT0 充进池子。收费地址自己扣不了。X Layer 上要这个钱包自己持有三张印鉴，每张 4 个输入、1 个输出、3 个 NAND，点登记才算。BSC 读不到这台处理器，要由部署者把地址记上。登记之后，一个新加坡周只能领一次，从周一 0 点到下周一 0 点。页面按撮合日志把这一周里你做多或做空的已成交加起来，领回每笔保证金上手续费的一半。有推荐人时，按少付之后的手续费再减半。金额用代币小数换成 USDT 显示，不是最小单位。旧订单簿分不出谁是挂单，所以两边都是这一半。同一笔只能进一次。这一周没领，过点作废，下周只算新的成交。晶体管那本账没有撮合时间，不算进这一周。更早部署的领取合约没有按周这一条，要重新部署。",
     ],
   },
   {
@@ -101,8 +102,9 @@ const zh: Section[] = [
   {
     h: "晶圆",
     ps: [
-      "处理器和晶体管在 X Layer。铸造 NAND、在画布流片，烧的是 OKB 和晶体管。流片不能撤回。电路地址和两份永续合约不是同一个。",
-      "晶圆上的电路今天不结算永续盈亏，也不增加你的保证金。它是这条产品后面要长出来的那一层的根。",
+      "处理器已经在 X Layer 上，地址写在文末，不用再部署一台。铸造有两条路。本页一次铸造 16 颗 NAND，钱包要停在 X Layer，签名在 OKX 或币安钱包里完成，OKB 付给这台处理器。官方入口是 TapeOut 上的同一台处理器，在晶体管市场铸造，收款地址也是这台处理器，不进交易所。",
+      "流片有两条路。本页的个人印鉴是 4 个输入、1 个输出、3 个 NAND，点一次烧掉 3 颗 NAND 并支付 0.0013 OKB，亮一盏灯，三盏颜色不同。也可以打开 TapeOut 画布，目标处理器选 TAPELIQUID，自己接线再流片上链。流片不能撤回。电路地址和两份永续不是同一个。",
+      "三盏灯不会改永续里写死的千分之二。另有一份领取合约。池子要先充钱。X Layer 由持有人拿三张合格印鉴登记。BSC 由部署者记地址。一个新加坡周领一次。页面只加总本周撮合日志里的成交，按代币小数显示成 USDT，领的是手续费的一半。有推荐人时按少付后的手续费再减半。过了下周一 0 点没领就作废，下周重新计算。晶体管账没有撮合时间，不进这一周。晶圆上的电路今天不结算永续盈亏，也不增加保证金。",
     ],
   },
   {
@@ -158,7 +160,7 @@ const en: Section[] = [
       "Paper: the book, paper tickets, and practice liquidations. Remelt clears only the paper book on this device. It does not move USDT, USDT0, or a live order.",
       "Perp: pick BSC or X Layer. The order is written to that chain's fixed contract. Anyone who opens the page can see it and take it. The counterparty is a person. A red row is a short: click the row or Open long. A green row is a long: click the row or Open short. The words match the transistor book. Five quotes stay on each side of the mark. The rest fold.",
       "Nicknames, on-chain rebates, your code, someone else's code, and the invite list live under My orders. The market page keeps the book, the chart, and the ticket. Long nickname and invite lists fold too.",
-      "Wafer: mint NAND and tape out on the canvas. It spends OKB and transistors. Tape-out cannot be undone. A circuit does not settle the perpetual.",
+      "Wafer: the processor is already deployed. Mint NAND on this page, or on this same processor at official TapeOut. Tape-out spends OKB and transistors and cannot be undone. A circuit does not settle the perpetual.",
     ],
   },
   {
@@ -191,6 +193,7 @@ const en: Section[] = [
       "The market lists untaken quotes with the address, side, margin, leverage, and price. Taking one makes you the other side. Both margins lock in the same contract.",
       "The personal page shows only your quotes and your open deals. An untaken quote can be cancelled. A cancel costs 0.2% of that margin and returns the rest. A matched deal cannot be cancelled. It is closed or liquidated.",
       "Closing does not add another fee. PnL uses the mark at close and splits the two margins. You can nickname a counterparty on this browser. The chain still stores the address.",
+      "Three seal lamps do not change the 0.2% by themselves. To reduce it, deploy the rebate on the wafer page and fund the pool with USDT or USDT0. The fee address cannot push money in. On X Layer the wallet must own three seals, each with 4 inputs, 1 output, and 3 NAND gates, and register them. BSC cannot read that processor, so the deployer marks the address. After that, one claim is allowed per Singapore week, Monday 00:00 to the next Monday 00:00. The page adds the matched fills in that week where you are long or short, using the match log, and pays half the fee on each margin. With a referrer, that half is of the already discounted fee. The number is shown in USDT after the token decimals, not in raw units. The old book does not record who posted, so both sides get that half. A deal is included once. Miss the week and it is gone. The next week counts only new fills. The transistor book stores no match time, so it is not in the week. An older rebate has no weekly rule and has to be deployed again.",
     ],
   },
   {
@@ -238,8 +241,9 @@ const en: Section[] = [
   {
     h: "Wafer",
     ps: [
-      "The processor and its transistors live on X Layer. Minting NAND and taping out spends OKB and transistors. Tape-out cannot be undone. The circuit address is not either perpetual.",
-      "A taped circuit does not settle perpetual PnL and does not add margin. It is the root of the layer this desk grows next.",
+      "The processor is already on X Layer. The address is at the end of this paper. Do not deploy another one. There are two ways to mint. This page mints 16 NAND at a time. The wallet stays on X Layer, you sign in OKX or Binance Wallet, and the OKB is paid to this processor. The official entrance is the same processor on TapeOut, in the transistor market. That payment also goes to the processor, not to an exchange.",
+      "There are two ways to tape out. The seal on this page is four inputs, one output, and three NAND gates. One tap burns 3 NAND and pays 0.0013 OKB, and lights one lamp. The three lamps are different colors. Or open the TapeOut canvas, choose TAPELIQUID as the target processor, wire it yourself, and tape it on chain. Tape-out cannot be undone. The circuit address is not either perpetual.",
+      "Three lamps do not change the 0.2% written into the perpetual. A separate rebate has to be funded. On X Layer the holder registers three qualifying seals. On BSC the deployer marks the address. One claim per Singapore week. The page totals only this week's match-log fills, shows the amount in USDT after the token decimals, and pays half the fee. With a referrer, half of the discounted fee. Unclaimed value is dropped at the next Monday 00:00 and the next week is counted again. The transistor book has no match time, so it is left out. A taped circuit does not settle perpetual PnL and does not add margin.",
     ],
   },
   {

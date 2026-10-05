@@ -85,7 +85,7 @@ export function LiveBoard() {
       </header>
 
       {!data && !failed ? <p className="px-3 py-4 text-sm">{c.loading}</p> : null}
-      {failed && !data?.ok ? <p className="px-3 py-4 text-sm text-sell">{data?.error ?? c.liveFail}</p> : null}
+      {failed && !data?.ok ? <p className="px-3 py-4 text-sm text-sell">{c.liveFail}</p> : null}
 
       {data?.ok ? (
         <div className="flex flex-col gap-3 p-3">

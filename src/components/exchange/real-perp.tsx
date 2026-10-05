@@ -14,7 +14,6 @@ import {
   deployXLayer,
   bookOf,
   KNOWN_PERP,
-  KNOWN_XMARK,
   KNOWN_XPERP,
   liquidatePerp,
   openPerp,
@@ -114,6 +113,7 @@ function DeskLadder({
   dec,
   scan,
   named,
+  lang,
   onTake,
 }: {
   rows: { perp: string; quote: BookQuote }[];
@@ -123,6 +123,7 @@ function DeskLadder({
   dec: number;
   scan: string;
   named: (addr: string) => string;
+  lang: "zh" | "en";
   onTake: (book: string, quote: BookQuote) => void;
 }) {
   const drawn = rows.map(({ perp, quote }) => {
@@ -137,6 +138,7 @@ function DeskLadder({
   const askRows = open ? asks : asks.slice(-5);
   const bidRows = open ? bids : bids.slice(0, 5);
   const hidden = asks.length + bids.length - askRows.length - bidRows.length;
+  const zh = lang === "zh";
   const max = Math.max(1, ...drawn.map((row) => row.size));
   const line = (row: (typeof drawn)[number], buy: boolean) => {
     const mine = Boolean(account && row.quote.user.toLowerCase() === account.toLowerCase());
@@ -164,10 +166,10 @@ function DeskLadder({
         <span className="relative flex items-center gap-1">
           <span className="hidden border border-gold/40 px-1 text-xs sm:inline">≤{Math.max(1, Math.round(row.size))}</span>
           {mine ? (
-            <span className="px-2 text-xs text-ink/50">我的</span>
+            <span className="px-2 text-xs text-ink/50">{zh ? "我的" : "Mine"}</span>
           ) : (
             <button type="button" disabled={busy} onClick={(event) => { event.stopPropagation(); onTake(row.perp, row.quote); }} className={`min-h-9 px-3 text-paper ${buy ? "bg-sell" : "bg-[#1b6b45]"}`}>
-              {buy ? "开多吃" : "开空吃"}
+              {buy ? (zh ? "开多吃" : "Buy") : zh ? "开空吃" : "Sell"}
             </button>
           )}
           <a className="text-xs text-ink/50 underline" href={`${scan}/address/${row.quote.user}`} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
@@ -180,13 +182,13 @@ function DeskLadder({
   return (
     <div>
       <div className="grid grid-cols-[4.5rem_1fr_1fr_auto] gap-2 px-2 py-1 text-xs text-ink/50">
-        <span>价格</span>
-        <span>数量 BEM</span>
-        <span>保证金</span>
-        <span className="text-right">指定成交</span>
+        <span>{zh ? "价格" : "Price"}</span>
+        <span>{zh ? "数量 BEM" : "Size BEM"}</span>
+        <span>{zh ? "保证金" : "Margin"}</span>
+        <span className="text-right">{zh ? "指定成交" : "Take"}</span>
       </div>
-      {asks.length === 0 && bids.length === 0 ? <p className="px-2 py-3 text-sm text-ink/60">这口价附近还没有挂单。</p> : null}
-      {asks.length > askRows.length ? <p className="px-2 py-1 text-xs text-ink/50">上面还有 {asks.length - askRows.length} 张</p> : null}
+      {asks.length === 0 && bids.length === 0 ? <p className="px-2 py-3 text-sm text-ink/60">{zh ? "这口价附近还没有挂单。" : "No orders near this price."}</p> : null}
+      {asks.length > askRows.length ? <p className="px-2 py-1 text-xs text-ink/50">{zh ? `上面还有 ${asks.length - askRows.length} 张` : `${asks.length - askRows.length} more above`}</p> : null}
       {askRows.map((row) => line(row, true))}
       <p className="my-1 flex items-center gap-3 px-2 font-mono text-sm text-ink/70">
         <span className="h-px flex-1 bg-gold/40" />
@@ -194,10 +196,10 @@ function DeskLadder({
         <span className="h-px flex-1 bg-gold/40" />
       </p>
       {bidRows.map((row) => line(row, false))}
-      {bids.length > bidRows.length ? <p className="px-2 py-1 text-xs text-ink/50">下面还有 {bids.length - bidRows.length} 张</p> : null}
+      {bids.length > bidRows.length ? <p className="px-2 py-1 text-xs text-ink/50">{zh ? `下面还有 ${bids.length - bidRows.length} 张` : `${bids.length - bidRows.length} more below`}</p> : null}
       {hidden > 0 || (open && asks.length + bids.length > 10) ? (
         <button type="button" className="min-h-11 w-full border-t border-gold/40 text-sm" onClick={() => setOpen((value) => !value)}>
-          {open ? "收起" : `展开其余 ${hidden} 张`}
+          {open ? (zh ? "收起" : "Fold") : zh ? `展开其余 ${hidden} 张` : `Show ${hidden} more`}
         </button>
       ) : null}
     </div>
@@ -441,7 +443,6 @@ export function RealPerp() {
             X Layer · USDT
           </button>
         </div>
-        <p className="text-sm leading-relaxed text-ink/70">{chain === "xlayer" ? c.chainX : c.chainBsc}</p>
         {chain === "xlayer" && !/^0x[a-fA-F0-9]{40}$/.test(KNOWN_XPERP) ? (
           <p className="text-sm leading-relaxed">{c.xOpen}</p>
         ) : null}
@@ -484,24 +485,28 @@ export function RealPerp() {
             {c.signOkx}
           </a>
         ) : null}
-        <div className="grid grid-cols-2 gap-2">
-          <p className="border border-gold/40 px-3 py-2">
-            <span className="block text-xs tracking-widest text-gold">{c.perpMark}</span>
-            <span className="font-mono text-2xl tabular-nums">{markN > 0 ? `$${markN.toFixed(2)}` : "—"}</span>
-          </p>
-          <p className="border border-gold/40 px-3 py-2">
-            <span className="block text-xs tracking-widest text-gold">{c.yourEq}</span>
-            <span className="font-mono text-2xl tabular-nums">{view && account ? usdtText(view.equity) : "—"}</span>
-          </p>
-        </div>
+        <p className="border border-gold/40 px-3 py-2">
+          <span className="block text-xs tracking-widest text-gold">{c.yourEq}</span>
+          <span className="font-mono text-2xl tabular-nums">{view && account ? usdtText(view.equity) : "—"}</span>
+        </p>
         <div className="border border-gold bg-card">
           <div className="flex flex-wrap items-end justify-between gap-3 border-b border-gold/30 px-3 py-3">
             <div>
               <p className="font-display text-2xl italic">BEM / USDT</p>
-              <p className="mt-1 break-all font-mono text-xs text-ink/60">{perp || "—"}</p>
+              <p className="mt-1 break-all font-mono text-xs text-ink/60">
+                {perp || "—"}
+                {/^0x[a-fA-F0-9]{40}$/.test(perp) ? (
+                  <>
+                    {" "}
+                    <a className="underline decoration-gold underline-offset-4" href={`${scan}/address/${perp}`} target="_blank" rel="noreferrer">
+                      {chain === "xlayer" ? "OKLink" : "BscScan"}
+                    </a>
+                  </>
+                ) : null}
+              </p>
             </div>
             <div className="text-right">
-              <p className="text-xs tracking-widest text-gold">参考价</p>
+              <p className="text-xs tracking-widest text-gold">{c.mark}</p>
               <p className="font-mono text-2xl tabular-nums">{markN > 0 ? markN.toFixed(4) : "—"}</p>
             </div>
           </div>
@@ -521,9 +526,14 @@ export function RealPerp() {
             dec={dec}
             scan={scan}
             named={named}
+            lang={lang}
             onTake={(book, quote) => run((from) => takePerp(from, book, quote.id, formatUnits(quote.margin, dec), quote.lev, quote.price > 0n))}
           />
-          <p className="px-3 py-2 text-xs text-ink/50">上面红的是空单，点整行或「开多吃」。下面绿的是多单，点整行或「开空吃」。自己的单写着「我的」。靠近现价的各留 5 张，其余可以展开。</p>
+          <p className="px-3 py-2 text-xs text-ink/50">
+            {lang === "zh"
+              ? "上面红的是空单，点整行或「开多吃」。下面绿的是多单，点整行或「开空吃」。自己的单写着「我的」。靠近现价的各留 5 张，其余可以展开。"
+              : "Red rows above are shorts. Tap the row or Buy. Green rows below are longs. Tap the row or Sell. Yours says Mine. Five stay next to the price. The rest can open."}
+          </p>
         </div>
         <div className="border border-gold/40 p-3">
           <p className="text-xs tracking-widest text-gold">{c.pkTitle}</p>
@@ -552,12 +562,6 @@ export function RealPerp() {
           </p>
           <p className="text-xs leading-relaxed text-ink/60">{c.pkNote}</p>
         </div>
-        <p className="text-sm leading-relaxed text-ink/80">{chain === "xlayer" ? c.sharedBookX : c.sharedBook}</p>
-        <p className="text-xs tracking-widest text-gold">{chain === "xlayer" ? c.perpAddrX : c.perpAddr}</p>
-        <p className="break-all font-mono text-xs">{perp || "—"}</p>
-          <a className="text-sm underline decoration-gold underline-offset-4" href={`${scan}/address/${perp}`} target="_blank" rel="noreferrer">
-            {chain === "xlayer" ? "OKLink" : "BscScan"}
-          </a>
         {/^0x[a-fA-F0-9]{40}$/.test(perp) && (
           <>
             {waiting ? (
@@ -567,7 +571,7 @@ export function RealPerp() {
                 {c.pkMiss}
               </p>
             ) : null}
-            {inDeal ? (
+            {inDeal && !view?.book ? (
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <p className="border border-gold/40 px-2 py-2">
                   <span className="block text-xs tracking-widest text-gold">{view?.long ? c.postLong : c.postShort}</span>
@@ -597,10 +601,7 @@ export function RealPerp() {
                     {c.myOrders}
                   </button>
                 </div>
-                <p className="text-sm leading-relaxed text-ink/80">{c.feeNote}</p>
-                {sheet === "book" ? (
-                  <p className="text-sm text-ink/60">挂单在上面的盘口里。红的空单点开多吃，绿的多单点开空吃，中间那根就是现在的价。</p>
-                ) : (
+                {sheet === "mine" ? (
                   <>
                     {view.quotes.filter((quote) => account && quote.user.toLowerCase() === account.toLowerCase()).length === 0 ? (
                       <p className="text-sm text-ink/60">{c.pkEmpty}</p>
@@ -619,8 +620,9 @@ export function RealPerp() {
                           </div>
                         ))}
                   </>
-                )}
+                ) : null}
                 {view.liveDeals.map((deal) => {
+                  if (sheet !== "mine") return null;
                   const mineDeal = Boolean(account && (deal.long.toLowerCase() === account.toLowerCase() || deal.short.toLowerCase() === account.toLowerCase()));
                   if (sheet === "mine" && !mineDeal) return null;
                   const mineLong = Boolean(account && deal.long.toLowerCase() === account.toLowerCase());
@@ -678,7 +680,6 @@ export function RealPerp() {
             ) : null}
             {(view?.book ? sheet === "book" : !inDeal && !mine) ? (
               <>
-                <p className="text-sm leading-relaxed text-ink/80">{chain === "xlayer" ? c.perpStepsX : c.perpSteps}</p>
                 <div className="grid grid-cols-2 gap-2">
                   <button type="button" onClick={() => setMode("easy")} className={`min-h-11 border border-gold ${mode === "easy" ? "bg-ink text-paper" : ""}`}>
                     {c.beginner}
@@ -904,9 +905,6 @@ export function RealPerp() {
             {c.walletTx}
           </a>
         ) : null}
-        <p className="text-xs text-ink/50">
-          {chain === "xlayer" ? `X Layer · USDT0 · mark ${KNOWN_XMARK.slice(0, 8)}` : `BSC · USDT · BEM pool ${BSC.pool.slice(0, 8)}`}
-        </p>
       </div>
     </section>
   );

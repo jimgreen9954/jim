@@ -14,9 +14,7 @@ import { SpotDesk } from "@/components/exchange/spot-desk";
 import { TransistorDesk } from "@/components/exchange/transistor-desk";
 import { ConnectButton, WalletBar } from "@/components/exchange/wallet-bar";
 import { Whitepaper } from "@/components/exchange/whitepaper";
-import { KNOWN_PERP, KNOWN_XPERP } from "@/lib/perp";
 import { bemPrice } from "@/lib/bsc";
-import { XLAYER } from "@/lib/xlayer";
 
 type Pane = "spot" | "paper" | "perp" | "gate" | "wafer" | "brief";
 
@@ -32,7 +30,7 @@ export function Exchange() {
       <SimClock />
       <BannerToast />
       <FuseFlash />
-      <div className={`mx-auto flex max-w-6xl flex-col gap-4 px-3 pt-4 lg:px-6 ${pane === "paper" ? "pb-24 lg:pb-10" : "pb-8"}`}>
+      <div className={`mx-auto flex max-w-6xl flex-col gap-4 px-3 pt-2 lg:px-6 ${pane === "paper" ? "pb-24 lg:pb-10" : "pb-8"}`}>
         <Header pane={pane} setPane={setPane} />
         {pane === "spot" ? <SpotDesk /> : null}
         {pane === "paper" ? <PaperFloor /> : null}
@@ -40,8 +38,6 @@ export function Exchange() {
         {pane === "gate" ? <TransistorDesk /> : null}
         {pane === "wafer" ? <WaferFloor /> : null}
         {pane === "brief" ? <Whitepaper /> : null}
-        <NextStep pane={pane} setPane={setPane} />
-        <SiteFoot />
       </div>
       {pane === "paper" ? <MobileNav /> : null}
     </div>
@@ -136,6 +132,9 @@ function Header({ pane, setPane }: { pane: Pane; setPane: (pane: Pane) => void }
   const c = copy[lang];
   const [arm, setArm] = useState(false);
   useEffect(() => {
+    document.documentElement.lang = lang === "zh" ? "zh" : "en";
+  }, [lang]);
+  useEffect(() => {
     if (!arm) return;
     const id = window.setTimeout(() => setArm(false), 2800);
     return () => window.clearTimeout(id);
@@ -149,24 +148,24 @@ function Header({ pane, setPane }: { pane: Pane; setPane: (pane: Pane) => void }
     ["brief", c.deskBrief, c.chainBrief],
   ] as const;
   return (
-    <header className="flex flex-col gap-3">
+    <header className="sticky top-0 z-20 -mx-3 flex flex-col gap-3 bg-paper/95 px-3 py-3 backdrop-blur-sm lg:-mx-6 lg:px-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <img src="/mark.jpg" alt="" className="size-14 shrink-0 border border-gold object-cover" />
+          <img src="/mark.jpg" alt="" className="size-12 shrink-0 bg-ink" />
           <div className="min-w-0">
-            <p className="text-xs tracking-widest text-gold">{c.kicker}</p>
-            <h1 className="font-display text-4xl italic leading-none">TAPELIQUID</h1>
+            <h1 className="truncate text-sm tracking-[0.28em] sm:text-base">TAPELIQUID</h1>
+            <p className="truncate text-xs tracking-widest text-gold">{c.kicker}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button type="button" className="min-h-11 border border-gold px-3" onClick={() => setLang(lang === "zh" ? "en" : "zh")}>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" className="min-h-11 border border-gold bg-card px-3" onClick={() => setLang(lang === "zh" ? "en" : "zh")}>
             {lang === "zh" ? "EN" : "中文"}
           </button>
           <ConnectButton />
           {pane === "paper" ? (
             <button
               type="button"
-              className={`min-h-11 border px-3 ${arm ? "border-sell text-sell" : "border-gold"}`}
+              className={`min-h-11 border px-3 ${arm ? "border-sell bg-card text-sell" : "border-gold bg-card"}`}
               onClick={() => {
                 if (!arm) setArm(true);
                 else {
@@ -186,46 +185,14 @@ function Header({ pane, setPane }: { pane: Pane; setPane: (pane: Pane) => void }
             key={id}
             type="button"
             onClick={() => setPane(id)}
-            className={`min-h-14 px-3 text-left ${pane === id ? "bg-ink text-paper" : "bg-card"}`}
+            className={`min-h-11 px-2 text-left sm:min-h-14 sm:px-3 ${pane === id ? "bg-ink text-paper" : "bg-card"}`}
           >
             <span className="block text-sm">{label}</span>
-            <span className={`block text-xs ${pane === id ? "text-paper/70" : "text-gold"}`}>{hint}</span>
+            <span className={`hidden text-xs sm:block ${pane === id ? "text-paper/70" : "text-gold"}`}>{hint}</span>
           </button>
         ))}
       </div>
     </header>
-  );
-}
-
-function NextStep({ pane, setPane }: { pane: Pane; setPane: (pane: Pane) => void }) {
-  const lang = useExchange((s) => s.lang);
-  const c = copy[lang];
-  const order: Pane[] = ["spot", "paper", "perp", "gate", "wafer", "brief"];
-  const labels = [c.deskSpot, c.deskPaper, c.deskPerp, c.deskGate, c.deskWafer, c.deskBrief];
-  const index = order.indexOf(pane);
-  const next = order[(index + 1) % order.length];
-  return (
-    <button type="button" className="min-h-12 border border-gold px-3 text-left" onClick={() => setPane(next)}>
-      <span className="block text-xs tracking-widest text-gold">{c.nextStep}</span>
-      <span className="text-sm">{labels[(index + 1) % order.length]}</span>
-    </button>
-  );
-}
-
-function SiteFoot() {
-  const lang = useExchange((s) => s.lang);
-  return (
-    <footer className="border border-gold/40 px-3 py-3 text-xs leading-relaxed text-ink/70">
-      <p>{copy[lang].sharedBook}</p>
-      <p className="mt-1 break-all font-mono">BSC {KNOWN_PERP}</p>
-      <p className="mt-3">{copy[lang].sharedBookX}</p>
-      <p className="mt-1 break-all font-mono">{KNOWN_XPERP ? `X Layer ${KNOWN_XPERP}` : copy[lang].xOpen}</p>
-      {KNOWN_XPERP ? (
-        <a className="mt-1 inline-block underline decoration-gold underline-offset-4" href={`${XLAYER.explorer}/address/${KNOWN_XPERP}`} target="_blank" rel="noreferrer">
-          OKLink
-        </a>
-      ) : null}
-    </footer>
   );
 }
 

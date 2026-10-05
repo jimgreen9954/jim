@@ -18,10 +18,6 @@ import {
 } from "@/lib/bsc";
 import { currentAccount, onAccount } from "@/lib/wallet";
 
-function short(addr: string): string {
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
-}
-
 function portion(raw: bigint, decimals: number, pct: number): string {
   const cut = (raw * BigInt(pct)) / 100n;
   const [whole, frac = ""] = formatUnits(cut, decimals).split(".");
@@ -234,7 +230,6 @@ export function SpotDesk() {
           <button type="submit" className="min-h-12 bg-ink text-paper" disabled={busy || (Boolean(account) && !amount.trim())}>
             {account ? `${side === "buy" ? c.buy : c.sell} BEM` : c.walletConnect}
           </button>
-          {account ? <p className="font-mono text-xs">{short(account)}</p> : null}
           {note ? <p className={`text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
           {hash ? (
             <a className="text-sm underline decoration-gold underline-offset-4" href={txUrl(hash)} target="_blank" rel="noreferrer">

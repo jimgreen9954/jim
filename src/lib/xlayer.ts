@@ -227,7 +227,48 @@ const circuitAbi = [
     inputs: [],
     outputs: [{ name: "", type: "uint256" }],
   },
+  {
+    name: "ownerOf",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "id", type: "uint256" }],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "circuitInfo",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "id", type: "uint256" }],
+    outputs: [
+      { name: "inputs", type: "uint256" },
+      { name: "outputs", type: "uint256" },
+      { name: "state", type: "uint256" },
+      { name: "gates", type: "uint256" },
+    ],
+  },
+  {
+    name: "TAPEOUT_FEE",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "tapeout",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "netlist", type: "bytes" },
+      { name: "nIn", type: "uint32" },
+      { name: "nOut", type: "uint32" },
+    ],
+    outputs: [{ name: "id", type: "uint256" }],
+  },
 ] as const;
+
+/** NAND(NAND(A,B), NAND(C,D)). Three NAND gates, no canvas buffers. */
+export const SEAL_NETLIST =
+  "0x000000020000030000000400000500000006000007" as Hex;
 
 export type ProcessorStatus = {
   name: string;
@@ -281,4 +322,86 @@ export function processorUrl(): string {
 }
 
 export const CANVAS = "https://tapeout.net/#canvas";
+
+/** Personal chop: four inputs, one output, three NAND gates. */
+export async function countSeal(owner: string): Promise<number> {
+  const next = await client.readContract({
+    address: DEPLOYED.circuits,
+    abi: circuitAbi,
+    functionName: "nextId",
+  });
+  const last = Number(next);
+  let count = 0;
+  const ids = Array.from({ length: Math.max(0, last - 1) }, (_, i) => BigInt(i + 1));
+  for (let i = 0; i < ids.length; i += 8) {
+    const slice = ids.slice(i, i + 8);
+    const rows = await Promise.all(
+      slice.map(async (id) => {
+        try {
+          const [who, info] = await Promise.all([
+            client.readContract({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "ownerOf", args: [id] }),
+            client.readContract({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "circuitInfo", args: [id] }),
+          ]);
+          return who.toLowerCase() === owner.toLowerCase() && info[0] === 4n && info[1] === 1n && info[3] === 3n;
+        } catch {
+          return false;
+        }
+      }),
+    );
+    count += rows.filter(Boolean).length;
+  }
+  return count;
+}
+
+export async function sealIds(owner: string): Promise<bigint[]> {
+  const next = await client.readContract({
+    address: DEPLOYED.circuits,
+    abi: circuitAbi,
+    functionName: "nextId",
+  });
+  const last = Number(next);
+  const found: bigint[] = [];
+  const ids = Array.from({ length: Math.max(0, last - 1) }, (_, i) => BigInt(i + 1));
+  for (let i = 0; i < ids.length && found.length < 3; i += 8) {
+    const slice = ids.slice(i, i + 8);
+    const rows = await Promise.all(
+      slice.map(async (id) => {
+        try {
+          const [who, info] = await Promise.all([
+            client.readContract({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "ownerOf", args: [id] }),
+            client.readContract({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "circuitInfo", args: [id] }),
+          ]);
+          return who.toLowerCase() === owner.toLowerCase() && info[0] === 4n && info[1] === 1n && info[3] === 3n ? id : null;
+        } catch {
+          return null;
+        }
+      }),
+    );
+    for (const id of rows) if (id != null) found.push(id);
+  }
+  return found.slice(0, 3);
+}
+
+export async function tapeSeal(from: string): Promise<Hex> {
+  const fee = await client.readContract({
+    address: DEPLOYED.circuits,
+    abi: circuitAbi,
+    functionName: "TAPEOUT_FEE",
+  });
+  const data = encodeFunctionData({
+    abi: circuitAbi,
+    functionName: "tapeout",
+    args: [SEAL_NETLIST, 4, 1],
+  });
+  const eth = ethereum();
+  if (!eth) throw new Error("nowallet");
+  await ensureXLayer();
+  const hash = (await eth.request({
+    method: "eth_sendTransaction",
+    params: [{ from, to: DEPLOYED.circuits, data, value: toHex(fee) }],
+  })) as Hex;
+  const receipt = await client.waitForTransactionReceipt({ hash, timeout: 120_000 });
+  if (receipt.status !== "success") throw new Error("revert");
+  return hash;
+}
 

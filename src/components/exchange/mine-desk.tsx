@@ -193,7 +193,7 @@ export function MineDesk({
         ))}
         {addresses.length > 4 ? (
           <button type="button" className="mt-2 min-h-11 border border-gold px-3 text-sm" onClick={() => setNickOpen((value) => !value)}>
-            {nickOpen ? "收起" : `展开其余 ${addresses.length - 4} 个地址`}
+            {nickOpen ? (lang === "zh" ? "收起" : "Fold") : lang === "zh" ? `展开其余 ${addresses.length - 4} 个地址` : `Show ${addresses.length - 4} more`}
           </button>
         ) : null}
       </section>
@@ -208,8 +208,22 @@ export function MineDesk({
             <p className="mt-2 text-sm">
               {c.rebateAccrued} <span className="font-mono">{pretty(accrued, dec, 2)} {chain === "xlayer" ? "USDT0" : "USDT"}</span>
             </p>
-            <p className="mt-1 text-sm text-ink/60">{chain === "xlayer" ? "这一笔用 OKB 付手续费。" : "这一笔用 BNB 付手续费。"}</p>
-            {accrued === 0n ? <p className="mt-1 text-sm text-ink/60">现在是 0。有人用你的码在这条链成交之后才会增加。是 0 的时候按钮不会转出钱。</p> : null}
+            <p className="mt-1 text-sm text-ink/60">
+              {chain === "xlayer"
+                ? lang === "zh"
+                  ? "这一笔用 OKB 付手续费。"
+                  : "This claim pays gas in OKB."
+                : lang === "zh"
+                  ? "这一笔用 BNB 付手续费。"
+                  : "This claim pays gas in BNB."}
+            </p>
+            {accrued === 0n ? (
+              <p className="mt-1 text-sm text-ink/60">
+                {lang === "zh"
+                  ? "现在是 0。有人用你的码在这条链成交之后才会增加。是 0 的时候按钮不会转出钱。"
+                  : "It is 0 until someone using your code trades on this chain. At 0 the button sends nothing."}
+              </p>
+            ) : null}
             <div className="mt-2 grid grid-cols-4 gap-2">
               {steps.map((step) => (
                 <button
@@ -311,7 +325,7 @@ export function MineDesk({
                   ))}
                   {book.invitees.length > 4 ? (
                     <button type="button" className="mt-2 min-h-11 border border-gold px-3 text-sm" onClick={() => setInviteOpen((value) => !value)}>
-                      {inviteOpen ? "收起" : `展开其余 ${book.invitees.length - 4} 人`}
+                      {inviteOpen ? (lang === "zh" ? "收起" : "Fold") : lang === "zh" ? `展开其余 ${book.invitees.length - 4} 人` : `Show ${book.invitees.length - 4} more`}
                     </button>
                   ) : null}
                 </>

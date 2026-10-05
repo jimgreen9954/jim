@@ -10,6 +10,7 @@ const linkListeners = new Set<(next: string | null) => void>();
 let current: Eth | null = null;
 let account: string | null = null;
 let kind: WalletKind = "okx";
+let dropped = false;
 const listeners = new Set<(next: string | null) => void>();
 
 export function currentAccount(): string | null {
@@ -34,6 +35,7 @@ function publishLink(next: string | null) {
 }
 
 function remember(next: string | null) {
+  if (dropped && next) return;
   account = next;
   listeners.forEach((cb) => cb(next));
 }
@@ -87,6 +89,7 @@ function armCapture() {
 }
 
 async function useInjected(eth: Eth): Promise<string> {
+  dropped = false;
   current = eth;
   const accounts = (await eth.request({ method: "eth_requestAccounts" })) as string[];
   const next = accounts[0];
@@ -160,6 +163,7 @@ async function connectOkxRemote(): Promise<string> {
     },
   };
   current = wrapped;
+  dropped = false;
   const accounts = (await wrapped.request({ method: "eth_requestAccounts" })) as string[];
   const next = accounts[0];
   if (!next) throw new Error("nowallet");
@@ -180,6 +184,19 @@ export async function connectKind(which: WalletKind): Promise<string> {
 
 export function getProvider(): Eth | null {
   return current;
+}
+
+export async function disconnectWallet(): Promise<void> {
+  const eth = current;
+  dropped = true;
+  try {
+    await eth?.request({ method: "wallet_revokePermissions", params: [{ eth_accounts: {} }] });
+  } catch {
+    /* OKX and Binance often refuse. The page still drops the session. */
+  }
+  current = null;
+  publishLink(null);
+  remember(null);
 }
 
 export async function ensureProvider(): Promise<Eth> {
