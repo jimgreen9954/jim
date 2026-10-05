@@ -791,16 +791,28 @@ export function RealPerp() {
                     ))}
                   </div>
                   {guard === "pro" ? (
-                    <div className="mt-2 grid grid-cols-2 gap-2">
-                      <label className="border border-gold/40 px-2 py-2">
-                        <span className="block text-xs tracking-widest text-gold">{c.stopTp}</span>
-                        <input value={tpText} onChange={(event) => setTpText(event.target.value)} inputMode="decimal" className="w-full bg-transparent font-mono text-xl outline-none" />
-                      </label>
-                      <label className="border border-gold/40 px-2 py-2">
-                        <span className="block text-xs tracking-widest text-gold">{c.stopSl}</span>
-                        <input value={slText} onChange={(event) => setSlText(event.target.value)} inputMode="decimal" className="w-full bg-transparent font-mono text-xl outline-none" />
-                      </label>
-                    </div>
+                    <>
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        <label className="border border-gold/40 px-2 py-2">
+                          <span className="block text-xs tracking-widest text-gold">{c.stopTp}</span>
+                          <input value={tpText} onChange={(event) => setTpText(event.target.value)} inputMode="decimal" className="w-full bg-transparent font-mono text-xl outline-none" />
+                        </label>
+                        <label className="border border-gold/40 px-2 py-2">
+                          <span className="block text-xs tracking-widest text-gold">{c.stopSl}</span>
+                          <input value={slText} onChange={(event) => setSlText(event.target.value)} inputMode="decimal" className="w-full bg-transparent font-mono text-xl outline-none" />
+                        </label>
+                      </div>
+                      <StopReadout
+                        lang={lang}
+                        entry={Number(limit) || markN}
+                        usedMark={!(Number(limit) > 0)}
+                        tp={Number(tpText)}
+                        sl={Number(slText)}
+                        margin={Number(margin)}
+                        lev={lev}
+                        unit={chain === "xlayer" ? "USDT0" : "USDT"}
+                      />
+                    </>
                   ) : null}
                   {guard === "easy" && markN > 0 ? (
                     <p className="mt-2 font-mono text-sm tabular-nums">
@@ -980,5 +992,58 @@ export function RealPerp() {
         ) : null}
       </div>
     </section>
+  );
+}
+
+function signed(n: number): string {
+  const abs = Math.abs(n);
+  const text = abs >= 1 ? abs.toFixed(2) : abs.toFixed(4);
+  if (n > 0) return `+${text}`;
+  if (n < 0) return `−${text}`;
+  return "0";
+}
+
+function StopReadout({
+  lang,
+  entry,
+  usedMark,
+  tp,
+  sl,
+  margin,
+  lev,
+  unit,
+}: {
+  lang: "zh" | "en";
+  entry: number;
+  usedMark: boolean;
+  tp: number;
+  sl: number;
+  margin: number;
+  lev: number;
+  unit: string;
+}) {
+  if (!(entry > 0) || !(margin > 0) || !(lev > 0)) return null;
+  const zh = lang === "zh";
+  const px = entry >= 100 ? entry.toFixed(2) : entry.toFixed(4);
+  const row = (label: string, exit: number) => {
+    if (!(exit > 0)) return null;
+    const long = (margin * lev * (exit - entry)) / entry;
+    const short = -long;
+    return (
+      <p key={label} className="font-mono text-xs tabular-nums">
+        {label} {exit >= 100 ? exit.toFixed(2) : exit.toFixed(4)}
+        {" · "}
+        {zh ? "开多" : "Long"} <span className={long >= 0 ? "text-gold" : "text-sell"}>{signed(long)} {unit}</span>
+        {" · "}
+        {zh ? "开空" : "Short"} <span className={short >= 0 ? "text-gold" : "text-sell"}>{signed(short)} {unit}</span>
+      </p>
+    );
+  };
+  return (
+    <div className="mt-2 flex flex-col gap-1">
+      <p className="text-xs text-ink/60">{usedMark ? (zh ? `按标记价 ${px}` : `At the mark ${px}`) : zh ? `按开单价 ${px}` : `At your price ${px}`}</p>
+      {row(zh ? "止盈" : "Take profit", tp)}
+      {row(zh ? "止损" : "Stop", sl)}
+    </div>
   );
 }
