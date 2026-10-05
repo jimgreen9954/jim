@@ -113,6 +113,7 @@ const zh: Section[] = [
   {
     h: "晶圆",
     ps: [
+      "页面上的处理器名字是 TAPELIQUID，没有标本编号。以前写过的 TAPELIQUID-7 和标本 07 已经拿掉。旁边的 CLK 是页面时钟，补零到 6 位，数字会往上走，不是型号。",
       "处理器已经在 X Layer 上，地址写在文末，不用再部署一台。铸造有两条路。本页一次铸造 16 颗 NAND，钱包要停在 X Layer，签名在 OKX 或币安钱包里完成，OKB 付给这台处理器。官方入口是 TapeOut 上的同一台处理器，在晶体管市场铸造，收款地址也是这台处理器，不进交易所。",
       "流片有两条路。本页的个人印鉴是 4 个输入、1 个输出、3 个 NAND，点一次烧掉 3 颗 NAND 并支付 0.0013 OKB，亮一盏灯，三盏颜色不同。也可以打开 TapeOut 画布，目标处理器选 TAPELIQUID，自己接线再流片上链。流片不能撤回。电路地址和两份永续不是同一个。",
       "三盏灯不会改永续里写死的千分之二。领取合约地址已经写死：X Layer 0x62abA5CD9B6C371e7c443C79934B8644d60481d7，BSC 0x0FcC922739a565804Ea57BDB44Bc2503E80Fce7A。池子要先充钱。X Layer 由持有人拿三张合格印鉴登记。BSC 由部署者记地址。一个新加坡周领一次。页面只加总本周撮合日志里的成交，按代币小数显示成 USDT，领的是手续费的一半。有推荐人时按少付后的手续费再减半。过了下周一 0 点没领就作废，下周重新计算。晶体管账没有撮合时间，不进这一周。晶圆上的电路今天不结算永续盈亏，也不增加保证金。",
@@ -264,6 +265,7 @@ const en: Section[] = [
   {
     h: "Wafer",
     ps: [
+      "The name on the page is TAPELIQUID. There is no specimen number. TAPELIQUID-7 and Specimen 07 are gone. CLK beside it is the page clock, padded to 6 digits. The number counts up. It is not a model number.",
       "The processor is already on X Layer. The address is at the end of this paper. Do not deploy another one. There are two ways to mint. This page mints 16 NAND at a time. The wallet stays on X Layer, you sign in OKX or Binance Wallet, and the OKB is paid to this processor. The official entrance is the same processor on TapeOut, in the transistor market. That payment also goes to the processor, not to an exchange.",
       "There are two ways to tape out. The seal on this page is four inputs, one output, and three NAND gates. One tap burns 3 NAND and pays 0.0013 OKB, and lights one lamp. The three lamps are different colors. Or open the TapeOut canvas, choose TAPELIQUID as the target processor, wire it yourself, and tape it on chain. Tape-out cannot be undone. The circuit address is not either perpetual.",
       "Three lamps do not change the 0.2% written into the perpetual. The rebate addresses are locked: X Layer 0x62abA5CD9B6C371e7c443C79934B8644d60481d7, BSC 0x0FcC922739a565804Ea57BDB44Bc2503E80Fce7A. The pool has to be funded. On X Layer the holder registers three qualifying seals. On BSC the deployer marks the address. One claim per Singapore week. The page totals only this week's match-log fills, shows the amount in USDT after the token decimals, and pays half the fee. With a referrer, half of the discounted fee. Unclaimed value is dropped at the next Monday 00:00 and the next week is counted again. The transistor book has no match time, so it is left out. A taped circuit does not settle perpetual PnL and does not add margin.",

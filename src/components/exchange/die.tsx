@@ -105,7 +105,7 @@ export function DiePanel() {
         <div className="mt-3 flex items-center gap-4">
           <DieFace clock={clock} hot={hot} />
           <div>
-            <h2 className="font-display text-3xl italic leading-none">TAPELIQUID-7</h2>
+            <h2 className="font-display text-3xl italic leading-none">TAPELIQUID</h2>
             <p className="mt-2 text-xs tracking-widest text-gold">{c.match}</p>
             <p className="mt-1 font-mono text-xs tabular-nums">CLK {String(clock).padStart(6, "0")}</p>
           </div>
