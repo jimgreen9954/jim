@@ -23,6 +23,8 @@ import {
   type PoolPrint,
 } from "@/lib/bsc";
 import { currentAccount, onAccount } from "@/lib/wallet";
+import { SignCard } from "@/components/exchange/sign-card";
+import { useFeeLock } from "@/lib/fee-lock";
 
 function sized(raw: bigint, decimals: number, pct: number, cap?: bigint): string {
   let cut = (raw * BigInt(pct)) / 100n;
@@ -50,6 +52,8 @@ export function SpotDesk() {
   const [note, setNote] = useState<string | null>(null);
   const [bad, setBad] = useState(false);
   const [hash, setHash] = useState<string | null>(null);
+  const [card, setCard] = useState(false);
+  const lock = useFeeLock();
 
   useEffect(() => onAccount(setAccount), []);
 
@@ -121,6 +125,10 @@ export function SpotDesk() {
     const message = err instanceof Error ? err.message : "";
     if (message === "nowallet") setNote(c.walletNo);
     else if (code === 4001) setNote(c.walletReject);
+    else if (message === "fee-kept") setNote(lang === "zh" ? "台费已经打进收费地址。兑换没有完成，其余的币还在钱包里。" : "The desk fee reached the fee address. The swap did not. The rest is still in the wallet.");
+    else if (message === "fee-kept-slip" || message === "slip") setNote(lang === "zh" ? "滑点超过 1%，兑换取消。若台费已划走，只少了那一笔，其余还在钱包。" : "Slippage was over 1% and the swap was cancelled. If the fee already moved, only that fee left the wallet.");
+    else if (message === "reverted") setNote(lang === "zh" ? "签名成功，链上失败。钱还在钱包里。" : "The signature was sent and the chain rejected it. The funds stayed in the wallet.");
+    else if (/insufficient|exceeds balance|transfer amount/i.test(message)) setNote(lang === "zh" ? "余额不够。币还在钱包里，这一笔没有发生。" : "Not enough balance. Nothing left the wallet.");
     else if (/RPC|publicnode|Archive|Invalid param/i.test(message)) setNote(c.rpcWait);
     else if (message === "amount") setNote(c.pay);
     else setNote(message || c.walletReject);
@@ -208,7 +216,7 @@ export function SpotDesk() {
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink/80">{c.realNote}</p>
           <h2 className="mt-4 text-xs tracking-widest text-gold">{c.poolPrints}</h2>
           <ul className="mt-2 divide-y divide-gold/30">
-            {prints.length === 0 ? <li className="py-3 text-sm text-ink/60">{c.noBook}</li> : null}
+            {prints.length === 0 ? <li className="py-3 text-sm text-ink/60">{lang === "zh" ? "当前区间无成交" : "No trades in this window"}</li> : null}
             {prints.map((row) => (
               <li key={row.id}>
                 <a className="flex items-baseline justify-between gap-3 py-2 font-mono text-sm tabular-nums" href={txUrl(row.tx)} target="_blank" rel="noreferrer">
@@ -224,7 +232,8 @@ export function SpotDesk() {
           className="flex flex-col gap-3 p-3 lg:col-span-5"
           onSubmit={(event) => {
             event.preventDefault();
-            void trade();
+            if (lock.status !== "ok" || over || !amount.trim()) return;
+            setCard(true);
           }}
         >
           <div className="grid grid-cols-2 gap-2">
@@ -298,10 +307,13 @@ export function SpotDesk() {
           </p>
           {over ? <p className="text-sm text-sell">{lang === "zh" ? "余额不够，减一点数量。" : "Not enough balance. Use a smaller size."}</p> : null}
           <p className="text-xs text-ink/70">
-            {c.slippage} 1% · PancakeSwap V3 · {lang === "zh" ? "台费" : "Desk"} {(DESK_FEE_BPS / 100).toFixed(2)}% · {FEE_TO.slice(0, 6)}…{FEE_TO.slice(-4)}
+            {c.slippage} 1% · PancakeSwap V3 · {lang === "zh" ? "台费在池子手续费之外另收" : "Desk fee is on top of the pool fee"} {(DESK_FEE_BPS / 100).toFixed(2)}% ·{" "}
+            <a className="underline decoration-gold underline-offset-4" href={`${BSC.explorer}/address/${FEE_TO}`} target="_blank" rel="noreferrer">
+              {FEE_TO}
+            </a>
             {pair === "bnb" && side === "sell" ? (lang === "zh" ? " · 留下 0.003 BNB 付 gas" : " · 0.003 BNB stays for gas") : ""}
           </p>
-          <button type="submit" className="min-h-12 bg-ink text-paper disabled:opacity-40" disabled={busy || over || (Boolean(account) && !amount.trim())}>
+          <button type="submit" className="min-h-12 bg-ink text-paper disabled:opacity-40" disabled={busy || over || lock.status !== "ok" || (Boolean(account) && !amount.trim())}>
             {account ? `${side === "buy" ? c.buy : c.sell} ${base}` : c.walletConnect}
           </button>
           {note ? <p className={`text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
@@ -309,6 +321,29 @@ export function SpotDesk() {
             <a className="text-sm underline decoration-gold underline-offset-4" href={txUrl(hash)} target="_blank" rel="noreferrer">
               {c.walletTx}
             </a>
+          ) : null}
+          {card ? (
+            <SignCard
+              title={lang === "zh" ? "签名前看一眼" : "Before you sign"}
+              yes={lang === "zh" ? "确认并签名" : "Confirm and sign"}
+              no={lang === "zh" ? "取消" : "Cancel"}
+              warn={lang === "zh" ? "这是 BSC 现货。不会和 X Layer 的单合成一笔。钱包若不在 BSC，签名前会切过去。" : "This is BSC spot. It does not net with an X Layer order. If the wallet is on another chain, it switches to BSC before the signature."}
+              onNo={() => setCard(false)}
+              onYes={() => {
+                setCard(false);
+                void trade();
+              }}
+              lines={[
+                { k: lang === "zh" ? "链" : "Chain", v: "BNB Smart Chain · 56" },
+                { k: lang === "zh" ? "路由" : "Router", v: BSC.router, href: `${BSC.explorer}/address/${BSC.router}` },
+                { k: lang === "zh" ? "钱去哪" : "Where funds go", v: lang === "zh" ? "成交的币留在钱包。千分之二先进收费地址，剩下的才进池子。这千分之二加在 Pancake 池子手续费之外。" : "The fill stays in the wallet. 0.2% goes to the fee address first. The rest goes to the pool. That 0.2% is on top of the Pancake pool fee." },
+                { k: lang === "zh" ? "付出" : "Pay", v: `${amount || "—"} ${payUnit}` },
+                { k: lang === "zh" ? "本单台费" : "Fee", v: `${deskFee ? pretty(deskFee.fee, payDecimals, 4) : "—"} ${payUnit}` },
+                { k: lang === "zh" ? "收费地址" : "Fee address", v: FEE_TO, href: `${BSC.explorer}/address/${FEE_TO}` },
+                { k: lang === "zh" ? "预估到账" : "Estimate", v: `${out ?? "—"} ${recvUnit}` },
+                { k: lang === "zh" ? "最少到账 · 滑点 1%" : "Minimum · 1% slippage", v: `${minOut ?? "—"} ${recvUnit}` },
+              ]}
+            />
           ) : null}
         </form>
       </div>

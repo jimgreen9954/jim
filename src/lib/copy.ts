@@ -285,7 +285,7 @@ export type Copy = {
 
 export const copy: Record<Lang, Copy> = {
   zh: {
-    kicker: "X LAYER × HYPERCORE · 纸上晶圆",
+    kicker: "BSC 现货 · 两本永续 · 晶圆在 X Layer",
     thesis:
       "撮合不该关在黑盒里。买价和卖价是两只管脚，NAND 一低，锁存器写下成交。BEM 现货和永续，刻在同一片白底金线上。",
     spot: "现货",
@@ -403,7 +403,7 @@ export const copy: Record<Lang, Copy> = {
     deskWafer: "晶圆",
     deskBrief: "白皮书",
     chainSpot: "钱包里真买卖",
-    chainPaper: "不花真钱练手",
+    chainPaper: "不进实盘成交",
     chainPerp: "同一份合约对赌",
     chainGate: "六个标",
     chainWafer: "X Layer 上流片",
@@ -419,7 +419,7 @@ export const copy: Record<Lang, Copy> = {
     realNote: "现货在 PancakeSwap V3 上成交。本台另收千分之二，签名后打进收费地址。币在签名之前留在钱包里。",
     paperNote: "这一页是纸上撮合。成交只记在这台浏览器里，重熔就没了。重熔不会动真实合约。",
     perpWarn:
-      "双方 USDT 锁在同一个 BSC 合约里。1 USDT 起，最高 500。杠杆 1 到 1000 倍。成交价是挂单人写的价格，之后盈亏按 Pancake 池 10 分钟标记价。撮合和撤单都收保证金的千分之二。没有管理员，没有审计。只放你亏得起的钱。",
+      "保证金是 BSC 的 USDT，锁进这一份合约，从 1 到 500。杠杆最高 1000 倍。亏到大约一半保证金就可以被强平，谁都可以调用，没有保险基金，也没有自动减仓。标记价是 Pancake 池大约 10 分钟的均价，不拿最后一笔去清算。没有资金费。撮合和撤单收保证金的千分之二。没有管理员，没有审计。簿上没有对手时，签下去只是挂单，不会马上成交。",
     postLong: "开多",
     postShort: "开空",
     pullQuote: "接下这一边",
@@ -451,7 +451,7 @@ export const copy: Record<Lang, Copy> = {
     sharedBook: "BSC 全站只用这一份合约。任何人、任何时候开的单都在这里，打开就能看到，点吃单就能接。",
     sharedBookX: "X Layer 全站只用这一份合约。用 X Layer 的 USDT0 开的单都在这里，打开就能看到，点吃单就能接。",
     perpWarnX:
-      "双方的 USDT0 锁在同一个 X Layer 合约里。gas 用 OKB。1 美元起，最高 500。杠杆 1 到 1000 倍。成交价是挂单人写的价格。标记价由页面按 BSC 的 BEM 池推进，每 30 秒最多挪一点，盈亏按这个价结算。撮合和撤单都收保证金的千分之二。没有管理员，没有审计。只放你亏得起的钱。",
+      "保证金是 X Layer 的 USDT0，锁进这一份合约。gas 用 OKB。从 1 美元到 500。杠杆最高 1000 倍。亏到大约一半保证金就可以被强平，谁都可以调用，没有保险基金，也没有自动减仓。标记价由页面按 BSC 的 BEM 池推进，每 30 秒最多挪一点，标记停更时不要新开。没有资金费。不能和 BSC 的单合成一笔。簿上没有对手时，签下去只是挂单。",
     perpStepsX: "三步：钱包停在 X Layer，里面有 USDT0，再留一点 OKB 当 gas。选一档，点开多或开空。另一个 X Layer 钱包接反方向才成交。",
     perpAddrX: "X Layer 永续合约",
     xOpen: "X Layer 的全站合约还没写进页面。部署一次，把地址发我，我锁给所有人。在那之前，别人看不到你的单。",
@@ -589,7 +589,7 @@ export const copy: Record<Lang, Copy> = {
     },
   },
   en: {
-    kicker: "X LAYER × HYPERCORE · PAPER WAFER",
+    kicker: "BSC SPOT · TWO PERP BOOKS · WAFER ON X LAYER",
     thesis:
       "Matching should not sit in a black box. Bid and ask are two pads. When the NAND falls, a latch writes the fill. BEM spot and the perpetual share one white wafer ruled in gold.",
     spot: "Spot",
@@ -707,7 +707,7 @@ export const copy: Record<Lang, Copy> = {
     deskWafer: "Wafer",
     deskBrief: "Brief",
     chainSpot: "Real wallet trades",
-    chainPaper: "Practice with no funds",
+    chainPaper: "Not in the live tape",
     chainPerp: "One shared contract",
     chainGate: "Six markets",
     chainWafer: "Tape-out on X Layer",
@@ -723,7 +723,7 @@ export const copy: Record<Lang, Copy> = {
     realNote: "Spot fills on PancakeSwap V3. This desk takes 0.2% and sends it to the fee address when you sign. Tokens stay in your wallet until then.",
     paperNote: "This page is a paper match. Fills live in this browser and vanish if you remelt. Remelt does not touch the real perp.",
     perpWarn:
-      "Both sides lock USDT in one BSC contract. From 1 to 500 USDT. Leverage is 1x to 1000x. The fill is the price on the order. After that, PnL follows the 10-minute Pancake mark. Matches and cancels each take 0.2% of margin. No admin and no audit. Only post what you can lose.",
+      "Margin is BSC USDT, locked in this one contract, from 1 to 500. Leverage goes to 1000x. About half the margin lost and anyone can liquidate it. There is no insurance fund and no auto-deleveraging. The mark is about a 10-minute Pancake average. The last trade is not used to liquidate. There is no funding fee. Matches and cancels take 0.2% of margin. No admin and no audit. If the book is empty, signing only posts a quote. It does not fill.",
     postLong: "Long",
     postShort: "Short",
     pullQuote: "Take this side",
@@ -755,7 +755,7 @@ export const copy: Record<Lang, Copy> = {
     sharedBook: "The whole site uses this one BSC contract. Anyone can see every order here and take it.",
     sharedBookX: "The whole site uses this one X Layer contract. Orders posted in USDT0 are here, and anyone can take them.",
     perpWarnX:
-      "Both sides lock USDT0 in one X Layer contract. Gas is OKB. From 1 to 500 USD. Leverage is 1x to 1000x. The fill is the price on the order. The mark is pushed from the BSC BEM pool, at most a small step every 30 seconds, and PnL settles on that mark. Matches and cancels each take 0.2% of margin. No admin and no audit. Only post what you can lose.",
+      "Margin is X Layer USDT0, locked in this one contract. Gas is OKB. From 1 to 500 USD. Leverage goes to 1000x. About half the margin lost and anyone can liquidate it. There is no insurance fund and no auto-deleveraging. The mark is pushed from the BSC BEM pool, at most a small step every 30 seconds. Do not open a new order if the mark has stopped. There is no funding fee. It cannot net with a BSC order. If the book is empty, signing only posts a quote.",
     perpStepsX: "Three steps: be on X Layer with USDT0 and a little OKB for gas, pick a size, then long or short. It fills only when another X Layer wallet takes the other side.",
     perpAddrX: "X Layer perp",
     xOpen: "The shared X Layer contract is not written into the page yet. Deploy once and send me the address. Until then, other people cannot see your order.",

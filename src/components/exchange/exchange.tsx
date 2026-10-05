@@ -13,35 +13,69 @@ import { RealPerp } from "@/components/exchange/real-perp";
 import { SpotDesk } from "@/components/exchange/spot-desk";
 import { TransistorDesk } from "@/components/exchange/transistor-desk";
 import { ConnectButton, WalletBar } from "@/components/exchange/wallet-bar";
+import { AddressBook } from "@/components/exchange/address-book";
 import { Whitepaper } from "@/components/exchange/whitepaper";
-import { bemPrice } from "@/lib/bsc";
+import { bemPrice, FEE_TO, BSC } from "@/lib/bsc";
+import { FeeLockProvider, useFeeLock } from "@/lib/fee-lock";
 
 type Pane = "spot" | "paper" | "perp" | "gate" | "wafer" | "brief";
 
-export function Exchange() {
-  const [pane, setPane] = useState<Pane>("spot");
+export function Exchange({ start = "spot" }: { start?: Pane }) {
+  const [pane, setPane] = useState<Pane>(start);
   useEffect(() => {
+    const named = window.location.hash.replace(/^#/, "");
+    if (named === "spot" || named === "paper" || named === "perp" || named === "gate" || named === "wafer") setPane(named);
     const gate = new URLSearchParams(window.location.hash.replace(/^#/, "")).get("gate");
     if (gate) setPane("gate");
   }, []);
   return (
-    <div className="min-h-screen overflow-x-hidden bg-paper text-ink">
-      <Crops />
-      <SimClock />
-      <BannerToast />
-      <FuseFlash />
-      <div className={`mx-auto flex max-w-6xl flex-col gap-4 px-3 pt-2 lg:px-6 ${pane === "paper" ? "pb-24 lg:pb-10" : "pb-8"}`}>
-        <Header pane={pane} setPane={setPane} />
-        {pane === "spot" ? <SpotDesk /> : null}
-        {pane === "paper" ? <PaperFloor /> : null}
-        {pane === "perp" ? <RealPerp /> : null}
-        {pane === "gate" ? <TransistorDesk /> : null}
-        {pane === "wafer" ? <WaferFloor /> : null}
-        {pane === "brief" ? <Whitepaper /> : null}
-        <DeskFoot />
+    <FeeLockProvider>
+      <div className="min-h-screen overflow-x-hidden bg-paper text-ink">
+        <Crops />
+        <SimClock />
+        <BannerToast />
+        <FuseFlash />
+        <div className={`mx-auto flex max-w-6xl flex-col gap-4 px-3 pt-2 lg:px-6 ${pane === "paper" ? "pb-24 lg:pb-10" : "pb-8"}`}>
+          <Header pane={pane} setPane={setPane} />
+          <FeeStrip />
+          {pane === "spot" ? <SpotDesk /> : null}
+          {pane === "paper" ? <PaperFloor /> : null}
+          {pane === "perp" ? <RealPerp /> : null}
+          {pane === "gate" ? <TransistorDesk /> : null}
+          {pane === "wafer" ? <WaferFloor /> : null}
+          {pane === "brief" ? <Whitepaper /> : null}
+          <DeskFoot />
+        </div>
+        {pane === "paper" ? <MobileNav /> : null}
       </div>
-      {pane === "paper" ? <MobileNav /> : null}
-    </div>
+    </FeeLockProvider>
+  );
+}
+
+function FeeStrip() {
+  const lang = useExchange((s) => s.lang);
+  const lock = useFeeLock();
+  if (lock.status === "checking") {
+    return <p className="text-xs text-ink/60">{lang === "zh" ? "正在对三份合约的收费地址。" : "Checking the fee address on the three contracts."}</p>;
+  }
+  if (lock.status === "bad") {
+    return (
+      <p className="border border-sell px-3 py-2 text-sm text-sell">
+        {lang === "zh" ? "收费地址对不上，下单已停。" : "The fee address does not match. Orders are stopped."}{" "}
+        {lock.rows
+          .filter((row) => !row.ok)
+          .map((row) => `${row.name}: ${row.got ?? (lang === "zh" ? "没读到" : "unread")}`)
+          .join(" · ")}
+      </p>
+    );
+  }
+  return (
+    <p className="text-xs text-ink/60">
+      {lang === "zh" ? "收费地址已对上" : "Fee address matches"}{" "}
+      <a className="font-mono underline decoration-gold underline-offset-4" href={`${BSC.explorer}/address/${FEE_TO}`} target="_blank" rel="noreferrer">
+        {FEE_TO}
+      </a>
+    </p>
   );
 }
 
@@ -129,11 +163,14 @@ function FuseFlash() {
 function DeskFoot() {
   const lang = useExchange((s) => s.lang);
   return (
-    <p className="border-t border-gold/30 pt-3 text-xs leading-6 text-ink/60">
-      {lang === "zh"
-        ? "现货留在钱包。永续保证金进固定合约。晶圆是另一台处理器。规则和地址写在白皮书，页面不托管资金。"
-        : "Spot stays in the wallet. Perpetual margin sits in a fixed contract. The wafer is another processor. The rules and addresses are in the white paper. This page does not custody funds."}
-    </p>
+    <footer className="flex flex-col gap-3 border-t border-gold/30 pt-3">
+      <p className="text-xs leading-6 text-ink/60">
+        {lang === "zh"
+          ? "现货留在钱包，台费进上面的收费地址。永续保证金进该链那一份合约。两链不能合成一笔。谁都可以挂单，价差和深度由挂单人自己写，没有平台下限。撤单失败时，单还在合约里。做市激励和积分都尚未开始。"
+          : "Spot stays in the wallet. The desk fee goes to the address above. Perpetual margin sits in that chain's contract. The two chains do not net. Anyone can quote. Spread and depth are whatever they write. There is no platform minimum. If a cancel fails, the quote stays in the contract. Maker rewards and points have not started."}
+      </p>
+      <AddressBook lang={lang} />
+    </footer>
   );
 }
 
@@ -168,9 +205,9 @@ function Header({ pane, setPane }: { pane: Pane; setPane: (pane: Pane) => void }
     ["spot", c.deskSpot, c.chainSpot],
     ["paper", c.deskPaper, c.chainPaper],
     ["perp", c.deskPerp, c.chainPerp],
+    ["brief", c.deskBrief, c.chainBrief],
     ["gate", c.deskGate, c.chainGate],
     ["wafer", c.deskWafer, c.chainWafer],
-    ["brief", c.deskBrief, c.chainBrief],
   ] as const;
   return (
     <header className="sticky top-0 z-20 -mx-3 flex flex-col gap-3 bg-paper/95 px-3 py-3 backdrop-blur-sm lg:-mx-6 lg:px-6">
@@ -212,7 +249,17 @@ function Header({ pane, setPane }: { pane: Pane; setPane: (pane: Pane) => void }
           <button
             key={id}
             type="button"
-            onClick={() => setPane(id)}
+            onClick={() => {
+              if (id === "brief") {
+                window.location.assign("/whitepaper");
+                return;
+              }
+              if (window.location.pathname.startsWith("/whitepaper")) {
+                window.location.assign(`/#${id}`);
+                return;
+              }
+              setPane(id);
+            }}
             className={`min-h-11 px-2 text-left sm:min-h-14 sm:px-3 ${pane === id ? "bg-ink text-paper" : "bg-card"}`}
           >
             <span className="block text-sm">{label}</span>
@@ -228,6 +275,11 @@ function PaperFloor() {
   const lang = useExchange((s) => s.lang);
   return (
     <>
+      <p className="border border-sell bg-card px-3 py-2 text-sm text-sell">
+        {lang === "zh"
+          ? "模拟。不花真钱。这里的成交只在这台浏览器里，不会出现在现货或合约的成交列表。"
+          : "Paper. No real money. These prints stay in this browser and do not appear on the spot or perpetual tape."}
+      </p>
       <p className="text-sm text-ink/70">{copy[lang].paperNote}</p>
       <div className="grid items-start gap-4 lg:grid-cols-12">
         <aside className="hidden lg:col-span-4 lg:block">

@@ -3,6 +3,7 @@ import { bindGate, cancelGateChain, claimGate, closeGateChain, gateAddress, gate
 import { getTransistorDesk, type TransistorDesk } from "@/lib/transistor-market";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import { useExchange } from "@/lib/exchange-store";
+import { useFeeLock } from "@/lib/fee-lock";
 
 const GATES = [
   ["0xcc42ba5de07f01b472a5b14cf45abcca79eb8087", 0],
@@ -62,6 +63,7 @@ export function TransistorDesk() {
   const [lev, setLev] = useState(10);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const lock = useFeeLock();
   const [chainMark, setChainMark] = useState(0);
   const [mineCode, setMineCode] = useState("");
   const [friend, setFriend] = useState("");
@@ -118,6 +120,10 @@ export function TransistorDesk() {
     }
     if (!perp) {
       setNote(zh ? "全站合约还没写进页面。" : "The shared contract is not in the page yet.");
+      return;
+    }
+    if (lock.status !== "ok") {
+      setNote(zh ? "收费地址还没对上，这一笔先不签。" : "The fee address is not confirmed, so this order is not signed.");
       return;
     }
     const limitPx = Number(limit) > 0 ? Number(limit) : mark;
@@ -264,8 +270,8 @@ export function TransistorDesk() {
             ))}
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <button type="button" disabled={busy} onClick={() => send(true)} className="min-h-11 bg-ink text-paper disabled:opacity-50">{zh ? "开多" : "Long"}</button>
-            <button type="button" disabled={busy} onClick={() => send(false)} className="min-h-11 border border-gold disabled:opacity-50">{zh ? "开空" : "Short"}</button>
+            <button type="button" disabled={busy || lock.status !== "ok"} onClick={() => send(true)} className="min-h-11 bg-ink text-paper disabled:opacity-50">{zh ? "开多" : "Long"}</button>
+            <button type="button" disabled={busy || lock.status !== "ok"} onClick={() => send(false)} className="min-h-11 border border-gold disabled:opacity-50">{zh ? "开空" : "Short"}</button>
           </div>
           <p className="text-xs leading-relaxed text-ink/60">{zh ? "划走 BSC 的 USDT。盈亏按推进后的官网价，不按限价。" : "Moves BSC USDT. PnL uses the pushed official price, not your limit."}</p>
           {perp ? <p className="break-all font-mono text-xs">{perp}</p> : null}

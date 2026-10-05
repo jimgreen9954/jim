@@ -238,6 +238,21 @@ async function approveIfNeeded(from: string, token: Hex, need: bigint): Promise<
   await waitReceipt(await send(from, token, approveData));
 }
 
+async function finishSwap(from: string, data: Hex, paid: boolean): Promise<Hex> {
+  try {
+    const hash = await send(from, BSC.router, data);
+    const receipt = await waitReceipt(hash);
+    if (receipt.status !== "success") throw new Error("reverted");
+    return hash;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    if (message === "reverted") throw new Error(paid ? "fee-kept" : "reverted");
+    if (/slippage|Too little|STF/i.test(message)) throw new Error(paid ? "fee-kept-slip" : "slip");
+    if (paid) throw new Error("fee-kept");
+    throw err;
+  }
+}
+
 export async function swapBem(from: string, side: "buy" | "sell", amount: string): Promise<Hex> {
   const tokenIn = side === "buy" ? BSC.usdt : BSC.bem;
   const tokenOut = side === "buy" ? BSC.bem : BSC.usdt;
@@ -250,10 +265,12 @@ export async function swapBem(from: string, side: "buy" | "sell", amount: string
   const minOut = (quoted * BigInt(10_000 - BSC.slippageBps)) / 10_000n;
   const owner = from as Hex;
   await approveIfNeeded(from, tokenIn, swapIn);
+  let paid = false;
   if (fee > 0n) {
     const feeData = encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, fee] });
     const feeHash = await send(from, tokenIn, feeData);
     await waitReceipt(feeHash);
+    paid = true;
   }
   const data = encodeFunctionData({
     abi: routerAbi,
@@ -271,7 +288,7 @@ export async function swapBem(from: string, side: "buy" | "sell", amount: string
       },
     ],
   });
-  return send(from, BSC.router, data);
+  return finishSwap(from, data, paid);
 }
 
 export async function swapBnb(from: string, side: "buy" | "sell", amount: string): Promise<Hex> {
@@ -285,9 +302,11 @@ export async function swapBnb(from: string, side: "buy" | "sell", amount: string
     const quoted = await quoteExact(BSC.usdt, BSC.wbnb, swapIn, BSC.bnbFee);
     const minOut = (quoted * BigInt(10_000 - BSC.slippageBps)) / 10_000n;
     await approveIfNeeded(from, BSC.usdt, swapIn);
+    let paid = false;
     if (fee > 0n) {
       const feeData = encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, fee] });
       await waitReceipt(await send(from, BSC.usdt, feeData));
+      paid = true;
     }
     const swapData = encodeFunctionData({
       abi: routerAbi,
@@ -311,7 +330,7 @@ export async function swapBnb(from: string, side: "buy" | "sell", amount: string
       args: [minOut, owner],
     });
     const data = encodeFunctionData({ abi: routerAbi, functionName: "multicall", args: [[swapData, unwrapData]] });
-    return send(from, BSC.router, data);
+    return finishSwap(from, data, paid);
   }
   const bal = await client.getBalance({ address: owner });
   const maxSpend = bal > BNB_GAS_RESERVE ? bal - BNB_GAS_RESERVE : 0n;
@@ -322,27 +341,37 @@ export async function swapBnb(from: string, side: "buy" | "sell", amount: string
   if (swapIn <= 0n) throw new Error("amount");
   const quoted = await quoteExact(BSC.wbnb, BSC.usdt, swapIn, BSC.bnbFee);
   const minOut = (quoted * BigInt(10_000 - BSC.slippageBps)) / 10_000n;
-  if (fee > 0n) await waitReceipt(await send(from, FEE_TO, "0x", fee));
-  const deposit = encodeFunctionData({ abi: wbnbAbi, functionName: "deposit" });
-  await waitReceipt(await send(from, BSC.wbnb, deposit, swapIn));
-  await approveIfNeeded(from, BSC.wbnb, swapIn);
-  const data = encodeFunctionData({
-    abi: routerAbi,
-    functionName: "exactInputSingle",
-    args: [
-      {
-        tokenIn: BSC.wbnb,
-        tokenOut: BSC.usdt,
-        fee: BSC.bnbFee,
-        recipient: owner,
-        deadline,
-        amountIn: swapIn,
-        amountOutMinimum: minOut,
-        sqrtPriceLimitX96: 0n,
-      },
-    ],
-  });
-  return send(from, BSC.router, data);
+  let paid = false;
+  if (fee > 0n) {
+    await waitReceipt(await send(from, FEE_TO, "0x", fee));
+    paid = true;
+  }
+  try {
+    const deposit = encodeFunctionData({ abi: wbnbAbi, functionName: "deposit" });
+    await waitReceipt(await send(from, BSC.wbnb, deposit, swapIn));
+    await approveIfNeeded(from, BSC.wbnb, swapIn);
+    const data = encodeFunctionData({
+      abi: routerAbi,
+      functionName: "exactInputSingle",
+      args: [
+        {
+          tokenIn: BSC.wbnb,
+          tokenOut: BSC.usdt,
+          fee: BSC.bnbFee,
+          recipient: owner,
+          deadline,
+          amountIn: swapIn,
+          amountOutMinimum: minOut,
+          sqrtPriceLimitX96: 0n,
+        },
+      ],
+    });
+    return await finishSwap(from, data, paid);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    if (paid && message !== "fee-kept" && message !== "fee-kept-slip") throw new Error("fee-kept");
+    throw err;
+  }
 }
 
 export function txUrl(hash: string): string {

@@ -6,6 +6,8 @@ import { getCandles, type Candle, type CandleFrame } from "@/lib/candles";
 import { currentAccount, onAccount, onOpenLink } from "@/lib/wallet";
 import { useExchange } from "@/lib/exchange-store";
 import { MineDesk } from "@/components/exchange/mine-desk";
+import { SignCard } from "@/components/exchange/sign-card";
+import { useFeeLock } from "@/lib/fee-lock";
 import { Kline } from "@/components/exchange/kline";
 import { DepthTape } from "@/components/exchange/depth";
 import { nickOf, readNicks } from "@/lib/nicks";
@@ -189,6 +191,8 @@ export function RealPerp() {
   const [tpText, setTpText] = useState("");
   const [slText, setSlText] = useState("");
   const [arm, setArm] = useState<Arm | null>(null);
+  const [card, setCard] = useState<"long" | "short" | null>(null);
+  const lock = useFeeLock();
   const firing = useRef(false);
 
   useEffect(() => {
@@ -850,46 +854,89 @@ export function RealPerp() {
                   <button
                     type="button"
                     className="min-h-12 bg-ink text-paper disabled:opacity-40"
-                    disabled={busy || !levOk || !marginOk || !priceOk || !view?.priced || Boolean(!view?.book && waiting && view?.pendingLong)}
-                    onClick={() =>
-                      run(async (from) => {
-                        const entry = Number(limit) || markN;
-                        if (guard !== "off" && entry > 0) {
-                          const band = guard === "easy" ? easyBand(entry, lev || 1, true) : { tp: Number(tpText), sl: Number(slText) };
-                          if (band.tp > 0 && band.sl > 0) {
-                            const next = { account: from, perp, long: true, tp: band.tp, sl: band.sl, spent: false };
-                            writeArm(next);
-                            setArm(next);
-                          }
-                        }
-                        return openPerp(from, perp, true, margin, lev, limit);
-                      })
-                    }
+                    disabled={busy || lock.status !== "ok" || !levOk || !marginOk || !priceOk || !view?.priced || Boolean(!view?.book && waiting && view?.pendingLong)}
+                    onClick={() => setCard("long")}
                   >
                     {waiting && view && !view.pendingLong ? c.pullQuote : `${c.postLong} · ${margin || "1"} USDT`}
                   </button>
                   <button
                     type="button"
                     className="min-h-12 border border-sell bg-sell text-[#f7f5f0] disabled:opacity-40"
-                    disabled={busy || !levOk || !marginOk || !priceOk || !view?.priced || Boolean(!view?.book && waiting && !view?.pendingLong)}
-                    onClick={() =>
-                      run(async (from) => {
-                        const entry = Number(limit) || markN;
-                        if (guard !== "off" && entry > 0) {
-                          const band = guard === "easy" ? easyBand(entry, lev || 1, false) : { tp: Number(tpText), sl: Number(slText) };
-                          if (band.tp > 0 && band.sl > 0) {
-                            const next = { account: from, perp, long: false, tp: band.tp, sl: band.sl, spent: false };
-                            writeArm(next);
-                            setArm(next);
-                          }
-                        }
-                        return openPerp(from, perp, false, margin, lev, limit);
-                      })
-                    }
+                    disabled={busy || lock.status !== "ok" || !levOk || !marginOk || !priceOk || !view?.priced || Boolean(!view?.book && waiting && !view?.pendingLong)}
+                    onClick={() => setCard("short")}
                   >
                     {waiting && view?.pendingLong ? c.pullQuote : `${c.postShort} · ${margin || "1"} USDT`}
                   </button>
                 </div>
+                {card ? (
+                  <SignCard
+                    title={lang === "zh" ? "签名前看一眼" : "Before you sign"}
+                    yes={lang === "zh" ? "确认并签名" : "Confirm and sign"}
+                    no={lang === "zh" ? "取消" : "Cancel"}
+                    warn={
+                      board.length === 0
+                        ? lang === "zh"
+                          ? "簿上没有别人的单。签下去只是把保证金挂进合约，不会马上成交。想先看盈亏，去模拟。"
+                          : "Nobody else is on the book. Signing only posts margin into the contract. It does not fill. Use the paper book if you want to see PnL first."
+                        : lang === "zh"
+                          ? "两链不能合成一笔。钱包不在这条链时，签名前会切过去。"
+                          : "The two chains do not net. If the wallet is on the other chain, it switches before the signature."
+                    }
+                    onNo={() => setCard(null)}
+                    onYes={() => {
+                      const long = card === "long";
+                      setCard(null);
+                      void run(async (from) => {
+                        const entry = Number(limit) || markN;
+                        if (guard !== "off" && entry > 0) {
+                          const band = guard === "easy" ? easyBand(entry, lev || 1, long) : { tp: Number(tpText), sl: Number(slText) };
+                          if (band.tp > 0 && band.sl > 0) {
+                            const next = { account: from, perp, long, tp: band.tp, sl: band.sl, spent: false };
+                            writeArm(next);
+                            setArm(next);
+                          }
+                        }
+                        return openPerp(from, perp, long, margin, lev, limit);
+                      });
+                    }}
+                    lines={[
+                      { k: lang === "zh" ? "链" : "Chain", v: chain === "xlayer" ? "X Layer · 196" : "BNB Smart Chain · 56" },
+                      { k: lang === "zh" ? "合约" : "Contract", v: perp, href: `${scan}/address/${perp}` },
+                      {
+                        k: lang === "zh" ? "钱去哪" : "Where funds go",
+                        v:
+                          chain === "xlayer"
+                            ? lang === "zh"
+                              ? "保证金是 USDT0，锁进这份 X Layer 合约。千分之二进收费地址。"
+                              : "Margin is USDT0, locked in this X Layer contract. 0.2% goes to the fee address."
+                            : lang === "zh"
+                              ? "保证金是 BSC 的 USDT，锁进这份合约。千分之二进收费地址。"
+                              : "Margin is BSC USDT, locked in this contract. 0.2% goes to the fee address.",
+                      },
+                      { k: lang === "zh" ? "保证金" : "Margin", v: `${margin || "—"} ${chain === "xlayer" ? "USDT0" : "USDT"} · ${lev || "—"}×` },
+                      { k: lang === "zh" ? "本单手续费" : "Fee", v: `${marginOk ? (Number(margin) * 0.002).toFixed(4) : "—"} ${chain === "xlayer" ? "USDT0" : "USDT"}` },
+                      {
+                        k: lang === "zh" ? "标记价" : "Mark",
+                        v:
+                          chain === "xlayer"
+                            ? lang === "zh"
+                              ? "由 BSC 池子推进，每 30 秒最多挪一点。没有资金费。没有保险基金，没有自动减仓。"
+                              : "Pushed from the BSC pool, a small step every 30 seconds. No funding. No insurance fund. No auto-deleveraging."
+                            : lang === "zh"
+                              ? "Pancake 池大约 10 分钟均价。没有资金费。没有保险基金，没有自动减仓。"
+                              : "About a 10-minute Pancake average. No funding. No insurance fund. No auto-deleveraging.",
+                      },
+                      {
+                        k: lang === "zh" ? "强平" : "Liquidation",
+                        v: liqMove
+                          ? lang === "zh"
+                            ? `反向大约 ${liqMove}%，保证金亏一半就可以被强平`
+                            : `About ${liqMove}% the wrong way and half the margin can be liquidated`
+                          : "—",
+                      },
+                    ]}
+                  />
+                ) : null}
               </>
             ) : null}
             {mine ? (

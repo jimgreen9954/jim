@@ -102,6 +102,13 @@ const zh: Section[] = [
     ],
   },
   {
+    h: "做市和积分",
+    ps: [
+      "谁都可以挂单。价差、深度和库存没有平台下限。撤单交易失败时，单还在合约里。",
+      "做市激励尚未开始。积分和空投尚未开始。这两项没有冻结规则之前，页面不记分，也不发奖励。",
+    ],
+  },
+  {
     h: "风险",
     ps: [
       "三份永续都没有管理员，也没有审计。1000 倍时，标记价轻轻一动就会强平。限价成交之后，结算仍看标记价，不看你填的那个价。",
@@ -203,6 +210,13 @@ const en: Section[] = [
       `The processor is on X Layer. Circuits ${DEPLOYED.circuits}. Transistors ${DEPLOYED.transistors}. The name is TAPELIQUID. The CLK beside it is a page clock, not a model number.`,
       "This page mints 16 NAND at a time. The wallet stays on X Layer, and the OKB is paid to this processor. The same processor can also be minted from official TapeOut.",
       "A personal seal is 4 inputs, 1 output, and 3 NAND gates. One tap of Tape out burns 3 NAND, pays 0.0013 OKB, and lights one lamp. The three lamps are different colors. Three lamps do not change the 0.2% on the book. A tape-out cannot be undone.",
+    ],
+  },
+  {
+    h: "Making and points",
+    ps: [
+      "Anyone can post a quote. There is no platform minimum for spread, depth, or inventory. If a cancel transaction fails, the quote stays in the contract.",
+      "Maker rewards have not started. Points and airdrops have not started. Until those rules are frozen, the page keeps no score and pays no reward.",
     ],
   },
   {
