@@ -30,7 +30,7 @@ export function AddressBook({ lang }: { lang: "zh" | "en" }) {
   return (
     <section className="border border-gold/40">
       <p className="border-b border-gold/40 px-3 py-2 text-xs tracking-widest text-gold">
-        {lang === "zh" ? "地址只此一套" : "One address book"}
+        {lang === "zh" ? "只认下面这些合约" : "Only these contracts"}
       </p>
       <ul className="divide-y divide-gold/30">
         {rows.map((row) => (

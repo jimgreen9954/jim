@@ -12,21 +12,28 @@ import { LiveBoard } from "@/components/exchange/live-board";
 import { RealPerp } from "@/components/exchange/real-perp";
 import { SpotDesk } from "@/components/exchange/spot-desk";
 import { TransistorDesk } from "@/components/exchange/transistor-desk";
-import { ConnectButton, WalletBar } from "@/components/exchange/wallet-bar";
-import { AddressBook } from "@/components/exchange/address-book";
+import { WalletBar } from "@/components/exchange/wallet-bar";
+import { SealRebateBox } from "@/components/exchange/seal-rebate";
 import { Whitepaper } from "@/components/exchange/whitepaper";
-import { bemPrice, FEE_TO, BSC } from "@/lib/bsc";
+import { bemPrice } from "@/lib/bsc";
 import { FeeLockProvider, useFeeLock } from "@/lib/fee-lock";
 
-type Pane = "spot" | "paper" | "perp" | "gate" | "wafer" | "brief";
+type Floor = "desk" | "paper" | "shop" | "rules";
+type DeskTab = "spot" | "perp";
+type ShopTab = "gate" | "wafer";
 
-export function Exchange({ start = "spot" }: { start?: Pane }) {
-  const [pane, setPane] = useState<Pane>(start);
+export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp" | "gate" | "wafer" | "brief" }) {
+  const [floor, setFloor] = useState<Floor>(start === "paper" ? "paper" : start === "gate" || start === "wafer" ? "shop" : start === "brief" ? "rules" : "desk");
+  const [desk, setDesk] = useState<DeskTab>(start === "perp" ? "perp" : "spot");
+  const [shop, setShop] = useState<ShopTab>(start === "wafer" ? "wafer" : "gate");
   useEffect(() => {
     const named = window.location.hash.replace(/^#/, "");
-    if (named === "spot" || named === "paper" || named === "perp" || named === "gate" || named === "wafer") setPane(named);
-    const gate = new URLSearchParams(window.location.hash.replace(/^#/, "")).get("gate");
-    if (gate) setPane("gate");
+    if (named === "spot") { setFloor("desk"); setDesk("spot"); }
+    if (named === "perp") { setFloor("desk"); setDesk("perp"); }
+    if (named === "paper") setFloor("paper");
+    if (named === "gate" || named.startsWith("gate=")) { setFloor("shop"); setShop("gate"); }
+    if (named === "wafer") { setFloor("shop"); setShop("wafer"); }
+    if (named === "brief" || named === "rules") setFloor("rules");
   }, []);
   return (
     <FeeLockProvider>
@@ -35,18 +42,16 @@ export function Exchange({ start = "spot" }: { start?: Pane }) {
         <SimClock />
         <BannerToast />
         <FuseFlash />
-        <div className={`mx-auto flex max-w-6xl flex-col gap-4 px-3 pt-2 lg:px-6 ${pane === "paper" ? "pb-24 lg:pb-10" : "pb-8"}`}>
-          <Header pane={pane} setPane={setPane} />
+        <div className={`mx-auto flex max-w-6xl flex-col gap-4 px-3 pt-2 lg:px-6 ${floor === "paper" ? "pb-24 lg:pb-10" : "pb-8"}`}>
+          <Header floor={floor} desk={desk} setFloor={setFloor} setDesk={setDesk} />
           <FeeStrip />
-          {pane === "spot" ? <SpotDesk /> : null}
-          {pane === "paper" ? <PaperFloor /> : null}
-          {pane === "perp" ? <RealPerp /> : null}
-          {pane === "gate" ? <TransistorDesk /> : null}
-          {pane === "wafer" ? <WaferFloor /> : null}
-          {pane === "brief" ? <Whitepaper /> : null}
-          <DeskFoot />
+          {floor === "desk" && desk === "spot" ? <SpotDesk /> : null}
+          {floor === "desk" && desk === "perp" ? <RealPerp /> : null}
+          {floor === "paper" ? <PaperFloor /> : null}
+          {floor === "shop" ? <ShopFloor shop={shop} setShop={setShop} /> : null}
+          {floor === "rules" ? <Whitepaper /> : null}
         </div>
-        {pane === "paper" ? <MobileNav /> : null}
+        {floor === "paper" ? <MobileNav /> : null}
       </div>
     </FeeLockProvider>
   );
@@ -70,12 +75,7 @@ function FeeStrip() {
     );
   }
   return (
-    <p className="text-xs text-ink/60">
-      {lang === "zh" ? "收费地址已对上" : "Fee address matches"}{" "}
-      <a className="font-mono underline decoration-gold underline-offset-4" href={`${BSC.explorer}/address/${FEE_TO}`} target="_blank" rel="noreferrer">
-        {FEE_TO}
-      </a>
-    </p>
+    <p className="text-xs text-ink/60">{lang === "zh" ? "台费地址已核对" : "Fee address checked"}</p>
   );
 }
 
@@ -160,21 +160,7 @@ function FuseFlash() {
   );
 }
 
-function DeskFoot() {
-  const lang = useExchange((s) => s.lang);
-  return (
-    <footer className="flex flex-col gap-3 border-t border-gold/30 pt-3">
-      <p className="text-xs leading-6 text-ink/60">
-        {lang === "zh"
-          ? "现货留在钱包，台费进上面的收费地址。永续保证金进该链那一份合约。两链不能合成一笔。谁都可以挂单，价差和深度由挂单人自己写，没有平台下限。撤单失败时，单还在合约里。做市激励和积分都尚未开始。"
-          : "Spot stays in the wallet. The desk fee goes to the address above. Perpetual margin sits in that chain's contract. The two chains do not net. Anyone can quote. Spread and depth are whatever they write. There is no platform minimum. If a cancel fails, the quote stays in the contract. Maker rewards and points have not started."}
-      </p>
-      <AddressBook lang={lang} />
-    </footer>
-  );
-}
-
-function Header({ pane, setPane }: { pane: Pane; setPane: (pane: Pane) => void }) {
+function Header({ floor, desk, setFloor, setDesk }: { floor: Floor; desk: DeskTab; setFloor: (floor: Floor) => void; setDesk: (desk: DeskTab) => void }) {
   const lang = useExchange((s) => s.lang);
   const setLang = useExchange((s) => s.setLang);
   const reset = useExchange((s) => s.reset);
@@ -201,14 +187,27 @@ function Header({ pane, setPane }: { pane: Pane; setPane: (pane: Pane) => void }
     const id = window.setTimeout(() => setArm(false), 2800);
     return () => window.clearTimeout(id);
   }, [arm]);
-  const tabs = [
-    ["spot", c.deskSpot, c.chainSpot],
-    ["paper", c.deskPaper, c.chainPaper],
-    ["perp", c.deskPerp, c.chainPerp],
-    ["brief", c.deskBrief, c.chainBrief],
-    ["gate", c.deskGate, c.chainGate],
-    ["wafer", c.deskWafer, c.chainWafer],
+  const floors = [
+    ["desk", lang === "zh" ? "交易台" : "Desk"],
+    ["paper", lang === "zh" ? "练习" : "Practice"],
+    ["shop", lang === "zh" ? "工房" : "Workshop"],
+    ["rules", lang === "zh" ? "规则" : "Rules"],
   ] as const;
+  const line = floor === "paper"
+    ? lang === "zh" ? "不进实盘成交" : "Not a live fill"
+    : floor === "desk" && desk === "perp"
+      ? lang === "zh" ? "同一份合约里互相成交" : "Fills only inside this contract"
+      : floor === "desk"
+        ? lang === "zh" ? "钱包里真买卖" : "Real trades in the wallet"
+        : "";
+  const go = (next: Floor) => {
+    if (window.location.pathname.startsWith("/whitepaper")) {
+      window.location.assign(next === "rules" ? "/whitepaper" : `/#${next === "desk" ? desk : next === "shop" ? "gate" : "paper"}`);
+      return;
+    }
+    if (next === "rules") window.location.assign("/whitepaper");
+    else setFloor(next);
+  };
   return (
     <header className="sticky top-0 z-20 -mx-3 flex flex-col gap-3 bg-paper/95 px-3 py-3 backdrop-blur-sm lg:-mx-6 lg:px-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -219,18 +218,17 @@ function Header({ pane, setPane }: { pane: Pane; setPane: (pane: Pane) => void }
             <p className="truncate text-xs tracking-widest text-gold">{c.kicker}</p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button type="button" className="min-h-11 border border-gold bg-card px-3" onClick={() => setNight((on) => !on)}>
+        <div className="flex items-center gap-2">
+          <button type="button" className="min-h-9 border border-gold px-2 text-xs" onClick={() => setNight((on) => !on)}>
             {night ? (lang === "zh" ? "白天" : "Day") : lang === "zh" ? "黑夜" : "Night"}
           </button>
-          <button type="button" className="min-h-11 border border-gold bg-card px-3" onClick={() => setLang(lang === "zh" ? "en" : "zh")}>
+          <button type="button" className="min-h-9 border border-gold px-2 text-xs" onClick={() => setLang(lang === "zh" ? "en" : "zh")}>
             {lang === "zh" ? "EN" : "中文"}
           </button>
-          <ConnectButton />
-          {pane === "paper" ? (
+          {floor === "paper" ? (
             <button
               type="button"
-              className={`min-h-11 border px-3 ${arm ? "border-sell bg-card text-sell" : "border-gold bg-card"}`}
+              className={`min-h-9 border px-2 text-xs ${arm ? "border-sell text-sell" : "border-gold"}`}
               onClick={() => {
                 if (!arm) setArm(true);
                 else {
@@ -239,34 +237,28 @@ function Header({ pane, setPane }: { pane: Pane; setPane: (pane: Pane) => void }
                 }
               }}
             >
-              {arm ? c.resetArm : c.reset}
+              {arm ? (lang === "zh" ? "再点一次" : "Tap again") : lang === "zh" ? "只清除本机练习记录，不动合约" : "Clears this browser only"}
             </button>
           ) : null}
         </div>
       </div>
-      <div className="grid grid-cols-3 border border-gold sm:grid-cols-6">
-        {tabs.map(([id, label, hint]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => {
-              if (id === "brief") {
-                window.location.assign("/whitepaper");
-                return;
-              }
-              if (window.location.pathname.startsWith("/whitepaper")) {
-                window.location.assign(`/#${id}`);
-                return;
-              }
-              setPane(id);
-            }}
-            className={`min-h-11 px-2 text-left sm:min-h-14 sm:px-3 ${pane === id ? "bg-ink text-paper" : "bg-card"}`}
-          >
-            <span className="block text-sm">{label}</span>
-            <span className={`hidden text-xs sm:block ${pane === id ? "text-paper/70" : "text-gold"}`}>{hint}</span>
+      <div className="grid grid-cols-4 border border-gold">
+        {floors.map(([id, label]) => (
+          <button key={id} type="button" onClick={() => go(id)} className={`min-h-11 text-sm ${floor === id ? "bg-ink text-paper" : "bg-card"}`}>
+            {label}
           </button>
         ))}
       </div>
+      {floor === "desk" ? (
+        <div className="grid grid-cols-2 border border-gold">
+          {(["spot", "perp"] as const).map((id) => (
+            <button key={id} type="button" onClick={() => setDesk(id)} className={`min-h-10 text-sm ${desk === id ? "bg-ink text-paper" : ""}`}>
+              {id === "spot" ? (lang === "zh" ? "现货" : "Spot") : lang === "zh" ? "永续" : "Perp"}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {line ? <p className="text-sm text-ink/70">{line}</p> : null}
     </header>
   );
 }
@@ -274,13 +266,9 @@ function Header({ pane, setPane }: { pane: Pane; setPane: (pane: Pane) => void }
 function PaperFloor() {
   const lang = useExchange((s) => s.lang);
   return (
-    <>
-      <p className="border border-sell bg-card px-3 py-2 text-sm text-sell">
-        {lang === "zh"
-          ? "模拟。不花真钱。这里的成交只在这台浏览器里，不会出现在现货或合约的成交列表。"
-          : "Paper. No real money. These prints stay in this browser and do not appear on the spot or perpetual tape."}
-      </p>
-      <p className="text-sm text-ink/70">{copy[lang].paperNote}</p>
+    <div className="relative">
+      <p className="pointer-events-none absolute top-16 right-4 z-10 font-display text-3xl italic text-ink/15">{lang === "zh" ? "练习 · 本地" : "Practice · local"}</p>
+      <p className="text-sm text-ink/70">{lang === "zh" ? "不进实盘成交。余额是练习金。" : "Not a live fill. The balance is practice cash."}</p>
       <div className="grid items-start gap-4 lg:grid-cols-12">
         <aside className="hidden lg:col-span-4 lg:block">
           <div className="lg:sticky lg:top-4">
@@ -303,16 +291,29 @@ function PaperFloor() {
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
-function WaferFloor() {
+function ShopFloor({ shop, setShop }: { shop: ShopTab; setShop: (shop: ShopTab) => void }) {
+  const lang = useExchange((s) => s.lang);
   return (
     <>
-      <WalletBar />
-      <LiveBoard />
-      <DiePanel />
+      <p className="text-sm text-ink/80">{lang === "zh" ? "先铸造 NAND，再流片。流片烧掉晶体管，不能撤回。" : "Mint NAND, then tape out. A tape-out burns transistors and cannot be undone."}</p>
+      <div className="grid grid-cols-2 border border-gold">
+        {(["gate", "wafer"] as const).map((id) => (
+          <button key={id} type="button" onClick={() => setShop(id)} className={`min-h-10 text-sm ${shop === id ? "bg-ink text-paper" : ""}`}>
+            {id === "gate" ? (lang === "zh" ? "晶体管" : "Transistors") : lang === "zh" ? "晶圆" : "Wafer"}
+          </button>
+        ))}
+      </div>
+      {shop === "gate" ? <TransistorDesk /> : (
+        <>
+          <WalletBar />
+          <LiveBoard />
+          <SealRebateBox />
+        </>
+      )}
     </>
   );
 }

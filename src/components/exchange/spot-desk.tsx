@@ -181,12 +181,12 @@ export function SpotDesk() {
     setBad(true);
   };
 
-  const connectHere = async () => {
+  const connectHere = async (which: "okx" | "binance") => {
     setBusy(true);
     setBad(false);
     setNote(lang === "zh" ? "正在打开钱包…" : "Opening the wallet…");
     try {
-      const from = await connectKind("okx");
+      const from = await connectKind(which);
       if (pair === "okb") await connectX();
       else await connectBsc();
       setAccount(from);
@@ -348,7 +348,7 @@ export function SpotDesk() {
             <span>{lang === "zh" ? "地址" : "Address"}</span>
           </div>
           <ul className="mt-2 divide-y divide-gold/30">
-            {prints.length === 0 ? <li className="py-3 text-sm text-ink/60">{lang === "zh" ? "当前区间无成交" : "No trades in this window"}</li> : null}
+            {prints.length === 0 ? <li className="py-3 text-sm text-ink/60">{lang === "zh" ? (pair === "okb" ? "这根周期还没有池子成交。报价仍每秒从 PotatoSwap 读取。" : "这根周期还没有池子成交。报价仍每秒从 Pancake 读取。") : "No pool trades in this candle yet. The quote is still read every second."}</li> : null}
             {prints.map((row) => (
               <li key={row.id} className="grid grid-cols-[3rem_1fr_5rem_7.5rem] items-baseline gap-2 py-2 font-mono text-sm tabular-nums">
                 <a className={row.side === "buy" ? "text-gold" : "text-sell"} href={pair === "okb" ? okbTxUrl(row.tx) : txUrl(row.tx)} target="_blank" rel="noreferrer">
@@ -368,13 +368,16 @@ export function SpotDesk() {
           </ul>
         </div>
         <form
-          className="flex flex-col gap-3 p-3 lg:col-span-5"
+          className="flex flex-col gap-3 p-3 lg:sticky lg:top-28 lg:col-span-5 lg:self-start"
           onSubmit={(event) => {
             event.preventDefault();
-            if (lock.status !== "ok" || over || !amount.trim()) return;
+            if (!account || lock.status !== "ok" || over || !amount.trim() || !out || !minOut) return;
             setCard(true);
           }}
         >
+          <p className="font-mono text-xs text-ink/70">
+            {account ? `${lang === "zh" ? "已连接" : "Connected"} ${account.slice(0, 6)}…${account.slice(-4)}` : lang === "zh" ? "未连接" : "Not connected"}
+          </p>
           <div className="grid grid-cols-2 gap-2">
             {(["buy", "sell"] as const).map((key) => (
               <button
@@ -457,21 +460,28 @@ export function SpotDesk() {
             {lang === "zh" ? "最少到账" : "Min. received"} {minOut ?? "—"} {recvUnit}
           </p>
           {over ? <p className="text-sm text-sell">{lang === "zh" ? "余额不够，减一点数量。" : "Not enough balance. Use a smaller size."}</p> : null}
-          <p className="text-xs text-ink/70">
-            {c.slippage} 1% · {pair === "okb" ? "PotatoSwap" : "PancakeSwap V3"} · {lang === "zh" ? "台费在池子手续费之外另收" : "Desk fee is on top of the pool fee"} {(DESK_FEE_BPS / 100).toFixed(2)}% ·{" "}
-            <a className="underline decoration-gold underline-offset-4" href={pair === "okb" ? `${XLAYER.explorer}/address/${FEE_TO}` : `${BSC.explorer}/address/${FEE_TO}`} target="_blank" rel="noreferrer">
-              {FEE_TO}
-            </a>
-            {pair === "okb" && side === "sell" ? (lang === "zh" ? " · 留下 0.002 OKB 付 gas" : " · 0.002 OKB stays for gas") : ""}
-            {pair === "bnb" && side === "sell" ? (lang === "zh" ? " · 留下 0.003 BNB 付 gas" : " · 0.003 BNB stays for gas") : ""}
+          <p className="flex flex-wrap items-center gap-2 text-xs text-ink/70">
+            <span>{lang === "zh" ? "本单台费收款，与规则页登记地址一致" : "This order's fee. Same address as the rules page."}</span>
+            <button
+              type="button"
+              className="font-mono underline decoration-gold underline-offset-4"
+              onClick={() => void navigator.clipboard?.writeText(FEE_TO)}
+            >
+              {FEE_TO.slice(0, 6)}…{FEE_TO.slice(-4)}
+            </button>
           </p>
           {!account ? (
-            <button type="button" className="min-h-12 bg-ink text-paper disabled:opacity-40" disabled={busy} onClick={() => void connectHere()}>
-              {busy ? (lang === "zh" ? "正在打开钱包…" : "Opening the wallet…") : c.walletConnect}
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" className="min-h-12 border border-gold" disabled={busy} onClick={() => void connectHere("okx")}>
+                {lang === "zh" ? "用 OKX 连接" : "Connect OKX"}
+              </button>
+              <button type="button" className="min-h-12 border border-gold" disabled={busy} onClick={() => void connectHere("binance")}>
+                {lang === "zh" ? "用币安连接" : "Connect Binance"}
+              </button>
+            </div>
           ) : (
-            <button type="submit" className="min-h-12 bg-ink text-paper disabled:opacity-40" disabled={busy || over || lock.status !== "ok" || !amount.trim()}>
-              {`${side === "buy" ? c.buy : c.sell} ${base}`}
+            <button type="submit" className="min-h-12 bg-ink text-paper disabled:opacity-40" disabled={busy || over || lock.status !== "ok" || !amount.trim() || !out || !minOut}>
+              {lang === "zh" ? `签名并${side === "buy" ? "买入" : "卖出"}` : `Sign and ${side === "buy" ? "buy" : "sell"}`}
             </button>
           )}
           {openLink ? (
@@ -488,16 +498,16 @@ export function SpotDesk() {
           {card ? (
             <SignCard
               title={lang === "zh" ? "签名前看一眼" : "Before you sign"}
-              yes={lang === "zh" ? "确认并签名" : "Confirm and sign"}
+              yes={lang === "zh" ? `签名并${side === "buy" ? "买入" : "卖出"}` : `Sign and ${side === "buy" ? "buy" : "sell"}`}
               no={lang === "zh" ? "取消" : "Cancel"}
               warn={
                 pair === "okb"
                   ? lang === "zh"
-                    ? "这是 X Layer 现货。钱包会切到 X Layer。买到的是 OKB，卖出留下约 0.002 OKB 付 gas。不会和 BSC 的单合成一笔。"
-                    : "This is X Layer spot. The wallet switches to X Layer. A buy lands as OKB. A sell leaves about 0.002 OKB for gas. It does not net with a BSC order."
+                    ? "这是 X Layer 现货。钱包会切到 X Layer。不会和 BSC 的单合成一笔。"
+                    : "This is X Layer spot. The wallet switches to X Layer. It does not net with a BSC order."
                   : lang === "zh"
-                    ? "这是 BSC 现货。不会和 X Layer 的单合成一笔。钱包若不在 BSC，签名前会切过去。"
-                    : "This is BSC spot. It does not net with an X Layer order. If the wallet is on another chain, it switches to BSC before the signature."
+                    ? "这是 BSC 现货。不会和 X Layer 的单合成一笔。"
+                    : "This is BSC spot. It does not net with an X Layer order."
               }
               onNo={() => setCard(false)}
               onYes={() => {
@@ -505,14 +515,11 @@ export function SpotDesk() {
                 void trade();
               }}
               lines={[
-                { k: lang === "zh" ? "链" : "Chain", v: pair === "okb" ? "X Layer · 196" : "BNB Smart Chain · 56" },
-                { k: lang === "zh" ? "路由" : "Router", v: pair === "okb" ? OKB.router : BSC.router, href: pair === "okb" ? `${XLAYER.explorer}/address/${OKB.router}` : `${BSC.explorer}/address/${BSC.router}` },
-                { k: lang === "zh" ? "钱去哪" : "Where funds go", v: pair === "okb" ? (lang === "zh" ? "成交的 OKB 或 USDT 留在钱包。千分之二先进收费地址。池子是 PotatoSwap 的 OKB / USDT。" : "OKB or USDT stays in the wallet. 0.2% goes to the fee address first. The pool is PotatoSwap OKB / USDT.") : (lang === "zh" ? "成交的币留在钱包。千分之二先进收费地址，剩下的才进池子。这千分之二加在 Pancake 池子手续费之外。" : "The fill stays in the wallet. 0.2% goes to the fee address first. The rest goes to the pool. That 0.2% is on top of the Pancake pool fee.") },
-                { k: lang === "zh" ? "付出" : "Pay", v: `${amount || "—"} ${payUnit}` },
-                { k: lang === "zh" ? "本单台费" : "Fee", v: `${deskFee ? pretty(deskFee.fee, payDecimals, 4) : "—"} ${payUnit}` },
+                { k: lang === "zh" ? "这一笔" : "This order", v: `${side === "buy" ? (lang === "zh" ? "买入" : "Buy") : lang === "zh" ? "卖出" : "Sell"} ${amount} ${payUnit}` },
+                { k: lang === "zh" ? "池子约得" : "Pool estimate", v: `${out ?? "—"} ${recvUnit}` },
+                { k: lang === "zh" ? "台费，打入收费地址" : "Desk fee, to the fee address", v: `${deskFee ? pretty(deskFee.fee, payDecimals, 4) : "—"} ${payUnit}` },
+                { k: lang === "zh" ? "滑点 1% 内最少到账" : "Minimum within 1% slippage", v: `${minOut ?? "—"} ${recvUnit}` },
                 { k: lang === "zh" ? "收费地址" : "Fee address", v: FEE_TO, href: pair === "okb" ? `${XLAYER.explorer}/address/${FEE_TO}` : `${BSC.explorer}/address/${FEE_TO}` },
-                { k: lang === "zh" ? "预估到账" : "Estimate", v: `${out ?? "—"} ${recvUnit}` },
-                { k: lang === "zh" ? "最少到账 · 滑点 1%" : "Minimum · 1% slippage", v: `${minOut ?? "—"} ${recvUnit}` },
               ]}
             />
           ) : null}

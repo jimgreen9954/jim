@@ -319,7 +319,7 @@ export function Kline({
   const lean = bias?.side === "long" ? (zh ? "看多" : "Long") : bias?.side === "short" ? (zh ? "看空" : "Short") : zh ? "不明显" : "Unclear";
 
   return (
-    <div className={biasOn ? "lg:grid lg:grid-cols-[minmax(0,1fr)_13rem]" : ""}>
+    <div>
       <div>
       <div className="flex flex-col gap-2 border-b border-gold/30 px-3 py-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -654,29 +654,14 @@ export function Kline({
       </div>
       </div>
       {biasOn ? (
-        <aside className="border-t border-gold/30 bg-paper/60 p-4 lg:border-t-0 lg:border-l">
-          <p className="text-xs tracking-widest text-gold">{zh ? "模型倾向" : "Model lean"}</p>
-          <p className={`mt-3 font-display text-4xl italic leading-none ${bias?.side === "short" ? "text-sell" : "text-gold"}`}>
-            {biasBusy && !bias ? (zh ? "在看" : "Reading") : lean}
-          </p>
+        <p className="px-3 py-1 text-right text-xs text-ink/55">
           {(() => {
             const spot = all[all.length - 1]?.c ?? 0;
             const guess = bias && bias.price > 0 && spot > 0 && Math.abs(bias.price - spot) / spot <= 0.04 ? bias.price : 0;
-            return (
-              <>
-                <p className="mt-3 font-mono text-2xl tabular-nums">{guess > 0 ? fmtPx(guess) : "—"}</p>
-                <p className="mt-1 text-xs tracking-widest text-gold">{zh ? "预测的 BEM 价格" : "Guessed BEM price"}</p>
-                <p className="mt-1 font-mono text-xs tabular-nums text-ink/60">{zh ? `现价 ${fmtPx(spot)}` : `Now ${fmtPx(spot)}`}</p>
-              </>
-            );
+            if (!guess) return null;
+            return `${zh ? "形态备注 · 非报价 · 非建议" : "Shape note · not a quote · not advice"} · ${lean} ${fmtPx(guess)}`;
           })()}
-          {bias?.why ? <p className="mt-3 text-sm leading-relaxed">{bias.why}</p> : null}
-          <p className="mt-3 text-xs leading-relaxed text-ink/50">
-            {zh
-              ? "预测价必须贴着现价，离现价超过 4% 的数字，比如 65，不会显示。这不是标记价，也不保证下一根会到。约两分钟重看。"
-              : "The guess has to stay within 4% of the live price. A figure like 65 is dropped. It is not the mark, and it does not promise the next candle. Rechecked about every two minutes."}
-          </p>
-        </aside>
+        </p>
       ) : null}
     </div>
   );

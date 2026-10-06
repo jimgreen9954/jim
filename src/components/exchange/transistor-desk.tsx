@@ -371,7 +371,7 @@ function OrderRow({ row, mine, zh, onTake, onCancel }: { row: ChainOrder; mine: 
       {own ? (
         <button type="button" className="min-h-8 border border-gold px-2 text-xs" onClick={onCancel}>{zh ? "撤单" : "Cancel"}</button>
       ) : (
-        <button type="button" className={`min-h-8 px-2 text-xs text-[#f7f5f0] ${row.long ? "bg-[#1b6b45]" : "bg-sell"}`} onClick={onTake}>{row.long ? (zh ? "开空吃" : "Short") : zh ? "开多吃" : "Long"}</button>
+        <button type="button" className={`min-h-8 px-2 text-xs text-[#f7f5f0] ${row.long ? "bg-[#1b6b45]" : "bg-sell"}`} onClick={onTake}>{row.long ? (zh ? "吃单开空" : "Take short") : zh ? "吃单开多" : "Take long"}</button>
       )}
     </div>
   );

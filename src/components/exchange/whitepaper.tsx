@@ -54,7 +54,7 @@ const zh: Section[] = [
       `X Layer 只有一份合约 ${KNOWN_XPERP}。保证金是这条链上的 USDT0，6 位小数，从 1 美元起。Gas 是 OKB。标记价合约是 ${KNOWN_XMARK}。一条 X Layer 的单不能去填一条 BSC 的单。`,
       "杠杆从 1 倍到 1000 倍。新手用页面上的保证金和倍数。要自己写，切到高级，手填倍数和开单价。不填价格，就用当时的标记价。填写的价格就是成交价。",
       "下单前，页面写出可用余额、这一单的手续费，以及大约能开多少 BEM。100 倍及以上会写出：标记价反向大约多少，保证金会亏掉一半，仓可以被强平。开空是红色。",
-      "市场页列出还没有人接的挂单。红的是空单，点整行或「开多吃」。绿的是多单，点整行或「开空吃」。靠近现价的上下各留 5 张，其余折起来。自己的单不能自己吃。",
+      "市场页列出还没有人接的挂单。红的是空单，点「吃单开多」。绿的是多单，点「吃单开空」。偏离标记价超过 15% 的单默认不进五档。自己的单不能自己吃。",
       "没人接的单可以撤，收这张保证金的千分之二，剩下的退回。对上之后不能撤，只能平仓或等强平。平仓不再另收。一边平仓或强平，两边一起结算。",
       "止盈止损记在这台浏览器里。页面开着，价格碰到之后，会请你的钱包签一笔平仓。关掉页面，它不会自己平。链上不保存这条止盈止损。",
       "对手昵称、推荐码、邀请名单都在「我的订单」。昵称只存在这台浏览器里，链上仍是地址。",
@@ -240,17 +240,19 @@ export function Whitepaper() {
     <article className="border border-gold bg-card shadow-plate">
       <header className="border-b border-gold px-5 py-7 sm:px-8">
         <p className="text-xs tracking-[0.35em] text-gold">TAPELIQUID</p>
-        <h2 className="mt-3 font-display text-5xl italic leading-none">{lang === "zh" ? "白皮书" : "White paper"}</h2>
-        <p className="mt-4 max-w-2xl text-sm leading-7">
-          {lang === "zh"
-            ? "这一页只写现在这一版交易台。现货、三本永续、返佣和晶圆，都按页面上真能签的那一套。"
-            : "This page describes the desk as it trades now. Spot, the three perpetuals, rebates, and the wafer match what the page can actually sign."}
-        </p>
+        <h2 className="mt-3 font-display text-5xl italic leading-none">{lang === "zh" ? "规则" : "Rules"}</h2>
+        <ol className="mt-4 flex max-w-2xl list-decimal flex-col gap-2 pl-5 text-sm leading-7">
+          <li>{lang === "zh" ? "现货留在钱包。台费进收费地址。永续保证金进该链那一份合约。" : "Spot stays in the wallet. The desk fee goes to the fee address. Perpetual margin sits in that chain's contract."}</li>
+          <li>{lang === "zh" ? "BSC 和 X Layer 两本永续不能并成一笔。" : "The BSC book and the X Layer book do not net."}</li>
+          <li>{lang === "zh" ? "亏到保证金大约一半即可强平。标记价是池子约 10 分钟均价。没有保险基金，也没有自动减仓。" : "About half the margin lost can liquidate. The mark is about a 10-minute pool average. There is no insurance fund and no auto-deleveraging."}</li>
+          <li>{lang === "zh" ? "池子费之外再收 0.20%。印鉴登记之后，已撮合的成交可以领回一半。灯不自动减费。" : "0.20% sits on top of the pool fee. After a seal is registered, half the fee on a matched fill can be claimed. A lamp does not cut the fee by itself."}</li>
+          <li>{lang === "zh" ? `只认收费地址 ${FEE_TO}。旧地址停用，不出现在交易流。` : `The only fee address is ${FEE_TO}. Old addresses are retired and are not in the trade flow.`}</li>
+          <li>{lang === "zh" ? "做市和积分未开放。未开放就不产生积分。" : "Maker rewards and points are not open. Nothing is scored until they are."}</li>
+        </ol>
       </header>
       <nav className="grid border-b border-gold sm:grid-cols-2" aria-label={lang === "zh" ? "目录" : "Contents"}>
         {sections.map((section, i) => (
-          <a key={section.h} href={`#paper-${i}`} className="flex min-h-11 items-center gap-3 border-gold/40 px-4 py-2 text-sm hover:bg-paper sm:odd:border-r">
-            <span className="font-mono text-xs text-gold">{String(i + 1).padStart(2, "0")}</span>
+          <a key={section.h} href={`#paper-${i}`} className="flex min-h-11 items-center border-gold/40 px-4 py-2 text-sm hover:bg-paper sm:odd:border-r">
             {section.h}
           </a>
         ))}
