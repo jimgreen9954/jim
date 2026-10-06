@@ -1,5 +1,5 @@
 import { createPublicClient, encodeFunctionData, http, parseAbi, type Hex } from "viem";
-import { BSC, DESK_FEE_BPS, ERC_BOOKS, FEE_TO, pretty, readAsset, splitDeskFee, units, waitReceipt, type ErcKey } from "@/lib/bsc";
+import { BSC, DESK_FEE_BPS, ERC_BOOKS, FEE_TO, pretty, quoteExact, readAsset, splitDeskFee, units, waitReceipt, type ErcKey } from "@/lib/bsc";
 import { STOCKS, STOCK_KEYS, type StockKey } from "@/lib/stocks";
 import { ensureProvider } from "@/lib/wallet";
 
@@ -33,8 +33,15 @@ const npmAbi = parseAbi([
 ]);
 
 const wbnbAbi = parseAbi(["function deposit() payable"]);
+const factoryAbi = parseAbi([
+  "function getPool(address,address,uint24) view returns (address)",
+  "function createPool(address,address,uint24) returns (address)",
+]);
+const initAbi = parseAbi(["function initialize(uint160 sqrtPriceX96)"]);
+const FACTORY = "0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865" as Hex;
+const ZERO = "0x0000000000000000000000000000000000000000" as Hex;
 
-export type LpKey = "bem" | "bnb" | ErcKey;
+export type LpKey = "bem" | "bnb" | "bnb-bem" | "btc-bem" | "xau-bem" | ErcKey;
 
 export type LpBook = {
   key: LpKey;
@@ -46,6 +53,10 @@ export type LpBook = {
   pool: Hex;
   assetIsToken0: boolean;
   native: boolean;
+  quoteToken: Hex;
+  quoteDecimals: number;
+  quoteZh: string;
+  usdtFee: number;
 };
 
 const bemBook: LpBook = {
@@ -58,6 +69,10 @@ const bemBook: LpBook = {
   pool: BSC.pool,
   assetIsToken0: true,
   native: false,
+  quoteToken: BSC.usdt,
+  quoteDecimals: BSC.usdtDecimals,
+  quoteZh: "USDT",
+  usdtFee: BSC.fee,
 };
 
 const bnbBook: LpBook = {
@@ -70,6 +85,10 @@ const bnbBook: LpBook = {
   pool: BSC.bnbPool,
   assetIsToken0: false,
   native: true,
+  quoteToken: BSC.usdt,
+  quoteDecimals: BSC.usdtDecimals,
+  quoteZh: "USDT",
+  usdtFee: BSC.bnbFee,
 };
 
 function fromErc(key: ErcKey, zh: string, en: string): LpBook {
@@ -84,6 +103,10 @@ function fromErc(key: ErcKey, zh: string, en: string): LpBook {
     pool: book.pool,
     assetIsToken0: book.assetIsToken0,
     native: false,
+    quoteToken: BSC.usdt,
+    quoteDecimals: BSC.usdtDecimals,
+    quoteZh: "USDT",
+    usdtFee: book.fee,
   };
 }
 
@@ -96,7 +119,55 @@ export const LP_CRYPTO: LpBook[] = [
 
 export const LP_STOCKS: LpBook[] = STOCK_KEYS.map((key) => fromErc(key, STOCKS[key as StockKey].zh, STOCKS[key as StockKey].en));
 
-const ALL = [...LP_CRYPTO, ...LP_STOCKS];
+export const LP_BEM: LpBook[] = [
+  {
+    key: "bnb-bem",
+    zh: "BNB",
+    en: "BNB",
+    token: BSC.wbnb,
+    decimals: 18,
+    fee: 10000,
+    pool: "0x28B12792F9D81Bd529Bc5572434E861C9EDbBBC2",
+    assetIsToken0: false,
+    native: true,
+    quoteToken: BSC.bem,
+    quoteDecimals: BSC.bemDecimals,
+    quoteZh: "BEM",
+    usdtFee: BSC.bnbFee,
+  },
+  {
+    key: "btc-bem",
+    zh: "BTC",
+    en: "BTC",
+    token: BSC.btcb,
+    decimals: 18,
+    fee: 10000,
+    pool: ZERO,
+    assetIsToken0: false,
+    native: false,
+    quoteToken: BSC.bem,
+    quoteDecimals: BSC.bemDecimals,
+    quoteZh: "BEM",
+    usdtFee: BSC.btcFee,
+  },
+  {
+    key: "xau-bem",
+    zh: "黄金",
+    en: "Gold",
+    token: BSC.xaut,
+    decimals: BSC.xauDecimals,
+    fee: 10000,
+    pool: ZERO,
+    assetIsToken0: true,
+    native: false,
+    quoteToken: BSC.bem,
+    quoteDecimals: BSC.bemDecimals,
+    quoteZh: "BEM",
+    usdtFee: BSC.xauFee,
+  },
+];
+
+const ALL = [...LP_CRYPTO, ...LP_BEM, ...LP_STOCKS];
 
 export function lpBook(key: LpKey): LpBook {
   const found = ALL.find((book) => book.key === key);
@@ -145,42 +216,116 @@ async function approve(from: string, token: Hex, spender: Hex, need: bigint): Pr
 
 export type LpQuote = {
   asset: bigint;
-  feeUsdt: bigint;
+  feeQuote: bigint;
   feeAsset: bigint;
-  poolUsdt: bigint;
+  poolQuote: bigint;
   poolAsset: bigint;
+  creating: boolean;
 };
 
-export async function quoteLp(key: LpKey, usdtText: string): Promise<LpQuote> {
-  const book = lpBook(key);
-  const usdtIn = units(usdtText, BSC.usdtDecimals);
-  if (usdtIn <= 0n) throw new Error("amount");
-  const slot = await client.readContract({ address: book.pool, abi: poolAbi, functionName: "slot0" });
-  const sqrt = slot[0];
-  if (sqrt === 0n) throw new Error("empty");
-  const { fee: feeUsdt, swapIn: poolUsdt } = splitDeskFee(usdtIn);
-  if (poolUsdt <= 0n) throw new Error("amount");
-  const priceX192 = sqrt * sqrt;
-  const poolAsset = book.assetIsToken0 ? (poolUsdt * Q192) / priceX192 : (poolUsdt * priceX192) / Q192;
-  if (poolAsset <= 0n) throw new Error("empty");
-  const totalAsset = (poolAsset * 10_000n) / BigInt(10_000 - DESK_FEE_BPS);
-  return { asset: totalAsset, feeUsdt, feeAsset: totalAsset - poolAsset, poolUsdt, poolAsset };
+function sqrtBig(value: bigint): bigint {
+  if (value < 2n) return value;
+  let x0 = value;
+  let x1 = (x0 + 1n) / 2n;
+  while (x1 < x0) {
+    x0 = x1;
+    x1 = (x0 + value / x0) / 2n;
+  }
+  return x0;
 }
 
-export function formatLp(book: LpBook, quote: LpQuote): { asset: string; usdt: string; feeAsset: string; feeUsdt: string } {
+async function poolOf(book: LpBook): Promise<Hex> {
+  if (book.pool !== ZERO) return book.pool;
+  return client.readContract({
+    address: FACTORY,
+    abi: factoryAbi,
+    functionName: "getPool",
+    args: [book.token, book.quoteToken, book.fee],
+  });
+}
+
+async function crossSqrt(book: LpBook): Promise<bigint> {
+  const quoteUsdt =
+    book.quoteToken.toLowerCase() === BSC.usdt.toLowerCase()
+      ? 10n ** BigInt(book.quoteDecimals)
+      : await quoteExact(book.quoteToken, BSC.usdt, 10n ** BigInt(book.quoteDecimals), BSC.fee);
+  const assetUsdt = await quoteExact(book.native ? BSC.wbnb : book.token, BSC.usdt, 10n ** BigInt(book.decimals), book.usdtFee);
+  const usdt0 = book.assetIsToken0 ? assetUsdt : quoteUsdt;
+  const dec0 = book.assetIsToken0 ? book.decimals : book.quoteDecimals;
+  const usdt1 = book.assetIsToken0 ? quoteUsdt : assetUsdt;
+  const dec1 = book.assetIsToken0 ? book.quoteDecimals : book.decimals;
+  const num = usdt0 * 10n ** BigInt(dec1) * Q192;
+  const den = usdt1 * 10n ** BigInt(dec0);
+  if (den === 0n || num === 0n) throw new Error("empty");
+  return sqrtBig((num << 256n) / den) >> 128n;
+}
+
+async function sqrtOf(book: LpBook): Promise<{ sqrt: bigint; creating: boolean }> {
+  const pool = await poolOf(book);
+  if (pool !== ZERO) {
+    try {
+      const slot = await client.readContract({ address: pool, abi: poolAbi, functionName: "slot0" });
+      if (slot[0] > 0n) return { sqrt: slot[0], creating: false };
+    } catch {
+      /* pool not initialized */
+    }
+  }
+  return { sqrt: await crossSqrt(book), creating: true };
+}
+
+async function ensurePool(from: string, book: LpBook): Promise<void> {
+  let pool = await poolOf(book);
+  if (pool === ZERO) {
+    const hash = await send(
+      from,
+      FACTORY,
+      encodeFunctionData({ abi: factoryAbi, functionName: "createPool", args: [book.token, book.quoteToken, book.fee] }),
+    );
+    const receipt = await waitReceipt(hash);
+    if (receipt.status !== "success") throw new Error("reverted");
+    pool = await poolOf(book);
+    if (pool === ZERO) throw new Error("empty");
+  }
+  const slot = await client.readContract({ address: pool, abi: poolAbi, functionName: "slot0" }).catch(() => null);
+  if (!slot || slot[0] === 0n) {
+    const price = await crossSqrt(book);
+    const hash = await send(from, pool, encodeFunctionData({ abi: initAbi, functionName: "initialize", args: [price] }));
+    const receipt = await waitReceipt(hash);
+    if (receipt.status !== "success") throw new Error("reverted");
+  }
+  book.pool = pool;
+}
+
+export async function quoteLp(key: LpKey, amountText: string): Promise<LpQuote> {
+  const book = lpBook(key);
+  const quoteIn = units(amountText, book.quoteDecimals);
+  if (quoteIn <= 0n) throw new Error("amount");
+  const { sqrt, creating } = await sqrtOf(book);
+  if (sqrt === 0n) throw new Error("empty");
+  const { fee: feeQuote, swapIn: poolQuote } = splitDeskFee(quoteIn);
+  if (poolQuote <= 0n) throw new Error("amount");
+  const priceX192 = sqrt * sqrt;
+  const poolAsset = book.assetIsToken0 ? (poolQuote * Q192) / priceX192 : (poolQuote * priceX192) / Q192;
+  if (poolAsset <= 0n) throw new Error("empty");
+  const totalAsset = (poolAsset * 10_000n) / BigInt(10_000 - DESK_FEE_BPS);
+  return { asset: totalAsset, feeQuote, feeAsset: totalAsset - poolAsset, poolQuote, poolAsset, creating };
+}
+
+export function formatLp(book: LpBook, quote: LpQuote): { asset: string; quote: string; feeAsset: string; feeQuote: string } {
   return {
     asset: pretty(quote.asset, book.decimals, 4),
-    usdt: pretty(quote.poolUsdt + quote.feeUsdt, BSC.usdtDecimals, 2),
+    quote: pretty(quote.poolQuote + quote.feeQuote, book.quoteDecimals, book.quoteZh === "USDT" ? 2 : 4),
     feeAsset: pretty(quote.feeAsset, book.decimals, 4),
-    feeUsdt: pretty(quote.feeUsdt, BSC.usdtDecimals, 2),
+    feeQuote: pretty(quote.feeQuote, book.quoteDecimals, book.quoteZh === "USDT" ? 2 : 4),
   };
 }
 
-export async function addLp(from: string, key: LpKey, usdtText: string): Promise<Hex> {
+export async function addLp(from: string, key: LpKey, amountText: string): Promise<Hex> {
   const book = lpBook(key);
-  const quote = await quoteLp(key, usdtText);
-  const usdtBal = await readAsset(from, BSC.usdt);
-  if (usdtBal < quote.poolUsdt + quote.feeUsdt) throw new Error("usdt");
+  await ensurePool(from, book);
+  const quote = await quoteLp(key, amountText);
+  const quoteBal = await readAsset(from, book.quoteToken);
+  if (quoteBal < quote.poolQuote + quote.feeQuote) throw new Error("quote");
   if (book.native) {
     const gas = await client.getBalance({ address: from as Hex });
     if (gas < quote.asset + 3_000_000_000_000_000n) throw new Error("bnb");
@@ -188,8 +333,8 @@ export async function addLp(from: string, key: LpKey, usdtText: string): Promise
     const assetBal = await readAsset(from, book.token);
     if (assetBal < quote.asset) throw new Error("asset");
   }
-  if (quote.feeUsdt > 0n) {
-    await waitReceipt(await send(from, BSC.usdt, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, quote.feeUsdt] })));
+  if (quote.feeQuote > 0n) {
+    await waitReceipt(await send(from, book.quoteToken, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, quote.feeQuote] })));
   }
   if (book.native) {
     if (quote.feeAsset > 0n) await waitReceipt(await send(from, FEE_TO, "0x", quote.feeAsset));
@@ -197,13 +342,13 @@ export async function addLp(from: string, key: LpKey, usdtText: string): Promise
   } else if (quote.feeAsset > 0n) {
     await waitReceipt(await send(from, book.token, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, quote.feeAsset] })));
   }
-  await approve(from, BSC.usdt, NPM, quote.poolUsdt);
+  await approve(from, book.quoteToken, NPM, quote.poolQuote);
   await approve(from, book.token, NPM, quote.poolAsset);
   const range = fullRange(book.fee);
-  const token0 = book.assetIsToken0 ? book.token : BSC.usdt;
-  const token1 = book.assetIsToken0 ? BSC.usdt : book.token;
-  const amount0 = book.assetIsToken0 ? quote.poolAsset : quote.poolUsdt;
-  const amount1 = book.assetIsToken0 ? quote.poolUsdt : quote.poolAsset;
+  const token0 = book.assetIsToken0 ? book.token : book.quoteToken;
+  const token1 = book.assetIsToken0 ? book.quoteToken : book.token;
+  const amount0 = book.assetIsToken0 ? quote.poolAsset : quote.poolQuote;
+  const amount1 = book.assetIsToken0 ? quote.poolQuote : quote.poolAsset;
   const data = encodeFunctionData({
     abi: npmAbi,
     functionName: "mint",
@@ -238,14 +383,16 @@ export type LpPosition = {
 };
 
 function match(token0: string, token1: string, fee: number): LpBook | null {
+  const a = token0.toLowerCase();
+  const b = token1.toLowerCase();
   return (
-    ALL.find(
-      (book) =>
-        book.fee === fee &&
-        (book.assetIsToken0
-          ? token0.toLowerCase() === book.token.toLowerCase() && token1.toLowerCase() === BSC.usdt.toLowerCase()
-          : token0.toLowerCase() === BSC.usdt.toLowerCase() && token1.toLowerCase() === book.token.toLowerCase()),
-    ) ?? null
+    ALL.find((book) => {
+      const token = book.token.toLowerCase();
+      const quote = book.quoteToken.toLowerCase();
+      const left = book.assetIsToken0 ? token : quote;
+      const right = book.assetIsToken0 ? quote : token;
+      return book.fee === fee && a === left && b === right;
+    }) ?? null
   );
 }
 
@@ -258,7 +405,7 @@ export async function listLp(owner: string): Promise<LpPosition[]> {
     const pos = await client.readContract({ address: NPM, abi: npmAbi, functionName: "positions", args: [id] });
     const book = match(pos[2], pos[3], pos[4]);
     if (!book || pos[7] === 0n) continue;
-    rows.push({ id, key: book.key, labelZh: book.zh, labelEn: book.en, liquidity: pos[7] });
+    rows.push({ id, key: book.key, labelZh: `${book.zh} / ${book.quoteZh}`, labelEn: `${book.en} / ${book.quoteZh}`, liquidity: pos[7] });
   }
   return rows;
 }
@@ -287,10 +434,14 @@ export async function removeLp(from: string, id: bigint): Promise<Hex> {
     args: [{ tokenId: id, liquidity, amount0Min: min0, amount1Min: min1, deadline }],
   });
   const owner = from as Hex;
+  const token0 = pos[2];
+  const token1 = pos[3];
+  const wbnbIs0 = token0.toLowerCase() === BSC.wbnb.toLowerCase();
   let calls: Hex[];
   if (book.native) {
-    const usdtMin = book.assetIsToken0 ? min1 : min0;
-    const bnbMin = book.assetIsToken0 ? min0 : min1;
+    const other = wbnbIs0 ? token1 : token0;
+    const otherMin = wbnbIs0 ? min1 : min0;
+    const bnbMin = wbnbIs0 ? min0 : min1;
     calls = [
       decrease,
       encodeFunctionData({
@@ -299,7 +450,7 @@ export async function removeLp(from: string, id: bigint): Promise<Hex> {
         args: [{ tokenId: id, recipient: NPM, amount0Max: MAX128, amount1Max: MAX128 }],
       }),
       encodeFunctionData({ abi: npmAbi, functionName: "unwrapWETH9", args: [bnbMin, owner] }),
-      encodeFunctionData({ abi: npmAbi, functionName: "sweepToken", args: [BSC.usdt, usdtMin, owner] }),
+      encodeFunctionData({ abi: npmAbi, functionName: "sweepToken", args: [other, otherMin, owner] }),
     ];
   } else {
     calls = [
@@ -317,12 +468,11 @@ export async function removeLp(from: string, id: bigint): Promise<Hex> {
   if (receipt.status !== "success") throw new Error("reverted");
   const fee0 = (out0 * BigInt(DESK_FEE_BPS)) / 10_000n;
   const fee1 = (out1 * BigInt(DESK_FEE_BPS)) / 10_000n;
-  const token0 = pos[2];
-  const token1 = pos[3];
   if (book.native) {
-    const feeUsdt = book.assetIsToken0 ? fee1 : fee0;
-    const feeBnb = book.assetIsToken0 ? fee0 : fee1;
-    if (feeUsdt > 0n) await waitReceipt(await send(from, BSC.usdt, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, feeUsdt] })));
+    const feeOther = wbnbIs0 ? fee1 : fee0;
+    const feeBnb = wbnbIs0 ? fee0 : fee1;
+    const other = wbnbIs0 ? token1 : token0;
+    if (feeOther > 0n) await waitReceipt(await send(from, other, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, feeOther] })));
     if (feeBnb > 0n) await waitReceipt(await send(from, FEE_TO, "0x", feeBnb));
   } else {
     if (fee0 > 0n) await waitReceipt(await send(from, token0, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, fee0] })));
@@ -330,3 +480,4 @@ export async function removeLp(from: string, id: bigint): Promise<Hex> {
   }
   return hash;
 }
+

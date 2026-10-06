@@ -22,7 +22,7 @@ const zh: Section[] = [
     ps: [
       "现货买到的币留在钱包。台费是付出金额的 0.20%，进收费地址。池子自己的手续费留给流动性提供者。Gas 付给链。",
       "永续保证金锁进你选的那一条链上的那一份合约。平台不经手。",
-      "流动性凭证是你钱包里的一张仓位。添加时，USDT 和另一边各扣 0.20%。撤回时，拿回来的两边再各扣 0.20%。",
+      "流动性凭证是你钱包里的一张仓位。添加时，你放入的两边各扣 0.20%。撤回时，拿回来的两边再各扣 0.20%。",
       `收费地址只有 ${FEE_TO}。对不上，下单停掉。`,
     ],
   },
@@ -37,8 +37,8 @@ const zh: Section[] = [
   {
     h: "流动性",
     ps: [
-      "在现货里切到流动性。只填 USDT，另一边按这口池子的现价配上，范围是全区间。不用自己选价格上下限。",
-      "能做的池子就是本站现货里的 BSC 池：BEM、BNB、BTC、黄金，以及上面的美股，都对 USDT。OKB 在另一条链，这一版不加。",
+      "在现货里切到流动性。对 USDT 的是现货里的 BSC 池。对 BEM 的是 BNB、BTC、黄金。只填一边，另一边按现价配上，全区间。BNB / BEM 已有池。BTC / BEM 和黄金 / BEM 还没有池时，第一笔按两边对 USDT 的现价建池。随时可以一键撤回。OKB 在 X Layer，不能和 BEM 组在同一个池。",
+      "能做的 USDT 池是 BEM、BNB、BTC、黄金，以及上面的美股。对 BEM 的是 BNB、BTC、黄金。",
       `凭证由 PancakeSwap V3 的仓位合约 ${NPM} 铸给钱包。撤回一次退出全部。BNB 池拿回的是 BNB。已经转出的台费，中途取消不退。`,
     ],
   },
@@ -91,7 +91,7 @@ const en: Section[] = [
     ps: [
       "A spot fill stays in the wallet. The desk fee is 0.20% of what you pay, and it goes to the fee address. The pool fee stays with liquidity providers. Gas stays with the chain.",
       "Perpetual margin is locked in the one contract on the chain you picked. The desk does not hold it.",
-      "A liquidity position is a receipt in your wallet. Adding takes 0.20% from the USDT and from the other token. Removing takes 0.20% from both tokens that come back.",
+      "A liquidity position is a receipt in your wallet. Adding takes 0.20% from each token you deposit. Removing takes 0.20% from both tokens that come back.",
       `There is one fee address, ${FEE_TO}. If it does not match, orders stop.`,
     ],
   },
@@ -106,8 +106,8 @@ const en: Section[] = [
   {
     h: "Liquidity",
     ps: [
-      "On spot, switch to liquidity. Type USDT. The other side is matched to the pool price, across the full range. You do not pick a price band.",
-      "The pools are the BSC spot markets on this desk: BEM, BNB, BTC, gold, and the stocks above, each against USDT. OKB is on the other chain and is not included.",
+      "On spot, switch to liquidity. USDT pairs are the BSC spot pools. BEM pairs are BNB, BTC, and gold. Type one side. The other matches the live price, full range. BNB / BEM already has a pool. BTC / BEM and gold / BEM are created by the first deposit, at the two USDT prices. You can remove any time. OKB is on X Layer and cannot share a pool with BEM.",
+      "USDT pairs are BEM, BNB, BTC, gold, and the stocks above. BEM pairs are BNB, BTC, and gold.",
       `The receipt is minted to your wallet by the PancakeSwap V3 position contract ${NPM}. Remove exits the whole position. A BNB pool returns BNB. A fee already sent is not returned if you cancel halfway.`,
     ],
   },
