@@ -480,6 +480,7 @@ export function RealPerp() {
                   ["15m", "15分", "15m"],
                   ["1h", "1时", "1h"],
                   ["4h", "4时", "4h"],
+                  ["1d", "1日", "1d"],
                 ] as const
               ).map(([item, zhLabel, enLabel]) => (
                 <button key={item} type="button" onClick={() => setFrame(item)} className={`min-h-9 flex-1 px-2 font-mono text-xs sm:flex-none sm:px-3 ${frame === item ? "bg-ink text-paper" : ""}`}>

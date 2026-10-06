@@ -230,8 +230,8 @@ export function TransistorDesk() {
               <p className="font-display text-2xl italic">{gate ? `${gate.name} / ${gate.kind}` : "NAND"}</p>
             </div>
             <div className="text-right">
-              <p className="text-xs tracking-widest text-gold">{zh ? "官网参考价" : "Official mark"}</p>
-              <p className="font-mono text-2xl tabular-nums">{px(mark)} BNB</p>
+              <p className="text-xs tracking-widest text-gold">{zh ? "链上最新成交" : "Last on-chain trade"}</p>
+              <p className="font-mono text-2xl tabular-nums">{px(mark)} OKB</p>
               <p className={`font-mono text-xs ${chainMark > 0 && mark > 0 && (chainMark / mark < 0.97 || chainMark / mark > 1.03) ? "text-sell" : "text-ink/50"}`}>{zh ? "合约结算" : "Contract"} {chainMark > 0 ? px(chainMark) : "—"}</p>
             </div>
           </div>

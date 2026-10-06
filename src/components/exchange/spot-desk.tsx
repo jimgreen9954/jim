@@ -23,7 +23,13 @@ import {
   type PoolPrint,
 } from "@/lib/bsc";
 import { currentAccount, onAccount } from "@/lib/wallet";
+import { getSpotCandles } from "@/lib/candles";
+import type { Candle } from "@/lib/bem-ohlcv";
+import type { SpotFrame } from "@/lib/spot-ohlcv";
+import { connectX, okbAddressUrl, okbPrice, okbPrints, okbTxUrl, OKB, quoteOkb, readOkbPurse, swapOkb } from "@/lib/okb";
+import { XLAYER } from "@/lib/xlayer";
 import { SignCard } from "@/components/exchange/sign-card";
+import { Kline } from "@/components/exchange/kline";
 import { useFeeLock } from "@/lib/fee-lock";
 
 function sized(raw: bigint, decimals: number, pct: number, cap?: bigint): string {
@@ -37,7 +43,7 @@ function sized(raw: bigint, decimals: number, pct: number, cap?: bigint): string
 export function SpotDesk() {
   const lang = useExchange((s) => s.lang);
   const c = copy[lang];
-  const [pair, setPair] = useState<"bem" | "bnb">("bem");
+  const [pair, setPair] = useState<"bem" | "bnb" | "okb">("bem");
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [amount, setAmount] = useState("");
   const [price, setPrice] = useState<string | null>(null);
@@ -53,6 +59,9 @@ export function SpotDesk() {
   const [bad, setBad] = useState(false);
   const [hash, setHash] = useState<string | null>(null);
   const [card, setCard] = useState(false);
+  const [okbBal, setOkbBal] = useState<{ okb: bigint; usdt: bigint } | null>(null);
+  const [frame, setFrame] = useState<SpotFrame>("1m");
+  const [bars, setBars] = useState<Candle[]>([]);
   const lock = useFeeLock();
 
   useEffect(() => onAccount(setAccount), []);
@@ -60,17 +69,24 @@ export function SpotDesk() {
   useEffect(() => {
     let dead = false;
     const pull = () => {
-      const priceOf = pair === "bnb" ? bnbPrice : bemPrice;
+      const priceOf = pair === "bnb" ? bnbPrice : pair === "okb" ? okbPrice : bemPrice;
       priceOf().then((text) => {
         if (!dead) setPrice(text);
       }).catch(() => undefined);
-      recentPrints(pair).then((rows) => {
+      const printsOf = pair === "okb" ? okbPrints() : recentPrints(pair);
+      printsOf.then((rows) => {
         if (!dead) setPrints(rows);
       }).catch(() => undefined);
       const who = account ?? currentAccount();
-      if (who) readBalances(who).then((next) => {
-        if (!dead) setBalances(next);
-      }).catch(() => undefined);
+      if (who && pair === "okb") {
+        readOkbPurse(who).then((next) => {
+          if (!dead) setOkbBal(next);
+        }).catch(() => undefined);
+      } else if (who) {
+        readBalances(who).then((next) => {
+          if (!dead) setBalances(next);
+        }).catch(() => undefined);
+      }
     };
     pull();
     const timer = window.setInterval(pull, 4000);
@@ -81,12 +97,24 @@ export function SpotDesk() {
   }, [account, hash, pair]);
 
   useEffect(() => {
-    const base = pair === "bnb" ? BSC.wbnb : BSC.bem;
-    const baseDecimals = pair === "bnb" ? 18 : BSC.bemDecimals;
-    const tokenIn = side === "buy" ? BSC.usdt : base;
-    const tokenOut = side === "buy" ? base : BSC.usdt;
-    const decimals = side === "buy" ? BSC.usdtDecimals : baseDecimals;
-    const outDecimals = side === "buy" ? baseDecimals : BSC.usdtDecimals;
+    let dead = false;
+    getSpotCandles({ data: { pair, frame } })
+      .then((rows) => {
+        if (!dead) setBars(rows);
+      })
+      .catch(() => undefined);
+    return () => {
+      dead = true;
+    };
+  }, [pair, frame, hash]);
+  useEffect(() => {
+    const base = pair === "okb" ? OKB.wokb : pair === "bnb" ? BSC.wbnb : BSC.bem;
+    const baseDecimals = pair === "okb" || pair === "bnb" ? 18 : BSC.bemDecimals;
+    const payDecimals = pair === "okb" ? OKB.usdtDecimals : BSC.usdtDecimals;
+    const tokenIn = side === "buy" ? (pair === "okb" ? OKB.usdt : BSC.usdt) : base;
+    const tokenOut = side === "buy" ? base : pair === "okb" ? OKB.usdt : BSC.usdt;
+    const decimals = side === "buy" ? payDecimals : baseDecimals;
+    const outDecimals = side === "buy" ? baseDecimals : payDecimals;
     const fee = pair === "bnb" ? BSC.bnbFee : BSC.fee;
     let dead = false;
     try {
@@ -97,12 +125,13 @@ export function SpotDesk() {
         return;
       }
       const { swapIn } = splitDeskFee(amountIn);
-      const digits = side === "buy" ? (pair === "bnb" ? 6 : 4) : 2;
-      quoteExact(tokenIn, tokenOut, swapIn, fee)
-        .then((quoted) => {
+      const digits = side === "buy" ? (pair === "bem" ? 4 : 6) : 2;
+      const quoted = pair === "okb" ? quoteOkb(side, swapIn) : quoteExact(tokenIn, tokenOut, swapIn, fee);
+      quoted
+        .then((value) => {
           if (!dead) {
-            setOut(pretty(quoted, outDecimals, digits));
-            setMinOut(pretty((quoted * BigInt(10_000 - BSC.slippageBps)) / 10_000n, outDecimals, digits));
+            setOut(pretty(value, outDecimals, digits));
+            setMinOut(pretty((value * BigInt(10_000 - BSC.slippageBps)) / 10_000n, outDecimals, digits));
           }
         })
         .catch(() => {
@@ -140,10 +169,10 @@ export function SpotDesk() {
     setBad(false);
     setNote(c.walletBusy);
     try {
-      const from = account ?? (await connectBsc());
+      const from = pair === "okb" ? account ?? (await connectX()) : account ?? (await connectBsc());
       setAccount(from);
       if (!amount.trim()) return;
-      const tx = pair === "bnb" ? await swapBnb(from, side, amount) : await swapBem(from, side, amount);
+      const tx = pair === "okb" ? await swapOkb(from, side, amount) : pair === "bnb" ? await swapBnb(from, side, amount) : await swapBem(from, side, amount);
       setHash(tx);
       setNote(null);
     } catch (err) {
@@ -154,18 +183,23 @@ export function SpotDesk() {
   };
 
   const max = (pct: number) => {
-    if (!balances) return;
-    const raw = side === "buy" ? balances.usdt : pair === "bnb" ? balances.bnb : balances.bem;
-    const decimals = side === "buy" ? BSC.usdtDecimals : pair === "bnb" ? 18 : BSC.bemDecimals;
-    const cap = pair === "bnb" && side === "sell" && raw > BNB_GAS_RESERVE ? raw - BNB_GAS_RESERVE : undefined;
+    if (pair === "okb" ? !okbBal : !balances) return;
+    const raw = side === "buy" ? (pair === "okb" ? (okbBal?.usdt ?? 0n) : (balances?.usdt ?? 0n)) : pair === "okb" ? (okbBal?.okb ?? 0n) : pair === "bnb" ? (balances?.bnb ?? 0n) : (balances?.bem ?? 0n);
+    const decimals = side === "buy" ? (pair === "okb" ? OKB.usdtDecimals : BSC.usdtDecimals) : pair === "bem" ? BSC.bemDecimals : 18;
+    const cap = (pair === "bnb" || pair === "okb") && side === "sell" && raw > (pair === "okb" ? OKB.gasReserve : BNB_GAS_RESERVE) ? raw - (pair === "okb" ? OKB.gasReserve : BNB_GAS_RESERVE) : undefined;
     setAmount(sized(raw, decimals, pct, cap));
   };
 
-  const payRaw = balances ? (side === "buy" ? balances.usdt : pair === "bnb" ? balances.bnb : balances.bem) : 0n;
-  const payDecimals = side === "buy" ? BSC.usdtDecimals : pair === "bnb" ? 18 : BSC.bemDecimals;
-  const spendCap = pair === "bnb" && side === "sell" ? (payRaw > BNB_GAS_RESERVE ? payRaw - BNB_GAS_RESERVE : 0n) : undefined;
+  const payRaw = pair === "okb"
+    ? (side === "buy" ? (okbBal?.usdt ?? 0n) : (okbBal?.okb ?? 0n))
+    : balances
+      ? (side === "buy" ? balances.usdt : pair === "bnb" ? balances.bnb : balances.bem)
+      : 0n;
+  const payDecimals = side === "buy" ? (pair === "okb" ? OKB.usdtDecimals : BSC.usdtDecimals) : pair === "bem" ? BSC.bemDecimals : 18;
+  const reserve = pair === "okb" ? OKB.gasReserve : BNB_GAS_RESERVE;
+  const spendCap = (pair === "bnb" || pair === "okb") && side === "sell" ? (payRaw > reserve ? payRaw - reserve : 0n) : undefined;
   const spendable = spendCap ?? payRaw;
-  const base = pair === "bnb" ? "BNB" : "BEM";
+  const base = pair === "okb" ? "OKB" : pair === "bnb" ? "BNB" : "BEM";
   const payUnit = side === "buy" ? "USDT" : base;
   const recvUnit = side === "buy" ? base : "USDT";
   let typed = 0n;
@@ -175,7 +209,7 @@ export function SpotDesk() {
     typed = 0n;
   }
   const deskFee = typed > 0n ? splitDeskFee(typed) : null;
-  const over = Boolean(balances) && typed > spendable;
+  const over = (pair === "okb" ? Boolean(okbBal) : Boolean(balances)) && typed > spendable;
   const pcts = [25, 50, 75, 100];
 
   return (
@@ -184,8 +218,8 @@ export function SpotDesk() {
         <div className="border-b border-gold/40 p-3 lg:col-span-7 lg:border-r lg:border-b-0">
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs tracking-widest text-gold">{base} / USDT</p>
-            <div className="grid grid-cols-2">
-              {(["bem", "bnb"] as const).map((key) => (
+            <div className="grid grid-cols-3">
+              {(["bem", "bnb", "okb"] as const).map((key) => (
                 <button
                   key={key}
                   type="button"
@@ -198,14 +232,18 @@ export function SpotDesk() {
                   }}
                   className={`min-h-8 border border-gold px-3 font-mono text-xs ${pair === key ? "bg-ink text-paper" : ""}`}
                 >
-                  {key === "bem" ? "BEM" : "BNB"}
+                  {key === "bem" ? "BEM" : key === "bnb" ? "BNB" : "OKB"}
                 </button>
               ))}
             </div>
           </div>
           <p className="font-display text-5xl italic leading-none tabular-nums">{shown ? `$${shown}` : "—"}</p>
           <p className="mt-1 font-mono text-xs text-ink/50">
-            {pair === "bnb"
+            {pair === "okb"
+              ? lang === "zh"
+                ? "X Layer PotatoSwap · OKB / USDT · 买到的是钱包里的 OKB · 成交地址从池子日志读"
+                : "X Layer PotatoSwap · OKB / USDT · a buy lands as OKB · addresses come from the pool log"
+              : pair === "bnb"
               ? lang === "zh"
                 ? "Pancake BNB / USDT · 池费率 0.01% · 买到的是钱包里的 BNB"
                 : "Pancake BNB / USDT · pool fee 0.01% · a buy lands as BNB"
@@ -214,16 +252,31 @@ export function SpotDesk() {
                 : "Pancake pool quote · read every second"}
           </p>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink/80">{c.realNote}</p>
+          <div className="mt-3 flex flex-wrap border border-gold">
+            {(["1m", "5m", "15m", "1h", "1d"] as const).map((item) => (
+              <button key={item} type="button" onClick={() => setFrame(item)} className={`min-h-9 flex-1 font-mono text-xs ${frame === item ? "bg-ink text-paper" : ""}`}>
+                {item === "1d" ? (lang === "zh" ? "1日" : "1d") : item}
+              </button>
+            ))}
+          </div>
+          <Kline bars={bars} lang={lang} desk="spot" />
           <h2 className="mt-4 text-xs tracking-widest text-gold">{c.poolPrints}</h2>
           <ul className="mt-2 divide-y divide-gold/30">
             {prints.length === 0 ? <li className="py-3 text-sm text-ink/60">{lang === "zh" ? "当前区间无成交" : "No trades in this window"}</li> : null}
             {prints.map((row) => (
-              <li key={row.id}>
-                <a className="flex items-baseline justify-between gap-3 py-2 font-mono text-sm tabular-nums" href={txUrl(row.tx)} target="_blank" rel="noreferrer">
-                  <span className={row.side === "buy" ? "text-gold" : "text-sell"}>{row.side === "buy" ? c.buy : c.sell}</span>
-                  <span className="min-w-0 truncate">{row.bem} {base}</span>
-                  <span className="text-ink/70">{row.usdt}</span>
+              <li key={row.id} className="grid grid-cols-[3rem_1fr_5rem_7.5rem] items-baseline gap-2 py-2 font-mono text-sm tabular-nums">
+                <a className={row.side === "buy" ? "text-gold" : "text-sell"} href={pair === "okb" ? okbTxUrl(row.tx) : txUrl(row.tx)} target="_blank" rel="noreferrer">
+                  {row.side === "buy" ? c.buy : c.sell}
                 </a>
+                <span className="min-w-0 truncate">{row.bem} {base}</span>
+                <span className="text-ink/70">{row.usdt}</span>
+                {row.who ? (
+                  <a className="truncate text-xs underline decoration-gold underline-offset-4" href={pair === "okb" ? okbAddressUrl(row.who) : `${BSC.explorer}/address/${row.who}`} target="_blank" rel="noreferrer">
+                    {row.who.slice(0, 6)}…{row.who.slice(-4)}
+                  </a>
+                ) : (
+                  <span className="text-xs text-ink/40">—</span>
+                )}
               </li>
             ))}
           </ul>
@@ -251,11 +304,17 @@ export function SpotDesk() {
           <p className="text-xs tracking-widest text-gold">{c.balTitle}</p>
           <div className="grid grid-cols-3 gap-2">
             {(
-              [
-                ["BEM", balances ? pretty(balances.bem, BSC.bemDecimals, 4) : "—"],
-                ["USDT", balances ? pretty(balances.usdt, BSC.usdtDecimals, 2) : "—"],
-                ["BNB", balances ? pretty(balances.bnb, 18, 4) : "—"],
-              ] as const
+              pair === "okb"
+                ? ([
+                    ["OKB", okbBal ? pretty(okbBal.okb, 18, 4) : "—"],
+                    ["USDT", okbBal ? pretty(okbBal.usdt, OKB.usdtDecimals, 2) : "—"],
+                    ["链", "X Layer"],
+                  ] as const)
+                : ([
+                    ["BEM", balances ? pretty(balances.bem, BSC.bemDecimals, 4) : "—"],
+                    ["USDT", balances ? pretty(balances.usdt, BSC.usdtDecimals, 2) : "—"],
+                    ["BNB", balances ? pretty(balances.bnb, 18, 4) : "—"],
+                  ] as const)
             ).map(([name, value]) => (
               <p key={name} className="border border-gold/40 px-2 py-2">
                 <span className="block text-xs tracking-widest text-gold">{name}</span>
@@ -307,10 +366,11 @@ export function SpotDesk() {
           </p>
           {over ? <p className="text-sm text-sell">{lang === "zh" ? "余额不够，减一点数量。" : "Not enough balance. Use a smaller size."}</p> : null}
           <p className="text-xs text-ink/70">
-            {c.slippage} 1% · PancakeSwap V3 · {lang === "zh" ? "台费在池子手续费之外另收" : "Desk fee is on top of the pool fee"} {(DESK_FEE_BPS / 100).toFixed(2)}% ·{" "}
-            <a className="underline decoration-gold underline-offset-4" href={`${BSC.explorer}/address/${FEE_TO}`} target="_blank" rel="noreferrer">
+            {c.slippage} 1% · {pair === "okb" ? "PotatoSwap" : "PancakeSwap V3"} · {lang === "zh" ? "台费在池子手续费之外另收" : "Desk fee is on top of the pool fee"} {(DESK_FEE_BPS / 100).toFixed(2)}% ·{" "}
+            <a className="underline decoration-gold underline-offset-4" href={pair === "okb" ? `${XLAYER.explorer}/address/${FEE_TO}` : `${BSC.explorer}/address/${FEE_TO}`} target="_blank" rel="noreferrer">
               {FEE_TO}
             </a>
+            {pair === "okb" && side === "sell" ? (lang === "zh" ? " · 留下 0.002 OKB 付 gas" : " · 0.002 OKB stays for gas") : ""}
             {pair === "bnb" && side === "sell" ? (lang === "zh" ? " · 留下 0.003 BNB 付 gas" : " · 0.003 BNB stays for gas") : ""}
           </p>
           <button type="submit" className="min-h-12 bg-ink text-paper disabled:opacity-40" disabled={busy || over || lock.status !== "ok" || (Boolean(account) && !amount.trim())}>
@@ -318,7 +378,7 @@ export function SpotDesk() {
           </button>
           {note ? <p className={`text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
           {hash ? (
-            <a className="text-sm underline decoration-gold underline-offset-4" href={txUrl(hash)} target="_blank" rel="noreferrer">
+            <a className="text-sm underline decoration-gold underline-offset-4" href={pair === "okb" ? okbTxUrl(hash) : txUrl(hash)} target="_blank" rel="noreferrer">
               {c.walletTx}
             </a>
           ) : null}
@@ -327,19 +387,27 @@ export function SpotDesk() {
               title={lang === "zh" ? "签名前看一眼" : "Before you sign"}
               yes={lang === "zh" ? "确认并签名" : "Confirm and sign"}
               no={lang === "zh" ? "取消" : "Cancel"}
-              warn={lang === "zh" ? "这是 BSC 现货。不会和 X Layer 的单合成一笔。钱包若不在 BSC，签名前会切过去。" : "This is BSC spot. It does not net with an X Layer order. If the wallet is on another chain, it switches to BSC before the signature."}
+              warn={
+                pair === "okb"
+                  ? lang === "zh"
+                    ? "这是 X Layer 现货。钱包会切到 X Layer。买到的是 OKB，卖出留下约 0.002 OKB 付 gas。不会和 BSC 的单合成一笔。"
+                    : "This is X Layer spot. The wallet switches to X Layer. A buy lands as OKB. A sell leaves about 0.002 OKB for gas. It does not net with a BSC order."
+                  : lang === "zh"
+                    ? "这是 BSC 现货。不会和 X Layer 的单合成一笔。钱包若不在 BSC，签名前会切过去。"
+                    : "This is BSC spot. It does not net with an X Layer order. If the wallet is on another chain, it switches to BSC before the signature."
+              }
               onNo={() => setCard(false)}
               onYes={() => {
                 setCard(false);
                 void trade();
               }}
               lines={[
-                { k: lang === "zh" ? "链" : "Chain", v: "BNB Smart Chain · 56" },
-                { k: lang === "zh" ? "路由" : "Router", v: BSC.router, href: `${BSC.explorer}/address/${BSC.router}` },
-                { k: lang === "zh" ? "钱去哪" : "Where funds go", v: lang === "zh" ? "成交的币留在钱包。千分之二先进收费地址，剩下的才进池子。这千分之二加在 Pancake 池子手续费之外。" : "The fill stays in the wallet. 0.2% goes to the fee address first. The rest goes to the pool. That 0.2% is on top of the Pancake pool fee." },
+                { k: lang === "zh" ? "链" : "Chain", v: pair === "okb" ? "X Layer · 196" : "BNB Smart Chain · 56" },
+                { k: lang === "zh" ? "路由" : "Router", v: pair === "okb" ? OKB.router : BSC.router, href: pair === "okb" ? `${XLAYER.explorer}/address/${OKB.router}` : `${BSC.explorer}/address/${BSC.router}` },
+                { k: lang === "zh" ? "钱去哪" : "Where funds go", v: pair === "okb" ? (lang === "zh" ? "成交的 OKB 或 USDT 留在钱包。千分之二先进收费地址。池子是 PotatoSwap 的 OKB / USDT。" : "OKB or USDT stays in the wallet. 0.2% goes to the fee address first. The pool is PotatoSwap OKB / USDT.") : (lang === "zh" ? "成交的币留在钱包。千分之二先进收费地址，剩下的才进池子。这千分之二加在 Pancake 池子手续费之外。" : "The fill stays in the wallet. 0.2% goes to the fee address first. The rest goes to the pool. That 0.2% is on top of the Pancake pool fee.") },
                 { k: lang === "zh" ? "付出" : "Pay", v: `${amount || "—"} ${payUnit}` },
                 { k: lang === "zh" ? "本单台费" : "Fee", v: `${deskFee ? pretty(deskFee.fee, payDecimals, 4) : "—"} ${payUnit}` },
-                { k: lang === "zh" ? "收费地址" : "Fee address", v: FEE_TO, href: `${BSC.explorer}/address/${FEE_TO}` },
+                { k: lang === "zh" ? "收费地址" : "Fee address", v: FEE_TO, href: pair === "okb" ? `${XLAYER.explorer}/address/${FEE_TO}` : `${BSC.explorer}/address/${FEE_TO}` },
                 { k: lang === "zh" ? "预估到账" : "Estimate", v: `${out ?? "—"} ${recvUnit}` },
                 { k: lang === "zh" ? "最少到账 · 滑点 1%" : "Minimum · 1% slippage", v: `${minOut ?? "—"} ${recvUnit}` },
               ]}

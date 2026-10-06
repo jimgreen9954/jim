@@ -12,10 +12,11 @@ type Asset = {
   tokenId: number;
   symbol: string;
   referencePriceWei: string | null;
+  latestPriceWei?: string | null;
   referenceBidPriceWei: string | null;
   referenceAskPriceWei: string | null;
   estimatedMarketCapUsdMicros: string | null;
-  rolling24h?: { referenceChangeBps?: string; volumeWei?: string };
+  rolling24h?: { changeBps?: string; referenceChangeBps?: string; volumeWei?: string };
 };
 
 type Market = { transistors: string; name: string; assets: Asset[] };
@@ -31,7 +32,7 @@ function bnb(wei: string | null | undefined): number {
 }
 
 async function rail(): Promise<Rail> {
-  if (cache && Date.now() - cache.at < 1000) return cache.rail;
+  if (cache && Date.now() - cache.at < 800) return cache.rail;
   const res = await fetch(RAIL, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(8000) });
   if (!res.ok) throw new Error(`rail ${res.status}`);
   const body = (await res.json()) as Rail;
@@ -45,7 +46,7 @@ function gatesOf(body: Rail): Gate[] {
     const market = (body.markets ?? []).find((row) => row.transistors.toLowerCase() === wanted.transistors.toLowerCase());
     for (const kind of ["NAND", "LATCH"] as const) {
       const asset = market?.assets.find((row) => row.symbol === kind);
-      const price = bnb(asset?.referencePriceWei);
+      const price = bnb(asset?.latestPriceWei) || bnb(asset?.referencePriceWei);
       rows.push({
         id: `${wanted.name}-${kind}`.toLowerCase().replace(/\s+/g, "-"),
         name: wanted.name,
@@ -55,7 +56,7 @@ function gatesOf(body: Rail): Gate[] {
         price,
         bid: bnb(asset?.referenceBidPriceWei) || price,
         ask: bnb(asset?.referenceAskPriceWei) || price,
-        changePct: Number(asset?.rolling24h?.referenceChangeBps ?? 0) / 100,
+        changePct: Number(asset?.rolling24h?.changeBps ?? asset?.rolling24h?.referenceChangeBps ?? 0) / 100,
         volumeBnb: bnb(asset?.rolling24h?.volumeWei),
         capUsd: Number(asset?.estimatedMarketCapUsdMicros ?? 0) / 1e6,
       });
@@ -76,20 +77,24 @@ export async function loadTransistorDesk(token: string, id: number): Promise<Tra
   try {
     const body = await rail();
     const gates = gatesOf(body);
-    const res = await fetch(`https://api-tapeout.firsto.ai/v1/book/${token}/${id}`, {
-      headers: { accept: "application/json" },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) throw new Error(`book ${res.status}`);
-    const book = (await res.json()) as Book;
-    return {
-      ok: true,
-      error: null,
-      asOf: book.asOf ?? body.asOf ?? "",
-      gates,
-      bids: levels(book.bids),
-      asks: levels(book.asks),
-    };
+    let bids: Level[] = [];
+    let asks: Level[] = [];
+    let asOf = body.asOf ?? "";
+    let error: string | null = null;
+    try {
+      const res = await fetch(`https://api-tapeout.firsto.ai/v1/book/${token}/${id}`, {
+        headers: { accept: "application/json" },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) throw new Error(`book ${res.status}`);
+      const book = (await res.json()) as Book;
+      bids = levels(book.bids);
+      asks = levels(book.asks);
+      asOf = book.asOf ?? asOf;
+    } catch (err) {
+      error = err instanceof Error ? err.message : "book";
+    }
+    return { ok: gates.some((row) => row.price > 0), error, asOf, gates, bids, asks };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "feed", asOf: "", gates: [], bids: [], asks: [] };
   }

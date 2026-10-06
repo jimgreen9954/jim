@@ -143,6 +143,7 @@ export type PoolPrint = {
   bem: string;
   usdt: string;
   tx: Hex;
+  who: string;
 };
 
 export async function recentPrints(market: "bem" | "bnb" = "bem"): Promise<PoolPrint[]> {
@@ -172,6 +173,7 @@ export async function recentPrints(market: "bem" | "bnb" = "bem"): Promise<PoolP
         bem: pretty(a1 < 0n ? -a1 : a1, assetDecimals, market === "bnb" ? 5 : 4),
         usdt: pretty(a0 < 0n ? -a0 : a0, BSC.usdtDecimals, 2),
         tx: log.transactionHash,
+        who: log.args.recipient ?? log.args.sender ?? "",
       };
     });
 }

@@ -22,6 +22,7 @@ const zh: Section[] = [
     ps: [
       "两对都走 PancakeSwap V3。报价读链上 Quoter，成交走 SwapRouter。",
       `BEM / USDT 的池子是 ${BSC.pool}，池费率 1%。BNB / USDT 的池子是 ${BSC.bnbPool}，池费率 0.01%。买 BNB 到账的是钱包里的 BNB。卖 BNB 留下约 0.003 BNB 付 gas。`,
+      "OKB 在 X Layer 的 PotatoSwap 上买卖，池子是 OKB / USDT。买到的是钱包里的 OKB。卖出留下约 0.002 OKB 付 gas。台费同样是千分之二。现货页有 K 线，成交地址从池子日志读，点得开浏览器。",
       "本台另收付出金额的千分之二。买入从 USDT 扣，卖 BEM 从 BEM 扣，卖 BNB 从 BNB 扣，打进同一个收费地址。剩下的才进池子。池子自己的手续费留给流动性提供者，gas 付给链，这两笔不进收费地址。现货没有返佣。",
       "下单前，页面写出这一单的台费，以及按 1% 滑点算出的最少到账。余额不够，按钮不会让你签。钱包会先签台费，再签兑换。买 BNB 时，兑换和解包写在同一笔里。",
       "现货价每秒从池子读出。BEM 的这个价也拿来做永续的标记来源。永续的成交价仍是挂单上写的那个价。",
@@ -39,7 +40,7 @@ const zh: Section[] = [
     h: "K 线",
     ps: [
       `两张 BEM 图读的是同一口池子 ${BSC.pool}。柱子是池子成交的开高低收。模拟盈亏不按这张图结算。永续盈亏也不按最后一根结算。`,
-      "模拟图的周期是 1 分、5 分、10 分、1 时、4 时、1 日、1 周。真实合约的短周期是 15 秒、1 分、5 分、15 分、1 时、4 时，下面另有一周、一月、三月、一年。大约最近 100 根，带成交量、MA7 和 MA25。十字线标出价格和新加坡时间。滚轮或按钮可以放大缩小，空白处可以左右拖。",
+      "模拟图的周期是 1 分、5 分、10 分、1 时、4 时、1 日、1 周。真实合约的短周期是 15 秒、1 分、5 分、15 分、1 时、4 时、1 日，下面另有一周、一月、三月、一年。大约最近 100 根，带成交量、MA7 和 MA25。十字线标出价格和新加坡时间。滚轮或按钮可以放大缩小，空白处可以左右拖。",
       "画线和区块点两次就落下，存在这台浏览器里。落下之后可以拖动、改端点、换颜色、删除、撤销或清空。",
       "图旁边的看多或看空，读的是最近约 36 根 BEM / USDT。下面的数字是猜的下一截价格，离现价不超过 4%，不是 0 到 100 的强度，也不是标记价。可以隐藏。不保证下一根。",
       "BSC 永续的开仓价是挂单上的价。之后盈亏跟大约 10 分钟的池子均价。X Layer 没有这口 BEM 池，图仍画 BSC 的池子，所以图可以比 X Layer 的结算价快。晶体管页用链上参考价，不用这两张图。",
@@ -62,7 +63,7 @@ const zh: Section[] = [
     h: "晶体管永续",
     ps: [
       `这一页只做六个标：TapeOut、Behemoth、Genesis CPU，各有 NAND 和 LATCH。全站只有一份合约 ${GATE}。任何地址、任何时候的单都在这一本账上。保证金是 BSC 的 USDT，从 1 到 500。`,
-      "右上角是链上参考价。中间的盘口是本站自己的。下单、吃单、平仓之前，页面先看合约里的结算价。和参考价相差不超过 3% 才继续。差得更多就先把参考价推进去。推进之后仍超过 3%，这一笔不做。成交按挂单价。",
+      "角上的价是官网记录的链上最新一笔成交，单位是 OKB，大约每秒重读。不再用买卖中间价。订单簿暂时读不到时，六个价格仍然留着。下单、吃单、平仓之前，页面先看合约里的结算价。和这个最新价相差不超过 3% 才继续。差得更多就先把最新价推进去。推进之后仍超过 3%，这一笔不做。成交按挂单价。",
       "手续费是用掉的保证金的千分之二，比例和 BEM 永续相同。推荐码要在这份合约上单独确认，不能拿 BEM 的码直接用。邀请链接是当前网址加 #gate=你的码。BEM 和 X Layer 的链接是 #ref=。只打开链接不会绑定，仍要点确认。确认之后不能改。",
     ],
   },
@@ -133,6 +134,7 @@ const en: Section[] = [
     ps: [
       "Both pairs use PancakeSwap V3. Quotes come from the on-chain quoter. Swaps use the SwapRouter.",
       `The BEM / USDT pool is ${BSC.pool}, pool fee 1%. The BNB / USDT pool is ${BSC.bnbPool}, pool fee 0.01%. A BNB buy lands in the wallet as BNB. A BNB sell leaves about 0.003 BNB for gas.`,
+      "OKB trades on PotatoSwap on X Layer, OKB / USDT. A buy lands as OKB. A sell leaves about 0.002 OKB for gas. The desk fee is the same 0.2%. The spot page has a chart. Trade addresses are read from the pool log and open in a browser.",
       "This desk also takes 0.2% of what you pay. A buy takes it from USDT. A BEM sell takes it from BEM. A BNB sell takes it from BNB. It goes to the one fee address. The rest goes to the pool. The pool's own fee stays with liquidity providers. Gas stays with the chain. Neither goes to the fee address. Spot pays no rebate.",
       "Before you sign, the page shows this order's fee and the least you can receive after 1% slippage. If the balance is short, the button will not ask you to sign. The wallet signs the fee first, then the swap. A BNB buy puts the swap and the unwrap in one transaction.",
       "The spot price is read from the pool every second. The BEM price also feeds the perpetual mark. A perpetual fill is still the price written on the order.",
@@ -150,7 +152,7 @@ const en: Section[] = [
     h: "Charts",
     ps: [
       `Both BEM charts read the same pool, ${BSC.pool}. A candle is the pool's open, high, low, and close. Paper PnL does not settle on the chart. The perpetual does not settle on the last candle either.`,
-      "The paper chart has 1 minute, 5 minutes, 10 minutes, 1 hour, 4 hours, 1 day, and 1 week. The live chart has 15 seconds, 1 minute, 5 minutes, 15 minutes, 1 hour, and 4 hours, plus a second row for one week, one month, three months, and one year. About the last 100 candles, with volume, MA7, and MA25. The crosshair shows price and Singapore time. The wheel or the buttons zoom. Empty space pans.",
+      "The paper chart has 1 minute, 5 minutes, 10 minutes, 1 hour, 4 hours, 1 day, and 1 week. The live chart has 15 seconds, 1 minute, 5 minutes, 15 minutes, 1 hour, 4 hours, and 1 day, plus a second row for one week, one month, three months, and one year. About the last 100 candles, with volume, MA7, and MA25. The crosshair shows price and Singapore time. The wheel or the buttons zoom. Empty space pans.",
       "A line or a block is placed with two clicks and stays in this browser. After that it can be dragged, its ends moved, its color changed, deleted, undone, or cleared.",
       "The long or short note beside the chart reads about the last 36 BEM / USDT candles. The number under it is a guessed next price, within 4% of the last price. It is not a score from 0 to 100, and it is not the mark. It can be hidden. It does not promise the next candle.",
       "On the BSC perpetual, the fill is the price on the order. After that, PnL follows about a 10-minute pool average. X Layer has no BEM pool, and the chart still draws the BSC pool, so the chart can lead the X Layer settlement. The transistor page uses the on-chain reference price, not these two charts.",
@@ -173,7 +175,7 @@ const en: Section[] = [
     h: "Transistor perpetual",
     ps: [
       `This page lists six markets: TapeOut, Behemoth, and Genesis CPU, each as NAND and LATCH. There is one contract, ${GATE}. Every order, from any address, at any time, is on this book. Margin is BSC USDT, from 1 to 500.`,
-      "The corner is the on-chain reference price. The book in the middle is this desk's. Before an open, a take, or a close, the page reads the settlement price in the contract. It continues only if that price is within 3% of the reference. If it is wider, the page pushes the reference first. If it is still wider than 3% after the push, the order is not sent. The fill is the price on the quote.",
+      "The corner is the last on-chain trade recorded by the official feed, in OKB, read about once a second. It is not the mid. If the book read fails, the six prices stay. Before an open, a take, or a close, the page reads the settlement price in the contract. It continues only if that price is within 3% of this last trade. If it is wider, the page pushes the last trade first. If it is still wider than 3% after the push, the order is not sent. The fill is the price on the quote.",
       "The fee is 0.2% of the margin used, the same split as the BEM perpetual. The code has to be confirmed on this contract. A BEM code does not work here. The invite link is this URL plus #gate= and your code. BEM and X Layer use #ref=. Opening the link does not bind. Binding still needs a confirmation, and it cannot be changed after that.",
     ],
   },

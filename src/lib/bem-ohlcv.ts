@@ -1,5 +1,5 @@
 export type Candle = { t?: number; o: number; h: number; l: number; c: number; v?: number };
-export type CandleFrame = "15s" | "1m" | "5m" | "15m" | "1h" | "4h" | "1w" | "1M" | "3M" | "1y";
+export type CandleFrame = "15s" | "1m" | "5m" | "15m" | "1h" | "4h" | "1d" | "1w" | "1M" | "3M" | "1y";
 
 const POOL = "https://api.geckoterminal.com/api/v2/networks/bsc/pools/0x3098d7a051045000d68ec0360753a40c8cabea31/ohlcv";
 
@@ -10,6 +10,7 @@ const direct: Record<Exclude<CandleFrame, "1w" | "1M" | "3M" | "1y">, { path: st
   "15m": { path: "minute", aggregate: 15, limit: 300 },
   "1h": { path: "hour", aggregate: 1, limit: 300 },
   "4h": { path: "hour", aggregate: 4, limit: 300 },
+  "1d": { path: "day", aggregate: 1, limit: 300 },
 };
 
 const cache = new Map<string, { at: number; rows: Candle[] }>();
