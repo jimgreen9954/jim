@@ -256,7 +256,7 @@ function Header({ floor, desk, setFloor, setDesk, setShop }: { floor: Floor; des
       >
         <span>
           <span className="block text-xs tracking-widest text-gold">{lang === "zh" ? "现在去铸造" : "Mint now"}</span>
-          <span className="font-display text-2xl italic">{lang === "zh" ? "晶圆 · 16 颗 NAND" : "Wafer · 16 NAND"}</span>
+          <span className="font-display text-2xl italic">{lang === "zh" ? "晶圆 · NAND / LATCH" : "Wafer · NAND / LATCH"}</span>
         </span>
         <span className="text-sm">{lang === "zh" ? "去铸造" : "Mint"}</span>
       </button>

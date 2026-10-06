@@ -7,9 +7,10 @@ import {
   connectXLayer,
   DEPLOYED,
   mintCost,
-  mintNand,
+  mintTransistor,
   processorUrl,
   readProcessor,
+  transistorHeld,
   txUrl,
   type ProcessorStatus,
 } from "@/lib/xlayer";
@@ -83,6 +84,9 @@ export function WalletBar() {
   const [bad, setBad] = useState(false);
   const [hash, setHash] = useState<string | null>(null);
   const [cpu, setCpu] = useState<ProcessorStatus | null>(null);
+  const [kind, setKind] = useState<0 | 1>(0);
+  const [qtyText, setQtyText] = useState("100");
+  const [held, setHeld] = useState<{ nand: bigint; latch: bigint } | null>(null);
 
   useEffect(() => {
     let dead = false;
@@ -98,11 +102,31 @@ export function WalletBar() {
     };
   }, [hash]);
 
+  useEffect(() => {
+    if (!account) {
+      setHeld(null);
+      return;
+    }
+    let dead = false;
+    transistorHeld(account)
+      .then((row) => {
+        if (!dead) setHeld(row);
+      })
+      .catch(() => undefined);
+    return () => {
+      dead = true;
+    };
+  }, [account, hash]);
+
   const fail = (err: unknown) => {
     const code = (err as { code?: number }).code;
     const message = err instanceof Error ? err.message : "";
     if (message === "nowallet") {
       setNote(c.walletNo);
+    } else if (message === "cap") {
+      setNote(lang === "zh" ? "超过还能铸的数量。" : "That is more than the supply still left.");
+    } else if (message === "amount") {
+      setNote(lang === "zh" ? "数量要是整数。" : "Use a whole number.");
     } else if (code === 4001 || message === "minprice") {
       setNote(message === "minprice" ? c.walletMin : c.walletReject);
     } else {
@@ -133,7 +157,7 @@ export function WalletBar() {
     try {
       const from = account ?? (await connectXLayer());
       setAccount(from);
-      const tx = await mintNand(from, 16n);
+      const tx = await mintTransistor(from, kind, qty);
       setHash(tx);
       setNote(null);
     } catch (err) {
@@ -143,7 +167,11 @@ export function WalletBar() {
     }
   };
 
-  const cost = cpu ? mintCost(cpu.price, cpu.fee, 16n) : null;
+  const left = cpu ? BigInt(cpu.cap) - BigInt(cpu.minted) : null;
+  const qty = /^\d+$/.test(qtyText.trim()) ? BigInt(qtyText.trim()) : 0n;
+  const cost = cpu && qty > 0n ? mintCost(cpu.price, cpu.fee, qty) : null;
+  const label = kind === 0 ? "NAND" : "LATCH";
+  const tooMany = left !== null && qty > left;
 
   return (
     <section className="border border-gold bg-card shadow-plate">
@@ -170,16 +198,53 @@ export function WalletBar() {
             </span>
           </p>
           <p className="border border-gold/40 px-3 py-2">
+            <span className="block text-xs tracking-widest text-gold">{lang === "zh" ? "还可铸" : "Left"}</span>
+            <span className="font-mono text-lg tabular-nums">{left !== null ? Number(left).toLocaleString("en-US") : "—"}</span>
+            <span className="mt-1 block text-xs text-ink/60">{lang === "zh" ? "NAND 和 LATCH 共用这一份" : "NAND and LATCH share this"}</span>
+          </p>
+          <p className="border border-gold/40 px-3 py-2">
+            <span className="block text-xs tracking-widest text-gold">{lang === "zh" ? "你的 NAND" : "Your NAND"}</span>
+            <span className="font-mono text-lg tabular-nums">{held ? Number(held.nand).toLocaleString("en-US") : "—"}</span>
+          </p>
+          <p className="border border-gold/40 px-3 py-2">
             <span className="block text-xs tracking-widest text-gold">{c.liveCircuits}</span>
             <span className="font-mono text-lg tabular-nums">{cpu?.circuits ?? "—"}</span>
+          </p>
+          <p className="border border-gold/40 px-3 py-2">
+            <span className="block text-xs tracking-widest text-gold">{lang === "zh" ? "你的 LATCH" : "Your LATCH"}</span>
+            <span className="font-mono text-lg tabular-nums">{held ? Number(held.latch).toLocaleString("en-US") : "—"}</span>
           </p>
         </div>
         <p className="break-all font-mono text-xs">
           {c.walletCpu} {DEPLOYED.circuits}
         </p>
+        <div className="grid grid-cols-2 gap-2">
+          {([0, 1] as const).map((id) => (
+            <button key={id} type="button" onClick={() => setKind(id)} className={`min-h-11 border border-gold ${kind === id ? "bg-ink text-paper" : ""}`}>
+              {id === 0 ? "NAND" : "LATCH"}
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {(["100", "1000", "10000"] as const).map((item) => (
+            <button key={item} type="button" onClick={() => setQtyText(item)} className={`min-h-11 border border-gold font-mono ${qtyText === item ? "bg-ink text-paper" : ""}`}>
+              {Number(item).toLocaleString("en-US")}
+            </button>
+          ))}
+        </div>
+        <label className="border border-gold/40 px-3 py-2">
+          <span className="block text-xs tracking-widest text-gold">{lang === "zh" ? "自定义数量" : "Custom amount"}</span>
+          <input
+            value={qtyText}
+            onChange={(event) => setQtyText(event.target.value.replace(/[^\d]/g, ""))}
+            inputMode="numeric"
+            className="w-full bg-transparent font-mono text-3xl outline-none"
+          />
+        </label>
+        {tooMany ? <p className="text-sm text-sell">{lang === "zh" ? "超过还能铸的数量。" : "More than the supply still left."}</p> : null}
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" className="min-h-14 bg-ink px-4 font-display text-2xl italic text-paper" disabled={busy} onClick={mint}>
-            {c.mintNand}
+          <button type="button" className="min-h-14 bg-ink px-4 font-display text-2xl italic text-paper disabled:opacity-40" disabled={busy || qty < 1n || tooMany} onClick={mint}>
+            {lang === "zh" ? `铸造 ${qty.toString()} 颗 ${label}` : `Mint ${qty.toString()} ${label}`}
             {cost ? ` · ${cost} OKB` : ""}
           </button>
           <a className="inline-flex min-h-11 items-center border border-gold px-3" href={CANVAS} target="_blank" rel="noreferrer">

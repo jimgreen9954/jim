@@ -217,6 +217,16 @@ const transistorAbi = [
     ],
     outputs: [],
   },
+  {
+    name: "balanceOf",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "account", type: "address" },
+      { name: "id", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+  },
 ] as const;
 
 const circuitAbi = [
@@ -302,12 +312,16 @@ export function mintCost(price: string, fee: string, amount: bigint): string {
   return formatEther(parseEther(price) * amount + parseEther(fee));
 }
 
-export async function mintNand(from: string, amount: bigint): Promise<Hex> {
-  const [price, fee] = await Promise.all([
+export async function mintTransistor(from: string, id: 0 | 1, amount: bigint): Promise<Hex> {
+  if (amount < 1n) throw new Error("amount");
+  const [price, fee, minted, cap] = await Promise.all([
     client.readContract({ address: DEPLOYED.transistors, abi: transistorAbi, functionName: "mintPrice" }),
     client.readContract({ address: DEPLOYED.transistors, abi: transistorAbi, functionName: "protocolFee" }),
+    client.readContract({ address: DEPLOYED.transistors, abi: transistorAbi, functionName: "minted" }),
+    client.readContract({ address: DEPLOYED.transistors, abi: transistorAbi, functionName: "supplyCap" }),
   ]);
-  const data = encodeFunctionData({ abi: transistorAbi, functionName: "mint", args: [0n, amount] });
+  if (minted + amount > cap) throw new Error("cap");
+  const data = encodeFunctionData({ abi: transistorAbi, functionName: "mint", args: [BigInt(id), amount] });
   const eth = ethereum();
   if (!eth) throw new Error("nowallet");
   await ensureXLayer();
@@ -315,6 +329,18 @@ export async function mintNand(from: string, amount: bigint): Promise<Hex> {
     method: "eth_sendTransaction",
     params: [{ from, to: DEPLOYED.transistors, data, value: toHex(price * amount + fee) }],
   })) as Hex;
+}
+
+export async function mintNand(from: string, amount: bigint): Promise<Hex> {
+  return mintTransistor(from, 0, amount);
+}
+
+export async function transistorHeld(owner: string): Promise<{ nand: bigint; latch: bigint }> {
+  const [nand, latch] = await Promise.all([
+    client.readContract({ address: DEPLOYED.transistors, abi: transistorAbi, functionName: "balanceOf", args: [owner as Hex, 0n] }),
+    client.readContract({ address: DEPLOYED.transistors, abi: transistorAbi, functionName: "balanceOf", args: [owner as Hex, 1n] }),
+  ]);
+  return { nand, latch };
 }
 
 export function processorUrl(): string {
