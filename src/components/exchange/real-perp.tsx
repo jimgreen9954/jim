@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { formatUnits, parseUnits } from "viem";
+import { formatUnits } from "viem";
 import { copy } from "@/lib/copy";
 import { BSC, connectBsc, pretty, units, type Balances } from "@/lib/bsc";
 import { getCandles, type Candle, type CandleFrame } from "@/lib/candles";
@@ -9,7 +9,6 @@ import { MineDesk } from "@/components/exchange/mine-desk";
 import { SignCard } from "@/components/exchange/sign-card";
 import { useFeeLock } from "@/lib/fee-lock";
 import { Kline } from "@/components/exchange/kline";
-import { DepthTape } from "@/components/exchange/depth";
 import { nickOf, readNicks } from "@/lib/nicks";
 import { clearArm, easyBand, readArm, writeArm, type Arm } from "@/lib/stops";
 import {
@@ -28,7 +27,6 @@ import {
   savedDesk,
   selectDesk,
   activeBook,
-  splitEquity,
   takePerp,
   usdtText,
   type BookQuote,
@@ -72,6 +70,7 @@ function DeskLadder({
   named,
   lang,
   onTake,
+  onCancel,
 }: {
   rows: { perp: string; quote: BookQuote }[];
   mark: number;
@@ -82,60 +81,57 @@ function DeskLadder({
   named: (addr: string) => string;
   lang: "zh" | "en";
   onTake: (book: string, quote: BookQuote) => void;
+  onCancel: (book: string, quote: BookQuote) => void;
 }) {
   const drawn = rows.map(({ perp, quote }) => {
-    const px = quote.price > 0n ? Number(formatUnits(quote.price, 18)) : mark;
+    const limit = quote.price > 0n ? Number(formatUnits(quote.price, 18)) : 0;
+    const px = limit > 0 ? limit : mark;
     const margin = Number(formatUnits(quote.margin, dec));
     const size = px > 0 ? (margin * quote.lev) / px : 0;
-    return { perp, quote, px, margin, size };
+    return { perp, quote, px, limit, margin, size };
   });
-  const near = (row: (typeof drawn)[number]) => mark <= 0 || row.px <= 0 || Math.abs(row.px - mark) / mark <= 0.15;
+  const away = (row: (typeof drawn)[number]) => mark > 0 && row.px > 0 && Math.abs(row.px - mark) / mark > 0.15;
   const asks = drawn.filter((row) => !row.quote.long).sort((a, b) => b.px - a.px);
   const bids = drawn.filter((row) => row.quote.long).sort((a, b) => b.px - a.px);
-  const [open, setOpen] = useState(false);
-  const askRows = open ? asks : asks.slice(-8);
-  const bidRows = open ? bids : bids.slice(0, 8);
-  const hidden = asks.length + bids.length - askRows.length - bidRows.length;
-  const bestAsk = asks.length ? asks[asks.length - 1].px : 0;
-  const bestBid = bids.length ? bids[0].px : 0;
+  const nearAsks = asks.filter((row) => !away(row));
+  const nearBids = bids.filter((row) => !away(row));
+  const farCount = asks.length - nearAsks.length + (bids.length - nearBids.length);
+  const [showFar, setShowFar] = useState(false);
+  const [more, setMore] = useState(false);
+  const bookAsks = nearAsks.length + nearBids.length > 0 && !showFar ? nearAsks : asks;
+  const bookBids = nearAsks.length + nearBids.length > 0 && !showFar ? nearBids : bids;
+  const askRows = more ? bookAsks : bookAsks.slice(-6);
+  const bidRows = more ? bookBids : bookBids.slice(0, 6);
+  const hidden = bookAsks.length + bookBids.length - askRows.length - bidRows.length;
+  const bestAsk = (nearAsks.length ? nearAsks : asks).at(-1)?.px ?? 0;
+  const bestBid = (nearBids.length ? nearBids : bids).at(0)?.px ?? 0;
   const spread = bestAsk > 0 && bestBid > 0 ? bestAsk - bestBid : 0;
-  const thin = mark > 0 && (asks.length === 0 || bids.length === 0 || spread / mark > 0.02);
   const zh = lang === "zh";
-  const max = Math.max(1, ...drawn.map((row) => row.size));
-  const line = (row: (typeof drawn)[number], buy: boolean) => {
+  const line = (row: (typeof drawn)[number], takeLong: boolean) => {
     const mine = Boolean(account && row.quote.user.toLowerCase() === account.toLowerCase());
-    const width = `${Math.max(8, Math.round((row.size / max) * 100))}%`;
+    const pct = mark > 0 && row.px > 0 ? ((row.px - mark) / mark) * 100 : null;
     return (
-      <div
-        key={`${row.perp}-${row.quote.id}`}
-        role={mine ? undefined : "button"}
-        tabIndex={mine ? undefined : 0}
-        onClick={() => {
-          if (!mine && !busy) onTake(row.perp, row.quote);
-        }}
-        onKeyDown={(event) => {
-          if (!mine && !busy && (event.key === "Enter" || event.key === " ")) {
-            event.preventDefault();
-            onTake(row.perp, row.quote);
-          }
-        }}
-        className={`relative grid w-full grid-cols-[4.5rem_1fr_1fr_auto] items-center gap-2 px-2 py-1.5 text-left font-mono text-sm tabular-nums ${mine ? "" : "cursor-pointer"}`}
-      >
-        <span className="absolute inset-y-1 left-0" style={{ width, background: buy ? "rgba(158,27,18,0.12)" : "rgba(30,110,70,0.14)" }} />
-        <span className={`relative ${buy ? "text-sell" : "text-[#1b6b45]"}`}>{row.px > 0 ? row.px.toFixed(4) : "—"}</span>
-        <span className="relative">{row.size.toFixed(2)}</span>
-        <span className="relative">{row.margin.toFixed(2)}</span>
-        <span className="relative flex items-center gap-1">
-          <span className="hidden border border-gold/40 px-1 text-xs sm:inline">≤{Math.max(1, Math.round(row.size))}</span>
+      <div key={`${row.perp}-${row.quote.id}`} className="grid grid-cols-[2.4rem_1fr_auto] items-center gap-2 border-t border-gold/20 px-2 py-2 text-sm">
+        <span className={takeLong ? "text-sell" : "text-[#1b6b45]"}>{takeLong ? (zh ? "空" : "S") : zh ? "多" : "L"}</span>
+        <span className="min-w-0 font-mono tabular-nums">
+          <span className={takeLong ? "text-sell" : "text-[#1b6b45]"}>{row.limit > 0 ? row.px.toFixed(4) : zh ? "随标记" : "At mark"}</span>
+          {pct != null ? <span className="ml-2 text-xs text-ink/45">{pct > 0 ? "+" : ""}{pct.toFixed(1)}%</span> : null}
+          <span className="mt-0.5 block truncate text-xs text-ink/60">
+            {row.margin.toFixed(2)} USDT · {row.quote.lev}× · {row.size.toFixed(2)} BEM
+            {away(row) ? (zh ? " · 偏离" : " · far") : ""}
+          </span>
+        </span>
+        <span className="flex flex-col items-end gap-1">
           {mine ? (
-            <span className="px-2 text-xs text-ink/50">{zh ? "我的" : "Mine"}</span>
+            <button type="button" disabled={busy} onClick={() => onCancel(row.perp, row.quote)} className="min-h-8 border border-gold px-2 text-xs">
+              {zh ? "撤单" : "Cancel"}
+            </button>
           ) : (
-            <button type="button" disabled={busy} onClick={(event) => { event.stopPropagation(); onTake(row.perp, row.quote); }} className={`min-h-9 px-3 text-[#f7f5f0] ${buy ? "bg-sell" : "bg-[#1b6b45]"}`}>
-              {buy ? (zh ? "吃单开多" : "Take long") : zh ? "吃单开空" : "Take short"}
+            <button type="button" disabled={busy} onClick={() => onTake(row.perp, row.quote)} className="min-h-8 border border-gold px-2 text-xs">
+              {takeLong ? (zh ? "吃单开多" : "Take long") : zh ? "吃单开空" : "Take short"}
             </button>
           )}
-          {!near(row) ? <span className="text-xs text-ink/40">{zh ? "偏离" : "Far"}</span> : null}
-          <a className="text-xs text-ink/50 underline" href={`${scan}/address/${row.quote.user}`} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
+          <a className="text-xs text-ink/50 underline" href={`${scan}/address/${row.quote.user}`} target="_blank" rel="noreferrer">
             {named(row.quote.user).slice(0, 6)}
           </a>
         </span>
@@ -143,30 +139,39 @@ function DeskLadder({
     );
   };
   return (
-    <div>
-      <p className="px-2 pt-2 font-mono text-sm">
-        {zh ? "标记" : "Mark"} {mark > 0 ? mark.toFixed(4) : "—"} · {zh ? "买一/卖一价差" : "Bid / ask"} {spread > 0 ? spread.toFixed(4) : "—"}
+    <div className="border-t border-gold/30">
+      <p className="px-2 pt-2 font-mono text-xs text-ink/60">
+        {zh ? "卖一" : "Ask"} {bestAsk > 0 ? bestAsk.toFixed(4) : "—"}
+        {" · "}
+        {zh ? "买一" : "Bid"} {bestBid > 0 ? bestBid.toFixed(4) : "—"}
+        {spread > 0 ? ` · ${zh ? "价差" : "Spread"} ${((spread / Math.max(mark, bestBid)) * 100).toFixed(2)}%` : ""}
       </p>
-      {thin ? <p className="px-2 text-sm text-ink/70">{zh ? "这本合约现在很薄。" : "This book is thin."}</p> : null}
-      <div className="grid grid-cols-[4.5rem_1fr_1fr_auto] gap-2 px-2 py-1 text-xs text-ink/50">
-        <span>{zh ? "价格" : "Price"}</span>
-        <span>{zh ? "数量 BEM" : "Size BEM"}</span>
-        <span>{zh ? "保证金" : "Margin"}</span>
-        <span className="text-right">{zh ? "指定成交" : "Take"}</span>
+      <div className="grid grid-cols-[2.4rem_1fr_auto] gap-2 px-2 py-1 text-xs text-ink/50">
+        <span>{zh ? "方向" : "Side"}</span>
+        <span>{zh ? "价格 · 保证金 · 倍数" : "Price · margin · leverage"}</span>
+        <span className="text-right">{zh ? "对手" : "Who"}</span>
       </div>
-      {asks.length === 0 && bids.length === 0 ? <p className="px-2 py-3 text-sm text-ink/60">{zh ? "还没有人挂单。下面可以直接开多或开空。" : "Nobody has a quote yet. Open long or short below."}</p> : null}
-      {asks.length > askRows.length ? <p className="px-2 py-1 text-xs text-ink/50">{zh ? `上面还有 ${asks.length - askRows.length} 张` : `${asks.length - askRows.length} more above`}</p> : null}
+      {asks.length === 0 && bids.length === 0 ? <p className="px-2 py-3 text-sm text-ink/60">{zh ? "还没有人挂单。" : "Nobody has a quote yet."}</p> : null}
+      {asks.length === 0 && bids.length > 0 ? <p className="px-2 py-1 text-xs text-ink/40">{zh ? "卖盘空" : "No asks"}</p> : null}
       {askRows.map((row) => line(row, true))}
-      <p className="my-1 flex items-center gap-3 px-2 font-mono text-sm text-ink/70">
+      <p className="my-1 flex items-center gap-3 px-2 font-mono text-sm">
         <span className="h-px flex-1 bg-gold/40" />
-        <span>{mark > 0 ? `${mark.toFixed(4)} USD` : "—"}</span>
+        <span>{mark > 0 ? mark.toFixed(4) : "—"}</span>
         <span className="h-px flex-1 bg-gold/40" />
       </p>
       {bidRows.map((row) => line(row, false))}
-      {bids.length > bidRows.length ? <p className="px-2 py-1 text-xs text-ink/50">{zh ? `下面还有 ${bids.length - bidRows.length} 张` : `${bids.length - bidRows.length} more below`}</p> : null}
-      {hidden > 0 || (open && asks.length + bids.length > 10) ? (
-        <button type="button" className="min-h-11 w-full border-t border-gold/40 text-sm" onClick={() => setOpen((value) => !value)}>
-          {open ? (zh ? "收起" : "Fold") : zh ? `展开其余 ${hidden} 张` : `Show ${hidden} more`}
+      {bids.length === 0 && asks.length > 0 ? <p className="px-2 py-1 text-xs text-ink/40">{zh ? "买盘空" : "No bids"}</p> : null}
+      {nearAsks.length + nearBids.length === 0 && farCount > 0 ? (
+        <p className="px-2 pb-1 text-xs text-ink/50">{zh ? "这些价离标记超过 15%，成交价按挂单价，不按标记价。" : "These prices are more than 15% from the mark. A fill uses the quote, not the mark."}</p>
+      ) : null}
+      {farCount > 0 && nearAsks.length + nearBids.length > 0 ? (
+        <button type="button" className="min-h-9 w-full text-xs text-ink/60" onClick={() => setShowFar((value) => !value)}>
+          {showFar ? (zh ? "收起偏离的单" : "Hide far quotes") : zh ? `偏离标记价 ${farCount} 张` : `${farCount} far from the mark`}
+        </button>
+      ) : null}
+      {hidden > 0 || more ? (
+        <button type="button" className="min-h-9 w-full border-t border-gold/30 text-xs" onClick={() => setMore((value) => !value)}>
+          {more ? (zh ? "收起" : "Fold") : zh ? `再看 ${hidden} 张` : `${hidden} more`}
         </button>
       ) : null}
     </div>
@@ -378,9 +383,6 @@ export function RealPerp() {
       ]
     : presets;
   const markN = live && live > 0 ? live : view && view.mark > 0n ? Number(formatUnits(view.mark, 18)) : 0;
-  const markWei = markN > 0 ? parseUnits(markN.toFixed(8), 18) : 0n;
-  const split = view?.dealOpen ? splitEquity(view.dealBase, view.dealEntry, markWei, view.marginL, view.marginS) : null;
-  const lead = split ? (split.eqL === split.eqS ? "flat" : split.eqL > split.eqS ? "long" : "short") : null;
   const entryN = view && view.dealEntry > 0n ? Number(formatUnits(view.dealEntry, 18)) : 0;
   const pick = (nextMargin: string, nextLev: number) => {
     setMargin(nextMargin);
@@ -531,25 +533,6 @@ export function RealPerp() {
             lang={lang}
             desk="perp"
           />
-          <DepthTape
-            lang={lang}
-            bids={board.filter((row) => row.quote.long).map((row) => ({
-              price: row.quote.price > 0n ? Number(formatUnits(row.quote.price, 18)) : markN,
-              size: (() => {
-                const px = row.quote.price > 0n ? Number(formatUnits(row.quote.price, 18)) : markN;
-                const margin = Number(formatUnits(row.quote.margin, dec));
-                return px > 0 ? (margin * row.quote.lev) / px : 0;
-              })(),
-            }))}
-            asks={board.filter((row) => !row.quote.long).map((row) => ({
-              price: row.quote.price > 0n ? Number(formatUnits(row.quote.price, 18)) : markN,
-              size: (() => {
-                const px = row.quote.price > 0n ? Number(formatUnits(row.quote.price, 18)) : markN;
-                const margin = Number(formatUnits(row.quote.margin, dec));
-                return px > 0 ? (margin * row.quote.lev) / px : 0;
-              })(),
-            }))}
-          />
           <DeskLadder
             rows={board}
             mark={markN}
@@ -560,73 +543,40 @@ export function RealPerp() {
             named={named}
             lang={lang}
             onTake={(book, quote) => run((from) => takePerp(from, book, quote.id, formatUnits(quote.margin, dec), quote.lev, quote.price > 0n))}
+            onCancel={(book, quote) => run((from) => cancelPerp(from, book, quote.id), "cancel")}
           />
-          <p className="px-3 py-2 text-xs text-ink/50">
-            {lang === "zh"
-              ? "红的是空单，点「吃单开多」。绿的是多单，点「吃单开空」。写着偏离的单，成交价不是现在的标记价。自己的单写着「我的」。"
-              : "Red is a short: tap Take long. Green is a long: tap Take short. A row marked Far fills at its own price, not the mark. Yours says Mine."}
-          </p>
-          <div className="grid grid-cols-2 gap-2 px-3 pb-3">
-            <button
-              type="button"
-              className="min-h-12 bg-ink text-paper disabled:opacity-40"
-              disabled={busy || lock.status === "bad" || !levOk || !marginOk || !priceOk || !view?.priced || Boolean(!view?.book && waiting && view?.pendingLong)}
-              onClick={() => {
-                if (lev > 20 && !hot) { setHot(true); return; }
-                setCard("long");
-              }}
-            >
-              {lev > 20 && !hot ? (lang === "zh" ? "超过 20 倍，再点一次" : "Over 20x. Tap again") : `${c.postLong} · ${margin || "1"} USDT`}
-            </button>
-            <button
-              type="button"
-              className="min-h-12 bg-sell text-[#f7f5f0] disabled:opacity-40"
-              disabled={busy || lock.status === "bad" || !levOk || !marginOk || !priceOk || !view?.priced || Boolean(!view?.book && waiting && !view?.pendingLong)}
-              onClick={() => {
-                if (lev > 20 && !hot) { setHot(true); return; }
-                setCard("short");
-              }}
-            >
-              {lev > 20 && !hot ? (lang === "zh" ? "超过 20 倍，再点一次" : "Over 20x. Tap again") : `${c.postShort} · ${margin || "1"} USDT`}
-            </button>
-          </div>
-          {!view ? <p className="px-3 pb-2 text-sm text-ink/60">{lang === "zh" ? "正在读合约，读完才能开仓。" : "Reading the contract. Open waits until that finishes."}</p> : null}
+          {!view ? <p className="px-3 py-2 text-sm text-ink/60">{lang === "zh" ? "正在读合约，读完才能开仓。" : "Reading the contract. Open waits until that finishes."}</p> : null}
           {lock.status === "bad" ? <p className="px-3 pb-2 text-sm text-sell">{lang === "zh" ? "收费地址对不上，开仓停了。" : "The fee address does not match. Opening is stopped."}</p> : null}
         </div>
         <div className="border border-gold/40 p-3">
           <p className="text-xs tracking-widest text-gold">{c.pkTitle}</p>
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <p>
-              <span className="block text-xs text-gold">{c.pkLong}</span>
-              {view?.dealOpen || (waiting && view?.pendingLong) ? (
-                <a className="break-all font-mono text-xs underline decoration-gold" href={`${scan}/address/${view?.dealOpen ? view.longAddr : view?.pendingUser}`}>
-                  {view?.dealOpen ? short(view.longAddr) : short(view?.pendingUser ?? "")}
-                </a>
-              ) : (
-                <span className="font-mono text-xs text-ink/50">{c.pkEmpty}</span>
-              )}
-              <span className="mt-1 block font-mono text-sm tabular-nums">{split ? `${usdtText(split.eqL)} USDT` : waiting && view?.pendingLong ? `${usdtText(view.pendingMargin)}` : "—"}</span>
-            </p>
-            <p className="text-right">
-              <span className="block text-xs text-sell">{c.pkShort}</span>
-              {view?.dealOpen || (waiting && view && !view.pendingLong) ? (
-                <a className="break-all font-mono text-xs underline decoration-gold" href={`${scan}/address/${view?.dealOpen ? view.shortAddr : view?.pendingUser}`}>
-                  {view?.dealOpen ? short(view.shortAddr) : short(view?.pendingUser ?? "")}
-                </a>
-              ) : (
-                <span className="font-mono text-xs text-ink/50">{c.pkEmpty}</span>
-              )}
-              <span className="mt-1 block font-mono text-sm tabular-nums">{split ? `${usdtText(split.eqS)} USDT` : waiting && view && !view.pendingLong ? `${usdtText(view.pendingMargin)}` : "—"}</span>
-            </p>
-          </div>
-          <div className="mt-2 h-3 overflow-hidden border border-gold/40">
-            <div className="h-full bg-ink" style={{ width: split && split.eqL + split.eqS > 0n ? `${Number((split.eqL * 1000n) / (split.eqL + split.eqS)) / 10}%` : "50%" }} />
-          </div>
-          <p className="mt-2 text-sm">
-            {lead === "long" ? `${c.pkLong}${c.pkLead}` : lead === "short" ? `${c.pkShort}${c.pkLead}` : c.pkFlat}
-            {entryN > 0 ? ` · ${entryN.toFixed(2)} → ${markN.toFixed(2)}` : markN > 0 ? ` · $${markN.toFixed(2)}` : ""}
-          </p>
-          <p className="text-xs leading-relaxed text-ink/60">{c.pkNote}</p>
+          {!view?.liveDeals.length ? (
+            <p className="mt-2 text-sm text-ink/60">{lang === "zh" ? "还没有成交。上面是未成交的挂单，开仓在下面。" : "No matched deal yet. Resting quotes are above. Open further down."}</p>
+          ) : (
+            <div className="mt-2 flex flex-col gap-2">
+              {view.liveDeals.map((deal) => {
+                const mineLong = Boolean(account && deal.long.toLowerCase() === account.toLowerCase());
+                const mineShort = Boolean(account && deal.short.toLowerCase() === account.toLowerCase());
+                const mineDeal = mineLong || mineShort;
+                const pnl = mineLong ? deal.eqL - deal.marginL : deal.eqS - deal.marginS;
+                const ahead = deal.eqL === deal.eqS ? c.pkFlat : deal.eqL > deal.eqS ? `${c.pkLong}${c.pkLead}` : `${c.pkShort}${c.pkLead}`;
+                return (
+                  <div key={String(deal.id)} className="border border-gold/30 px-2 py-2 text-sm">
+                    <p className="font-mono text-xs text-[#1b6b45]">{c.pkLong} {named(deal.long)}{mineLong ? (lang === "zh" ? " · 我的" : " · mine") : ""} · {usdtText(deal.eqL)}</p>
+                    <p className="font-mono text-xs text-sell">{c.pkShort} {named(deal.short)}{mineShort ? (lang === "zh" ? " · 我的" : " · mine") : ""} · {usdtText(deal.eqS)}</p>
+                    <p className="mt-1">{ahead} · {pxText(deal.entry)} → {markN > 0 ? markN.toFixed(4) : "—"}</p>
+                    {mineDeal ? <p className={`mt-1 font-mono ${pnl >= 0n ? "text-gold" : "text-sell"}`}>{c.pnl} {pnl >= 0n ? "+" : ""}{pretty(pnl, dec, 4)} USDT</p> : null}
+                    {mineDeal ? (
+                      <button type="button" className="mt-2 min-h-11 bg-ink px-3 text-paper" disabled={busy} onClick={() => run((from) => closePerp(from, perp, deal.id))}>{c.closeDeal}</button>
+                    ) : null}
+                    {deal.weakL || deal.weakS ? (
+                      <button type="button" className="mt-2 min-h-11 border border-sell px-3 text-sell" disabled={busy} onClick={() => run((from) => liquidatePerp(from, perp, deal.id))}>{c.liqNow}</button>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
         {/^0x[a-fA-F0-9]{40}$/.test(perp) && (
           <>
@@ -668,7 +618,7 @@ export function RealPerp() {
                   <span className="font-mono">{pxText(view?.entry ?? 0n)}</span>
                 </p>
               </div>
-            ) : !waiting ? (
+            ) : !waiting && !(view?.liveDeals.some((deal) => account && (deal.long.toLowerCase() === account.toLowerCase() || deal.short.toLowerCase() === account.toLowerCase()))) ? (
               <p className="text-sm text-ink/70">{lang === "zh" ? "本地址在这条链上没有未平仓。" : "This address has no open position on this chain."}</p>
             ) : null}
             {view?.book ? (
@@ -684,7 +634,7 @@ export function RealPerp() {
                 {sheet === "mine" ? (
                   <>
                     {view.quotes.filter((quote) => account && quote.user.toLowerCase() === account.toLowerCase()).length === 0 ? (
-                      <p className="text-sm text-ink/60">{c.pkEmpty}</p>
+                      <p className="text-sm text-ink/60">{lang === "zh" ? "你还没有未成交的挂单。" : "You have no resting quote."}</p>
                     ) : null}
                     {view.quotes
                       .filter((quote) => account && quote.user.toLowerCase() === account.toLowerCase())
@@ -701,40 +651,6 @@ export function RealPerp() {
                         ))}
                   </>
                 ) : null}
-                {view.liveDeals.map((deal) => {
-                  if (sheet !== "mine") return null;
-                  const mineDeal = Boolean(account && (deal.long.toLowerCase() === account.toLowerCase() || deal.short.toLowerCase() === account.toLowerCase()));
-                  if (sheet === "mine" && !mineDeal) return null;
-                  const mineLong = Boolean(account && deal.long.toLowerCase() === account.toLowerCase());
-                  const pnl = mineLong ? deal.eqL - deal.marginL : deal.eqS - deal.marginS;
-                  const ahead = deal.eqL === deal.eqS ? c.pkFlat : deal.eqL > deal.eqS ? `${c.pkLong}${c.pkLead}` : `${c.pkShort}${c.pkLead}`;
-                  return (
-                    <div key={String(deal.id)} className="border border-gold/40 px-2 py-2 text-sm">
-                      <p className="font-mono text-xs">
-                        {c.pkLong} {named(deal.long)} · {usdtText(deal.eqL)}
-                      </p>
-                      <p className="font-mono text-xs">
-                        {c.pkShort} {named(deal.short)} · {usdtText(deal.eqS)}
-                      </p>
-                      <p className="mt-1">{ahead}</p>
-                      {mineDeal ? (
-                        <p className={`mt-1 font-mono ${pnl >= 0n ? "text-gold" : "text-sell"}`}>
-                          {c.pnl} {pnl >= 0n ? "+" : ""}{pretty(pnl, dec, 4)} USDT
-                        </p>
-                      ) : null}
-                      {mineDeal ? (
-                        <button type="button" className="mt-2 min-h-11 bg-ink px-3 text-paper" disabled={busy} onClick={() => run((from) => closePerp(from, perp, deal.id))}>
-                          {c.closeDeal}
-                        </button>
-                      ) : null}
-                      {deal.weakL || deal.weakS ? (
-                        <button type="button" className="mt-2 min-h-11 border border-sell px-3 text-sell" disabled={busy} onClick={() => run((from) => liquidatePerp(from, perp, deal.id))}>
-                          {c.liqNow}
-                        </button>
-                      ) : null}
-                    </div>
-                  );
-                })}
               </>
             ) : null}
             {sheet === "mine" || !view?.book ? (
