@@ -26,7 +26,7 @@ import {
   type Balances,
   type PoolPrint,
 } from "@/lib/bsc";
-import { currentAccount, onAccount } from "@/lib/wallet";
+import { currentAccount, connectKind, onAccount, onOpenLink } from "@/lib/wallet";
 import { getSpotCandles } from "@/lib/candles";
 import type { Candle } from "@/lib/bem-ohlcv";
 import type { SpotFrame } from "@/lib/spot-ohlcv";
@@ -63,6 +63,7 @@ export function SpotDesk() {
   const [bad, setBad] = useState(false);
   const [hash, setHash] = useState<string | null>(null);
   const [card, setCard] = useState(false);
+  const [openLink, setOpenLink] = useState<string | null>(null);
   const [okbBal, setOkbBal] = useState<{ okb: bigint; usdt: bigint } | null>(null);
   const [assetBal, setAssetBal] = useState<bigint | null>(null);
   const [frame, setFrame] = useState<SpotFrame>("1m");
@@ -70,6 +71,7 @@ export function SpotDesk() {
   const lock = useFeeLock();
 
   useEffect(() => onAccount(setAccount), []);
+  useEffect(() => onOpenLink(setOpenLink), []);
 
   useEffect(() => {
     let dead = false;
@@ -172,6 +174,25 @@ export function SpotDesk() {
     else if (message === "amount") setNote(c.pay);
     else setNote(message || c.walletReject);
     setBad(true);
+  };
+
+  const connectHere = async () => {
+    setBusy(true);
+    setBad(false);
+    setNote(lang === "zh" ? "正在打开钱包…" : "Opening the wallet…");
+    try {
+      const from = await connectKind("okx");
+      if (pair === "okb") await connectX();
+      else await connectBsc();
+      setAccount(from);
+      setNote(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      if (message === "binanceapp") return;
+      fail(err);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const trade = async () => {
@@ -412,9 +433,20 @@ export function SpotDesk() {
             {pair === "okb" && side === "sell" ? (lang === "zh" ? " · 留下 0.002 OKB 付 gas" : " · 0.002 OKB stays for gas") : ""}
             {pair === "bnb" && side === "sell" ? (lang === "zh" ? " · 留下 0.003 BNB 付 gas" : " · 0.003 BNB stays for gas") : ""}
           </p>
-          <button type="submit" className="min-h-12 bg-ink text-paper disabled:opacity-40" disabled={busy || over || lock.status !== "ok" || (Boolean(account) && !amount.trim())}>
-            {account ? `${side === "buy" ? c.buy : c.sell} ${base}` : c.walletConnect}
-          </button>
+          {!account ? (
+            <button type="button" className="min-h-12 bg-ink text-paper disabled:opacity-40" disabled={busy} onClick={() => void connectHere()}>
+              {busy ? (lang === "zh" ? "正在打开钱包…" : "Opening the wallet…") : c.walletConnect}
+            </button>
+          ) : (
+            <button type="submit" className="min-h-12 bg-ink text-paper disabled:opacity-40" disabled={busy || over || lock.status !== "ok" || !amount.trim()}>
+              {`${side === "buy" ? c.buy : c.sell} ${base}`}
+            </button>
+          )}
+          {openLink ? (
+            <a className="inline-flex min-h-11 items-center justify-center border border-gold bg-ink px-3 text-paper" href={openLink} target="_blank" rel="noreferrer">
+              {lang === "zh" ? "没弹出的话，点这里打开 OKX" : "If nothing opened, open OKX"}
+            </a>
+          ) : null}
           {note ? <p className={`text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
           {hash ? (
             <a className="text-sm underline decoration-gold underline-offset-4" href={pair === "okb" ? okbTxUrl(hash) : txUrl(hash)} target="_blank" rel="noreferrer">

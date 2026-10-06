@@ -55,7 +55,7 @@ export function ConnectButton() {
           disabled={busy}
           onClick={() => {
             setBusy(true);
-            setNote(null);
+            setNote(lang === "zh" ? "正在打开钱包…" : "Opening the wallet…");
             connectKind(which)
               .catch((err: unknown) => {
                 if (err instanceof Error && err.message === "binanceapp") return;

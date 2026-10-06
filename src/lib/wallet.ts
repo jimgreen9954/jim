@@ -175,10 +175,15 @@ export async function connectKind(which: WalletKind): Promise<string> {
   kind = which;
   const plugged = which === "binance" ? binanceInjected() : okxInjected();
   if (plugged) return useInjected(plugged);
+  const eth = host().ethereum;
   if (which === "binance") {
+    if (eth?.isBinance) return useInjected(eth);
     publishLink(`https://app.binance.com/cedefi/dapp?url=${encodeURIComponent(window.location.href)}`);
     throw new Error("binanceapp");
   }
+  if (eth) return useInjected(eth);
+  const here = window.location.href;
+  publishLink(`https://www.okx.com/download?deeplink=${encodeURIComponent(`okx://wallet/dapp/url?dappUrl=${encodeURIComponent(here)}`)}`);
   return connectOkxRemote();
 }
 
