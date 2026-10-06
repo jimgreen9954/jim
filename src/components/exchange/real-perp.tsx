@@ -90,13 +90,11 @@ function DeskLadder({
     return { perp, quote, px, margin, size };
   });
   const near = (row: (typeof drawn)[number]) => mark <= 0 || row.px <= 0 || Math.abs(row.px - mark) / mark <= 0.15;
-  const far = drawn.filter((row) => !near(row));
-  const asks = drawn.filter((row) => !row.quote.long && near(row)).sort((a, b) => b.px - a.px);
-  const bids = drawn.filter((row) => row.quote.long && near(row)).sort((a, b) => b.px - a.px);
+  const asks = drawn.filter((row) => !row.quote.long).sort((a, b) => b.px - a.px);
+  const bids = drawn.filter((row) => row.quote.long).sort((a, b) => b.px - a.px);
   const [open, setOpen] = useState(false);
-  const [farOpen, setFarOpen] = useState(false);
-  const askRows = open ? asks : asks.slice(-5);
-  const bidRows = open ? bids : bids.slice(0, 5);
+  const askRows = open ? asks : asks.slice(-8);
+  const bidRows = open ? bids : bids.slice(0, 8);
   const hidden = asks.length + bids.length - askRows.length - bidRows.length;
   const bestAsk = asks.length ? asks[asks.length - 1].px : 0;
   const bestBid = bids.length ? bids[0].px : 0;
@@ -136,6 +134,7 @@ function DeskLadder({
               {buy ? (zh ? "吃单开多" : "Take long") : zh ? "吃单开空" : "Take short"}
             </button>
           )}
+          {!near(row) ? <span className="text-xs text-ink/40">{zh ? "偏离" : "Far"}</span> : null}
           <a className="text-xs text-ink/50 underline" href={`${scan}/address/${row.quote.user}`} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
             {named(row.quote.user).slice(0, 6)}
           </a>
@@ -155,7 +154,7 @@ function DeskLadder({
         <span>{zh ? "保证金" : "Margin"}</span>
         <span className="text-right">{zh ? "指定成交" : "Take"}</span>
       </div>
-      {asks.length === 0 && bids.length === 0 ? <p className="px-2 py-3 text-sm text-ink/60">{zh ? "这口价附近还没有挂单。" : "No orders near this price."}</p> : null}
+      {asks.length === 0 && bids.length === 0 ? <p className="px-2 py-3 text-sm text-ink/60">{zh ? "还没有人挂单。下面可以直接开多或开空。" : "Nobody has a quote yet. Open long or short below."}</p> : null}
       {asks.length > askRows.length ? <p className="px-2 py-1 text-xs text-ink/50">{zh ? `上面还有 ${asks.length - askRows.length} 张` : `${asks.length - askRows.length} more above`}</p> : null}
       {askRows.map((row) => line(row, true))}
       <p className="my-1 flex items-center gap-3 px-2 font-mono text-sm text-ink/70">
@@ -169,14 +168,6 @@ function DeskLadder({
         <button type="button" className="min-h-11 w-full border-t border-gold/40 text-sm" onClick={() => setOpen((value) => !value)}>
           {open ? (zh ? "收起" : "Fold") : zh ? `展开其余 ${hidden} 张` : `Show ${hidden} more`}
         </button>
-      ) : null}
-      {far.length > 0 ? (
-        <div className="border-t border-gold/40">
-          <button type="button" className="min-h-11 w-full text-sm" onClick={() => setFarOpen((value) => !value)}>
-            {zh ? `远离标记价 ${far.length} 张` : `${far.length} far from the mark`}
-          </button>
-          {farOpen ? far.map((row) => line(row, !row.quote.long)) : null}
-        </div>
       ) : null}
     </div>
   );
@@ -320,7 +311,7 @@ export function RealPerp() {
     else if (message === "revert") setNote(c.perpRevert);
     else if (code === 4001) setNote(c.walletReject);
     else if (/RPC|publicnode|Archive|Invalid param/i.test(message)) setNote(c.rpcWait);
-    else if (message === "margin") setNote(`${floor}–500 USDT`);
+    else if (message === "amount") setNote(lang === "zh" ? "数量不对。先看保证金和价格有没有填上。" : "That amount is not valid. Check the margin and the price.");
     else if (message === "price") setNote(c.badPrice);
     else if (message === "lev") setNote(c.levCap);
     else if (message === "code") setNote(lang === "zh" ? "推荐码用 1 到 16 个英文字，汉字最多 5 个。" : "Use 1 to 16 English characters, or up to 5 Chinese characters.");
@@ -572,25 +563,59 @@ export function RealPerp() {
           />
           <p className="px-3 py-2 text-xs text-ink/50">
             {lang === "zh"
-              ? "上面红的是空单，点「吃单开多」。下面绿的是多单，点「吃单开空」。自己的单写着「我的」。偏离标记价超过 15% 的单收在「远离标记价」。"
-              : "Red rows above are shorts. Tap the row or Buy. Green rows below are longs. Tap the row or Sell. Yours says Mine. Five stay next to the price. The rest can open."}
+              ? "红的是空单，点「吃单开多」。绿的是多单，点「吃单开空」。写着偏离的单，成交价不是现在的标记价。自己的单写着「我的」。"
+              : "Red is a short: tap Take long. Green is a long: tap Take short. A row marked Far fills at its own price, not the mark. Yours says Mine."}
           </p>
+          <div className="grid grid-cols-2 gap-2 px-3 pb-3">
+            <button
+              type="button"
+              className="min-h-12 bg-ink text-paper disabled:opacity-40"
+              disabled={busy || lock.status === "bad" || !levOk || !marginOk || !priceOk || !view?.priced || Boolean(!view?.book && waiting && view?.pendingLong)}
+              onClick={() => {
+                if (lev > 20 && !hot) { setHot(true); return; }
+                setCard("long");
+              }}
+            >
+              {lev > 20 && !hot ? (lang === "zh" ? "超过 20 倍，再点一次" : "Over 20x. Tap again") : `${c.postLong} · ${margin || "1"} USDT`}
+            </button>
+            <button
+              type="button"
+              className="min-h-12 bg-sell text-[#f7f5f0] disabled:opacity-40"
+              disabled={busy || lock.status === "bad" || !levOk || !marginOk || !priceOk || !view?.priced || Boolean(!view?.book && waiting && !view?.pendingLong)}
+              onClick={() => {
+                if (lev > 20 && !hot) { setHot(true); return; }
+                setCard("short");
+              }}
+            >
+              {lev > 20 && !hot ? (lang === "zh" ? "超过 20 倍，再点一次" : "Over 20x. Tap again") : `${c.postShort} · ${margin || "1"} USDT`}
+            </button>
+          </div>
+          {!view ? <p className="px-3 pb-2 text-sm text-ink/60">{lang === "zh" ? "正在读合约，读完才能开仓。" : "Reading the contract. Open waits until that finishes."}</p> : null}
+          {lock.status === "bad" ? <p className="px-3 pb-2 text-sm text-sell">{lang === "zh" ? "收费地址对不上，开仓停了。" : "The fee address does not match. Opening is stopped."}</p> : null}
         </div>
         <div className="border border-gold/40 p-3">
           <p className="text-xs tracking-widest text-gold">{c.pkTitle}</p>
           <div className="mt-2 grid grid-cols-2 gap-2">
             <p>
               <span className="block text-xs text-gold">{c.pkLong}</span>
-              <a className="break-all font-mono text-xs underline decoration-gold" href={view?.dealOpen ? `${scan}/address/${view.longAddr}` : view && waiting && view.pendingLong ? `${scan}/address/${view.pendingUser}` : undefined}>
-                {view?.dealOpen ? short(view.longAddr) : waiting && view?.pendingLong ? short(view.pendingUser) : c.pkEmpty}
-              </a>
+              {view?.dealOpen || (waiting && view?.pendingLong) ? (
+                <a className="break-all font-mono text-xs underline decoration-gold" href={`${scan}/address/${view?.dealOpen ? view.longAddr : view?.pendingUser}`}>
+                  {view?.dealOpen ? short(view.longAddr) : short(view?.pendingUser ?? "")}
+                </a>
+              ) : (
+                <span className="font-mono text-xs text-ink/50">{c.pkEmpty}</span>
+              )}
               <span className="mt-1 block font-mono text-sm tabular-nums">{split ? `${usdtText(split.eqL)} USDT` : waiting && view?.pendingLong ? `${usdtText(view.pendingMargin)}` : "—"}</span>
             </p>
             <p className="text-right">
               <span className="block text-xs text-sell">{c.pkShort}</span>
-              <a className="break-all font-mono text-xs underline decoration-gold" href={view?.dealOpen ? `${scan}/address/${view.shortAddr}` : view && waiting && !view.pendingLong ? `${scan}/address/${view.pendingUser}` : undefined}>
-                {view?.dealOpen ? short(view.shortAddr) : waiting && view && !view.pendingLong ? short(view.pendingUser) : c.pkEmpty}
-              </a>
+              {view?.dealOpen || (waiting && view && !view.pendingLong) ? (
+                <a className="break-all font-mono text-xs underline decoration-gold" href={`${scan}/address/${view?.dealOpen ? view.shortAddr : view?.pendingUser}`}>
+                  {view?.dealOpen ? short(view.shortAddr) : short(view?.pendingUser ?? "")}
+                </a>
+              ) : (
+                <span className="font-mono text-xs text-ink/50">{c.pkEmpty}</span>
+              )}
               <span className="mt-1 block font-mono text-sm tabular-nums">{split ? `${usdtText(split.eqS)} USDT` : waiting && view && !view.pendingLong ? `${usdtText(view.pendingMargin)}` : "—"}</span>
             </p>
           </div>
@@ -916,7 +941,7 @@ export function RealPerp() {
                   <button
                     type="button"
                     className="min-h-12 bg-ink text-paper disabled:opacity-40"
-                    disabled={busy || lock.status !== "ok" || !levOk || !marginOk || !priceOk || !view?.priced || Boolean(!view?.book && waiting && view?.pendingLong)}
+                    disabled={busy || lock.status === "bad" || !levOk || !marginOk || !priceOk || !view?.priced || Boolean(!view?.book && waiting && view?.pendingLong)}
                     onClick={() => {
                       if (lev > 20 && !hot) { setHot(true); return; }
                       setCard("long");
@@ -927,7 +952,7 @@ export function RealPerp() {
                   <button
                     type="button"
                     className="min-h-12 border border-sell bg-sell text-[#f7f5f0] disabled:opacity-40"
-                    disabled={busy || lock.status !== "ok" || !levOk || !marginOk || !priceOk || !view?.priced || Boolean(!view?.book && waiting && !view?.pendingLong)}
+                    disabled={busy || lock.status === "bad" || !levOk || !marginOk || !priceOk || !view?.priced || Boolean(!view?.book && waiting && !view?.pendingLong)}
                     onClick={() => {
                       if (lev > 20 && !hot) { setHot(true); return; }
                       setCard("short");
@@ -964,7 +989,7 @@ export function RealPerp() {
                             setArm(next);
                           }
                         }
-                        return openPerp(from, perp, long, margin, lev, limit);
+                        return openPerp(from, perp, long, margin, lev, limit.trim() || (markN > 0 ? markN.toFixed(4) : ""));
                       });
                     }}
                     lines={[
