@@ -17,7 +17,7 @@ const spotFrames: SpotFrame[] = ["1m", "5m", "15m", "1h", "1d"];
 
 export const getSpotCandles = createServerFn({ method: "GET" })
   .validator((input: { pair?: string; frame?: string }) => ({
-    pair: (input?.pair === "bnb" || input?.pair === "okb" ? input.pair : "bem") as SpotPair,
+    pair: (input?.pair === "bnb" || input?.pair === "okb" || input?.pair === "btc" || input?.pair === "xau" ? input.pair : "bem") as SpotPair,
     frame: (spotFrames.includes(input?.frame as SpotFrame) ? input?.frame : "1m") as SpotFrame,
   }))
   .handler(async ({ data }): Promise<Candle[]> => pullSpot(data.pair, data.frame));

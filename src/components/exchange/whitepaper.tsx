@@ -11,7 +11,7 @@ const zh: Section[] = [
   {
     h: "交易台",
     ps: [
-      "TAPELIQUID 做三件事：现货、永续、晶圆。现货是 BEM / USDT 和 BNB / USDT，在 BNB Smart Chain 的 PancakeSwap 上成交。永续有三本账，各锁一份合约：BSC 的 BEM、X Layer 的 BEM、BSC 的六个晶体管。同一本账里的人能看见并吃彼此的单。不同的账不能合成一笔。",
+      "TAPELIQUID 做三件事：现货、永续、晶圆。现货是 BEM、BNB、BTC、黄金和 OKB 对稳定币。前四个在 BNB Smart Chain 的 PancakeSwap，OKB 在 X Layer 的 PotatoSwap。永续有三本账，各锁一份合约：BSC 的 BEM、X Layer 的 BEM、BSC 的六个晶体管。同一本账里的人能看见并吃彼此的单。不同的账不能合成一笔。",
       "模拟盘只在这台浏览器里，用来看盘，不碰真钱。晶圆在 X Layer 的处理器上铸造和流片，不结算盈亏。",
       "页面不托管。现货留在钱包里，直到你签名。永续的保证金进你选的那份合约。签名在 OKX 或币安钱包里完成。页面不收私钥。",
       "页首可以换白天和黑夜。选择记在这台浏览器里，不写上链，也不改价格和订单。",
@@ -22,7 +22,8 @@ const zh: Section[] = [
     ps: [
       "两对都走 PancakeSwap V3。报价读链上 Quoter，成交走 SwapRouter。",
       `BEM / USDT 的池子是 ${BSC.pool}，池费率 1%。BNB / USDT 的池子是 ${BSC.bnbPool}，池费率 0.01%。买 BNB 到账的是钱包里的 BNB。卖 BNB 留下约 0.003 BNB 付 gas。`,
-      "OKB 在 X Layer 的 PotatoSwap 上买卖，池子是 OKB / USDT。买到的是钱包里的 OKB。卖出留下约 0.002 OKB 付 gas。台费同样是千分之二。现货页有 K 线，成交地址从池子日志读，点得开浏览器。",
+      "OKB 在 X Layer 的 PotatoSwap 上买卖，池子是 OKB / USDT。买到的是钱包里的 OKB。卖出留下约 0.002 OKB 付 gas。台费同样是千分之二。现货页有 K 线。K 线下面是池子里的真实成交，地址是签那笔交易的钱包，点得开浏览器。",
+      "BTC 是 BSC 上的 BTCB，池子是 Pancake BTCB / USDT，池费率 0.01%。黄金是 Tether Gold（XAUt），池子是 Pancake XAUt / USDT，池费率 0.05%，一枚对应一盎司黄金。买到的都进钱包。台费同样是千分之二。",
       "本台另收付出金额的千分之二。买入从 USDT 扣，卖 BEM 从 BEM 扣，卖 BNB 从 BNB 扣，打进同一个收费地址。剩下的才进池子。池子自己的手续费留给流动性提供者，gas 付给链，这两笔不进收费地址。现货没有返佣。",
       "下单前，页面写出这一单的台费，以及按 1% 滑点算出的最少到账。余额不够，按钮不会让你签。钱包会先签台费，再签兑换。买 BNB 时，兑换和解包写在同一笔里。",
       "现货价每秒从池子读出。BEM 的这个价也拿来做永续的标记来源。永续的成交价仍是挂单上写的那个价。",
@@ -123,7 +124,7 @@ const en: Section[] = [
   {
     h: "The desk",
     ps: [
-      "TAPELIQUID does three things: spot, perpetuals, and a wafer. Spot is BEM / USDT and BNB / USDT, filled on PancakeSwap on BNB Smart Chain. There are three perpetual books, each locked to one contract: BEM on BSC, BEM on X Layer, and six transistor markets on BSC. People on the same book can see and take each other's orders. An order on one book cannot fill an order on another.",
+      "TAPELIQUID does three things: spot, perpetuals, and a wafer. Spot is BEM, BNB, BTC, gold, and OKB against a stablecoin. The first four fill on PancakeSwap on BNB Smart Chain. OKB fills on PotatoSwap on X Layer. There are three perpetual books, each locked to one contract: BEM on BSC, BEM on X Layer, and six transistor markets on BSC. People on the same book can see and take each other's orders. An order on one book cannot fill an order on another.",
       "The paper book lives only in this browser. It is for looking, and it does not move real money. The wafer mints and tapes out on an X Layer processor. It does not settle PnL.",
       "The page does not custody funds. Spot stays in the wallet until you sign. Perpetual margin sits in the contract you picked. You sign in OKX or Binance Wallet. The page never asks for a private key.",
       "The header switches day and night. The choice stays in this browser. It is not written on chain, and it does not change a price or an order.",
@@ -134,7 +135,8 @@ const en: Section[] = [
     ps: [
       "Both pairs use PancakeSwap V3. Quotes come from the on-chain quoter. Swaps use the SwapRouter.",
       `The BEM / USDT pool is ${BSC.pool}, pool fee 1%. The BNB / USDT pool is ${BSC.bnbPool}, pool fee 0.01%. A BNB buy lands in the wallet as BNB. A BNB sell leaves about 0.003 BNB for gas.`,
-      "OKB trades on PotatoSwap on X Layer, OKB / USDT. A buy lands as OKB. A sell leaves about 0.002 OKB for gas. The desk fee is the same 0.2%. The spot page has a chart. Trade addresses are read from the pool log and open in a browser.",
+      "OKB trades on PotatoSwap on X Layer, OKB / USDT. A buy lands as OKB. A sell leaves about 0.002 OKB for gas. The desk fee is the same 0.2%. The spot page has a chart. Under it, each fill is a real pool trade, and the address is the wallet that signed it.",
+      "BTC is BTCB on BSC, Pancake BTCB / USDT, pool fee 0.01%. Gold is Tether Gold (XAUt), Pancake XAUt / USDT, pool fee 0.05%, one token for one troy ounce. A buy stays in the wallet. The desk fee is the same 0.2%.",
       "This desk also takes 0.2% of what you pay. A buy takes it from USDT. A BEM sell takes it from BEM. A BNB sell takes it from BNB. It goes to the one fee address. The rest goes to the pool. The pool's own fee stays with liquidity providers. Gas stays with the chain. Neither goes to the fee address. Spot pays no rebate.",
       "Before you sign, the page shows this order's fee and the least you can receive after 1% slippage. If the balance is short, the button will not ask you to sign. The wallet signs the fee first, then the swap. A BNB buy puts the swap and the unwrap in one transaction.",
       "The spot price is read from the pool every second. The BEM price also feeds the perpetual mark. A perpetual fill is still the price written on the order.",

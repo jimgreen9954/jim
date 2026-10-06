@@ -24,6 +24,13 @@ export const BSC = {
   wbnb: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c" as const,
   bnbPool: "0x172fcD41E0913e95784454622d1c3724f546f849" as const,
   bnbFee: 100,
+  btcb: "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c" as const,
+  btcPool: "0x247f51881d1E3aE0f759afB801413a6C948Ef442" as const,
+  btcFee: 100,
+  xaut: "0x21cAef8A43163Eea865baeE23b9C2E327696A3bf" as const,
+  xauPool: "0x83a0a8a723262651AE9C54bbba929f167443bc59" as const,
+  xauFee: 500,
+  xauDecimals: 6,
   bemDecimals: 8,
   usdtDecimals: 18,
   slippageBps: 100,
@@ -116,6 +123,20 @@ export async function bnbPrice(): Promise<string> {
   return pretty(out, BSC.usdtDecimals, 2);
 }
 
+export async function btcPrice(): Promise<string> {
+  const out = await quoteExact(BSC.btcb, BSC.usdt, 10n ** 18n, BSC.btcFee);
+  return pretty(out, BSC.usdtDecimals, 2);
+}
+
+export async function xauPrice(): Promise<string> {
+  const out = await quoteExact(BSC.xaut, BSC.usdt, 10n ** BigInt(BSC.xauDecimals), BSC.xauFee);
+  return pretty(out, BSC.usdtDecimals, 2);
+}
+
+export async function readAsset(account: string, token: Hex): Promise<bigint> {
+  return client.readContract({ address: token, abi: erc20, functionName: "balanceOf", args: [account as Hex] });
+}
+
 export async function quoteExact(tokenIn: Hex, tokenOut: Hex, amountIn: bigint, fee = BSC.fee): Promise<bigint> {
   const result = await client.readContract({
     address: BSC.quoter,
@@ -146,36 +167,49 @@ export type PoolPrint = {
   who: string;
 };
 
-export async function recentPrints(market: "bem" | "bnb" = "bem"): Promise<PoolPrint[]> {
-  const pool = market === "bnb" ? BSC.bnbPool : BSC.pool;
-  const assetDecimals = market === "bnb" ? 18 : BSC.bemDecimals;
-  const spans = market === "bnb" ? [30n, 10n, 3n] : [400n, 120n, 40n];
+export async function recentPrints(market: "bem" | "bnb" | "btc" | "xau" = "bem"): Promise<PoolPrint[]> {
+  const pool = market === "bnb" ? BSC.bnbPool : market === "btc" ? BSC.btcPool : market === "xau" ? BSC.xauPool : BSC.pool;
+  const assetDecimals = market === "bnb" || market === "btc" ? 18 : market === "xau" ? BSC.xauDecimals : BSC.bemDecimals;
+  const assetIsToken0 = market === "xau";
+  const spans = market === "bnb" || market === "btc" ? [40n, 12n, 4n] : market === "xau" ? [180n, 60n, 20n] : [400n, 120n, 40n];
   const head = await client.getBlockNumber();
   let logs: Awaited<ReturnType<typeof client.getLogs<typeof swapEvent>>> = [];
   for (const span of spans) {
     const from = head > span ? head - span : 0n;
     try {
       logs = await client.getLogs({ address: pool, event: swapEvent, fromBlock: from, toBlock: head });
-      break;
+      if (logs.length > 0) break;
     } catch {
       logs = [];
     }
   }
-  return logs
-    .slice(-12)
-    .reverse()
-    .map((log) => {
-      const a0 = log.args.amount0 ?? 0n;
-      const a1 = log.args.amount1 ?? 0n;
-      return {
-        id: `${log.transactionHash}-${log.logIndex}`,
-        side: a1 < 0n ? "buy" : "sell",
-        bem: pretty(a1 < 0n ? -a1 : a1, assetDecimals, market === "bnb" ? 5 : 4),
-        usdt: pretty(a0 < 0n ? -a0 : a0, BSC.usdtDecimals, 2),
-        tx: log.transactionHash,
-        who: log.args.recipient ?? log.args.sender ?? "",
-      };
-    });
+  const rows = logs.slice(-8).reverse();
+  const signers = await Promise.all(
+    rows.map(async (log) => {
+      try {
+        const tx = await client.getTransaction({ hash: log.transactionHash });
+        return tx.from ?? "";
+      } catch {
+        const fallback = log.args.recipient ?? "";
+        return fallback.toLowerCase() === BSC.router.toLowerCase() ? "" : fallback;
+      }
+    }),
+  );
+  return rows.map((log, index) => {
+    const a0 = log.args.amount0 ?? 0n;
+    const a1 = log.args.amount1 ?? 0n;
+    const asset = assetIsToken0 ? a0 : a1;
+    const quote = assetIsToken0 ? a1 : a0;
+    const buy = asset < 0n;
+    return {
+      id: `${log.transactionHash}-${log.logIndex}`,
+      side: buy ? "buy" : "sell",
+      bem: pretty(buy ? -asset : asset, assetDecimals, market === "btc" ? 6 : market === "bnb" ? 5 : 4),
+      usdt: pretty(quote < 0n ? -quote : quote, BSC.usdtDecimals, 2),
+      tx: log.transactionHash,
+      who: signers[index] ?? "",
+    };
+  });
 }
 
 async function ensureBsc(): Promise<void> {
@@ -282,6 +316,46 @@ export async function swapBem(from: string, side: "buy" | "sell", amount: string
         tokenIn,
         tokenOut,
         fee: BSC.fee,
+        recipient: owner,
+        deadline: BigInt(Math.floor(Date.now() / 1000) + 60 * 20),
+        amountIn: swapIn,
+        amountOutMinimum: minOut,
+        sqrtPriceLimitX96: 0n,
+      },
+    ],
+  });
+  return finishSwap(from, data, paid);
+}
+
+export async function swapListed(from: string, key: "btc" | "xau", side: "buy" | "sell", amount: string): Promise<Hex> {
+  const token = key === "btc" ? BSC.btcb : BSC.xaut;
+  const decimals = key === "btc" ? 18 : BSC.xauDecimals;
+  const feeTier = key === "btc" ? BSC.btcFee : BSC.xauFee;
+  const tokenIn = side === "buy" ? BSC.usdt : token;
+  const tokenOut = side === "buy" ? token : BSC.usdt;
+  const decimalsIn = side === "buy" ? BSC.usdtDecimals : decimals;
+  const amountIn = units(amount, decimalsIn);
+  if (amountIn <= 0n) throw new Error("amount");
+  const { fee, swapIn } = splitDeskFee(amountIn);
+  if (swapIn <= 0n) throw new Error("amount");
+  const quoted = await quoteExact(tokenIn, tokenOut, swapIn, feeTier);
+  const minOut = (quoted * BigInt(10_000 - BSC.slippageBps)) / 10_000n;
+  const owner = from as Hex;
+  await approveIfNeeded(from, tokenIn, swapIn);
+  let paid = false;
+  if (fee > 0n) {
+    const feeData = encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, fee] });
+    await waitReceipt(await send(from, tokenIn, feeData));
+    paid = true;
+  }
+  const data = encodeFunctionData({
+    abi: routerAbi,
+    functionName: "exactInputSingle",
+    args: [
+      {
+        tokenIn,
+        tokenOut,
+        fee: feeTier,
         recipient: owner,
         deadline: BigInt(Math.floor(Date.now() / 1000) + 60 * 20),
         amountIn: swapIn,

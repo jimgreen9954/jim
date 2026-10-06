@@ -1,12 +1,14 @@
 import type { Candle } from "@/lib/bem-ohlcv";
 
 export type SpotFrame = "1m" | "5m" | "15m" | "1h" | "1d";
-export type SpotPair = "bem" | "bnb" | "okb";
+export type SpotPair = "bem" | "bnb" | "okb" | "btc" | "xau";
 
 const POOLS: Record<SpotPair, { network: string; pool: string }> = {
   bem: { network: "bsc", pool: "0x3098d7a051045000d68ec0360753a40c8cabea31" },
   bnb: { network: "bsc", pool: "0x172fcd41e0913e95784454622d1c3724f546f849" },
   okb: { network: "x-layer", pool: "0xc71f9e1de80eb505c0cb3bbf90ae6593130e5d25" },
+  btc: { network: "bsc", pool: "0x247f51881d1e3ae0f759afb801413a6c948ef442" },
+  xau: { network: "bsc", pool: "0x83a0a8a723262651ae9c54bbba929f167443bc59" },
 };
 
 const SPEC: Record<SpotFrame, { path: string; aggregate: number }> = {

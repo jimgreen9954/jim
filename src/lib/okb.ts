@@ -191,22 +191,30 @@ export async function okbPrints(): Promise<PoolPrint[]> {
       logs = [];
     }
   }
-  return logs
-    .slice(-12)
-    .reverse()
-    .map((log) => {
-      const in0 = log.args.amount0In ?? 0n;
-      const out1 = log.args.amount1Out ?? 0n;
-      const buy = in0 > 0n && out1 > 0n;
-      return {
-        id: `${log.transactionHash}-${log.logIndex}`,
-        side: buy ? "buy" : "sell",
-        bem: pretty(buy ? out1 : (log.args.amount1In ?? 0n), 18, 5),
-        usdt: pretty(buy ? in0 : (log.args.amount0Out ?? 0n), OKB.usdtDecimals, 2),
-        tx: log.transactionHash,
-        who: log.args.to ?? log.args.sender ?? "",
-      } satisfies PoolPrint;
-    });
+  const rows = logs.slice(-8).reverse();
+  const signers = await Promise.all(
+    rows.map(async (log) => {
+      try {
+        const tx = await xClient.getTransaction({ hash: log.transactionHash });
+        return tx.from ?? "";
+      } catch {
+        return log.args.to ?? "";
+      }
+    }),
+  );
+  return rows.map((log, index) => {
+    const in0 = log.args.amount0In ?? 0n;
+    const out1 = log.args.amount1Out ?? 0n;
+    const buy = in0 > 0n && out1 > 0n;
+    return {
+      id: `${log.transactionHash}-${log.logIndex}`,
+      side: buy ? "buy" : "sell",
+      bem: pretty(buy ? out1 : (log.args.amount1In ?? 0n), 18, 5),
+      usdt: pretty(buy ? in0 : (log.args.amount0Out ?? 0n), OKB.usdtDecimals, 2),
+      tx: log.transactionHash,
+      who: signers[index] ?? "",
+    } satisfies PoolPrint;
+  });
 }
 
 export function okbTxUrl(hash: string): string {
