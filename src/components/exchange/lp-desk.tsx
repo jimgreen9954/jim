@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { BSC, FEE_TO, txUrl } from "@/lib/bsc";
-import { addLp, formatLp, listLp, LP_BEM, LP_CRYPTO, LP_STOCKS, quoteLp, removeLp, type LpKey, type LpPosition, type LpQuote } from "@/lib/lp";
+import { addLp, formatLp, listLp, LP_BEM, LP_CRYPTO, LP_STOCKS, poolYield, quoteLp, removeLp, type LpKey, type LpPosition, type LpQuote, type LpYield } from "@/lib/lp";
 import { useExchange } from "@/lib/exchange-store";
 import { connectKind, currentAccount, onAccount } from "@/lib/wallet";
 import { SignCard } from "@/components/exchange/sign-card";
@@ -21,6 +21,7 @@ export function LpPanel() {
   const [bad, setBad] = useState(false);
   const [hash, setHash] = useState<string | null>(null);
   const [card, setCard] = useState(false);
+  const [apy, setApy] = useState<LpYield | null>(null);
   const books = group === "bem" ? LP_BEM : group === "stock" ? LP_STOCKS : LP_CRYPTO;
   const book = books.find((item) => item.key === key) ?? books[0];
 
@@ -73,15 +74,48 @@ export function LpPanel() {
     setBad(true);
   };
 
+  useEffect(() => {
+    let dead = false;
+    setApy(null);
+    poolYield(book.key)
+      .then((row) => {
+        if (!dead) setApy(row);
+      })
+      .catch(() => undefined);
+    return () => {
+      dead = true;
+    };
+  }, [book.key]);
+
   const shown = quote ? formatLp(book, quote) : null;
+  const aprText = apy?.apr === null || apy?.apr === 0 ? "0.00" : apy && apy.apr > 9999 ? ">9999" : apy ? apy.apr.toFixed(2) : "";
+  const yieldLine = !apy
+    ? zh
+      ? "正在按链上成交算年化。"
+      : "Reading the chain for the annualized fee."
+    : apy.empty
+      ? zh
+        ? "这口池还没有。有成交之后，才按真实手续费算年化。"
+        : "This pool does not exist yet. The annualized figure waits for a real trade."
+      : apy.hours === 0
+      ? zh
+        ? "这口池的成交暂时读不到，年化先不报。"
+        : "This pool's trades could not be read. No annualized figure yet."
+      : apy.thin
+        ? zh
+          ? `池子大约 ${apy.tvlUsd.toFixed(2)} USDT，不到 20，年化不报。近 ${Math.round(apy.hours)} 小时手续费 ${apy.feesUsd.toFixed(4)} USDT。`
+          : `About ${apy.tvlUsd.toFixed(2)} USDT in the pool, under 20, so no annualized figure. Fees over the last ${Math.round(apy.hours)}h: ${apy.feesUsd.toFixed(4)} USDT.`
+        : zh
+          ? `年化 ${aprText}%。近 ${Math.round(apy.hours)} 小时手续费 ${apy.feesUsd.toFixed(4)} USDT，池子大约 ${apy.tvlUsd.toFixed(0)} USDT。只算手续费，不算涨跌。`
+          : `${aprText}% annualized. Fees over the last ${Math.round(apy.hours)}h: ${apy.feesUsd.toFixed(4)} USDT. Pool about ${apy.tvlUsd.toFixed(0)} USDT. Fees only, not price change.`;
 
   return (
     <div className="grid gap-0 lg:grid-cols-12">
       <div className="border-b border-gold/40 p-3 lg:col-span-7 lg:border-r lg:border-b-0">
         <p className="text-sm leading-7 text-ink/80">
           {zh
-            ? "只填一边。另一边按池子现价配平，做成全区间。对 BEM 的是 BNB、BTC、黄金。池子还没有时，第一笔按两边对 USDT 的现价建池。凭证在你钱包里，随时可以一键撤回。OKB 在 X Layer，不能和 BEM 组在同一个池。"
-            : "Type one side. The other matches the pool price, full range. Against BEM: BNB, BTC, and gold. The first deposit opens the pool at the two USDT prices. The position stays in your wallet and can be removed any time. OKB is on X Layer and cannot share a pool with BEM."}
+            ? "只填一边。另一边按池子现价配平，做成全区间。对 BEM 的有 BNB、BTC、黄金，和现货里的美股。池子还没有时，第一笔按两边对 USDT 的现价建池。年化按这口池近几个小时的真实手续费来算。凭证在你钱包里，随时可以一键撤回。OKB 在 X Layer，不能和 BEM 组在同一个池。"
+            : "Type one side. The other matches the pool price, full range. Against BEM: BNB, BTC, gold, and the stocks on this desk. The first deposit opens a missing pool at the two USDT prices. The annualized figure uses this pool's real fees over the last few hours. The position stays in your wallet and can be removed any time. OKB is on X Layer and cannot share a pool with BEM."}
         </p>
         <div className="mt-3 grid grid-cols-3">
           {(
@@ -112,6 +146,7 @@ export function LpPanel() {
             </button>
           ))}
         </div>
+        <p className="mt-3 border border-gold/40 px-3 py-2 text-sm leading-6">{yieldLine}</p>
         <p className="mt-4 text-xs tracking-widest text-gold">{zh ? "我的流动性" : "My liquidity"}</p>
         {rows.length === 0 ? <p className="mt-2 text-sm text-ink/60">{zh ? "这个地址在本站这些池子里还没有仓位。" : "This address has no position in these pools."}</p> : null}
         <ul className="mt-2 flex flex-col gap-2">

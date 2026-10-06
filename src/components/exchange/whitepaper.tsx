@@ -37,8 +37,8 @@ const zh: Section[] = [
   {
     h: "流动性",
     ps: [
-      "在现货里切到流动性。对 USDT 的是现货里的 BSC 池。对 BEM 的是 BNB、BTC、黄金。只填一边，另一边按现价配上，全区间。BNB / BEM 已有池。BTC / BEM 和黄金 / BEM 还没有池时，第一笔按两边对 USDT 的现价建池。随时可以一键撤回。OKB 在 X Layer，不能和 BEM 组在同一个池。",
-      "能做的 USDT 池是 BEM、BNB、BTC、黄金，以及上面的美股。对 BEM 的是 BNB、BTC、黄金。",
+      "在现货里切到流动性。对 USDT 的是现货里的 BSC 池。对 BEM 的是 BNB、BTC、黄金，以及标普、纳指、苹果、英伟达、英特尔、微软、特斯拉、SpaceX、谷歌。只填一边，另一边按现价配上，全区间。还没有池时，第一笔按两边对 USDT 的现价建池。随时可以一键撤回。年化按这口池近几个小时的真实手续费除以池子金额来算，不算币价涨跌。池子不到 20 USDT 不报年化。OKB 在 X Layer，不能和 BEM 组在同一个池。",
+      "能做的 USDT 池是 BEM、BNB、BTC、黄金，以及上面的美股。对 BEM 的是同样这些，除了 BEM 自己和 OKB。",
       `凭证由 PancakeSwap V3 的仓位合约 ${NPM} 铸给钱包。撤回一次退出全部。BNB 池拿回的是 BNB。已经转出的台费，中途取消不退。`,
     ],
   },
@@ -106,8 +106,8 @@ const en: Section[] = [
   {
     h: "Liquidity",
     ps: [
-      "On spot, switch to liquidity. USDT pairs are the BSC spot pools. BEM pairs are BNB, BTC, and gold. Type one side. The other matches the live price, full range. BNB / BEM already has a pool. BTC / BEM and gold / BEM are created by the first deposit, at the two USDT prices. You can remove any time. OKB is on X Layer and cannot share a pool with BEM.",
-      "USDT pairs are BEM, BNB, BTC, gold, and the stocks above. BEM pairs are BNB, BTC, and gold.",
+      "On spot, switch to liquidity. USDT pairs are the BSC spot pools. BEM pairs are BNB, BTC, gold, and the same stocks: S&P, Nasdaq, Apple, Nvidia, Intel, Microsoft, Tesla, SpaceX, and Google. Type one side. The other matches the live price, full range. A missing pool is created by the first deposit, at the two USDT prices. You can remove any time. The annualized figure is this pool's real fees over the last few hours, divided by the pool, and does not include price change. Under 20 USDT in the pool, no annualized figure is shown. OKB is on X Layer and cannot share a pool with BEM.",
+      "USDT pairs are BEM, BNB, BTC, gold, and the stocks above. BEM pairs are the same list, except BEM itself and OKB.",
       `The receipt is minted to your wallet by the PancakeSwap V3 position contract ${NPM}. Remove exits the whole position. A BNB pool returns BNB. A fee already sent is not returned if you cancel halfway.`,
     ],
   },

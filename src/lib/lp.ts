@@ -1,4 +1,4 @@
-import { createPublicClient, encodeFunctionData, http, parseAbi, type Hex } from "viem";
+import { createPublicClient, encodeFunctionData, http, parseAbi, parseAbiItem, type Hex } from "viem";
 import { BSC, DESK_FEE_BPS, ERC_BOOKS, FEE_TO, pretty, quoteExact, readAsset, splitDeskFee, units, waitReceipt, type ErcKey } from "@/lib/bsc";
 import { STOCKS, STOCK_KEYS, type StockKey } from "@/lib/stocks";
 import { ensureProvider } from "@/lib/wallet";
@@ -9,6 +9,7 @@ const Q192 = 2n ** 192n;
 const MAX128 = (1n << 128n) - 1n;
 
 const client = createPublicClient({ transport: http(BSC.rpc) });
+const logClient = createPublicClient({ transport: http("https://bsc.publicnode.com", { timeout: 20_000 }) });
 
 const erc20 = parseAbi([
   "function allowance(address owner, address spender) view returns (uint256)",
@@ -41,7 +42,7 @@ const initAbi = parseAbi(["function initialize(uint160 sqrtPriceX96)"]);
 const FACTORY = "0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865" as Hex;
 const ZERO = "0x0000000000000000000000000000000000000000" as Hex;
 
-export type LpKey = "bem" | "bnb" | "bnb-bem" | "btc-bem" | "xau-bem" | ErcKey;
+export type LpKey = "bem" | "bnb" | "bnb-bem" | "btc-bem" | "xau-bem" | `${StockKey}-bem` | ErcKey;
 
 export type LpBook = {
   key: LpKey;
@@ -165,6 +166,24 @@ export const LP_BEM: LpBook[] = [
     quoteZh: "BEM",
     usdtFee: BSC.xauFee,
   },
+  ...STOCK_KEYS.map((key): LpBook => {
+    const stock = STOCKS[key];
+    return {
+      key: `${key}-bem`,
+      zh: stock.zh,
+      en: stock.en,
+      token: stock.token as Hex,
+      decimals: 18,
+      fee: 10000,
+      pool: ZERO,
+      assetIsToken0: stock.token.toLowerCase() < BSC.bem.toLowerCase(),
+      native: false,
+      quoteToken: BSC.bem,
+      quoteDecimals: BSC.bemDecimals,
+      quoteZh: "BEM",
+      usdtFee: stock.fee,
+    };
+  }),
 ];
 
 const ALL = [...LP_CRYPTO, ...LP_BEM, ...LP_STOCKS];
@@ -242,6 +261,86 @@ async function poolOf(book: LpBook): Promise<Hex> {
     functionName: "getPool",
     args: [book.token, book.quoteToken, book.fee],
   });
+}
+
+const swapEvent = parseAbiItem(
+  "event Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick, uint128 protocolFeesToken0, uint128 protocolFeesToken1)",
+);
+const balAbi = parseAbi(["function balanceOf(address) view returns (uint256)"]);
+
+function human(amount: bigint, decimals: number): number {
+  const neg = amount < 0n;
+  const value = neg ? -amount : amount;
+  const base = 10n ** BigInt(decimals);
+  const n = Number(value / base) + Number(value % base) / 10 ** decimals;
+  return neg ? -n : n;
+}
+
+async function usdPerToken(token: Hex, decimals: number, fee: number): Promise<number> {
+  if (token.toLowerCase() === BSC.usdt.toLowerCase()) return 1;
+  const out = await quoteExact(token, BSC.usdt, 10n ** BigInt(decimals), fee);
+  return Number(out) / 10 ** BSC.usdtDecimals;
+}
+
+export type LpYield = {
+  apr: number | null;
+  feesUsd: number;
+  tvlUsd: number;
+  hours: number;
+  empty: boolean;
+  thin: boolean;
+};
+
+export async function poolYield(key: LpKey): Promise<LpYield> {
+  const book = lpBook(key);
+  const pool = await poolOf(book);
+  if (pool === ZERO) return { apr: null, feesUsd: 0, tvlUsd: 0, hours: 0, empty: true, thin: false };
+  const latest = await client.getBlockNumber();
+  const span = 5000n;
+  const fromBlock = latest > span ? latest - span : 0n;
+  const [head, start, slot, bal0, bal1] = await Promise.all([
+    client.getBlock({ blockNumber: latest }),
+    client.getBlock({ blockNumber: fromBlock }),
+    client.readContract({ address: pool, abi: poolAbi, functionName: "slot0" }),
+    client.readContract({ address: book.assetIsToken0 ? book.token : book.quoteToken, abi: balAbi, functionName: "balanceOf", args: [pool] }),
+    client.readContract({ address: book.assetIsToken0 ? book.quoteToken : book.token, abi: balAbi, functionName: "balanceOf", args: [pool] }),
+  ]);
+  let windowStart = start;
+  let logs;
+  try {
+    logs = await logClient.getLogs({ address: pool, event: swapEvent, fromBlock, toBlock: latest });
+  } catch {
+    const short = latest > 500n ? latest - 500n : 0n;
+    windowStart = await client.getBlock({ blockNumber: short });
+    try {
+      logs = await logClient.getLogs({ address: pool, event: swapEvent, fromBlock: short, toBlock: latest });
+    } catch {
+      return { apr: null, feesUsd: 0, tvlUsd: 0, hours: 0, empty: false, thin: false };
+    }
+  }
+  const hours = Math.max(0.25, (Number(head.timestamp) - Number(windowStart.timestamp)) / 3600);
+  const token0 = book.assetIsToken0 ? book.token : book.quoteToken;
+  const dec0 = book.assetIsToken0 ? book.decimals : book.quoteDecimals;
+  const token1 = book.assetIsToken0 ? book.quoteToken : book.token;
+  const dec1 = book.assetIsToken0 ? book.quoteDecimals : book.decimals;
+  const fee0 = token0.toLowerCase() === BSC.bem.toLowerCase() ? BSC.fee : token0.toLowerCase() === BSC.usdt.toLowerCase() ? 100 : book.usdtFee;
+  const fee1 = token1.toLowerCase() === BSC.bem.toLowerCase() ? BSC.fee : token1.toLowerCase() === BSC.usdt.toLowerCase() ? 100 : book.usdtFee;
+  const [px0, px1] = await Promise.all([usdPerToken(token0, dec0, fee0), usdPerToken(token1, dec1, fee1)]);
+  const tvlUsd = human(bal0, dec0) * px0 + human(bal1, dec1) * px1;
+  const proto = Number(slot[5]);
+  const keep = (side: number) => (side === 0 ? 1 : (side - 1) / side);
+  const keep0 = keep(proto & 0xf);
+  const keep1 = keep((proto >> 4) & 0xf);
+  let feesUsd = 0;
+  for (const log of logs) {
+    const amount0 = log.args.amount0 ?? 0n;
+    const amount1 = log.args.amount1 ?? 0n;
+    if (amount0 > 0n) feesUsd += human(amount0, dec0) * (book.fee / 1_000_000) * keep0 * px0;
+    else if (amount1 > 0n) feesUsd += human(amount1, dec1) * (book.fee / 1_000_000) * keep1 * px1;
+  }
+  const thin = tvlUsd < 20;
+  const apr = !thin && tvlUsd > 0 ? (feesUsd / tvlUsd) * ((365 * 24) / hours) * 100 : feesUsd === 0 ? 0 : null;
+  return { apr, feesUsd, tvlUsd, hours, empty: false, thin };
 }
 
 async function crossSqrt(book: LpBook): Promise<bigint> {
