@@ -11,7 +11,9 @@ import {
   processorUrl,
   readProcessor,
   transistorHeld,
+  catchKindSupply,
   txUrl,
+  type KindSupply,
   type ProcessorStatus,
 } from "@/lib/xlayer";
 
@@ -87,6 +89,7 @@ export function WalletBar() {
   const [kind, setKind] = useState<0 | 1>(0);
   const [qtyText, setQtyText] = useState("100");
   const [held, setHeld] = useState<{ nand: bigint; latch: bigint } | null>(null);
+  const [kinds, setKinds] = useState<KindSupply | null>(null);
 
   useEffect(() => {
     let dead = false;
@@ -117,6 +120,16 @@ export function WalletBar() {
       dead = true;
     };
   }, [account, hash]);
+
+  useEffect(() => {
+    let dead = false;
+    catchKindSupply((row) => {
+      if (!dead) setKinds(row);
+    }).catch(() => undefined);
+    return () => {
+      dead = true;
+    };
+  }, [hash]);
 
   const fail = (err: unknown) => {
     const code = (err as { code?: number }).code;
@@ -198,9 +211,32 @@ export function WalletBar() {
             </span>
           </p>
           <p className="border border-gold/40 px-3 py-2">
-            <span className="block text-xs tracking-widest text-gold">{lang === "zh" ? "还可铸" : "Left"}</span>
-            <span className="font-mono text-lg tabular-nums">{left !== null ? Number(left).toLocaleString("en-US") : "—"}</span>
-            <span className="mt-1 block text-xs text-ink/60">{lang === "zh" ? "NAND 和 LATCH 共用这一份" : "NAND and LATCH share this"}</span>
+            <span className="block text-xs tracking-widest text-gold">{lang === "zh" ? "NAND 剩余" : "NAND left"}</span>
+            <span className="font-mono text-lg tabular-nums">
+              {kinds ? Number(kinds.nandMint - kinds.nandBurn).toLocaleString("en-US") : "—"}
+            </span>
+            <span className="mt-1 block text-xs text-ink/60">
+              {kinds
+                ? lang === "zh"
+                  ? `已铸 ${Number(kinds.nandMint).toLocaleString("en-US")} · 烧掉 ${Number(kinds.nandBurn).toLocaleString("en-US")}`
+                  : `Minted ${Number(kinds.nandMint).toLocaleString("en-US")} · Burned ${Number(kinds.nandBurn).toLocaleString("en-US")}`
+                : lang === "zh"
+                  ? "正在按铸造记录拆"
+                  : "Reading mint records"}
+            </span>
+          </p>
+          <p className="border border-gold/40 px-3 py-2">
+            <span className="block text-xs tracking-widest text-gold">{lang === "zh" ? "LATCH 剩余" : "LATCH left"}</span>
+            <span className="font-mono text-lg tabular-nums">
+              {kinds ? Number(kinds.latchMint - kinds.latchBurn).toLocaleString("en-US") : "—"}
+            </span>
+            <span className="mt-1 block text-xs text-ink/60">
+              {kinds
+                ? lang === "zh"
+                  ? `已铸 ${Number(kinds.latchMint).toLocaleString("en-US")} · 烧掉 ${Number(kinds.latchBurn).toLocaleString("en-US")}`
+                  : `Minted ${Number(kinds.latchMint).toLocaleString("en-US")} · Burned ${Number(kinds.latchBurn).toLocaleString("en-US")}`
+                : "—"}
+            </span>
           </p>
           <p className="border border-gold/40 px-3 py-2">
             <span className="block text-xs tracking-widest text-gold">{lang === "zh" ? "你的 NAND" : "Your NAND"}</span>

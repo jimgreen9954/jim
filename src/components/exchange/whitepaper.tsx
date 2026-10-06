@@ -12,7 +12,7 @@ const zh: Section[] = [
   {
     h: "先看这一页怎么用",
     ps: [
-      "页头第一颗按钮是铸造。点进去，钱包停在 X Layer。NAND 或 LATCH 都可以铸，可选 100、1000、10000，也可以自己填。两者共用 2,100,000 上限。这是进门的动作。交易在下面的交易台，不和铸造混在一张票上。",
+      "页头第一颗按钮是铸造。点进去，钱包停在 X Layer。NAND 或 LATCH 都可以铸，可选 100、1000、10000，也可以自己填。页面上的剩余是分开的：NAND 剩余是已铸 NAND 减去流片烧掉的，LATCH 一样。新铸造不是两份额度。2,100,000 是总额度，铸哪一种都从已铸之和外面扣。这是进门的动作。交易在下面的交易台，不和铸造混在一张票上。",
       "交易台只有现货和永续。现货再分买卖和流动性。练习页不进实盘成交。工房放晶体管、流片和印鉴。规则就是这一页。",
       "签名在 OKX 或币安钱包里。页面不收私钥，也不保管你的币。",
     ],
@@ -81,7 +81,7 @@ const en: Section[] = [
   {
     h: "How to use this page",
     ps: [
-      "The first button is mint. It opens the wafer and the wallet stays on X Layer. Mint NAND or LATCH, in 100, 1,000, 10,000, or any amount you type. They share a cap of 2,100,000. That is the front door. Trading is on the desk below, not on the same ticket.",
+      "The first button is mint. It opens the wafer and the wallet stays on X Layer. Mint NAND or LATCH, in 100, 1,000, 10,000, or any amount you type. The two left figures are separate: NAND left is NAND minted minus NAND burned, and the same for LATCH. A new mint is not a second cap. 2,100,000 is one cap, and either kind is taken from whatever has not been minted yet. That is the front door. Trading is on the desk below, not on the same ticket.",
       "The desk is spot and perpetuals. Spot splits into trade and liquidity. Practice fills stay off the live tape. The workshop holds transistors, tape-out, and the seal. These rules are this page.",
       "You sign in OKX or Binance Wallet. The page does not take a private key and does not hold your tokens.",
     ],
