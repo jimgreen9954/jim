@@ -68,6 +68,7 @@ const swapEvent = parseAbiItem(
   "event Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick, uint128 protocolFeesToken0, uint128 protocolFeesToken1)",
 );
 
+import { STOCKS, type StockKey } from "@/lib/stocks";
 import { ensureProvider, getProvider, rememberAccount } from "@/lib/wallet";
 
 export function hasWallet(): boolean {
@@ -123,13 +124,29 @@ export async function bnbPrice(): Promise<string> {
   return pretty(out, BSC.usdtDecimals, 2);
 }
 
-export async function btcPrice(): Promise<string> {
-  const out = await quoteExact(BSC.btcb, BSC.usdt, 10n ** 18n, BSC.btcFee);
-  return pretty(out, BSC.usdtDecimals, 2);
+export const ERC_BOOKS = {
+  btc: { token: BSC.btcb, pool: BSC.btcPool, fee: BSC.btcFee, decimals: 18, assetIsToken0: false, digits: 6 },
+  xau: { token: BSC.xaut, pool: BSC.xauPool, fee: BSC.xauFee, decimals: BSC.xauDecimals, assetIsToken0: true, digits: 4 },
+  spy: { ...STOCKS.spy, decimals: 18, digits: 4 },
+  qqq: { ...STOCKS.qqq, decimals: 18, digits: 4 },
+  aapl: { ...STOCKS.aapl, decimals: 18, digits: 4 },
+  nvda: { ...STOCKS.nvda, decimals: 18, digits: 4 },
+  intc: { ...STOCKS.intc, decimals: 18, digits: 4 },
+  msft: { ...STOCKS.msft, decimals: 18, digits: 4 },
+  tsla: { ...STOCKS.tsla, decimals: 18, digits: 4 },
+  spcx: { ...STOCKS.spcx, decimals: 18, digits: 4 },
+  googl: { ...STOCKS.googl, decimals: 18, digits: 4 },
+} as const;
+
+export type ErcKey = keyof typeof ERC_BOOKS;
+
+export function isErcKey(value: string): value is ErcKey {
+  return value in ERC_BOOKS;
 }
 
-export async function xauPrice(): Promise<string> {
-  const out = await quoteExact(BSC.xaut, BSC.usdt, 10n ** BigInt(BSC.xauDecimals), BSC.xauFee);
+export async function ercPrice(key: ErcKey): Promise<string> {
+  const book = ERC_BOOKS[key];
+  const out = await quoteExact(book.token, BSC.usdt, 10n ** BigInt(book.decimals), book.fee);
   return pretty(out, BSC.usdtDecimals, 2);
 }
 
@@ -167,11 +184,13 @@ export type PoolPrint = {
   who: string;
 };
 
-export async function recentPrints(market: "bem" | "bnb" | "btc" | "xau" = "bem"): Promise<PoolPrint[]> {
-  const pool = market === "bnb" ? BSC.bnbPool : market === "btc" ? BSC.btcPool : market === "xau" ? BSC.xauPool : BSC.pool;
-  const assetDecimals = market === "bnb" || market === "btc" ? 18 : market === "xau" ? BSC.xauDecimals : BSC.bemDecimals;
-  const assetIsToken0 = market === "xau";
-  const spans = market === "bnb" || market === "btc" ? [40n, 12n, 4n] : market === "xau" ? [180n, 60n, 20n] : [400n, 120n, 40n];
+export async function recentPrints(market: "bem" | "bnb" | ErcKey = "bem"): Promise<PoolPrint[]> {
+  const listed = market === "bem" || market === "bnb" ? null : ERC_BOOKS[market];
+  const pool = listed ? listed.pool : market === "bnb" ? BSC.bnbPool : BSC.pool;
+  const assetDecimals = listed ? listed.decimals : market === "bnb" ? 18 : BSC.bemDecimals;
+  const assetIsToken0 = listed ? listed.assetIsToken0 : false;
+  const digits = listed ? listed.digits : market === "bnb" ? 5 : 4;
+  const spans = market === "bnb" || market === "btc" ? [40n, 12n, 4n] : market === "bem" ? [400n, 120n, 40n] : [180n, 60n, 20n];
   const head = await client.getBlockNumber();
   let logs: Awaited<ReturnType<typeof client.getLogs<typeof swapEvent>>> = [];
   for (const span of spans) {
@@ -204,7 +223,7 @@ export async function recentPrints(market: "bem" | "bnb" | "btc" | "xau" = "bem"
     return {
       id: `${log.transactionHash}-${log.logIndex}`,
       side: buy ? "buy" : "sell",
-      bem: pretty(buy ? -asset : asset, assetDecimals, market === "btc" ? 6 : market === "bnb" ? 5 : 4),
+      bem: pretty(buy ? -asset : asset, assetDecimals, digits),
       usdt: pretty(quote < 0n ? -quote : quote, BSC.usdtDecimals, 2),
       tx: log.transactionHash,
       who: signers[index] ?? "",
@@ -327,10 +346,11 @@ export async function swapBem(from: string, side: "buy" | "sell", amount: string
   return finishSwap(from, data, paid);
 }
 
-export async function swapListed(from: string, key: "btc" | "xau", side: "buy" | "sell", amount: string): Promise<Hex> {
-  const token = key === "btc" ? BSC.btcb : BSC.xaut;
-  const decimals = key === "btc" ? 18 : BSC.xauDecimals;
-  const feeTier = key === "btc" ? BSC.btcFee : BSC.xauFee;
+export async function swapListed(from: string, key: ErcKey, side: "buy" | "sell", amount: string): Promise<Hex> {
+  const book = ERC_BOOKS[key];
+  const token = book.token;
+  const decimals = book.decimals;
+  const feeTier = book.fee;
   const tokenIn = side === "buy" ? BSC.usdt : token;
   const tokenOut = side === "buy" ? token : BSC.usdt;
   const decimalsIn = side === "buy" ? BSC.usdtDecimals : decimals;

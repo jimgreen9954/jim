@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { pullPaper, type PaperFrame } from "@/lib/candle-book";
 import { pullBem, type Candle, type CandleFrame } from "@/lib/bem-ohlcv";
 import { pullSpot, type SpotFrame, type SpotPair } from "@/lib/spot-ohlcv";
+import { STOCK_KEYS } from "@/lib/stocks";
 
 export type { Ohlc, PaperFrame } from "@/lib/candle-book";
 export { PAPER_FRAMES, paperLabel } from "@/lib/candle-book";
@@ -17,7 +18,7 @@ const spotFrames: SpotFrame[] = ["1m", "5m", "15m", "1h", "1d"];
 
 export const getSpotCandles = createServerFn({ method: "GET" })
   .validator((input: { pair?: string; frame?: string }) => ({
-    pair: (input?.pair === "bnb" || input?.pair === "okb" || input?.pair === "btc" || input?.pair === "xau" ? input.pair : "bem") as SpotPair,
+    pair: (input?.pair === "bnb" || input?.pair === "okb" || input?.pair === "btc" || input?.pair === "xau" || STOCK_KEYS.includes(input?.pair as (typeof STOCK_KEYS)[number]) ? input.pair : "bem") as SpotPair,
     frame: (spotFrames.includes(input?.frame as SpotFrame) ? input?.frame : "1m") as SpotFrame,
   }))
   .handler(async ({ data }): Promise<Candle[]> => pullSpot(data.pair, data.frame));

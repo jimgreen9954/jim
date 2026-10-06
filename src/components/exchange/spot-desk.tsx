@@ -7,10 +7,12 @@ import {
   BNB_GAS_RESERVE,
   bemPrice,
   bnbPrice,
-  btcPrice,
   connectBsc,
   DESK_FEE_BPS,
+  ERC_BOOKS,
+  ercPrice,
   FEE_TO,
+  isErcKey,
   pretty,
   quoteExact,
   readAsset,
@@ -22,18 +24,19 @@ import {
   swapListed,
   txUrl,
   units,
-  xauPrice,
+  type ErcKey,
   type Balances,
   type PoolPrint,
 } from "@/lib/bsc";
-import { currentAccount, connectKind, onAccount, onOpenLink } from "@/lib/wallet";
+import { STOCK_KEYS, STOCKS, type StockKey } from "@/lib/stocks";
 import { getSpotCandles } from "@/lib/candles";
 import type { Candle } from "@/lib/bem-ohlcv";
 import type { SpotFrame } from "@/lib/spot-ohlcv";
 import { connectX, okbAddressUrl, okbPrice, okbPrints, okbTxUrl, OKB, quoteOkb, readOkbPurse, swapOkb } from "@/lib/okb";
 import { XLAYER } from "@/lib/xlayer";
-import { SignCard } from "@/components/exchange/sign-card";
+import { currentAccount, connectKind, onAccount, onOpenLink } from "@/lib/wallet";
 import { Kline } from "@/components/exchange/kline";
+import { SignCard } from "@/components/exchange/sign-card";
 import { useFeeLock } from "@/lib/fee-lock";
 
 function sized(raw: bigint, decimals: number, pct: number, cap?: bigint): string {
@@ -47,7 +50,8 @@ function sized(raw: bigint, decimals: number, pct: number, cap?: bigint): string
 export function SpotDesk() {
   const lang = useExchange((s) => s.lang);
   const c = copy[lang];
-  const [pair, setPair] = useState<"bem" | "bnb" | "okb" | "btc" | "xau">("bem");
+  const [book, setBook] = useState<"crypto" | "stock">("crypto");
+  const [pair, setPair] = useState<"bem" | "bnb" | "okb" | ErcKey>("bem");
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [amount, setAmount] = useState("");
   const [price, setPrice] = useState<string | null>(null);
@@ -76,7 +80,7 @@ export function SpotDesk() {
   useEffect(() => {
     let dead = false;
     const pull = () => {
-      const priceOf = pair === "bnb" ? bnbPrice : pair === "okb" ? okbPrice : pair === "btc" ? btcPrice : pair === "xau" ? xauPrice : bemPrice;
+      const priceOf = pair === "bnb" ? bnbPrice : pair === "okb" ? okbPrice : pair === "bem" ? bemPrice : () => ercPrice(pair);
       priceOf().then((text) => {
         if (!dead) setPrice(text);
       }).catch(() => undefined);
@@ -93,8 +97,8 @@ export function SpotDesk() {
         readBalances(who).then((next) => {
           if (!dead) setBalances(next);
         }).catch(() => undefined);
-        if (pair === "btc" || pair === "xau") {
-          readAsset(who, pair === "btc" ? BSC.btcb : BSC.xaut).then((next) => {
+        if (isErcKey(pair)) {
+          readAsset(who, ERC_BOOKS[pair].token).then((next) => {
             if (!dead) setAssetBal(next);
           }).catch(() => undefined);
         }
@@ -120,14 +124,15 @@ export function SpotDesk() {
     };
   }, [pair, frame, hash]);
   useEffect(() => {
-    const base = pair === "okb" ? OKB.wokb : pair === "bnb" ? BSC.wbnb : pair === "btc" ? BSC.btcb : pair === "xau" ? BSC.xaut : BSC.bem;
-    const baseDecimals = pair === "xau" ? BSC.xauDecimals : pair === "bem" ? BSC.bemDecimals : 18;
+    const listed = isErcKey(pair) ? ERC_BOOKS[pair] : null;
+    const base = pair === "okb" ? OKB.wokb : pair === "bnb" ? BSC.wbnb : listed ? listed.token : BSC.bem;
+    const baseDecimals = listed ? listed.decimals : pair === "bem" ? BSC.bemDecimals : 18;
     const payDecimals = pair === "okb" ? OKB.usdtDecimals : BSC.usdtDecimals;
     const tokenIn = side === "buy" ? (pair === "okb" ? OKB.usdt : BSC.usdt) : base;
     const tokenOut = side === "buy" ? base : pair === "okb" ? OKB.usdt : BSC.usdt;
     const decimals = side === "buy" ? payDecimals : baseDecimals;
     const outDecimals = side === "buy" ? baseDecimals : payDecimals;
-    const fee = pair === "bnb" ? BSC.bnbFee : pair === "btc" ? BSC.btcFee : pair === "xau" ? BSC.xauFee : BSC.fee;
+    const fee = listed ? listed.fee : pair === "bnb" ? BSC.bnbFee : BSC.fee;
     let dead = false;
     try {
       const amountIn = units(amount || "0", decimals);
@@ -203,7 +208,7 @@ export function SpotDesk() {
       const from = pair === "okb" ? account ?? (await connectX()) : account ?? (await connectBsc());
       setAccount(from);
       if (!amount.trim()) return;
-      const tx = pair === "okb" ? await swapOkb(from, side, amount) : pair === "bnb" ? await swapBnb(from, side, amount) : pair === "btc" || pair === "xau" ? await swapListed(from, pair, side, amount) : await swapBem(from, side, amount);
+      const tx = pair === "okb" ? await swapOkb(from, side, amount) : pair === "bnb" ? await swapBnb(from, side, amount) : isErcKey(pair) ? await swapListed(from, pair, side, amount) : await swapBem(from, side, amount);
       setHash(tx);
       setNote(null);
     } catch (err) {
@@ -214,12 +219,12 @@ export function SpotDesk() {
   };
 
   const max = (pct: number) => {
-    const ready = pair === "okb" ? Boolean(okbBal) : pair === "btc" || pair === "xau" ? (side === "sell" ? assetBal != null : Boolean(balances)) : Boolean(balances);
+    const ready = pair === "okb" ? Boolean(okbBal) : isErcKey(pair) ? (side === "sell" ? assetBal != null : Boolean(balances)) : Boolean(balances);
     if (!ready) return;
     const raw = side === "buy"
       ? (pair === "okb" ? (okbBal?.usdt ?? 0n) : (balances?.usdt ?? 0n))
-      : pair === "okb" ? (okbBal?.okb ?? 0n) : pair === "bnb" ? (balances?.bnb ?? 0n) : pair === "btc" || pair === "xau" ? (assetBal ?? 0n) : (balances?.bem ?? 0n);
-    const decimals = side === "buy" ? (pair === "okb" ? OKB.usdtDecimals : BSC.usdtDecimals) : pair === "xau" ? BSC.xauDecimals : pair === "bem" ? BSC.bemDecimals : 18;
+      : pair === "okb" ? (okbBal?.okb ?? 0n) : pair === "bnb" ? (balances?.bnb ?? 0n) : isErcKey(pair) ? (assetBal ?? 0n) : (balances?.bem ?? 0n);
+    const decimals = side === "buy" ? (pair === "okb" ? OKB.usdtDecimals : BSC.usdtDecimals) : isErcKey(pair) ? ERC_BOOKS[pair].decimals : pair === "bem" ? BSC.bemDecimals : 18;
     const cap = (pair === "bnb" || pair === "okb") && side === "sell" && raw > (pair === "okb" ? OKB.gasReserve : BNB_GAS_RESERVE) ? raw - (pair === "okb" ? OKB.gasReserve : BNB_GAS_RESERVE) : undefined;
     setAmount(sized(raw, decimals, pct, cap));
   };
@@ -230,14 +235,15 @@ export function SpotDesk() {
       ? (balances?.usdt ?? 0n)
       : pair === "bnb"
         ? (balances?.bnb ?? 0n)
-        : pair === "btc" || pair === "xau"
+        : isErcKey(pair)
           ? (assetBal ?? 0n)
           : (balances?.bem ?? 0n);
-  const payDecimals = side === "buy" ? (pair === "okb" ? OKB.usdtDecimals : BSC.usdtDecimals) : pair === "xau" ? BSC.xauDecimals : pair === "bem" ? BSC.bemDecimals : 18;
+  const payDecimals = side === "buy" ? (pair === "okb" ? OKB.usdtDecimals : BSC.usdtDecimals) : isErcKey(pair) ? ERC_BOOKS[pair].decimals : pair === "bem" ? BSC.bemDecimals : 18;
   const reserve = pair === "okb" ? OKB.gasReserve : BNB_GAS_RESERVE;
   const spendCap = (pair === "bnb" || pair === "okb") && side === "sell" ? (payRaw > reserve ? payRaw - reserve : 0n) : undefined;
   const spendable = spendCap ?? payRaw;
-  const base = pair === "okb" ? "OKB" : pair === "bnb" ? "BNB" : pair === "btc" ? "BTC" : pair === "xau" ? "XAU" : "BEM";
+  const base = pair === "okb" ? "OKB" : pair === "bnb" ? "BNB" : pair === "btc" ? "BTC" : pair === "xau" ? "XAU" : pair === "bem" ? "BEM" : STOCKS[pair].en;
+  const stock = pair in STOCKS ? STOCKS[pair as StockKey] : null;
   const payUnit = side === "buy" ? "USDT" : base;
   const recvUnit = side === "buy" ? base : "USDT";
   let typed = 0n;
@@ -247,7 +253,7 @@ export function SpotDesk() {
     typed = 0n;
   }
   const deskFee = typed > 0n ? splitDeskFee(typed) : null;
-  const over = (pair === "okb" ? Boolean(okbBal) : pair === "btc" || pair === "xau" ? (side === "sell" ? assetBal != null : Boolean(balances)) : Boolean(balances)) && typed > spendable;
+  const over = (pair === "okb" ? Boolean(okbBal) : isErcKey(pair) ? (side === "sell" ? assetBal != null : Boolean(balances)) : Boolean(balances)) && typed > spendable;
   const pcts = [25, 50, 75, 100];
 
   return (
@@ -256,13 +262,15 @@ export function SpotDesk() {
         <div className="border-b border-gold/40 p-3 lg:col-span-7 lg:border-r lg:border-b-0">
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs tracking-widest text-gold">{base} / USDT</p>
-            <div className="grid grid-cols-5">
-              {(["bem", "bnb", "okb", "btc", "xau"] as const).map((key) => (
+            <div className="grid grid-cols-2">
+              {(["crypto", "stock"] as const).map((key) => (
                 <button
                   key={key}
                   type="button"
                   onClick={() => {
-                    setPair(key);
+                    setBook(key);
+                    const next = key === "crypto" ? "bem" : "spy";
+                    setPair(next);
                     setAmount("");
                     setOut(null);
                     setMinOut(null);
@@ -270,16 +278,40 @@ export function SpotDesk() {
                     setAssetBal(null);
                     setPrints([]);
                   }}
-                  className={`min-h-8 border border-gold px-3 font-mono text-xs ${pair === key ? "bg-ink text-paper" : ""}`}
+                  className={`min-h-8 border border-gold px-3 text-xs ${book === key ? "bg-ink text-paper" : ""}`}
                 >
-                  {key === "bem" ? "BEM" : key === "bnb" ? "BNB" : key === "okb" ? "OKB" : key === "btc" ? "BTC" : lang === "zh" ? "黄金" : "XAU"}
+                  {key === "crypto" ? (lang === "zh" ? "加密货币" : "Crypto") : lang === "zh" ? "美股" : "US stocks"}
                 </button>
               ))}
             </div>
           </div>
+          <div className={`mt-2 grid gap-0 ${book === "crypto" ? "grid-cols-5" : "grid-cols-3"}`}>
+            {(book === "crypto" ? (["bem", "bnb", "okb", "btc", "xau"] as const) : STOCK_KEYS).map((key) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => {
+                  setPair(key);
+                  setAmount("");
+                  setOut(null);
+                  setMinOut(null);
+                  setPrice(null);
+                  setAssetBal(null);
+                  setPrints([]);
+                }}
+                className={`min-h-8 border border-gold px-2 font-mono text-xs ${pair === key ? "bg-ink text-paper" : ""}`}
+              >
+                {key in STOCKS ? (lang === "zh" ? STOCKS[key as StockKey].zh : STOCKS[key as StockKey].en) : key === "bem" ? "BEM" : key === "bnb" ? "BNB" : key === "okb" ? "OKB" : key === "btc" ? "BTC" : "XAU"}
+              </button>
+            ))}
+          </div>
           <p className="font-display text-5xl italic leading-none tabular-nums">{shown ? `$${shown}` : "—"}</p>
           <p className="mt-1 font-mono text-xs text-ink/50">
-            {pair === "xau"
+            {stock
+              ? lang === "zh"
+                ? `Pancake ${base} / USDT · bStocks · 池费率 ${(ERC_BOOKS[pair as ErcKey].fee / 10000).toFixed(2)}% · 买到的是钱包里的代币，一枚对一股`
+                : `Pancake ${base} / USDT · bStocks · pool fee ${(ERC_BOOKS[pair as ErcKey].fee / 10000).toFixed(2)}% · a buy lands in the wallet, one token for one share`
+              : pair === "xau"
               ? lang === "zh"
                 ? "Pancake XAUt / USDT · Tether Gold · 池费率 0.05% · 一枚对一盎司黄金"
                 : "Pancake XAUt / USDT · Tether Gold · pool fee 0.05% · one token, one troy ounce"
@@ -364,9 +396,9 @@ export function SpotDesk() {
                     ["USDT", okbBal ? pretty(okbBal.usdt, OKB.usdtDecimals, 2) : "—"],
                     ["链", "X Layer"],
                   ] as const)
-                : pair === "btc" || pair === "xau"
+                : isErcKey(pair)
                   ? ([
-                      [base, assetBal != null ? pretty(assetBal, pair === "xau" ? BSC.xauDecimals : 18, 4) : "—"],
+                      [base, assetBal != null ? pretty(assetBal, ERC_BOOKS[pair].decimals, 4) : "—"],
                       ["USDT", balances ? pretty(balances.usdt, BSC.usdtDecimals, 2) : "—"],
                       ["BNB", balances ? pretty(balances.bnb, 18, 4) : "—"],
                     ] as const)

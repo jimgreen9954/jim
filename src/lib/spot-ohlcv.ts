@@ -1,7 +1,8 @@
 import type { Candle } from "@/lib/bem-ohlcv";
+import { STOCKS, type StockKey } from "@/lib/stocks";
 
 export type SpotFrame = "1m" | "5m" | "15m" | "1h" | "1d";
-export type SpotPair = "bem" | "bnb" | "okb" | "btc" | "xau";
+export type SpotPair = "bem" | "bnb" | "okb" | StockKey | "btc" | "xau";
 
 const POOLS: Record<SpotPair, { network: string; pool: string }> = {
   bem: { network: "bsc", pool: "0x3098d7a051045000d68ec0360753a40c8cabea31" },
@@ -9,6 +10,15 @@ const POOLS: Record<SpotPair, { network: string; pool: string }> = {
   okb: { network: "x-layer", pool: "0xc71f9e1de80eb505c0cb3bbf90ae6593130e5d25" },
   btc: { network: "bsc", pool: "0x247f51881d1e3ae0f759afb801413a6c948ef442" },
   xau: { network: "bsc", pool: "0x83a0a8a723262651ae9c54bbba929f167443bc59" },
+  spy: { network: "bsc", pool: STOCKS.spy.pool },
+  qqq: { network: "bsc", pool: STOCKS.qqq.pool },
+  aapl: { network: "bsc", pool: STOCKS.aapl.pool },
+  nvda: { network: "bsc", pool: STOCKS.nvda.pool },
+  intc: { network: "bsc", pool: STOCKS.intc.pool },
+  msft: { network: "bsc", pool: STOCKS.msft.pool },
+  tsla: { network: "bsc", pool: STOCKS.tsla.pool },
+  spcx: { network: "bsc", pool: STOCKS.spcx.pool },
+  googl: { network: "bsc", pool: STOCKS.googl.pool },
 };
 
 const SPEC: Record<SpotFrame, { path: string; aggregate: number }> = {
