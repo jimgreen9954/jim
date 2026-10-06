@@ -43,7 +43,7 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
         <BannerToast />
         <FuseFlash />
         <div className={`mx-auto flex max-w-6xl flex-col gap-4 px-3 pt-2 lg:px-6 ${floor === "paper" ? "pb-24 lg:pb-10" : "pb-8"}`}>
-          <Header floor={floor} desk={desk} setFloor={setFloor} setDesk={setDesk} />
+          <Header floor={floor} desk={desk} setFloor={setFloor} setDesk={setDesk} setShop={setShop} />
           <FeeStrip />
           {floor === "desk" && desk === "spot" ? <SpotDesk /> : null}
           {floor === "desk" && desk === "perp" ? <RealPerp /> : null}
@@ -160,7 +160,7 @@ function FuseFlash() {
   );
 }
 
-function Header({ floor, desk, setFloor, setDesk }: { floor: Floor; desk: DeskTab; setFloor: (floor: Floor) => void; setDesk: (desk: DeskTab) => void }) {
+function Header({ floor, desk, setFloor, setDesk, setShop }: { floor: Floor; desk: DeskTab; setFloor: (floor: Floor) => void; setDesk: (desk: DeskTab) => void; setShop: (shop: ShopTab) => void }) {
   const lang = useExchange((s) => s.lang);
   const setLang = useExchange((s) => s.setLang);
   const reset = useExchange((s) => s.reset);
@@ -242,6 +242,24 @@ function Header({ floor, desk, setFloor, setDesk }: { floor: Floor; desk: DeskTa
           ) : null}
         </div>
       </div>
+      <button
+        type="button"
+        onClick={() => {
+          if (window.location.pathname.startsWith("/whitepaper")) {
+            window.location.assign("/#wafer");
+            return;
+          }
+          setFloor("shop");
+          setShop("wafer");
+        }}
+        className="flex min-h-14 items-center justify-between border border-gold bg-ink px-4 text-paper"
+      >
+        <span>
+          <span className="block text-xs tracking-widest text-gold">{lang === "zh" ? "现在去铸造" : "Mint now"}</span>
+          <span className="font-display text-2xl italic">{lang === "zh" ? "晶圆 · 16 颗 NAND" : "Wafer · 16 NAND"}</span>
+        </span>
+        <span className="text-sm">{lang === "zh" ? "去铸造" : "Mint"}</span>
+      </button>
       <div className="grid grid-cols-4 border border-gold">
         {floors.map(([id, label]) => (
           <button key={id} type="button" onClick={() => go(id)} className={`min-h-11 text-sm ${floor === id ? "bg-ink text-paper" : "bg-card"}`}>

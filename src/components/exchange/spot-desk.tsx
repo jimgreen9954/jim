@@ -37,6 +37,7 @@ import { XLAYER } from "@/lib/xlayer";
 import { currentAccount, connectKind, onAccount, onOpenLink } from "@/lib/wallet";
 import { Kline } from "@/components/exchange/kline";
 import { SignCard } from "@/components/exchange/sign-card";
+import { LpPanel } from "@/components/exchange/lp-desk";
 import { useFeeLock } from "@/lib/fee-lock";
 
 function sized(raw: bigint, decimals: number, pct: number, cap?: bigint): string {
@@ -72,6 +73,7 @@ export function SpotDesk() {
   const [assetBal, setAssetBal] = useState<bigint | null>(null);
   const [frame, setFrame] = useState<SpotFrame>("1m");
   const [bars, setBars] = useState<Candle[]>([]);
+  const [lane, setLane] = useState<"trade" | "lp">("trade");
   const lock = useFeeLock();
 
   useEffect(() => onAccount(setAccount), []);
@@ -258,6 +260,15 @@ export function SpotDesk() {
 
   return (
     <section className="border border-gold bg-card shadow-plate">
+      <div className="grid grid-cols-2 border-b border-gold">
+        <button type="button" onClick={() => setLane("trade")} className={`min-h-11 text-sm ${lane === "trade" ? "bg-ink text-paper" : ""}`}>
+          {lang === "zh" ? "买卖" : "Trade"}
+        </button>
+        <button type="button" onClick={() => setLane("lp")} className={`min-h-11 text-sm ${lane === "lp" ? "bg-ink text-paper" : ""}`}>
+          {lang === "zh" ? "流动性" : "Liquidity"}
+        </button>
+      </div>
+      {lane === "lp" ? <LpPanel /> : (
       <div className="grid gap-0 lg:grid-cols-12">
         <div className="border-b border-gold/40 p-3 lg:col-span-7 lg:border-r lg:border-b-0">
           <div className="flex items-center justify-between gap-3">
@@ -525,6 +536,7 @@ export function SpotDesk() {
           ) : null}
         </form>
       </div>
+      )}
     </section>
   );
 }

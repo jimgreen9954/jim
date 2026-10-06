@@ -178,7 +178,7 @@ export function WalletBar() {
           {c.walletCpu} {DEPLOYED.circuits}
         </p>
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" className="min-h-11 border border-gold bg-ink px-3 text-paper" disabled={busy} onClick={mint}>
+          <button type="button" className="min-h-14 bg-ink px-4 font-display text-2xl italic text-paper" disabled={busy} onClick={mint}>
             {c.mintNand}
             {cost ? ` · ${cost} OKB` : ""}
           </button>
