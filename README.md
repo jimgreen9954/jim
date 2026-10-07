@@ -16,9 +16,9 @@ Spot fills on PancakeSwap V3 (BSC). BEM uses the 1% pool. BNB uses the 0.01% poo
 | Transistors | X Layer | `0x3FA393d3081AcCff9E7989619B688235F6d3EE3F` |
 | Fee recipient | spot and the three books | `0x823b9F6A93Ac44Ce5A469823A336c15b6117054D` |
 
-The rulebook is the whitepaper on the site: [/whitepaper](https://trade.yizhantoken.com/whitepaper). It wins over this file. If a rule changes, update the page, this README, and the in-app whitepaper the same day.
+The rulebook is the whitepaper on the site: [/whitepaper](https://trade.yizhantoken.com/whitepaper). It wins over this file. If a rule changes, update the page and this README the same day.
 
-The fee address on the page, in the contracts, and here is `0x823b9F6A93Ac44Ce5A469823A336c15b6117054D`. `0xb67741A0463779c0dab3fDCFE883bA7572AC0AC2` is retired. Spot is PancakeSwap on BSC, with a 0.2% desk fee taken from the input before the pool fee. The two perpetuals are separate contracts. The wafer is on X Layer. Maker rewards and points have not started.
+The fee address on the page, in the contracts, and here is `0x823b9F6A93Ac44Ce5A469823A336c15b6117054D`. `0xb67741A0463779c0dab3fDCFE883bA7572AC0AC2` is retired. Spot is PancakeSwap on BSC, except OKB, which is PotatoSwap on X Layer. The desk fee is 0.20% of the input, on top of the pool fee. The two perpetuals are separate contracts. The wafer and tape-out are on X Layer: minting spends OKB, tape-out burns NAND and LATCH and pays the protocol fee (0.0013 OKB), not the desk fee address. Official transistor and circuit spot follow the tapeout.net snapshot and settle on BSC; the extra 0.20% is paid first and is not returned if the official fill fails. Account reads balances and prices. It does not custody. Maker rewards and points have not started.
 
 ## Run
 

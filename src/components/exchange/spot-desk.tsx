@@ -296,7 +296,7 @@ export function SpotDesk() {
               ))}
             </div>
           </div>
-          <div className={`mt-2 grid gap-0 ${book === "crypto" ? "grid-cols-5" : "grid-cols-3"}`}>
+          <div className={`mt-2 grid gap-0 ${book === "crypto" ? "grid-cols-3 sm:grid-cols-5" : "grid-cols-3"}`}>
             {(book === "crypto" ? (["bem", "bnb", "okb", "btc", "xau"] as const) : STOCK_KEYS).map((key) => (
               <button
                 key={key}
@@ -316,7 +316,7 @@ export function SpotDesk() {
               </button>
             ))}
           </div>
-          <p className="font-display text-5xl italic leading-none tabular-nums">{shown ? `$${shown}` : "—"}</p>
+          <p className="font-display text-4xl italic leading-none tabular-nums sm:text-5xl">{shown ? `$${shown}` : "—"}</p>
           <p className="mt-1 font-mono text-xs text-ink/50">
             {stock
               ? lang === "zh"
@@ -352,13 +352,14 @@ export function SpotDesk() {
           </div>
           <Kline bars={bars} lang={lang} desk="spot" />
           <h2 className="mt-4 text-xs tracking-widest text-gold">{lang === "zh" ? "链上成交 · 地址是签名的钱包" : "On-chain fills · the address signed the trade"}</h2>
-          <div className="mt-2 grid grid-cols-[3rem_1fr_5rem_7.5rem] gap-2 font-mono text-xs text-ink/45">
+          <div className="mt-2 overflow-x-auto">
+          <div className="grid min-w-[22rem] grid-cols-[3rem_1fr_5rem_7.5rem] gap-2 font-mono text-xs text-ink/45">
             <span>{lang === "zh" ? "买卖" : "Side"}</span>
             <span>{base}</span>
             <span>USDT</span>
             <span>{lang === "zh" ? "地址" : "Address"}</span>
           </div>
-          <ul className="mt-2 divide-y divide-gold/30">
+          <ul className="mt-2 min-w-[22rem] divide-y divide-gold/30">
             {prints.length === 0 ? <li className="py-3 text-sm text-ink/60">{lang === "zh" ? (pair === "okb" ? "这根周期还没有池子成交。报价仍每秒从 PotatoSwap 读取。" : "这根周期还没有池子成交。报价仍每秒从 Pancake 读取。") : "No pool trades in this candle yet. The quote is still read every second."}</li> : null}
             {prints.map((row) => (
               <li key={row.id} className="grid grid-cols-[3rem_1fr_5rem_7.5rem] items-baseline gap-2 py-2 font-mono text-sm tabular-nums">
@@ -377,6 +378,7 @@ export function SpotDesk() {
               </li>
             ))}
           </ul>
+          </div>
         </div>
         <form
           className="flex flex-col gap-3 p-3 lg:sticky lg:top-28 lg:col-span-5 lg:self-start"

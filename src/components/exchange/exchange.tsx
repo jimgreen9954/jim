@@ -12,28 +12,40 @@ import { LiveBoard } from "@/components/exchange/live-board";
 import { RealPerp } from "@/components/exchange/real-perp";
 import { SpotDesk } from "@/components/exchange/spot-desk";
 import { TransistorDesk } from "@/components/exchange/transistor-desk";
-import { WalletBar } from "@/components/exchange/wallet-bar";
+import { TapeCanvas } from "@/components/exchange/tape-canvas";
+import { WalletBar, ConnectButton } from "@/components/exchange/wallet-bar";
+import { AccountCenter } from "@/components/exchange/account-center";
+import { OfficialDesk } from "@/components/exchange/official-desk";
 import { SealRebateBox } from "@/components/exchange/seal-rebate";
 import { Whitepaper } from "@/components/exchange/whitepaper";
 import { bemPrice } from "@/lib/bsc";
 import { FeeLockProvider, useFeeLock } from "@/lib/fee-lock";
 
-type Floor = "desk" | "paper" | "shop" | "rules";
+type Floor = "desk" | "paper" | "shop" | "rules" | "canvas" | "me";
 type DeskTab = "spot" | "perp";
-type ShopTab = "gate" | "wafer";
+type ShopTab = "gate" | "wafer" | "chips" | "circuits";
 
 export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp" | "gate" | "wafer" | "brief" }) {
   const [floor, setFloor] = useState<Floor>(start === "paper" ? "paper" : start === "gate" || start === "wafer" ? "shop" : start === "brief" ? "rules" : "desk");
   const [desk, setDesk] = useState<DeskTab>(start === "perp" ? "perp" : "spot");
   const [shop, setShop] = useState<ShopTab>(start === "wafer" ? "wafer" : "gate");
   useEffect(() => {
-    const named = window.location.hash.replace(/^#/, "");
-    if (named === "spot") { setFloor("desk"); setDesk("spot"); }
-    if (named === "perp") { setFloor("desk"); setDesk("perp"); }
-    if (named === "paper") setFloor("paper");
-    if (named === "gate" || named.startsWith("gate=")) { setFloor("shop"); setShop("gate"); }
-    if (named === "wafer") { setFloor("shop"); setShop("wafer"); }
-    if (named === "brief" || named === "rules") setFloor("rules");
+    const apply = () => {
+      const named = window.location.hash.replace(/^#/, "");
+      if (named === "spot") { setFloor("desk"); setDesk("spot"); }
+      if (named === "perp") { setFloor("desk"); setDesk("perp"); }
+      if (named === "paper") setFloor("paper");
+      if (named === "gate" || named.startsWith("gate=")) { setFloor("shop"); setShop("gate"); }
+      if (named === "wafer") { setFloor("shop"); setShop("wafer"); }
+      if (named === "chips") { setFloor("shop"); setShop("chips"); }
+      if (named === "circuits") { setFloor("shop"); setShop("circuits"); }
+      if (named === "canvas") setFloor("canvas");
+      if (named === "me") setFloor("me");
+      if (named === "brief" || named === "rules") setFloor("rules");
+    };
+    apply();
+    window.addEventListener("hashchange", apply);
+    return () => window.removeEventListener("hashchange", apply);
   }, []);
   return (
     <FeeLockProvider>
@@ -42,13 +54,15 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
         <SimClock />
         <BannerToast />
         <FuseFlash />
-        <div className={`mx-auto flex max-w-6xl flex-col gap-4 px-3 pt-2 lg:px-6 ${floor === "paper" ? "pb-24 lg:pb-10" : "pb-8"}`}>
+        <div className={`mx-auto flex max-w-7xl flex-col gap-3 px-3 pt-2 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-4 lg:gap-4 lg:px-6 ${floor === "paper" ? "lg:pb-10" : ""}`}>
           <Header floor={floor} desk={desk} setFloor={setFloor} setDesk={setDesk} setShop={setShop} />
           <FeeStrip />
           {floor === "desk" && desk === "spot" ? <SpotDesk /> : null}
           {floor === "desk" && desk === "perp" ? <RealPerp /> : null}
           {floor === "paper" ? <PaperFloor /> : null}
           {floor === "shop" ? <ShopFloor shop={shop} setShop={setShop} /> : null}
+          {floor === "canvas" ? <TapeCanvas /> : null}
+          {floor === "me" ? <AccountCenter /> : null}
           {floor === "rules" ? <Whitepaper /> : null}
         </div>
         {floor === "paper" ? <MobileNav /> : null}
@@ -199,83 +213,111 @@ function Header({ floor, desk, setFloor, setDesk, setShop }: { floor: Floor; des
       ? lang === "zh" ? "同一份合约里互相成交" : "Fills only inside this contract"
       : floor === "desk"
         ? lang === "zh" ? "钱包里真买卖" : "Real trades in the wallet"
-        : "";
+        : floor === "canvas"
+          ? lang === "zh" ? "画布先在浏览器里跑。点流片才烧这台处理器。" : "The canvas runs in the browser. Tape-out is what burns this processor."
+        : floor === "me"
+          ? lang === "zh" ? "资产在你的钱包里。这一页只读，转出要另签名。" : "Assets stay in your wallet. This page only reads. Sending takes another signature."
+          : "";
   const go = (next: Floor) => {
     if (window.location.pathname.startsWith("/whitepaper")) {
-      window.location.assign(next === "rules" ? "/whitepaper" : `/#${next === "desk" ? desk : next === "shop" ? "gate" : "paper"}`);
+      window.location.assign(next === "rules" ? "/whitepaper" : `/#${next === "desk" ? desk : next === "shop" ? "gate" : next === "canvas" ? "canvas" : next === "me" ? "me" : "paper"}`);
       return;
     }
     if (next === "rules") window.location.assign("/whitepaper");
     else setFloor(next);
   };
   return (
-    <header className="sticky top-0 z-20 -mx-3 flex flex-col gap-3 bg-paper/95 px-3 py-3 backdrop-blur-sm lg:-mx-6 lg:px-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <img src="/mark.jpg" alt="" className="size-14 shrink-0 border border-gold bg-[#14110d] object-cover" />
-          <div className="min-w-0">
-            <h1 className="truncate font-display text-xl italic tracking-wide sm:text-2xl">TAPELIQUID</h1>
-            <p className="truncate text-xs tracking-widest text-gold">{c.kicker}</p>
+    <header className="-mx-3 flex flex-col gap-2 px-3 sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6">
+      <div className="sticky top-0 z-20 -mx-3 flex flex-col gap-2 bg-paper/95 px-3 py-2 backdrop-blur-sm sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            <img src="/mark.jpg" alt="" className="size-10 shrink-0 border border-gold bg-[#14110d] object-cover sm:size-12" />
+            <div className="min-w-0">
+              <h1 className="truncate font-display text-lg italic tracking-wide sm:text-2xl">TAPELIQUID</h1>
+              <p className="truncate text-[10px] tracking-widest text-gold sm:text-xs">{c.kicker}</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-1 sm:justify-end sm:gap-2">
+            <ConnectButton />
+            <button type="button" className={`min-h-10 border px-2 text-xs sm:min-h-11 ${floor === "me" ? "border-ink bg-ink text-paper" : "border-gold"}`} onClick={() => setFloor("me")}>
+              <span className="sm:hidden">{lang === "zh" ? "我的" : "Me"}</span>
+              <span className="hidden sm:inline">{lang === "zh" ? "个人中心" : "Account"}</span>
+            </button>
+            <button type="button" className="min-h-10 border border-gold px-2 text-xs sm:min-h-11" onClick={() => setNight((on) => !on)}>
+              {night ? (lang === "zh" ? "白天" : "Day") : lang === "zh" ? "黑夜" : "Night"}
+            </button>
+            <button type="button" className="min-h-10 border border-gold px-2 text-xs sm:min-h-11" onClick={() => setLang(lang === "zh" ? "en" : "zh")}>
+              {lang === "zh" ? "EN" : "中文"}
+            </button>
+            {floor === "paper" ? (
+              <button
+                type="button"
+                className={`min-h-10 border px-2 text-xs sm:min-h-11 ${arm ? "border-sell text-sell" : "border-gold"}`}
+                onClick={() => {
+                  if (!arm) setArm(true);
+                  else {
+                    reset();
+                    setArm(false);
+                  }
+                }}
+              >
+                {arm ? (lang === "zh" ? "再点一次" : "Tap again") : lang === "zh" ? "清除练习" : "Clear practice"}
+              </button>
+            ) : null}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button type="button" className="min-h-9 border border-gold px-2 text-xs" onClick={() => setNight((on) => !on)}>
-            {night ? (lang === "zh" ? "白天" : "Day") : lang === "zh" ? "黑夜" : "Night"}
-          </button>
-          <button type="button" className="min-h-9 border border-gold px-2 text-xs" onClick={() => setLang(lang === "zh" ? "en" : "zh")}>
-            {lang === "zh" ? "EN" : "中文"}
-          </button>
-          {floor === "paper" ? (
-            <button
-              type="button"
-              className={`min-h-9 border px-2 text-xs ${arm ? "border-sell text-sell" : "border-gold"}`}
-              onClick={() => {
-                if (!arm) setArm(true);
-                else {
-                  reset();
-                  setArm(false);
-                }
-              }}
-            >
-              {arm ? (lang === "zh" ? "再点一次" : "Tap again") : lang === "zh" ? "只清除本机练习记录，不动合约" : "Clears this browser only"}
-            </button>
-          ) : null}
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={() => {
-          if (window.location.pathname.startsWith("/whitepaper")) {
-            window.location.assign("/#wafer");
-            return;
-          }
-          setFloor("shop");
-          setShop("wafer");
-        }}
-        className="flex min-h-14 items-center justify-between border border-gold bg-ink px-4 text-paper"
-      >
-        <span>
-          <span className="block text-xs tracking-widest text-gold">{lang === "zh" ? "现在去铸造" : "Mint now"}</span>
-          <span className="font-display text-2xl italic">{lang === "zh" ? "晶圆 · NAND / LATCH" : "Wafer · NAND / LATCH"}</span>
-        </span>
-        <span className="text-sm">{lang === "zh" ? "去铸造" : "Mint"}</span>
-      </button>
-      <div className="grid grid-cols-4 border border-gold">
-        {floors.map(([id, label]) => (
-          <button key={id} type="button" onClick={() => go(id)} className={`min-h-11 text-sm ${floor === id ? "bg-ink text-paper" : "bg-card"}`}>
-            {label}
-          </button>
-        ))}
-      </div>
-      {floor === "desk" ? (
-        <div className="grid grid-cols-2 border border-gold">
-          {(["spot", "perp"] as const).map((id) => (
-            <button key={id} type="button" onClick={() => setDesk(id)} className={`min-h-10 text-sm ${desk === id ? "bg-ink text-paper" : ""}`}>
-              {id === "spot" ? (lang === "zh" ? "现货" : "Spot") : lang === "zh" ? "永续" : "Perp"}
+        <div className="grid grid-cols-4 border border-gold">
+          {floors.map(([id, label]) => (
+            <button key={id} type="button" onClick={() => go(id)} className={`min-h-11 text-sm ${floor === id ? "bg-ink text-paper" : "bg-card"}`}>
+              {label}
             </button>
           ))}
         </div>
-      ) : null}
+        {floor === "desk" ? (
+          <div className="grid grid-cols-2 border border-gold">
+            {(["spot", "perp"] as const).map((id) => (
+              <button key={id} type="button" onClick={() => setDesk(id)} className={`min-h-10 text-sm ${desk === id ? "bg-ink text-paper" : ""}`}>
+                {id === "spot" ? (lang === "zh" ? "现货" : "Spot") : lang === "zh" ? "永续" : "Perp"}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            if (window.location.pathname.startsWith("/whitepaper")) {
+              window.location.assign("/#wafer");
+              return;
+            }
+            setFloor("shop");
+            setShop("wafer");
+          }}
+          className="flex min-h-12 items-center border border-gold bg-ink px-3 text-left text-paper sm:min-h-14 sm:px-4"
+        >
+          <span>
+            <span className="block text-[10px] tracking-widest text-gold sm:text-xs">{lang === "zh" ? "现在去铸造" : "Mint now"}</span>
+            <span className="font-display text-lg italic sm:text-2xl">{lang === "zh" ? "晶圆" : "Wafer"}</span>
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (window.location.pathname.startsWith("/whitepaper")) {
+              window.location.assign("/#canvas");
+              return;
+            }
+            setFloor("canvas");
+          }}
+          className={`flex min-h-12 items-center border px-3 text-left sm:min-h-14 sm:px-4 ${floor === "canvas" ? "border-ink bg-foil text-ink" : "border-gold bg-ink text-paper"}`}
+        >
+          <span>
+            <span className="block text-[10px] tracking-widest text-gold sm:text-xs">{lang === "zh" ? "同一条处理器" : "Same processor"}</span>
+            <span className="font-display text-lg italic sm:text-2xl">{lang === "zh" ? "流片" : "Tape"}</span>
+          </span>
+        </button>
+      </div>
       {line ? <p className="text-sm text-ink/70">{line}</p> : null}
     </header>
   );
@@ -317,21 +359,37 @@ function ShopFloor({ shop, setShop }: { shop: ShopTab; setShop: (shop: ShopTab) 
   const lang = useExchange((s) => s.lang);
   return (
     <>
-      <p className="text-sm text-ink/80">{lang === "zh" ? "先铸造 NAND，再流片。流片烧掉晶体管，不能撤回。" : "Mint NAND, then tape out. A tape-out burns transistors and cannot be undone."}</p>
-      <div className="grid grid-cols-2 border border-gold">
-        {(["gate", "wafer"] as const).map((id) => (
+      <p className="text-sm text-ink/80">
+        {shop === "chips" || shop === "circuits"
+          ? lang === "zh"
+            ? "盘口跟 tapeout.net 的快照。只做写死的官网合约。本站另收千分之二，先付，官网没成交也不退。"
+            : "The book follows the tapeout.net snapshot. Only the locked official contracts. Our extra 0.2% is paid first and is not returned."
+          : lang === "zh"
+            ? "先铸造 NAND，再流片。流片烧掉晶体管，不能撤回。"
+            : "Mint NAND, then tape out. A tape-out burns transistors and cannot be undone."}
+      </p>
+      <div className="grid grid-cols-2 border border-gold sm:grid-cols-4">
+        {([
+          ["gate", lang === "zh" ? "晶体管合约" : "Transistor perps"],
+          ["wafer", lang === "zh" ? "晶圆" : "Wafer"],
+          ["chips", lang === "zh" ? "晶体管现货" : "Transistor spot"],
+          ["circuits", lang === "zh" ? "电路现货" : "Circuit spot"],
+        ] as const).map(([id, label]) => (
           <button key={id} type="button" onClick={() => setShop(id)} className={`min-h-10 text-sm ${shop === id ? "bg-ink text-paper" : ""}`}>
-            {id === "gate" ? (lang === "zh" ? "晶体管" : "Transistors") : lang === "zh" ? "晶圆" : "Wafer"}
+            {label}
           </button>
         ))}
       </div>
-      {shop === "gate" ? <TransistorDesk /> : (
+      {shop === "gate" ? <TransistorDesk /> : null}
+      {shop === "wafer" ? (
         <>
           <WalletBar />
           <LiveBoard />
           <SealRebateBox />
         </>
-      )}
+      ) : null}
+      {shop === "chips" ? <OfficialDesk mode="chips" /> : null}
+      {shop === "circuits" ? <OfficialDesk mode="circuits" /> : null}
     </>
   );
 }
