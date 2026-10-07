@@ -376,9 +376,9 @@ function RecipeGrid({
       if (held && (held.nand < BigInt(n) || held.latch < BigInt(l))) {
         throw new Error("short");
       }
-      setNote(lang === "zh" ? `正在流片 ${short(n, l)}。钱包确认后不能撤回。` : `Taping ${short(n, l)}. It cannot be undone after you confirm.`);
+      setNote(lang === "zh" ? `正在流片 ${short(n, l)}。签名之后还要等回执。回执成功，电路就在链上。` : `Taping ${short(n, l)}. After you sign, this waits for the receipt. The circuit is on chain when that receipt succeeds.`);
       const hash = await tapeRecipe(from, n, l);
-      setNote(lang === "zh" ? `流片完成 ${short(n, l)}。烧掉的是本台晶体管，不是官网算力。` : `Taped ${short(n, l)}. This burned this processor's transistors, not official hashrate.`);
+      setNote(lang === "zh" ? `流片完成 ${short(n, l)}。电路在这笔交易里。名单要过几秒才显示，个人中心更慢。` : `Taped ${short(n, l)}. The circuit is in this transaction. The list can take a few seconds. The account page is slower.`);
       setPick(null);
       onDone(hash);
       window.open(txUrl(hash), "_blank", "noopener,noreferrer");
@@ -407,8 +407,8 @@ function RecipeGrid({
       <h3 className="font-display text-xl italic">{lang === "zh" ? "按配方直接流片" : "Tape a recipe directly"}</h3>
       <p className="mt-1 text-sm leading-relaxed text-ink/80">
         {lang === "zh"
-          ? "要自己接线，点页顶「流片 TAPELIQUID」进画布。下面这些配方不画图，确认后直接烧掉。工本 H 等于 NAND 加 LATCH，不是官网 BEM 算力。每次另付 0.0013 OKB，不能撤回。"
-          : "To draw the wires yourself, use Tape TAPELIQUID at the top. These recipes skip the drawing and burn on confirm. H is NAND plus LATCH, not official BEM hashrate. Each one also pays 0.0013 OKB and cannot be undone."}
+          ? "要自己接线，点页顶「流片 TAPELIQUID」进画布。下面这些配方不画图，确认后直接烧掉。工本 H 等于 NAND 加 LATCH，不是官网 BEM 算力。每次另付 0.0013 OKB，不能撤回。签名之后还要等回执。回执成功，电路就在链上。名单要过几秒才显示。"
+          : "To draw the wires yourself, use Tape TAPELIQUID at the top. These recipes skip the drawing and burn on confirm. H is NAND plus LATCH, not official BEM hashrate. Each one also pays 0.0013 OKB and cannot be undone. After you sign, the page waits for the receipt. The circuit exists when that receipt succeeds. This list can take a few seconds to show it."}
       </p>
       <div className="mt-3 grid grid-cols-2 gap-2">
         {RECIPES.map(([n, l]) => {

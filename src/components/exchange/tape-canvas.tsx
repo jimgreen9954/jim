@@ -230,10 +230,10 @@ export function TapeCanvas() {
       if (!netlist) throw new Error(built && "error" in built ? built.error : "gates");
       if (heldNow.nand < BigInt(nand) || heldNow.latch < BigInt(latchN)) throw new Error("short");
       const unit = target.chain === "bsc" ? "BNB" : "OKB";
-      setNote(zh ? `正在 ${target.name} 上流片。烧掉这台的 ${nand} NAND、${latchN} LATCH。确认后不能撤回。` : `Taping on ${target.name}. This burns ${nand} NAND and ${latchN} LATCH on that processor.`);
+      setNote(zh ? `正在 ${target.name} 上流片。签名之后还要等节点交出回执，大网表会更久。回执成功，电路就已经在链上。` : `Taping on ${target.name}. After you sign, the page waits for the node to return the receipt. A large sheet takes longer. When the receipt succeeds, the circuit is already on chain.`);
       const hash = await tapeOn(target, from, netlist, nIn, nOut);
       setHeld(await readTapeDesk(target, from).then((row) => ({ nand: row.nand, latch: row.latch })));
-      setNote(zh ? `已流在 ${target.name} 上。烧掉 ${nand} NAND、${latchN} LATCH。费是这台的协议费，单位 ${unit}。` : `Taped on ${target.name}. Burned ${nand} NAND and ${latchN} LATCH.`);
+      setNote(zh ? `已流在 ${target.name} 上。电路在这笔交易里，不是还要再铸一笔。本页名单大约 8 秒刷新一次。个人中心要更久，它从旧编号往后查。` : `Taped on ${target.name}. The circuit is in this transaction, not a second mint. This page's list refreshes in about 8 seconds. The account page is slower because it walks older ids first.`);
       window.open(tapeTxUrl(target, hash), "_blank", "noopener,noreferrer");
     } catch (error) {
       setBad(true);
@@ -595,6 +595,11 @@ export function TapeCanvas() {
             <input type="checkbox" className="mt-1" checked={ack} onChange={(event) => setAck(event.target.checked)} />
             <span>{zh ? `我知道这张会烧掉 ${burn}，确认后不能撤回，也不是官网 BEM 算力。` : `I know this burns ${burn}, cannot be undone, and is not official BEM hashrate.`}</span>
           </label>
+          <p className="mt-3 text-xs leading-5 text-ink/70">
+            {zh
+              ? "签名后页面会停在「等待钱包」，其实是在等回执。回执一成功，电路就有编号。下面的名单大约 8 秒才重读，个人中心更慢。想马上确认，打开弹出的那笔交易。"
+              : "After you sign, the button still says it is waiting. It is waiting for the receipt. The circuit has an id as soon as that receipt succeeds. The list below rereads in about 8 seconds. The account page is slower. Open the transaction to check immediately."}
+          </p>
           {!account ? (
             <button
               type="button"
