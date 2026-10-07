@@ -110,7 +110,7 @@ function DeskLadder({
     const mine = Boolean(account && row.quote.user.toLowerCase() === account.toLowerCase());
     const pct = mark > 0 && row.px > 0 ? ((row.px - mark) / mark) * 100 : null;
     return (
-      <div key={`${row.perp}-${row.quote.id}`} className="grid grid-cols-[2.4rem_1fr_auto] items-center gap-2 border-t border-gold/20 px-2 py-2 text-sm">
+      <div key={`${row.perp}-${row.quote.id}`} className="grid grid-cols-[2.2rem_minmax(0,1fr)_auto] items-center gap-2 border-t border-gold/20 px-2 py-2 text-sm">
         <span className={takeLong ? "text-sell" : "text-[#1b6b45]"}>{takeLong ? (zh ? "空" : "S") : zh ? "多" : "L"}</span>
         <span className="min-w-0 font-mono tabular-nums">
           <span className={takeLong ? "text-sell" : "text-[#1b6b45]"}>{row.limit > 0 ? row.px.toFixed(4) : zh ? "随标记" : "At mark"}</span>
@@ -145,7 +145,7 @@ function DeskLadder({
         {zh ? "买一" : "Bid"} {bestBid > 0 ? bestBid.toFixed(4) : "—"}
         {spread > 0 ? ` · ${zh ? "价差" : "Spread"} ${((spread / Math.max(mark, bestBid)) * 100).toFixed(2)}%` : ""}
       </p>
-      <div className="grid grid-cols-[2.4rem_1fr_auto] gap-2 px-2 py-1 text-xs text-ink/50">
+      <div className="grid grid-cols-[2.2rem_minmax(0,1fr)_auto] gap-2 px-2 py-1 text-xs text-ink/50">
         <span>{zh ? "方向" : "Side"}</span>
         <span>{zh ? "价格 · 保证金 · 倍数" : "Price · margin · leverage"}</span>
         <span className="text-right">{zh ? "对手" : "Who"}</span>
@@ -485,7 +485,7 @@ export function RealPerp() {
           <span className="block text-xs tracking-widest text-gold">{c.yourEq}</span>
           <span className="font-mono text-2xl tabular-nums">{view && account ? usdtText(view.equity) : "—"}</span>
         </p>
-        <div className="border border-gold bg-card xl:col-span-7">
+        <div className="min-w-0 border border-gold bg-card xl:col-span-7">
           <div className="flex flex-wrap items-end justify-between gap-3 border-b border-gold/30 px-3 py-3">
             <div>
               <p className="font-display text-2xl italic">BEM / USDT</p>
@@ -517,23 +517,13 @@ export function RealPerp() {
                   ["1h", "1时", "1h"],
                   ["4h", "4时", "4h"],
                   ["1d", "1日", "1d"],
+                  ["1w", "一周", "1w"],
+                  ["1M", "一月", "1M"],
+                  ["3M", "三月", "3M"],
+                  ["1y", "一年", "1y"],
                 ] as const
               ).map(([item, zhLabel, enLabel]) => (
                 <button key={item} type="button" onClick={() => setFrame(item)} className={`min-h-9 flex-1 px-2 font-mono text-xs sm:flex-none sm:px-3 ${frame === item ? "bg-ink text-paper" : ""}`}>
-                  {lang === "zh" ? zhLabel : enLabel}
-                </button>
-              ))}
-            </div>
-            <div className="flex w-full flex-wrap border border-gold">
-              {(
-                [
-                  ["1w", "一周", "1 week"],
-                  ["1M", "一月", "1 month"],
-                  ["3M", "三月", "3 months"],
-                  ["1y", "一年", "1 year"],
-                ] as const
-              ).map(([item, zhLabel, enLabel]) => (
-                <button key={item} type="button" onClick={() => setFrame(item)} className={`min-h-9 flex-1 px-3 text-xs sm:flex-none ${frame === item ? "bg-ink text-paper" : ""}`}>
                   {lang === "zh" ? zhLabel : enLabel}
                 </button>
               ))}
@@ -574,6 +564,7 @@ export function RealPerp() {
           {!view ? <p className="px-3 py-2 text-sm text-ink/60">{lang === "zh" ? "正在读合约，读完才能开仓。" : "Reading the contract. Open waits until that finishes."}</p> : null}
           {lock.status === "bad" ? <p className="px-3 pb-2 text-sm text-sell">{lang === "zh" ? "收费地址对不上，开仓停了。" : "The fee address does not match. Opening is stopped."}</p> : null}
         </div>
+        <div className="flex min-w-0 flex-col gap-3 xl:col-span-5">
         <div className="border border-gold/40 p-3">
           <p className="text-xs tracking-widest text-gold">{c.pkTitle}</p>
           {!view?.liveDeals.length ? (
@@ -605,7 +596,7 @@ export function RealPerp() {
           )}
         </div>
         {/^0x[a-fA-F0-9]{40}$/.test(perp) && (
-          <div className="flex flex-col gap-3 xl:col-span-5">
+          <div className="flex flex-col gap-3 border border-gold/40 p-3">
             {waiting ? (
               <p className="text-sm leading-relaxed">
                 {mine ? c.perpOther : `${c.waitQuote} · ${view?.pendingLong ? c.postLong : c.postShort} · ${usdtText(view?.pendingMargin ?? 0n)} USDT · ${view?.pendingLev}×`}
@@ -989,6 +980,7 @@ export function RealPerp() {
             ) : null}
           </div>
         )}
+        </div>
         {account ? (
           <p className="font-mono text-xs xl:col-span-12">
             {short(account)} · {chain === "xlayer" ? "X Layer" : "BSC"}
