@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { formatUnits } from "viem";
 import { copy } from "@/lib/copy";
-import { BSC, connectBsc, pretty, units, type Balances } from "@/lib/bsc";
+import { BSC, FEE_TO, connectBsc, pretty, units, type Balances } from "@/lib/bsc";
 import { getCandles, type Candle, type CandleFrame } from "@/lib/candles";
 import { currentAccount, onAccount, onOpenLink } from "@/lib/wallet";
 import { useExchange } from "@/lib/exchange-store";
@@ -14,6 +14,7 @@ import {
   cancelPerp,
   closePerp,
   deployXLayer,
+  deployLockedPair,
   bookOf,
   KNOWN_XPERP,
   liquidatePerp,
@@ -409,9 +410,39 @@ export function RealPerp() {
         {chain === "xlayer" ? (
           <p className="border border-sell px-3 py-2 text-sm text-sell xl:col-span-12">
             {lang === "zh"
-              ? "X Layer 这本已停新开仓和吃单。结算价不是十分钟均价，任何地址都能推，合约不能升级。已有仓可以平，自己的单可以撤。网页停不了别人直接调用合约。"
-              : "New opens and takes on this X Layer book are off. The mark is not a ten-minute average. Any address can push it, and the contract cannot be upgraded. You can still close a position and cancel your own order. The page cannot stop a direct contract call."}
+              ? "X Layer 这本已停新开仓和吃单。旧标记任何地址都能推，合约不能升级。已有仓可以平，自己的单可以撤。新本只许收费地址写价，结算用 10 分钟均价，没有管理员。要这个地址签两笔部署，签完之前网站不拿它当交易盘。"
+              : "New opens and takes on this X Layer book are off. Anyone can push the old mark, and that contract cannot be upgraded. You can still close and cancel your own order. The next book accepts prices only from the fee address, settles on a 10-minute average, and has no admin. That address has to sign two deployments. Until then this site does not trade it."}
           </p>
+        ) : null}
+        {chain === "xlayer" ? (
+          <button
+            type="button"
+            className="min-h-12 border border-gold"
+            disabled={busy}
+            onClick={() => {
+              setBusy(true);
+              setBad(false);
+              void (async () => {
+                try {
+                  const from = account ?? (await connectXLayer());
+                  setAccount(from);
+                  if (from.toLowerCase() !== FEE_TO.toLowerCase()) {
+                    setBad(true);
+                    setNote(lang === "zh" ? `只有收费地址能签。当前是 ${from}` : `Only the fee address can sign. This wallet is ${from}`);
+                    return;
+                  }
+                  const next = await deployLockedPair(from);
+                  setNote(lang === "zh" ? `新标记 ${next.mark}。新永续 ${next.perp}。还没写进网站，所有人仍用旧本，旧本不开新仓。` : `New mark ${next.mark}. New book ${next.perp}. Not written into the site yet. Everyone still sees the old book, and it does not open.`);
+                } catch (err) {
+                  fail(err);
+                } finally {
+                  setBusy(false);
+                }
+              })();
+            }}
+          >
+            {lang === "zh" ? "用收费地址部署新本" : "Deploy the new book from the fee address"}
+          </button>
         ) : null}
         <div className="grid grid-cols-2 gap-2 xl:col-span-12">
           <button

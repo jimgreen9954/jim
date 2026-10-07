@@ -144,6 +144,7 @@ contract TapePerp {
     }
 
     function open(bool long, uint256 margin, uint16 lev, uint256 price) external nonReentrant {
+        mark();
         _check(margin, lev);
         if (price < 1e16 || price > 100_000 ether) revert Bad();
         _take(msg.sender, margin);
@@ -153,6 +154,7 @@ contract TapePerp {
     }
 
     function take(uint256 quoteId, uint256 margin, uint16 lev) external nonReentrant {
+        mark();
         Quote memory q = quotes[quoteId];
         if (!q.open || q.user == msg.sender) revert Bad();
         _check(margin, lev);

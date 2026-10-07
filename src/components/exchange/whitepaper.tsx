@@ -34,7 +34,7 @@ const zh: Section[] = [
   {
     h: "TAPE",
     ps: [
-      "硬顶 21,000,000。无预挖，无团队份额，无私募。只发给已流片并且已验证的电路。未锁仓电路的领取，100% 进入该电路登记的矿工地址。销毁从已流通的币里发生，不从排放里预扣。",
+      "TAPE 是 TAPELIQUID 的平台币，只此一份，在 X Layer。硬顶 21,000,000。无预挖，无团队份额，无私募。只发给已流片并且已验证的电路。未锁仓电路的领取，100% 进入该电路登记的矿工地址。销毁从已流通的币里发生，不从排放里预扣。",
       "排放不回溯。从第一笔已验证流片的那一天开始计日。晶圆不必铸完才开始。之后新的铸造和流片提高全网算力，已有电路的占比下降。",
       "日排放和减半周期写在合约里，不设改率权限。减半周期 210,000×600 秒，约 4 年。每过一个周期，当日排放减半。各期累加不超过 21,000,000。销毁不改变日排放，只减少已流通数量。",
       "开盘阶段日排放为 1,000。收费地址连续 30 日有台费入账后，日排放调整为 7,200，此后按减半周期执行。调整只做这一次。",
@@ -89,10 +89,10 @@ const zh: Section[] = [
   {
     h: "已停的两本永续",
     ps: [
-      "晶体管永续的结算价没有权限。任何地址都能在 10 秒内、相对前价 2/3 到 1.5 倍之间提交一个新价格，平仓就按这个价分保证金。",
-      "X Layer 永续读的标记合约不是十分钟均价。它把最新提交的价格乘一个常数再除回去，所以用的就是刚推上去的价。任何地址每 30 秒最多推动约 0.5%。价格不过期，没人推时旧价仍能用来结算。",
-      "这两份合约没有升级入口。这一版网页不再提供新开仓和吃单。已经在里面的保证金可以平仓，自己的挂单可以撤。别人仍可绕过网页直接调用合约，网页停不掉。",
-      "BSC 上的 BEM 永续走的是另一条池子路径，不使用上面这份 X Layer 标记合约。",
+      "现在还在用的晶体管永续和 X Layer 永续是旧本。旧本的结算价任何地址都能推，合约不能升级。网页已停新开仓和吃单。里面的保证金可以平，自己的挂单可以撤。别人仍可直接调用旧合约，网页停不掉。",
+      "下一本写在源码里，链上地址还没换。新本没有管理员，也不能改谁有权写价。标记只由收费地址写入。每次最多挪 0.5%，至少隔 30 秒。结算用过去 10 分钟的均价，不是最后一笔。均价不满 10 分钟，或超过 30 分钟没有新写入，不能开仓，也不能按旧价结算。收费地址要自己连续写入。这一页不能替它签名。部署也要这个地址签。签完之前，网站不把新本当成可交易的盘。",
+      "BSC 上的 BEM 永续读的是 Pancake 池子，不使用上面这份 X Layer 标记。浅池仍可能在短时间里影响那条均价。",
+      "TAPE 不在这批替换里。平台币仍是现在这一枚。矿池没有升级入口。再部署一份矿池就会变成第二枚 TAPE，这一版不这么做。",
       "电路锁仓到期释放后，若矿池再结算这段权重，收益可能打进锁仓合约。锁仓记录已经删了，页面没有提取入口。这是已部署合约的行为。这一版网页不再提交新的电路锁仓。已经锁上的仍按到期日解锁。电路退回，不等于释放之后的挖矿收益也能取回。",
       "返佣合约有 clerk。clerk 可以提取返佣池里的余额。不是每一份合约都没有管理员。",
     ],
@@ -120,7 +120,7 @@ const zh: Section[] = [
       `TAPE 代币 ${TAPE}。挖矿合约 ${TAPE_MINE}。都在 X Layer。硬顶 21,000,000，8 位小数，没有管理员，也没有改率入口。只有挖矿合约能铸。总供应只随领取增加。`,
       "这份挖矿合约现在的日排放是 7,200，从部署时开始，不是先 1,000 再切换。它也没有「收费地址签一次改成 7,200」的入口。权重按电路门数，也就是 b*，处理器倍率按 1。q 还没有题目验证，页面不能显示大于 1。",
       "挖矿、TAPE 池、晶圆和电路锁仓，三份都没有管理员，不能升级，不能改期限，不能改费率，也没有救援入口。误转到合约、又没有对应仓位的资产，谁都取不回，页面不会这么转。加池时和池子比例对不上的部分退回给签名的人，不会进别人的份额。",
-      "开盘池的 100,000 枚没有另铸。TAPE 池没有管理员，加池即质押，90 天到 3 年，到期才能撤。晶圆和电路锁在另一份没有管理员的合约里，期限是 180 天、365 天、3 年、4 年、5 年。锁着的晶圆不能流片，不算算力。锁着的电路算力记在锁仓合约上，挖到的 TAPE 先留在锁仓里，解锁时和电路一起退回，退回后要重新开工。同一片电路不能锁两次。回购和 TAPE 跨链还没有合约。",
+      "开盘池的 100,000 枚没有另铸。TAPE 池没有管理员，加池即质押，90 天到 3 年，到期才能撤。晶圆和电路锁在另一份没有管理员的合约里，期限是 180 天、365 天、3 年、4 年、5 年。锁着的晶圆不能流片，不算算力。锁着的电路算力记在锁仓合约上。解锁时，当时已经结算的 TAPE 和电路一起退回。释放之后再结算的部分可能留在锁仓合约里，页面取不回。新的电路锁仓已停。同一片电路不能锁两次。回购和 TAPE 跨链还没有合约。",
       "个人中心转出晶体管可以选一对一或一对多。一对多每一行一个地址，这一行的 NAND 和 LATCH 只进这个地址，按行签名，不经过锁仓合约。电路在名单里上下滑动勾选，每一片填一个地址，勾几片签几笔。官网合约如果不提供逐个编号，这一页不能代填。",
     ],
   },
@@ -158,7 +158,7 @@ const en: Section[] = [
   {
     h: "TAPE",
     ps: [
-      "Hard cap 21,000,000. No premine, no team allocation, no private sale. It is paid only to a taped and verified circuit. A claim on an unlocked circuit goes entirely to the miner address registered on that circuit. Burns come out of coins already circulating. They are not withheld from emission.",
+      "TAPE is the platform token of TAPELIQUID. There is one token, on X Layer. The hard cap is 21,000,000. No premine, no team allocation, no private sale. It is paid only to a taped and verified circuit. A claim on an unlocked circuit goes entirely to the miner address registered on that circuit. Burns come out of coins already circulating. They are not withheld from emission.",
       "Emission does not backfill. The day count starts on the day of the first verified tape-out. The wafers do not have to be fully minted first. Later mints and tape-outs raise network hashrate, so an existing circuit's share falls.",
       "The daily amount and the halving are in the contract. There is no permission to edit the rate. A halving is 210,000 × 600 seconds, about four years. Each period, that day's emission is cut in half. The periods together do not exceed 21,000,000. A burn does not change the daily emission. It only reduces what is circulating.",
       "The opening daily emission is 1,000. After the fee address has received desk fees for 30 consecutive days, the daily emission becomes 7,200, and halvings apply from there. That change happens once.",
@@ -213,10 +213,10 @@ const en: Section[] = [
   {
     h: "Two books are closed to new risk",
     ps: [
-      "The transistor perpetual has no permission on its mark. Any address can submit a new price within ten seconds, between two thirds and one and a half of the previous price. A close settles at that price.",
-      "The X Layer perpetual does not read a ten-minute average. The mark contract returns the latest pushed price. Any address can move it by about half a percent every thirty seconds. The price does not expire. An old price can still settle a position.",
-      "Neither contract can be upgraded. This version of the site no longer offers a new open or a take on those two books. Margin already inside can be closed. Your own resting order can be cancelled. A direct contract call still works. The page cannot stop it.",
-      "The BEM perpetual on BSC uses a different pool path. It does not use the X Layer mark contract above.",
+      "The transistor perpetual and the X Layer perpetual still in use are the old books. Anyone can push their settlement price, and those contracts cannot be upgraded. This site no longer opens or takes on them. Margin already inside can be closed. Your own order can be cancelled. A direct call to the old contract still works. The page cannot stop it.",
+      "The next book is in the source. Its chain address is not live yet. It has no admin, and the address allowed to post a price cannot be changed. Only the fee address can post. Each post moves at most 0.5 percent, and at least 30 seconds must pass. Settlement uses the average of the last 10 minutes, not the last post. If that average is shorter than 10 minutes, or no post has arrived for 30 minutes, a new order cannot open and an old price cannot settle. The fee address has to keep posting. This page cannot sign for it. Deployment also has to be signed by that address. Until that signature, the site does not treat the new book as tradable.",
+      "The BEM perpetual on BSC reads the Pancake pool. It does not use the X Layer mark above. A thin pool can still move that average for a short time.",
+      "TAPE is not in this replacement. The platform token stays the one already deployed. The mine cannot be upgraded. A new mine would be a second TAPE. This version does not do that.",
       "After a locked circuit is released, a later mine settlement can pay that interval into the lock contract. The lock seat is already gone, and the page has no withdrawal for it. That is the deployed contract. This version of the site no longer submits a new circuit lock. A circuit already locked can still be released on its date. Getting the circuit back is not the same as getting the mining reward paid in after release.",
       "The rebate contract has a clerk. The clerk can withdraw the rebate pool. Not every contract is without an admin.",
     ],
@@ -244,7 +244,7 @@ const en: Section[] = [
       `TAPE is ${TAPE}. The mine is ${TAPE_MINE}. Both are on X Layer. The cap is 21,000,000 with 8 decimals. There is no admin and no way to change the rate. Only the mine can mint. Supply grows only when someone claims.`,
       "That mine contract emits 7,200 a day from the moment it was deployed. It does not start at 1,000, and it has no one-time switch to 7,200. Weight is the gate count, which is b*, and the processor multiplier is 1. There is no task score yet, so q is not shown above 1.",
       "The mine, the TAPE pool, and the wafer and circuit lock have no admin. They cannot be upgraded, and the terms and the fee cannot be changed. There is no rescue function. Assets sent to a contract without a matching position cannot be taken back by anyone, and the page does not send them that way. Liquidity that does not match the pool ratio is returned to the signer. It is not added to anyone else's share.",
-      "The 100,000 opening allocation was not minted. The TAPE pool has no admin. Adding liquidity stakes it for 90 days to 3 years. Wafers and circuits lock in a second contract with no admin, for 180 days, 365 days, 3 years, 4 years, or 5 years. Locked wafers cannot be taped and do not count as weight. A locked circuit's weight sits on the lock, its TAPE stays there until release, and it has to be opened again afterwards. The same circuit cannot be locked twice. Buyback and a TAPE bridge are not contracts yet.",
+      "The 100,000 opening allocation was not minted. The TAPE pool has no admin. Adding liquidity stakes it for 90 days to 3 years. Wafers and circuits lock in a second contract with no admin, for 180 days, 365 days, 3 years, 4 years, or 5 years. Locked wafers cannot be taped and do not count as weight. A locked circuit's weight sits on the lock. TAPE already settled at release comes back with the circuit. A later settlement can stay in the lock, and the page cannot take it out. New circuit locks are off. The same circuit cannot be locked twice. Buyback and a TAPE bridge are not contracts yet.",
       "Official BEM is still claimed from the TapeOut mine. It is not the same signature as TAPE. A large tape-out does not mint official BEM.",
       "The account page can send transistors to one address or to many. Many means one address per row, and that row's NAND and LATCH go only to that address. Each transfer is its own signature, and none of them go through the lock. Circuits are ticked in a scrolling list. Each ticked circuit has one address. One signature per circuit. If an official contract does not list token ids, this page does not invent them.",
     ],

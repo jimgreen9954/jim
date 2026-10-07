@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { bindGate, cancelGateChain, claimGate, closeGateChain, gateAddress, gateMark, readGateChain, readGateRebate, registerGate, type ChainDeal, type ChainOrder } from "@/lib/gate-chain";
+import { bindGate, cancelGateChain, claimGate, closeGateChain, deployGate, gateAddress, gateMark, readGateChain, readGateRebate, registerGate, type ChainDeal, type ChainOrder } from "@/lib/gate-chain";
+import { FEE_TO, connectBsc } from "@/lib/bsc";
 import { getTransistorDesk, type TransistorDesk } from "@/lib/transistor-market";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import { useExchange } from "@/lib/exchange-store";
@@ -206,7 +207,25 @@ export function TransistorDesk() {
           {resting.length === 0 ? <p className="px-3 py-6 text-sm text-ink/60">{zh ? "这个标还没有人挂单。右边开多或开空，就会出现在这里。" : "No orders on this market yet. A long or a short from the ticket shows up here."}</p> : null}
         </div>
         <div className="flex flex-col gap-2 border border-gold bg-card p-3">
-          <p className="border border-sell px-2 py-2 text-sm text-sell">{zh ? "新开仓和吃单已停。结算价任何地址都能推，合约不能升级。下面的持仓可以平，自己的挂单可以撤。网页停不了别人直接调用合约。" : "New opens and takes are off. Any address can push the mark, and the contract cannot be upgraded. Close a position below, or cancel your own order. The page cannot stop a direct call."}</p>
+          <p className="border border-sell px-2 py-2 text-sm text-sell">{zh ? "新开仓和吃单已停。旧本任何地址都能推结算价，不能升级。持仓可以平，自己的挂单可以撤。新本只许收费地址写价，用 10 分钟均价，没有管理员。这个地址签完部署之前，网站不拿新本当交易盘。" : "New opens and takes are off. Anyone can push the old mark, and that contract cannot be upgraded. Close a position or cancel your own order. The next book accepts prices only from the fee address, uses a 10-minute average, and has no admin. Until that address deploys it, the site does not trade the new book."}</p>
+          <button type="button" className="min-h-11 border border-gold" disabled={busy} onClick={async () => {
+            setBusy(true);
+            setNote("");
+            try {
+              const from = account ?? (await connectBsc());
+              setAccount(from);
+              if (from.toLowerCase() !== FEE_TO.toLowerCase()) {
+                setNote(zh ? `只有收费地址能签。当前是 ${from}` : `Only the fee address can sign. This wallet is ${from}`);
+                return;
+              }
+              const addr = await deployGate(from);
+              setNote(zh ? `新晶体管永续 ${addr}。还没写进网站。所有人仍看到旧本，旧本不开新仓。` : `New transistor book ${addr}. Not written into the site. Everyone still sees the old book, and it does not open.`);
+            } catch {
+              setNote(zh ? "没有部署成。" : "It did not deploy.");
+            } finally {
+              setBusy(false);
+            }
+          }}>{zh ? "用收费地址部署新本" : "Deploy the new book from the fee address"}</button>
           <p className="text-xs tracking-widest text-gold">{zh ? "下单已停" : "Opens are off"}</p>
           <label className="text-sm">
             {zh ? "限价 BNB，空着就用参考价" : "Limit in BNB. Blank uses the mark."}

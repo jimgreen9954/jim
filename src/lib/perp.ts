@@ -1,5 +1,5 @@
 import { encodeAbiParameters, encodeFunctionData, type Hex } from "viem";
-import { BSC, connectBsc, pretty, readBalances, units, waitReceipt } from "@/lib/bsc";
+import { BSC, FEE_TO, connectBsc, pretty, readBalances, units, waitReceipt } from "@/lib/bsc";
 import { PERP_BYTECODE } from "@/lib/perp-artifact";
 import { MARK_BYTECODE } from "@/lib/mark-artifact";
 import { getProvider } from "@/lib/wallet";
@@ -911,6 +911,32 @@ export async function deployXLayer(from: string, onStep?: (step: 1 | 2 | 3) => v
     if (perpReceipt.status !== "success" || !perpReceipt.contractAddress) throw new Error("revert");
     window.localStorage.setItem(XPERP_KEY, perpReceipt.contractAddress);
     return perpReceipt.contractAddress;
+  } finally {
+    desk = was;
+  }
+}
+
+/** Deploy a new mark and a new X Layer book. Does not switch the site onto them. */
+export async function deployLockedPair(from: string): Promise<{ mark: string; perp: string }> {
+  if (from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("oracle");
+  const was = desk;
+  desk = "xlayer";
+  try {
+    const rpc = await client();
+    const markHash = await send(from, undefined, MARK_BYTECODE);
+    const markReceipt = await rpc.waitForTransactionReceipt({ hash: markHash, timeout: 120_000 });
+    const mark = markReceipt.contractAddress ?? "";
+    if (markReceipt.status !== "success" || !mark) throw new Error("revert");
+    const args = encodeAbiParameters(
+      [{ type: "address" }, { type: "address" }, { type: "uint256" }],
+      [X_USDT, mark as Hex, 1_000_000n],
+    );
+    const data = (PERP_BYTECODE + args.slice(2)) as Hex;
+    const perpHash = await send(from, undefined, data);
+    const perpReceipt = await rpc.waitForTransactionReceipt({ hash: perpHash, timeout: 120_000 });
+    const perp = perpReceipt.contractAddress ?? "";
+    if (perpReceipt.status !== "success" || !perp) throw new Error("revert");
+    return { mark, perp };
   } finally {
     desk = was;
   }

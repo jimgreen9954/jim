@@ -7,11 +7,16 @@ interface IERC20 {
     function transferFrom(address, address, uint256) external returns (bool);
 }
 
-/// Six transistor markets. Margin is BSC USDT. The mark is pushed from the
-/// official TapeOut price. No admin.
+/// Six transistor markets. Margin is BSC USDT.
+/// Only the fee address can post a price. Settlement uses a 10-minute average.
+/// There is no owner and no way to change the poster.
 contract GatePerp {
     IERC20 public immutable usdt;
     address public constant FEE_TO = 0x823b9F6A93Ac44Ce5A469823A336c15b6117054D;
+    address public constant ORACLE = FEE_TO;
+    uint32 public constant WINDOW = 600;
+    uint32 public constant STALE = 1800;
+    uint8 public constant SLOTS = 32;
     uint256 public constant MIN_MARGIN = 1 ether;
     uint256 public constant MAX_MARGIN = 500 ether;
     uint256 public constant FEE_NUM = 2;
@@ -25,6 +30,16 @@ contract GatePerp {
     mapping(address => bytes32) public codeOf;
     mapping(uint8 => uint256) public marks;
     mapping(uint8 => uint256) public markedAt;
+
+    struct Snap {
+        uint64 time;
+        uint256 cum;
+        uint256 px;
+    }
+
+    mapping(uint8 => Snap[32]) private snaps;
+    mapping(uint8 => uint8) public snapLast;
+    mapping(uint8 => uint8) public snapCount;
 
     struct Quote {
         address user;
@@ -78,14 +93,50 @@ contract GatePerp {
     }
 
     function push(uint8 market, uint256 px) external {
+        if (msg.sender != ORACLE) revert Bad();
         if (market > 5 || px == 0 || px > 1000 ether) revert Bad();
-        uint256 prev = marks[market];
-        if (prev != 0) {
-            if (block.timestamp < markedAt[market] + 10) revert Bad();
-            if (px * 2 > prev * 3 || prev * 2 > px * 3) revert Bad();
+        uint64 nowT = uint64(block.timestamp);
+        uint8 n = snapCount[market];
+        if (n == 0 || nowT > snaps[market][snapLast[market]].time + STALE) {
+            snaps[market][0] = Snap(nowT, 0, px);
+            snapLast[market] = 0;
+            snapCount[market] = 1;
+        } else {
+            Snap memory prev = snaps[market][snapLast[market]];
+            if (nowT < prev.time + 30) revert Bad();
+            uint256 cap = prev.px + prev.px / 200;
+            uint256 floorPx = prev.px - prev.px / 200;
+            if (px > cap || px < floorPx) revert Bad();
+            uint256 cum = prev.cum + prev.px * (uint256(nowT) - prev.time);
+            uint8 j = (snapLast[market] + 1) % SLOTS;
+            snaps[market][j] = Snap(nowT, cum, px);
+            snapLast[market] = j;
+            if (n < SLOTS) snapCount[market] = n + 1;
         }
         marks[market] = px;
-        markedAt[market] = block.timestamp;
+        markedAt[market] = nowT;
+    }
+
+    function markOf(uint8 market) public view returns (uint256) {
+        uint8 n = snapCount[market];
+        if (market > 5 || n == 0) revert Bad();
+        Snap memory head = snaps[market][snapLast[market]];
+        if (block.timestamp < head.time + WINDOW || block.timestamp > head.time + STALE) revert Bad();
+        uint256 nowCum = head.cum + head.px * (block.timestamp - head.time);
+        uint256 thenCum = _cumAt(market, block.timestamp - WINDOW);
+        return (nowCum - thenCum) / WINDOW;
+    }
+
+    function _cumAt(uint8 market, uint256 target) internal view returns (uint256) {
+        uint8 i = snapLast[market];
+        uint8 n = snapCount[market];
+        for (uint8 k = 0; k < n; k++) {
+            Snap memory row = snaps[market][i];
+            if (row.time <= target) return row.cum + row.px * (target - row.time);
+            if (k + 1 == n) break;
+            i = i == 0 ? SLOTS - 1 : i - 1;
+        }
+        revert Bad();
     }
 
     function register(bytes32 code) external {
@@ -110,7 +161,8 @@ contract GatePerp {
     }
 
     function open(uint8 market, bool long, uint256 margin, uint16 lev, uint256 price) external nonReentrant {
-        if (market > 5 || marks[market] == 0) revert Bad();
+        if (market > 5) revert Bad();
+        markOf(market);
         _check(margin, lev, price);
         _take(msg.sender, margin);
         uint256 id = ++nextQuote;
@@ -120,6 +172,7 @@ contract GatePerp {
     function take(uint256 quoteId, uint256 margin, uint16 lev) external nonReentrant {
         Quote memory q = quotes[quoteId];
         if (!q.open || q.user == msg.sender) revert Bad();
+        markOf(q.market);
         _check(margin, lev, q.price);
         quotes[quoteId].open = false;
         _take(msg.sender, margin);
@@ -178,8 +231,7 @@ contract GatePerp {
     function _settle(uint256 id) internal {
         Deal memory d = deals[id];
         if (!d.open) revert Bad();
-        uint256 px = marks[d.market];
-        if (px == 0) revert Bad();
+        uint256 px = markOf(d.market);
         deals[id].open = false;
         (uint256 eqL, uint256 eqS) = _equity(d, px);
         _pay(d.long, eqL);
