@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { formatUnits } from "viem";
 import { copy } from "@/lib/copy";
 import { useExchange } from "@/lib/exchange-store";
+import { TapePoolDesk } from "@/components/exchange/tape-pool-desk";
 import {
   BSC,
   BNB_GAS_RESERVE,
@@ -268,22 +269,7 @@ export function SpotDesk() {
           {lang === "zh" ? "流动性" : "Liquidity"}
         </button>
       </div>
-      {lane === "lp" ? <LpPanel /> : book === "tape" ? (
-        <div className="p-4">
-          <p className="text-xs tracking-widest text-gold">X Layer · TAPE</p>
-          <h2 className="mt-2 font-display text-3xl italic">{lang === "zh" ? "TAPE 现货还没开" : "TAPE spot is not open"}</h2>
-          <p className="mt-3 max-w-2xl text-sm leading-7">
-            {lang === "zh"
-              ? "交易对是 TAPE/USDT 和 TAPE/BEM。吃进池子的 TAPE 只能是用户已经领到、自己加进去的。对手可以是 USDT，也可以是 BEM。加池要选三个月、六个月、一年、两年或三年，到期才能一键撤回。池子价值到 10,000 美元之前，买卖按钮不开。开盘计划里的 100,000 TAPE 还没有铸出，所以现在没有价格。"
-              : "The pairs are TAPE/USDT and TAPE/BEM. TAPE in the pool can only be TAPE a user already claimed and added. The other side is USDT or BEM. A deposit picks three months, six months, one year, two years, or three years, and comes out in one action at expiry. Trading stays off until the pool is worth 10,000 dollars. The planned 100,000 TAPE has not been minted, so there is no price."}
-          </p>
-          <div className="mt-4 grid grid-cols-2 gap-2 sm:max-w-md">
-            <button type="button" disabled className="min-h-12 border border-gold text-sm opacity-50">TAPE / USDT</button>
-            <button type="button" disabled className="min-h-12 border border-gold text-sm opacity-50">TAPE / BEM</button>
-          </div>
-          <button type="button" className="mt-4 text-sm underline" onClick={() => setBook("crypto")}>{lang === "zh" ? "回到现货" : "Back to spot"}</button>
-        </div>
-      ) : (
+      {lane === "lp" ? <LpPanel /> : book === "tape" ? <TapePoolDesk /> : (
       <div className="grid gap-0 lg:grid-cols-12">
         <div className="border-b border-gold/40 p-3 lg:col-span-7 lg:border-r lg:border-b-0">
           <div className="flex items-center justify-between gap-3">

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { BSC } from "@/lib/bsc";
 import { useExchange } from "@/lib/exchange-store";
 import { bemText, claimPod, getPodMiners, POD, readPodPending, readPodStats, type PodStats } from "@/lib/pod";
-import { claimTape, openTape, readTapeMine, readTapeSeats, TAPE, TAPE_MINE, tapeText, type TapeSeat } from "@/lib/tape-mine";
+import { claimTape, openTape, readTapeMine, TAPE, TAPE_MINE, tapeText, type TapeBoard } from "@/lib/tape-mine";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import { connectXLayer, XLAYER } from "@/lib/xlayer";
 
@@ -13,8 +13,8 @@ export function MineDesk() {
   const [stats, setStats] = useState<PodStats | null>(null);
   const [miners, setMiners] = useState<{ cpu: string; circuits: string; circuitId: number; taskId: number; pending: bigint; key: `0x${string}` }[]>([]);
   const [snap, setSnap] = useState("");
-  const [seats, setSeats] = useState<TapeSeat[]>([]);
-  const [tape, setTape] = useState<{ supply: bigint; weight: bigint; balance: bigint } | null>(null);
+  const [tape, setTape] = useState<TapeBoard | null>(null);
+  const [tapeErr, setTapeErr] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [bad, setBad] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -25,7 +25,7 @@ export function MineDesk() {
     let dead = false;
     const pull = () => {
       readPodStats().then((row) => { if (!dead) setStats(row); }).catch(() => undefined);
-      readTapeMine(account).then((row) => { if (!dead) setTape(row); }).catch(() => undefined);
+      readTapeMine(account).then((row) => { if (!dead) { setTape(row); setTapeErr(null); } }).catch(() => { if (!dead) setTapeErr(zh ? "链上没读到。失败不会写成 0。" : "The chain did not answer. A miss is not written as zero."); });
     };
     pull();
     const id = window.setInterval(pull, 15000);
@@ -35,7 +35,6 @@ export function MineDesk() {
   useEffect(() => {
     if (!account) {
       setMiners([]);
-      setSeats([]);
       return;
     }
     let dead = false;
@@ -48,12 +47,13 @@ export function MineDesk() {
         setMiners(snapRow.miners.slice(0, 24).map((row, i) => ({ ...row, pending: live[i]?.pending ?? 0n, key: live[i]?.key ?? "0x" })));
       })
       .catch(() => { if (!dead) setMiners([]); });
-    readTapeSeats(account).then((rows) => { if (!dead) setSeats(rows); }).catch(() => undefined);
     return () => { dead = true; };
   }, [account]);
 
   const pendingBem = miners.reduce((sum, row) => sum + row.pending, 0n);
-  const pendingTape = seats.reduce((sum, row) => sum + row.pending, 0n);
+  const pendingTape = tape?.seats.reduce((sum, row) => sum + row.pending, 0n) ?? 0n;
+  const myWeight = tape?.seats.reduce((sum, row) => sum + (row.on ? BigInt(row.gates) : 0n), 0n) ?? 0n;
+  const myShare = tape && tape.weight > 0n ? (tape.daily * myWeight) / tape.weight : 0n;
   const say = (text: string, failed = false) => { setBad(failed); setNote(text); };
 
   return (
@@ -115,40 +115,54 @@ export function MineDesk() {
         <h2 className="font-display text-3xl italic">{zh ? "领 TAPE" : "Claim TAPE"}</h2>
         <p className="mt-2 text-sm leading-relaxed">
           {zh
-            ? "发行写在规则里：硬顶 21,000,000，8 位小数，开盘日排放 1,000，收费地址连续 30 日有台费后一次性改为 7,200，之后每 210,000×600 秒减半。现在这份合约还不是那一档。它从部署起就是每天 7,200，权重是门数，q 不能大于 1。没有管理员，也不能把排放改掉。大张流片不产生官网 BEM。TAPE 还不能跨链。"
-            : "The written schedule is a 21,000,000 cap, 8 decimals, 1,000 a day at the open, one switch to 7,200 after 30 days of desk fees, then a halving every 210,000×600 seconds. This contract is not that schedule. It emits 7,200 a day from deployment, weight is the gate count, and q cannot be above 1. There is no admin and no way to edit the rate. A large tape-out does not mint official BEM. TAPE cannot be bridged yet."}
+            ? "数字每 15 秒从挖矿合约重读，并扫这台处理器上的电路。只有已经开工的电路才有 TAPE。权重是门数，q 记 1。这一页不托管。"
+            : "Figures are reread from the mine every 15 seconds, across this processor's circuits. Only an opened circuit earns TAPE. Weight is the gate count, and q stays at 1. This page does not custody."}
         </p>
         <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
-          <Cell k={zh ? "已铸" : "Minted"} v={tape ? `${tapeText(tape.supply)} TAPE` : "—"} />
-          <Cell k={zh ? "全网权重" : "Weight"} v={tape ? tape.weight.toString() : "—"} />
-          <Cell k={zh ? "这地址余额" : "Balance"} v={tape && account ? `${tapeText(tape.balance)} TAPE` : "—"} />
-          <Cell k={zh ? "待领" : "Pending"} v={account ? `${tapeText(pendingTape)} TAPE` : "—"} />
+          <Cell k={zh ? "今天排放" : "Daily emission"} v={tape ? `${amount(tape.daily)} TAPE` : "—"} />
+          <Cell k={zh ? "已领出" : "Claimed"} v={tape ? `${amount(tape.supply)} TAPE` : "—"} />
+          <Cell k={zh ? "全网权重" : "Network weight"} v={tape ? tape.weight.toLocaleString("en-US") : "—"} />
+          <Cell k={zh ? "已开工 / 电路" : "Open / circuits"} v={tape ? `${tape.open.toLocaleString("en-US")} / ${tape.circuits.toLocaleString("en-US")}` : "—"} />
+          <Cell k={zh ? "这地址权重" : "Weight here"} v={account && tape ? myWeight.toLocaleString("en-US") : "—"} />
+          <Cell k={zh ? "这地址约占今日" : "About today"} v={account && tape ? `${amount(myShare)} TAPE` : "—"} />
         </dl>
-        <ul className="mt-2 max-h-64 overflow-auto border border-gold/40">
-          {seats.map((row) => (
-            <li key={row.id} className="grid grid-cols-[4rem_5rem_1fr_auto] items-center gap-2 border-t border-gold/30 px-2 py-2 text-xs">
-              <span className="font-mono">#{row.id}</span>
-              <span>{row.gates} {zh ? "门" : "gates"}</span>
-              <span className="text-right font-mono">{tapeText(row.pending)}</span>
-              <button
-                type="button"
-                disabled={busy || row.on}
-                className="min-h-8 border border-gold px-2 disabled:opacity-40"
-                onClick={() => {
-                  if (!account) return;
-                  setBusy(true);
-                  openTape(account, BigInt(row.id))
-                    .then(() => readTapeSeats(account).then(setSeats))
-                    .then(() => say(zh ? `#${row.id} 已开工。权重按门数。` : `#${row.id} is open. Weight is the gate count.`))
-                    .catch(() => say(zh ? "开工没有完成。" : "Open did not finish.", true))
-                    .finally(() => setBusy(false));
-                }}
-              >
-                {row.on ? (zh ? "已开工" : "Open") : (zh ? "开工" : "Open")}
-              </button>
+        <p className="mt-3 text-sm">{zh ? "这个地址待领" : "Pending here"} <span className="font-mono">{account && tape ? `${amount(pendingTape)} TAPE` : "—"}</span></p>
+        <p className="mt-1 text-xs text-ink/50">{tapeErr ? tapeErr : account && tape ? (zh ? `余额 ${amount(tape.balance)} TAPE · 日排放从部署起写死 7,200，没有改率入口` : `Balance ${amount(tape.balance)} TAPE · 7,200 a day from deployment, with no switch`) : (zh ? "连上 X Layer 后读这个地址的电路" : "Connect on X Layer to read this address")}</p>
+        <div className="mt-2 grid grid-cols-[3.5rem_4.5rem_4rem_1fr_5rem] gap-2 px-2 text-xs text-ink/50">
+          <span>{zh ? "编号" : "Id"}</span>
+          <span>{zh ? "门数" : "Gates"}</span>
+          <span>{zh ? "状态" : "State"}</span>
+          <span className="text-right">{zh ? "待领" : "Pending"}</span>
+          <span className="text-right">{zh ? "约占今日" : "Today"}</span>
+        </div>
+        <ul className="max-h-72 overflow-auto border border-gold/40">
+          {(tape?.seats ?? []).map((row) => (
+            <li key={row.id} className="grid grid-cols-[3.5rem_4.5rem_4rem_1fr_auto] items-center gap-2 border-t border-gold/30 px-2 py-2 font-mono text-xs">
+              <span>#{row.id}</span>
+              <span>{Number(row.gates).toLocaleString("en-US")}</span>
+              <span>{row.on ? (zh ? "挖矿" : "Live") : (zh ? "未开工" : "Off")}</span>
+              <span className="text-right">{amount(row.pending)}</span>
+              {row.on ? <span className="text-right">{row.share}</span> : (
+                <button
+                  type="button"
+                  disabled={busy}
+                  className="min-h-8 border border-gold px-2 disabled:opacity-40"
+                  onClick={() => {
+                    if (!account) return;
+                    setBusy(true);
+                    openTape(account, BigInt(row.id))
+                      .then(() => readTapeMine(account).then(setTape))
+                      .then(() => say(zh ? `#${row.id} 已开工。权重按门数。` : `#${row.id} is open. Weight is the gate count.`))
+                      .catch(() => say(zh ? "开工没有完成。电路还在。" : "Open did not finish. The circuit is still there.", true))
+                      .finally(() => setBusy(false));
+                  }}
+                >
+                  {zh ? "开工" : "Open"}
+                </button>
+              )}
             </li>
           ))}
-          {account && seats.length === 0 ? <li className="px-2 py-3 text-sm text-ink/60">{zh ? "最近 40 张电路里没有这个地址的。先流片。" : "None of the latest 40 circuits belong to this address."}</li> : null}
+          {account && tape && tape.seats.length === 0 ? <li className="px-2 py-3 text-sm text-ink/60">{zh ? "这个地址在 TAPELIQUID 上还没有电路。" : "This address has no TAPELIQUID circuit."}</li> : null}
         </ul>
         <div className="mt-3 grid grid-cols-2 gap-2">
           {!account ? (
@@ -162,7 +176,7 @@ export function MineDesk() {
               className="col-span-2 min-h-12 bg-ink font-display text-2xl italic text-paper disabled:opacity-40"
               onClick={() => {
                 setBusy(true);
-                claimTape(account, seats.filter((row) => row.on && row.pending > 0n).map((row) => BigInt(row.id)))
+                claimTape(account, (tape?.seats ?? []).filter((row) => row.on && row.pending > 0n).map((row) => BigInt(row.id)))
                   .then(() => readTapeMine(account).then((row) => setTape(row)))
                   .then(() => say(zh ? "TAPE 已领到这个钱包。" : "TAPE is in this wallet."))
                   .catch((error) => say(error instanceof Error && /rejected|denied/i.test(error.message) ? (zh ? "你取消了。" : "You cancelled.") : (zh ? "领取没有完成。TAPE 还在合约里。" : "The claim did not finish."), true))
@@ -182,6 +196,12 @@ export function MineDesk() {
       </article>
     </section>
   );
+}
+
+function amount(value: bigint): string {
+  const n = Number(tapeText(value));
+  if (!Number.isFinite(n)) return tapeText(value);
+  return n.toLocaleString("en-US", { maximumFractionDigits: n >= 100 ? 2 : 4 });
 }
 
 function Cell({ k, v }: { k: string; v: string }) {

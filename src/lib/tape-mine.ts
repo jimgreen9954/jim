@@ -1,4 +1,4 @@
-import { createPublicClient, encodeFunctionData, formatUnits, http, parseAbi, type Hex } from "viem";
+import { createPublicClient, defineChain, encodeFunctionData, formatUnits, http, parseAbi, type Hex } from "viem";
 import { connectXLayer, DEPLOYED, XLAYER } from "@/lib/xlayer";
 import { getProvider } from "@/lib/wallet";
 
@@ -27,20 +27,51 @@ const circuitAbi = parseAbi([
   "function circuitInfo(uint256) view returns (uint256,uint256,uint256,uint256)",
 ]);
 
-const client = createPublicClient({ transport: http(XLAYER.rpc) });
+const xlayer = defineChain({
+  id: 196,
+  name: "X Layer",
+  nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
+  rpcUrls: { default: { http: [XLAYER.rpc] } },
+  contracts: { multicall3: { address: "0xcA11bde05977b3631167028862bE2a173976CA11" } },
+});
+
+const client = createPublicClient({ chain: xlayer, transport: http(XLAYER.rpc) });
 
 export function tapeText(amount: bigint): string {
   return formatUnits(amount, 8);
 }
 
-export async function readTapeMine(account: string | null): Promise<{
+export type TapeSeat = {
+  id: string;
+  gates: string;
+  on: boolean;
+  pending: bigint;
+  share: string;
+};
+
+export type TapeBoard = {
   supply: bigint;
   cap: bigint;
   weight: bigint;
   balance: bigint;
   start: bigint;
-}> {
-  const [supply, cap, weight, balance, start] = await Promise.all([
+  daily: bigint;
+  circuits: number;
+  open: number;
+  seats: TapeSeat[];
+};
+
+const DAY = 7200n * 10n ** 8n;
+const HALVING = 210_000n * 600n;
+
+function dailyAt(start: bigint): bigint {
+  const era = (BigInt(Math.floor(Date.now() / 1000)) - start) / HALVING;
+  if (era < 0n || era >= 64n) return 0n;
+  return DAY >> era;
+}
+
+export async function readTapeMine(account: string | null): Promise<TapeBoard> {
+  const [supply, cap, weight, balance, start, next] = await Promise.all([
     client.readContract({ address: TAPE, abi: tokenAbi, functionName: "totalSupply" }),
     client.readContract({ address: TAPE, abi: tokenAbi, functionName: "CAP" }),
     client.readContract({ address: TAPE_MINE, abi: mineAbi, functionName: "totalWeight" }),
@@ -48,33 +79,46 @@ export async function readTapeMine(account: string | null): Promise<{
       ? client.readContract({ address: TAPE, abi: tokenAbi, functionName: "balanceOf", args: [account as Hex] })
       : Promise.resolve(0n),
     client.readContract({ address: TAPE_MINE, abi: mineAbi, functionName: "start" }),
+    client.readContract({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "nextId" }),
   ]);
   if (cap !== 21_000_000n * 10n ** 8n) throw new Error("cap");
-  return { supply, cap, weight, balance, start };
-}
-
-export type TapeSeat = { id: string; gates: string; on: boolean; pending: bigint };
-
-export async function readTapeSeats(account: string): Promise<TapeSeat[]> {
-  const next = await client.readContract({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "nextId" });
   const last = Number(next) - 1;
-  if (last < 1) return [];
-  const start = Math.max(1, last - 39);
   const ids: number[] = [];
-  for (let id = last; id >= start; id -= 1) ids.push(id);
-  const rows = await Promise.all(ids.map(async (id) => {
-    try {
-      const owner = await client.readContract({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "ownerOf", args: [BigInt(id)] });
-      if (owner.toLowerCase() !== account.toLowerCase()) return null;
-      const info = await client.readContract({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "circuitInfo", args: [BigInt(id)] });
-      const seat = await client.readContract({ address: TAPE_MINE, abi: mineAbi, functionName: "seat", args: [BigInt(id)] });
-      const pending = await client.readContract({ address: TAPE_MINE, abi: mineAbi, functionName: "pendingOf", args: [BigInt(id)] });
-      return { id: String(id), gates: info[3].toString(), on: Boolean(seat[3]), pending };
-    } catch {
-      return null;
-    }
-  }));
-  return rows.filter((row): row is TapeSeat => row != null);
+  for (let id = last; id >= 1 && ids.length < 300; id -= 1) ids.push(id);
+  const calls = ids.flatMap((id) => [
+    { address: DEPLOYED.circuits, abi: circuitAbi, functionName: "ownerOf" as const, args: [BigInt(id)] as const },
+    { address: DEPLOYED.circuits, abi: circuitAbi, functionName: "circuitInfo" as const, args: [BigInt(id)] as const },
+    { address: TAPE_MINE, abi: mineAbi, functionName: "seat" as const, args: [BigInt(id)] as const },
+    { address: TAPE_MINE, abi: mineAbi, functionName: "pendingOf" as const, args: [BigInt(id)] as const },
+  ]);
+  const read = calls.length
+    ? await client.multicall({ contracts: calls, allowFailure: true, batchSize: 120 })
+    : [];
+  let open = 0;
+  const seats: TapeSeat[] = [];
+  const who = account?.toLowerCase() ?? "";
+  const daily = dailyAt(start);
+  for (let i = 0; i < ids.length; i += 1) {
+    const owner = read[i * 4];
+    const info = read[i * 4 + 1];
+    const seat = read[i * 4 + 2];
+    const pending = read[i * 4 + 3];
+    if (seat?.status === "success" && seat.result[3]) open += 1;
+    if (!who || owner?.status !== "success" || owner.result.toLowerCase() !== who) continue;
+    if (info?.status !== "success" || pending?.status !== "success" || seat?.status !== "success") continue;
+    const gates = info.result[3];
+    const on = Boolean(seat.result[3]);
+    const share = on && weight > 0n ? (daily * gates) / weight : 0n;
+    seats.push({
+      id: String(ids[i]),
+      gates: gates.toString(),
+      on,
+      pending: pending.result,
+      share: tapeText(share),
+    });
+  }
+  seats.sort((a, b) => Number(b.on) - Number(a.on) || Number(b.id) - Number(a.id));
+  return { supply, cap, weight, balance, start, daily, circuits: Math.max(0, last), open, seats };
 }
 
 async function send(from: string, data: Hex): Promise<Hex> {

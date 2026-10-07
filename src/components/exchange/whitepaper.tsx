@@ -103,16 +103,16 @@ const zh: Section[] = [
   {
     h: "现在链上有的",
     ps: [
-      `TAPE 代币 ${TAPE}。挖矿合约 ${TAPE_MINE}。都在 X Layer。硬顶 21,000,000，8 位小数，没有管理员，只有挖矿合约能铸。当前总供应是 0。`,
+      `TAPE 代币 ${TAPE}。挖矿合约 ${TAPE_MINE}。都在 X Layer。硬顶 21,000,000，8 位小数，没有管理员，也没有改率入口。只有挖矿合约能铸。总供应只随领取增加。`,
       "这份挖矿合约现在的日排放是 7,200，从部署时开始，不是先 1,000 再切换。它也没有「收费地址签一次改成 7,200」的入口。权重按电路门数，也就是 b*，处理器倍率按 1。q 还没有题目验证，页面不能显示大于 1。",
-      "开盘池的 100,000 枚还没有铸出。锁仓、四年质押、加池锁定期、回购买入，都还没有合约。这些按钮不开。",
+      "开盘池的 100,000 枚没有另铸。TAPE 池已经部署，没有管理员。加池就是质押，期限五档，到期才能撤。USDT0 一边到 5,000 之后买卖才打开。电路和晶圆的锁仓、四年质押、回购、TAPE 跨链，还没有合约。",
       "官网 BEM 的领取仍走 TapeOut 挖矿合约，和 TAPE 不是同一笔。大张流片不产生官网 BEM。",
     ],
   },
   {
     h: "地址",
     ps: [
-      `收费 ${FEE_TO}。TAPE ${TAPE}。TAPE 挖矿 ${TAPE_MINE}。TAPELIQUID 电路 ${DEPLOYED.circuits}。TAPELIQUID 晶体管 ${DEPLOYED.transistors}。`,
+      `收费 ${FEE_TO}。TAPE ${TAPE}。TAPE 挖矿 ${TAPE_MINE}。TAPE 池 0xAac2f26ACa20bbAf60fF791705548617f0b2e041。TAPELIQUID 电路 ${DEPLOYED.circuits}。TAPELIQUID 晶体管 ${DEPLOYED.transistors}。`,
       `BSC 永续 ${BSC_REBATE}。X Layer 永续 ${KNOWN_XPERP}。标记价 ${KNOWN_XMARK}。晶体管合约 ${GATE}。流动性仓位 ${NPM}。`,
       `BSC BEM ${BSC.bem}。BSC 桥 ${BEM_BRIDGE}。X Layer BEM ${X_BEM}。官网 BEM 挖矿 0x7E2E0DC66a3bD9103E69b766afA62d9f7b697b46。`,
       `官网晶体管市场 ${OFFICIAL.transistorMarket}。官网电路市场 ${OFFICIAL.circuitMarket}。BEM 池 ${BSC.pool}。`,
@@ -212,16 +212,16 @@ const en: Section[] = [
   {
     h: "What is on chain now",
     ps: [
-      `TAPE is ${TAPE}. The mine is ${TAPE_MINE}. Both are on X Layer. The cap is 21,000,000 with 8 decimals. There is no admin. Only the mine can mint. Supply is 0.`,
+      `TAPE is ${TAPE}. The mine is ${TAPE_MINE}. Both are on X Layer. The cap is 21,000,000 with 8 decimals. There is no admin and no way to change the rate. Only the mine can mint. Supply grows only when someone claims.`,
       "That mine contract emits 7,200 a day from the moment it was deployed. It does not start at 1,000, and it has no one-time switch to 7,200. Weight is the gate count, which is b*, and the processor multiplier is 1. There is no task score yet, so q is not shown above 1.",
-      "The 100,000 opening allocation has not been minted. Locks, the four-year stake, locked liquidity, and the buyback are not contracts yet. Those buttons stay off.",
+      "The 100,000 opening allocation was not minted. The TAPE pool is deployed and has no admin. Adding liquidity is a stake with five terms, and it comes out only at expiry. Trading opens after the USDT0 side reaches 5,000. Circuit locks, the four-year stake, buyback, and a TAPE bridge are not contracts yet.",
       "Official BEM is still claimed from the TapeOut mine. It is not the same signature as TAPE. A large tape-out does not mint official BEM.",
     ],
   },
   {
     h: "Addresses",
     ps: [
-      `Fee ${FEE_TO}. TAPE ${TAPE}. TAPE mine ${TAPE_MINE}. TAPELIQUID circuits ${DEPLOYED.circuits}. TAPELIQUID transistors ${DEPLOYED.transistors}.`,
+      `Fee ${FEE_TO}. TAPE ${TAPE}. TAPE mine ${TAPE_MINE}. TAPE pool 0xAac2f26ACa20bbAf60fF791705548617f0b2e041. TAPELIQUID circuits ${DEPLOYED.circuits}. TAPELIQUID transistors ${DEPLOYED.transistors}.`,
       `BSC perpetual ${BSC_REBATE}. X Layer perpetual ${KNOWN_XPERP}. Mark ${KNOWN_XMARK}. Transistor perpetual ${GATE}. Liquidity positions ${NPM}.`,
       `BSC BEM ${BSC.bem}. BSC bridge ${BEM_BRIDGE}. X Layer BEM ${X_BEM}. Official BEM mine 0x7E2E0DC66a3bD9103E69b766afA62d9f7b697b46.`,
       `Official transistor market ${OFFICIAL.transistorMarket}. Official circuit market ${OFFICIAL.circuitMarket}. BEM pool ${BSC.pool}.`,
@@ -262,8 +262,9 @@ const nowZh = [
   ["挖矿合约", TAPE_MINE],
   ["现在的日排放", "7,200，从部署时起。没有 1,000 档，也没有改率入口"],
   ["现在的权重", "门数，也就是 b*。P = 1。q 不能大于 1"],
-  ["总供应", "0。开盘池的 100,000 枚还没铸"],
-  ["还不能签", "锁仓、四年质押、加池锁定、回购、TAPE 跨链"],
+  ["总供应", "只随领取增加。10 万枚开盘种子没有另铸"],
+  ["TAPE 池", "0xAac2f26ACa20bbAf60fF791705548617f0b2e041，没有管理员"],
+  ["还不能签", "电路和晶圆锁仓、四年质押、回购、TAPE 跨链"],
 ];
 
 const nowEn = [
@@ -271,8 +272,9 @@ const nowEn = [
   ["Mine", TAPE_MINE],
   ["Emission today", "7,200 from deployment. There is no 1,000 tier and no switch"],
   ["Weight today", "Gate count, which is b*. P = 1. q cannot be above 1"],
-  ["Supply", "0. The 100,000 opening allocation is not minted"],
-  ["Not signable yet", "Locks, the four-year stake, locked pools, buyback, a TAPE bridge"],
+  ["Supply", "Grows only when claimed. The 100,000 seed was not minted"],
+  ["TAPE pool", "0xAac2f26ACa20bbAf60fF791705548617f0b2e041, no admin"],
+  ["Not signable yet", "Circuit locks, the four-year stake, buyback, a TAPE bridge"],
 ];
 export function Whitepaper() {
   const lang = useExchange((s) => s.lang);

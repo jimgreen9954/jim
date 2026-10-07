@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { formatEther, parseEther } from "viem";
 import { compile, simulate, type CNode, type CWire, type Kind } from "@/lib/canvas-net";
 import { useExchange } from "@/lib/exchange-store";
-import { connectXLayer, readProcessor, recipeNetlist, TAPE_SHEET, type ProcessorStatus } from "@/lib/xlayer";
+import { connectXLayer, readProcessor, recipeNetlist, SEAL_NETLIST, TAPE_SHEET, type ProcessorStatus } from "@/lib/xlayer";
 import { connectBsc } from "@/lib/bsc";
 import { readTapeDesk, readTapeRows, tapeOn, tapePage, tapeTxUrl } from "@/lib/tape-any";
 import { getTapeTargets, OURS, type TapeTarget } from "@/lib/tape-targets";
@@ -188,6 +188,7 @@ export function TapeCanvas() {
   }, [account, target]);
 
   const built = useMemo(() => (recipe ? null : compile(nodes, wires)), [nodes, wires, recipe]);
+  const optimal = Boolean(built && !("error" in built) && built.hex === SEAL_NETLIST);
   const sim = useMemo(() => (recipe ? null : simulate(nodes, wires, bits, latch)), [nodes, wires, bits, latch, recipe]);
   const inputs = nodes.filter((n) => n.kind === "in").sort((a, b) => a.y - b.y || a.x - b.x);
   const outputs = nodes.filter((n) => n.kind === "out").sort((a, b) => a.y - b.y || a.x - b.x);
@@ -357,6 +358,22 @@ export function TapeCanvas() {
             <Hold n={held?.nand ?? null} have={held} need={needN} other={needL} name="NAND" zh={zh} account={account} err={heldErr} />
             <Hold n={held?.latch ?? null} have={held} need={needL} other={needN} name="LATCH" zh={zh} account={account} err={heldErr} />
           </div>
+        </div>
+        <div className={`border px-3 py-3 ${optimal ? "border-ink bg-foil" : "border-gold bg-card"}`}>
+          <p className="text-xs tracking-widest text-gold">{zh ? "最优电路" : "Optimal sheet"}</p>
+          <p className="mt-1 font-display text-2xl italic">{zh ? "(A 与 B) 或 (C 与 D)" : "(A and B) or (C and D)"}</p>
+          <p className="mt-1 text-sm leading-relaxed">
+            {zh
+              ? "4 个输入，1 个输出，3 个 NAND，不用 LATCH。两扇 NAND 只能看见 3 个输入，所以 3 扇是最少。点签名只烧这 3 个，再付这台的流片费。"
+              : "4 inputs, 1 output, 3 NAND gates, no latch. Two NAND gates can only see 3 inputs, so 3 is the minimum. Signing burns those 3, plus this processor's tape fee."}
+          </p>
+          {optimal ? (
+            <p className="mt-2 text-sm">{zh ? "这张已经在画布上。右边勾上「不能撤回」，再签名。" : "This sheet is on the canvas. Confirm the burn, then sign."}</p>
+          ) : (
+            <button type="button" className="mt-2 min-h-11 border border-ink bg-ink px-3 text-sm text-paper" onClick={() => { const next = matchSheet(); setNodes(next.nodes); setWires(next.wires); setRecipe(null); setBits([true, true, true, true]); }}>
+              {zh ? "装上这张再试" : "Load this sheet"}
+            </button>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           {(["wire", "nand", "latch", "in", "out", "c0", "c1", "del"] as const).map((id) => (
@@ -601,7 +618,7 @@ export function TapeCanvas() {
           ) : (
             <>
             <button type="button" disabled={!ready || busy} onClick={() => void go()} className="mt-3 min-h-14 w-full bg-ink font-display text-2xl italic text-paper disabled:opacity-40">
-              {busy ? (zh ? "等待钱包" : "Waiting for the wallet") : heldErr && !held ? (zh ? "链上没读到" : "Chain unread") : okbShort ? (zh ? `${unit} 不够付流片费` : `Not enough ${unit}`) : short ? (zh ? `这张要 ${needN} 个 NAND` : `This sheet needs ${needN} NAND`) : !ack ? (zh ? "先勾上再签名" : "Confirm, then sign") : liveErr ? (zh ? "先把图接完" : "Finish the sheet") : (zh ? `签名并流片 ${target.name}` : `Sign and tape ${target.name}`)}
+              {busy ? (zh ? "等待钱包" : "Waiting for the wallet") : heldErr && !held ? (zh ? "链上没读到" : "Chain unread") : okbShort ? (zh ? `${unit} 不够付流片费` : `Not enough ${unit}`) : short ? (zh ? `这张要 ${needN} 个 NAND` : `This sheet needs ${needN} NAND`) : !ack ? (zh ? "先勾上再签名" : "Confirm, then sign") : liveErr ? (zh ? "先把图接完" : "Finish the sheet") : optimal ? (zh ? "签名并流这张最优" : "Sign this optimal sheet") : (zh ? `签名并流片 ${target.name}` : `Sign and tape ${target.name}`)}
             </button>
             {short && held && held.nand >= 1n ? (
               <button type="button" className="mt-2 min-h-10 w-full border border-gold text-sm" onClick={() => {
