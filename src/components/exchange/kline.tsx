@@ -344,7 +344,7 @@ export function Kline({
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-1">
             <button type="button" onClick={() => setInk((list) => list.slice(0, -1))} className="min-h-9 px-2 text-xs text-ink/70">
               {zh ? "撤销" : "Undo"}
             </button>
@@ -380,7 +380,7 @@ export function Kline({
             </button>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {PAINTS.map((color) => (
             <button
               key={color}
@@ -395,7 +395,7 @@ export function Kline({
               style={{ background: color }}
             />
           ))}
-          <span className="ml-auto text-xs text-ink/50">
+          <span className="min-w-0 text-xs leading-5 text-ink/50">
             {draft
               ? zh
                 ? "再点一次"

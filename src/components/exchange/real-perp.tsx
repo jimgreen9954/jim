@@ -404,7 +404,7 @@ export function RealPerp() {
 
   return (
     <section className="border border-gold bg-card shadow-plate">
-      <div className="grid gap-3 p-3 xl:grid-cols-12">
+      <div className="flex flex-col gap-3 p-3">
         <p className="text-sm leading-relaxed text-ink/80 xl:col-span-12">{chain === "xlayer" ? c.perpWarnX : c.perpWarn}</p>
         {chain === "xlayer" ? (
           <p className="border border-sell px-3 py-2 text-sm text-sell xl:col-span-12">
@@ -481,11 +481,12 @@ export function RealPerp() {
             {c.signOkx}
           </a>
         ) : null}
-        <p className="border border-gold/40 px-3 py-2 xl:col-span-12">
+        <p className="border border-gold/40 px-3 py-2">
           <span className="block text-xs tracking-widest text-gold">{c.yourEq}</span>
           <span className="font-mono text-2xl tabular-nums">{view && account ? usdtText(view.equity) : "—"}</span>
         </p>
-        <div className="min-w-0 border border-gold bg-card xl:col-span-7">
+        <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(17rem,22rem)]">
+        <div className="min-w-0 border border-gold bg-card">
           <div className="flex flex-wrap items-end justify-between gap-3 border-b border-gold/30 px-3 py-3">
             <div>
               <p className="font-display text-2xl italic">BEM / USDT</p>
@@ -523,7 +524,7 @@ export function RealPerp() {
                   ["1y", "一年", "1y"],
                 ] as const
               ).map(([item, zhLabel, enLabel]) => (
-                <button key={item} type="button" onClick={() => setFrame(item)} className={`min-h-9 flex-1 px-2 font-mono text-xs sm:flex-none sm:px-3 ${frame === item ? "bg-ink text-paper" : ""}`}>
+                <button key={item} type="button" onClick={() => setFrame(item)} className={`min-h-9 shrink-0 px-2 font-mono text-xs sm:px-3 ${frame === item ? "bg-ink text-paper" : ""}`}>
                   {lang === "zh" ? zhLabel : enLabel}
                 </button>
               ))}
@@ -564,7 +565,7 @@ export function RealPerp() {
           {!view ? <p className="px-3 py-2 text-sm text-ink/60">{lang === "zh" ? "正在读合约，读完才能开仓。" : "Reading the contract. Open waits until that finishes."}</p> : null}
           {lock.status === "bad" ? <p className="px-3 pb-2 text-sm text-sell">{lang === "zh" ? "收费地址对不上，开仓停了。" : "The fee address does not match. Opening is stopped."}</p> : null}
         </div>
-        <div className="flex min-w-0 flex-col gap-3 xl:col-span-5">
+        <div className="flex min-w-0 flex-col gap-3 lg:sticky lg:top-3 lg:max-h-[calc(100vh-1.5rem)] lg:overflow-y-auto">
         <div className="border border-gold/40 p-3">
           <p className="text-xs tracking-widest text-gold">{c.pkTitle}</p>
           {!view?.liveDeals.length ? (
@@ -579,8 +580,8 @@ export function RealPerp() {
                 const ahead = deal.eqL === deal.eqS ? c.pkFlat : deal.eqL > deal.eqS ? `${c.pkLong}${c.pkLead}` : `${c.pkShort}${c.pkLead}`;
                 return (
                   <div key={String(deal.id)} className="border border-gold/30 px-2 py-2 text-sm">
-                    <p className="font-mono text-xs text-[#1b6b45]">{c.pkLong} {named(deal.long)}{mineLong ? (lang === "zh" ? " · 我的" : " · mine") : ""} · {usdtText(deal.eqL)}</p>
-                    <p className="font-mono text-xs text-sell">{c.pkShort} {named(deal.short)}{mineShort ? (lang === "zh" ? " · 我的" : " · mine") : ""} · {usdtText(deal.eqS)}</p>
+                    <p className="break-all font-mono text-xs text-[#1b6b45]">{c.pkLong} {named(deal.long)}{mineLong ? (lang === "zh" ? " · 我的" : " · mine") : ""} · {usdtText(deal.eqL)}</p>
+                    <p className="break-all font-mono text-xs text-sell">{c.pkShort} {named(deal.short)}{mineShort ? (lang === "zh" ? " · 我的" : " · mine") : ""} · {usdtText(deal.eqS)}</p>
                     <p className="mt-1">{ahead} · {pxText(deal.entry)} → {markN > 0 ? markN.toFixed(4) : "—"}</p>
                     {mineDeal ? <p className={`mt-1 font-mono ${pnl >= 0n ? "text-gold" : "text-sell"}`}>{c.pnl} {pnl >= 0n ? "+" : ""}{pretty(pnl, dec, 4)} USDT</p> : null}
                     {mineDeal ? (
@@ -738,7 +739,7 @@ export function RealPerp() {
                     </label>
                   </>
                 )}
-                <div className={`grid gap-2 ${mode === "easy" ? "grid-cols-3" : "grid-cols-4"}`}>
+                <div className="grid grid-cols-2 gap-2">
                   {(mode === "easy" ? [3, 5, 10, 20] : [10, 20, 30, 50, 100, 200, 500, 1000]).map((item) => (
                     <button key={item} type="button" onClick={() => pick(margin, item)} className={`min-h-11 border border-gold font-mono text-xs ${lev === item ? "bg-ink text-paper" : ""}`}>
                       {item}×
@@ -980,6 +981,7 @@ export function RealPerp() {
             ) : null}
           </div>
         )}
+        </div>
         </div>
         {account ? (
           <p className="font-mono text-xs xl:col-span-12">
