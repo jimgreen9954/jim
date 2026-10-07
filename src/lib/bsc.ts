@@ -101,6 +101,87 @@ export async function waitReceipt(hash: Hex) {
   throw last instanceof Error ? last : new Error("receipt");
 }
 
+/** Sent, but no receipt yet. The hash is the only thing that may be retried. */
+export class TxPending extends Error {
+  hash: Hex;
+  paid = false;
+  constructor(hash: Hex) {
+    super("pending");
+    this.hash = hash;
+  }
+}
+
+export async function waitOk(hash: Hex) {
+  let receipt: Awaited<ReturnType<typeof waitReceipt>>;
+  try {
+    receipt = await waitReceipt(hash);
+  } catch {
+    throw new TxPending(hash);
+  }
+  if (receipt.status !== "success") throw new Error("reverted");
+}
+
+function recall(key: string): Hex | null {
+  try {
+    const value = sessionStorage.getItem(key);
+    return value && /^0x[0-9a-fA-F]{64}$/.test(value) ? (value as Hex) : null;
+  } catch {
+    return null;
+  }
+}
+
+function remember(key: string, hash: Hex) {
+  try {
+    sessionStorage.setItem(key, hash);
+  } catch {
+    /* a private window can refuse storage; the hash is still returned to the page */
+  }
+}
+
+function forget(key: string) {
+  try {
+    sessionStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Finish a step that may already have been sent. A pending hash is never sent twice. */
+async function step(key: string, sendHash: () => Promise<Hex>): Promise<void> {
+  const prior = recall(key);
+  if (prior) {
+    try {
+      await waitOk(prior);
+      return;
+    } catch (err) {
+      if (err instanceof TxPending) throw err;
+      forget(key);
+    }
+  }
+  const hash = await sendHash();
+  remember(key, hash);
+  try {
+    await waitOk(hash);
+  } catch (err) {
+    if (err instanceof Error && err.message === "reverted") forget(key);
+    throw err;
+  }
+}
+
+async function resumeSwap(key: string): Promise<Hex | null> {
+  const prior = recall(key);
+  if (!prior) return null;
+  try {
+    await waitOk(prior);
+    forget(key);
+    return prior;
+  } catch (err) {
+    if (err instanceof TxPending) throw err;
+    forget(key);
+    return null;
+  }
+}
+
 export function units(amount: string, decimals: number): bigint {
   const trimmed = amount.trim().replace(/\.$/, "");
   if (!/^\d+(\.\d+)?$/.test(trimmed)) throw new Error("amount");
@@ -287,28 +368,57 @@ async function approveIfNeeded(from: string, token: Hex, need: bigint): Promise<
   if (allowance >= need) return;
   if (allowance > 0n) {
     const reset = encodeFunctionData({ abi: erc20, functionName: "approve", args: [BSC.router, 0n] });
-    await waitReceipt(await send(from, token, reset));
+    await waitOk(await send(from, token, reset));
   }
   const approveData = encodeFunctionData({ abi: erc20, functionName: "approve", args: [BSC.router, need] });
-  await waitReceipt(await send(from, token, approveData));
+  await waitOk(await send(from, token, approveData));
 }
 
-async function finishSwap(from: string, data: Hex, paid: boolean): Promise<Hex> {
+async function finishSwap(from: string, data: Hex, paid: boolean, swapKey: string, feeKey: string): Promise<Hex> {
+  const resumed = await resumeSwap(swapKey);
+  if (resumed) {
+    forget(feeKey);
+    return resumed;
+  }
+  let hash: Hex;
   try {
-    const hash = await send(from, BSC.router, data);
-    const receipt = await waitReceipt(hash);
-    if (receipt.status !== "success") throw new Error("reverted");
+    hash = await send(from, BSC.router, data);
+  } catch (err) {
+    if (paid) throw new Error("fee-kept");
+    throw err;
+  }
+  remember(swapKey, hash);
+  try {
+    await waitOk(hash);
+    forget(swapKey);
+    forget(feeKey);
     return hash;
   } catch (err) {
+    if (err instanceof TxPending) {
+      err.paid = paid;
+      throw err;
+    }
     const message = err instanceof Error ? err.message : "";
-    if (message === "reverted") throw new Error(paid ? "fee-kept" : "reverted");
-    if (/slippage|Too little|STF/i.test(message)) throw new Error(paid ? "fee-kept-slip" : "slip");
+    if (message === "reverted") {
+      forget(swapKey);
+      throw new Error(paid ? "fee-kept" : "reverted");
+    }
+    if (/slippage|Too little|STF/i.test(message)) {
+      forget(swapKey);
+      throw new Error(paid ? "fee-kept-slip" : "slip");
+    }
     if (paid) throw new Error("fee-kept");
     throw err;
   }
 }
 
-export async function swapBem(from: string, side: "buy" | "sell", amount: string): Promise<Hex> {
+function boundMin(quoted: bigint, floor?: bigint): bigint {
+  const fresh = (quoted * BigInt(10_000 - BSC.slippageBps)) / 10_000n;
+  if (floor != null && fresh < floor) throw new Error("quote-moved");
+  return floor ?? fresh;
+}
+
+export async function swapBem(from: string, side: "buy" | "sell", amount: string, floor?: bigint): Promise<Hex> {
   const tokenIn = side === "buy" ? BSC.usdt : BSC.bem;
   const tokenOut = side === "buy" ? BSC.bem : BSC.usdt;
   const decimalsIn = side === "buy" ? BSC.usdtDecimals : BSC.bemDecimals;
@@ -316,15 +426,22 @@ export async function swapBem(from: string, side: "buy" | "sell", amount: string
   if (amountIn <= 0n) throw new Error("amount");
   const { fee, swapIn } = splitDeskFee(amountIn);
   if (swapIn <= 0n) throw new Error("amount");
+  const who = from.toLowerCase();
+  const swapKey = `tl-swap:${who}:${tokenIn}:${amountIn}`;
+  const feeKey = `tl-fee:${who}:${tokenIn}:${fee}`;
+  const already = await resumeSwap(swapKey);
+  if (already) {
+    forget(feeKey);
+    return already;
+  }
   const quoted = await quoteExact(tokenIn, tokenOut, swapIn);
-  const minOut = (quoted * BigInt(10_000 - BSC.slippageBps)) / 10_000n;
+  const minOut = boundMin(quoted, floor);
   const owner = from as Hex;
   await approveIfNeeded(from, tokenIn, swapIn);
   let paid = false;
   if (fee > 0n) {
     const feeData = encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, fee] });
-    const feeHash = await send(from, tokenIn, feeData);
-    await waitReceipt(feeHash);
+    await step(feeKey, () => send(from, tokenIn, feeData));
     paid = true;
   }
   const data = encodeFunctionData({
@@ -343,10 +460,10 @@ export async function swapBem(from: string, side: "buy" | "sell", amount: string
       },
     ],
   });
-  return finishSwap(from, data, paid);
+  return finishSwap(from, data, paid, swapKey, feeKey);
 }
 
-export async function swapListed(from: string, key: ErcKey, side: "buy" | "sell", amount: string): Promise<Hex> {
+export async function swapListed(from: string, key: ErcKey, side: "buy" | "sell", amount: string, floor?: bigint): Promise<Hex> {
   const book = ERC_BOOKS[key];
   const token = book.token;
   const decimals = book.decimals;
@@ -358,14 +475,22 @@ export async function swapListed(from: string, key: ErcKey, side: "buy" | "sell"
   if (amountIn <= 0n) throw new Error("amount");
   const { fee, swapIn } = splitDeskFee(amountIn);
   if (swapIn <= 0n) throw new Error("amount");
+  const who = from.toLowerCase();
+  const swapKey = `tl-swap:${who}:${tokenIn}:${amountIn}`;
+  const feeKey = `tl-fee:${who}:${tokenIn}:${fee}`;
+  const already = await resumeSwap(swapKey);
+  if (already) {
+    forget(feeKey);
+    return already;
+  }
   const quoted = await quoteExact(tokenIn, tokenOut, swapIn, feeTier);
-  const minOut = (quoted * BigInt(10_000 - BSC.slippageBps)) / 10_000n;
+  const minOut = boundMin(quoted, floor);
   const owner = from as Hex;
   await approveIfNeeded(from, tokenIn, swapIn);
   let paid = false;
   if (fee > 0n) {
     const feeData = encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, fee] });
-    await waitReceipt(await send(from, tokenIn, feeData));
+    await step(feeKey, () => send(from, tokenIn, feeData));
     paid = true;
   }
   const data = encodeFunctionData({
@@ -384,10 +509,10 @@ export async function swapListed(from: string, key: ErcKey, side: "buy" | "sell"
       },
     ],
   });
-  return finishSwap(from, data, paid);
+  return finishSwap(from, data, paid, swapKey, feeKey);
 }
 
-export async function swapBnb(from: string, side: "buy" | "sell", amount: string): Promise<Hex> {
+export async function swapBnb(from: string, side: "buy" | "sell", amount: string, floor?: bigint): Promise<Hex> {
   const owner = from as Hex;
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20);
   if (side === "buy") {
@@ -395,13 +520,21 @@ export async function swapBnb(from: string, side: "buy" | "sell", amount: string
     if (amountIn <= 0n) throw new Error("amount");
     const { fee, swapIn } = splitDeskFee(amountIn);
     if (swapIn <= 0n) throw new Error("amount");
+    const who = from.toLowerCase();
+    const swapKey = `tl-swap:${who}:${BSC.usdt}:${amountIn}:bnb`;
+    const feeKey = `tl-fee:${who}:${BSC.usdt}:${fee}:bnb`;
+    const already = await resumeSwap(swapKey);
+    if (already) {
+      forget(feeKey);
+      return already;
+    }
     const quoted = await quoteExact(BSC.usdt, BSC.wbnb, swapIn, BSC.bnbFee);
-    const minOut = (quoted * BigInt(10_000 - BSC.slippageBps)) / 10_000n;
+    const minOut = boundMin(quoted, floor);
     await approveIfNeeded(from, BSC.usdt, swapIn);
     let paid = false;
     if (fee > 0n) {
       const feeData = encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, fee] });
-      await waitReceipt(await send(from, BSC.usdt, feeData));
+      await step(feeKey, () => send(from, BSC.usdt, feeData));
       paid = true;
     }
     const swapData = encodeFunctionData({
@@ -426,7 +559,7 @@ export async function swapBnb(from: string, side: "buy" | "sell", amount: string
       args: [minOut, owner],
     });
     const data = encodeFunctionData({ abi: routerAbi, functionName: "multicall", args: [[swapData, unwrapData]] });
-    return finishSwap(from, data, paid);
+    return finishSwap(from, data, paid, swapKey, feeKey);
   }
   const bal = await client.getBalance({ address: owner });
   const maxSpend = bal > BNB_GAS_RESERVE ? bal - BNB_GAS_RESERVE : 0n;
@@ -435,16 +568,25 @@ export async function swapBnb(from: string, side: "buy" | "sell", amount: string
   if (amountIn <= 0n) throw new Error("amount");
   const { fee, swapIn } = splitDeskFee(amountIn);
   if (swapIn <= 0n) throw new Error("amount");
+  const who = from.toLowerCase();
+  const swapKey = `tl-swap:${who}:bnb:${amountIn}`;
+  const feeKey = `tl-fee:${who}:bnb:${fee}`;
+  const already = await resumeSwap(swapKey);
+  if (already) {
+    forget(feeKey);
+    return already;
+  }
   const quoted = await quoteExact(BSC.wbnb, BSC.usdt, swapIn, BSC.bnbFee);
-  const minOut = (quoted * BigInt(10_000 - BSC.slippageBps)) / 10_000n;
+  const minOut = boundMin(quoted, floor);
   let paid = false;
   if (fee > 0n) {
-    await waitReceipt(await send(from, FEE_TO, "0x", fee));
+    await step(feeKey, () => send(from, FEE_TO, "0x", fee));
     paid = true;
   }
   try {
     const deposit = encodeFunctionData({ abi: wbnbAbi, functionName: "deposit" });
-    await waitReceipt(await send(from, BSC.wbnb, deposit, swapIn));
+    const wrapKey = `tl-wrap:${who}:${swapIn}`;
+    await step(wrapKey, () => send(from, BSC.wbnb, deposit, swapIn));
     await approveIfNeeded(from, BSC.wbnb, swapIn);
     const data = encodeFunctionData({
       abi: routerAbi,
@@ -462,10 +604,14 @@ export async function swapBnb(from: string, side: "buy" | "sell", amount: string
         },
       ],
     });
-    return await finishSwap(from, data, paid);
+    const hash = await finishSwap(from, data, paid, swapKey, feeKey);
+    forget(wrapKey);
+    return hash;
   } catch (err) {
+    if (err instanceof TxPending) throw err;
     const message = err instanceof Error ? err.message : "";
-    if (paid && message !== "fee-kept" && message !== "fee-kept-slip") throw new Error("fee-kept");
+    if (message === "fee-kept" || message === "fee-kept-slip" || message === "quote-moved" || message === "pending") throw err;
+    if (paid) throw new Error("fee-kept");
     throw err;
   }
 }

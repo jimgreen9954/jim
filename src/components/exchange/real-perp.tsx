@@ -218,25 +218,38 @@ export function RealPerp() {
   useEffect(() => {
     if (!account || !view || view.myDeal <= 0n || firing.current) return;
     const row = readArm(account, perp);
-    if (!row || row.spent) return;
+    if (!row || row.spent || row.hold) return;
+    const id = view.myDeal.toString();
+    if (row.deal && row.deal !== id) return;
+    if (!row.deal && row.before != null && row.before === id) return;
     const px = live && live > 0 ? live : view.mark > 0n ? Number(formatUnits(view.mark, 18)) : 0;
     if (!(px > 0)) return;
     const hit = row.long ? px >= row.tp || px <= row.sl : px <= row.tp || px >= row.sl;
     if (!hit) return;
     firing.current = true;
-    const spent = { ...row, spent: true };
-    writeArm(spent);
-    setArm(spent);
-    run((from) => closePerp(from, perp, view.myDeal))
+    const bound = { ...row, deal: id, spent: false, hold: false };
+    writeArm(bound);
+    setArm(bound);
+    const from = account;
+    closePerp(from, perp, view.myDeal)
+      .then(() => {
+        const done = { ...bound, spent: true, hold: false };
+        writeArm(done);
+        setArm(done);
+        setNote(lang === "zh" ? "止盈或止损已平仓。" : "The stop closed the position.");
+        setBad(false);
+      })
       .catch(() => {
-        const back = { ...row, spent: false };
-        writeArm(back);
-        setArm(back);
+        const held = { ...bound, spent: false, hold: true };
+        writeArm(held);
+        setArm(held);
+        setNote(lang === "zh" ? "平仓没有完成。保护还在，但不会自动再弹钱包。点再试一次。" : "The close did not finish. The stop is still there, but the wallet will not pop again until you tap retry.");
+        setBad(true);
       })
       .finally(() => {
         firing.current = false;
       });
-  }, [account, perp, view?.myDeal, view?.mark, live, hash]);
+  }, [account, perp, view?.myDeal, view?.mark, live, hash, lang]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -791,7 +804,14 @@ export function RealPerp() {
                   <p className="mt-2 text-xs leading-relaxed text-ink/60">{c.stopNote}</p>
                   {arm && !arm.spent ? (
                     <p className="mt-2 font-mono text-sm">
-                      {c.stopArmed} · {c.stopTp} ${arm.tp.toFixed(2)} · {c.stopSl} ${arm.sl.toFixed(2)}
+                      {arm.hold ? (lang === "zh" ? "上次没平掉。保护还在，不会自动再弹钱包。" : "The last close did not finish. The stop stays, and the wallet will not pop by itself.") : c.stopArmed} · {c.stopTp} ${arm.tp.toFixed(2)} · {c.stopSl} ${arm.sl.toFixed(2)}
+                      {arm.hold ? (
+                        <button type="button" className="ml-2 underline" onClick={() => {
+                          const next = { ...arm, hold: false, spent: false };
+                          writeArm(next);
+                          setArm(next);
+                        }}>{lang === "zh" ? "再试一次" : "Try again"}</button>
+                      ) : null}
                       <button type="button" className="ml-2 underline" onClick={() => { if (account) { clearArm(account, perp); setArm(null); } }}>{c.stopClear}</button>
                     </p>
                   ) : null}
@@ -874,16 +894,18 @@ export function RealPerp() {
                       const long = card === "long";
                       setCard(null);
                       void run(async (from) => {
-                        const entry = Number(limit) || markN;
-                        if (guard !== "off" && entry > 0) {
+                        const before = view?.myDeal && view.myDeal > 0n ? view.myDeal.toString() : "0";
+                        const tx = await openPerp(from, perp, long, margin, lev, limit.trim() || (markN > 0 ? markN.toFixed(4) : ""));
+                        if (guard !== "off") {
+                          const entry = Number(limit) || markN;
                           const band = guard === "easy" ? easyBand(entry, lev || 1, long) : { tp: Number(tpText), sl: Number(slText) };
-                          if (band.tp > 0 && band.sl > 0) {
-                            const next = { account: from, perp, long, tp: band.tp, sl: band.sl, spent: false };
+                          if (entry > 0 && band.tp > 0 && band.sl > 0) {
+                            const next = { account: from, perp, long, tp: band.tp, sl: band.sl, spent: false, hold: false, before, deal: "" };
                             writeArm(next);
                             setArm(next);
                           }
                         }
-                        return openPerp(from, perp, long, margin, lev, limit.trim() || (markN > 0 ? markN.toFixed(4) : ""));
+                        return tx;
                       });
                     }}
                     lines={[

@@ -5,6 +5,12 @@ export type Arm = {
   tp: number;
   sl: number;
   spent: boolean;
+  /** Deal this arm already bound to. Empty until a new position appears. */
+  deal?: string;
+  /** Deal id at the moment the arm was saved. Do not fire on that same id. */
+  before?: string;
+  /** Close was rejected or failed. Do not pop the wallet again until the user asks. */
+  hold?: boolean;
 };
 
 const KEY = "tapeliquid-stops-v1";

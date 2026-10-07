@@ -3,7 +3,7 @@ import { parseEther } from "viem";
 import { useExchange } from "@/lib/exchange-store";
 import { getOfficialBooks, OFFICIAL, type OfficialBid, type OfficialBooks, type OfficialList } from "@/lib/official-books";
 import { buyOfficialCircuit, fillOfficialBid, placeOfficialBid } from "@/lib/official-trade";
-import { BSC, txUrl } from "@/lib/bsc";
+import { BSC, TxPending, txUrl } from "@/lib/bsc";
 import { connectBsc } from "@/lib/bsc";
 import { currentAccount } from "@/lib/wallet";
 
@@ -61,7 +61,11 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
       setBad(true);
       const message = error instanceof Error ? error.message : "";
       setNote(
-        message === "fee-kept"
+        message === "pending" || error instanceof TxPending
+          ? zh
+            ? `已经提交，回执还没读到。先核对 ${(error as TxPending).hash ?? ""}，不要再签同一笔。`
+            : `Submitted. The receipt is not back. Check ${(error as TxPending).hash ?? ""} before signing again.`
+          : message === "fee-kept"
           ? zh ? "服务费已经付了，官网那一笔没有完成。服务费不退。" : "The fee was paid. The official trade did not finish. The fee is not returned."
           : message === "gone"
             ? zh ? "这张买单数量不够了。刷新后再看。" : "That bid no longer has this size."

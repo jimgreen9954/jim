@@ -1,5 +1,5 @@
 import { createPublicClient, encodeFunctionData, http, parseAbi, parseAbiItem, type Hex } from "viem";
-import { FEE_TO, splitDeskFee, type PoolPrint, units, pretty } from "@/lib/bsc";
+import { FEE_TO, splitDeskFee, TxPending, type PoolPrint, units, pretty } from "@/lib/bsc";
 import { ensureProvider, rememberAccount } from "@/lib/wallet";
 import { XLAYER } from "@/lib/xlayer";
 
@@ -70,6 +70,76 @@ async function waitX(hash: Hex) {
   return xClient.waitForTransactionReceipt({ hash, timeout: 45_000, pollingInterval: 2_000 });
 }
 
+async function waitOkX(hash: Hex) {
+  try {
+    const receipt = await waitX(hash);
+    if (receipt.status !== "success") throw new Error("reverted");
+  } catch (err) {
+    if (err instanceof Error && err.message === "reverted") throw err;
+    throw new TxPending(hash);
+  }
+}
+
+function recall(key: string): Hex | null {
+  try {
+    const value = sessionStorage.getItem(key);
+    return value && /^0x[0-9a-fA-F]{64}$/.test(value) ? (value as Hex) : null;
+  } catch {
+    return null;
+  }
+}
+
+function remember(key: string, hash: Hex) {
+  try {
+    sessionStorage.setItem(key, hash);
+  } catch {
+    /* ignore */
+  }
+}
+
+function forget(key: string) {
+  try {
+    sessionStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
+
+async function stepX(key: string, sendHash: () => Promise<Hex>) {
+  const prior = recall(key);
+  if (prior) {
+    try {
+      await waitOkX(prior);
+      return;
+    } catch (err) {
+      if (err instanceof TxPending) throw err;
+      forget(key);
+    }
+  }
+  const hash = await sendHash();
+  remember(key, hash);
+  try {
+    await waitOkX(hash);
+  } catch (err) {
+    if (err instanceof Error && err.message === "reverted") forget(key);
+    throw err;
+  }
+}
+
+async function resumeX(key: string): Promise<Hex | null> {
+  const prior = recall(key);
+  if (!prior) return null;
+  try {
+    await waitOkX(prior);
+    forget(key);
+    return prior;
+  } catch (err) {
+    if (err instanceof TxPending) throw err;
+    forget(key);
+    return null;
+  }
+}
+
 async function approveUsdt(from: string, need: bigint) {
   const allowance = await xClient.readContract({
     address: OKB.usdt,
@@ -78,8 +148,8 @@ async function approveUsdt(from: string, need: bigint) {
     args: [from as Hex, OKB.router],
   });
   if (allowance >= need) return;
-  if (allowance > 0n) await waitX(await send(from, OKB.usdt, encodeFunctionData({ abi: erc20, functionName: "approve", args: [OKB.router, 0n] })));
-  await waitX(await send(from, OKB.usdt, encodeFunctionData({ abi: erc20, functionName: "approve", args: [OKB.router, need] })));
+  if (allowance > 0n) await waitOkX(await send(from, OKB.usdt, encodeFunctionData({ abi: erc20, functionName: "approve", args: [OKB.router, 0n] })));
+  await waitOkX(await send(from, OKB.usdt, encodeFunctionData({ abi: erc20, functionName: "approve", args: [OKB.router, need] })));
 }
 
 export async function quoteOkb(side: "buy" | "sell", amountIn: bigint): Promise<bigint> {
@@ -116,20 +186,32 @@ export async function connectX(): Promise<string> {
   return next;
 }
 
-export async function swapOkb(from: string, side: "buy" | "sell", amount: string): Promise<Hex> {
+export async function swapOkb(from: string, side: "buy" | "sell", amount: string, floor?: bigint): Promise<Hex> {
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20);
   const owner = from as Hex;
+  const slip = (quoted: bigint) => {
+    const fresh = (quoted * BigInt(10_000 - 100)) / 10_000n;
+    if (floor != null && fresh < floor) throw new Error("quote-moved");
+    return floor ?? fresh;
+  };
   if (side === "buy") {
     const amountIn = units(amount, OKB.usdtDecimals);
     if (amountIn <= 0n) throw new Error("amount");
     const { fee, swapIn } = splitDeskFee(amountIn);
     if (swapIn <= 0n) throw new Error("amount");
-    const quoted = await quoteOkb("buy", swapIn);
-    const minOut = (quoted * BigInt(10_000 - 100)) / 10_000n;
+    const who = from.toLowerCase();
+    const swapKey = `tl-swap:${who}:okb-buy:${amountIn}`;
+    const feeKey = `tl-fee:${who}:okb-buy:${fee}`;
+    const already = await resumeX(swapKey);
+    if (already) {
+      forget(feeKey);
+      return already;
+    }
+    const minOut = slip(await quoteOkb("buy", swapIn));
     await approveUsdt(from, swapIn);
     let paid = false;
     if (fee > 0n) {
-      await waitX(await send(from, OKB.usdt, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, fee] })));
+      await stepX(feeKey, () => send(from, OKB.usdt, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, fee] })));
       paid = true;
     }
     const data = encodeFunctionData({
@@ -137,14 +219,28 @@ export async function swapOkb(from: string, side: "buy" | "sell", amount: string
       functionName: "swapExactTokensForETH",
       args: [swapIn, minOut, [OKB.usdt, OKB.wokb], owner, deadline],
     });
+    let hash: Hex;
     try {
-      const hash = await send(from, OKB.router, data);
-      const receipt = await waitX(hash);
-      if (receipt.status !== "success") throw new Error(paid ? "fee-kept" : "reverted");
+      hash = await send(from, OKB.router, data);
+    } catch (err) {
+      if (paid) throw new Error("fee-kept");
+      throw err;
+    }
+    remember(swapKey, hash);
+    try {
+      await waitOkX(hash);
+      forget(swapKey);
+      forget(feeKey);
       return hash;
     } catch (err) {
-      const message = err instanceof Error ? err.message : "";
-      if (message === "fee-kept" || message === "reverted") throw err;
+      if (err instanceof TxPending) {
+        err.paid = paid;
+        throw err;
+      }
+      if (err instanceof Error && err.message === "reverted") {
+        forget(swapKey);
+        throw new Error(paid ? "fee-kept" : "reverted");
+      }
       if (paid) throw new Error("fee-kept");
       throw err;
     }
@@ -156,11 +252,18 @@ export async function swapOkb(from: string, side: "buy" | "sell", amount: string
   if (amountIn <= 0n) throw new Error("amount");
   const { fee, swapIn } = splitDeskFee(amountIn);
   if (swapIn <= 0n) throw new Error("amount");
-  const quoted = await quoteOkb("sell", swapIn);
-  const minOut = (quoted * BigInt(10_000 - 100)) / 10_000n;
+  const who = from.toLowerCase();
+  const swapKey = `tl-swap:${who}:okb-sell:${amountIn}`;
+  const feeKey = `tl-fee:${who}:okb-sell:${fee}`;
+  const already = await resumeX(swapKey);
+  if (already) {
+    forget(feeKey);
+    return already;
+  }
+  const minOut = slip(await quoteOkb("sell", swapIn));
   let paid = false;
   if (fee > 0n) {
-    await waitX(await send(from, FEE_TO, "0x", fee));
+    await stepX(feeKey, () => send(from, FEE_TO, "0x", fee));
     paid = true;
   }
   const data = encodeFunctionData({
@@ -168,14 +271,29 @@ export async function swapOkb(from: string, side: "buy" | "sell", amount: string
     functionName: "swapExactETHForTokens",
     args: [minOut, [OKB.wokb, OKB.usdt], owner, deadline],
   });
+  let hash: Hex;
   try {
-    const hash = await send(from, OKB.router, data, swapIn);
-    const receipt = await waitX(hash);
-    if (receipt.status !== "success") throw new Error(paid ? "fee-kept" : "reverted");
+    hash = await send(from, OKB.router, data, swapIn);
+  } catch (err) {
+    if (paid) throw new Error("fee-kept");
+    throw err;
+  }
+  remember(swapKey, hash);
+  try {
+    await waitOkX(hash);
+    forget(swapKey);
+    forget(feeKey);
     return hash;
   } catch (err) {
-    const message = err instanceof Error ? err.message : "";
-    if (paid && message !== "fee-kept") throw new Error("fee-kept");
+    if (err instanceof TxPending) {
+      err.paid = paid;
+      throw err;
+    }
+    if (err instanceof Error && err.message === "reverted") {
+      forget(swapKey);
+      throw new Error(paid ? "fee-kept" : "reverted");
+    }
+    if (paid) throw new Error("fee-kept");
     throw err;
   }
 }

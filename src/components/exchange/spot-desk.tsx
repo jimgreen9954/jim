@@ -24,6 +24,7 @@ import {
   swapBnb,
   swapListed,
   txUrl,
+  TxPending,
   units,
   type ErcKey,
   type Balances,
@@ -61,6 +62,8 @@ export function SpotDesk() {
   const shown = pair === "bem" && live && live > 0 ? live.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : price;
   const [out, setOut] = useState<string | null>(null);
   const [minOut, setMinOut] = useState<string | null>(null);
+  const [floor, setFloor] = useState<bigint | null>(null);
+  const [quotedAt, setQuotedAt] = useState(0);
   const [account, setAccount] = useState<string | null>(currentAccount());
   const [balances, setBalances] = useState<Balances | null>(null);
   const [prints, setPrints] = useState<PoolPrint[]>([]);
@@ -142,6 +145,7 @@ export function SpotDesk() {
       if (amountIn <= 0n) {
         setOut(null);
         setMinOut(null);
+        setFloor(null);
         return;
       }
       const { swapIn } = splitDeskFee(amountIn);
@@ -150,19 +154,24 @@ export function SpotDesk() {
       quoted
         .then((value) => {
           if (!dead) {
+            const min = (value * BigInt(10_000 - BSC.slippageBps)) / 10_000n;
             setOut(pretty(value, outDecimals, digits));
-            setMinOut(pretty((value * BigInt(10_000 - BSC.slippageBps)) / 10_000n, outDecimals, digits));
+            setMinOut(pretty(min, outDecimals, digits));
+            setFloor(min);
+            setQuotedAt(Date.now());
           }
         })
         .catch(() => {
           if (!dead) {
             setOut(null);
             setMinOut(null);
+            setFloor(null);
           }
         });
     } catch {
       setOut(null);
       setMinOut(null);
+      setFloor(null);
     }
     return () => {
       dead = true;
@@ -174,7 +183,13 @@ export function SpotDesk() {
     const message = err instanceof Error ? err.message : "";
     if (message === "nowallet") setNote(c.walletNo);
     else if (code === 4001) setNote(c.walletReject);
-    else if (message === "fee-kept") setNote(lang === "zh" ? "台费已经打进收费地址。兑换没有完成，其余的币还在钱包里。" : "The desk fee reached the fee address. The swap did not. The rest is still in the wallet.");
+    else if (message === "pending" || err instanceof TxPending) {
+      const pending = err as TxPending;
+      if (pending.hash) setHash(pending.hash);
+      setNote(lang === "zh" ? "交易已经提交，回执还没读到。先打开这笔哈希核对，不要再签同一笔。同一金额不会再收一次台费。" : "Submitted. The receipt is not back yet. Open this hash before signing again. The same amount is not charged a second desk fee.");
+    }
+    else if (message === "quote-moved") setNote(lang === "zh" ? "价格变了，现在的最少到账低于刚才确认的数。看新报价再签。" : "The price moved. The new minimum is below the one you confirmed. Look again, then sign.");
+    else if (message === "fee-kept") setNote(lang === "zh" ? "台费已经打进收费地址，不退。兑换没有完成，其余的币还在钱包里。同一金额再试，不会再收一次台费。" : "The desk fee reached the fee address and is not returned. The swap did not. The rest is still in the wallet. Retrying the same amount does not charge the fee again.");
     else if (message === "fee-kept-slip" || message === "slip") setNote(lang === "zh" ? "滑点超过 1%，兑换取消。若台费已划走，只少了那一笔，其余还在钱包。" : "Slippage was over 1% and the swap was cancelled. If the fee already moved, only that fee left the wallet.");
     else if (message === "reverted") setNote(lang === "zh" ? "签名成功，链上失败。钱还在钱包里。" : "The signature was sent and the chain rejected it. The funds stayed in the wallet.");
     else if (/insufficient|exceeds balance|transfer amount/i.test(message)) setNote(lang === "zh" ? "余额不够。币还在钱包里，这一笔没有发生。" : "Not enough balance. Nothing left the wallet.");
@@ -203,7 +218,7 @@ export function SpotDesk() {
     }
   };
 
-  const trade = async () => {
+  const trade = async (min: bigint) => {
     setBusy(true);
     setBad(false);
     setNote(c.walletBusy);
@@ -211,7 +226,7 @@ export function SpotDesk() {
       const from = pair === "okb" ? account ?? (await connectX()) : account ?? (await connectBsc());
       setAccount(from);
       if (!amount.trim()) return;
-      const tx = pair === "okb" ? await swapOkb(from, side, amount) : pair === "bnb" ? await swapBnb(from, side, amount) : isErcKey(pair) ? await swapListed(from, pair, side, amount) : await swapBem(from, side, amount);
+      const tx = pair === "okb" ? await swapOkb(from, side, amount, min) : pair === "bnb" ? await swapBnb(from, side, amount, min) : isErcKey(pair) ? await swapListed(from, pair, side, amount, min) : await swapBem(from, side, amount, min);
       setHash(tx);
       setNote(null);
     } catch (err) {
@@ -520,16 +535,23 @@ export function SpotDesk() {
               warn={
                 pair === "okb"
                   ? lang === "zh"
-                    ? "这是 X Layer 现货。钱包会切到 X Layer。不会和 BSC 的单合成一笔。"
-                    : "This is X Layer spot. The wallet switches to X Layer. It does not net with a BSC order."
+                    ? "这是 X Layer 现货。钱包会切到 X Layer。不会和 BSC 的单合成一笔。台费先付，后面的兑换没完成也不退。"
+                    : "This is X Layer spot. The wallet switches to X Layer. It does not net with a BSC order. The desk fee is paid first and is not returned if the swap does not finish."
                   : lang === "zh"
-                    ? "这是 BSC 现货。不会和 X Layer 的单合成一笔。"
-                    : "This is BSC spot. It does not net with an X Layer order."
+                    ? "这是 BSC 现货。不会和 X Layer 的单合成一笔。台费先付，后面的兑换没完成也不退。"
+                    : "This is BSC spot. It does not net with an X Layer order. The desk fee is paid first and is not returned if the swap does not finish."
               }
               onNo={() => setCard(false)}
               onYes={() => {
+                if (!floor || Date.now() - quotedAt > 30_000) {
+                  setCard(false);
+                  setBad(true);
+                  setNote(lang === "zh" ? "报价超过 30 秒，已经作废。看新的最少到账再签。" : "The quote is older than 30 seconds. Read the new minimum, then sign.");
+                  return;
+                }
+                const min = floor;
                 setCard(false);
-                void trade();
+                void trade(min);
               }}
               lines={[
                 { k: lang === "zh" ? "这一笔" : "This order", v: `${side === "buy" ? (lang === "zh" ? "买入" : "Buy") : lang === "zh" ? "卖出" : "Sell"} ${amount} ${payUnit}` },

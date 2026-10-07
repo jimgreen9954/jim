@@ -1,5 +1,5 @@
 import { createPublicClient, encodeFunctionData, http, parseAbi, type Hex } from "viem";
-import { BSC, DESK_FEE_BPS, FEE_TO, connectBsc, waitReceipt } from "@/lib/bsc";
+import { BSC, DESK_FEE_BPS, FEE_TO, TxPending, connectBsc, waitOk, waitReceipt } from "@/lib/bsc";
 import { OFFICIAL } from "@/lib/official-books";
 import { getProvider } from "@/lib/wallet";
 
@@ -40,8 +40,25 @@ async function payFee(from: string, notional: bigint): Promise<void> {
   const fee = feeOf(notional);
   if (fee <= 0n) return;
   const hash = await send(from, FEE_TO, "0x", fee);
-  const receipt = await waitReceipt(hash);
-  if (receipt.status !== "success") throw new Error("fee-kept");
+  try {
+    await waitOk(hash);
+  } catch (err) {
+    if (err instanceof TxPending) throw err;
+    throw new Error("reverted");
+  }
+}
+
+async function finishPaid(hash: Hex): Promise<Hex> {
+  try {
+    await waitOk(hash);
+    return hash;
+  } catch (err) {
+    if (err instanceof TxPending) {
+      err.paid = true;
+      throw err;
+    }
+    throw new Error("fee-kept");
+  }
 }
 
 /** Eat an official bid. The bid is re-read on chain first. 0.2% is paid before the official fill. */
@@ -70,18 +87,19 @@ export async function fillOfficialBid(from: string, id: bigint, quantity: bigint
       args: [OFFICIAL.transistorMarket, true],
     });
     const approveHash = await send(from, row[1], approve);
-    const approveReceipt = await waitReceipt(approveHash);
-    if (approveReceipt.status !== "success") throw new Error("revert");
+    try {
+      await waitOk(approveHash);
+    } catch (err) {
+      if (err instanceof TxPending) throw err;
+      throw new Error("revert");
+    }
   }
   await client.call({ account: from as Hex, to: OFFICIAL.transistorMarket, data });
   await payFee(from, notional);
   try {
-    const hash = await send(from, OFFICIAL.transistorMarket, data);
-    const receipt = await waitReceipt(hash);
-    if (receipt.status !== "success") throw new Error("fee-kept");
-    return hash;
+    return await finishPaid(await send(from, OFFICIAL.transistorMarket, data));
   } catch (err) {
-    if (err instanceof Error && err.message === "fee-kept") throw err;
+    if (err instanceof TxPending || (err instanceof Error && err.message === "fee-kept")) throw err;
     throw new Error("fee-kept");
   }
 }
@@ -99,12 +117,9 @@ export async function placeOfficialBid(from: string, transistors: Hex, tokenId: 
   await client.call({ account: from as Hex, to: OFFICIAL.transistorMarket, data, value: notional });
   await payFee(from, notional);
   try {
-    const hash = await send(from, OFFICIAL.transistorMarket, data, notional);
-    const receipt = await waitReceipt(hash);
-    if (receipt.status !== "success") throw new Error("fee-kept");
-    return hash;
+    return await finishPaid(await send(from, OFFICIAL.transistorMarket, data, notional));
   } catch (err) {
-    if (err instanceof Error && err.message === "fee-kept") throw err;
+    if (err instanceof TxPending || (err instanceof Error && err.message === "fee-kept")) throw err;
     throw new Error("fee-kept");
   }
 }
@@ -116,12 +131,9 @@ export async function buyOfficialCircuit(from: string, id: bigint, priceWei: big
   await client.call({ account: from as Hex, to: OFFICIAL.circuitMarket, data, value: priceWei });
   await payFee(from, priceWei);
   try {
-    const hash = await send(from, OFFICIAL.circuitMarket, data, priceWei);
-    const receipt = await waitReceipt(hash);
-    if (receipt.status !== "success") throw new Error("fee-kept");
-    return hash;
+    return await finishPaid(await send(from, OFFICIAL.circuitMarket, data, priceWei));
   } catch (err) {
-    if (err instanceof Error && err.message === "fee-kept") throw err;
+    if (err instanceof TxPending || (err instanceof Error && err.message === "fee-kept")) throw err;
     throw new Error("fee-kept");
   }
 }

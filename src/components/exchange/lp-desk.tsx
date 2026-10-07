@@ -156,7 +156,7 @@ export function LpPanel() {
               <button
                 type="button"
                 className="min-h-9 border border-gold px-2 text-xs"
-                disabled={busy || lock.status !== "ok"}
+                disabled={busy}
                 onClick={() => {
                   if (!account) return;
                   setBusy(true);

@@ -78,7 +78,7 @@ const zh: Section[] = [
   {
     h: "台费",
     ps: [
-      "现货买卖、永续撮合、撤单、添加流动性、撤回流动性，台费都是付出金额的 0.20%。此费用在池子手续费之外。平仓不再另收。添加流动性时两边各扣 0.20%，撤回时拿回的两边再各扣 0.20%。已转出的台费不退。",
+      "现货买卖、永续撮合、撤单、添加流动性、撤回流动性，台费都是付出金额的 0.20%。此费用在池子手续费之外。平仓不再另收。添加流动性时两边各扣 0.20%，撤回时拿回的两边再各扣 0.20%。已转出的台费不退。现货的台费是单独一笔，先付。后面的兑换拒签或回滚，这一笔不退。回执还没读到时，页面留下哈希，同一金额不会再收一次。",
       "现货买到的币留在签名钱包。永续保证金进入用户所选链上的那一份合约。BSC 与 X Layer 不能并成一笔。",
       `台费进入收费地址 ${FEE_TO}。`,
       "推荐只作用于永续。有推荐人时，交易者少付永续台费的 4%，推荐人记 6%，其余进入收费地址。现货和流动性不参与。印鉴不自动减费。登记后，已撮合的永续成交可按新加坡周领回一半，周一 0 点至下周一 0 点，过点作废，同一笔只进一次，从领取合约出。",
@@ -190,7 +190,7 @@ const en: Section[] = [
   {
     h: "Desk fee",
     ps: [
-      "Spot, a perpetual match, a cancel, adding liquidity, and removing liquidity all pay 0.20 percent of what is paid. That is on top of the pool fee. Closing adds nothing. Adding takes 0.20 percent from each side. Removing takes 0.20 percent from both sides that come back. A fee already sent is not returned.",
+      "Spot, a perpetual match, a cancel, adding liquidity, and removing liquidity all pay 0.20 percent of what is paid. That is on top of the pool fee. Closing adds nothing. Adding takes 0.20 percent from each side. Removing takes 0.20 percent from both sides that come back. A fee already sent is not returned. The spot fee is its own transaction and is paid first. If the swap is rejected or reverts, that fee stays. If the receipt has not come back, the page keeps the hash and does not charge the same amount again.",
       "A spot fill stays in the wallet that signed. Perpetual margin enters the one contract on the chain the user picked. BSC and X Layer do not net.",
       `The desk fee goes to ${FEE_TO}.`,
       "Referrals apply only to perpetuals. With a referrer, the trader pays 4 percent less of the perpetual desk fee, the referrer is credited 6 percent, and the rest goes to the fee address. Spot and liquidity are outside that split. A seal does not cut a fee by itself. After registration, half the fee on a matched perpetual fill can be claimed once per Singapore week, Monday 00:00 to the next Monday 00:00. A missed week is gone. One fill is counted once. The claim is paid by the claim contract.",

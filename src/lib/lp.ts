@@ -1,5 +1,5 @@
 import { createPublicClient, encodeFunctionData, http, parseAbi, parseAbiItem, type Hex } from "viem";
-import { BSC, DESK_FEE_BPS, ERC_BOOKS, FEE_TO, pretty, quoteExact, readAsset, splitDeskFee, units, waitReceipt, type ErcKey } from "@/lib/bsc";
+import { BSC, DESK_FEE_BPS, ERC_BOOKS, FEE_TO, pretty, quoteExact, readAsset, splitDeskFee, units, waitOk, waitReceipt, type ErcKey } from "@/lib/bsc";
 import { STOCKS, STOCK_KEYS, type StockKey } from "@/lib/stocks";
 import { ensureProvider } from "@/lib/wallet";
 
@@ -228,9 +228,9 @@ async function approve(from: string, token: Hex, spender: Hex, need: bigint): Pr
   });
   if (allowance >= need) return;
   if (allowance > 0n) {
-    await waitReceipt(await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, 0n] })));
+    await waitOk(await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, 0n] })));
   }
-  await waitReceipt(await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, need] })));
+  await waitOk(await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, need] })));
 }
 
 export type LpQuote = {
@@ -433,13 +433,13 @@ export async function addLp(from: string, key: LpKey, amountText: string): Promi
     if (assetBal < quote.asset) throw new Error("asset");
   }
   if (quote.feeQuote > 0n) {
-    await waitReceipt(await send(from, book.quoteToken, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, quote.feeQuote] })));
+    await waitOk(await send(from, book.quoteToken, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, quote.feeQuote] })));
   }
   if (book.native) {
-    if (quote.feeAsset > 0n) await waitReceipt(await send(from, FEE_TO, "0x", quote.feeAsset));
-    await waitReceipt(await send(from, BSC.wbnb, encodeFunctionData({ abi: wbnbAbi, functionName: "deposit" }), quote.poolAsset));
+    if (quote.feeAsset > 0n) await waitOk(await send(from, FEE_TO, "0x", quote.feeAsset));
+    await waitOk(await send(from, BSC.wbnb, encodeFunctionData({ abi: wbnbAbi, functionName: "deposit" }), quote.poolAsset));
   } else if (quote.feeAsset > 0n) {
-    await waitReceipt(await send(from, book.token, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, quote.feeAsset] })));
+    await waitOk(await send(from, book.token, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, quote.feeAsset] })));
   }
   await approve(from, book.quoteToken, NPM, quote.poolQuote);
   await approve(from, book.token, NPM, quote.poolAsset);
@@ -571,11 +571,11 @@ export async function removeLp(from: string, id: bigint): Promise<Hex> {
     const feeOther = wbnbIs0 ? fee1 : fee0;
     const feeBnb = wbnbIs0 ? fee0 : fee1;
     const other = wbnbIs0 ? token1 : token0;
-    if (feeOther > 0n) await waitReceipt(await send(from, other, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, feeOther] })));
-    if (feeBnb > 0n) await waitReceipt(await send(from, FEE_TO, "0x", feeBnb));
+    if (feeOther > 0n) await waitOk(await send(from, other, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, feeOther] })));
+    if (feeBnb > 0n) await waitOk(await send(from, FEE_TO, "0x", feeBnb));
   } else {
-    if (fee0 > 0n) await waitReceipt(await send(from, token0, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, fee0] })));
-    if (fee1 > 0n) await waitReceipt(await send(from, token1, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, fee1] })));
+    if (fee0 > 0n) await waitOk(await send(from, token0, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, fee0] })));
+    if (fee1 > 0n) await waitOk(await send(from, token1, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, fee1] })));
   }
   return hash;
 }
