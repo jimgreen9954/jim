@@ -613,8 +613,10 @@ export async function sealIds(owner: string): Promise<bigint[]> {
   return found.slice(0, 3);
 }
 
+export const TAPE_SHEET = { nand: 18000, latch: 30000 } as const;
+
 export function recipeNetlist(nand: number, latch: number): Hex {
-  if (!Number.isInteger(nand) || !Number.isInteger(latch) || nand < 0 || latch < 0 || nand + latch < 1 || nand > 400 || latch > 80) {
+  if (!Number.isInteger(nand) || !Number.isInteger(latch) || nand < 0 || latch < 0 || nand + latch < 1 || nand > 18000 || latch > 30000) {
     throw new Error("recipe");
   }
   const bytes: number[] = [];

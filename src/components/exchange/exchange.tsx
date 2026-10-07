@@ -17,11 +17,12 @@ import { WalletBar, ConnectButton } from "@/components/exchange/wallet-bar";
 import { AccountCenter } from "@/components/exchange/account-center";
 import { OfficialDesk } from "@/components/exchange/official-desk";
 import { SealRebateBox } from "@/components/exchange/seal-rebate";
+import { MineDesk } from "@/components/exchange/mine-desk";
 import { Whitepaper } from "@/components/exchange/whitepaper";
 import { bemPrice } from "@/lib/bsc";
 import { FeeLockProvider, useFeeLock } from "@/lib/fee-lock";
 
-type Floor = "desk" | "paper" | "shop" | "rules" | "canvas" | "me";
+type Floor = "desk" | "paper" | "shop" | "rules" | "canvas" | "me" | "mine";
 type DeskTab = "spot" | "perp";
 type ShopTab = "gate" | "wafer" | "chips" | "circuits";
 
@@ -40,6 +41,7 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
       if (named === "chips") { setFloor("shop"); setShop("chips"); }
       if (named === "circuits") { setFloor("shop"); setShop("circuits"); }
       if (named === "canvas") setFloor("canvas");
+      if (named === "mine") setFloor("mine");
       if (named === "me") setFloor("me");
       if (named === "brief" || named === "rules") setFloor("rules");
     };
@@ -62,6 +64,7 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
           {floor === "paper" ? <PaperFloor /> : null}
           {floor === "shop" ? <ShopFloor shop={shop} setShop={setShop} /> : null}
           {floor === "canvas" ? <TapeCanvas /> : null}
+          {floor === "mine" ? <MineDesk /> : null}
           {floor === "me" ? <AccountCenter /> : null}
           {floor === "rules" ? <Whitepaper /> : null}
         </div>
@@ -77,19 +80,15 @@ function FeeStrip() {
   if (lock.status === "checking") {
     return <p className="text-xs text-ink/60">{lang === "zh" ? "正在对三份合约的收费地址。" : "Checking the fee address on the three contracts."}</p>;
   }
-  if (lock.status === "bad") {
-    return (
-      <p className="border border-sell px-3 py-2 text-sm text-sell">
-        {lang === "zh" ? "收费地址对不上，下单已停。" : "The fee address does not match. Orders are stopped."}{" "}
-        {lock.rows
-          .filter((row) => !row.ok)
-          .map((row) => `${row.name}: ${row.got ?? (lang === "zh" ? "没读到" : "unread")}`)
-          .join(" · ")}
-      </p>
-    );
-  }
+  if (lock.status !== "bad") return null;
   return (
-    <p className="text-xs text-ink/60">{lang === "zh" ? "台费地址已核对" : "Fee address checked"}</p>
+    <p className="border border-sell px-3 py-2 text-sm text-sell">
+      {lang === "zh" ? "收费地址对不上，下单已停。" : "The fee address does not match. Orders are stopped."}{" "}
+      {lock.rows
+        .filter((row) => !row.ok)
+        .map((row) => `${row.name}: ${row.got ?? (lang === "zh" ? "没读到" : "unread")}`)
+        .join(" · ")}
+    </p>
   );
 }
 
@@ -215,12 +214,14 @@ function Header({ floor, desk, setFloor, setDesk, setShop }: { floor: Floor; des
         ? lang === "zh" ? "钱包里真买卖" : "Real trades in the wallet"
         : floor === "canvas"
           ? lang === "zh" ? "画布先在浏览器里跑。点流片才烧这台处理器。" : "The canvas runs in the browser. Tape-out is what burns this processor."
+        : floor === "mine"
+          ? lang === "zh" ? "BEM 是官网的。TAPE 是这台处理器的。两笔分开签。" : "BEM is the official token. TAPE is this processor's. They are separate signatures."
         : floor === "me"
           ? lang === "zh" ? "资产在你的钱包里。这一页只读，转出要另签名。" : "Assets stay in your wallet. This page only reads. Sending takes another signature."
           : "";
   const go = (next: Floor) => {
     if (window.location.pathname.startsWith("/whitepaper")) {
-      window.location.assign(next === "rules" ? "/whitepaper" : `/#${next === "desk" ? desk : next === "shop" ? "gate" : next === "canvas" ? "canvas" : next === "me" ? "me" : "paper"}`);
+      window.location.assign(next === "rules" ? "/whitepaper" : `/#${next === "desk" ? desk : next === "shop" ? "gate" : next === "canvas" ? "canvas" : next === "mine" ? "mine" : next === "me" ? "me" : "paper"}`);
       return;
     }
     if (next === "rules") window.location.assign("/whitepaper");
@@ -283,7 +284,7 @@ function Header({ floor, desk, setFloor, setDesk, setShop }: { floor: Floor; des
           </div>
         ) : null}
       </div>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         <button
           type="button"
           onClick={() => {
@@ -317,6 +318,22 @@ function Header({ floor, desk, setFloor, setDesk, setShop }: { floor: Floor; des
             <span className="font-display text-lg italic sm:text-2xl">{lang === "zh" ? "流片" : "Tape"}</span>
           </span>
         </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (window.location.pathname.startsWith("/whitepaper")) {
+              window.location.assign("/#mine");
+              return;
+            }
+            setFloor("mine");
+          }}
+          className={`flex min-h-12 items-center border px-3 text-left sm:min-h-14 sm:px-4 ${floor === "mine" ? "border-ink bg-foil text-ink" : "border-gold bg-ink text-paper"}`}
+        >
+          <span>
+            <span className="block text-[10px] tracking-widest text-gold sm:text-xs">{lang === "zh" ? "BEM 和 TAPE" : "BEM and TAPE"}</span>
+            <span className="font-display text-lg italic sm:text-2xl">{lang === "zh" ? "挖矿" : "Mine"}</span>
+          </span>
+        </button>
       </div>
       {line ? <p className="text-sm text-ink/70">{line}</p> : null}
     </header>
@@ -328,7 +345,7 @@ function PaperFloor() {
   return (
     <div className="relative">
       <p className="pointer-events-none absolute top-16 right-4 z-10 font-display text-3xl italic text-ink/15">{lang === "zh" ? "练习 · 本地" : "Practice · local"}</p>
-      <p className="text-sm text-ink/70">{lang === "zh" ? "不进实盘成交。余额是练习金。" : "Not a live fill. The balance is practice cash."}</p>
+      <p className="text-sm text-ink/70">{lang === "zh" ? "余额是练习金。清除只动这台浏览器，不动合约。" : "The balance is practice cash. Clear only wipes this browser, not a contract."}</p>
       <div className="grid items-start gap-4 lg:grid-cols-12">
         <aside className="hidden lg:col-span-4 lg:block">
           <div className="lg:sticky lg:top-4">

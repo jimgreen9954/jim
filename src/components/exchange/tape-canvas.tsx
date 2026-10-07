@@ -2,12 +2,20 @@ import { useEffect, useMemo, useState } from "react";
 import { formatEther, parseEther } from "viem";
 import { compile, simulate, type CNode, type CWire, type Kind } from "@/lib/canvas-net";
 import { useExchange } from "@/lib/exchange-store";
-import { connectXLayer, DEPLOYED, processorUrl, readCircuits, readOkb, readProcessor, readTapeFee, tapeNetlist, tapeRecipe, transistorHeld, txUrl, type ChainCircuit, type ProcessorStatus } from "@/lib/xlayer";
+import { connectXLayer, readProcessor, recipeNetlist, TAPE_SHEET, type ProcessorStatus } from "@/lib/xlayer";
+import { connectBsc } from "@/lib/bsc";
+import { readTapeDesk, readTapeRows, tapeOn, tapePage, tapeTxUrl } from "@/lib/tape-any";
+import { getTapeTargets, OURS, type TapeTarget } from "@/lib/tape-targets";
 import { currentAccount, onAccount } from "@/lib/wallet";
 
 const RECIPES: [number, number][] = [
   [1, 0], [1, 1], [3, 0], [4, 0], [9, 0], [1, 9], [20, 0], [49, 0], [100, 0], [400, 0],
 ];
+
+function sheets(have: bigint, chunk: number): bigint {
+  if (have <= 0n) return 0n;
+  return (have + BigInt(chunk) - 1n) / BigInt(chunk);
+}
 
 function uid() {
   return Math.random().toString(36).slice(2, 8);
@@ -116,8 +124,11 @@ export function TapeCanvas() {
   const [recipe, setRecipe] = useState<[number, number] | null>(null);
   const [cpu, setCpu] = useState<ProcessorStatus | null>(null);
   const [fee, setFee] = useState("0.0013");
-  const [rows, setRows] = useState<ChainCircuit[]>([]);
+  const [rows, setRows] = useState<{ id: string; nIn: string; nOut: string; gates: string; owner: string }[]>([]);
   const [total, setTotal] = useState(0);
+  const [target, setTarget] = useState<TapeTarget>(OURS);
+  const [targets, setTargets] = useState<TapeTarget[]>([OURS]);
+  const [find, setFind] = useState("");
   const [note, setNote] = useState<string | null>(null);
   const [bad, setBad] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -130,45 +141,51 @@ export function TapeCanvas() {
 
   useEffect(() => {
     let dead = false;
+    getTapeTargets()
+      .then((rows) => { if (!dead && rows.length) setTargets(rows); })
+      .catch(() => undefined);
+    return () => { dead = true; };
+  }, []);
+
+  useEffect(() => {
+    let dead = false;
     const pull = () => {
-      readProcessor().then((row) => { if (!dead) setCpu(row); }).catch(() => undefined);
-      readTapeFee().then((row) => { if (!dead) setFee(row); }).catch(() => undefined);
-      readCircuits(8).then((row) => { if (!dead) { setRows(row.rows); setTotal(row.total); } }).catch(() => undefined);
+      if (target.ours) readProcessor().then((row) => { if (!dead) setCpu(row); }).catch(() => undefined);
+      else if (!dead) setCpu(null);
+      readTapeRows(target, 8).then((list) => { if (!dead) setRows(list); }).catch(() => undefined);
     };
     pull();
     const id = window.setInterval(pull, 8000);
     return () => { dead = true; window.clearInterval(id); };
-  }, []);
+  }, [target]);
 
   useEffect(() => onAccount((next) => setAccount(next)), []);
 
   useEffect(() => {
-    if (!account) {
-      setHeld(null);
-      setHeldErr(false);
-      return;
-    }
     let dead = false;
     const pull = () => {
-      transistorHeld(account)
+      readTapeDesk(target, account)
         .then((row) => {
-          if (!dead) {
-            setHeld(row);
+          if (dead) return;
+          setFee(row.fee);
+          setTotal(row.total);
+          setOkb(account ? row.native : null);
+          if (account) {
+            setHeld({ nand: row.nand, latch: row.latch });
+            setHeldErr(false);
+          } else {
+            setHeld(null);
             setHeldErr(false);
           }
         })
         .catch(() => {
-          if (!dead) setHeldErr(true);
+          if (!dead && account) setHeldErr(true);
         });
-      readOkb(account).then((row) => { if (!dead) setOkb(row); }).catch(() => undefined);
     };
     pull();
     const id = window.setInterval(pull, 5000);
-    return () => {
-      dead = true;
-      window.clearInterval(id);
-    };
-  }, [account]);
+    return () => { dead = true; window.clearInterval(id); };
+  }, [account, target]);
 
   const built = useMemo(() => (recipe ? null : compile(nodes, wires)), [nodes, wires, recipe]);
   const sim = useMemo(() => (recipe ? null : simulate(nodes, wires, bits, latch)), [nodes, wires, bits, latch, recipe]);
@@ -199,40 +216,75 @@ export function TapeCanvas() {
     setBad(false);
     setNote(zh ? "正在连接钱包。" : "Connecting the wallet.");
     try {
-      const from = currentAccount() ?? (await connectXLayer());
+      const from = currentAccount() ?? (target.chain === "bsc" ? await connectBsc() : await connectXLayer());
       setAccount(from);
-      const held = await transistorHeld(from);
-      if (recipe) {
-        const [n, l] = recipe;
-        if (held.nand < BigInt(n) || held.latch < BigInt(l)) throw new Error("short");
-        setNote(zh ? `正在流片 ${n}N+${l}L。确认后不能撤回。` : `Taping ${n}N+${l}L. It cannot be undone.`);
-        const hash = await tapeRecipe(from, n, l);
-        setHeld(await transistorHeld(from));
-        setNote(zh ? `已流片。烧掉 ${n} NAND、${l} LATCH。官网同一条处理器会多一条电路。` : `Taped. Burned ${n} NAND and ${l} LATCH. The official processor gains one circuit.`);
-        window.open(txUrl(hash), "_blank", "noopener,noreferrer");
-      } else {
-        if (!built || "error" in built) throw new Error(built && "error" in built ? built.error : "gates");
-        if (held.nand < BigInt(built.nand) || held.latch < BigInt(built.latch)) throw new Error("short");
-        setNote(zh ? `正在流片 ${built.nand} NAND、${built.latch} LATCH。确认后不能撤回。` : `Taping ${built.nand} NAND and ${built.latch} LATCH. It cannot be undone.`);
-        const hash = await tapeNetlist(from, built.hex, built.nIn, built.nOut);
-        setHeld(await transistorHeld(from));
-        setNote(zh ? `已流片。烧掉 ${built.nand} NAND、${built.latch} LATCH。官网同一条处理器会多一条电路。` : `Taped. Burned ${built.nand} NAND and ${built.latch} LATCH. The official processor gains one circuit.`);
-        window.open(txUrl(hash), "_blank", "noopener,noreferrer");
-      }
+      const desk = await readTapeDesk(target, from);
+      const heldNow = { nand: desk.nand, latch: desk.latch };
+      setHeld(heldNow);
+      const netlist = recipe ? recipeNetlist(recipe[0], recipe[1]) : built && !("error" in built) ? built.hex : null;
+      const nIn = recipe ? 2 : built && !("error" in built) ? built.nIn : 0;
+      const nOut = recipe ? 1 : built && !("error" in built) ? built.nOut : 0;
+      const nand = recipe ? recipe[0] : built && !("error" in built) ? built.nand : 0;
+      const latchN = recipe ? recipe[1] : built && !("error" in built) ? built.latch : 0;
+      if (!netlist) throw new Error(built && "error" in built ? built.error : "gates");
+      if (heldNow.nand < BigInt(nand) || heldNow.latch < BigInt(latchN)) throw new Error("short");
+      const unit = target.chain === "bsc" ? "BNB" : "OKB";
+      setNote(zh ? `正在 ${target.name} 上流片。烧掉这台的 ${nand} NAND、${latchN} LATCH。确认后不能撤回。` : `Taping on ${target.name}. This burns ${nand} NAND and ${latchN} LATCH on that processor.`);
+      const hash = await tapeOn(target, from, netlist, nIn, nOut);
+      setHeld(await readTapeDesk(target, from).then((row) => ({ nand: row.nand, latch: row.latch })));
+      setNote(zh ? `已流在 ${target.name} 上。烧掉 ${nand} NAND、${latchN} LATCH。费是这台的协议费，单位 ${unit}。` : `Taped on ${target.name}. Burned ${nand} NAND and ${latchN} LATCH.`);
+      window.open(tapeTxUrl(target, hash), "_blank", "noopener,noreferrer");
     } catch (error) {
       setBad(true);
-      const message = error instanceof Error ? error.message : "";
+      const message = error instanceof Error ? `${error.message} ${"shortMessage" in error ? String((error as { shortMessage?: string }).shortMessage ?? "") : ""}` : "";
       setNote(
-        message === "short"
-          ? zh ? "这个地址的 NAND 或 LATCH 不够。先去铸造。" : "This address does not hold enough NAND or LATCH. Mint first."
+        message === "short" || message.startsWith("short")
+          ? zh ? "这台的 NAND 或 LATCH 不够。TAPELIQUID 去晶圆铸造，官网那台去 tapeout.net 铸造。" : "This processor does not have enough NAND or LATCH. Mint TAPELIQUID on the wafer. Mint an official one on tapeout.net."
           : message === "okb" || /insufficient funds/i.test(message)
-            ? zh ? `流片费是 ${fee} OKB。这个地址的 OKB 不够付费，也付不了 gas。晶体管没动。` : `The tape fee is ${fee} OKB. This address does not have enough OKB for the fee and gas. The transistors did not move.`
+            ? zh ? `流片费是 ${fee} ${target.chain === "bsc" ? "BNB" : "OKB"}。这个地址不够付费，也付不了 gas。晶体管没动。` : `The tape fee is ${fee} ${target.chain === "bsc" ? "BNB" : "OKB"}. This address cannot pay it. The transistors did not move.`
+            : /SSTORE2|too large|out of gas/i.test(message)
+            ? zh ? "这张太大，链上写不进去。改点 1.8 万 NAND 或 3 万 LATCH。颗数还在。" : "This sheet is too big to store. Use 18,000 NAND or 30,000 LATCH. The transistors are still there."
             : ERR[message]
             ? say(message)
             : message.includes("rejected") || message.includes("denied")
               ? zh ? "你取消了。" : "You cancelled."
               : zh ? "流片没有完成。颗数还在。" : "Tape-out did not finish. The transistors are still there.",
       );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const flood = async (kind: "nand" | "latch") => {
+    const chunk = kind === "nand" ? TAPE_SHEET.nand : TAPE_SHEET.latch;
+    setBusy(true);
+    setBad(false);
+    let done = 0;
+    try {
+      const from = currentAccount() ?? (target.chain === "bsc" ? await connectBsc() : await connectXLayer());
+      setAccount(from);
+      for (let i = 0; i < 24; i++) {
+        const desk = await readTapeDesk(target, from);
+        const have = kind === "nand" ? desk.nand : desk.latch;
+        if (have < 1n) break;
+        const n = Number(have > BigInt(chunk) ? BigInt(chunk) : have);
+        const nand = kind === "nand" ? n : 0;
+        const latchN = kind === "latch" ? n : 0;
+        setNote(zh ? `第 ${i + 1} 笔。这张烧掉 ${nand} NAND、${latchN} LATCH。确认后才会下一笔。` : `Sheet ${i + 1}. Burns ${nand} NAND and ${latchN} LATCH. The next one waits for this signature.`);
+        await tapeOn(target, from, recipeNetlist(nand, latchN), 2, 1);
+        done += 1;
+      }
+      const left = await readTapeDesk(target, from);
+      setHeld({ nand: left.nand, latch: left.latch });
+      setNote(zh ? `这一轮签成 ${done} 笔。NAND 还剩 ${left.nand.toString()}，LATCH 还剩 ${left.latch.toString()}。` : `${done} sheets landed. NAND left ${left.nand.toString()}, LATCH left ${left.latch.toString()}.`);
+    } catch (error) {
+      setBad(true);
+      const message = error instanceof Error ? `${error.message} ${"shortMessage" in error ? String((error as { shortMessage?: string }).shortMessage ?? "") : ""}` : "";
+      setNote(message.includes("rejected") || message.includes("denied")
+        ? zh ? `你取消了。已经流成 ${done} 笔。` : `You cancelled. ${done} sheets already landed.`
+        : /SSTORE2|too large/i.test(message)
+          ? zh ? `这张太大，写不进去。已经流成 ${done} 笔，剩下的颗数还在。` : `That sheet does not fit. ${done} landed. The rest is still there.`
+          : zh ? `停了。已经流成 ${done} 笔，没签成的颗数还在。` : `Stopped. ${done} sheets landed. The rest is still there.`);
     } finally {
       setBusy(false);
     }
@@ -247,6 +299,23 @@ export function TapeCanvas() {
   const okbShort = Boolean(account) && okb != null && okb < feeWei + parseEther("0.0004");
   const short = times != null && times < 1n;
   const ready = !liveErr && needN != null && ack && Boolean(account) && held != null && !short && !okbShort;
+  const unit = target.chain === "bsc" ? "BNB" : "OKB";
+  const shownTargets = (() => {
+    const query = find.trim().toLowerCase();
+    const source = query
+      ? targets.filter((row) => row.name.toLowerCase().includes(query))
+      : targets.filter((row) => row.ours || /genesis|tapeout|behemoth|blonskr/i.test(row.name));
+    const seen = new Set<string>();
+    const out: TapeTarget[] = [];
+    for (const row of source) {
+      const key = row.circuits.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(row);
+      if (out.length >= 12) break;
+    }
+    return out;
+  })();
   const table = useMemo(() => {
     if (recipe || !built || "error" in built || built.nIn > 4 || built.latch > 0) return null;
     const rows: { bits: boolean[]; outs: boolean[] }[] = [];
@@ -259,18 +328,30 @@ export function TapeCanvas() {
     return rows;
   }, [built, nodes, wires, recipe]);
 
-  useEffect(() => { setAck(false); }, [needN, needL]);
+  useEffect(() => { setAck(false); }, [needN, needL, target]);
 
   return (
     <section className="grid items-start gap-4 lg:grid-cols-12">
       <div className="flex min-w-0 flex-col gap-3 lg:col-span-8">
         <div className="border border-gold bg-card px-3 py-3">
+          <p className="text-xs tracking-widest text-gold">{zh ? "选一台再画" : "Pick a processor, then draw"}</p>
+          <input value={find} onChange={(event) => setFind(event.target.value)} placeholder={zh ? "搜官网处理器，例如 Genesis、Blonskr" : "Search an official processor"} className="mt-2 w-full border border-gold bg-paper px-3 py-2 outline-none" />
+          <div className="mt-2 flex gap-2 overflow-x-auto">
+            {shownTargets.map((row) => (
+              <button key={row.circuits} type="button" onClick={() => setTarget(row)} className={`min-h-10 shrink-0 border px-3 text-sm ${target.circuits.toLowerCase() === row.circuits.toLowerCase() ? "border-ink bg-ink text-paper" : "border-gold"}`}>
+                {row.ours ? "TAPELIQUID" : row.name} · {row.chain === "bsc" ? "BSC" : "X Layer"}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-sm text-ink/70">{zh ? `当前是 ${target.name}。烧掉的是这台的 NAND 和 LATCH。${!find.trim() ? " 其他官网处理器输入名字再选。" : ""}` : `Taping ${target.name}. This burns that processor's NAND and LATCH.`}</p>
+        </div>
+        <div className="border border-gold bg-card px-3 py-3">
           <p className="text-xs tracking-widest text-gold">{zh ? "画布 · 先在浏览器里跑" : "Canvas · runs in the browser first"}</p>
-          <h2 className="font-display text-3xl italic">{zh ? "流片 TAPELIQUID" : "Tape TAPELIQUID"}</h2>
+          <h2 className="font-display text-3xl italic">{zh ? `流片 ${target.name}` : `Tape ${target.name}`}</h2>
           <p className="mt-1 text-sm leading-relaxed text-ink/80">
             {zh
-              ? "这两格是这个钱包在晶体管合约上的余额，每 5 秒重读。次数按当前这张图算。整台处理器还剩多少，不算你的。"
-              : "The two figures are the NAND and LATCH this wallet can still tape on TAPELIQUID. Tape-out is what spends them."}
+              ? "这两格是这个钱包在当前这台晶体管合约上的余额，每 5 秒重读。换一台就换一份余额。整台处理器还剩多少，不算你的。"
+              : "These two figures are this wallet's balance on the processor you picked. Switching processors switches the balance."}
           </p>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <Hold n={held?.nand ?? null} have={held} need={needN} other={needL} name="NAND" zh={zh} account={account} err={heldErr} />
@@ -313,6 +394,27 @@ export function TapeCanvas() {
               {n}N+{l}L
             </button>
           ))}
+        </div>
+        <div className="border border-gold bg-card px-3 py-3">
+          <p className="text-xs tracking-widest text-gold">{zh ? "大张" : "Large sheets"}</p>
+          <p className="mt-1 text-sm leading-relaxed">
+            {zh
+              ? `一张最大 ${TAPE_SHEET.nand.toLocaleString("en-US")} NAND，或 ${TAPE_SHEET.latch.toLocaleString("en-US")} LATCH。5 万那张网表写不进链，会直接失败，颗数不动。按现在的余额，NAND 还要 ${held ? sheets(held.nand, TAPE_SHEET.nand).toString() : "—"} 笔，LATCH 还要 ${held ? sheets(held.latch, TAPE_SHEET.latch).toString() : "—"} 笔。`
+              : `One sheet can burn ${TAPE_SHEET.nand.toLocaleString("en-US")} NAND or ${TAPE_SHEET.latch.toLocaleString("en-US")} LATCH. A 50,000 sheet does not fit and the transistors stay put. NAND needs ${held ? sheets(held.nand, TAPE_SHEET.nand).toString() : "—"} signatures, LATCH ${held ? sheets(held.latch, TAPE_SHEET.latch).toString() : "—"}.`}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button type="button" disabled={busy || !held || held.nand < 1n} onClick={() => void flood("nand")} className="min-h-11 border border-ink bg-ink px-3 text-sm text-paper disabled:opacity-40">
+              {zh ? "连流 NAND" : "Tape NAND through"}
+            </button>
+            <button type="button" disabled={busy || !held || held.latch < 1n} onClick={() => void flood("latch")} className="min-h-11 border border-ink bg-ink px-3 text-sm text-paper disabled:opacity-40">
+              {zh ? "连流 LATCH" : "Tape LATCH through"}
+            </button>
+            {([[5000, 0], [10000, 0], [18000, 0], [0, 10000], [0, 30000]] as [number, number][]).map(([n, l]) => (
+              <button key={`${n}-${l}`} type="button" className="min-h-11 border border-gold px-3 font-mono text-sm" onClick={() => { setNodes([]); setWires([]); setRecipe([n, l]); }}>
+                {n > 0 ? `${n} NAND` : `${l} LATCH`}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="overflow-x-auto border border-gold bg-paper">
           <div
@@ -437,7 +539,7 @@ export function TapeCanvas() {
         <div className="border border-gold bg-card px-3 py-3">
           <div className="flex items-baseline justify-between gap-2">
             <h3 className="font-display text-2xl italic">{zh ? "可流片" : "Ready to tape"}</h3>
-            <span className="text-xs tracking-widest text-gold">TAPELIQUID</span>
+            <span className="text-xs tracking-widest text-gold">{target.name}</span>
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <Hold n={held?.nand ?? null} have={held} need={needN} other={needL} name="NAND" zh={zh} account={account} err={heldErr} />
@@ -454,7 +556,7 @@ export function TapeCanvas() {
                     : `This sheet burns ${needN} NAND and ${needL} LATCH. ${times.toString()} tapes left on chain.`
                   : zh ? "正在读链上余额。" : "Reading the chain balance."}
           </p>
-          <p className="mt-1 break-all text-xs text-ink/50">{account ? `${account} · ` : ""}{DEPLOYED.transistors}</p>
+          <p className="mt-1 break-all text-xs text-ink/50">{account ? `${account} · ` : ""}{target.transistors}</p>
           <ol className="mt-3 flex flex-col gap-2 text-sm">
             <Check on={!liveErr && needN != null} text={liveErr ?? (zh ? `图已算完，烧掉 ${burn}` : `Sheet is ready. Burns ${burn}`)} />
             <Check on={Boolean(account)} text={account ? `${account.slice(0, 6)}…${account.slice(-4)}` : (zh ? "钱包还没接上" : "Wallet is not connected")} />
@@ -462,16 +564,16 @@ export function TapeCanvas() {
             <Check on={ack} text={zh ? "已确认不能撤回" : "Irreversible burn confirmed"} />
           </ol>
           <dl className="mt-3 flex flex-col gap-2 border-t border-gold/40 pt-3 text-sm">
-            <Row k={zh ? "链" : "Chain"} v="X Layer" />
-            <Row k={zh ? "处理器" : "Processor"} v={DEPLOYED.circuits} mono />
+            <Row k={zh ? "链" : "Chain"} v={target.chain === "bsc" ? "BSC" : "X Layer"} />
+            <Row k={zh ? "处理器" : "Processor"} v={target.circuits} mono />
             <Row k={zh ? "链上还能流" : "Tapes left"} v={times == null ? "—" : times.toString()} />
-            <Row k={zh ? "流片费" : "Tape fee"} v={`${fee} OKB`} />
-            <Row k={zh ? "这地址的 OKB" : "OKB here"} v={okb == null ? "—" : `${formatEther(okb)} OKB`} />
-            <Row k={zh ? "费进哪里" : "Fee goes"} v={zh ? "协议流片费，不进本站收费地址" : "Protocol tape fee, not this site's fee address"} />
-            <Row k={zh ? "得到" : "You get"} v={zh ? "这台处理器上的一张电路" : "One circuit on this processor"} />
+            <Row k={zh ? "流片费" : "Tape fee"} v={`${fee} ${unit}`} />
+            <Row k={zh ? `这地址的 ${unit}` : `${unit} here`} v={okb == null ? "—" : `${formatEther(okb)} ${unit}`} />
+            <Row k={zh ? "费进哪里" : "Fee goes"} v={zh ? "这台处理器的协议流片费，不进本站收费地址" : "That processor's protocol fee, not this site's fee address"} />
+            <Row k={zh ? "得到" : "You get"} v={zh ? `${target.name} 上的一张电路` : `One circuit on ${target.name}`} />
             <Row k={zh ? "官网" : "Official"} v={zh ? `同一份合约，已流片 ${total}` : `Same contract, ${total} taped`} />
           </dl>
-          {okbShort ? <p className="mt-2 text-sm text-sell">{zh ? `流片费 ${fee} OKB，这个地址只有 ${okb == null ? "—" : formatEther(okb)} OKB。NAND 没问题，是 OKB 不够，所以签不出去。` : `The fee is ${fee} OKB. This address has ${okb == null ? "—" : formatEther(okb)} OKB. The NAND is fine. The OKB is not.`}</p> : null}
+          {okbShort ? <p className="mt-2 text-sm text-sell">{zh ? `流片费 ${fee} ${unit}，这个地址只有 ${okb == null ? "—" : formatEther(okb)} ${unit}。NAND 没问题的话，是 ${unit} 不够，所以签不出去。` : `The fee is ${fee} ${unit}. This address has ${okb == null ? "—" : formatEther(okb)} ${unit}.`}</p> : null}
           <label className="mt-3 flex items-start gap-2 text-sm">
             <input type="checkbox" className="mt-1" checked={ack} onChange={(event) => setAck(event.target.checked)} />
             <span>{zh ? `我知道这张会烧掉 ${burn}，确认后不能撤回，也不是官网 BEM 算力。` : `I know this burns ${burn}, cannot be undone, and is not official BEM hashrate.`}</span>
@@ -483,7 +585,8 @@ export function TapeCanvas() {
               onClick={() => {
                 setBusy(true);
                 setBad(false);
-                connectXLayer()
+                const open = target.chain === "bsc" ? connectBsc() : connectXLayer();
+                open
                   .then((from) => setAccount(from))
                   .catch(() => {
                     setBad(true);
@@ -498,7 +601,7 @@ export function TapeCanvas() {
           ) : (
             <>
             <button type="button" disabled={!ready || busy} onClick={() => void go()} className="mt-3 min-h-14 w-full bg-ink font-display text-2xl italic text-paper disabled:opacity-40">
-              {busy ? (zh ? "等待钱包" : "Waiting for the wallet") : heldErr && !held ? (zh ? "链上没读到" : "Chain unread") : okbShort ? (zh ? "OKB 不够付流片费" : "Not enough OKB for the fee") : short ? (zh ? `这张要 ${needN} 个 NAND` : `This sheet needs ${needN} NAND`) : !ack ? (zh ? "先勾上再签名" : "Confirm, then sign") : liveErr ? (zh ? "先把图接完" : "Finish the sheet") : (zh ? "签名并流片" : "Sign and tape")}
+              {busy ? (zh ? "等待钱包" : "Waiting for the wallet") : heldErr && !held ? (zh ? "链上没读到" : "Chain unread") : okbShort ? (zh ? `${unit} 不够付流片费` : `Not enough ${unit}`) : short ? (zh ? `这张要 ${needN} 个 NAND` : `This sheet needs ${needN} NAND`) : !ack ? (zh ? "先勾上再签名" : "Confirm, then sign") : liveErr ? (zh ? "先把图接完" : "Finish the sheet") : (zh ? `签名并流片 ${target.name}` : `Sign and tape ${target.name}`)}
             </button>
             {short && held && held.nand >= 1n ? (
               <button type="button" className="mt-2 min-h-10 w-full border border-gold text-sm" onClick={() => {
@@ -515,10 +618,10 @@ export function TapeCanvas() {
             </>
           )}
           <div className="mt-2 flex flex-wrap gap-3 text-sm">
-            <button type="button" className="underline decoration-gold underline-offset-4" onClick={() => { void navigator.clipboard.writeText(DEPLOYED.circuits); setCopied(true); }}>
-              {copied ? (zh ? "地址已复制" : "Address copied") : (zh ? "复制处理器地址" : "Copy processor")}
+            <button type="button" className="underline decoration-gold underline-offset-4" onClick={() => { void navigator.clipboard.writeText(target.circuits); setCopied(true); }}>
+              {copied ? (zh ? "地址已复制" : "Address copied") : (zh ? "复制这台处理器" : "Copy this processor")}
             </button>
-            <a className="underline decoration-gold underline-offset-4" href={processorUrl()} target="_blank" rel="noreferrer">
+            <a className="underline decoration-gold underline-offset-4" href={tapePage(target)} target="_blank" rel="noreferrer">
               {zh ? "官网同一条" : "Official page"}
             </a>
           </div>

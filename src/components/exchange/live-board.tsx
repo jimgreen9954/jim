@@ -14,9 +14,6 @@ function fmtTs(ts: number): string {
 
 export function LiveBoard() {
   const lang = useExchange((s) => s.lang);
-  const fills = useExchange((s) => s.engine.fills.length);
-  const orders = useExchange((s) => s.engine.orders.length);
-  const position = useExchange((s) => s.engine.position);
   const c = copy[lang];
   const [data, setData] = useState<TapeoutLive | null>(null);
   const [failed, setFailed] = useState(false);
@@ -64,7 +61,6 @@ export function LiveBoard() {
     return view === "all" ? traded : traded.slice(0, 12);
   }, [data, q, view]);
 
-  const held = fills > 0 || orders > 0 || Boolean(position);
   const toggle = (id: string) => setPick((cur) => (cur === id ? null : id));
 
   return (
@@ -109,7 +105,7 @@ export function LiveBoard() {
             />
           </div>
           <p className="text-xs text-ink/70">
-            {held ? c.heldNote : c.following} {data.traded} {c.withTrades} / {data.listed} · {data.bidding} {c.onlyBids}
+            {c.following} {data.traded} {c.withTrades} / {data.listed} · {data.bidding} {c.onlyBids}
           </p>
           <input
             value={q}

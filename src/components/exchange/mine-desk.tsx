@@ -1,339 +1,194 @@
 import { useEffect, useState } from "react";
-import { copy } from "@/lib/copy";
-import { pretty } from "@/lib/bsc";
+import { BSC } from "@/lib/bsc";
 import { useExchange } from "@/lib/exchange-store";
-import { nickOf, readNicks, writeNick } from "@/lib/nicks";
-import { getRebateBook, type RebateBook } from "@/lib/rebate-index";
-import {
-  bindCode,
-  claimRebate,
-  claimTier,
-  CLAIM_STEPS,
-  codeText,
-  hasRebates,
-  BSC_REBATE,
-  KNOWN_XPERP,
-  lookupCode,
-  OLD_CLAIM_STEPS,
-  readRebate,
-  registerCode,
-  type Desk,
-} from "@/lib/perp";
+import { bemText, claimPod, getPodMiners, POD, readPodPending, readPodStats, type PodStats } from "@/lib/pod";
+import { claimTape, openTape, readTapeMine, readTapeSeats, TAPE, TAPE_MINE, tapeText, type TapeSeat } from "@/lib/tape-mine";
+import { currentAccount, onAccount } from "@/lib/wallet";
+import { connectXLayer, XLAYER } from "@/lib/xlayer";
 
-const zero = "0x0000000000000000000000000000000000000000";
-
-export function MineDesk({
-  account,
-  busy,
-  addresses,
-  chain,
-  run,
-  onBook,
-  onChain,
-}: {
-  account: string | null;
-  busy: boolean;
-  addresses: string[];
-  chain: Desk;
-  run: (task: (from: string) => Promise<unknown>) => Promise<void>;
-  onBook?: (addr: string) => void;
-  onChain?: (next: Desk) => void;
-}) {
+export function MineDesk() {
   const lang = useExchange((s) => s.lang);
-  const c = copy[lang];
-  const [nicks, setNicks] = useState<Record<string, string>>({});
-  const [draft, setDraft] = useState<Record<string, string>>({});
-  const [code, setCode] = useState("");
-  const [bind, setBind] = useState("");
-  const [live, setLive] = useState(false);
-  const [accrued, setAccrued] = useState(0n);
-  const [referrer, setReferrer] = useState("");
-  const [mine, setMine] = useState("");
-  const [tier, setTier] = useState(1);
-  const [who, setWho] = useState("");
-  const [ask, setAsk] = useState("");
-  const [bindNote, setBindNote] = useState("");
-  const [book, setBook] = useState<RebateBook | null>(null);
-  const [nickOpen, setNickOpen] = useState(false);
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const urlRef = useState(() => {
-    if (typeof window === "undefined") return "";
-    return (new URLSearchParams(window.location.hash.replace(/^#/, "")).get("ref") || new URLSearchParams(window.location.search).get("ref") || "").trim().slice(0, 16);
-  })[0];
-  const perp = chain === "xlayer" ? KNOWN_XPERP : BSC_REBATE;
-  const dec = chain === "xlayer" ? 6 : 18;
+  const zh = lang === "zh";
+  const [account, setAccount] = useState<string | null>(currentAccount());
+  const [stats, setStats] = useState<PodStats | null>(null);
+  const [miners, setMiners] = useState<{ cpu: string; circuits: string; circuitId: number; taskId: number; pending: bigint; key: `0x${string}` }[]>([]);
+  const [snap, setSnap] = useState("");
+  const [seats, setSeats] = useState<TapeSeat[]>([]);
+  const [tape, setTape] = useState<{ supply: bigint; weight: bigint; balance: bigint } | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [bad, setBad] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => onAccount((next) => setAccount(next)), []);
 
   useEffect(() => {
-    const saved = readNicks();
-    setNicks(saved);
-    const next: Record<string, string> = {};
-    for (const addr of addresses) next[addr.toLowerCase()] = nickOf(addr, saved);
-    setDraft(next);
-  }, [addresses]);
-
-  useEffect(() => {
-    if (!/^0x[a-fA-F0-9]{40}$/.test(perp)) return;
     let dead = false;
-    hasRebates(chain).then((ok) => {
-      if (!dead) setLive(ok);
-    });
-    claimTier(chain).then((next) => {
-      if (!dead) setTier(next);
-    });
-    if (account) {
-      readRebate(chain, account)
-        .then((row) => {
-          if (dead) return;
-          setAccrued(row.accrued);
-          setReferrer(row.referrer);
-          setMine(codeText(row.code));
-        })
-        .catch(() => undefined);
-    }
-    return () => {
-      dead = true;
+    const pull = () => {
+      readPodStats().then((row) => { if (!dead) setStats(row); }).catch(() => undefined);
+      readTapeMine(account).then((row) => { if (!dead) setTape(row); }).catch(() => undefined);
     };
-  }, [account, busy, chain, perp]);
+    pull();
+    const id = window.setInterval(pull, 15000);
+    return () => { dead = true; window.clearInterval(id); };
+  }, [account]);
 
   useEffect(() => {
-    if (!live || !urlRef || (referrer && referrer !== zero)) return;
+    if (!account) {
+      setMiners([]);
+      setSeats([]);
+      return;
+    }
     let dead = false;
-    setBind(urlRef);
-    lookupCode(chain, urlRef)
-      .then((owner) => {
+    getPodMiners({ data: { account } })
+      .then(async (snapRow) => {
         if (dead) return;
-        if (!owner || owner.toLowerCase() === zero) {
-          setBindNote(c.rebateNone);
-          return;
-        }
-        if (account && owner.toLowerCase() === account.toLowerCase()) {
-          setBindNote(lang === "zh" ? "这是你自己的码" : "This is your own code");
-          return;
-        }
-        setAsk(urlRef);
-        setWho(owner);
+        setSnap(snapRow.at);
+        const live = await readPodPending(snapRow.miners.slice(0, 24));
+        if (dead) return;
+        setMiners(snapRow.miners.slice(0, 24).map((row, i) => ({ ...row, pending: live[i]?.pending ?? 0n, key: live[i]?.key ?? "0x" })));
       })
-      .catch(() => {
-        if (!dead) setBindNote(c.rebateNone);
-      });
-    return () => {
-      dead = true;
-    };
-  }, [live, chain, urlRef, referrer, account, c.rebateNone, lang]);
+      .catch(() => { if (!dead) setMiners([]); });
+    readTapeSeats(account).then((rows) => { if (!dead) setSeats(rows); }).catch(() => undefined);
+    return () => { dead = true; };
+  }, [account]);
 
-  useEffect(() => {
-    if (chain !== "xlayer" || !account) return;
-    let dead = false;
-    const tick = () => {
-      getRebateBook({ data: { account } })
-        .then((next) => {
-          if (!dead) setBook(next);
-        })
-        .catch(() => undefined);
-    };
-    tick();
-    const timer = window.setInterval(tick, 5000);
-    return () => {
-      dead = true;
-      window.clearInterval(timer);
-    };
-  }, [account, chain, busy]);
-
-  const locked = Boolean(referrer && referrer !== zero);
-  const steps = tier >= 2 ? CLAIM_STEPS : OLD_CLAIM_STEPS;
-
-  async function review() {
-    setBindNote("");
-    setWho("");
-    setAsk("");
-    try {
-      const owner = await lookupCode(chain, bind);
-      if (!owner || owner.toLowerCase() === zero) {
-        setBindNote(c.rebateNone);
-        return;
-      }
-      if (account && owner.toLowerCase() === account.toLowerCase()) {
-        setBindNote(lang === "zh" ? "不能绑定自己的推荐码" : "You cannot bind your own code");
-        return;
-      }
-      setAsk(bind.trim());
-      setWho(owner);
-    } catch {
-      setBindNote(c.rebateNone);
-    }
-  }
+  const pendingBem = miners.reduce((sum, row) => sum + row.pending, 0n);
+  const pendingTape = seats.reduce((sum, row) => sum + row.pending, 0n);
+  const say = (text: string, failed = false) => { setBad(failed); setNote(text); };
 
   return (
-    <div className="flex flex-col gap-3">
-      <section className="border border-gold p-3">
-        <p className="text-xs tracking-widest text-gold">{c.nickTitle}</p>
-        <p className="mt-1 text-sm leading-relaxed text-ink/70">{c.nickHint}</p>
-        {addresses.length === 0 ? <p className="mt-2 text-sm text-ink/60">—</p> : null}
-        {(nickOpen ? addresses : addresses.slice(0, 4)).map((addr) => (
-          <label key={addr} className="mt-2 block">
-            <span className="break-all font-mono text-xs">{nickOf(addr, nicks) ? `${nickOf(addr, nicks)} · ` : ""}{addr}</span>
-            <span className="mt-1 flex gap-2">
-              <input
-                value={draft[addr.toLowerCase()] ?? ""}
-                onChange={(event) => setDraft((prev) => ({ ...prev, [addr.toLowerCase()]: event.target.value.slice(0, 16) }))}
-                className="min-h-11 min-w-0 flex-1 border border-gold bg-transparent px-2 font-mono outline-none"
-              />
+    <section className="grid items-start gap-4 lg:grid-cols-2">
+      <article className="border border-gold bg-card px-3 py-3">
+        <p className="text-xs tracking-widest text-gold">BSC · tapeout.net</p>
+        <h2 className="font-display text-3xl italic">{zh ? "领官网 BEM" : "Claim official BEM"}</h2>
+        <p className="mt-2 text-sm leading-relaxed">
+          {zh
+            ? "数字每 15 秒从挖矿合约重读。矿机名单用官网快照，大约一分钟。只有 Behemoth 和 TapeOut 上已经开挖的电路才有 BEM。这一页不替你做题，也不托管。"
+            : "Figures are read from the mining contract every 15 seconds. The miner list is the official snapshot. Only circuits already mining on Behemoth or TapeOut earn BEM."}
+        </p>
+        <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
+          <Cell k={zh ? "今天排放" : "Daily emission"} v={stats ? `${Number(stats.daily).toLocaleString("en-US", { maximumFractionDigits: 2 })} BEM` : "—"} />
+          <Cell k={zh ? "已铸" : "Minted"} v={stats ? `${Number(stats.mined).toLocaleString("en-US", { maximumFractionDigits: 2 })} BEM` : "—"} />
+          <Cell k={zh ? "作废" : "Forgone"} v={stats ? `${Number(stats.forgone).toLocaleString("en-US", { maximumFractionDigits: 4 })} BEM` : "—"} />
+          <Cell k={zh ? "矿机" : "Miners"} v={stats ? `${stats.verified} / ${stats.miners}` : "—"} />
+          <Cell k={zh ? "已验证权重" : "Verified weight"} v={stats?.verifWeight ?? "—"} />
+          <Cell k={zh ? "未验证权重" : "Unverified weight"} v={stats?.unverWeight ?? "—"} />
+        </dl>
+        <p className="mt-3 text-sm">{zh ? "这个地址待领" : "Pending here"} <span className="font-mono">{account ? bemText(pendingBem) : "—"} BEM</span></p>
+        <p className="mt-1 text-xs text-ink/50">{snap ? (zh ? `名单 ${snap}` : `List ${snap}`) : zh ? "连上钱包后读名单" : "The list is read after you connect"}</p>
+        <ul className="mt-2 max-h-64 overflow-auto border border-gold/40">
+          {miners.map((row) => (
+            <li key={`${row.circuits}-${row.circuitId}`} className="grid grid-cols-[6rem_4rem_1fr] gap-2 border-t border-gold/30 px-2 py-2 font-mono text-xs">
+              <span>{row.cpu}</span>
+              <span>#{row.circuitId}</span>
+              <span className="text-right">{bemText(row.pending)} BEM</span>
+            </li>
+          ))}
+          {account && miners.length === 0 ? <li className="px-2 py-3 text-sm text-ink/60">{zh ? "官网快照里没有这个地址的矿机。" : "The official snapshot has no miner for this address."}</li> : null}
+        </ul>
+        <button
+          type="button"
+          disabled={busy || !account || pendingBem === 0n}
+          className="mt-3 min-h-12 w-full bg-ink font-display text-2xl italic text-paper disabled:opacity-40"
+          onClick={() => {
+            if (!account) return;
+            setBusy(true);
+            claimPod(account, miners.filter((row) => row.pending > 0n).map((row) => row.key))
+              .then((hash) => say(zh ? `BEM 已领。${hash}` : `BEM claimed. ${hash}`))
+              .catch((error) => say(error instanceof Error && /rejected|denied/i.test(error.message) ? (zh ? "你取消了。" : "You cancelled.") : (zh ? "领取没有完成。BEM 还在合约里。" : "The claim did not finish. The BEM is still in the contract."), true))
+              .finally(() => setBusy(false));
+          }}
+        >
+          {zh ? "签名领取 BEM" : "Sign and claim BEM"}
+        </button>
+        <p className="mt-2 break-all text-xs text-ink/50">
+          <a className="underline" href="https://tapeout.net/bridge" target="_blank" rel="noreferrer">{zh ? "官网 BEM 跨链" : "Official BEM bridge"}</a>
+          {" · "}
+          <a className="underline" href={`${BSC.explorer}/address/0xa84B8D3893De6e9922f2B29bE1e1b115845F5E72`} target="_blank" rel="noreferrer">BSC</a>
+          {" · "}
+          <a className="underline" href={`${XLAYER.explorer}/address/0x60e62Efa9405d6873C5deaBD4E6CC91c25363952`} target="_blank" rel="noreferrer">X Layer BEM</a>
+          <span className="mt-1 block">{zh ? "本站不经手。TAPE 没有自己的桥，所以这里没有 TAPE 跨链。" : "This site does not custody the bridge. TAPE has no bridge, so there is no TAPE transfer here."}</span>
+        </p>
+      </article>
+      <article className="border border-gold bg-card px-3 py-3">
+        <p className="text-xs tracking-widest text-gold">X Layer · TAPELIQUID</p>
+        <h2 className="font-display text-3xl italic">{zh ? "领 TAPE" : "Claim TAPE"}</h2>
+        <p className="mt-2 text-sm leading-relaxed">
+          {zh
+            ? "发行写在规则里：硬顶 21,000,000，8 位小数，开盘日排放 1,000，收费地址连续 30 日有台费后一次性改为 7,200，之后每 210,000×600 秒减半。现在这份合约还不是那一档。它从部署起就是每天 7,200，权重是门数，q 不能大于 1。没有管理员，也不能把排放改掉。大张流片不产生官网 BEM。TAPE 还不能跨链。"
+            : "The written schedule is a 21,000,000 cap, 8 decimals, 1,000 a day at the open, one switch to 7,200 after 30 days of desk fees, then a halving every 210,000×600 seconds. This contract is not that schedule. It emits 7,200 a day from deployment, weight is the gate count, and q cannot be above 1. There is no admin and no way to edit the rate. A large tape-out does not mint official BEM. TAPE cannot be bridged yet."}
+        </p>
+        <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
+          <Cell k={zh ? "已铸" : "Minted"} v={tape ? `${tapeText(tape.supply)} TAPE` : "—"} />
+          <Cell k={zh ? "全网权重" : "Weight"} v={tape ? tape.weight.toString() : "—"} />
+          <Cell k={zh ? "这地址余额" : "Balance"} v={tape && account ? `${tapeText(tape.balance)} TAPE` : "—"} />
+          <Cell k={zh ? "待领" : "Pending"} v={account ? `${tapeText(pendingTape)} TAPE` : "—"} />
+        </dl>
+        <ul className="mt-2 max-h-64 overflow-auto border border-gold/40">
+          {seats.map((row) => (
+            <li key={row.id} className="grid grid-cols-[4rem_5rem_1fr_auto] items-center gap-2 border-t border-gold/30 px-2 py-2 text-xs">
+              <span className="font-mono">#{row.id}</span>
+              <span>{row.gates} {zh ? "门" : "gates"}</span>
+              <span className="text-right font-mono">{tapeText(row.pending)}</span>
               <button
                 type="button"
-                className="min-h-11 border border-gold px-3"
+                disabled={busy || row.on}
+                className="min-h-8 border border-gold px-2 disabled:opacity-40"
                 onClick={() => {
-                  writeNick(addr, draft[addr.toLowerCase()] ?? "");
-                  setNicks(readNicks());
+                  if (!account) return;
+                  setBusy(true);
+                  openTape(account, BigInt(row.id))
+                    .then(() => readTapeSeats(account).then(setSeats))
+                    .then(() => say(zh ? `#${row.id} 已开工。权重按门数。` : `#${row.id} is open. Weight is the gate count.`))
+                    .catch(() => say(zh ? "开工没有完成。" : "Open did not finish.", true))
+                    .finally(() => setBusy(false));
                 }}
               >
-                {c.nickSave}
+                {row.on ? (zh ? "已开工" : "Open") : (zh ? "开工" : "Open")}
               </button>
-            </span>
-          </label>
-        ))}
-        {addresses.length > 4 ? (
-          <button type="button" className="mt-2 min-h-11 border border-gold px-3 text-sm" onClick={() => setNickOpen((value) => !value)}>
-            {nickOpen ? (lang === "zh" ? "收起" : "Fold") : lang === "zh" ? `展开其余 ${addresses.length - 4} 个地址` : `Show ${addresses.length - 4} more`}
-          </button>
-        ) : null}
-      </section>
-      <section className="border border-gold p-3">
-        <p className="text-xs tracking-widest text-gold">{c.rebateTitle}</p>
-        <p className="mt-1 text-sm leading-relaxed text-ink/70">{c.rebateHint}</p>
-        {!live ? <p className="mt-2 text-sm leading-relaxed">{c.rebateNone}</p> : null}
-        {live ? (
-          <>
-            <p className="mt-2 text-sm leading-relaxed">{c.rebateShared}</p>
-            <p className="mt-2 break-all font-mono text-xs">{perp}</p>
-            <p className="mt-2 text-sm">
-              {c.rebateAccrued} <span className="font-mono">{pretty(accrued, dec, 2)} {chain === "xlayer" ? "USDT0" : "USDT"}</span>
-            </p>
-            <p className="mt-1 text-sm text-ink/60">
-              {chain === "xlayer"
-                ? lang === "zh"
-                  ? "这一笔用 OKB 付手续费。"
-                  : "This claim pays gas in OKB."
-                : lang === "zh"
-                  ? "这一笔用 BNB 付手续费。"
-                  : "This claim pays gas in BNB."}
-            </p>
-            {accrued === 0n ? (
-              <p className="mt-1 text-sm text-ink/60">
-                {lang === "zh"
-                  ? "现在是 0。有人用你的码在这条链成交之后才会增加。是 0 的时候按钮不会转出钱。"
-                  : "It is 0 until someone using your code trades on this chain. At 0 the button sends nothing."}
-              </p>
-            ) : null}
-            <div className="mt-2 grid grid-cols-4 gap-2">
-              {steps.map((step) => (
-                <button
-                  key={step}
-                  type="button"
-                  className="min-h-11 border border-gold font-mono text-xs"
-                  disabled={busy || accrued < BigInt(step) * 10n ** BigInt(dec)}
-                  onClick={() => run((from) => claimRebate(from, chain, step))}
-                >
-                  {c.rebateClaim} {step}
-                </button>
-              ))}
-            </div>
-            {tier < 2 ? <p className="mt-2 text-sm leading-relaxed">{c.rebateOld}</p> : null}
-            <label className="mt-3 block text-sm">
-              {c.rebateCode}
-              <span className="mt-1 flex gap-2">
-                <input value={mine || code} onChange={(event) => setCode(event.target.value.slice(0, 16))} disabled={Boolean(mine)} className="min-h-11 min-w-0 flex-1 border border-gold bg-transparent px-2 font-mono outline-none" />
-                <button type="button" className="min-h-11 bg-ink px-3 text-paper" disabled={busy || Boolean(mine) || !code.trim()} onClick={() => run((from) => registerCode(from, chain, code))}>
-                  {c.rebateRegister}
-                </button>
-              </span>
-            </label>
-            {mine ? (
-              <div className="mt-3">
-                <p className="text-xs tracking-widest text-gold">{c.inviteLink}</p>
-                <input
-                  readOnly
-                  value={`${typeof window === "undefined" ? "" : window.location.origin + window.location.pathname}#ref=${encodeURIComponent(mine)}`}
-                  className="mt-1 w-full border border-gold bg-transparent px-2 py-2 font-mono text-xs outline-none"
-                />
-                <button
-                  type="button"
-                  className="mt-2 min-h-11 border border-gold px-3"
-                  onClick={() => {
-                    const link = `${window.location.origin}${window.location.pathname}#ref=${encodeURIComponent(mine)}`;
-                    navigator.clipboard.writeText(link).then(() => setBindNote(c.inviteCopied)).catch(() => setBindNote(link));
-                  }}
-                >
-                  {c.inviteCopy}
-                </button>
-              </div>
-            ) : null}
-            <label className="mt-3 block text-sm">
-              {c.rebateBind}
-              {locked ? (
-                <span className="mt-1 block">
-                  <span className="block break-all font-mono text-xs">{referrer}</span>
-                  <span className="mt-1 block text-ink/70">{c.rebateLocked}</span>
-                </span>
-              ) : who ? (
-                <span className="mt-1 block">
-                  <span className="block">{c.rebateReview}</span>
-                  <span className="mt-1 block break-all font-mono text-xs">{who}</span>
-                  <span className="mt-1 block font-mono text-xs">{ask}</span>
-                  <span className="mt-1 flex gap-2">
-                    <button type="button" className="min-h-11 bg-ink px-3 text-paper" disabled={busy} onClick={() => run((from) => bindCode(from, chain, ask))}>
-                      {c.rebateGo}
-                    </button>
-                    <button type="button" className="min-h-11 border border-gold px-3" disabled={busy} onClick={() => { setWho(""); setAsk(""); }}>
-                      {c.rebateBack}
-                    </button>
-                  </span>
-                </span>
-              ) : (
-                <span className="mt-1 block">
-                  <span className="flex gap-2">
-                    <input value={bind} onChange={(event) => { setBind(event.target.value.slice(0, 16)); setBindNote(""); }} className="min-h-11 min-w-0 flex-1 border border-gold bg-transparent px-2 font-mono outline-none" />
-                    <button type="button" className="min-h-11 border border-gold px-3" disabled={busy || !bind.trim()} onClick={() => void review()}>
-                      {c.rebateCheck}
-                    </button>
-                  </span>
-                  {bindNote ? <span className="mt-1 block text-ink/70">{bindNote}</span> : null}
-                </span>
-              )}
-            </label>
-            <div className="mt-3 border-t border-gold/40 pt-3">
-              <p className="text-xs tracking-widest text-gold">{c.inviteTitle}</p>
-              {chain !== "xlayer" ? (
-                <p className="mt-2 text-sm leading-relaxed">{c.inviteBsc}</p>
-              ) : !book || !book.caughtUp ? (
-                <p className="mt-2 text-sm leading-relaxed">{book && !book.live ? c.inviteGap : c.inviteChecking}</p>
-              ) : book.invitees.length === 0 ? (
-                <p className="mt-2 text-sm">{c.inviteEmpty}</p>
-              ) : (
-                <>
-                  <p className="mt-2 text-sm">
-                    {book.invitees.length}
-                    <span className="ml-3 font-mono">{c.inviteCounted} {pretty(BigInt(book.counted), dec, 4)} USDT</span>
-                  </p>
-                  <p className="mt-1 text-xs leading-relaxed text-ink/60">{c.inviteExact}</p>
-                  {(inviteOpen ? book.invitees : book.invitees.slice(0, 4)).map((row) => (
-                    <p key={row.user} className="mt-2 break-all font-mono text-xs leading-relaxed">
-                      {row.user}
-                      <span className="mt-1 block">
-                        {c.inviteMargin} {pretty(BigInt(row.margin), dec, 2)} · {c.inviteNotional} {pretty(BigInt(row.notional), dec, 2)} · {c.inviteReward} {pretty(BigInt(row.reward), dec, 4)}
-                      </span>
-                    </p>
-                  ))}
-                  {book.invitees.length > 4 ? (
-                    <button type="button" className="mt-2 min-h-11 border border-gold px-3 text-sm" onClick={() => setInviteOpen((value) => !value)}>
-                      {inviteOpen ? (lang === "zh" ? "收起" : "Fold") : lang === "zh" ? `展开其余 ${book.invitees.length - 4} 人` : `Show ${book.invitees.length - 4} more`}
-                    </button>
-                  ) : null}
-                </>
-              )}
-            </div>
-          </>
-        ) : null}
-      </section>
+            </li>
+          ))}
+          {account && seats.length === 0 ? <li className="px-2 py-3 text-sm text-ink/60">{zh ? "最近 40 张电路里没有这个地址的。先流片。" : "None of the latest 40 circuits belong to this address."}</li> : null}
+        </ul>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {!account ? (
+            <button type="button" className="col-span-2 min-h-12 bg-ink font-display text-2xl italic text-paper" onClick={() => { setBusy(true); connectXLayer().then(setAccount).catch(() => say(zh ? "钱包没有连上。" : "The wallet did not connect.", true)).finally(() => setBusy(false)); }}>
+              {zh ? "连接钱包" : "Connect"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={busy || pendingTape === 0n}
+              className="col-span-2 min-h-12 bg-ink font-display text-2xl italic text-paper disabled:opacity-40"
+              onClick={() => {
+                setBusy(true);
+                claimTape(account, seats.filter((row) => row.on && row.pending > 0n).map((row) => BigInt(row.id)))
+                  .then(() => readTapeMine(account).then((row) => setTape(row)))
+                  .then(() => say(zh ? "TAPE 已领到这个钱包。" : "TAPE is in this wallet."))
+                  .catch((error) => say(error instanceof Error && /rejected|denied/i.test(error.message) ? (zh ? "你取消了。" : "You cancelled.") : (zh ? "领取没有完成。TAPE 还在合约里。" : "The claim did not finish."), true))
+                  .finally(() => setBusy(false));
+              }}
+            >
+              {zh ? "签名领取 TAPE" : "Sign and claim TAPE"}
+            </button>
+          )}
+        </div>
+        {note ? <p className={`mt-2 text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
+        <p className="mt-2 break-all text-xs text-ink/50">
+          <a className="underline" href={`${XLAYER.explorer}/address/${TAPE}`} target="_blank" rel="noreferrer">TAPE {TAPE}</a>
+          <br />
+          <a className="underline" href={`${XLAYER.explorer}/address/${TAPE_MINE}`} target="_blank" rel="noreferrer">Mine {TAPE_MINE}</a>
+        </p>
+      </article>
+    </section>
+  );
+}
+
+function Cell({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="border border-gold/40 px-2 py-2">
+      <dt className="text-xs text-ink/50">{k}</dt>
+      <dd className="mt-1 font-mono text-sm">{v}</dd>
     </div>
   );
 }
