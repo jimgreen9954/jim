@@ -60,8 +60,8 @@ const zh: Section[] = [
   {
     h: "自愿锁仓",
     ps: [
-      "电路和未流片的晶圆可以自愿锁仓。期限只有五档：半年、一年、三年、四年、五年。档位写在合约里，不能改，也不能自选天数。",
-      "锁入后，到期前不能转让、不能流片、不能拆出。电路在锁定期内继续按原规则计算 H，当日所得记在该电路上，不进入矿工地址。解锁后，锁定期内累计的 TAPE 与之后的所得一并领取。晶圆在锁定期内不算算力，到期后才可流片。到期自动解锁，不另收费用。",
+      "晶圆可以自愿锁仓。电路的新锁仓在这一版网页上已停，因为释放之后的挖矿收益可能留在锁仓合约里。期限只有五档：半年、一年、三年、四年、五年。档位写在合约里，不能改，也不能自选天数。别人仍可直接调用合约锁电路，网页停不掉。",
+      "锁入后，到期前不能转让、不能流片、不能拆出。电路在锁定期内继续按原规则计算 H，当日所得记在该电路上，不进入矿工地址。解锁时，释放当时已经结算的 TAPE 和电路一起退回。释放之后矿池再结算的部分，可能留在锁仓合约里，取不回。晶圆在锁定期内不算算力，到期后才可流片。到期自动解锁，不另收费用。",
       "锁仓不增加 H，不另发 TAPE。规则页列出锁仓地址、对象是电路还是晶圆、档位、到期日，以及电路上尚未领取的数量。榜一地址的官方未流片额度同样走这五档，登记后写明地址与到期日。",
     ],
   },
@@ -93,7 +93,7 @@ const zh: Section[] = [
       "X Layer 永续读的标记合约不是十分钟均价。它把最新提交的价格乘一个常数再除回去，所以用的就是刚推上去的价。任何地址每 30 秒最多推动约 0.5%。价格不过期，没人推时旧价仍能用来结算。",
       "这两份合约没有升级入口。这一版网页不再提供新开仓和吃单。已经在里面的保证金可以平仓，自己的挂单可以撤。别人仍可绕过网页直接调用合约，网页停不掉。",
       "BSC 上的 BEM 永续走的是另一条池子路径，不使用上面这份 X Layer 标记合约。",
-      "电路锁仓到期释放后，若矿池再结算这段权重，收益可能打进锁仓合约。锁仓记录已经删了，页面没有提取入口。这是已部署合约的行为。",
+      "电路锁仓到期释放后，若矿池再结算这段权重，收益可能打进锁仓合约。锁仓记录已经删了，页面没有提取入口。这是已部署合约的行为。这一版网页不再提交新的电路锁仓。已经锁上的仍按到期日解锁。电路退回，不等于释放之后的挖矿收益也能取回。",
       "返佣合约有 clerk。clerk 可以提取返佣池里的余额。不是每一份合约都没有管理员。",
     ],
   },
@@ -184,8 +184,8 @@ const en: Section[] = [
   {
     h: "Voluntary locks",
     ps: [
-      "A circuit or untaped wafers can be locked by choice. The only terms are six months, one year, three years, four years, and five years. The terms are in the contract. They cannot be edited, and a custom number of days is not accepted.",
-      "Until expiry it cannot be transferred, taped, or split out. A locked circuit still earns H. The day's amount stays on the circuit and does not go to the miner address. After unlock, the TAPE accrued during the lock is claimed together with what is earned after. Locked wafers are not hashrate. They can be taped after expiry. Unlock is automatic and charges nothing.",
+      "Wafers can be locked by choice. New circuit locks are off on this version of the site, because a mining reward after release can stay in the lock contract. The only terms are six months, one year, three years, four years, and five years. The terms are in the contract. They cannot be edited, and a custom number of days is not accepted. A direct contract call can still lock a circuit. The page cannot stop that.",
+      "Until expiry it cannot be transferred, taped, or split out. A locked circuit still earns H. The day's amount stays on the circuit and does not go to the miner address. At release, the TAPE already settled and the circuit come back together. A mine settlement after that release can stay in the lock contract and cannot be taken out. Locked wafers are not hashrate. They can be taped after expiry. Unlock is automatic and charges nothing.",
       "A lock does not raise H and does not mint extra TAPE. This page lists the address, whether it is a circuit or wafers, the term, the expiry, and the unclaimed amount on the circuit. The lead address's official untaped quota uses the same five terms. The address and expiry are written here after registration.",
     ],
   },
@@ -217,7 +217,7 @@ const en: Section[] = [
       "The X Layer perpetual does not read a ten-minute average. The mark contract returns the latest pushed price. Any address can move it by about half a percent every thirty seconds. The price does not expire. An old price can still settle a position.",
       "Neither contract can be upgraded. This version of the site no longer offers a new open or a take on those two books. Margin already inside can be closed. Your own resting order can be cancelled. A direct contract call still works. The page cannot stop it.",
       "The BEM perpetual on BSC uses a different pool path. It does not use the X Layer mark contract above.",
-      "After a locked circuit is released, a later mine settlement can pay that interval into the lock contract. The lock seat is already gone, and the page has no withdrawal for it. That is the deployed contract.",
+      "After a locked circuit is released, a later mine settlement can pay that interval into the lock contract. The lock seat is already gone, and the page has no withdrawal for it. That is the deployed contract. This version of the site no longer submits a new circuit lock. A circuit already locked can still be released on its date. Getting the circuit back is not the same as getting the mining reward paid in after release.",
       "The rebate contract has a clerk. The clerk can withdraw the rebate pool. Not every contract is without an admin.",
     ],
   },
