@@ -6,6 +6,7 @@ import { claimTape, openTape, readTapeMine, TAPE, TAPE_MINE, tapeText, type Tape
 import { currentAccount, onAccount } from "@/lib/wallet";
 import { connectXLayer, XLAYER } from "@/lib/xlayer";
 import { StakeDesk } from "@/components/exchange/stake-desk";
+import { BurnDesk } from "@/components/exchange/burn-desk";
 
 export function MineDesk() {
   const lang = useExchange((s) => s.lang);
@@ -19,7 +20,7 @@ export function MineDesk() {
   const [note, setNote] = useState<string | null>(null);
   const [bad, setBad] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [sheet, setSheet] = useState<"claim" | "stake">("stake");
+  const [sheet, setSheet] = useState<"claim" | "stake" | "ash">("claim");
 
   useEffect(() => onAccount((next) => setAccount(next)), []);
 
@@ -60,11 +61,12 @@ export function MineDesk() {
 
   return (
     <section className="flex flex-col gap-3">
-      <div className="grid grid-cols-2 border border-gold">
-        <button type="button" onClick={() => setSheet("stake")} className={`min-h-11 text-sm ${sheet === "stake" ? "bg-ink text-paper" : ""}`}>{zh ? "质押" : "Stake"}</button>
+      <div className="grid grid-cols-3 border border-gold">
         <button type="button" onClick={() => setSheet("claim")} className={`min-h-11 text-sm ${sheet === "claim" ? "bg-ink text-paper" : ""}`}>{zh ? "领取" : "Claim"}</button>
+        <button type="button" onClick={() => setSheet("stake")} className={`min-h-11 text-sm ${sheet === "stake" ? "bg-ink text-paper" : ""}`}>{zh ? "质押" : "Stake"}</button>
+        <button type="button" onClick={() => setSheet("ash")} className={`min-h-11 text-sm ${sheet === "ash" ? "bg-ink text-paper" : ""}`}>{zh ? "销毁" : "Burn"}</button>
       </div>
-      {sheet === "stake" ? <StakeDesk /> : (
+      {sheet === "stake" ? <StakeDesk /> : sheet === "ash" ? <BurnDesk /> : (
     <section className="grid items-start gap-4 lg:grid-cols-2">
       <article className="border border-gold bg-card px-3 py-3">
         <p className="text-xs tracking-widest text-gold">BSC · tapeout.net</p>
@@ -109,6 +111,7 @@ export function MineDesk() {
         >
           {zh ? "签名领取 BEM" : "Sign and claim BEM"}
         </button>
+        {account && pendingBem === 0n ? <p className="mt-2 text-xs text-ink/60">{zh ? "没有待领。官网快照里没有这地址的矿机，或者矿机还没挖出可领的 BEM。这一页不能替你开工官网电路。" : "Nothing is pending. The official snapshot has no miner here, or it has not earned claimable BEM. This page cannot open an official circuit for you."}</p> : null}
         <p className="mt-2 break-all text-xs text-ink/50">
           <a className="underline" href="https://tapeout.net/bridge" target="_blank" rel="noreferrer">{zh ? "官网 BEM 跨链" : "Official BEM bridge"}</a>
           {" · "}
@@ -135,7 +138,7 @@ export function MineDesk() {
           <Cell k={zh ? "这地址约占今日" : "About today"} v={account && tape ? `${amount(myShare)} TAPE` : "—"} />
         </dl>
         <p className="mt-3 text-sm">{zh ? "这个地址待领" : "Pending here"} <span className="font-mono">{account && tape ? `${amount(pendingTape)} TAPE` : "—"}</span></p>
-        <p className="mt-1 text-xs text-ink/50">{tapeErr ? tapeErr : account && tape ? (zh ? `余额 ${amount(tape.balance)} TAPE · 日排放从部署起写死 7,200，没有改率入口` : `Balance ${amount(tape.balance)} TAPE · 7,200 a day from deployment, with no switch`) : (zh ? "连上 X Layer 后读这个地址的电路" : "Connect on X Layer to read this address")}</p>
+        <p className="mt-1 text-xs text-ink/50">{tapeErr ? tapeErr : !tape?.scanOk ? (zh ? "排放读到了，电路名单这次没扫全。刷新再试，不要把空名单当成没有电路。" : "Emission is in. The circuit list did not finish. Refresh before treating an empty list as none.") : account && tape ? (zh ? `钱包 ${amount(tape.balance)} TAPE · 日排放写死 7,200` : `Wallet ${amount(tape.balance)} TAPE · 7,200 a day, fixed`) : (zh ? "连上 X Layer 后读这个地址的电路" : "Connect on X Layer to read this address")}</p>
         <div className="mt-2 grid grid-cols-[3.5rem_4.5rem_4rem_1fr_5rem] gap-2 px-2 text-xs text-ink/50">
           <span>{zh ? "编号" : "Id"}</span>
           <span>{zh ? "门数" : "Gates"}</span>
@@ -170,7 +173,7 @@ export function MineDesk() {
               )}
             </li>
           ))}
-          {account && tape && tape.seats.length === 0 ? <li className="px-2 py-3 text-sm text-ink/60">{zh ? "这个地址在 TAPELIQUID 上还没有电路。" : "This address has no TAPELIQUID circuit."}</li> : null}
+          {account && tape && tape.seats.length === 0 ? <li className="px-2 py-3 text-sm text-ink/60">{zh ? "这个地址名下没有可开工的 TAPELIQUID 电路。锁进质押的电路不在这张表，去质押页看。" : "This address holds no TAPELIQUID circuit to open. A staked circuit is not on this list. See Stake."}</li> : null}
         </ul>
         <div className="mt-3 grid grid-cols-2 gap-2">
           {!account ? (
@@ -195,6 +198,7 @@ export function MineDesk() {
             </button>
           )}
         </div>
+        {account && pendingTape === 0n ? <p className="mt-2 text-xs text-ink/60">{zh ? "没有待领。未开工的电路先点「开工」。已经质押的电路，TAPE 在锁仓里，去质押页点「入账」。" : "Nothing is pending. Open a circuit that is off. Staked circuits keep their TAPE in the lock. Book it on Stake."}</p> : null}
         {note ? <p className={`mt-2 text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
         <p className="mt-2 break-all text-xs text-ink/50">
           <a className="underline" href={`${XLAYER.explorer}/address/${TAPE}`} target="_blank" rel="noreferrer">TAPE {TAPE}</a>

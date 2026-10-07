@@ -20,7 +20,12 @@ import {
 } from "@/lib/tape-pool";
 
 function when(ts: number): string {
-  return new Date(ts * 1000).toLocaleString("zh-CN", { timeZone: "Asia/Singapore", hour12: false });
+  if (!Number.isFinite(ts) || ts < 1_000_000_000 || ts > 10_000_000_000) return "—";
+  try {
+    return new Date(ts * 1000).toLocaleString("zh-CN", { timeZone: "Asia/Singapore", hour12: false });
+  } catch {
+    return "—";
+  }
 }
 
 export function TapePoolDesk() {
@@ -44,6 +49,7 @@ export function TapePoolDesk() {
   const [note, setNote] = useState<string | null>(null);
   const [bad, setBad] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [ack, setAck] = useState(false);
   const unit = quote === 0 ? "USDT0" : "BEM";
 
   useEffect(() => onAccount(setAccount), []);
@@ -179,8 +185,8 @@ export function TapePoolDesk() {
           {positions.map((row) => {
             const due = row.unlock * 1000 <= Date.now();
             return (
-              <li key={row.id} className="flex items-center justify-between gap-2 border-t border-gold/30 px-2 py-2 text-xs">
-                <span>
+              <li key={row.id} className="flex flex-col gap-2 border-t border-gold/30 px-2 py-2 text-xs sm:flex-row sm:items-center sm:justify-between">
+                <span className="min-w-0 break-all">
                   #{row.id} · TAPE/{row.quote === 0 ? "USDT0" : "BEM"} · {zh ? TAPE_TERMS[row.term]?.zh : TAPE_TERMS[row.term]?.en}
                   <span className="mt-1 block font-mono text-ink/50">{zh ? "到期" : "Unlocks"} {when(row.unlock)}</span>
                 </span>
@@ -214,7 +220,7 @@ export function TapePoolDesk() {
       >
         <div className="grid grid-cols-2 border border-gold">
           {(["add", "swap"] as const).map((id) => (
-            <button key={id} type="button" onClick={() => setMode(id)} className={`min-h-10 text-sm ${mode === id ? "bg-ink text-paper" : ""}`}>
+            <button key={id} type="button" onClick={() => { setMode(id); setAck(false); }} className={`min-h-10 text-sm ${mode === id ? "bg-ink text-paper" : ""}`}>
               {id === "add" ? (zh ? "加池质押" : "Add and stake") : (zh ? "买卖" : "Trade")}
             </button>
           ))}
@@ -246,7 +252,7 @@ export function TapePoolDesk() {
         {mode === "add" ? (
           <div className="grid grid-cols-3 gap-1 sm:grid-cols-5">
             {TAPE_TERMS.map((row) => (
-              <button key={row.id} type="button" onClick={() => setTerm(row.id)} className={`min-h-10 border px-1 text-xs ${term === row.id ? "border-ink bg-ink text-paper" : "border-gold"}`}>
+              <button key={row.id} type="button" onClick={() => { setTerm(row.id); setAck(false); }} className={`min-h-10 border px-1 text-xs ${term === row.id ? "border-ink bg-ink text-paper" : "border-gold"}`}>
                 {zh ? row.zh : row.en}
               </button>
             ))}
@@ -256,19 +262,20 @@ export function TapePoolDesk() {
         )}
         <p className="text-xs leading-5 text-ink/60">
           {mode === "add"
-            ? zh ? "两边各扣 0.20% 进收费地址。到期撤回时，拿回的两边再各扣 0.20%。授权不够会先弹出授权。" : "0.20% of each side goes to the fee address. Removing takes 0.20% again. A missing approval asks for one first."
-            : zh ? "付出金额的 0.20% 进收费地址。滑点 1%。未开盘不能签。" : "0.20% of the input goes to the fee address. Slippage is 1%. A closed pool cannot be signed."}
+            ? zh ? `锁到 ${when(Math.floor(Date.now() / 1000) + TAPE_TERMS[term].days * 86400)}（新加坡）。到期前不能撤。两边各扣 0.20%，对不上比例的退回。撤的时候再扣一次。` : `Locked until ${when(Math.floor(Date.now() / 1000) + TAPE_TERMS[term].days * 86400)} Singapore time. It cannot be removed early. Each side pays 0.20%, and a mismatch is returned. Removing pays 0.20% again.`
+            : zh ? "付出金额的 0.20% 进收费地址。滑点 1%。未开盘不能签。这一笔不是质押。" : "0.20% of the input goes to the fee address. Slippage is 1%. A closed pool cannot be signed. This is not a stake."}
         </p>
+        {mode === "add" ? <label className="flex gap-2 text-xs"><input type="checkbox" checked={ack} onChange={(event) => setAck(event.target.checked)} />{zh ? "我知道到期前取不出来" : "I know this cannot be removed early"}</label> : null}
         {!account ? (
           <button type="button" disabled={busy} className="min-h-12 bg-ink font-display text-2xl italic text-paper" onClick={() => { setBusy(true); connectXLayer().then(setAccount).catch(() => say(zh ? "钱包没有连上。" : "The wallet did not connect.", true)).finally(() => setBusy(false)); }}>
             {zh ? "连接钱包" : "Connect"}
           </button>
         ) : (
-          <button type="submit" disabled={busy || (mode === "swap" && !live)} className="min-h-12 bg-ink font-display text-2xl italic text-paper disabled:opacity-40">
+          <button type="submit" disabled={busy || (mode === "swap" && !live) || (mode === "add" && !ack)} className="min-h-12 bg-ink font-display text-2xl italic text-paper disabled:opacity-40">
             {busy ? (zh ? "等待钱包" : "Waiting") : mode === "swap" && !live ? (zh ? "买卖还没打开" : "Trading is closed") : mode === "add" ? (zh ? "签名并质押" : "Sign and stake") : (zh ? "签名并成交" : "Sign and trade")}
           </button>
         )}
-        {note ? <p className={`text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
+        {note ? <p className={`break-all text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
         <p className="text-xs text-ink/50">{zh ? `开盘线 ${OPEN_USDT.toString()} 最小单位，也就是 5,000 USDT0。` : "The gate is 5,000 USDT0."}</p>
       </form>
     </div>

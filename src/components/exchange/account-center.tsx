@@ -10,7 +10,9 @@ import { okbPrice, readOkbPurse } from "@/lib/okb";
 import { KNOWN_PERP, KNOWN_XPERP, readPerp } from "@/lib/perp";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import { transferCircuit, transferTransistor, txUrl } from "@/lib/xlayer";
-import { fanCircuits } from "@/lib/tape-lock";
+import { fanCircuits, LOCK_TERMS, readLocks, type LockSeat } from "@/lib/tape-lock";
+import { readTapePool, showQuote, showTape, TAPE_TERMS, type TapePosition } from "@/lib/tape-pool";
+import { tapeText } from "@/lib/tape-mine";
 
 function money(n: number): string {
   if (!Number.isFinite(n)) return "—";
@@ -69,6 +71,8 @@ export function AccountCenter() {
   const [ack, setAck] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [fanText, setFanText] = useState("");
+  const [fanAck, setFanAck] = useState(false);
+  const [stakes, setStakes] = useState<{ lp: TapePosition[]; seats: LockSeat[]; usdtShares: bigint; usdtTape: bigint; usdtQuote: bigint; bemShares: bigint; bemTape: bigint; bemQuote: bigint } | null>(null);
   const [bad, setBad] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -103,6 +107,32 @@ export function AccountCenter() {
       .catch(() => undefined);
     return () => window.clearInterval(id);
   }, [account, zh]);
+
+  useEffect(() => {
+    if (!account) {
+      setStakes(null);
+      return;
+    }
+    let dead = false;
+    const pullStakes = () => {
+      Promise.all([readTapePool(account), readLocks(account)]).then(([pool, locks]) => {
+        if (dead) return;
+        setStakes({
+          lp: pool.positions,
+          seats: locks.seats,
+          usdtShares: pool.usdt.shares,
+          usdtTape: pool.usdt.tape,
+          usdtQuote: pool.usdt.quote,
+          bemShares: pool.bem.shares,
+          bemTape: pool.bem.tape,
+          bemQuote: pool.bem.quote,
+        });
+      }).catch(() => { if (!dead) setStakes(null); });
+    };
+    pullStakes();
+    const id = window.setInterval(pullStakes, 15000);
+    return () => { dead = true; window.clearInterval(id); };
+  }, [account]);
 
   useEffect(() => {
     if (!account || !book?.ok) return;
@@ -142,6 +172,29 @@ export function AccountCenter() {
         const token = ERC_BOOKS[key];
         add(ERC_NAME[key], qtyOf(ercBal[index], token.decimals, 4), priced[index] ? `${priced[index]} USDT` : "—", Number(formatUnits(ercBal[index], token.decimals)) * num(priced[index]));
       });
+      const pool = await readTapePool(account).catch(() => null);
+      if (pool && !dead) {
+        const tapePx = pool.usdt.tape > 0n && pool.usdt.quote > 0n
+          ? Number(formatUnits(pool.usdt.quote, 6)) / Number(formatUnits(pool.usdt.tape, 8))
+          : 0;
+        add("TAPE", qtyOf(pool.tape, 8, 4), tapePx > 0 ? `${tapePx.toFixed(4)} USDT` : "—", tapePx > 0 ? Number(formatUnits(pool.tape, 8)) * tapePx : null);
+        const bemPx = num(bemRaw);
+        for (const pos of pool.positions) {
+          if (typeof pos.shares !== "bigint") continue;
+          const side = pos.quote === 0 ? pool.usdt : pool.bem;
+          if (side.shares === 0n) continue;
+          const tape = (pos.shares * side.tape) / side.shares;
+          const other = (pos.shares * side.quote) / side.shares;
+          const tapeUsd = tapePx > 0 ? Number(formatUnits(tape, 8)) * tapePx : 0;
+          const otherUsd = pos.quote === 0 ? Number(formatUnits(other, 6)) : Number(formatUnits(other, 8)) * (Number.isFinite(bemPx) ? bemPx : 0);
+          lines.push({
+            name: zh ? (pos.quote === 0 ? "TAPE/USDT0 质押" : "TAPE/BEM 质押") : pos.quote === 0 ? "TAPE/USDT0 stake" : "TAPE/BEM stake",
+            qty: `${qtyOf(tape, 8, 4)} TAPE`,
+            px: tapePx > 0 ? `${tapePx.toFixed(4)} USDT` : "—",
+            usd: tapeUsd + otherUsd > 0 ? tapeUsd + otherUsd : null,
+          });
+        }
+      }
       const bidOf = (transistors: string, tokenId: number) => {
         const rows = (bids?.bids ?? []).filter((row) => row.transistors.toLowerCase() === transistors.toLowerCase() && row.tokenId === tokenId && row.remaining > 0);
         return rows.reduce<null | (typeof rows)[number]>((best, row) => (!best || row.priceBnb > best.priceBnb ? row : best), null);
@@ -310,8 +363,9 @@ export function AccountCenter() {
           </tbody>
         </table>
         </div>
-        <p className="px-3 py-2 text-xs text-ink/60">{zh ? "USDT 和 X Layer USDT 按 1 枚 = 1 USDT。BNB、BEM、OKB 和美股代币用池子现价。晶体管用这台处理器的最高买单，再乘 BNB 现价。没有买单的不计进合计。电路和未实现盈亏不算。" : "USDT and X Layer USDT are counted at 1. BNB, BEM, OKB and the stock tokens use the pool price. Transistors use that processor's best bid times the BNB price. No bid means it is left out. Circuits and unrealized PnL are not included."}</p>
+        <p className="px-3 py-2 text-xs text-ink/60">{zh ? "USDT 和 X Layer USDT 按 1 枚 = 1 USDT。钱包里的 TAPE 用 TAPE/USDT0 池子价。加进池子的 TAPE 单独一行，叫质押，到期日在下面。BNB、BEM、OKB 和美股代币用各自池子现价。晶体管用这台处理器的最高买单，再乘 BNB 现价。没有买单的不计进合计。电路和未实现盈亏不算。" : "USDT and X Layer USDT count at 1. Wallet TAPE uses the TAPE/USDT0 pool price. TAPE added to a pool is its own row, marked as a stake, with the expiry below. BNB, BEM, OKB and the stock tokens use their pool price. Transistors use that processor's best bid times the BNB price. No bid means it is left out. Circuits and unrealized PnL are not included."}</p>
       </div>
+      <StakeLines zh={zh} stakes={stakes} />
       <p className="text-sm text-ink/70">
         {book?.ok
           ? zh
@@ -389,9 +443,11 @@ export function AccountCenter() {
         <div className="flex flex-col gap-3">
           <div className="border border-gold p-3">
             <p className="font-display text-xl italic">{zh ? "一对多转出" : "Send to many"}</p>
-            <p className="mt-1 text-xs leading-5 text-ink/60">{zh ? "只限 TAPELIQUID 的电路。每行一片：编号 空格 地址。一次最多 30 行，一笔签名。有一片不是这个钱包的，整笔退回，已经成功的不会出现。官网电路仍用下面的单笔。" : "TAPELIQUID circuits only. One line each: id, space, address. Up to 30 lines, one signature. If one is not yours, the whole transaction returns."}</p>
-            <textarea value={fanText} onChange={(event) => setFanText(event.target.value)} rows={4} placeholder={"12 0x...\n13 0x..."} className="mt-2 w-full border border-gold bg-transparent px-2 py-2 font-mono text-xs outline-none" />
-            <button type="button" disabled={busy} onClick={() => void sendFan()} className="mt-2 min-h-10 bg-ink px-3 text-paper disabled:opacity-40">{zh ? "签名并按行转出" : "Sign and send the lines"}</button>
+            <p className="mt-1 text-xs leading-5 text-ink/60">{zh ? "只限 TAPELIQUID 的电路。每行一片：编号 空格 地址。一次最多 30 行，一笔签名。有一片不是这个钱包的，整笔都不会转。" : "TAPELIQUID circuits only. One line each: id, space, address. Up to 30 lines, one signature. If one is not yours, nothing moves."}</p>
+            <p className="mt-2 border border-sell/40 px-2 py-2 text-xs leading-5">{zh ? "地址填错就到别人钱包里，取不回。不要填锁仓合约，也不要填已经停用的旧地址。转到锁仓合约、又没有质押仓位的电路，谁都拿不出来。" : "A wrong address is gone. Do not use the lock contract or a retired address. A circuit sent into the lock without a stake cannot be taken out."}</p>
+            <textarea value={fanText} onChange={(event) => { setFanText(event.target.value); setFanAck(false); }} rows={4} placeholder={"12 0x...\n13 0x..."} className="mt-2 w-full border border-gold bg-transparent px-2 py-2 font-mono text-xs outline-none" />
+            <label className="mt-2 flex gap-2 text-xs"><input type="checkbox" checked={fanAck} onChange={(event) => setFanAck(event.target.checked)} />{zh ? "每一行地址我都核对过" : "I checked every address"}</label>
+            <button type="button" disabled={busy || !fanAck} onClick={() => void sendFan()} className="mt-2 min-h-10 bg-ink px-3 text-paper disabled:opacity-40">{zh ? "签名并按行转出" : "Sign and send the lines"}</button>
           </div>
         <ul className="border border-gold">
           {circuits.length === 0 ? <li className="px-3 py-3 text-sm text-ink/60">{zh ? "这地址在 TAPELIQUID 和已扫到的官网处理器上没有电路。" : "No circuits on TAPELIQUID or the scanned processors."}</li> : null}
@@ -407,7 +463,7 @@ export function AccountCenter() {
                   {open === `c:${row.circuits}:${row.id}` ? (
                     <div className="mt-2 grid gap-2 border border-gold p-2">
                       <input value={to} onChange={(event) => setTo(event.target.value.trim())} placeholder="0x" className="border border-gold px-2 py-2 font-mono text-xs outline-none" />
-                      <label className="flex gap-2 text-xs"><input type="checkbox" checked={ack} onChange={(event) => setAck(event.target.checked)} />{zh ? "确认转出这片电路" : "Confirm sending this circuit"}</label>
+                      <label className="flex gap-2 text-xs"><input type="checkbox" checked={ack} onChange={(event) => setAck(event.target.checked)} />{zh ? "地址我核对过。转错取不回，不要填锁仓合约。" : "I checked the address. A mistake cannot be undone. Do not use the lock."}</label>
                       <button type="button" disabled={!ack || busy} onClick={() => void sendCircuit(row)} className="min-h-10 bg-ink text-paper disabled:opacity-40">{zh ? "签名转出" : "Sign and send"}</button>
                     </div>
                   ) : null}
@@ -427,6 +483,58 @@ export function AccountCenter() {
       ) : null}
       {note ? <p className={`text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
     </section>
+  );
+}
+
+function StakeLines({ zh, stakes }: { zh: boolean; stakes: { lp: TapePosition[]; seats: LockSeat[]; usdtShares: bigint; usdtTape: bigint; usdtQuote: bigint; bemShares: bigint; bemTape: bigint; bemQuote: bigint } | null }) {
+  const when = (ts: number) => {
+    if (!Number.isFinite(ts) || ts < 1_000_000_000 || ts > 10_000_000_000) return "—";
+    try {
+      return new Date(ts * 1000).toLocaleString("zh-CN", { timeZone: "Asia/Singapore", hour12: false });
+    } catch {
+      return "—";
+    }
+  };
+  const slice = (shares: bigint, total: bigint, reserve: bigint) => (typeof shares === "bigint" && total > 0n ? (shares * reserve) / total : 0n);
+  const rows: { key: string; name: string; qty: string; term: string | undefined; until: string }[] = stakes?.lp.map((row) => {
+    const tape = slice(row.shares, row.quote === 0 ? stakes.usdtShares : stakes.bemShares, row.quote === 0 ? stakes.usdtTape : stakes.bemTape);
+    const other = slice(row.shares, row.quote === 0 ? stakes.usdtShares : stakes.bemShares, row.quote === 0 ? stakes.usdtQuote : stakes.bemQuote);
+    const term = TAPE_TERMS[row.term];
+    return { key: `lp-${row.id}`, name: `TAPE/${row.quote === 0 ? "USDT0" : "BEM"} #${row.id}`, qty: `${showTape(tape)} TAPE · ${showQuote(row.quote as 0 | 1, other)} ${row.quote === 0 ? "USDT0" : "BEM"}`, term: zh ? term?.zh : term?.en, until: when(row.unlock) };
+  }) ?? [];
+  for (const seat of stakes?.seats ?? []) {
+    const term = LOCK_TERMS[seat.term];
+    if (seat.kind === 2) rows.push({ key: `c-${seat.id}`, name: zh ? `TAPELIQUID 电路 #${seat.ref}` : `TAPELIQUID circuit #${seat.ref}`, qty: `${seat.gates.toLocaleString("en-US")} ${zh ? "门" : "gates"} · TAPE ${Number(tapeText(seat.tape + seat.pending)).toLocaleString("en-US", { maximumFractionDigits: 4 })}`, term: zh ? term?.zh : term?.en, until: when(seat.unlock) });
+    else rows.push({ key: `w-${seat.id}`, name: seat.kind === 0 ? "TAPELIQUID NAND" : "TAPELIQUID LATCH", qty: seat.amount.toLocaleString("en-US"), term: zh ? term?.zh : term?.en, until: when(seat.unlock) });
+  }
+  return (
+    <div className="border border-gold">
+      <p className="px-3 py-2 text-xs tracking-widest text-gold">{zh ? "我的质押" : "My stakes"}</p>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[36rem] text-left text-sm">
+          <thead className="text-xs tracking-widest text-gold">
+            <tr>
+              <th className="px-3 py-2">{zh ? "质押的是" : "What"}</th>
+              <th className="px-3 py-2">{zh ? "数量" : "Amount"}</th>
+              <th className="px-3 py-2">{zh ? "期限" : "Term"}</th>
+              <th className="px-3 py-2">{zh ? "解锁（新加坡）" : "Unlocks, Singapore"}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.key} className="border-t border-gold/40">
+                <td className="px-3 py-2">{row.name}</td>
+                <td className="px-3 py-2 font-mono">{row.qty}</td>
+                <td className="px-3 py-2">{row.term}</td>
+                <td className="px-3 py-2 font-mono text-xs">{row.until}</td>
+              </tr>
+            ))}
+            {stakes && rows.length === 0 ? <tr><td className="px-3 py-3 text-ink/60" colSpan={4}>{zh ? "这个地址没有 TAPE 池、晶圆或电路质押。" : "This address has no TAPE pool, wafer, or circuit stake."}</td></tr> : null}
+            {!stakes ? <tr><td className="px-3 py-3 text-ink/60" colSpan={4}>{zh ? "正在读链上质押。" : "Reading stakes."}</td></tr> : null}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 

@@ -31,7 +31,7 @@ export async function loadOfficialBooks(): Promise<OfficialBooks> {
     if (!circuitRes.ok) throw new Error(`circuits ${circuitRes.status}`);
     const market = (await marketRes.json()) as { generatedAt?: string; lastBlock?: number; openBids?: RawBid[] };
     const circuits = (await circuitRes.json()) as { listings?: RawList[] };
-    const names = new Map(OFFICIAL.chips.map((row) => [row.transistors.toLowerCase(), row.name]));
+    const names = new Map<string, string>(OFFICIAL.chips.map((row) => [row.transistors.toLowerCase(), row.name]));
     if (cpuRes.ok) {
       const body = (await cpuRes.json()) as { cpus?: { transistors: string; name: string }[] };
       for (const cpu of body.cpus ?? []) names.set(cpu.transistors.toLowerCase(), cpu.name);

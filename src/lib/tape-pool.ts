@@ -70,8 +70,9 @@ export async function readTapePool(account: string | null): Promise<{
     );
     const rows = await Promise.all(ids.map((id) => client.readContract({ address: TAPE_POOL, abi, functionName: "position", args: [id] })));
     rows.forEach((row, i) => {
-      if (row[4] === 0n) return;
-      positions.push({ id: ids[i].toString(), quote: Number(row[1]), term: Number(row[2]), unlock: Number(row[3]), shares: row[4] });
+      const shares = row[4];
+      if (typeof shares !== "bigint" || shares === 0n) return;
+      positions.push({ id: ids[i].toString(), quote: Number(row[1]), term: Number(row[2]), unlock: Number(row[3]), shares });
     });
   }
   return {

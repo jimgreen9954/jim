@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatUnits } from "viem";
 import { useExchange } from "@/lib/exchange-store";
 import {
   harvestLock,
@@ -10,7 +11,7 @@ import {
   TAPE_LOCK,
   type LockSeat,
 } from "@/lib/tape-lock";
-import { tapeText } from "@/lib/tape-mine";
+import { tapeText, readTapeMine, type TapeSeat } from "@/lib/tape-mine";
 import {
   addTapePool,
   quoteUnits,
@@ -27,8 +28,12 @@ import { connectXLayer, transistorHeld, XLAYER } from "@/lib/xlayer";
 import { currentAccount, onAccount } from "@/lib/wallet";
 
 function sgt(ts: number): string {
-  if (!ts) return "—";
-  return new Date(ts * 1000).toLocaleString("zh-CN", { timeZone: "Asia/Singapore", hour12: false });
+  if (!Number.isFinite(ts) || ts < 1_000_000_000 || ts > 10_000_000_000) return "—";
+  try {
+    return new Date(ts * 1000).toLocaleString("zh-CN", { timeZone: "Asia/Singapore", hour12: false });
+  } catch {
+    return "—";
+  }
 }
 
 function amt(value: bigint): string {
@@ -47,10 +52,14 @@ export function StakeDesk() {
   const [kind, setKind] = useState<0 | 1>(0);
   const [waferAmt, setWaferAmt] = useState("");
   const [waferTerm, setWaferTerm] = useState(0);
-  const [circuitId, setCircuitId] = useState("");
   const [circuitTerm, setCircuitTerm] = useState(1);
   const [nand, setNand] = useState(0n);
   const [latch, setLatch] = useState(0n);
+  const [tapeBal, setTapeBal] = useState(0n);
+  const [usdtBal, setUsdtBal] = useState(0n);
+  const [bemBal, setBemBal] = useState(0n);
+  const [owned, setOwned] = useState<TapeSeat[]>([]);
+  const [picked, setPicked] = useState<string[]>([]);
   const [weight, setWeight] = useState(0n);
   const [seats, setSeats] = useState<LockSeat[]>([]);
   const [lp, setLp] = useState<TapePosition[]>([]);
@@ -58,6 +67,9 @@ export function StakeDesk() {
   const [note, setNote] = useState<string | null>(null);
   const [bad, setBad] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [ackLp, setAckLp] = useState(false);
+  const [ackWafer, setAckWafer] = useState(false);
+  const [ackCircuit, setAckCircuit] = useState(false);
 
   useEffect(() => onAccount(setAccount), []);
 
@@ -68,6 +80,9 @@ export function StakeDesk() {
       readTapePool(account).then((row) => {
         if (dead) return;
         setLp(row.positions);
+        setTapeBal(row.tape);
+        setUsdtBal(row.usdtBal);
+        setBemBal(row.bemBal);
         setReserves({
           usdtTape: row.usdt.tape,
           usdtQuote: row.usdt.quote,
@@ -77,6 +92,7 @@ export function StakeDesk() {
           bemShares: row.bem.shares,
         });
       }).catch(() => undefined);
+      readTapeMine(account).then((row) => { if (!dead) setOwned(row.seats); }).catch(() => undefined);
       if (account) transistorHeld(account).then((row) => { if (!dead) { setNand(row.nand); setLatch(row.latch); } }).catch(() => undefined);
     };
     pull();
@@ -89,7 +105,7 @@ export function StakeDesk() {
     const message = error instanceof Error ? error.message : "";
     say(/rejected|denied/i.test(message) ? (zh ? "你取消了。" : "You cancelled.") : zh ? "没有完成。资产还在原处。" : "It did not finish. The assets stayed put.", true);
   };
-  const slice = (shares: bigint, total: bigint, reserve: bigint) => (total > 0n ? (shares * reserve) / total : 0n);
+  const slice = (shares: bigint, total: bigint, reserve: bigint) => (typeof shares === "bigint" && total > 0n ? (shares * reserve) / total : 0n);
   const lpTape = lp.reduce((sum, row) => sum + slice(row.shares, row.quote === 0 ? reserves.usdtShares : reserves.bemShares, row.quote === 0 ? reserves.usdtTape : reserves.bemTape), 0n);
   const lpUsdt = lp.reduce((sum, row) => row.quote === 0 ? sum + slice(row.shares, reserves.usdtShares, reserves.usdtQuote) : sum, 0n);
   const lpBem = lp.reduce((sum, row) => row.quote === 1 ? sum + slice(row.shares, reserves.bemShares, reserves.bemQuote) : sum, 0n);
@@ -99,6 +115,10 @@ export function StakeDesk() {
   const lockedGates = circuits.reduce((sum, row) => sum + row.gates, 0n);
   const share = weight > 0n ? Number((lockedGates * 10000n) / weight) / 100 : 0;
   const nextUnlock = [...lp.map((row) => row.unlock), ...seats.map((row) => row.unlock)].filter((ts) => ts * 1000 > Date.now()).sort((a, b) => a - b)[0];
+  const now = Math.floor(Date.now() / 1000);
+  const lpUntil = sgt(now + (TAPE_TERMS[lpTerm]?.days ?? 0) * 86400);
+  const waferUntil = sgt(now + (LOCK_TERMS[waferTerm]?.sec ?? 0));
+  const circuitUntil = sgt(now + (LOCK_TERMS[circuitTerm]?.sec ?? 0));
 
   return (
     <section className="flex flex-col gap-4">
@@ -110,6 +130,12 @@ export function StakeDesk() {
             ? "三本账分开。TAPE 池是流动性，对手是 USDT0 或 BEM，期限是 90 天到 3 年。晶圆和电路是另一份锁仓，期限是 180 天到 5 年。时间都是新加坡时间。到期前不能提前取出。锁仓合约没有管理员。"
             : "Three books, kept apart. The TAPE pool is liquidity against USDT0 or BEM, for 90 days to 3 years. Wafers and circuits use the other lock, for 180 days to 5 years. Times are Singapore time. Nothing comes out early. The lock has no admin."}
         </p>
+      </div>
+      <div className="border border-sell/50 px-3 py-3 text-sm leading-6">
+        <p className="text-xs tracking-widest text-sell">{zh ? "签名前看这三句" : "Read this before you sign"}</p>
+        <p>{zh ? "到期前不能取。合约没有提前解锁，也没有人能帮你改日期。" : "Nothing comes out early. The contract has no early exit, and nobody can change the date."}</p>
+        <p>{zh ? "只签这一页写出来的池子和锁仓。转到别的地址，包括已经停用的旧合约，谁都取不回。" : "Sign only the pool and the lock shown on this page. Anything sent elsewhere, including the retired contracts, cannot be recovered."}</p>
+        <p>{zh ? "晶圆锁上不能流片。电路锁上后算力不在你的地址上，解锁后要重新开工。" : "Locked wafers cannot be taped. A locked circuit's weight leaves your address and has to be opened again after release."}</p>
       </div>
       <dl className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
         <Cell k={zh ? "池中 TAPE" : "TAPE in pool"} v={amt(lpTape)} />
@@ -132,9 +158,12 @@ export function StakeDesk() {
             const due = row.unlock * 1000 <= Date.now();
             const term = TAPE_TERMS[row.term];
             return (
-              <li key={row.id} className="grid gap-1 border-t border-gold/30 px-2 py-2 text-xs sm:grid-cols-[7rem_1fr_auto] sm:items-center">
-                <span>#{row.id} TAPE/{row.quote === 0 ? "USDT0" : "BEM"}</span>
-                <span className="font-mono">{amt(tape)} TAPE · {showQuote(row.quote as 0 | 1, other)} {row.quote === 0 ? "USDT0" : "BEM"} · {zh ? term?.zh : term?.en}<span className="mt-1 block text-ink/50">{sgt(row.unlock - (term?.days ?? 0) * 86400)} → {sgt(row.unlock)}</span></span>
+              <li key={row.id} className="grid gap-2 border-t border-gold/30 px-2 py-2 text-xs sm:grid-cols-[1fr_auto] sm:items-center">
+                <span className="min-w-0 break-all">
+                  <span className="block">#{row.id} TAPE/{row.quote === 0 ? "USDT0" : "BEM"}</span>
+                  <span className="mt-1 block font-mono">{amt(tape)} TAPE · {showQuote(row.quote === 0 ? 0 : 1, other)} {row.quote === 0 ? "USDT0" : "BEM"} · {zh ? term?.zh : term?.en}</span>
+                  <span className="mt-1 block font-mono text-ink/50">{sgt(row.unlock - (term?.days ?? 0) * 86400)} → {sgt(row.unlock)}</span>
+                </span>
                 <button type="button" disabled={busy || !due || !account} className="min-h-8 border border-gold px-2 disabled:opacity-40" onClick={() => { if (!account) return; setBusy(true); removeTapePool(account, BigInt(row.id)).then(() => say(zh ? "流动性已撤回。" : "Liquidity removed.")).catch(fail).finally(() => setBusy(false)); }}>{due ? (zh ? "撤回" : "Remove") : (zh ? "未到期" : "Locked")}</button>
               </li>
             );
@@ -146,13 +175,22 @@ export function StakeDesk() {
             {([0, 1] as const).map((id) => <button key={id} type="button" onClick={() => setQuote(id)} className={`min-h-10 text-sm ${quote === id ? "bg-ink text-paper" : ""}`}>TAPE / {id === 0 ? "USDT0" : "BEM"}</button>)}
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <input value={tapeAmt} onChange={(event) => setTapeAmt(event.target.value)} inputMode="decimal" placeholder="TAPE" className="min-h-11 border border-gold bg-transparent px-2 font-mono outline-none" />
-            <input value={quoteAmt} onChange={(event) => setQuoteAmt(event.target.value)} inputMode="decimal" placeholder={quote === 0 ? "USDT0" : "BEM"} className="min-h-11 border border-gold bg-transparent px-2 font-mono outline-none" />
+            <label className="text-xs">TAPE
+              <input value={tapeAmt} onChange={(event) => setTapeAmt(event.target.value)} inputMode="decimal" placeholder="TAPE" className="mt-1 min-h-11 w-full border border-gold bg-transparent px-2 font-mono outline-none" />
+              <button type="button" className="mt-1 underline" onClick={() => setTapeAmt(tapeText(tapeBal))}>{zh ? `全部 ${amt(tapeBal)}` : `All ${amt(tapeBal)}`}</button>
+            </label>
+            <label className="text-xs">{quote === 0 ? "USDT0" : "BEM"}
+              <input value={quoteAmt} onChange={(event) => setQuoteAmt(event.target.value)} inputMode="decimal" placeholder={quote === 0 ? "USDT0" : "BEM"} className="mt-1 min-h-11 w-full border border-gold bg-transparent px-2 font-mono outline-none" />
+              <button type="button" className="mt-1 underline" onClick={() => setQuoteAmt(quote === 0 ? formatUnits(usdtBal, 6) : tapeText(bemBal))}>{zh ? `全部 ${quote === 0 ? showQuote(0, usdtBal) : amt(bemBal)}` : `All ${quote === 0 ? showQuote(0, usdtBal) : amt(bemBal)}`}</button>
+            </label>
           </div>
+          <p className="text-xs text-ink/60">{zh ? `链上可质押：TAPE ${amt(tapeBal)} · USDT0 ${showQuote(0, usdtBal)} · BEM ${amt(bemBal)}。15 秒重读。` : `Stakeable on chain: TAPE ${amt(tapeBal)} · USDT0 ${showQuote(0, usdtBal)} · BEM ${amt(bemBal)}. Reread every 15 seconds.`}</p>
           <div className="grid grid-cols-3 gap-1 sm:grid-cols-5">
-            {TAPE_TERMS.map((row) => <button key={row.id} type="button" onClick={() => setLpTerm(row.id)} className={`min-h-10 border px-1 text-xs ${lpTerm === row.id ? "border-ink bg-ink text-paper" : "border-gold"}`}>{zh ? row.zh : row.en}</button>)}
+            {TAPE_TERMS.map((row) => <button key={row.id} type="button" onClick={() => { setLpTerm(row.id); setAckLp(false); }} className={`min-h-10 border px-1 text-xs ${lpTerm === row.id ? "border-ink bg-ink text-paper" : "border-gold"}`}>{zh ? row.zh : row.en}</button>)}
           </div>
-          <button type="submit" disabled={busy || !account} className="min-h-11 bg-ink text-paper disabled:opacity-40">{zh ? "签名并质押流动性" : "Sign and stake liquidity"}</button>
+          <p className="border border-sell/40 px-2 py-2 text-xs leading-5">{zh ? `这一笔锁到 ${lpUntil}（新加坡）。到期前不能撤。两边各扣 0.20%，多出来的退回。` : `This stake unlocks ${lpUntil} Singapore time. It cannot be removed early. Each side pays 0.20%, and the extra is returned.`}</p>
+          <label className="flex gap-2 text-xs"><input type="checkbox" checked={ackLp} onChange={(event) => setAckLp(event.target.checked)} />{zh ? "我知道到期前取不出来" : "I know this cannot be removed early"}</label>
+          <button type="submit" disabled={busy || !account || !ackLp} className="min-h-11 bg-ink text-paper disabled:opacity-40">{zh ? "签名并质押流动性" : "Sign and stake liquidity"}</button>
         </form>
       </article>
 
@@ -177,10 +215,14 @@ export function StakeDesk() {
             {([0, 1] as const).map((id) => <button key={id} type="button" onClick={() => setKind(id)} className={`min-h-10 text-sm ${kind === id ? "bg-ink text-paper" : ""}`}>{id === 0 ? "NAND" : "LATCH"}</button>)}
           </div>
           <input value={waferAmt} onChange={(event) => setWaferAmt(event.target.value.replace(/[^\d]/g, ""))} inputMode="numeric" placeholder={zh ? "数量" : "Amount"} className="min-h-11 border border-gold bg-transparent px-2 font-mono outline-none" />
+          <p className="text-xs text-ink/60">{zh ? `链上可质押：NAND ${nand.toLocaleString("en-US")} · LATCH ${latch.toLocaleString("en-US")}。锁着的不算在里面。` : `Stakeable on chain: NAND ${nand.toLocaleString("en-US")} · LATCH ${latch.toLocaleString("en-US")}. Locked ones are not included.`}</p>
+          <button type="button" className="min-h-8 justify-self-start text-xs underline" onClick={() => setWaferAmt((kind === 0 ? nand : latch).toString())}>{zh ? "填入当前这种的全部" : "Fill all of this kind"}</button>
           <div className="grid grid-cols-3 gap-1 sm:grid-cols-5">
-            {LOCK_TERMS.map((row) => <button key={row.id} type="button" onClick={() => setWaferTerm(row.id)} className={`min-h-10 border px-1 text-xs ${waferTerm === row.id ? "border-ink bg-ink text-paper" : "border-gold"}`}>{zh ? row.zh : row.en}</button>)}
+            {LOCK_TERMS.map((row) => <button key={row.id} type="button" onClick={() => { setWaferTerm(row.id); setAckWafer(false); }} className={`min-h-10 border px-1 text-xs ${waferTerm === row.id ? "border-ink bg-ink text-paper" : "border-gold"}`}>{zh ? row.zh : row.en}</button>)}
           </div>
-          <button type="submit" disabled={busy || !account} className="min-h-11 bg-ink text-paper disabled:opacity-40">{zh ? "签名并质押晶圆" : "Sign and stake wafers"}</button>
+          <p className="border border-sell/40 px-2 py-2 text-xs leading-5">{zh ? `NAND 或 LATCH 锁到 ${waferUntil}（新加坡）。这段时间不能流片，也不算算力。` : `These wafers stay locked until ${waferUntil} Singapore time. They cannot be taped and do not count as weight.`}</p>
+          <label className="flex gap-2 text-xs"><input type="checkbox" checked={ackWafer} onChange={(event) => setAckWafer(event.target.checked)} />{zh ? "我知道锁着不能流片" : "I know these cannot be taped while locked"}</label>
+          <button type="submit" disabled={busy || !account || !ackWafer} className="min-h-11 bg-ink text-paper disabled:opacity-40">{zh ? "签名并质押晶圆" : "Sign and stake wafers"}</button>
         </form>
       </article>
 
@@ -210,12 +252,38 @@ export function StakeDesk() {
           })}
           {account && circuits.length === 0 ? <li className="px-2 py-3 text-sm text-ink/60">{zh ? "没有锁着的电路。" : "No circuits are locked."}</li> : null}
         </ul>
-        <form className="mt-3 grid gap-2" onSubmit={(event) => { event.preventDefault(); if (!account || !/^\d+$/.test(circuitId)) { say(zh ? "填电路编号。" : "Enter the circuit id.", true); return; } setBusy(true); lockCircuit(account, BigInt(circuitId), circuitTerm).then(() => say(zh ? "电路已锁上。算力改记在锁仓合约。" : "The circuit is locked. Its weight now sits on the lock.")).catch(fail).finally(() => setBusy(false)); }}>
-          <input value={circuitId} onChange={(event) => setCircuitId(event.target.value.replace(/[^\d]/g, ""))} inputMode="numeric" placeholder={zh ? "TAPELIQUID 电路编号" : "TAPELIQUID circuit id"} className="min-h-11 border border-gold bg-transparent px-2 font-mono outline-none" />
+        <form className="mt-3 grid gap-2" onSubmit={(event) => {
+          event.preventDefault();
+          if (!account || picked.length === 0) { say(zh ? "先勾选要锁的电路。" : "Choose a circuit first.", true); return; }
+          setBusy(true);
+          const run = async () => {
+            for (const id of picked) {
+              await lockCircuit(account, BigInt(id), circuitTerm);
+            }
+          };
+          run()
+            .then(() => { setPicked([]); say(zh ? `已锁上 ${picked.length} 片。算力改记在锁仓合约。每片单独签。` : `Locked ${picked.length}. Weight now sits on the lock. Each one is its own signature.`); })
+            .catch(fail)
+            .finally(() => setBusy(false));
+        }}>
+          <p className="text-xs text-ink/60">{zh ? "只列出这个钱包还拿着的 TAPELIQUID 电路。已经锁上的不在这里。勾选后再签，多片会逐笔签名。" : "Only TAPELIQUID circuits this wallet still holds. Staked ones are not listed. Check them, then sign. More than one means one signature each."}</p>
+          <ul className="max-h-48 overflow-auto border border-gold/40">
+            {owned.map((row) => (
+              <li key={row.id}>
+                <label className={`flex items-center justify-between gap-2 px-2 py-2 text-xs ${picked.includes(row.id) ? "bg-ink text-paper" : ""}`}>
+                  <span>#{row.id} · {Number(row.gates).toLocaleString("en-US")} {zh ? "门" : "gates"} · {row.on ? (zh ? "挖矿中" : "Mining") : (zh ? "未开工" : "Not open")}</span>
+                  <input type="checkbox" checked={picked.includes(row.id)} onChange={() => { setPicked((cur) => cur.includes(row.id) ? cur.filter((id) => id !== row.id) : [...cur, row.id]); setAckCircuit(false); }} />
+                </label>
+              </li>
+            ))}
+            {account && owned.length === 0 ? <li className="px-2 py-3 text-sm text-ink/60">{zh ? "这个地址没有还能质押的电路。" : "This address has no circuit left to stake."}</li> : null}
+          </ul>
           <div className="grid grid-cols-3 gap-1 sm:grid-cols-5">
-            {LOCK_TERMS.map((row) => <button key={row.id} type="button" onClick={() => setCircuitTerm(row.id)} className={`min-h-10 border px-1 text-xs ${circuitTerm === row.id ? "border-ink bg-ink text-paper" : "border-gold"}`}>{zh ? row.zh : row.en}</button>)}
+            {LOCK_TERMS.map((row) => <button key={row.id} type="button" onClick={() => { setCircuitTerm(row.id); setAckCircuit(false); }} className={`min-h-10 border px-1 text-xs ${circuitTerm === row.id ? "border-ink bg-ink text-paper" : "border-gold"}`}>{zh ? row.zh : row.en}</button>)}
           </div>
-          <button type="submit" disabled={busy || !account} className="min-h-11 bg-ink text-paper disabled:opacity-40">{zh ? "签名并质押电路" : "Sign and stake the circuit"}</button>
+          <p className="border border-sell/40 px-2 py-2 text-xs leading-5">{zh ? `这片锁到 ${circuitUntil}（新加坡）。算力改记在锁仓合约，TAPE 先留在里面。解锁后要重新开工。` : `This circuit stays locked until ${circuitUntil} Singapore time. Its weight moves to the lock, and the TAPE stays there. Open it again after release.`}</p>
+          <label className="flex gap-2 text-xs"><input type="checkbox" checked={ackCircuit} onChange={(event) => setAckCircuit(event.target.checked)} />{zh ? "我知道算力会离开这个地址" : "I know the weight leaves this address"}</label>
+          <button type="submit" disabled={busy || !account || !ackCircuit || picked.length === 0} className="min-h-11 bg-ink text-paper disabled:opacity-40">{zh ? `签名并质押${picked.length > 0 ? ` ${picked.length} 片` : ""}` : `Sign and stake${picked.length > 0 ? ` ${picked.length}` : ""}`}</button>
         </form>
       </article>
 

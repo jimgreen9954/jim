@@ -59,6 +59,7 @@ export type TapeBoard = {
   circuits: number;
   open: number;
   seats: TapeSeat[];
+  scanOk: boolean;
 };
 
 const DAY = 7200n * 10n ** 8n;
@@ -91,34 +92,44 @@ export async function readTapeMine(account: string | null): Promise<TapeBoard> {
     { address: TAPE_MINE, abi: mineAbi, functionName: "seat" as const, args: [BigInt(id)] as const },
     { address: TAPE_MINE, abi: mineAbi, functionName: "pendingOf" as const, args: [BigInt(id)] as const },
   ]);
-  const read = calls.length
-    ? await client.multicall({ contracts: calls, allowFailure: true, batchSize: 120 })
-    : [];
   let open = 0;
   const seats: TapeSeat[] = [];
+  let scanOk = true;
   const who = account?.toLowerCase() ?? "";
   const daily = dailyAt(start);
-  for (let i = 0; i < ids.length; i += 1) {
-    const owner = read[i * 4];
-    const info = read[i * 4 + 1];
-    const seat = read[i * 4 + 2];
-    const pending = read[i * 4 + 3];
-    if (seat?.status === "success" && seat.result[3]) open += 1;
-    if (!who || owner?.status !== "success" || owner.result.toLowerCase() !== who) continue;
-    if (info?.status !== "success" || pending?.status !== "success" || seat?.status !== "success") continue;
-    const gates = info.result[3];
-    const on = Boolean(seat.result[3]);
-    const share = on && weight > 0n ? (daily * gates) / weight : 0n;
-    seats.push({
-      id: String(ids[i]),
-      gates: gates.toString(),
-      on,
-      pending: pending.result,
-      share: tapeText(share),
-    });
+  try {
+    const read = calls.length
+      ? await client.multicall({ contracts: calls, allowFailure: true, batchSize: 120 })
+      : [];
+    for (let i = 0; i < ids.length; i += 1) {
+      const owner = read[i * 4];
+      const info = read[i * 4 + 1];
+      const seat = read[i * 4 + 2];
+      const pending = read[i * 4 + 3];
+      const ownerAddr = owner?.status === "success" && typeof owner.result === "string" ? owner.result : null;
+      const infoRow = info?.status === "success" && Array.isArray(info.result) ? info.result : null;
+      const seatRow = seat?.status === "success" && Array.isArray(seat.result) ? seat.result : null;
+      const pendingAmt = pending?.status === "success" && typeof pending.result === "bigint" ? pending.result : null;
+      if (seatRow && seatRow[3]) open += 1;
+      if (!who || !ownerAddr || ownerAddr.toLowerCase() !== who) continue;
+      if (!infoRow || pendingAmt == null || !seatRow) continue;
+      const gates = infoRow[3];
+      if (typeof gates !== "bigint") continue;
+      const on = Boolean(seatRow[3]);
+      const share = on && weight > 0n ? (daily * gates) / weight : 0n;
+      seats.push({
+        id: String(ids[i]),
+        gates: gates.toString(),
+        on,
+        pending: pendingAmt,
+        share: tapeText(share),
+      });
+    }
+  } catch {
+    scanOk = false;
   }
   seats.sort((a, b) => Number(b.on) - Number(a.on) || Number(b.id) - Number(a.id));
-  return { supply, cap, weight, balance, start, daily, circuits: Math.max(0, last), open, seats };
+  return { supply, cap, weight, balance, start, daily, circuits: Math.max(0, last), open, seats, scanOk };
 }
 
 async function send(from: string, data: Hex): Promise<Hex> {

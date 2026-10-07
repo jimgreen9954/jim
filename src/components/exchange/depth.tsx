@@ -107,13 +107,13 @@ export function DepthTape({ bids, asks, lang }: { bids: Level[]; asks: Level[]; 
             setMid(panning.mid - (dx / innerW) * span);
           }}
         >
-          <path d={area(book.bidPts, "bid")} fill="#6e5014" fillOpacity="0.28" stroke="#6e5014" />
+          <path d={area(book.bidPts, "bid")} fill="#b5a48e" fillOpacity="0.22" stroke="#b5a48e" />
           <path d={area(book.askPts, "ask")} fill="#9e1b12" fillOpacity="0.22" stroke="#9e1b12" />
           {[0, 0.5, 1].map((step) => {
             const price = lo + span * step;
             return (
               <g key={step}>
-                <line x1={x(price)} x2={x(price)} y1={PAD.t} y2={PAD.t + innerH} stroke="#6e5014" strokeOpacity="0.15" />
+                <line x1={x(price)} x2={x(price)} y1={PAD.t} y2={PAD.t + innerH} stroke="#b5a48e" strokeOpacity="0.18" />
                 <text
                   x={step === 0 ? PAD.l : step === 1 ? x(price) : W - PAD.r}
                   y={H - 4}

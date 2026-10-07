@@ -10,7 +10,7 @@ type Grip = "move" | "a" | "b" | "ab" | "ba";
 type Stroke = { kind: "line" | "zone"; a: Pt; b: Pt; color: string };
 type Drag = { i: number; mode: Grip; origin: Pt; a: Pt; b: Pt };
 
-const PAINTS = ["#14110d", "#6e5014", "#e4c56b", "#9e1b12", "#1f6b45", "#1d4e89"];
+const PAINTS = ["#2f2a26", "#b5a48e", "#efe6d8", "#9e1b12", "#1f6b45", "#1d4e89"];
 
 const VB_W = 860;
 const VB_H = 420;

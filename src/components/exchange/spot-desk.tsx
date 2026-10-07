@@ -269,34 +269,36 @@ export function SpotDesk() {
           {lang === "zh" ? "流动性" : "Liquidity"}
         </button>
       </div>
-      {lane === "lp" ? <LpPanel /> : book === "tape" ? <TapePoolDesk /> : (
+      {lane === "lp" ? <LpPanel /> : (
+      <>
+      <div className="grid grid-cols-3 border-b border-gold">
+        {(["crypto", "stock", "tape"] as const).map((key) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => {
+              setBook(key);
+              if (key === "tape") return;
+              const next = key === "crypto" ? "bem" : "spy";
+              setPair(next);
+              setAmount("");
+              setOut(null);
+              setMinOut(null);
+              setPrice(null);
+              setAssetBal(null);
+              setPrints([]);
+            }}
+            className={`min-h-11 text-sm ${book === key ? "bg-ink text-paper" : ""}`}
+          >
+            {key === "crypto" ? (lang === "zh" ? "加密货币" : "Crypto") : key === "stock" ? (lang === "zh" ? "美股" : "US stocks") : "TAPE"}
+          </button>
+        ))}
+      </div>
+      {book === "tape" ? <TapePoolDesk /> : (
       <div className="grid gap-0 lg:grid-cols-12">
         <div className="border-b border-gold/40 p-3 lg:col-span-7 lg:border-r lg:border-b-0">
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs tracking-widest text-gold">{base} / USDT</p>
-            <div className="grid grid-cols-3">
-              {(["crypto", "stock", "tape"] as const).map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => {
-                    setBook(key);
-                    if (key === "tape") return;
-                    const next = key === "crypto" ? "bem" : "spy";
-                    setPair(next);
-                    setAmount("");
-                    setOut(null);
-                    setMinOut(null);
-                    setPrice(null);
-                    setAssetBal(null);
-                    setPrints([]);
-                  }}
-                  className={`min-h-8 border border-gold px-3 text-xs ${book === key ? "bg-ink text-paper" : ""}`}
-                >
-                  {key === "crypto" ? (lang === "zh" ? "加密货币" : "Crypto") : key === "stock" ? (lang === "zh" ? "美股" : "US stocks") : "TAPE"}
-                </button>
-              ))}
-            </div>
           </div>
           <div className={`mt-2 grid gap-0 ${book === "crypto" ? "grid-cols-3 sm:grid-cols-5" : "grid-cols-3"}`}>
             {(book === "crypto" ? (["bem", "bnb", "okb", "btc", "xau"] as const) : STOCK_KEYS).map((key) => (
@@ -540,6 +542,8 @@ export function SpotDesk() {
           ) : null}
         </form>
       </div>
+      )}
+      </>
       )}
     </section>
   );

@@ -4,11 +4,11 @@
 @source "./lib";
 
 @theme {
-  --color-paper: #f7f5f0;
-  --color-card: #fffcf8;
-  --color-ink: #14110d;
-  --color-gold: #6e5014;
-  --color-foil: #e4c56b;
+  --color-paper: #f7f4ef;
+  --color-card: #fbf9f6;
+  --color-ink: #2f2a26;
+  --color-gold: #b5a48e;
+  --color-foil: #efe6d8;
   --color-sell: #9e1b12;
   --font-sans: "IBM Plex Mono", ui-monospace, monospace;
   --font-display: "Fraunces", Georgia, serif;
@@ -23,11 +23,11 @@
   }
   html.night {
     color-scheme: dark;
-    --color-paper: #100e0b;
-    --color-card: #1c1814;
-    --color-ink: #f4efe6;
-    --color-gold: #e4c56b;
-    --color-foil: #8a6a2a;
+    --color-paper: #1c1916;
+    --color-card: #26221e;
+    --color-ink: #f3eee6;
+    --color-gold: #cbbda8;
+    --color-foil: #6e6458;
     --color-sell: #ff8d7a;
     --shadow-plate: 0 18px 40px -32px rgb(0 0 0 / 0.8);
   }
@@ -64,6 +64,16 @@
   p {
     text-wrap: pretty;
   }
+}
+
+.bg-ink {
+  background-color: #efe6d8 !important;
+  color: #2f2a26 !important;
+}
+
+html.night .bg-ink {
+  background-color: #3a342c !important;
+  color: #f3eee6 !important;
 }
 
 .misreg {
@@ -108,6 +118,12 @@
 @media (max-width: 1023px) {
   .crop-bl,
   .crop-br {
+    display: none;
+  }
+}
+
+@media (max-width: 639px) {
+  .crop {
     display: none;
   }
 }

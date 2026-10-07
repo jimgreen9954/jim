@@ -5,7 +5,6 @@ import { BSC, connectBsc, pretty, units, type Balances } from "@/lib/bsc";
 import { getCandles, type Candle, type CandleFrame } from "@/lib/candles";
 import { currentAccount, onAccount, onOpenLink } from "@/lib/wallet";
 import { useExchange } from "@/lib/exchange-store";
-import { MineDesk } from "@/components/exchange/mine-desk";
 import { SignCard } from "@/components/exchange/sign-card";
 import { useFeeLock } from "@/lib/fee-lock";
 import { Kline } from "@/components/exchange/kline";
@@ -392,9 +391,9 @@ export function RealPerp() {
 
   return (
     <section className="border border-gold bg-card shadow-plate">
-      <div className="flex flex-col gap-3 p-3">
-        <p className="text-sm leading-relaxed text-ink/80">{chain === "xlayer" ? c.perpWarnX : c.perpWarn}</p>
-        <div className="grid grid-cols-2 gap-2">
+      <div className="grid gap-3 p-3 xl:grid-cols-12">
+        <p className="text-sm leading-relaxed text-ink/80 xl:col-span-12">{chain === "xlayer" ? c.perpWarnX : c.perpWarn}</p>
+        <div className="grid grid-cols-2 gap-2 xl:col-span-12">
           <button
             type="button"
             className={`min-h-12 border border-gold ${chain === "bsc" ? "bg-ink text-paper" : ""}`}
@@ -421,12 +420,12 @@ export function RealPerp() {
           </button>
         </div>
         {chain === "xlayer" && !/^0x[a-fA-F0-9]{40}$/.test(KNOWN_XPERP) ? (
-          <p className="text-sm leading-relaxed">{c.xOpen}</p>
+          <p className="text-sm leading-relaxed xl:col-span-12">{c.xOpen}</p>
         ) : null}
         {chain === "xlayer" && !/^0x[a-fA-F0-9]{40}$/.test(perp) ? (
           <button
             type="button"
-            className="min-h-12 bg-ink text-paper"
+            className="min-h-12 bg-ink text-paper xl:col-span-12"
             disabled={busy}
             onClick={() => {
               setBusy(true);
@@ -453,20 +452,20 @@ export function RealPerp() {
           </button>
         ) : null}
         {chain === "xlayer" && /^0x[a-fA-F0-9]{40}$/.test(perp) ? (
-          <button type="button" className="min-h-11 border border-gold" disabled={busy} onClick={() => run((from) => pushMark(from).then(() => "ok"))}>
+          <button type="button" className="min-h-11 border border-gold xl:col-span-12" disabled={busy} onClick={() => run((from) => pushMark(from).then(() => "ok"))}>
             {c.pushMark}
           </button>
         ) : null}
         {link ? (
-          <a href={link} className="inline-flex min-h-12 items-center justify-center bg-ink px-3 text-paper">
+          <a href={link} className="inline-flex min-h-12 items-center justify-center bg-ink px-3 text-paper xl:col-span-12">
             {c.signOkx}
           </a>
         ) : null}
-        <p className="border border-gold/40 px-3 py-2">
+        <p className="border border-gold/40 px-3 py-2 xl:col-span-12">
           <span className="block text-xs tracking-widest text-gold">{c.yourEq}</span>
           <span className="font-mono text-2xl tabular-nums">{view && account ? usdtText(view.equity) : "—"}</span>
         </p>
-        <div className="border border-gold bg-card">
+        <div className="border border-gold bg-card xl:col-span-7">
           <div className="flex flex-wrap items-end justify-between gap-3 border-b border-gold/30 px-3 py-3">
             <div>
               <p className="font-display text-2xl italic">BEM / USDT</p>
@@ -579,7 +578,7 @@ export function RealPerp() {
           )}
         </div>
         {/^0x[a-fA-F0-9]{40}$/.test(perp) && (
-          <>
+          <div className="flex flex-col gap-3 xl:col-span-5">
             {waiting ? (
               <p className="text-sm leading-relaxed">
                 {mine ? c.perpOther : `${c.waitQuote} · ${view?.pendingLong ? c.postLong : c.postShort} · ${usdtText(view?.pendingMargin ?? 0n)} USDT · ${view?.pendingLev}×`}
@@ -652,27 +651,6 @@ export function RealPerp() {
                   </>
                 ) : null}
               </>
-            ) : null}
-            {sheet === "mine" || !view?.book ? (
-            <MineDesk
-              account={account}
-              busy={busy}
-              chain={chain}
-              run={run}
-              onBook={(addr) => setPerp(addr)}
-              onChain={(next) => {
-                selectDesk(next);
-                setChain(next);
-                setPerp(bookOf(next));
-              }}
-              addresses={Array.from(
-                new Map(
-                  [...(view?.quotes ?? []).map((quote) => quote.user), ...(view?.liveDeals ?? []).flatMap((deal) => [deal.long, deal.short])]
-                    .filter((addr) => account && addr.toLowerCase() !== account.toLowerCase() && addr !== zero)
-                    .map((addr) => [addr.toLowerCase(), addr]),
-                ).values(),
-              )}
-            />
             ) : null}
             {(view?.book ? sheet === "book" : !inDeal && !mine) ? (
               <>
@@ -968,10 +946,10 @@ export function RealPerp() {
                 {c.liqNow}
               </button>
             ) : null}
-          </>
+          </div>
         )}
         {account ? (
-          <p className="font-mono text-xs">
+          <p className="font-mono text-xs xl:col-span-12">
             {short(account)} · {chain === "xlayer" ? "X Layer" : "BSC"}
             {bal
               ? ` · ${chain === "xlayer" ? "USDT0" : "USDT"} ${pretty(bal.usdt, dec, 2)} · ${chain === "xlayer" ? "OKB" : "BNB"} ${pretty(bal.bnb, 18, 4)}`
@@ -979,11 +957,11 @@ export function RealPerp() {
           </p>
         ) : null}
         {perp && bal && view && bal.usdt < view.min ? (
-          <p className="text-sm text-sell">{chain === "xlayer" ? c.perpNeedX : c.perpNeedUsdt}</p>
+          <p className="text-sm text-sell xl:col-span-12">{chain === "xlayer" ? c.perpNeedX : c.perpNeedUsdt}</p>
         ) : null}
-        {note ? <p className={`text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
+        {note ? <p className={`text-sm xl:col-span-12 ${bad ? "text-sell" : ""}`}>{note}</p> : null}
         {hash ? (
-          <a className="text-sm underline decoration-gold underline-offset-4" href={`${scan}/tx/${hash}`} target="_blank" rel="noreferrer">
+          <a className="text-sm underline decoration-gold underline-offset-4 xl:col-span-12" href={`${scan}/tx/${hash}`} target="_blank" rel="noreferrer">
             {c.walletTx}
           </a>
         ) : null}

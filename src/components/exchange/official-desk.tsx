@@ -16,7 +16,7 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
   const lang = useExchange((s) => s.lang);
   const zh = lang === "zh";
   const [books, setBooks] = useState<OfficialBooks | null>(null);
-  const [name, setName] = useState<(typeof OFFICIAL.chips)[number]["name"]>("TapeOut");
+  const [name, setName] = useState<string>("TapeOut");
   const [kind, setKind] = useState<0 | 1>(0);
   const [bid, setBid] = useState<OfficialBid | null>(null);
   const [list, setList] = useState<OfficialList | null>(null);
@@ -165,7 +165,7 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
                 if (!chip) return;
                 void run(async () => {
                   const from = currentAccount() ?? (await connectBsc());
-                  return placeOfficialBid(from, chip.transistors, kind, parseEther(price), BigInt(qty || "0"));
+                  return placeOfficialBid(from, chip.transistors as `0x${string}`, kind, parseEther(price), BigInt(qty || "0"));
                 });
               }}
               className="min-h-12 border border-gold font-display text-xl italic disabled:opacity-40"
