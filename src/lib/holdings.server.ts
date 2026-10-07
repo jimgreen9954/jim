@@ -35,7 +35,20 @@ export async function loadHoldings(account: `0x${string}` | string): Promise<Hol
   const hit = resultCache.get(key);
   if (hit && Date.now() - hit.at < 15_000) return hit.row;
   const row = await readHoldings(account);
-  if (row.ok) resultCache.set(key, { at: Date.now(), row });
+  if (row.ok) {
+    resultCache.set(key, { at: Date.now(), row });
+    if (resultCache.size > 200) {
+      const now = Date.now();
+      for (const [cachedKey, cached] of resultCache) {
+        if (now - cached.at > 15_000) resultCache.delete(cachedKey);
+      }
+      while (resultCache.size > 200) {
+        const oldest = resultCache.keys().next().value;
+        if (!oldest) break;
+        resultCache.delete(oldest);
+      }
+    }
+  }
   return row;
 }
 

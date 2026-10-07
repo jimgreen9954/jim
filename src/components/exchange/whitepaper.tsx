@@ -86,6 +86,17 @@ const zh: Section[] = [
     ],
   },
   {
+    h: "已停的两本永续",
+    ps: [
+      "晶体管永续的结算价没有权限。任何地址都能在 10 秒内、相对前价 2/3 到 1.5 倍之间提交一个新价格，平仓就按这个价分保证金。",
+      "X Layer 永续读的标记合约不是十分钟均价。它把最新提交的价格乘一个常数再除回去，所以用的就是刚推上去的价。任何地址每 30 秒最多推动约 0.5%。价格不过期，没人推时旧价仍能用来结算。",
+      "这两份合约没有升级入口。这一版网页不再提供新开仓和吃单。已经在里面的保证金可以平仓，自己的挂单可以撤。别人仍可绕过网页直接调用合约，网页停不掉。",
+      "BSC 上的 BEM 永续走的是另一条池子路径，不使用上面这份 X Layer 标记合约。",
+      "电路锁仓到期释放后，若矿池再结算这段权重，收益可能打进锁仓合约。锁仓记录已经删了，页面没有提取入口。这是已部署合约的行为。",
+      "返佣合约有 clerk。clerk 可以提取返佣池里的余额。不是每一份合约都没有管理员。",
+    ],
+  },
+  {
     h: "回购销毁",
     ps: [
       "每个自然月，当月手续费收入的 50%，加上回购余额中的用户铸造收入，用于在市场上买入 TAPE。官方地址铸造金额不进入回购余额。没有入账的月份不买。",
@@ -195,6 +206,17 @@ const en: Section[] = [
       `The desk fee goes to ${FEE_TO}.`,
       "Referrals apply only to perpetuals. With a referrer, the trader pays 4 percent less of the perpetual desk fee, the referrer is credited 6 percent, and the rest goes to the fee address. Spot and liquidity are outside that split. A seal does not cut a fee by itself. After registration, half the fee on a matched perpetual fill can be claimed once per Singapore week, Monday 00:00 to the next Monday 00:00. A missed week is gone. One fill is counted once. The claim is paid by the claim contract.",
       "The pool's own fee stays with liquidity providers. Gas is paid to the chain.",
+    ],
+  },
+  {
+    h: "Two books are closed to new risk",
+    ps: [
+      "The transistor perpetual has no permission on its mark. Any address can submit a new price within ten seconds, between two thirds and one and a half of the previous price. A close settles at that price.",
+      "The X Layer perpetual does not read a ten-minute average. The mark contract returns the latest pushed price. Any address can move it by about half a percent every thirty seconds. The price does not expire. An old price can still settle a position.",
+      "Neither contract can be upgraded. This version of the site no longer offers a new open or a take on those two books. Margin already inside can be closed. Your own resting order can be cancelled. A direct contract call still works. The page cannot stop it.",
+      "The BEM perpetual on BSC uses a different pool path. It does not use the X Layer mark contract above.",
+      "After a locked circuit is released, a later mine settlement can pay that interval into the lock contract. The lock seat is already gone, and the page has no withdrawal for it. That is the deployed contract.",
+      "The rebate contract has a clerk. The clerk can withdraw the rebate pool. Not every contract is without an admin.",
     ],
   },
   {

@@ -406,6 +406,13 @@ export function RealPerp() {
     <section className="border border-gold bg-card shadow-plate">
       <div className="grid gap-3 p-3 xl:grid-cols-12">
         <p className="text-sm leading-relaxed text-ink/80 xl:col-span-12">{chain === "xlayer" ? c.perpWarnX : c.perpWarn}</p>
+        {chain === "xlayer" ? (
+          <p className="border border-sell px-3 py-2 text-sm text-sell xl:col-span-12">
+            {lang === "zh"
+              ? "X Layer 这本已停新开仓和吃单。结算价不是十分钟均价，任何地址都能推，合约不能升级。已有仓可以平，自己的单可以撤。网页停不了别人直接调用合约。"
+              : "New opens and takes on this X Layer book are off. The mark is not a ten-minute average. Any address can push it, and the contract cannot be upgraded. You can still close a position and cancel your own order. The page cannot stop a direct contract call."}
+          </p>
+        ) : null}
         <div className="grid grid-cols-2 gap-2 xl:col-span-12">
           <button
             type="button"
@@ -554,7 +561,14 @@ export function RealPerp() {
             scan={scan}
             named={named}
             lang={lang}
-            onTake={(book, quote) => run((from) => takePerp(from, book, quote.id, formatUnits(quote.margin, dec), quote.lev, quote.price > 0n))}
+            onTake={(book, quote) => {
+              if (chain === "xlayer") {
+                setBad(true);
+                setNote(lang === "zh" ? "X Layer 这本已停吃单。已有仓可以平，自己的单可以撤。" : "Takes on this X Layer book are off. Close a position or cancel your own order.");
+                return;
+              }
+              void run((from) => takePerp(from, book, quote.id, formatUnits(quote.margin, dec), quote.lev, quote.price > 0n));
+            }}
             onCancel={(book, quote) => run((from) => cancelPerp(from, book, quote.id), "cancel")}
           />
           {!view ? <p className="px-3 py-2 text-sm text-ink/60">{lang === "zh" ? "正在读合约，读完才能开仓。" : "Reading the contract. Open waits until that finishes."}</p> : null}
@@ -855,7 +869,7 @@ export function RealPerp() {
                   <button
                     type="button"
                     className="min-h-12 bg-ink text-paper disabled:opacity-40"
-                    disabled={busy || lock.status === "bad" || !levOk || !marginOk || !priceOk || !view?.priced || Boolean(!view?.book && waiting && view?.pendingLong)}
+                    disabled={busy || chain === "xlayer" || lock.status === "bad" || !levOk || !marginOk || !priceOk || !view?.priced || Boolean(!view?.book && waiting && view?.pendingLong)}
                     onClick={() => {
                       if (lev > 20 && !hot) { setHot(true); return; }
                       setCard("long");
@@ -866,7 +880,7 @@ export function RealPerp() {
                   <button
                     type="button"
                     className="min-h-12 border border-sell bg-sell text-[#f7f5f0] disabled:opacity-40"
-                    disabled={busy || lock.status === "bad" || !levOk || !marginOk || !priceOk || !view?.priced || Boolean(!view?.book && waiting && !view?.pendingLong)}
+                    disabled={busy || chain === "xlayer" || lock.status === "bad" || !levOk || !marginOk || !priceOk || !view?.priced || Boolean(!view?.book && waiting && !view?.pendingLong)}
                     onClick={() => {
                       if (lev > 20 && !hot) { setHot(true); return; }
                       setCard("short");
@@ -893,6 +907,11 @@ export function RealPerp() {
                     onYes={() => {
                       const long = card === "long";
                       setCard(null);
+                      if (chain === "xlayer") {
+                        setBad(true);
+                        setNote(lang === "zh" ? "X Layer 这本已停新开仓。" : "New opens on this X Layer book are off.");
+                        return;
+                      }
                       void run(async (from) => {
                         const before = view?.myDeal && view.myDeal > 0n ? view.myDeal.toString() : "0";
                         const tx = await openPerp(from, perp, long, margin, lev, limit.trim() || (markN > 0 ? markN.toFixed(4) : ""));
