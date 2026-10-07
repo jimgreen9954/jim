@@ -78,7 +78,7 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
 
   return (
     <section className="grid items-start gap-4 lg:grid-cols-12">
-      <div className="flex flex-col gap-3 lg:col-span-7">
+      <div className="order-2 flex min-w-0 flex-col gap-3 lg:order-1 lg:col-span-7">
         <p className="text-sm text-ink/80">
           {books?.ok
             ? zh ? `官网快照 ${books.asOf ?? ""} · 区块 ${books.block ?? "—"} · 约 15 秒` : `Official snapshot ${books.asOf ?? ""} · block ${books.block ?? "—"}`
@@ -101,14 +101,12 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
               ))}
             </div>
             <p className="text-sm">{zh ? "官网卖单合约没有开放。这里只同步买单。卖出就是吃下面的买单。" : "The official ask market is not open. This list is bids only. Selling means filling one of them."}</p>
-            <ul className="border border-gold">
+            <ul className="max-h-[22rem] overflow-auto border border-gold">
               {bids.map((row) => (
                 <li key={row.id}>
-                  <button type="button" onClick={() => setBid(row)} className={`grid w-full grid-cols-4 px-3 py-2 text-left font-mono text-sm ${bid?.id === row.id ? "bg-ink text-paper" : ""}`}>
-                    <span className="truncate">{row.name}</span>
-                    <span>#{row.id}</span>
-                    <span>{px(row.priceBnb)}</span>
-                    <span>{row.remaining}</span>
+                  <button type="button" onClick={() => setBid(row)} className={`flex w-full flex-col gap-1 px-3 py-2 text-left text-sm sm:flex-row sm:items-center sm:justify-between ${bid?.id === row.id ? "bg-ink text-paper" : ""}`}>
+                    <span className="truncate">{row.name} <span className="font-mono text-xs opacity-70">#{row.id}</span></span>
+                    <span className="font-mono text-xs">{px(row.priceBnb)} BNB · {zh ? "剩" : "left"} {row.remaining}</span>
                   </button>
                 </li>
               ))}
@@ -118,14 +116,12 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
         ) : (
           <>
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={zh ? "搜处理器或电路编号" : "Search processor or id"} className="border border-gold bg-paper px-3 py-2 outline-none" />
-            <ul className="border border-gold">
+            <ul className="max-h-[22rem] overflow-auto border border-gold">
               {lists.map((row) => (
                 <li key={row.id}>
-                  <button type="button" onClick={() => setList(row)} className={`grid w-full grid-cols-4 px-3 py-2 text-left font-mono text-sm ${list?.id === row.id ? "bg-ink text-paper" : ""}`}>
-                    <span>{row.name}</span>
-                    <span>#{row.circuitId}</span>
-                    <span>{px(row.priceBnb)}</span>
-                    <span>{row.gates}</span>
+                  <button type="button" onClick={() => setList(row)} className={`flex w-full flex-col gap-1 px-3 py-2 text-left text-sm sm:flex-row sm:items-center sm:justify-between ${list?.id === row.id ? "bg-ink text-paper" : ""}`}>
+                    <span className="truncate">{row.name} <span className="font-mono text-xs opacity-70">#{row.circuitId}</span></span>
+                    <span className="font-mono text-xs">{px(row.priceBnb)} BNB · {row.gates} {zh ? "门" : "gates"}</span>
                   </button>
                 </li>
               ))}
@@ -133,13 +129,13 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
           </>
         )}
       </div>
-      <aside className="border border-gold bg-card px-3 py-3 lg:col-span-5">
+      <aside className="order-1 min-w-0 border border-gold bg-card px-3 py-3 lg:sticky lg:top-3 lg:order-2 lg:col-span-5">
         <h3 className="font-display text-2xl italic">{zh ? "成交票" : "Trade ticket"}</h3>
         <dl className="mt-3 flex flex-col gap-2 text-sm">
           <div className="flex justify-between gap-3"><dt className="text-ink/60">{zh ? "链" : "Chain"}</dt><dd>BSC</dd></div>
-          <div className="flex justify-between gap-3"><dt className="text-ink/60">{zh ? "官网合约" : "Official"}</dt><dd className="break-all text-right font-mono text-xs">{mode === "chips" ? OFFICIAL.transistorMarket : OFFICIAL.circuitMarket}</dd></div>
-          <div className="flex justify-between gap-3"><dt className="text-ink/60">{zh ? "本站服务费" : "Our fee"}</dt><dd>0.20% → {OFFICIAL.feeTo.slice(0, 6)}…{OFFICIAL.feeTo.slice(-4)}</dd></div>
-          <div className="flex justify-between gap-3"><dt className="text-ink/60">{zh ? "费和官网费" : "Two fees"}</dt><dd className="text-right">{zh ? "官网费在他们合约里。我们另收千分之二，先付，不退。" : "Official fee stays in their contract. Ours is an extra 0.2%, paid first, not returned."}</dd></div>
+          <div className="grid gap-1 sm:grid-cols-[5rem_1fr]"><dt className="text-ink/60">{zh ? "官网合约" : "Official"}</dt><dd className="break-all font-mono text-xs">{mode === "chips" ? OFFICIAL.transistorMarket : OFFICIAL.circuitMarket}</dd></div>
+          <div className="flex justify-between gap-3"><dt className="shrink-0 text-ink/60">{zh ? "本站服务费" : "Our fee"}</dt><dd className="text-right">0.20% → {OFFICIAL.feeTo.slice(0, 6)}…{OFFICIAL.feeTo.slice(-4)}</dd></div>
+          <p className="text-xs leading-5 text-ink/70">{zh ? "官网费在他们合约里。我们另收千分之二，先付，不退。" : "The official fee stays in their contract. Ours is an extra 0.2%, paid first, not returned."}</p>
         </dl>
         {mode === "chips" ? (
           <div className="mt-3 flex flex-col gap-2">

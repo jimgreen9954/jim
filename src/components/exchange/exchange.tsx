@@ -386,7 +386,7 @@ function ShopFloor({ shop, setShop }: { shop: ShopTab; setShop: (shop: ShopTab) 
           ["chips", lang === "zh" ? "晶体管现货" : "Transistor spot"],
           ["circuits", lang === "zh" ? "电路现货" : "Circuit spot"],
         ] as const).map(([id, label]) => (
-          <button key={id} type="button" onClick={() => setShop(id)} className={`min-h-10 text-sm ${shop === id ? "bg-ink text-paper" : ""}`}>
+          <button key={id} type="button" onClick={() => setShop(id)} className={`min-h-11 px-1 text-xs leading-tight sm:text-sm ${shop === id ? "bg-ink text-paper" : ""}`}>
             {label}
           </button>
         ))}
