@@ -10,6 +10,7 @@ import { okbPrice, readOkbPurse } from "@/lib/okb";
 import { KNOWN_PERP, KNOWN_XPERP, readPerp } from "@/lib/perp";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import { transferCircuit, transferTransistor, txUrl } from "@/lib/xlayer";
+import { fanCircuits } from "@/lib/tape-lock";
 
 function money(n: number): string {
   if (!Number.isFinite(n)) return "—";
@@ -67,6 +68,7 @@ export function AccountCenter() {
   const [latchQty, setLatchQty] = useState("");
   const [ack, setAck] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [fanText, setFanText] = useState("");
   const [bad, setBad] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -230,6 +232,40 @@ export function AccountCenter() {
     }
   };
 
+  const sendFan = async () => {
+    const rows = fanText.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+    if (rows.length === 0 || rows.length > 30) {
+      setBad(true);
+      setNote(zh ? "一次 1 到 30 行。" : "Use 1 to 30 lines.");
+      return;
+    }
+    const ids: bigint[] = [];
+    const tos: Hex[] = [];
+    for (const line of rows) {
+      const [id, dest] = line.split(/\s+/);
+      if (!/^\d+$/.test(id ?? "") || !/^0x[a-fA-F0-9]{40}$/.test(dest ?? "")) {
+        setBad(true);
+        setNote(zh ? "每行要是「编号 地址」。" : "Each line must be an id and an address.");
+        return;
+      }
+      ids.push(BigInt(id));
+      tos.push(dest as Hex);
+    }
+    setBusy(true);
+    setBad(false);
+    try {
+      const hash = await fanCircuits(account, ids, tos);
+      setNote(zh ? `已转出 ${ids.length} 片。` : `Sent ${ids.length}.`);
+      window.open(txUrl(hash), "_blank", "noopener,noreferrer");
+      pull(account);
+    } catch (error) {
+      setBad(true);
+      setNote(say(error, zh));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const chips = book?.chips ?? [];
   const circuits = book?.circuits ?? [];
 
@@ -350,6 +386,13 @@ export function AccountCenter() {
         </div>
       ) : null}
       {tab === "circuits" ? (
+        <div className="flex flex-col gap-3">
+          <div className="border border-gold p-3">
+            <p className="font-display text-xl italic">{zh ? "一对多转出" : "Send to many"}</p>
+            <p className="mt-1 text-xs leading-5 text-ink/60">{zh ? "只限 TAPELIQUID 的电路。每行一片：编号 空格 地址。一次最多 30 行，一笔签名。有一片不是这个钱包的，整笔退回，已经成功的不会出现。官网电路仍用下面的单笔。" : "TAPELIQUID circuits only. One line each: id, space, address. Up to 30 lines, one signature. If one is not yours, the whole transaction returns."}</p>
+            <textarea value={fanText} onChange={(event) => setFanText(event.target.value)} rows={4} placeholder={"12 0x...\n13 0x..."} className="mt-2 w-full border border-gold bg-transparent px-2 py-2 font-mono text-xs outline-none" />
+            <button type="button" disabled={busy} onClick={() => void sendFan()} className="mt-2 min-h-10 bg-ink px-3 text-paper disabled:opacity-40">{zh ? "签名并按行转出" : "Sign and send the lines"}</button>
+          </div>
         <ul className="border border-gold">
           {circuits.length === 0 ? <li className="px-3 py-3 text-sm text-ink/60">{zh ? "这地址在 TAPELIQUID 和已扫到的官网处理器上没有电路。" : "No circuits on TAPELIQUID or the scanned processors."}</li> : null}
           {circuits.map((row, index) => (
@@ -373,6 +416,7 @@ export function AccountCenter() {
             </li>
           ))}
         </ul>
+        </div>
       ) : null}
       {tab === "book" ? (
         <div className="border border-gold px-3 py-3 text-sm">

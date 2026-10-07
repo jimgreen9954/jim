@@ -5,6 +5,7 @@ import { bemText, claimPod, getPodMiners, POD, readPodPending, readPodStats, typ
 import { claimTape, openTape, readTapeMine, TAPE, TAPE_MINE, tapeText, type TapeBoard } from "@/lib/tape-mine";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import { connectXLayer, XLAYER } from "@/lib/xlayer";
+import { StakeDesk } from "@/components/exchange/stake-desk";
 
 export function MineDesk() {
   const lang = useExchange((s) => s.lang);
@@ -18,6 +19,7 @@ export function MineDesk() {
   const [note, setNote] = useState<string | null>(null);
   const [bad, setBad] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [sheet, setSheet] = useState<"claim" | "stake">("stake");
 
   useEffect(() => onAccount((next) => setAccount(next)), []);
 
@@ -57,6 +59,12 @@ export function MineDesk() {
   const say = (text: string, failed = false) => { setBad(failed); setNote(text); };
 
   return (
+    <section className="flex flex-col gap-3">
+      <div className="grid grid-cols-2 border border-gold">
+        <button type="button" onClick={() => setSheet("stake")} className={`min-h-11 text-sm ${sheet === "stake" ? "bg-ink text-paper" : ""}`}>{zh ? "质押" : "Stake"}</button>
+        <button type="button" onClick={() => setSheet("claim")} className={`min-h-11 text-sm ${sheet === "claim" ? "bg-ink text-paper" : ""}`}>{zh ? "领取" : "Claim"}</button>
+      </div>
+      {sheet === "stake" ? <StakeDesk /> : (
     <section className="grid items-start gap-4 lg:grid-cols-2">
       <article className="border border-gold bg-card px-3 py-3">
         <p className="text-xs tracking-widest text-gold">BSC · tapeout.net</p>
@@ -194,6 +202,8 @@ export function MineDesk() {
           <a className="underline" href={`${XLAYER.explorer}/address/${TAPE_MINE}`} target="_blank" rel="noreferrer">Mine {TAPE_MINE}</a>
         </p>
       </article>
+    </section>
+      )}
     </section>
   );
 }

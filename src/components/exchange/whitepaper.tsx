@@ -105,14 +105,15 @@ const zh: Section[] = [
     ps: [
       `TAPE 代币 ${TAPE}。挖矿合约 ${TAPE_MINE}。都在 X Layer。硬顶 21,000,000，8 位小数，没有管理员，也没有改率入口。只有挖矿合约能铸。总供应只随领取增加。`,
       "这份挖矿合约现在的日排放是 7,200，从部署时开始，不是先 1,000 再切换。它也没有「收费地址签一次改成 7,200」的入口。权重按电路门数，也就是 b*，处理器倍率按 1。q 还没有题目验证，页面不能显示大于 1。",
-      "开盘池的 100,000 枚没有另铸。TAPE 池已经部署，没有管理员。加池就是质押，期限五档，到期才能撤。USDT0 一边到 5,000 之后买卖才打开。电路和晶圆的锁仓、四年质押、回购、TAPE 跨链，还没有合约。",
+      "挖矿、TAPE 池、晶圆和电路锁仓，三份都没有管理员，不能升级，不能改期限，不能改费率，也没有救援入口。误转到合约、又没有对应仓位的资产，谁都取不回，页面不会这么转。加池时和池子比例对不上的部分退回给签名的人，不会进别人的份额。",
+      "开盘池的 100,000 枚没有另铸。TAPE 池没有管理员，加池即质押，90 天到 3 年，到期才能撤。晶圆和电路锁在另一份没有管理员的合约里，期限是 180 天、365 天、3 年、4 年、5 年。锁着的晶圆不能流片，不算算力。锁着的电路算力记在锁仓合约上，挖到的 TAPE 先留在锁仓里，解锁时和电路一起退回，退回后要重新开工。同一片电路不能锁两次。回购和 TAPE 跨链还没有合约。",
       "官网 BEM 的领取仍走 TapeOut 挖矿合约，和 TAPE 不是同一笔。大张流片不产生官网 BEM。",
     ],
   },
   {
     h: "地址",
     ps: [
-      `收费 ${FEE_TO}。TAPE ${TAPE}。TAPE 挖矿 ${TAPE_MINE}。TAPE 池 0xAac2f26ACa20bbAf60fF791705548617f0b2e041。TAPELIQUID 电路 ${DEPLOYED.circuits}。TAPELIQUID 晶体管 ${DEPLOYED.transistors}。`,
+      `收费 ${FEE_TO}。TAPE ${TAPE}。TAPE 挖矿 ${TAPE_MINE}。TAPE 池 0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641。锁仓 0xA28390924607F08aaD8d03F512B41b6a1c012Ace。TAPELIQUID 电路 ${DEPLOYED.circuits}。TAPELIQUID 晶体管 ${DEPLOYED.transistors}。`,
       `BSC 永续 ${BSC_REBATE}。X Layer 永续 ${KNOWN_XPERP}。标记价 ${KNOWN_XMARK}。晶体管合约 ${GATE}。流动性仓位 ${NPM}。`,
       `BSC BEM ${BSC.bem}。BSC 桥 ${BEM_BRIDGE}。X Layer BEM ${X_BEM}。官网 BEM 挖矿 0x7E2E0DC66a3bD9103E69b766afA62d9f7b697b46。`,
       `官网晶体管市场 ${OFFICIAL.transistorMarket}。官网电路市场 ${OFFICIAL.circuitMarket}。BEM 池 ${BSC.pool}。`,
@@ -214,14 +215,15 @@ const en: Section[] = [
     ps: [
       `TAPE is ${TAPE}. The mine is ${TAPE_MINE}. Both are on X Layer. The cap is 21,000,000 with 8 decimals. There is no admin and no way to change the rate. Only the mine can mint. Supply grows only when someone claims.`,
       "That mine contract emits 7,200 a day from the moment it was deployed. It does not start at 1,000, and it has no one-time switch to 7,200. Weight is the gate count, which is b*, and the processor multiplier is 1. There is no task score yet, so q is not shown above 1.",
-      "The 100,000 opening allocation was not minted. The TAPE pool is deployed and has no admin. Adding liquidity is a stake with five terms, and it comes out only at expiry. Trading opens after the USDT0 side reaches 5,000. Circuit locks, the four-year stake, buyback, and a TAPE bridge are not contracts yet.",
+      "The mine, the TAPE pool, and the wafer and circuit lock have no admin. They cannot be upgraded, and the terms and the fee cannot be changed. There is no rescue function. Assets sent to a contract without a matching position cannot be taken back by anyone, and the page does not send them that way. Liquidity that does not match the pool ratio is returned to the signer. It is not added to anyone else's share.",
+      "The 100,000 opening allocation was not minted. The TAPE pool has no admin. Adding liquidity stakes it for 90 days to 3 years. Wafers and circuits lock in a second contract with no admin, for 180 days, 365 days, 3 years, 4 years, or 5 years. Locked wafers cannot be taped and do not count as weight. A locked circuit's weight sits on the lock, its TAPE stays there until release, and it has to be opened again afterwards. The same circuit cannot be locked twice. Buyback and a TAPE bridge are not contracts yet.",
       "Official BEM is still claimed from the TapeOut mine. It is not the same signature as TAPE. A large tape-out does not mint official BEM.",
     ],
   },
   {
     h: "Addresses",
     ps: [
-      `Fee ${FEE_TO}. TAPE ${TAPE}. TAPE mine ${TAPE_MINE}. TAPE pool 0xAac2f26ACa20bbAf60fF791705548617f0b2e041. TAPELIQUID circuits ${DEPLOYED.circuits}. TAPELIQUID transistors ${DEPLOYED.transistors}.`,
+      `Fee ${FEE_TO}. TAPE ${TAPE}. TAPE mine ${TAPE_MINE}. TAPE pool 0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641. Lock 0xA28390924607F08aaD8d03F512B41b6a1c012Ace. TAPELIQUID circuits ${DEPLOYED.circuits}. TAPELIQUID transistors ${DEPLOYED.transistors}.`,
       `BSC perpetual ${BSC_REBATE}. X Layer perpetual ${KNOWN_XPERP}. Mark ${KNOWN_XMARK}. Transistor perpetual ${GATE}. Liquidity positions ${NPM}.`,
       `BSC BEM ${BSC.bem}. BSC bridge ${BEM_BRIDGE}. X Layer BEM ${X_BEM}. Official BEM mine 0x7E2E0DC66a3bD9103E69b766afA62d9f7b697b46.`,
       `Official transistor market ${OFFICIAL.transistorMarket}. Official circuit market ${OFFICIAL.circuitMarket}. BEM pool ${BSC.pool}.`,
@@ -263,8 +265,9 @@ const nowZh = [
   ["现在的日排放", "7,200，从部署时起。没有 1,000 档，也没有改率入口"],
   ["现在的权重", "门数，也就是 b*。P = 1。q 不能大于 1"],
   ["总供应", "只随领取增加。10 万枚开盘种子没有另铸"],
-  ["TAPE 池", "0xAac2f26ACa20bbAf60fF791705548617f0b2e041，没有管理员"],
-  ["还不能签", "电路和晶圆锁仓、四年质押、回购、TAPE 跨链"],
+  ["TAPE 池", "0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641，没有管理员"],
+  ["锁仓", "0xA28390924607F08aaD8d03F512B41b6a1c012Ace，没有管理员"],
+  ["还不能签", "回购、TAPE 跨链"],
 ];
 
 const nowEn = [
@@ -273,8 +276,9 @@ const nowEn = [
   ["Emission today", "7,200 from deployment. There is no 1,000 tier and no switch"],
   ["Weight today", "Gate count, which is b*. P = 1. q cannot be above 1"],
   ["Supply", "Grows only when claimed. The 100,000 seed was not minted"],
-  ["TAPE pool", "0xAac2f26ACa20bbAf60fF791705548617f0b2e041, no admin"],
-  ["Not signable yet", "Circuit locks, the four-year stake, buyback, a TAPE bridge"],
+  ["TAPE pool", "0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641, no admin"],
+  ["Lock", "0xA28390924607F08aaD8d03F512B41b6a1c012Ace, no admin"],
+  ["Not signable yet", "Buyback, a TAPE bridge"],
 ];
 export function Whitepaper() {
   const lang = useExchange((s) => s.lang);

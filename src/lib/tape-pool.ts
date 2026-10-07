@@ -2,7 +2,7 @@ import { createPublicClient, encodeFunctionData, formatUnits, http, parseAbi, pa
 import { connectXLayer, XLAYER } from "@/lib/xlayer";
 import { getProvider } from "@/lib/wallet";
 
-export const TAPE_POOL = "0xAac2f26ACa20bbAf60fF791705548617f0b2e041" as const;
+export const TAPE_POOL = "0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641" as const;
 export const TAPE_TOKEN = "0x8f2d517D3d62019CD8D7F08ae178Be05BBb6EBE3" as const;
 export const TAPE_USDT = "0x779Ded0c9e1022225f8E0630b35a9b54bE713736" as const;
 export const TAPE_BEM = "0x60e62Efa9405d6873C5deaBD4E6CC91c25363952" as const;
