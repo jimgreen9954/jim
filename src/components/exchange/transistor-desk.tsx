@@ -207,7 +207,7 @@ export function TransistorDesk() {
           {resting.length === 0 ? <p className="px-3 py-6 text-sm text-ink/60">{zh ? "这个标还没有人挂单。右边开多或开空，就会出现在这里。" : "No orders on this market yet. A long or a short from the ticket shows up here."}</p> : null}
         </div>
         <div className="flex flex-col gap-2 border border-gold bg-card p-3">
-          <p className="border border-sell px-2 py-2 text-sm text-sell">{zh ? "新开仓和吃单已停。旧本任何地址都能推结算价，不能升级。持仓可以平，自己的挂单可以撤。新本只许收费地址写价，用 10 分钟均价，没有管理员。这个地址签完部署之前，网站不拿新本当交易盘。" : "New opens and takes are off. Anyone can push the old mark, and that contract cannot be upgraded. Close a position or cancel your own order. The next book accepts prices only from the fee address, uses a 10-minute average, and has no admin. Until that address deploys it, the site does not trade the new book."}</p>
+          <p className="border border-sell px-2 py-2 text-sm text-sell">{zh ? "新开仓和吃单已停。旧本任何地址都能推结算价。两次部署都失败了：钱包 gas 停在 120 万，这份合约大约要 180 万。签名时把 Gas Limit 改成 3000000。BSC 的 BEM 永续不用重部署。" : "New opens and takes are off. Anyone can push the old mark. Both deploys failed: the wallet left gas at 1.2 million, and this contract needs about 1.8 million. Set Gas Limit to 3000000. The BSC BEM perpetual does not need a new contract."}</p>
           <button type="button" className="min-h-11 border border-gold" disabled={busy} onClick={async () => {
             setBusy(true);
             setNote("");
@@ -225,7 +225,7 @@ export function TransistorDesk() {
             } finally {
               setBusy(false);
             }
-          }}>{zh ? "用收费地址部署新本" : "Deploy the new book from the fee address"}</button>
+          }}>{zh ? "再部署晶体管永续（Gas Limit 填 3000000）" : "Deploy the transistor book again (Gas Limit 3000000)"}</button>
           <p className="text-xs tracking-widest text-gold">{zh ? "下单已停" : "Opens are off"}</p>
           <label className="text-sm">
             {zh ? "限价 BNB，空着就用参考价" : "Limit in BNB. Blank uses the mark."}

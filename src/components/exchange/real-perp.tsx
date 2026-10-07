@@ -410,8 +410,8 @@ export function RealPerp() {
         {chain === "xlayer" ? (
           <p className="border border-sell px-3 py-2 text-sm text-sell xl:col-span-12">
             {lang === "zh"
-              ? "X Layer 这本已停新开仓和吃单。旧标记任何地址都能推，合约不能升级。已有仓可以平，自己的单可以撤。新本只许收费地址写价，结算用 10 分钟均价，没有管理员。要这个地址签两笔部署，签完之前网站不拿它当交易盘。"
-              : "New opens and takes on this X Layer book are off. Anyone can push the old mark, and that contract cannot be upgraded. You can still close and cancel your own order. The next book accepts prices only from the fee address, settles on a 10-minute average, and has no admin. That address has to sign two deployments. Until then this site does not trade it."}
+              ? "X Layer 旧本已停新开仓。新标记已经在链上，写价的地址不能改。新永续三笔都因 gas 只有 120 万而失败，需要大约 210 万。签名时把 Gas Limit 改成 3000000。BSC 的 BEM 永续读 Pancake，不用为这个洞重部署。"
+              : "The old X Layer book is closed to new opens. The new mark is on chain and its poster cannot be changed. Three perpetual deploys failed because gas was left at 1.2 million. They need about 2.1 million. Set Gas Limit to 3000000 before signing. The BSC BEM perpetual reads Pancake and does not need a new contract for this hole."}
           </p>
         ) : null}
         {chain === "xlayer" ? (
@@ -441,7 +441,7 @@ export function RealPerp() {
               })();
             }}
           >
-            {lang === "zh" ? "用收费地址部署新本" : "Deploy the new book from the fee address"}
+            {lang === "zh" ? "挂上新永续（Gas Limit 填 3000000）" : "Attach the new book (set Gas Limit to 3000000)"}
           </button>
         ) : null}
         <div className="grid grid-cols-2 gap-2 xl:col-span-12">

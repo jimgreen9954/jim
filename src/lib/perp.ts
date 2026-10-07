@@ -46,6 +46,8 @@ export const KNOWN_PERP = "0xB98D14333a93D49a4E05478d002FC3944D88A3b7";
 export const BSC_REBATE = "0xce3511b6e909c9694826cfd5dbe434d457920eba";
 export const KNOWN_XPERP = "0x0f22b18b67477886311ee0fb7cf684d3f48c5eca";
 export const KNOWN_XMARK = "0xc35C8cB9FFaC92F25cAFaEdC82F03144b24bCb1d";
+/** New mark. Oracle is the fee address. No perpetual is attached yet. */
+export const NEXT_XMARK = "0xb623ee0ef23d8ea61f93cca373a4a4b27cf32fe1";
 export const BOARD = [KNOWN_PERP];
 
 const abi = [
@@ -916,23 +918,20 @@ export async function deployXLayer(from: string, onStep?: (step: 1 | 2 | 3) => v
   }
 }
 
-/** Deploy a new mark and a new X Layer book. Does not switch the site onto them. */
+/** Attach a perpetual to the mark that already deployed. Does not deploy another mark. */
 export async function deployLockedPair(from: string): Promise<{ mark: string; perp: string }> {
   if (from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("oracle");
   const was = desk;
   desk = "xlayer";
   try {
     const rpc = await client();
-    const markHash = await send(from, undefined, MARK_BYTECODE);
-    const markReceipt = await rpc.waitForTransactionReceipt({ hash: markHash, timeout: 120_000 });
-    const mark = markReceipt.contractAddress ?? "";
-    if (markReceipt.status !== "success" || !mark) throw new Error("revert");
+    const mark = NEXT_XMARK;
     const args = encodeAbiParameters(
       [{ type: "address" }, { type: "address" }, { type: "uint256" }],
-      [X_USDT, mark as Hex, 1_000_000n],
+      [X_USDT, mark, 1_000_000n],
     );
     const data = (PERP_BYTECODE + args.slice(2)) as Hex;
-    const perpHash = await send(from, undefined, data);
+    const perpHash = await send(from, undefined, data, 3_000_000n);
     const perpReceipt = await rpc.waitForTransactionReceipt({ hash: perpHash, timeout: 120_000 });
     const perp = perpReceipt.contractAddress ?? "";
     if (perpReceipt.status !== "success" || !perp) throw new Error("revert");

@@ -1,4 +1,4 @@
-import { BSC_REBATE, KNOWN_XMARK, KNOWN_XPERP } from "@/lib/perp";
+import { BSC_REBATE, KNOWN_XMARK, KNOWN_XPERP, NEXT_XMARK } from "@/lib/perp";
 import { GATE } from "@/lib/gate-chain";
 import { BSC, FEE_TO } from "@/lib/bsc";
 import { NPM } from "@/lib/lp";
@@ -90,8 +90,8 @@ const zh: Section[] = [
     h: "已停的两本永续",
     ps: [
       "现在还在用的晶体管永续和 X Layer 永续是旧本。旧本的结算价任何地址都能推，合约不能升级。网页已停新开仓和吃单。里面的保证金可以平，自己的挂单可以撤。别人仍可直接调用旧合约，网页停不掉。",
-      "下一本写在源码里，链上地址还没换。新本没有管理员，也不能改谁有权写价。标记只由收费地址写入。每次最多挪 0.5%，至少隔 30 秒。结算用过去 10 分钟的均价，不是最后一笔。均价不满 10 分钟，或超过 30 分钟没有新写入，不能开仓，也不能按旧价结算。收费地址要自己连续写入。这一页不能替它签名。部署也要这个地址签。签完之前，网站不把新本当成可交易的盘。",
-      "BSC 上的 BEM 永续读的是 Pancake 池子，不使用上面这份 X Layer 标记。浅池仍可能在短时间里影响那条均价。",
+      "下一本的标记已经部署在 X Layer，地址是 0xb623ee0ef23d8ea61f93cca373a4a4b27cf32fe1。写价地址是收费地址，写死，不能改。结算设计是过去 10 分钟的均价。永续合约还没挂上：三笔创建都因为 gas 停在 1,200,000 而回滚，实际大约需要 2,100,000。晶体管永续在 BSC 上也试了两笔，同样回滚，大约需要 1,800,000。这两本都还不是可交易的盘。",
+      "BSC 上的 BEM 永续不用为这个洞重新部署。它读的是 Pancake 池子，不使用上面这份能被任意地址推动的标记。浅池仍可能在短时间里影响那条均价。",
       "TAPE 不在这批替换里。平台币仍是现在这一枚。矿池没有升级入口。再部署一份矿池就会变成第二枚 TAPE，这一版不这么做。",
       "电路锁仓到期释放后，若矿池再结算这段权重，收益可能打进锁仓合约。锁仓记录已经删了，页面没有提取入口。这是已部署合约的行为。这一版网页不再提交新的电路锁仓。已经锁上的仍按到期日解锁。电路退回，不等于释放之后的挖矿收益也能取回。",
       "返佣合约有 clerk。clerk 可以提取返佣池里的余额。不是每一份合约都没有管理员。",
@@ -128,7 +128,7 @@ const zh: Section[] = [
     h: "地址",
     ps: [
       `收费 ${FEE_TO}。TAPE ${TAPE}。TAPE 挖矿 ${TAPE_MINE}。TAPE 池 0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641。锁仓 0xA28390924607F08aaD8d03F512B41b6a1c012Ace。TAPELIQUID 电路 ${DEPLOYED.circuits}。TAPELIQUID 晶体管 ${DEPLOYED.transistors}。`,
-      `BSC 永续 ${BSC_REBATE}。X Layer 永续 ${KNOWN_XPERP}。标记价 ${KNOWN_XMARK}。晶体管合约 ${GATE}。流动性仓位 ${NPM}。`,
+      `BSC 永续 ${BSC_REBATE}。X Layer 永续 ${KNOWN_XPERP}。旧标记 ${KNOWN_XMARK}。新标记 ${NEXT_XMARK}，永续还没挂上。晶体管合约 ${GATE}。流动性仓位 ${NPM}。`,
       `BSC BEM ${BSC.bem}。BSC 桥 ${BEM_BRIDGE}。X Layer BEM ${X_BEM}。官网 BEM 挖矿 0x7E2E0DC66a3bD9103E69b766afA62d9f7b697b46。`,
       `官网晶体管市场 ${OFFICIAL.transistorMarket}。官网电路市场 ${OFFICIAL.circuitMarket}。BEM 池 ${BSC.pool}。`,
       `X Layer 印鉴领取 ${LOCKED_REBATE.xlayer}。BSC 印鉴领取 ${LOCKED_REBATE.bsc}。`,
@@ -214,8 +214,8 @@ const en: Section[] = [
     h: "Two books are closed to new risk",
     ps: [
       "The transistor perpetual and the X Layer perpetual still in use are the old books. Anyone can push their settlement price, and those contracts cannot be upgraded. This site no longer opens or takes on them. Margin already inside can be closed. Your own order can be cancelled. A direct call to the old contract still works. The page cannot stop it.",
-      "The next book is in the source. Its chain address is not live yet. It has no admin, and the address allowed to post a price cannot be changed. Only the fee address can post. Each post moves at most 0.5 percent, and at least 30 seconds must pass. Settlement uses the average of the last 10 minutes, not the last post. If that average is shorter than 10 minutes, or no post has arrived for 30 minutes, a new order cannot open and an old price cannot settle. The fee address has to keep posting. This page cannot sign for it. Deployment also has to be signed by that address. Until that signature, the site does not treat the new book as tradable.",
-      "The BEM perpetual on BSC reads the Pancake pool. It does not use the X Layer mark above. A thin pool can still move that average for a short time.",
+      "The next mark is already on X Layer at 0xb623ee0ef23d8ea61f93cca373a4a4b27cf32fe1. The posting address is the fee address. It is fixed. Settlement is designed as a 10-minute average. The perpetual is not attached: three creates reverted because gas stayed at 1,200,000, and the deploy needs about 2,100,000. The transistor perpetual was tried twice on BSC and reverted the same way. It needs about 1,800,000. Neither book is tradable.",
+      "The BEM perpetual on BSC does not need a new contract for this hole. It reads the Pancake pool. It does not use the mark any address can push. A thin pool can still move that average for a short time.",
       "TAPE is not in this replacement. The platform token stays the one already deployed. The mine cannot be upgraded. A new mine would be a second TAPE. This version does not do that.",
       "After a locked circuit is released, a later mine settlement can pay that interval into the lock contract. The lock seat is already gone, and the page has no withdrawal for it. That is the deployed contract. This version of the site no longer submits a new circuit lock. A circuit already locked can still be released on its date. Getting the circuit back is not the same as getting the mining reward paid in after release.",
       "The rebate contract has a clerk. The clerk can withdraw the rebate pool. Not every contract is without an admin.",
@@ -253,7 +253,7 @@ const en: Section[] = [
     h: "Addresses",
     ps: [
       `Fee ${FEE_TO}. TAPE ${TAPE}. TAPE mine ${TAPE_MINE}. TAPE pool 0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641. Lock 0xA28390924607F08aaD8d03F512B41b6a1c012Ace. TAPELIQUID circuits ${DEPLOYED.circuits}. TAPELIQUID transistors ${DEPLOYED.transistors}.`,
-      `BSC perpetual ${BSC_REBATE}. X Layer perpetual ${KNOWN_XPERP}. Mark ${KNOWN_XMARK}. Transistor perpetual ${GATE}. Liquidity positions ${NPM}.`,
+      `BSC perpetual ${BSC_REBATE}. X Layer perpetual ${KNOWN_XPERP}. Old mark ${KNOWN_XMARK}. New mark ${NEXT_XMARK}, no perpetual attached yet. Transistor perpetual ${GATE}. Liquidity positions ${NPM}.`,
       `BSC BEM ${BSC.bem}. BSC bridge ${BEM_BRIDGE}. X Layer BEM ${X_BEM}. Official BEM mine 0x7E2E0DC66a3bD9103E69b766afA62d9f7b697b46.`,
       `Official transistor market ${OFFICIAL.transistorMarket}. Official circuit market ${OFFICIAL.circuitMarket}. BEM pool ${BSC.pool}.`,
       `X Layer seal claim ${LOCKED_REBATE.xlayer}. BSC seal claim ${LOCKED_REBATE.bsc}.`,

@@ -1,6 +1,6 @@
 import { BSC, FEE_TO } from "@/lib/bsc";
 import { GATE } from "@/lib/gate-chain";
-import { BSC_REBATE, KNOWN_XMARK, KNOWN_XPERP, X_USDT } from "@/lib/perp";
+import { BSC_REBATE, KNOWN_XMARK, KNOWN_XPERP, NEXT_XMARK, X_USDT } from "@/lib/perp";
 import { DEPLOYED, XLAYER } from "@/lib/xlayer";
 
 type Row = { name: string; chain: string; address: string; href: string };
@@ -16,7 +16,8 @@ function xlayer(address: string): string {
 const rows: Row[] = [
   { name: "BSC 永续", chain: "BSC", address: BSC_REBATE, href: bsc(BSC_REBATE) },
   { name: "X Layer 永续", chain: "X Layer", address: KNOWN_XPERP, href: xlayer(KNOWN_XPERP) },
-  { name: "标记价", chain: "X Layer", address: KNOWN_XMARK, href: xlayer(KNOWN_XMARK) },
+  { name: "标记价（旧本）", chain: "X Layer", address: KNOWN_XMARK, href: xlayer(KNOWN_XMARK) },
+  { name: "新标记（永续未挂）", chain: "X Layer", address: NEXT_XMARK, href: xlayer(NEXT_XMARK) },
   { name: "晶体管永续", chain: "BSC", address: GATE, href: bsc(GATE) },
   { name: "电路", chain: "X Layer", address: DEPLOYED.circuits, href: xlayer(DEPLOYED.circuits) },
   { name: "晶体管", chain: "X Layer", address: DEPLOYED.transistors, href: xlayer(DEPLOYED.transistors) },
