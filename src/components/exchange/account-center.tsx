@@ -10,7 +10,7 @@ import { okbPrice, readOkbPurse } from "@/lib/okb";
 import { KNOWN_PERP, KNOWN_XPERP, readPerp } from "@/lib/perp";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import { transferCircuit, transferTransistor, txUrl } from "@/lib/xlayer";
-import { fanCircuits, LOCK_TERMS, readLocks, type LockSeat } from "@/lib/tape-lock";
+import { LOCK_TERMS, readLocks, type LockSeat } from "@/lib/tape-lock";
 import { readTapePool, showQuote, showTape, TAPE_TERMS, type TapePosition } from "@/lib/tape-pool";
 import { tapeText } from "@/lib/tape-mine";
 
@@ -64,14 +64,14 @@ export function AccountCenter() {
   const [worthAt, setWorthAt] = useState("");
   const [spot, setSpot] = useState<string>("—");
   const [perp, setPerp] = useState<string>("—");
-  const [open, setOpen] = useState<string | null>(null);
   const [to, setTo] = useState("");
   const [nandQty, setNandQty] = useState("");
   const [latchQty, setLatchQty] = useState("");
   const [ack, setAck] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  const [fanText, setFanText] = useState("");
-  const [fanAck, setFanAck] = useState(false);
+  const [chipMode, setChipMode] = useState<"one" | "many">("one");
+  const [many, setMany] = useState<{ to: string; nand: string; latch: string }[]>([{ to: "", nand: "", latch: "" }]);
+  const [picks, setPicks] = useState<Record<string, { on: boolean; to: string }>>({});
   const [stakes, setStakes] = useState<{ lp: TapePosition[]; seats: LockSeat[]; usdtShares: bigint; usdtTape: bigint; usdtQuote: bigint; bemShares: bigint; bemTape: bigint; bemQuote: bigint } | null>(null);
   const [bad, setBad] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -266,16 +266,54 @@ export function AccountCenter() {
     }
   };
 
-  const sendCircuit = async (row: CircuitRow) => {
-    if (!row.id) return;
+  const sendMany = async (row: ChipRow) => {
+    const lines = many
+      .map((item) => ({ to: item.to.trim(), nand: BigInt(item.nand || "0"), latch: BigInt(item.latch || "0") }))
+      .filter((item) => item.nand > 0n || item.latch > 0n);
+    if (lines.length === 0 || lines.length > 20) {
+      setBad(true);
+      setNote(zh ? "一次 1 到 20 行，每行至少填一个数量。" : "Use 1 to 20 rows, and put a quantity on each.");
+      return;
+    }
+    let nandSum = 0n;
+    let latchSum = 0n;
+    for (const line of lines) {
+      if (!/^0x[a-fA-F0-9]{40}$/.test(line.to)) {
+        setBad(true);
+        setNote(zh ? "有一行地址不对。" : "One address is not valid.");
+        return;
+      }
+      if (line.to.toLowerCase() === account.toLowerCase()) {
+        setBad(true);
+        setNote(zh ? "不能转给自己。" : "You cannot send it to yourself.");
+        return;
+      }
+      nandSum += line.nand;
+      latchSum += line.latch;
+    }
+    if (nandSum > BigInt(row.nand || "0") || latchSum > BigInt(row.latch || "0")) {
+      setBad(true);
+      setNote(zh ? "加起来超过这个钱包的余额。" : "The rows add up to more than this wallet holds.");
+      return;
+    }
+    const jobs: { id: 0 | 1; amount: bigint; to: string }[] = [];
+    for (const line of lines) {
+      if (line.nand > 0n) jobs.push({ id: 0, amount: line.nand, to: line.to });
+      if (line.latch > 0n) jobs.push({ id: 1, amount: line.latch, to: line.to });
+    }
     setBusy(true);
     setBad(false);
     try {
-      const hash = row.chain === "xlayer"
-        ? await transferCircuit(account, to.trim(), BigInt(row.id))
-        : await transferBscCircuit(account, row.circuits as Hex, BigInt(row.id), to.trim());
-      setNote(zh ? "电路已转出。" : "Circuit sent.");
-      window.open(row.chain === "xlayer" ? txUrl(hash) : bscTx(hash), "_blank", "noopener,noreferrer");
+      for (let i = 0; i < jobs.length; i += 1) {
+        const job = jobs[i];
+        setNote(zh ? `第 ${i + 1} / ${jobs.length} 笔，请在钱包里确认。` : `Signature ${i + 1} of ${jobs.length}. Confirm it in the wallet.`);
+        const hash = row.ours
+          ? await transferTransistor(account, job.to, job.id, job.amount)
+          : await transferBscTransistor(account, row.transistors as Hex, job.id, job.amount, job.to);
+        window.open(row.ours ? txUrl(hash) : bscTx(hash), "_blank", "noopener,noreferrer");
+      }
+      setNote(zh ? `${jobs.length} 笔都已转出。` : `Sent ${jobs.length}.`);
+      setAck(false);
       pull(account);
     } catch (error) {
       setBad(true);
@@ -285,35 +323,38 @@ export function AccountCenter() {
     }
   };
 
-  const sendFan = async () => {
-    const rows = fanText.split(/\n+/).map((line) => line.trim()).filter(Boolean);
-    if (rows.length === 0 || rows.length > 30) {
+  const sendPicked = async () => {
+    const chosen = circuits.filter((row) => row.id && !row.listed && picks[`${row.chain}:${row.circuits}:${row.id}`]?.on);
+    if (chosen.length === 0 || chosen.length > 20) {
       setBad(true);
-      setNote(zh ? "一次 1 到 30 行。" : "Use 1 to 30 lines.");
+      setNote(zh ? "勾 1 到 20 片。" : "Pick 1 to 20 circuits.");
       return;
     }
-    const ids: bigint[] = [];
-    const tos: Hex[] = [];
-    for (const line of rows) {
-      const [id, dest] = line.split(/\s+/);
-      if (!/^\d+$/.test(id ?? "") || !/^0x[a-fA-F0-9]{40}$/.test(dest ?? "")) {
+    const jobs = chosen.map((row) => ({ row, to: (picks[`${row.chain}:${row.circuits}:${row.id}`]?.to ?? "").trim() }));
+    for (const job of jobs) {
+      if (!/^0x[a-fA-F0-9]{40}$/.test(job.to) || job.to.toLowerCase() === account.toLowerCase()) {
         setBad(true);
-        setNote(zh ? "每行要是「编号 地址」。" : "Each line must be an id and an address.");
+        setNote(zh ? `电路 #${job.row.id} 的地址不对，或是你自己。` : `Circuit #${job.row.id} has a bad address, or it is your own.`);
         return;
       }
-      ids.push(BigInt(id));
-      tos.push(dest as Hex);
     }
     setBusy(true);
     setBad(false);
     try {
-      const hash = await fanCircuits(account, ids, tos);
-      setNote(zh ? `已转出 ${ids.length} 片。` : `Sent ${ids.length}.`);
-      window.open(txUrl(hash), "_blank", "noopener,noreferrer");
+      for (let i = 0; i < jobs.length; i += 1) {
+        const job = jobs[i];
+        setNote(zh ? `第 ${i + 1} / ${jobs.length} 片，#${job.row.id}。请在钱包确认。` : `Circuit ${i + 1} of ${jobs.length}, #${job.row.id}. Confirm it in the wallet.`);
+        const hash = job.row.chain === "xlayer"
+          ? await transferCircuit(account, job.to, BigInt(job.row.id!))
+          : await transferBscCircuit(account, job.row.circuits as Hex, BigInt(job.row.id!), job.to);
+        window.open(job.row.chain === "xlayer" ? txUrl(hash) : bscTx(hash), "_blank", "noopener,noreferrer");
+      }
+      setPicks({});
+      setNote(zh ? `${jobs.length} 片都已转出。每片只去了你填的那个地址。` : `Sent ${jobs.length}. Each one went only to the address on its row.`);
       pull(account);
     } catch (error) {
       setBad(true);
-      setNote(say(error, zh));
+      setNote(say(error, zh) + (zh ? " 已经确认成功的那几片不会退回。" : " Ones that already confirmed do not come back."));
     } finally {
       setBusy(false);
     }
@@ -383,95 +424,109 @@ export function AccountCenter() {
         ))}
       </div>
       {tab === "chips" ? (
-        <div className="overflow-x-auto border border-gold">
-          <table className="w-full min-w-[720px] text-left text-sm">
-            <thead className="text-xs tracking-widest text-gold">
-              <tr>
-                <th className="px-3 py-2">{zh ? "处理器" : "Processor"}</th>
-                <th className="px-3 py-2">NAND</th>
-                <th className="px-3 py-2">LATCH</th>
-                <th className="px-3 py-2">{zh ? "操作" : "Action"}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {chips.map((row) => {
-                const key = `${row.chain}:${row.transistors}`;
-                return (
-                  <tr key={key} className="border-t border-gold/40 align-top">
-                    <td className="px-3 py-3">
-                      <p className="font-display text-lg italic">{row.name}{row.ours ? (zh ? " · 本站" : " · this site") : ""}</p>
-                      <p className="text-xs text-ink/60">{row.chain === "xlayer" ? "X Layer" : "BSC"} · {row.ours ? (zh ? "TAPELIQUID 的晶体管" : "TAPELIQUID transistors") : zh ? "官网这台的晶体管" : "Official transistors"}</p>
-                      <a className="mt-1 block break-all font-mono text-xs underline decoration-gold" href={scan(row.chain, row.transistors)} target="_blank" rel="noreferrer">{zh ? "晶体管合约" : "Transistor contract"} {row.transistors}</a>
-                      <a className="block break-all font-mono text-xs underline decoration-gold" href={scan(row.chain, row.circuits)} target="_blank" rel="noreferrer">{zh ? "电路合约" : "Circuit contract"} {row.circuits}</a>
-                    </td>
-                    <td className="px-3 py-3 font-mono">
-                      <p>{zh ? "总数" : "Total"} {row.nand}</p>
-                      <p className="text-xs text-ink/60">{zh ? `可转 ${row.nand} · 挂单中 0` : `Free ${row.nand} · listed 0`}</p>
-                    </td>
-                    <td className="px-3 py-3 font-mono">
-                      <p>{zh ? "总数" : "Total"} {row.latch}</p>
-                      <p className="text-xs text-ink/60">{zh ? `可转 ${row.latch} · 挂单中 0` : `Free ${row.latch} · listed 0`}</p>
-                    </td>
-                    <td className="px-3 py-3">
-                      <button type="button" className="min-h-10 border border-gold px-3" onClick={() => { setOpen(open === key ? null : key); setNandQty(""); setLatchQty(""); setAck(false); }}>{zh ? "转账" : "Send"}</button>
-                      {open === key ? (
-                        <div className="mt-2 border border-gold bg-paper p-2">
-                          <input value={to} onChange={(event) => setTo(event.target.value.trim())} placeholder={zh ? "接收地址" : "Recipient"} className="w-full border border-gold bg-card px-2 py-2 font-mono text-xs outline-none" />
-                          <div className="mt-2 grid grid-cols-2 gap-2">
-                            <label className="text-xs">NAND
-                              <input value={nandQty} onChange={(event) => setNandQty(event.target.value.replace(/[^\d]/g, ""))} className="mt-1 w-full border border-gold px-2 py-1 font-mono outline-none" />
-                              <button type="button" className="mt-1 underline" onClick={() => setNandQty(row.nand)}>{zh ? "全部" : "All"}</button>
-                            </label>
-                            <label className="text-xs">LATCH
-                              <input value={latchQty} onChange={(event) => setLatchQty(event.target.value.replace(/[^\d]/g, ""))} className="mt-1 w-full border border-gold px-2 py-1 font-mono outline-none" />
-                              <button type="button" className="mt-1 underline" onClick={() => setLatchQty(row.latch)}>{zh ? "全部" : "All"}</button>
-                            </label>
+        <div className="flex flex-col gap-3">
+          {chips.length === 0 ? <p className="border border-gold px-3 py-3 text-sm text-ink/60">{zh ? "这个地址没有晶体管。" : "This address has no transistors."}</p> : null}
+          {chips.map((row) => {
+            const key = `${row.chain}:${row.transistors}`;
+            const lines = many.filter((item) => BigInt(item.nand || "0") > 0n || BigInt(item.latch || "0") > 0n).length;
+            return (
+              <article key={key} className="border border-gold px-3 py-3">
+                <p className="font-display text-lg italic">{row.name}{row.ours ? (zh ? " · 本站" : " · this site") : ""}</p>
+                <p className="text-xs text-ink/60">{row.chain === "xlayer" ? "X Layer" : "BSC"} · {row.ours ? (zh ? "TAPELIQUID 的晶体管" : "TAPELIQUID transistors") : zh ? "官网这台的晶体管" : "Official transistors"}</p>
+                <p className="mt-2 font-mono text-sm">NAND {row.nand} · LATCH {row.latch}</p>
+                <a className="mt-1 block break-all font-mono text-xs underline decoration-gold" href={scan(row.chain, row.transistors)} target="_blank" rel="noreferrer">{row.transistors}</a>
+                <div className="mt-3 grid grid-cols-2 border border-gold">
+                  <button type="button" className={`min-h-10 text-sm ${chipMode === "one" ? "bg-ink text-paper" : ""}`} onClick={() => { setChipMode("one"); setAck(false); }}>{zh ? "一对一" : "One address"}</button>
+                  <button type="button" className={`min-h-10 text-sm ${chipMode === "many" ? "bg-ink text-paper" : ""}`} onClick={() => { setChipMode("many"); setAck(false); }}>{zh ? "一对多" : "Many addresses"}</button>
+                </div>
+                {chipMode === "one" ? (
+                  <div className="mt-2 grid gap-2">
+                    <input value={to} onChange={(event) => setTo(event.target.value.trim())} placeholder={zh ? "一个接收地址" : "One recipient"} className="w-full border border-gold bg-card px-2 py-2 font-mono text-xs outline-none" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="text-xs">NAND
+                        <input value={nandQty} onChange={(event) => setNandQty(event.target.value.replace(/[^\d]/g, ""))} className="mt-1 w-full border border-gold px-2 py-1 font-mono outline-none" />
+                        <button type="button" className="mt-1 underline" onClick={() => setNandQty(row.nand)}>{zh ? "全部" : "All"}</button>
+                      </label>
+                      <label className="text-xs">LATCH
+                        <input value={latchQty} onChange={(event) => setLatchQty(event.target.value.replace(/[^\d]/g, ""))} className="mt-1 w-full border border-gold px-2 py-1 font-mono outline-none" />
+                        <button type="button" className="mt-1 underline" onClick={() => setLatchQty(row.latch)}>{zh ? "全部" : "All"}</button>
+                      </label>
+                    </div>
+                    <p className="text-xs text-ink/60">{zh ? "NAND 和 LATCH 各签一笔，都进上面这一个地址。" : "NAND and LATCH are one signature each, both to the address above."}</p>
+                    <label className="flex gap-2 text-xs"><input type="checkbox" checked={ack} onChange={(event) => setAck(event.target.checked)} />{zh ? "地址我核对过，不能撤回" : "I checked the address. This cannot be undone."}</label>
+                    <button type="button" disabled={!ack || busy} onClick={() => void sendChip(row)} className="min-h-10 bg-ink text-paper disabled:opacity-40">{zh ? "签名转出" : "Sign and send"}</button>
+                  </div>
+                ) : (
+                  <div className="mt-2 grid gap-2">
+                    <p className="text-xs text-ink/60">{zh ? "每一行一个地址。这一行的 NAND、LATCH 只进这个地址。最多 20 行，按行签名。" : "One address per row. That row's NAND and LATCH go only there. Up to 20 rows, one signature per transfer."}</p>
+                    <ul className="max-h-64 overflow-auto border border-gold/40">
+                      {many.map((item, index) => (
+                        <li key={index} className="grid gap-1 border-t border-gold/30 p-2">
+                          <input value={item.to} onChange={(event) => setMany((cur) => cur.map((row, i) => i === index ? { ...row, to: event.target.value.trim() } : row))} placeholder="0x" className="border border-gold px-2 py-1 font-mono text-xs outline-none" />
+                          <div className="grid grid-cols-2 gap-1">
+                            <input value={item.nand} onChange={(event) => setMany((cur) => cur.map((row, i) => i === index ? { ...row, nand: event.target.value.replace(/[^\d]/g, "") } : row))} placeholder="NAND" className="border border-gold px-2 py-1 font-mono text-xs outline-none" />
+                            <input value={item.latch} onChange={(event) => setMany((cur) => cur.map((row, i) => i === index ? { ...row, latch: event.target.value.replace(/[^\d]/g, "") } : row))} placeholder="LATCH" className="border border-gold px-2 py-1 font-mono text-xs outline-none" />
                           </div>
-                          <label className="mt-2 flex gap-2 text-xs"><input type="checkbox" checked={ack} onChange={(event) => setAck(event.target.checked)} />{zh ? "地址我核对过，不能撤回" : "I checked the address. This cannot be undone."}</label>
-                          <button type="button" disabled={!ack || busy} onClick={() => void sendChip(row)} className="mt-2 min-h-10 w-full bg-ink text-paper disabled:opacity-40">{zh ? "签名转出" : "Sign and send"}</button>
-                        </div>
-                      ) : null}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                        </li>
+                      ))}
+                    </ul>
+                    <button type="button" className="min-h-10 border border-gold text-sm" onClick={() => setMany((cur) => cur.length >= 20 ? cur : [...cur, { to: "", nand: "", latch: "" }])}>{zh ? "再加一行" : "Add a row"}</button>
+                    <label className="flex gap-2 text-xs"><input type="checkbox" checked={ack} onChange={(event) => setAck(event.target.checked)} />{zh ? `我核对过这 ${lines} 行地址，不能撤回` : `I checked these ${lines} addresses. This cannot be undone.`}</label>
+                    <button type="button" disabled={!ack || busy} onClick={() => void sendMany(row)} className="min-h-10 bg-ink text-paper disabled:opacity-40">{zh ? "按行签名转出" : "Sign each row"}</button>
+                  </div>
+                )}
+              </article>
+            );
+          })}
         </div>
       ) : null}
       {tab === "circuits" ? (
         <div className="flex flex-col gap-3">
-          <div className="border border-gold p-3">
-            <p className="font-display text-xl italic">{zh ? "一对多转出" : "Send to many"}</p>
-            <p className="mt-1 text-xs leading-5 text-ink/60">{zh ? "只限 TAPELIQUID 的电路。每行一片：编号 空格 地址。一次最多 30 行，一笔签名。有一片不是这个钱包的，整笔都不会转。" : "TAPELIQUID circuits only. One line each: id, space, address. Up to 30 lines, one signature. If one is not yours, nothing moves."}</p>
-            <p className="mt-2 border border-sell/40 px-2 py-2 text-xs leading-5">{zh ? "地址填错就到别人钱包里，取不回。不要填锁仓合约，也不要填已经停用的旧地址。转到锁仓合约、又没有质押仓位的电路，谁都拿不出来。" : "A wrong address is gone. Do not use the lock contract or a retired address. A circuit sent into the lock without a stake cannot be taken out."}</p>
-            <textarea value={fanText} onChange={(event) => { setFanText(event.target.value); setFanAck(false); }} rows={4} placeholder={"12 0x...\n13 0x..."} className="mt-2 w-full border border-gold bg-transparent px-2 py-2 font-mono text-xs outline-none" />
-            <label className="mt-2 flex gap-2 text-xs"><input type="checkbox" checked={fanAck} onChange={(event) => setFanAck(event.target.checked)} />{zh ? "每一行地址我都核对过" : "I checked every address"}</label>
-            <button type="button" disabled={busy || !fanAck} onClick={() => void sendFan()} className="mt-2 min-h-10 bg-ink px-3 text-paper disabled:opacity-40">{zh ? "签名并按行转出" : "Sign and send the lines"}</button>
+          <div className="border border-sell/40 px-3 py-2 text-xs leading-5">
+            {zh
+              ? "上下滑动勾选具体的一片。每一片右边填一个地址，只转给这个地址。勾几片就签几笔，从你的钱包直接转出，不经过锁仓合约。地址填错取不回。"
+              : "Scroll and tick the exact circuit. Each row has one address, and that circuit goes only there. One signature per circuit, straight from your wallet, not through the lock. A wrong address is gone."}
           </div>
-        <ul className="border border-gold">
-          {circuits.length === 0 ? <li className="px-3 py-3 text-sm text-ink/60">{zh ? "这地址在 TAPELIQUID 和已扫到的官网处理器上没有电路。" : "No circuits on TAPELIQUID or the scanned processors."}</li> : null}
-          {circuits.map((row, index) => (
-            <li key={`${row.circuits}-${row.id ?? "n"}-${index}`} className="border-t border-gold/40 px-3 py-3">
-              <p className="font-display text-lg italic">{row.name}{row.chain === "xlayer" ? (zh ? " · 本站电路" : " · this site's circuit") : row.listed ? (zh ? " · 官网挂单中的电路" : " · listed official circuit") : (zh ? " · 官网这台的电路" : " · official circuit")}</p>
-              <p className="font-mono text-sm">{row.chain === "xlayer" ? "X Layer" : "BSC"} · {row.id ? `#${row.id}` : zh ? `持有 ${row.count} 片，编号没有逐个展开` : `Holds ${row.count}. Ids are not listed one by one.`}</p>
-              {row.priceBnb != null ? <p className="text-sm">{zh ? `挂单价 ${row.priceBnb} BNB` : `Listed at ${row.priceBnb} BNB`}</p> : null}
-              <a className="break-all font-mono text-xs underline decoration-gold" href={scan(row.chain, row.circuits)} target="_blank" rel="noreferrer">{row.circuits}</a>
-              {row.id && !row.listed ? (
-                <div className="mt-2">
-                  <button type="button" className="min-h-10 border border-gold px-3 text-sm" onClick={() => setOpen(open === `c:${row.circuits}:${row.id}` ? null : `c:${row.circuits}:${row.id}`)}>{zh ? "转账" : "Send"}</button>
-                  {open === `c:${row.circuits}:${row.id}` ? (
-                    <div className="mt-2 grid gap-2 border border-gold p-2">
-                      <input value={to} onChange={(event) => setTo(event.target.value.trim())} placeholder="0x" className="border border-gold px-2 py-2 font-mono text-xs outline-none" />
-                      <label className="flex gap-2 text-xs"><input type="checkbox" checked={ack} onChange={(event) => setAck(event.target.checked)} />{zh ? "地址我核对过。转错取不回，不要填锁仓合约。" : "I checked the address. A mistake cannot be undone. Do not use the lock."}</label>
-                      <button type="button" disabled={!ack || busy} onClick={() => void sendCircuit(row)} className="min-h-10 bg-ink text-paper disabled:opacity-40">{zh ? "签名转出" : "Sign and send"}</button>
+          <ul className="max-h-[28rem] overflow-auto border border-gold">
+            {circuits.length === 0 ? <li className="px-3 py-3 text-sm text-ink/60">{zh ? "这地址在 TAPELIQUID 和已扫到的官网处理器上没有电路。" : "No circuits on TAPELIQUID or the scanned processors."}</li> : null}
+            {circuits.map((row, index) => {
+              const key = `${row.chain}:${row.circuits}:${row.id ?? "n"}:${index}`;
+              const pick = row.id ? picks[`${row.chain}:${row.circuits}:${row.id}`] : undefined;
+              return (
+                <li key={key} className="border-t border-gold/40 px-3 py-3">
+                  <div className="flex items-start gap-2">
+                    {row.id && !row.listed ? (
+                      <input
+                        type="checkbox"
+                        className="mt-1 size-4"
+                        checked={Boolean(pick?.on)}
+                        onChange={(event) => {
+                          const id = `${row.chain}:${row.circuits}:${row.id}`;
+                          setPicks((cur) => ({ ...cur, [id]: { on: event.target.checked, to: cur[id]?.to ?? "" } }));
+                          setAck(false);
+                        }}
+                      />
+                    ) : null}
+                    <div className="min-w-0 flex-1">
+                      <p className="font-display text-lg italic">{row.name}{row.chain === "xlayer" ? (zh ? " · 本站电路" : " · this site") : (zh ? " · 官网" : " · official")}</p>
+                      <p className="font-mono text-sm">{row.chain === "xlayer" ? "X Layer" : "BSC"} · {row.id ? `#${row.id}` : zh ? `还有 ${row.count} 片没有编号，这里不能代选` : `${row.count} more have no id, so they cannot be picked here`}</p>
+                      {row.listed ? <p className="text-xs text-ink/60">{zh ? "这片正在挂单。先撤单再转。" : "This one is listed. Delist it before sending."}</p> : null}
+                      {row.id && !row.listed && pick?.on ? (
+                        <input
+                          value={pick.to}
+                          onChange={(event) => setPicks((cur) => ({ ...cur, [`${row.chain}:${row.circuits}:${row.id}`]: { on: true, to: event.target.value.trim() } }))}
+                          placeholder={zh ? "这一片的接收地址" : "Address for this circuit"}
+                          className="mt-2 w-full border border-gold px-2 py-2 font-mono text-xs outline-none"
+                        />
+                      ) : null}
                     </div>
-                  ) : null}
-                </div>
-              ) : row.listed ? <p className="text-xs text-ink/60">{zh ? "这片正在官网挂单。先在电路现货撤了再转。" : "This one is listed. Delist it before sending."}</p> : null}
-            </li>
-          ))}
-        </ul>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <label className="flex gap-2 text-xs"><input type="checkbox" checked={ack} onChange={(event) => setAck(event.target.checked)} />{zh ? "每一片的地址我都核对过" : "I checked the address on every ticked circuit"}</label>
+          <button type="button" disabled={busy || !ack} onClick={() => void sendPicked()} className="min-h-11 bg-ink text-paper disabled:opacity-40">{zh ? "按片签名转出" : "Sign each circuit"}</button>
         </div>
       ) : null}
       {tab === "book" ? (

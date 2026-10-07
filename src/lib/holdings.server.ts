@@ -7,7 +7,10 @@ import { DEPLOYED, myCircuits, transistorHeld } from "./xlayer";
 type Cpu = { address: string; transistors: string; name: string };
 
 const erc1155 = parseAbi(["function balanceOf(address,uint256) view returns (uint256)"]);
-const erc721 = parseAbi(["function balanceOf(address) view returns (uint256)"]);
+const erc721 = parseAbi([
+  "function balanceOf(address) view returns (uint256)",
+  "function tokenOfOwnerByIndex(address,uint256) view returns (uint256)",
+]);
 
 let cpuCache: { at: number; rows: Cpu[] } | null = null;
 const client = createPublicClient({ chain: bsc, transport: http(BSC.rpc) });
@@ -81,7 +84,8 @@ async function readHoldings(account: `0x${string}` | string): Promise<Holdings> 
       listed: false,
       priceBnb: null,
     }));
-    cpus.forEach((cpu, index) => {
+    for (let index = 0; index < cpus.length; index += 1) {
+      const cpu = cpus[index];
       const nand = read[index * 3];
       const latch = read[index * 3 + 1];
       const count = read[index * 3 + 2];
@@ -100,19 +104,62 @@ async function readHoldings(account: `0x${string}` | string): Promise<Holdings> 
         });
       }
       if (c > 0n) {
-        circuits.push({
-          chain: "bsc",
-          name: cpu.name,
-          circuits: cpu.address,
-          id: null,
-          count: c.toString(),
-          listed: false,
-          priceBnb: null,
-        });
+        const cap = c > 40n ? 40n : c;
+        let ids: string[] = [];
+        try {
+          ids = (await Promise.all(
+            Array.from({ length: Number(cap) }, (_, i) =>
+              client.readContract({
+                address: cpu.address as `0x${string}`,
+                abi: erc721,
+                functionName: "tokenOfOwnerByIndex",
+                args: [owner, BigInt(i)],
+              }),
+            ),
+          )).map((id) => id.toString());
+        } catch {
+          ids = [];
+        }
+        if (ids.length === 0) {
+          circuits.push({
+            chain: "bsc",
+            name: cpu.name,
+            circuits: cpu.address,
+            id: null,
+            count: c.toString(),
+            listed: false,
+            priceBnb: null,
+          });
+        } else {
+          for (const id of ids) {
+            const hit = listed.get(`${cpu.address.toLowerCase()}:${id}`);
+            circuits.push({
+              chain: "bsc",
+              name: cpu.name,
+              circuits: cpu.address,
+              id,
+              count: "1",
+              listed: Boolean(hit),
+              priceBnb: hit && Number.isFinite(Number(hit.price)) ? Number(hit.price) / 1e18 : null,
+            });
+          }
+          if (c > 40n) {
+            circuits.push({
+              chain: "bsc",
+              name: cpu.name,
+              circuits: cpu.address,
+              id: null,
+              count: (c - 40n).toString(),
+              listed: false,
+              priceBnb: null,
+            });
+          }
+        }
       }
-    });
+    }
     for (const [key, row] of listed) {
       const [circuitsAddr, id] = key.split(":");
+      if (circuits.some((item) => item.circuits.toLowerCase() === circuitsAddr && item.id === id)) continue;
       const price = Number(row.price);
       circuits.push({
         chain: "bsc",

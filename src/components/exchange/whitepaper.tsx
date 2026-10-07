@@ -109,7 +109,7 @@ const zh: Section[] = [
       "这份挖矿合约现在的日排放是 7,200，从部署时开始，不是先 1,000 再切换。它也没有「收费地址签一次改成 7,200」的入口。权重按电路门数，也就是 b*，处理器倍率按 1。q 还没有题目验证，页面不能显示大于 1。",
       "挖矿、TAPE 池、晶圆和电路锁仓，三份都没有管理员，不能升级，不能改期限，不能改费率，也没有救援入口。误转到合约、又没有对应仓位的资产，谁都取不回，页面不会这么转。加池时和池子比例对不上的部分退回给签名的人，不会进别人的份额。",
       "开盘池的 100,000 枚没有另铸。TAPE 池没有管理员，加池即质押，90 天到 3 年，到期才能撤。晶圆和电路锁在另一份没有管理员的合约里，期限是 180 天、365 天、3 年、4 年、5 年。锁着的晶圆不能流片，不算算力。锁着的电路算力记在锁仓合约上，挖到的 TAPE 先留在锁仓里，解锁时和电路一起退回，退回后要重新开工。同一片电路不能锁两次。回购和 TAPE 跨链还没有合约。",
-      "官网 BEM 的领取仍走 TapeOut 挖矿合约，和 TAPE 不是同一笔。大张流片不产生官网 BEM。",
+      "个人中心转出晶体管可以选一对一或一对多。一对多每一行一个地址，这一行的 NAND 和 LATCH 只进这个地址，按行签名，不经过锁仓合约。电路在名单里上下滑动勾选，每一片填一个地址，勾几片签几笔。官网合约如果不提供逐个编号，这一页不能代填。",
     ],
   },
   {
@@ -222,6 +222,7 @@ const en: Section[] = [
       "The mine, the TAPE pool, and the wafer and circuit lock have no admin. They cannot be upgraded, and the terms and the fee cannot be changed. There is no rescue function. Assets sent to a contract without a matching position cannot be taken back by anyone, and the page does not send them that way. Liquidity that does not match the pool ratio is returned to the signer. It is not added to anyone else's share.",
       "The 100,000 opening allocation was not minted. The TAPE pool has no admin. Adding liquidity stakes it for 90 days to 3 years. Wafers and circuits lock in a second contract with no admin, for 180 days, 365 days, 3 years, 4 years, or 5 years. Locked wafers cannot be taped and do not count as weight. A locked circuit's weight sits on the lock, its TAPE stays there until release, and it has to be opened again afterwards. The same circuit cannot be locked twice. Buyback and a TAPE bridge are not contracts yet.",
       "Official BEM is still claimed from the TapeOut mine. It is not the same signature as TAPE. A large tape-out does not mint official BEM.",
+      "The account page can send transistors to one address or to many. Many means one address per row, and that row's NAND and LATCH go only to that address. Each transfer is its own signature, and none of them go through the lock. Circuits are ticked in a scrolling list. Each ticked circuit has one address. One signature per circuit. If an official contract does not list token ids, this page does not invent them.",
     ],
   },
   {
