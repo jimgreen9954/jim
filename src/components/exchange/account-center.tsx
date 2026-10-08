@@ -387,7 +387,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
         <button type="button" className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left" onClick={() => setGift((open) => !open)}>
           <span>
             <span className="block text-[11px] tracking-[0.22em] text-gold">{zh ? "新手礼包" : "Starter gift"}</span>
-            <span className="mt-1 block text-sm">{zh ? "交易够 5 美元才能选编号。两枚礼包要重新部署，按钮在下面。" : "Only a fill of at least 5 dollars can be selected. The two gifts need a new deploy. The buttons are below."}</span>
+            <span className="mt-1 block text-sm">{zh ? "保证金不少于 5 美元的成交才会出现。点编号就能领。池子空的时候领不到。" : "Only a fill with at least 5 dollars of margin is listed. Select it to claim. An empty pool cannot pay."}</span>
           </span>
           <span className="shrink-0 text-xs text-ink/50">{gift ? (zh ? "收起" : "Close") : (zh ? "打开" : "Open")}</span>
         </button>

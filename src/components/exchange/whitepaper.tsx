@@ -119,7 +119,7 @@ const zh: Section[] = [
       "X Layer 上放入的是 TAPELIQUID 的 NAND。BSC 上放入的是 BEM。放入的数量记在这个地址的份额上。只有这个地址能取回还没被领走的部分。别人不能把你的整笔转走。",
       "有人按规则领取时，池子变少，每个放入地址能取回的份额一起变少。池子空了就停。再放入，才继续发。",
       "领 NAND：一笔已记的 X Layer 永续，你这一边保证金不少于 5 USDT0，领 10 个。一个地址最多 5 次。领 BEM：BSC 的 BEM 永续或晶体管永续，每笔你这一边不少于 5 USDT，记满超过 10 笔，领一次 0.1。同一笔只能记一次。现货不记，因为那笔不在礼包合约里。",
-      "刚部署的 NAND 礼包是 0xAfcfc12981a5ccF7F0178A742E0A1D717E360790，它认的还是上一本 X Layer 永续。刚部署的 BEM 礼包是 0x5B9f90F894048a185000197E1aE1f8D81C358c82，它认的还是上一本晶体管合约。两份池子都是空的。交易已经切到不会停的这两本，所以礼包要按新地址再部署一次，新成交才领得到。两份都没有管理员。",
+      "NAND 礼包在 X Layer，地址 0x5374DFfD3186FfEDAC46Cc6c9545B9e9e2CEF45b，认现在这笔不会停的 X Layer 永续。BEM 礼包在 BSC，地址 0xa29f86319E66DAdF1e30548bcC593fa91CBB7278，认 BSC 的 BEM 永续和现在这笔晶体管合约。两份都没有管理员。池子现在是空的，要先放入才领得到。放进去的只有原地址能取回。",
     ],
   },
   {
@@ -269,7 +269,7 @@ const en: Section[] = [
       "NAND added on X Layer is TAPELIQUID NAND. BEM added on BSC is BEM. What you add is your share. Only that address can take back what has not been claimed. Nobody can take your whole amount.",
       "When someone claims under the rule, the pool shrinks, and every remaining share shrinks with it. An empty pool stops. It pays again only after someone adds more.",
       "NAND pays 10, at most five times per address, after a counted X Layer perpetual fill with your margin at least 5 USDT0. BEM pays 0.1 once, after more than 10 counted BSC fills on the BEM perpetual or the transistor perpetual, each with your margin at least 5 USDT. One fill counts once. Spot is not counted, because that trade is not inside the gift contract.",
-      "The NAND gift just deployed is 0xAfcfc12981a5ccF7F0178A742E0A1D717E360790. It still reads the previous X Layer book. The BEM gift just deployed is 0x5B9f90F894048a185000197E1aE1f8D81C358c82. It still reads the previous transistor book. Both pools are empty. Trading has moved to the books that do not stop, so the gifts have to be deployed once more against those books before a new fill can be claimed. Neither has an admin.",
+      "The NAND gift is on X Layer at 0x5374DFfD3186FfEDAC46Cc6c9545B9e9e2CEF45b. It reads the X Layer book that does not stop. The BEM gift is on BSC at 0xa29f86319E66DAdF1e30548bcC593fa91CBB7278. It reads the BSC BEM book and the current transistor book. Neither has an admin. Both pools are empty until someone adds to them. Only the address that added can take its share back.",
     ],
   },
   {

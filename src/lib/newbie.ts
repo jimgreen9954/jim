@@ -6,8 +6,8 @@ import { KNOWN_XPERP } from "@/lib/perp";
 import { getProvider } from "@/lib/wallet";
 import { connectXLayer, DEPLOYED, XLAYER } from "@/lib/xlayer";
 
-export const NAND_GIFT = "0xAfcfc12981a5ccF7F0178A742E0A1D717E360790" as const;
-export const BEM_GIFT = "0x5B9f90F894048a185000197E1aE1f8D81C358c82" as const;
+export const NAND_GIFT = "0x5374DFfD3186FfEDAC46Cc6c9545B9e9e2CEF45b" as const;
+export const BEM_GIFT = "0xa29f86319E66DAdF1e30548bcC593fa91CBB7278" as const;
 
 const nandAbi = parseAbi([
   "function balance() view returns (uint256)",
@@ -57,9 +57,7 @@ function bemGift(): Hex {
 }
 
 export function giftMoved(): { nand: boolean; bem: boolean } {
-  if (typeof window === "undefined") return { nand: false, bem: false };
-  const ok = (key: string) => /^0x[a-fA-F0-9]{40}$/.test(window.localStorage.getItem(key) ?? "");
-  return { nand: ok("tapeliquid-nand-gift-v2"), bem: ok("tapeliquid-bem-gift-v2") };
+  return { nand: nandGiftReady(), bem: bemGiftReady() };
 }
 
 function activeGift(key: string, fallback: string): Hex {
