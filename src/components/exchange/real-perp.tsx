@@ -326,6 +326,7 @@ export function RealPerp() {
     else if (message === "usdt") setNote(chain === "xlayer" ? c.perpNeedX : c.perpNeedUsdt);
     else if (message === "nochain") setNote(c.perpNoChain);
     else if (message === "oracle") setNote(lang === "zh" ? "只有收费地址能写标记价。" : "Only the fee address can post the mark.");
+    else if (chain === "xlayer" && /revert|execution|Bad/i.test(message)) setNote(lang === "zh" ? "没开成。十分钟均价还是空的。用收费地址隔 30 秒点一次「推进」，连续大约 10 分钟之后才能开仓。" : "It did not open. The ten-minute average is empty. The fee address posts every 30 seconds for about 10 minutes before an open can succeed.");
     else if (code === 4001) setNote(c.walletReject);
     else if (/RPC|publicnode|Archive|Invalid param/i.test(message)) setNote(c.rpcWait);
     else if (message === "amount") setNote(lang === "zh" ? "数量不对。先看保证金和价格有没有填上。" : "That amount is not valid. Check the margin and the price.");

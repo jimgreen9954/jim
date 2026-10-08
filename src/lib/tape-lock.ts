@@ -1,9 +1,12 @@
 import { createPublicClient, encodeFunctionData, http, parseAbi, type Hex } from "viem";
 import { connectXLayer, DEPLOYED, XLAYER } from "@/lib/xlayer";
 import { getProvider } from "@/lib/wallet";
+import { CIRCUIT_LOCK_BYTECODE } from "@/lib/circuit-lock-artifact";
 import { TAPE_MINE } from "@/lib/tape-mine";
 
 export const TAPE_LOCK = "0xA28390924607F08aaD8d03F512B41b6a1c012Ace" as const;
+/** Not deployed. Stays empty until the fee address creates it and the address is written here. */
+export const CIRCUIT_LOCK = "" as const;
 
 export const LOCK_TERMS = [
   { id: 0, zh: "180 天", en: "180 days", sec: 180 * 86400 },
@@ -29,12 +32,30 @@ const approveAbi = parseAbi([
   "function setApprovalForAll(address,bool)",
 ]);
 
+const circuitAbi = parseAbi([
+  "function seat(uint256) view returns (address owner, uint8 term, uint64 start, uint64 unlock, uint256 circuitId, uint256 gates)",
+  "function ownedCount(address) view returns (uint256)",
+  "function ownedId(address,uint256) view returns (uint256)",
+  "function lock(uint256,uint8) returns (uint256)",
+  "function claimTape(uint256)",
+  "function claimCircuit(uint256)",
+]);
+
+const client = createPublicClient({ transport: http(XLAYER.rpc) });
+
 const mineAbi = parseAbi([
   "function totalWeight() view returns (uint256)",
   "function pendingOf(uint256) view returns (uint256)",
 ]);
 
-const client = createPublicClient({ transport: http(XLAYER.rpc) });
+export function circuitLockReady(): boolean {
+  return /^0x[a-fA-F0-9]{40}$/.test(CIRCUIT_LOCK);
+}
+
+function circuitLock(): Hex {
+  if (!circuitLockReady()) throw new Error("nodeploy");
+  return CIRCUIT_LOCK as Hex;
+}
 
 export type LockSeat = {
   id: string;
@@ -97,15 +118,15 @@ async function send(from: string, to: Hex, data: Hex): Promise<Hex> {
   return hash;
 }
 
-async function ensureApproved(from: string, token: Hex) {
+async function ensureApproved(from: string, token: Hex, spender: Hex = TAPE_LOCK) {
   const ok = await client.readContract({
     address: token,
     abi: approveAbi,
     functionName: "isApprovedForAll",
-    args: [from as Hex, TAPE_LOCK],
+    args: [from as Hex, spender],
   });
   if (ok) return;
-  await send(from, token, encodeFunctionData({ abi: approveAbi, functionName: "setApprovalForAll", args: [TAPE_LOCK, true] }));
+  await send(from, token, encodeFunctionData({ abi: approveAbi, functionName: "setApprovalForAll", args: [spender, true] }));
 }
 
 export async function lockWafer(from: string, kind: 0 | 1, amount: bigint, term: number): Promise<Hex> {
@@ -141,4 +162,82 @@ export async function fanCircuits(from: string, ids: bigint[], tos: Hex[]): Prom
   const data = encodeFunctionData({ abi, functionName: "fan", args: [ids, tos] });
   await client.call({ account: from as Hex, to: TAPE_LOCK, data });
   return send(from, TAPE_LOCK, data);
+}
+
+export type CircuitSeat = {
+  id: string;
+  term: number;
+  start: number;
+  unlock: number;
+  circuitId: string;
+  gates: bigint;
+  pending: bigint;
+};
+
+export async function readCircuitLocks(account: string | null): Promise<CircuitSeat[]> {
+  if (!account || !circuitLockReady()) return [];
+  const lock = circuitLock();
+  const count = await client.readContract({ address: lock, abi: circuitAbi, functionName: "ownedCount", args: [account as Hex] });
+  const n = Number(count);
+  if (n === 0) return [];
+  const start = Math.max(0, n - 30);
+  const ids = await Promise.all(
+    Array.from({ length: n - start }, (_, i) =>
+      client.readContract({ address: lock, abi: circuitAbi, functionName: "ownedId", args: [account as Hex, BigInt(start + i)] }),
+    ),
+  );
+  const rows = await Promise.all(ids.map((id) => client.readContract({ address: lock, abi: circuitAbi, functionName: "seat", args: [id] })));
+  const seats: CircuitSeat[] = [];
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i];
+    if (row[0] === "0x0000000000000000000000000000000000000000") continue;
+    const circuitId = row[4];
+    const pending = await client.readContract({ address: TAPE_MINE, abi: mineAbi, functionName: "pendingOf", args: [circuitId] }).catch(() => 0n);
+    seats.push({
+      id: ids[i].toString(),
+      term: Number(row[1]),
+      start: Number(row[2]),
+      unlock: Number(row[3]),
+      circuitId: circuitId.toString(),
+      gates: row[5],
+      pending,
+    });
+  }
+  return seats;
+}
+
+export async function lockFreshCircuit(from: string, circuitId: bigint, term: number): Promise<Hex> {
+  if (!circuitLockReady()) throw new Error("nodeploy");
+  const lock = circuitLock();
+  await ensureApproved(from, DEPLOYED.circuits, lock);
+  const data = encodeFunctionData({ abi: circuitAbi, functionName: "lock", args: [circuitId, term] });
+  await client.call({ account: from as Hex, to: lock, data });
+  return send(from, lock, data);
+}
+
+export async function claimFreshTape(from: string, id: bigint): Promise<Hex> {
+  const lock = circuitLock();
+  const data = encodeFunctionData({ abi: circuitAbi, functionName: "claimTape", args: [id] });
+  await client.call({ account: from as Hex, to: lock, data });
+  return send(from, lock, data);
+}
+
+export async function claimFreshCircuit(from: string, id: bigint): Promise<Hex> {
+  const lock = circuitLock();
+  const data = encodeFunctionData({ abi: circuitAbi, functionName: "claimCircuit", args: [id] });
+  await client.call({ account: from as Hex, to: lock, data });
+  return send(from, lock, data);
+}
+
+export async function deployCircuitLock(from: string): Promise<string> {
+  await connectXLayer();
+  const eth = getProvider();
+  if (!eth) throw new Error("nowallet");
+  const hash = (await eth.request({
+    method: "eth_sendTransaction",
+    params: [{ from, data: CIRCUIT_LOCK_BYTECODE, gas: "0x2DC6C0" }],
+  })) as Hex;
+  const receipt = await client.waitForTransactionReceipt({ hash, timeout: 180_000 });
+  if (receipt.status !== "success" || !receipt.contractAddress) throw new Error("revert");
+  return receipt.contractAddress;
 }
