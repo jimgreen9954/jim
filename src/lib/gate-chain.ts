@@ -4,7 +4,7 @@ import { GATE_BYTECODE } from "@/lib/gate-artifact";
 import { getProvider } from "@/lib/wallet";
 
 const KEY = "tapeliquid-gate-perp";
-export const GATE = "0xc075443ab7ebef86fe044be2c93a4ff4376ffe0b";
+export const GATE = "0xb4b2ee90d10ecfc7ed36a58e96e03074fa8731eb";
 const USDT = BSC.usdt;
 
 const abi = parseAbi([
@@ -102,24 +102,10 @@ async function approve(from: string, perp: string, amount: bigint) {
   await send(from, USDT, data, 80_000n);
 }
 
-function diverge(stored: number, official: number): boolean {
-  if (!(official > 0) || !(stored > 0)) return true;
-  const ratio = stored / official;
-  return ratio < 0.97 || ratio > 1.03;
-}
-
 export async function gateMark(perp: string, market: number): Promise<number> {
   const c = await client();
   const prev = await c.readContract({ address: perp as Hex, abi, functionName: "marks", args: [market] });
   return Number(formatUnits(prev, 18));
-}
-
-async function alignMark(from: string, perp: string, market: number, official: number) {
-  if (!(official > 0)) throw new Error("mark");
-  const stored = await gateMark(perp, market);
-  if (diverge(stored, official)) await pushMark(from, perp, market, official);
-  const next = await gateMark(perp, market);
-  if (diverge(next, official)) throw new Error("mark");
 }
 
 export async function pushMark(from: string, perp: string, market: number, price: number) {
@@ -130,8 +116,12 @@ export async function pushMark(from: string, perp: string, market: number, price
   ]);
   const px = priceWei(price);
   const now = BigInt(Math.floor(Date.now() / 1000));
-  if (prev !== 0n && now < at + 10n) return;
-  if (prev !== 0n && (px * 2n > prev * 3n || prev * 2n > px * 3n)) return;
+  if (prev !== 0n && now < at + 30n) return;
+  if (prev !== 0n) {
+    const cap = prev + prev / 200n;
+    const floor = prev - prev / 200n;
+    if (px > cap || px < floor) throw new Error("step");
+  }
   const data = encodeFunctionData({ abi, functionName: "push", args: [market, px] });
   await send(from, perp as Hex, data, 120_000n);
 }
@@ -141,7 +131,6 @@ export async function openGate(from: string, perp: string, market: number, long:
   if (amount < parseUnits("1", 18) || amount > parseUnits("500", 18)) throw new Error("margin");
   const balances = await readBalances(from);
   if (balances.usdt < amount) throw new Error("usdt");
-  await alignMark(from, perp, market, mark);
   await approve(from, perp, amount);
   const px = priceWei(limit);
   const data = encodeFunctionData({ abi, functionName: "open", args: [market, long, amount, lev, px] });
@@ -153,7 +142,6 @@ export async function takeGateChain(from: string, perp: string, id: bigint, marg
   if (amount < parseUnits("1", 18)) throw new Error("margin");
   const balances = await readBalances(from);
   if (balances.usdt < amount) throw new Error("usdt");
-  await alignMark(from, perp, market, official);
   await approve(from, perp, amount);
   const data = encodeFunctionData({ abi, functionName: "take", args: [id, amount, lev] });
   return send(from, perp as Hex, data, 400_000n);
@@ -164,8 +152,7 @@ export async function cancelGateChain(from: string, perp: string, id: bigint) {
   return send(from, perp as Hex, data, 200_000n);
 }
 
-export async function closeGateChain(from: string, perp: string, id: bigint, market: number, official: number) {
-  await alignMark(from, perp, market, official);
+export async function closeGateChain(from: string, perp: string, id: bigint) {
   const data = encodeFunctionData({ abi, functionName: "close", args: [id] });
   return send(from, perp as Hex, data, 250_000n);
 }

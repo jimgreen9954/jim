@@ -44,10 +44,9 @@ function tokenUnit(): bigint {
 }
 export const KNOWN_PERP = "0xB98D14333a93D49a4E05478d002FC3944D88A3b7";
 export const BSC_REBATE = "0xce3511b6e909c9694826cfd5dbe434d457920eba";
-export const KNOWN_XPERP = "0x0f22b18b67477886311ee0fb7cf684d3f48c5eca";
-export const KNOWN_XMARK = "0xc35C8cB9FFaC92F25cAFaEdC82F03144b24bCb1d";
-/** New mark. Oracle is the fee address. No perpetual is attached yet. */
-export const NEXT_XMARK = "0xb623ee0ef23d8ea61f93cca373a4a4b27cf32fe1";
+export const KNOWN_XPERP = "0x3dfde13ef89f49575e73e91d3cd11127557f4d60";
+export const KNOWN_XMARK = "0xb623ee0ef23d8ea61f93cca373a4a4b27cf32fe1";
+export const NEXT_XMARK = KNOWN_XMARK;
 export const BOARD = [KNOWN_PERP];
 
 const abi = [

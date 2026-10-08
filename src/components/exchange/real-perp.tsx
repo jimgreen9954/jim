@@ -14,7 +14,6 @@ import {
   cancelPerp,
   closePerp,
   deployXLayer,
-  deployLockedPair,
   bookOf,
   KNOWN_XPERP,
   liquidatePerp,
@@ -326,7 +325,7 @@ export function RealPerp() {
     if (message === "nowallet") setNote(c.walletNo);
     else if (message === "usdt") setNote(chain === "xlayer" ? c.perpNeedX : c.perpNeedUsdt);
     else if (message === "nochain") setNote(c.perpNoChain);
-    else if (message === "revert") setNote(c.perpRevert);
+    else if (message === "oracle") setNote(lang === "zh" ? "只有收费地址能写标记价。" : "Only the fee address can post the mark.");
     else if (code === 4001) setNote(c.walletReject);
     else if (/RPC|publicnode|Archive|Invalid param/i.test(message)) setNote(c.rpcWait);
     else if (message === "amount") setNote(lang === "zh" ? "数量不对。先看保证金和价格有没有填上。" : "That amount is not valid. Check the margin and the price.");
@@ -410,39 +409,9 @@ export function RealPerp() {
         {chain === "xlayer" ? (
           <p className="border border-sell px-3 py-2 text-sm text-sell xl:col-span-12">
             {lang === "zh"
-              ? "X Layer 旧本已停新开仓。新标记已经在链上，写价的地址不能改。新永续三笔都因 gas 只有 120 万而失败，需要大约 210 万。签名时把 Gas Limit 改成 3000000。BSC 的 BEM 永续读 Pancake，不用为这个洞重部署。"
-              : "The old X Layer book is closed to new opens. The new mark is on chain and its poster cannot be changed. Three perpetual deploys failed because gas was left at 1.2 million. They need about 2.1 million. Set Gas Limit to 3000000 before signing. The BSC BEM perpetual reads Pancake and does not need a new contract for this hole."}
+              ? "X Layer 已换上新本。标记只许收费地址写，结算用 10 分钟均价。均价现在还是空的，开仓会失败。收费地址每隔 30 秒点一次「推进」，写满约 10 分钟。网站只用 0x3dfd…4d60，另外两份空合约不要打钱。"
+              : "The X Layer book is the new one. Only the fee address can post the mark, and settlement uses a 10-minute average. The average is empty, so an open fails. That address posts about every 30 seconds for 10 minutes. The site uses 0x3dfd…4d60. Do not send funds to the other two empty contracts."}
           </p>
-        ) : null}
-        {chain === "xlayer" ? (
-          <button
-            type="button"
-            className="min-h-12 border border-gold"
-            disabled={busy}
-            onClick={() => {
-              setBusy(true);
-              setBad(false);
-              void (async () => {
-                try {
-                  const from = account ?? (await connectXLayer());
-                  setAccount(from);
-                  if (from.toLowerCase() !== FEE_TO.toLowerCase()) {
-                    setBad(true);
-                    setNote(lang === "zh" ? `只有收费地址能签。当前是 ${from}` : `Only the fee address can sign. This wallet is ${from}`);
-                    return;
-                  }
-                  const next = await deployLockedPair(from);
-                  setNote(lang === "zh" ? `新标记 ${next.mark}。新永续 ${next.perp}。还没写进网站，所有人仍用旧本，旧本不开新仓。` : `New mark ${next.mark}. New book ${next.perp}. Not written into the site yet. Everyone still sees the old book, and it does not open.`);
-                } catch (err) {
-                  fail(err);
-                } finally {
-                  setBusy(false);
-                }
-              })();
-            }}
-          >
-            {lang === "zh" ? "挂上新永续（Gas Limit 填 3000000）" : "Attach the new book (set Gas Limit to 3000000)"}
-          </button>
         ) : null}
         <div className="grid grid-cols-2 gap-2 xl:col-span-12">
           <button
@@ -503,7 +472,11 @@ export function RealPerp() {
           </button>
         ) : null}
         {chain === "xlayer" && /^0x[a-fA-F0-9]{40}$/.test(perp) ? (
-          <button type="button" className="min-h-11 border border-gold xl:col-span-12" disabled={busy} onClick={() => run((from) => pushMark(from).then(() => "ok"))}>
+          <button type="button" className="min-h-11 border border-gold xl:col-span-12" disabled={busy} onClick={() => run(async (from) => {
+            if (from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("oracle");
+            await pushMark(from);
+            return "ok";
+          })}>
             {c.pushMark}
           </button>
         ) : null}
@@ -584,11 +557,6 @@ export function RealPerp() {
             named={named}
             lang={lang}
             onTake={(book, quote) => {
-              if (chain === "xlayer") {
-                setBad(true);
-                setNote(lang === "zh" ? "X Layer 这本已停吃单。已有仓可以平，自己的单可以撤。" : "Takes on this X Layer book are off. Close a position or cancel your own order.");
-                return;
-              }
               void run((from) => takePerp(from, book, quote.id, formatUnits(quote.margin, dec), quote.lev, quote.price > 0n));
             }}
             onCancel={(book, quote) => run((from) => cancelPerp(from, book, quote.id), "cancel")}
@@ -892,7 +860,7 @@ export function RealPerp() {
                   <button
                     type="button"
                     className="min-h-12 bg-ink text-paper disabled:opacity-40"
-                    disabled={busy || chain === "xlayer" || lock.status === "bad" || !levOk || !marginOk || !priceOk || !view?.priced || Boolean(!view?.book && waiting && view?.pendingLong)}
+                    disabled={busy || lock.status === "bad" || !levOk || !marginOk || !priceOk || !view?.priced || Boolean(!view?.book && waiting && view?.pendingLong)}
                     onClick={() => {
                       if (lev > 20 && !hot) { setHot(true); return; }
                       setCard("long");
@@ -903,7 +871,7 @@ export function RealPerp() {
                   <button
                     type="button"
                     className="min-h-12 border border-sell bg-sell text-[#f7f5f0] disabled:opacity-40"
-                    disabled={busy || chain === "xlayer" || lock.status === "bad" || !levOk || !marginOk || !priceOk || !view?.priced || Boolean(!view?.book && waiting && !view?.pendingLong)}
+                    disabled={busy || lock.status === "bad" || !levOk || !marginOk || !priceOk || !view?.priced || Boolean(!view?.book && waiting && !view?.pendingLong)}
                     onClick={() => {
                       if (lev > 20 && !hot) { setHot(true); return; }
                       setCard("short");
@@ -930,11 +898,6 @@ export function RealPerp() {
                     onYes={() => {
                       const long = card === "long";
                       setCard(null);
-                      if (chain === "xlayer") {
-                        setBad(true);
-                        setNote(lang === "zh" ? "X Layer 这本已停新开仓。" : "New opens on this X Layer book are off.");
-                        return;
-                      }
                       void run(async (from) => {
                         const before = view?.myDeal && view.myDeal > 0n ? view.myDeal.toString() : "0";
                         const tx = await openPerp(from, perp, long, margin, lev, limit.trim() || (markN > 0 ? markN.toFixed(4) : ""));

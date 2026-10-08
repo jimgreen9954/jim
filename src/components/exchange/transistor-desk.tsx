@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { bindGate, cancelGateChain, claimGate, closeGateChain, deployGate, gateAddress, gateMark, readGateChain, readGateRebate, registerGate, type ChainDeal, type ChainOrder } from "@/lib/gate-chain";
+import { bindGate, cancelGateChain, claimGate, closeGateChain, gateAddress, gateMark, openGate, pushMark, readGateChain, readGateRebate, registerGate, takeGateChain, type ChainDeal, type ChainOrder } from "@/lib/gate-chain";
 import { FEE_TO, connectBsc } from "@/lib/bsc";
 import { getTransistorDesk, type TransistorDesk } from "@/lib/transistor-market";
 import { currentAccount, onAccount } from "@/lib/wallet";
@@ -130,12 +130,47 @@ export function TransistorDesk() {
     }
   }
 
+  async function place(long: boolean) {
+    const user = account ?? currentAccount();
+    const price = Number(limit) || mark;
+    if (!user || !perp || !(price > 0)) return;
+    setBusy(true);
+    try {
+      await openGate(user, perp, market, long, margin, lev, price, mark);
+      const next = await readGateChain(perp);
+      setOrders(next.orders);
+      setDeals(next.deals);
+      setNote(zh ? "已挂上。对手来了才会成交。" : "Posted. It fills when someone takes the other side.");
+    } catch {
+      setNote(zh ? "没有开成。十分钟均价还没写满，或保证金不够。" : "It did not open. The ten-minute average may not be ready, or the margin is short.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function take(row: ChainOrder) {
+    const user = account ?? currentAccount();
+    if (!user || !perp) return;
+    setBusy(true);
+    try {
+      await takeGateChain(user, perp, BigInt(row.id), margin, lev, row.market, markFor(row.market));
+      const next = await readGateChain(perp);
+      setOrders(next.orders);
+      setDeals(next.deals);
+      setNote(zh ? "已吃到。" : "Taken.");
+    } catch {
+      setNote(zh ? "没有吃成。十分钟均价还没写满，或保证金不够。" : "The take did not fill. The average may not be ready, or the margin is short.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function close(row: ChainDeal) {
     const user = account ?? currentAccount();
     if (!user || !perp) return;
     setBusy(true);
     try {
-      await closeGateChain(user, perp, BigInt(row.id), row.market, markFor(row.market));
+      await closeGateChain(user, perp, BigInt(row.id));
       const next = await readGateChain(perp);
       setOrders(next.orders);
       setDeals(next.deals);
@@ -194,7 +229,7 @@ export function TransistorDesk() {
             <span />
           </div>
           {asks.map((row) => (
-            <OrderRow key={row.id} row={row} mine={mine} zh={zh} onCancel={() => cancel(row)} />
+            <OrderRow key={row.id} row={row} mine={mine} zh={zh} onCancel={() => cancel(row)} onTake={() => take(row)} />
           ))}
           <p className="my-1 flex items-center gap-3 px-2 font-mono text-sm">
             <span className="h-px flex-1 bg-gold/40" />
@@ -202,12 +237,12 @@ export function TransistorDesk() {
             <span className="h-px flex-1 bg-gold/40" />
           </p>
           {bids.map((row) => (
-            <OrderRow key={row.id} row={row} mine={mine} zh={zh} onCancel={() => cancel(row)} />
+            <OrderRow key={row.id} row={row} mine={mine} zh={zh} onCancel={() => cancel(row)} onTake={() => take(row)} />
           ))}
           {resting.length === 0 ? <p className="px-3 py-6 text-sm text-ink/60">{zh ? "这个标还没有人挂单。右边开多或开空，就会出现在这里。" : "No orders on this market yet. A long or a short from the ticket shows up here."}</p> : null}
         </div>
         <div className="flex flex-col gap-2 border border-gold bg-card p-3">
-          <p className="border border-sell px-2 py-2 text-sm text-sell">{zh ? "新开仓和吃单已停。旧本任何地址都能推结算价。两次部署都失败了：钱包 gas 停在 120 万，这份合约大约要 180 万。签名时把 Gas Limit 改成 3000000。BSC 的 BEM 永续不用重部署。" : "New opens and takes are off. Anyone can push the old mark. Both deploys failed: the wallet left gas at 1.2 million, and this contract needs about 1.8 million. Set Gas Limit to 3000000. The BSC BEM perpetual does not need a new contract."}</p>
+          <p className="border border-gold/40 px-2 py-2 text-sm">{zh ? "新本已换上。结算用 10 分钟均价，只许收费地址写价。现在均价还是空的，开仓会失败。收费地址要隔 30 秒写一次，写满大约 10 分钟。每次最多挪 0.5%。" : "The new book is live. Settlement is a 10-minute average, and only the fee address can post it. The average is empty, so an open fails. That address posts every 30 seconds for about 10 minutes. Each step moves at most 0.5%."}</p>
           <button type="button" className="min-h-11 border border-gold" disabled={busy} onClick={async () => {
             setBusy(true);
             setNote("");
@@ -215,18 +250,18 @@ export function TransistorDesk() {
               const from = account ?? (await connectBsc());
               setAccount(from);
               if (from.toLowerCase() !== FEE_TO.toLowerCase()) {
-                setNote(zh ? `只有收费地址能签。当前是 ${from}` : `Only the fee address can sign. This wallet is ${from}`);
+                setNote(zh ? `只有收费地址能写价。当前是 ${from}` : `Only the fee address can post. This wallet is ${from}`);
                 return;
               }
-              const addr = await deployGate(from);
-              setNote(zh ? `新晶体管永续 ${addr}。还没写进网站。所有人仍看到旧本，旧本不开新仓。` : `New transistor book ${addr}. Not written into the site. Everyone still sees the old book, and it does not open.`);
+              await pushMark(from, perp, market, mark);
+              setNote(zh ? "这个标的已写入。隔 30 秒再写，连续约 10 分钟后才能开仓。" : "This market was posted. Post again after 30 seconds. Opens wait about 10 minutes.");
             } catch {
-              setNote(zh ? "没有部署成。" : "It did not deploy.");
+              setNote(zh ? "没写上。可能还没到 30 秒，或这一笔挪过了 0.5%。" : "It was not posted. Wait 30 seconds, or the move was over 0.5%.");
             } finally {
               setBusy(false);
             }
-          }}>{zh ? "再部署晶体管永续（Gas Limit 填 3000000）" : "Deploy the transistor book again (Gas Limit 3000000)"}</button>
-          <p className="text-xs tracking-widest text-gold">{zh ? "下单已停" : "Opens are off"}</p>
+          }}>{zh ? "收费地址写入这个标的" : "Fee address posts this market"}</button>
+          <p className="text-xs tracking-widest text-gold">{zh ? "下单" : "Open"}</p>
           <label className="text-sm">
             {zh ? "限价 BNB，空着就用参考价" : "Limit in BNB. Blank uses the mark."}
             <input value={limit} onChange={(event) => setLimit(event.target.value)} inputMode="decimal" placeholder={px(mark)} className="mt-1 w-full border border-gold bg-transparent px-2 py-2 font-mono outline-none" />
@@ -241,8 +276,8 @@ export function TransistorDesk() {
             ))}
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <button type="button" disabled className="min-h-11 bg-ink text-paper disabled:opacity-50">{zh ? "开多已停" : "Long off"}</button>
-            <button type="button" disabled className="min-h-11 border border-gold disabled:opacity-50">{zh ? "开空已停" : "Short off"}</button>
+            <button type="button" disabled={busy} className="min-h-11 bg-ink text-paper disabled:opacity-50" onClick={() => place(true)}>{zh ? "开多" : "Long"}</button>
+            <button type="button" disabled={busy} className="min-h-11 border border-gold disabled:opacity-50" onClick={() => place(false)}>{zh ? "开空" : "Short"}</button>
           </div>
           <p className="text-xs leading-relaxed text-ink/60">{zh ? "划走 BSC 的 USDT。盈亏按推进后的官网价，不按限价。" : "Moves BSC USDT. PnL uses the pushed official price, not your limit."}</p>
           {perp ? <p className="break-all font-mono text-xs">{perp}</p> : null}
@@ -332,7 +367,7 @@ export function TransistorDesk() {
   );
 }
 
-function OrderRow({ row, mine, zh, onCancel }: { row: ChainOrder; mine: string; zh: boolean; onCancel: () => void }) {
+function OrderRow({ row, mine, zh, onCancel, onTake }: { row: ChainOrder; mine: string; zh: boolean; onCancel: () => void; onTake: () => void }) {
   const own = row.user.toLowerCase() === mine;
   return (
     <div className="grid grid-cols-[5rem_1fr_4.5rem_auto] items-center gap-2 px-2 py-1 font-mono text-sm tabular-nums">
@@ -342,7 +377,7 @@ function OrderRow({ row, mine, zh, onCancel }: { row: ChainOrder; mine: string; 
       {own ? (
         <button type="button" className="min-h-8 border border-gold px-2 text-xs" onClick={onCancel}>{zh ? "撤单" : "Cancel"}</button>
       ) : (
-        <button type="button" disabled className="min-h-8 border border-gold px-2 text-xs opacity-50">{row.long ? (zh ? "吃单已停" : "Take off") : zh ? "吃单已停" : "Take off"}</button>
+        <button type="button" className="min-h-8 border border-gold px-2 text-xs" onClick={onTake}>{zh ? "吃单" : "Take"}</button>
       )}
     </div>
   );
