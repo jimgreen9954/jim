@@ -221,7 +221,7 @@ function Header({ floor, desk, setFloor, setDesk, setShop, setGiftOpen }: { floo
         : floor === "mine"
           ? lang === "zh" ? "领取已经挖出的币。BEM 和 TAPE 分开签名。" : "Claim coins already mined. BEM and TAPE are separate signatures."
         : floor === "me"
-          ? lang === "zh" ? "看资产、转出。礼包在下面，打开才出现。" : "Balances and transfers. The gift stays closed until you open it."
+          ? lang === "zh" ? "看资产、转出。新手礼包是隐藏活动，打开才有规则。" : "Balances and transfers. The gift is a closed activity. The rules are inside."
           : lang === "zh" ? "规则以这一页为准。" : "This page is the rulebook.";
   const go = (next: Floor) => {
     if (window.location.pathname.startsWith("/whitepaper")) {

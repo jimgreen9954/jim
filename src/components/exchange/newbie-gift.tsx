@@ -51,7 +51,24 @@ export function NewbieGift({ account, zh }: { account: string; zh: boolean }) {
 
   return (
     <div className="border-t border-gold/30">
-      <p className="px-4 pt-3 text-xs text-ink/55">{zh ? "充进去是你的份额。别人只能按规则领，不能把你的整笔转走。" : "A deposit is your share. A claim follows the rule. It cannot take the whole deposit."}</p>
+      <div className="grid gap-3 px-4 py-3 text-sm leading-6 sm:grid-cols-2">
+        <div>
+          <p className="text-[11px] tracking-[0.18em] text-gold">{zh ? "这是什么" : "What it is"}</p>
+          <p className="mt-1 text-ink/80">{zh ? "隐藏活动，不是充值入口，也不是理财。奖励池里的 NAND 和 BEM 是别人自愿放进去的。你只能领规则里的那一档。放进去的人，只能取回还没被领走的份额。" : "A closed activity, not a deposit and not savings. The NAND and BEM in the pool were added by choice. You can claim only the stated amount. Whoever added funds can take back only what has not been claimed."}</p>
+        </div>
+        <div>
+          <p className="text-[11px] tracking-[0.18em] text-gold">{zh ? "领 NAND" : "NAND"}</p>
+          <p className="mt-1 text-ink/80">{zh ? "X Layer 永续，已经撮合，你这一边保证金不少于 5 USDT0。记下这一笔，领 10 个。一个地址最多 5 次。池子少于 10 个就停。" : "One matched X Layer perpetual, with your margin at least 5 USDT0. Count that fill, then claim 10. Five times per address. The pool stops under 10."}</p>
+        </div>
+        <div>
+          <p className="text-[11px] tracking-[0.18em] text-gold">{zh ? "领 BEM" : "BEM"}</p>
+          <p className="mt-1 text-ink/80">{zh ? "BSC 的 BEM 永续，或晶体管永续。每笔你这一边不少于 5 USDT。记下的成交超过 10 笔，领一次 0.1 BEM。池子少于 0.1 就停。" : "The BSC BEM perpetual, or the transistor perpetual. Each fill needs your margin of at least 5 USDT. After more than 10 counted fills, claim 0.1 BEM once. The pool stops under 0.1."}</p>
+        </div>
+        <div>
+          <p className="text-[11px] tracking-[0.18em] text-gold">{zh ? "不算的" : "Not counted"}</p>
+          <p className="mt-1 text-ink/80">{zh ? "现货不算。同一笔成交只能记一次。练习单不算。两本永续不能并成一笔。成交编号要自己填，页面不代记。" : "Spot is not counted. One fill counts once. Practice is not counted. The two books do not combine. You enter the fill id yourself. The page does not count it for you."}</p>
+        </div>
+      </div>
       <div className="grid sm:grid-cols-2">
         <article className="px-4 py-3 sm:border-r sm:border-gold/30">
           <p className="text-xs text-ink/50">NAND · X Layer</p>
@@ -60,8 +77,8 @@ export function NewbieGift({ account, zh }: { account: string; zh: boolean }) {
           <p className="mt-2 font-mono text-xs">{zh ? "已记" : "Counted"} {nandText(row?.nandTrades)} · {nandText(row?.nandClaimed)} / 5</p>
           <div className="mt-3 grid grid-cols-[1fr_auto_auto] gap-2">
             <input value={nandAmt} onChange={(event) => setNandAmt(event.target.value.replace(/[^\d]/g, ""))} placeholder={zh ? "数量" : "Amount"} className="min-h-10 min-w-0 border border-gold bg-card px-2 font-mono text-sm outline-none" />
-            <button type="button" disabled={busy || !nandOn || !nandAmt} className="min-h-10 bg-ink px-3 text-sm text-paper disabled:opacity-40" onClick={() => run(() => depositNand(account, BigInt(nandAmt)), zh ? "NAND 已充进你的份额。" : "NAND was added to your share.")}>{zh ? "充" : "In"}</button>
-            <button type="button" disabled={busy || !nandOn || !nandAmt} className="min-h-10 border border-gold px-3 text-sm disabled:opacity-40" onClick={() => run(() => withdrawNand(account, BigInt(nandAmt)), zh ? "NAND 已退回这个地址。" : "NAND is back in this address.")}>{zh ? "取" : "Out"}</button>
+            <button type="button" disabled={busy || !nandOn || !nandAmt} className="min-h-10 bg-ink px-3 text-sm text-paper disabled:opacity-40" onClick={() => run(() => depositNand(account, BigInt(nandAmt)), zh ? "NAND 已记入你的份额。" : "NAND was added to your share.")}>{zh ? "放入" : "Add"}</button>
+            <button type="button" disabled={busy || !nandOn || !nandAmt} className="min-h-10 border border-gold px-3 text-sm disabled:opacity-40" onClick={() => run(() => withdrawNand(account, BigInt(nandAmt)), zh ? "未领走的 NAND 已退回。" : "Unclaimed NAND is back.")}>{zh ? "取回" : "Back"}</button>
           </div>
           <button type="button" disabled={busy || !canNand} className="mt-2 min-h-10 w-full border border-gold text-sm disabled:opacity-40" onClick={() => run(() => claimNand(account), zh ? "已领 10 个 NAND。" : "Claimed 10 NAND.")}>{zh ? "领取 10 NAND" : "Claim 10 NAND"}</button>
         </article>
@@ -72,8 +89,8 @@ export function NewbieGift({ account, zh }: { account: string; zh: boolean }) {
           <p className="mt-2 font-mono text-xs">{zh ? "已记" : "Counted"} {row ? row.bemTrades.toString() : "—"} · {row?.bemClaimed ? "0.1" : "0"} / 0.1</p>
           <div className="mt-3 grid grid-cols-[1fr_auto_auto] gap-2">
             <input value={bemAmt} onChange={(event) => setBemAmt(event.target.value.replace(/[^\d.]/g, ""))} placeholder={zh ? "数量" : "Amount"} className="min-h-10 min-w-0 border border-gold bg-card px-2 font-mono text-sm outline-none" />
-            <button type="button" disabled={busy || !bemOn || !bemAmt} className="min-h-10 bg-ink px-3 text-sm text-paper disabled:opacity-40" onClick={() => run(() => depositBem(account, parseUnits(bemAmt, 8)), zh ? "BEM 已充进你的份额。" : "BEM was added to your share.")}>{zh ? "充" : "In"}</button>
-            <button type="button" disabled={busy || !bemOn || !bemAmt} className="min-h-10 border border-gold px-3 text-sm disabled:opacity-40" onClick={() => run(() => withdrawBem(account, parseUnits(bemAmt, 8)), zh ? "BEM 已退回这个地址。" : "BEM is back in this address.")}>{zh ? "取" : "Out"}</button>
+            <button type="button" disabled={busy || !bemOn || !bemAmt} className="min-h-10 bg-ink px-3 text-sm text-paper disabled:opacity-40" onClick={() => run(() => depositBem(account, parseUnits(bemAmt, 8)), zh ? "BEM 已记入你的份额。" : "BEM was added to your share.")}>{zh ? "放入" : "Add"}</button>
+            <button type="button" disabled={busy || !bemOn || !bemAmt} className="min-h-10 border border-gold px-3 text-sm disabled:opacity-40" onClick={() => run(() => withdrawBem(account, parseUnits(bemAmt, 8)), zh ? "未领走的 BEM 已退回。" : "Unclaimed BEM is back.")}>{zh ? "取回" : "Back"}</button>
           </div>
           <button type="button" disabled={busy || !canBem} className="mt-2 min-h-10 w-full border border-gold text-sm disabled:opacity-40" onClick={() => run(() => claimBem(account), zh ? "已领 0.1 BEM。" : "Claimed 0.1 BEM.")}>{zh ? "领取 0.1 BEM" : "Claim 0.1 BEM"}</button>
         </article>
