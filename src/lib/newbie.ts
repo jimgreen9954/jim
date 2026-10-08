@@ -4,8 +4,8 @@ import { BEM_GIFT_BYTECODE, NAND_GIFT_BYTECODE } from "@/lib/newbie-artifact";
 import { getProvider } from "@/lib/wallet";
 import { connectXLayer, DEPLOYED, XLAYER } from "@/lib/xlayer";
 
-export const NAND_GIFT = "" as const;
-export const BEM_GIFT = "" as const;
+export const NAND_GIFT = "0xfb05bf0472ab9c27b063b314a704516b086ea7d3" as const;
+export const BEM_GIFT = "0xcac69f02c06bfca3bfdb1eaf1f4a60e17e718081" as const;
 
 const nandAbi = parseAbi([
   "function balance() view returns (uint256)",

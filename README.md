@@ -19,6 +19,7 @@ Spot fills on PancakeSwap V3 (BSC). BEM uses the 1% pool. BNB uses the 0.01% poo
 | TAPE mine | X Layer | `0x60b1b7cae1bbd0e84ac3e1e43f933712f3ab67e8` |
 | TAPE pool | X Layer | `0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641` |
 | Wafer and circuit lock | X Layer | wafer `0xA28390924607F08aaD8d03F512B41b6a1c012Ace`, circuit `0x06c877cc158d9ca3547220f9fc156f39bce7013c` |
+| Starter gift | X Layer NAND, BSC BEM | NAND `0xfb05bf0472ab9c27b063b314a704516b086ea7d3`, BEM `0xcac69f02c06bfca3bfdb1eaf1f4a60e17e718081` |
 | BEM bridge | BSC | `0xa84B8D3893De6e9922f2B29bE1e1b115845F5E72` |
 | BEM | X Layer | `0x60e62Efa9405d6873C5deaBD4E6CC91c25363952` |
 

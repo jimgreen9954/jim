@@ -47,19 +47,11 @@ const ERC_NAME: Record<ErcKey, string> = {
 
 type Worth = { name: string; qty: string; px: string; usd: number | null };
 
-function short(addr: string): string {
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
-}
-
-function scan(chain: "bsc" | "xlayer", addr: string): string {
-  return chain === "xlayer" ? `https://www.oklink.com/xlayer/address/${addr}` : `https://bscscan.com/address/${addr}`;
-}
-
 export function AccountCenter() {
   const lang = useExchange((s) => s.lang);
   const zh = lang === "zh";
   const [account, setAccount] = useState<string | null>(currentAccount());
-  const [tab, setTab] = useState<"chips" | "circuits" | "book">("chips");
+  const [tab, setTab] = useState<"chips" | "circuits">("chips");
   const [book, setBook] = useState<Holdings | null>(null);
   const [worth, setWorth] = useState<Worth[] | null>(null);
   const [worthAt, setWorthAt] = useState("");
@@ -76,6 +68,7 @@ export function AccountCenter() {
   const [stakes, setStakes] = useState<{ lp: TapePosition[]; seats: LockSeat[]; usdtShares: bigint; usdtTape: bigint; usdtQuote: bigint; bemShares: bigint; bemTape: bigint; bemQuote: bigint } | null>(null);
   const [bad, setBad] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [sendKey, setSendKey] = useState<string | null>(null);
 
   useEffect(() => onAccount(setAccount), []);
 
@@ -364,138 +357,148 @@ export function AccountCenter() {
   const chips = book?.chips ?? [];
   const circuits = book?.circuits ?? [];
 
+  const total = worth ? worth.reduce((sum, row) => sum + (row.usd ?? 0), 0) : null;
+
   return (
-    <section className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3 border border-gold px-3 py-3">
-        <div>
-          <p className="text-xs tracking-widest text-gold">{zh ? "资产" : "Assets"}</p>
-          <h2 className="font-mono text-xl">{short(account)}</h2>
-          <p className="text-sm text-ink/70">{zh ? `BSC 钱包 ${book?.bnb ?? "—"} BNB` : `BSC wallet ${book?.bnb ?? "—"} BNB`}</p>
-        </div>
-        <button type="button" className="min-h-10 border border-gold px-3 text-sm" onClick={() => pull(account)}>{zh ? "刷新" : "Refresh"}</button>
-      </div>
-      <NewbieGift account={account} zh={zh} />
-      <div className="border border-gold">
-        <div className="flex items-end justify-between gap-3 px-3 py-3">
-          <div>
-            <p className="text-xs tracking-widest text-gold">{zh ? "资产统计" : "Assets"}</p>
-            <p className="font-display text-3xl italic">{worth ? `${money(worth.reduce((sum, row) => sum + (row.usd ?? 0), 0))} USDT` : "—"}</p>
+    <section className="flex flex-col gap-3">
+      <div className="border border-gold px-4 py-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] tracking-[0.22em] text-gold">{zh ? "个人中心" : "Account"}</p>
+            <h2 className="mt-1 truncate font-mono text-sm">{account}</h2>
           </div>
+          <button type="button" className="min-h-9 shrink-0 border border-gold px-3 text-xs" onClick={() => pull(account)}>{zh ? "刷新" : "Refresh"}</button>
+        </div>
+        <p className="mt-4 font-display text-4xl leading-none">{total == null ? "—" : money(total)}</p>
+        <p className="mt-1 text-xs tracking-[0.16em] text-ink/50">USDT</p>
+        <div className="mt-4 grid gap-2 text-xs sm:grid-cols-2">
+          <p className="border-t border-gold/30 pt-2"><span className="text-ink/50">{zh ? "现货" : "Spot"} </span>{spot}</p>
+          <p className="border-t border-gold/30 pt-2"><span className="text-ink/50">{zh ? "永续" : "Perps"} </span>{perp}</p>
+        </div>
+      </div>
+
+      <NewbieGift account={account} zh={zh} />
+
+      <div className="border border-gold">
+        <div className="flex items-center justify-between px-4 py-3">
+          <p className="text-[11px] tracking-[0.22em] text-gold">{zh ? "持仓" : "Holdings"}</p>
           <p className="text-xs text-ink/50">{worthAt ? (zh ? `现价 ${worthAt}` : `Prices ${worthAt}`) : (zh ? "正在取现价" : "Reading prices")}</p>
         </div>
-        <div className="overflow-x-auto">
-        <table className="w-full min-w-[36rem] text-left text-sm">
-          <thead className="text-xs tracking-widest text-gold">
-            <tr>
-              <th className="px-3 py-2">{zh ? "资产" : "Asset"}</th>
-              <th className="px-3 py-2">{zh ? "数量" : "Amount"}</th>
-              <th className="px-3 py-2">{zh ? "现价" : "Price"}</th>
-              <th className="px-3 py-2 text-right">USDT</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(worth ?? []).map((row, index) => (
-              <tr key={`${row.name}-${index}`} className="border-t border-gold/40">
-                <td className="px-3 py-2">{row.name}</td>
-                <td className="px-3 py-2 font-mono">{row.qty}</td>
-                <td className="px-3 py-2 font-mono">{row.px}</td>
-                <td className="px-3 py-2 text-right font-mono">{row.usd == null ? "—" : money(row.usd)}</td>
-              </tr>
-            ))}
-            {worth && worth.length === 0 ? <tr><td className="px-3 py-3 text-ink/60" colSpan={4}>{zh ? "这个地址没有读到余额。" : "No balance on this address."}</td></tr> : null}
-          </tbody>
-        </table>
-        </div>
-        <p className="px-3 py-2 text-xs text-ink/60">{zh ? "USDT 和 X Layer USDT 按 1 枚 = 1 USDT。钱包里的 TAPE 用 TAPE/USDT0 池子价。加进池子的 TAPE 单独一行，叫质押，到期日在下面。BNB、BEM、OKB 和美股代币用各自池子现价。晶体管用这台处理器的最高买单，再乘 BNB 现价。没有买单的不计进合计。电路和未实现盈亏不算。" : "USDT and X Layer USDT count at 1. Wallet TAPE uses the TAPE/USDT0 pool price. TAPE added to a pool is its own row, marked as a stake, with the expiry below. BNB, BEM, OKB and the stock tokens use their pool price. Transistors use that processor's best bid times the BNB price. No bid means it is left out. Circuits and unrealized PnL are not included."}</p>
+        <ul>
+          {(worth ?? []).map((row, index) => (
+            <li key={`${row.name}-${index}`} className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3 border-t border-gold/30 px-4 py-2.5">
+              <div className="min-w-0">
+                <p className="truncate text-sm">{row.name}</p>
+                <p className="truncate font-mono text-xs text-ink/55">{row.qty}{row.px && row.px !== "—" ? ` · ${row.px}` : ""}</p>
+              </div>
+              <p className="font-mono text-sm">{row.usd == null ? "—" : money(row.usd)}</p>
+            </li>
+          ))}
+          {worth && worth.length === 0 ? <li className="border-t border-gold/30 px-4 py-3 text-sm text-ink/60">{zh ? "这个地址没有读到余额。" : "No balance on this address."}</li> : null}
+          {!worth ? <li className="border-t border-gold/30 px-4 py-3 text-sm text-ink/60">{zh ? "正在读余额。" : "Reading balances."}</li> : null}
+        </ul>
+        <details className="border-t border-gold/30 px-4 py-2 text-xs text-ink/55">
+          <summary className="cursor-pointer">{zh ? "计价怎么算" : "How this is priced"}</summary>
+          <p className="mt-2 leading-5">{zh ? "USDT 和 X Layer USDT 按 1 枚 = 1 USDT。钱包里的 TAPE 用 TAPE/USDT0 池子价。加进池子的 TAPE 在下面的质押里。BNB、BEM、OKB 和美股代币用各自池子现价。晶体管用这台处理器的最高买单，再乘 BNB 现价。没有买单的不计。电路和未实现盈亏不算。" : "USDT and X Layer USDT count at 1. Wallet TAPE uses the TAPE/USDT0 pool. Staked TAPE is listed below. BNB, BEM, OKB and the stock tokens use their pool price. Transistors use that processor's best bid times the BNB price. No bid means it is left out. Circuits and unrealized PnL are not included."}</p>
+        </details>
       </div>
+
       <StakeLines zh={zh} stakes={stakes} />
-      <p className="text-sm text-ink/70">
-        {book?.ok
-          ? zh
-            ? `扫过官网 ${book.scanned} 台 BSC 处理器，加上本站 TAPELIQUID（X Layer）。20 秒重读。挂单中的卖单官网没有单独合约，所以可转等于总数。`
-            : `Scanned ${book.scanned} official BSC processors plus TAPELIQUID on X Layer. Reread every 20s. There is no official ask contract, so transferable equals the total.`
-          : zh ? `正在读链上${book?.error ? `（${book.error}）` : ""}` : "Reading the chain."}
-      </p>
-      <div className="grid grid-cols-3 border border-gold">
+
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs text-ink/50">
+          {book?.ok
+            ? zh
+              ? `官网 ${book.scanned} 台，加本站。20 秒重读。`
+              : `${book.scanned} official processors, plus this site. Every 20s.`
+            : zh ? `正在读链上${book?.error ? `（${book.error}）` : ""}` : "Reading the chain."}
+        </p>
+      </div>
+      <div className="grid grid-cols-2 border border-gold text-sm">
         {([
-          ["chips", zh ? `晶体管 ${chips.length}` : `Transistors ${chips.length}`],
+          ["chips", zh ? `晶体管 ${chips.length}` : `Chips ${chips.length}`],
           ["circuits", zh ? `电路 ${circuits.length}` : `Circuits ${circuits.length}`],
-          ["book", zh ? "现货和合约" : "Spot and perps"],
         ] as const).map(([id, label]) => (
-          <button key={id} type="button" onClick={() => setTab(id)} className={`min-h-11 text-sm ${tab === id ? "bg-ink text-paper" : ""}`}>{label}</button>
+          <button key={id} type="button" onClick={() => { setTab(id); setAck(false); }} className={`min-h-11 ${tab === id ? "bg-ink text-paper" : ""}`}>{label}</button>
         ))}
       </div>
+
       {tab === "chips" ? (
-        <div className="flex flex-col gap-3">
-          {chips.length === 0 ? <p className="border border-gold px-3 py-3 text-sm text-ink/60">{zh ? "这个地址没有晶体管。" : "This address has no transistors."}</p> : null}
+        <div className="flex flex-col gap-2">
+          {chips.length === 0 ? <p className="border border-gold px-4 py-3 text-sm text-ink/60">{zh ? "这个地址没有晶体管。" : "This address has no transistors."}</p> : null}
           {chips.map((row) => {
             const key = `${row.chain}:${row.transistors}`;
+            const open = sendKey === key;
             const lines = many.filter((item) => BigInt(item.nand || "0") > 0n || BigInt(item.latch || "0") > 0n).length;
             return (
-              <article key={key} className="border border-gold px-3 py-3">
-                <p className="font-display text-lg italic">{row.name}{row.ours ? (zh ? " · 本站" : " · this site") : ""}</p>
-                <p className="text-xs text-ink/60">{row.chain === "xlayer" ? "X Layer" : "BSC"} · {row.ours ? (zh ? "TAPELIQUID 的晶体管" : "TAPELIQUID transistors") : zh ? "官网这台的晶体管" : "Official transistors"}</p>
-                <p className="mt-2 font-mono text-sm">NAND {row.nand} · LATCH {row.latch}</p>
-                <a className="mt-1 block break-all font-mono text-xs underline decoration-gold" href={scan(row.chain, row.transistors)} target="_blank" rel="noreferrer">{row.transistors}</a>
-                <div className="mt-3 grid grid-cols-2 border border-gold">
-                  <button type="button" className={`min-h-10 text-sm ${chipMode === "one" ? "bg-ink text-paper" : ""}`} onClick={() => { setChipMode("one"); setAck(false); }}>{zh ? "一对一" : "One address"}</button>
-                  <button type="button" className={`min-h-10 text-sm ${chipMode === "many" ? "bg-ink text-paper" : ""}`} onClick={() => { setChipMode("many"); setAck(false); }}>{zh ? "一对多" : "Many addresses"}</button>
+              <article key={key} className="border border-gold px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm">{row.name}</p>
+                    <p className="text-xs text-ink/50">{row.chain === "xlayer" ? "X Layer" : "BSC"} · {row.ours ? "TAPELIQUID" : (zh ? "官网" : "Official")}</p>
+                    <p className="mt-1 font-mono text-sm">NAND {row.nand} · LATCH {row.latch}</p>
+                  </div>
+                  <button type="button" className="min-h-9 shrink-0 border border-gold px-3 text-xs" onClick={() => { setSendKey(open ? null : key); setAck(false); }}>{open ? (zh ? "收起" : "Close") : (zh ? "转出" : "Send")}</button>
                 </div>
-                {chipMode === "one" ? (
-                  <div className="mt-2 grid gap-2">
-                    <input value={to} onChange={(event) => setTo(event.target.value.trim())} placeholder={zh ? "一个接收地址" : "One recipient"} className="w-full border border-gold bg-card px-2 py-2 font-mono text-xs outline-none" />
-                    <div className="grid grid-cols-2 gap-2">
-                      <label className="text-xs">NAND
-                        <input value={nandQty} onChange={(event) => setNandQty(event.target.value.replace(/[^\d]/g, ""))} className="mt-1 w-full border border-gold px-2 py-1 font-mono outline-none" />
-                        <button type="button" className="mt-1 underline" onClick={() => setNandQty(row.nand)}>{zh ? "全部" : "All"}</button>
-                      </label>
-                      <label className="text-xs">LATCH
-                        <input value={latchQty} onChange={(event) => setLatchQty(event.target.value.replace(/[^\d]/g, ""))} className="mt-1 w-full border border-gold px-2 py-1 font-mono outline-none" />
-                        <button type="button" className="mt-1 underline" onClick={() => setLatchQty(row.latch)}>{zh ? "全部" : "All"}</button>
-                      </label>
+                {open ? (
+                  <div className="mt-3 border-t border-gold/30 pt-3">
+                    <div className="grid grid-cols-2 border border-gold text-sm">
+                      <button type="button" className={`min-h-9 ${chipMode === "one" ? "bg-ink text-paper" : ""}`} onClick={() => { setChipMode("one"); setAck(false); }}>{zh ? "一个地址" : "One address"}</button>
+                      <button type="button" className={`min-h-9 ${chipMode === "many" ? "bg-ink text-paper" : ""}`} onClick={() => { setChipMode("many"); setAck(false); }}>{zh ? "多个地址" : "Many addresses"}</button>
                     </div>
-                    <p className="text-xs text-ink/60">{zh ? "NAND 和 LATCH 各签一笔，都进上面这一个地址。" : "NAND and LATCH are one signature each, both to the address above."}</p>
-                    <label className="flex gap-2 text-xs"><input type="checkbox" checked={ack} onChange={(event) => setAck(event.target.checked)} />{zh ? "地址我核对过，不能撤回" : "I checked the address. This cannot be undone."}</label>
-                    <button type="button" disabled={!ack || busy} onClick={() => void sendChip(row)} className="min-h-10 bg-ink text-paper disabled:opacity-40">{zh ? "签名转出" : "Sign and send"}</button>
+                    {chipMode === "one" ? (
+                      <div className="mt-2 grid gap-2">
+                        <input value={to} onChange={(event) => setTo(event.target.value.trim())} placeholder={zh ? "接收地址" : "Recipient"} className="w-full border border-gold bg-card px-2 py-2 font-mono text-xs outline-none" />
+                        <div className="grid grid-cols-2 gap-2">
+                          <label className="text-xs">NAND
+                            <input value={nandQty} onChange={(event) => setNandQty(event.target.value.replace(/[^\d]/g, ""))} className="mt-1 w-full border border-gold bg-card px-2 py-1 font-mono outline-none" />
+                            <button type="button" className="mt-1 text-ink/60 underline" onClick={() => setNandQty(row.nand)}>{zh ? "全部" : "All"}</button>
+                          </label>
+                          <label className="text-xs">LATCH
+                            <input value={latchQty} onChange={(event) => setLatchQty(event.target.value.replace(/[^\d]/g, ""))} className="mt-1 w-full border border-gold bg-card px-2 py-1 font-mono outline-none" />
+                            <button type="button" className="mt-1 text-ink/60 underline" onClick={() => setLatchQty(row.latch)}>{zh ? "全部" : "All"}</button>
+                          </label>
+                        </div>
+                        <label className="flex gap-2 text-xs"><input type="checkbox" checked={ack} onChange={(event) => setAck(event.target.checked)} />{zh ? "地址我核对过，不能撤回" : "I checked the address. This cannot be undone."}</label>
+                        <button type="button" disabled={!ack || busy} onClick={() => void sendChip(row)} className="min-h-10 bg-ink text-paper disabled:opacity-40">{zh ? "签名转出" : "Sign and send"}</button>
+                      </div>
+                    ) : (
+                      <div className="mt-2 grid gap-2">
+                        <p className="text-xs text-ink/55">{zh ? "一行一个地址。这一行的 NAND、LATCH 只进这个地址。最多 20 行。" : "One address per row. That row's NAND and LATCH go only there. Up to 20 rows."}</p>
+                        <ul className="max-h-64 overflow-auto">
+                          {many.map((item, index) => (
+                            <li key={index} className="grid gap-1 border-t border-gold/30 py-2">
+                              <input value={item.to} onChange={(event) => setMany((cur) => cur.map((line, i) => i === index ? { ...line, to: event.target.value.trim() } : line))} placeholder="0x" className="border border-gold bg-card px-2 py-1 font-mono text-xs outline-none" />
+                              <div className="grid grid-cols-2 gap-1">
+                                <input value={item.nand} onChange={(event) => setMany((cur) => cur.map((line, i) => i === index ? { ...line, nand: event.target.value.replace(/[^\d]/g, "") } : line))} placeholder="NAND" className="border border-gold bg-card px-2 py-1 font-mono text-xs outline-none" />
+                                <input value={item.latch} onChange={(event) => setMany((cur) => cur.map((line, i) => i === index ? { ...line, latch: event.target.value.replace(/[^\d]/g, "") } : line))} placeholder="LATCH" className="border border-gold bg-card px-2 py-1 font-mono text-xs outline-none" />
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                        <button type="button" className="min-h-9 border border-gold text-xs" onClick={() => setMany((cur) => cur.length >= 20 ? cur : [...cur, { to: "", nand: "", latch: "" }])}>{zh ? "再加一行" : "Add a row"}</button>
+                        <label className="flex gap-2 text-xs"><input type="checkbox" checked={ack} onChange={(event) => setAck(event.target.checked)} />{zh ? `我核对过这 ${lines} 行` : `I checked these ${lines} rows`}</label>
+                        <button type="button" disabled={!ack || busy} onClick={() => void sendMany(row)} className="min-h-10 bg-ink text-paper disabled:opacity-40">{zh ? "按行签名" : "Sign each row"}</button>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="mt-2 grid gap-2">
-                    <p className="text-xs text-ink/60">{zh ? "每一行一个地址。这一行的 NAND、LATCH 只进这个地址。最多 20 行，按行签名。" : "One address per row. That row's NAND and LATCH go only there. Up to 20 rows, one signature per transfer."}</p>
-                    <ul className="max-h-64 overflow-auto border border-gold/40">
-                      {many.map((item, index) => (
-                        <li key={index} className="grid gap-1 border-t border-gold/30 p-2">
-                          <input value={item.to} onChange={(event) => setMany((cur) => cur.map((row, i) => i === index ? { ...row, to: event.target.value.trim() } : row))} placeholder="0x" className="border border-gold px-2 py-1 font-mono text-xs outline-none" />
-                          <div className="grid grid-cols-2 gap-1">
-                            <input value={item.nand} onChange={(event) => setMany((cur) => cur.map((row, i) => i === index ? { ...row, nand: event.target.value.replace(/[^\d]/g, "") } : row))} placeholder="NAND" className="border border-gold px-2 py-1 font-mono text-xs outline-none" />
-                            <input value={item.latch} onChange={(event) => setMany((cur) => cur.map((row, i) => i === index ? { ...row, latch: event.target.value.replace(/[^\d]/g, "") } : row))} placeholder="LATCH" className="border border-gold px-2 py-1 font-mono text-xs outline-none" />
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                    <button type="button" className="min-h-10 border border-gold text-sm" onClick={() => setMany((cur) => cur.length >= 20 ? cur : [...cur, { to: "", nand: "", latch: "" }])}>{zh ? "再加一行" : "Add a row"}</button>
-                    <label className="flex gap-2 text-xs"><input type="checkbox" checked={ack} onChange={(event) => setAck(event.target.checked)} />{zh ? `我核对过这 ${lines} 行地址，不能撤回` : `I checked these ${lines} addresses. This cannot be undone.`}</label>
-                    <button type="button" disabled={!ack || busy} onClick={() => void sendMany(row)} className="min-h-10 bg-ink text-paper disabled:opacity-40">{zh ? "按行签名转出" : "Sign each row"}</button>
-                  </div>
-                )}
+                ) : null}
               </article>
             );
           })}
         </div>
       ) : null}
+
       {tab === "circuits" ? (
-        <div className="flex flex-col gap-3">
-          <div className="border border-sell/40 px-3 py-2 text-xs leading-5">
-            {zh
-              ? "上下滑动勾选具体的一片。每一片右边填一个地址，只转给这个地址。勾几片就签几笔，从你的钱包直接转出，不经过锁仓合约。地址填错取不回。"
-              : "Scroll and tick the exact circuit. Each row has one address, and that circuit goes only there. One signature per circuit, straight from your wallet, not through the lock. A wrong address is gone."}
-          </div>
+        <div className="flex flex-col gap-2">
+          <p className="text-xs leading-5 text-ink/55">{zh ? "勾选一片，填一个地址。勾几片签几笔，从钱包直接转出。地址填错取不回。" : "Tick a circuit and give it one address. One signature each, straight from the wallet. A wrong address is gone."}</p>
           <ul className="max-h-[28rem] overflow-auto border border-gold">
-            {circuits.length === 0 ? <li className="px-3 py-3 text-sm text-ink/60">{zh ? "这地址在 TAPELIQUID 和已扫到的官网处理器上没有电路。" : "No circuits on TAPELIQUID or the scanned processors."}</li> : null}
+            {circuits.length === 0 ? <li className="px-4 py-3 text-sm text-ink/60">{zh ? "没有电路。" : "No circuits."}</li> : null}
             {circuits.map((row, index) => {
               const key = `${row.chain}:${row.circuits}:${row.id ?? "n"}:${index}`;
               const pick = row.id ? picks[`${row.chain}:${row.circuits}:${row.id}`] : undefined;
               return (
-                <li key={key} className="border-t border-gold/40 px-3 py-3">
+                <li key={key} className="border-t border-gold/30 px-4 py-3">
                   <div className="flex items-start gap-2">
                     {row.id && !row.listed ? (
                       <input
@@ -510,15 +513,15 @@ export function AccountCenter() {
                       />
                     ) : null}
                     <div className="min-w-0 flex-1">
-                      <p className="font-display text-lg italic">{row.name}{row.chain === "xlayer" ? (zh ? " · 本站电路" : " · this site") : (zh ? " · 官网" : " · official")}</p>
-                      <p className="font-mono text-sm">{row.chain === "xlayer" ? "X Layer" : "BSC"} · {row.id ? `#${row.id}` : zh ? `还有 ${row.count} 片没有编号，这里不能代选` : `${row.count} more have no id, so they cannot be picked here`}</p>
-                      {row.listed ? <p className="text-xs text-ink/60">{zh ? "这片正在挂单。先撤单再转。" : "This one is listed. Delist it before sending."}</p> : null}
+                      <p className="truncate text-sm">{row.name}</p>
+                      <p className="font-mono text-xs text-ink/50">{row.chain === "xlayer" ? "X Layer" : "BSC"} · {row.id ? `#${row.id}` : zh ? `还有 ${row.count} 片没有编号` : `${row.count} more have no id`}</p>
+                      {row.listed ? <p className="text-xs text-ink/60">{zh ? "正在挂单，先撤再转。" : "Listed. Delist it first."}</p> : null}
                       {row.id && !row.listed && pick?.on ? (
                         <input
                           value={pick.to}
                           onChange={(event) => setPicks((cur) => ({ ...cur, [`${row.chain}:${row.circuits}:${row.id}`]: { on: true, to: event.target.value.trim() } }))}
                           placeholder={zh ? "这一片的接收地址" : "Address for this circuit"}
-                          className="mt-2 w-full border border-gold px-2 py-2 font-mono text-xs outline-none"
+                          className="mt-2 w-full border border-gold bg-card px-2 py-2 font-mono text-xs outline-none"
                         />
                       ) : null}
                     </div>
@@ -527,15 +530,8 @@ export function AccountCenter() {
               );
             })}
           </ul>
-          <label className="flex gap-2 text-xs"><input type="checkbox" checked={ack} onChange={(event) => setAck(event.target.checked)} />{zh ? "每一片的地址我都核对过" : "I checked the address on every ticked circuit"}</label>
+          <label className="flex gap-2 text-xs"><input type="checkbox" checked={ack} onChange={(event) => setAck(event.target.checked)} />{zh ? "每一片的地址我都核对过" : "I checked every address"}</label>
           <button type="button" disabled={busy || !ack} onClick={() => void sendPicked()} className="min-h-11 bg-ink text-paper disabled:opacity-40">{zh ? "按片签名转出" : "Sign each circuit"}</button>
-        </div>
-      ) : null}
-      {tab === "book" ? (
-        <div className="border border-gold px-3 py-3 text-sm">
-          <p>{zh ? "现货" : "Spot"} {spot}</p>
-          <p className="mt-2">{zh ? "合约保证金" : "Perp margin"} {perp}</p>
-          <p className="mt-2 text-xs text-ink/60">{zh ? "这行是 BSC 现货和两本永续，不是晶体管。" : "This is BSC spot and the two perp books, not transistors."}</p>
         </div>
       ) : null}
       {note ? <p className={`text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
@@ -566,31 +562,20 @@ function StakeLines({ zh, stakes }: { zh: boolean; stakes: { lp: TapePosition[];
   }
   return (
     <div className="border border-gold">
-      <p className="px-3 py-2 text-xs tracking-widest text-gold">{zh ? "我的质押" : "My stakes"}</p>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[36rem] text-left text-sm">
-          <thead className="text-xs tracking-widest text-gold">
-            <tr>
-              <th className="px-3 py-2">{zh ? "质押的是" : "What"}</th>
-              <th className="px-3 py-2">{zh ? "数量" : "Amount"}</th>
-              <th className="px-3 py-2">{zh ? "期限" : "Term"}</th>
-              <th className="px-3 py-2">{zh ? "解锁（新加坡）" : "Unlocks, Singapore"}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.key} className="border-t border-gold/40">
-                <td className="px-3 py-2">{row.name}</td>
-                <td className="px-3 py-2 font-mono">{row.qty}</td>
-                <td className="px-3 py-2">{row.term}</td>
-                <td className="px-3 py-2 font-mono text-xs">{row.until}</td>
-              </tr>
-            ))}
-            {stakes && rows.length === 0 ? <tr><td className="px-3 py-3 text-ink/60" colSpan={4}>{zh ? "这个地址没有 TAPE 池、晶圆或电路质押。" : "This address has no TAPE pool, wafer, or circuit stake."}</td></tr> : null}
-            {!stakes ? <tr><td className="px-3 py-3 text-ink/60" colSpan={4}>{zh ? "正在读链上质押。" : "Reading stakes."}</td></tr> : null}
-          </tbody>
-        </table>
-      </div>
+      <p className="px-4 py-3 text-[11px] tracking-[0.22em] text-gold">{zh ? "质押" : "Stakes"}</p>
+      <ul>
+        {rows.map((row) => (
+          <li key={row.key} className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3 border-t border-gold/30 px-4 py-2.5">
+            <div className="min-w-0">
+              <p className="truncate text-sm">{row.name}</p>
+              <p className="truncate font-mono text-xs text-ink/55">{row.qty}</p>
+            </div>
+            <p className="text-right text-xs text-ink/70">{row.term}<span className="mt-0.5 block font-mono">{row.until}</span></p>
+          </li>
+        ))}
+        {stakes && rows.length === 0 ? <li className="border-t border-gold/30 px-4 py-3 text-sm text-ink/60">{zh ? "没有在质押的 TAPE、晶圆或电路。" : "Nothing is staked."}</li> : null}
+        {!stakes ? <li className="border-t border-gold/30 px-4 py-3 text-sm text-ink/60">{zh ? "正在读质押。" : "Reading stakes."}</li> : null}
+      </ul>
     </div>
   );
 }

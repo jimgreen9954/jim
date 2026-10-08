@@ -100,7 +100,7 @@ const zh: Section[] = [
       "个人中心有一份新手礼包。X Layer 上充的是 TAPELIQUID 的 NAND。BSC 上充的是 BEM。充进去的记在你的份额上。只有这个地址能取回自己还没被领走的那一份。别人不能把你的充值整笔转走。",
       "有人按规则领取时，池子变少，每个充值地址能取回的份额一起变少。池子空了就停。再充进去，就继续发。",
       "NAND 每次领 10 个，一个地址最多 5 次。要先有一笔已记的 X Layer 永续成交，你这一边的保证金不少于 5 USDT0。BEM 领一次 0.1 个。要先记满超过 10 笔 BSC 成交，每笔你这一边的保证金不少于 5 USDT。BSC 只认 BEM 永续和晶体管永续。同一笔成交只能记一次。现货不记进这个次数。",
-      "这两份礼包合约还没有部署。收费地址签过之后，地址写进这一页，才开始充值和领取。",
+      "NAND 礼包在 X Layer，地址 0xfb05bf0472ab9c27b063b314a704516b086ea7d3。BEM 礼包在 BSC，地址 0xcac69f02c06bfca3bfdb1eaf1f4a60e17e718081。两份都没有管理员。",
     ],
   },
   {
@@ -231,7 +231,7 @@ const en: Section[] = [
       "The account page has a starter gift. NAND deposited on X Layer is TAPELIQUID NAND. BEM deposited on BSC is BEM. A deposit is your share. Only that address can withdraw what has not yet been paid out. Nobody can take your whole deposit.",
       "When someone claims under the rule, the pool shrinks, and every depositor's remaining share shrinks with it. An empty pool stops. A new deposit starts it again.",
       "NAND pays 10 each time, at most 5 times per address. That requires a counted X Layer perpetual fill, and your side's margin must be at least 5 USDT0. BEM pays 0.1 once. That requires more than 10 counted BSC fills, each with your side's margin at least 5 USDT. BSC counts the BEM perpetual and the transistor perpetual. One fill counts once. Spot is not counted.",
-      "The two gift contracts are not deployed. After the fee address signs and the addresses are written here, deposits and claims start.",
+      "The NAND gift is on X Layer at 0xfb05bf0472ab9c27b063b314a704516b086ea7d3. The BEM gift is on BSC at 0xcac69f02c06bfca3bfdb1eaf1f4a60e17e718081. Neither has an admin.",
     ],
   },
   {
