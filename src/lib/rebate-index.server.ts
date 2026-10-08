@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createPublicClient, decodeEventLog, http, keccak256, toBytes, type Hex } from "viem";
 import type { Invitee, RebateBook } from "./rebate-index";
 
-const PERP = "0x0f22b18b67477886311ee0fb7cf684d3f48c5eca" as const;
+const PERP = "0xce3511b6e909c9694826cfd5dbe434d457920eba" as const;
 const BIRTH = 72_430_087n;
 const FILE = "/workspace/data/rebate-index.json";
 const STEP = 250n;

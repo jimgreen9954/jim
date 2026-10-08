@@ -7,7 +7,7 @@ import { readGateChain } from "@/lib/gate-chain";
 import { getOfficialBooks } from "@/lib/official-books";
 import { transferBscCircuit, transferBscTransistor } from "@/lib/official-trade";
 import { okbPrice, readOkbPurse } from "@/lib/okb";
-import { KNOWN_PERP, KNOWN_XPERP, readPerp } from "@/lib/perp";
+import { BSC_REBATE, KNOWN_XPERP, readPerp } from "@/lib/perp";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import { transferCircuit, transferTransistor, txUrl } from "@/lib/xlayer";
 import { LOCK_TERMS, readLocks, type LockSeat } from "@/lib/tape-lock";
@@ -112,7 +112,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
         setSpot(`USDT ${money(Number(formatUnits(row.usdt, 18)))} · BNB ${Number(formatEther(row.bnb)).toFixed(4)} · BEM ${Number(formatUnits(row.bem, 8)).toFixed(4)} · ${money(usd)} USDT`);
       })
       .catch(() => undefined);
-    readPerp(KNOWN_PERP, account)
+    readPerp(BSC_REBATE, account)
       .then((view) => setPerp(`BSC ${Number(formatUnits(view.margin, 18)).toFixed(2)} USDT`))
       .catch(() => setPerp(zh ? "BSC 没读到" : "BSC unread"));
     readGateChain(KNOWN_XPERP)
@@ -162,7 +162,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
         bnbPrice().catch(() => ""),
         okbPrice().catch(() => ""),
         getOfficialBooks().catch(() => null),
-        readPerp(KNOWN_PERP, account).catch(() => null),
+        readPerp(BSC_REBATE, account).catch(() => null),
         Promise.all(keys.map((key) => readAsset(account, ERC_BOOKS[key].token).catch(() => 0n))),
         readGateChain(KNOWN_XPERP).catch(() => null),
       ]);
