@@ -8,6 +8,7 @@ import {
   deployNandGift,
   depositBem,
   depositNand,
+  giftMoved,
   nandGiftReady,
   readGift,
   readGiftFills,
@@ -19,6 +20,55 @@ import {
   type GiftBooks,
   type GiftState,
 } from "@/lib/newbie";
+
+export function GiftDeploy({ account, zh }: { account: string | null; zh: boolean }) {
+  const [moved, setMoved] = useState(giftMoved());
+  const [note, setNote] = useState<string | null>(null);
+  const [bad, setBad] = useState(false);
+  const [busy, setBusy] = useState(false);
+  if (moved.nand && moved.bem) return null;
+  const run = (task: () => Promise<string>, ok: string) => {
+    if (!account) {
+      setBad(true);
+      setNote(zh ? "先连接收费地址。" : "Connect the fee address first.");
+      return;
+    }
+    setBusy(true);
+    task()
+      .then((addr) => {
+        setMoved(giftMoved());
+        setBad(false);
+        setNote(`${ok} ${addr}`);
+      })
+      .catch(() => {
+        setBad(true);
+        setNote(zh ? "没有部署。只有收费地址能签，Gas Limit 填 3000000。" : "It did not deploy. Only the fee address can sign. Set Gas Limit to 3000000.");
+      })
+      .finally(() => setBusy(false));
+  };
+  return (
+    <div className="border-t border-gold bg-card px-4 py-3">
+      <p className="text-sm leading-6">
+        {zh
+          ? "现在的两枚礼包还认旧合约，新永续和新晶体管的成交不会出现。先从旧礼包取回还没被领走的，再点下面部署。部署后重新放入。把新地址发我，我写进网页。"
+          : "These two gifts still read the previous contracts, so new perpetual and transistor fills do not show. Withdraw what is left, deploy below, then add again. Send me the new addresses."}
+      </p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {moved.nand ? null : (
+          <button type="button" disabled={busy} className="min-h-12 bg-ink px-3 text-sm text-paper disabled:opacity-40" onClick={() => run(() => deployNandGift(account ?? ""), zh ? "NAND 礼包已部署。" : "NAND gift deployed.")}>
+            {zh ? "部署认新永续的 NAND 礼包" : "Deploy the NAND gift"}
+          </button>
+        )}
+        {moved.bem ? null : (
+          <button type="button" disabled={busy} className="min-h-12 bg-ink px-3 text-sm text-paper disabled:opacity-40" onClick={() => run(() => deployBemGift(account ?? ""), zh ? "BEM 礼包已部署。" : "BEM gift deployed.")}>
+            {zh ? "部署认新晶体管的 BEM 礼包" : "Deploy the BEM gift"}
+          </button>
+        )}
+      </div>
+      {note ? <p className={`mt-2 text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
+    </div>
+  );
+}
 
 export function NewbieGift({ account, zh }: { account: string; zh: boolean }) {
   const [row, setRow] = useState<GiftState | null>(null);

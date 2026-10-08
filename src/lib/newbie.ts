@@ -56,6 +56,12 @@ function bemGift(): Hex {
   return activeGift("tapeliquid-bem-gift", BEM_GIFT);
 }
 
+export function giftMoved(): { nand: boolean; bem: boolean } {
+  if (typeof window === "undefined") return { nand: false, bem: false };
+  const ok = (key: string) => /^0x[a-fA-F0-9]{40}$/.test(window.localStorage.getItem(key) ?? "");
+  return { nand: ok("tapeliquid-nand-gift"), bem: ok("tapeliquid-bem-gift") };
+}
+
 function activeGift(key: string, fallback: string): Hex {
   if (typeof window === "undefined") return fallback as Hex;
   const saved = window.localStorage.getItem(key) ?? "";

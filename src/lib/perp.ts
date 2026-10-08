@@ -12,7 +12,9 @@ const DESK_KEY = "tapeliquid-desk-v1";
 const XPERP_KEY = "tapeliquid-xperp-v1";
 const XMARK_KEY = "tapeliquid-xmark-v1";
 const XPERP_FIXED = "tapeliquid-xperp-fixed";
+const XPERP_HOLD = "tapeliquid-xperp-hold";
 const XMARK_FIXED = "tapeliquid-xmark-fixed";
+const XMARK_HOLD = "tapeliquid-xmark-hold";
 export const X_USDT = "0x779Ded0c9e1022225f8E0630b35a9b54bE713736" as const;
 
 export type Desk = "bsc" | "xlayer";
@@ -420,6 +422,10 @@ export async function xBookState(perp: string): Promise<"ready" | "scale" | "dow
   } catch {
     return "down";
   }
+}
+
+export function xHolds(): boolean {
+  return typeof window !== "undefined" && /^0x[a-fA-F0-9]{40}$/.test(window.localStorage.getItem(XMARK_HOLD) ?? "");
 }
 
 export async function xReady(perp: string): Promise<boolean> {
@@ -943,24 +949,26 @@ export async function deployXLayer(from: string, onStep?: (step: 1 | 2 | 3) => v
   }
 }
 
-/** Deploy the X Layer book on the mark that is already posted. One post is enough to settle. */
+/** Deploy a mark that keeps the last price, then the X Layer book on it. */
 export async function deployFixedX(from: string): Promise<string> {
   if (from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("oracle");
   const was = desk;
   desk = "xlayer";
   try {
     const rpc = await client();
-    const saved = window.localStorage.getItem(XMARK_FIXED) ?? "";
-    const mark = /^0x[a-fA-F0-9]{40}$/.test(saved) ? saved : KNOWN_XMARK;
-    window.localStorage.setItem(XMARK_FIXED, mark);
-    try {
-      const tick = await bscTick();
-      const push = encodeFunctionData({ abi: pushAbi, functionName: "push", args: [tick] });
-      await send(from, mark as Hex, push, 250_000n);
-    } catch {
-      // A recent post is enough. The book can still be deployed.
+    let mark = window.localStorage.getItem(XMARK_HOLD) ?? "";
+    if (!/^0x[a-fA-F0-9]{40}$/.test(mark)) {
+      const markHash = await send(from, undefined, MARK_BYTECODE, 2_000_000n);
+      const markReceipt = await rpc.waitForTransactionReceipt({ hash: markHash, timeout: 120_000 });
+      mark = markReceipt.contractAddress ?? "";
+      if (markReceipt.status !== "success" || !mark) throw new Error("revert");
+      window.localStorage.setItem(XMARK_HOLD, mark);
+      window.localStorage.setItem(XMARK_FIXED, mark);
     }
-    const existing = window.localStorage.getItem(XPERP_FIXED) ?? "";
+    const tick = await bscTick();
+    const push = encodeFunctionData({ abi: pushAbi, functionName: "push", args: [tick] });
+    await send(from, mark as Hex, push, 250_000n);
+    const existing = window.localStorage.getItem(XPERP_HOLD) ?? "";
     if (/^0x[a-fA-F0-9]{40}$/.test(existing) && (await xBookState(existing)) === "ready") return existing;
     const args = encodeAbiParameters(
       [{ type: "address" }, { type: "address" }, { type: "uint256" }],
@@ -971,6 +979,7 @@ export async function deployFixedX(from: string): Promise<string> {
     const perpReceipt = await rpc.waitForTransactionReceipt({ hash: perpHash, timeout: 180_000 });
     const perp = perpReceipt.contractAddress ?? "";
     if (perpReceipt.status !== "success" || !perp) throw new Error("revert");
+    window.localStorage.setItem(XPERP_HOLD, perp);
     window.localStorage.setItem(XPERP_FIXED, perp);
     return perp;
   } finally {

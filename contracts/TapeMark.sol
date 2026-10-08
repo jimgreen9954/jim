@@ -62,7 +62,6 @@ contract TapeMark {
         if (count == 0) revert Bad();
         Obs memory head = obs[last];
         uint32 nowT = uint32(block.timestamp);
-        if (nowT > head.time + STALE) revert Bad();
         int56 nowCum = head.cum + int56(head.tick) * int56(uint56(nowT - head.time));
         cumulatives = new int56[](secondsAgos.length);
         liquidity = new uint160[](secondsAgos.length);

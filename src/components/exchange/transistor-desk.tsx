@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { bindGate, cancelGateChain, claimGate, closeGateChain, gateAddress, gateMark, gateReady, openGate, pushMark, readGateChain, readGateRebate, registerGate, takeGateChain, type ChainDeal, type ChainOrder } from "@/lib/gate-chain";
+import { bindGate, cancelGateChain, claimGate, closeGateChain, deployFixedGate, gateAddress, gateHolds, gateMark, gateReady, openGate, pushMark, readGateChain, readGateRebate, registerGate, takeGateChain, type ChainDeal, type ChainOrder } from "@/lib/gate-chain";
 import { FEE_TO, connectBsc } from "@/lib/bsc";
 import { getTransistorDesk, type TransistorDesk } from "@/lib/transistor-market";
 import { currentAccount, onAccount } from "@/lib/wallet";
@@ -67,6 +67,7 @@ export function TransistorDesk() {
   const lock = useFeeLock();
   const [chainMark, setChainMark] = useState(0);
   const [ready, setReady] = useState(true);
+  const [gateHold, setGateHold] = useState(gateHolds());
   const [mineCode, setMineCode] = useState("");
   const [friend, setFriend] = useState("");
   const [rebate, setRebate] = useState({ accrued: 0, code: "", referrer: "" });
@@ -244,6 +245,29 @@ export function TransistorDesk() {
           {resting.length === 0 ? <p className="px-3 py-6 text-sm text-ink/60">{zh ? "这个标还没有人挂单。右边开多或开空，就会出现在这里。" : "No orders on this market yet. A long or a short from the ticket shows up here."}</p> : null}
         </div>
         <div className="flex flex-col gap-2 border border-gold bg-card p-3">
+          {!gateHold ? (
+            <div className="border border-sell px-2 py-2 text-sm">
+              <p>{zh ? "现在这本，某个标的超过 30 分钟没写价，那个标的就不能开，也不能平。下面这份写过一次就按最后的价格继续，不再停。部署后六个标的还要各写一次。Gas Limit 填 8000000。" : "On this book, a market that is not posted for 30 minutes cannot open or close. The book below keeps the last price. After it is deployed, each of the six markets still needs one post. Set Gas Limit to 8000000."}</p>
+              <button type="button" className="mt-2 min-h-11 w-full bg-ink text-paper disabled:opacity-40" disabled={busy} onClick={async () => {
+                setBusy(true);
+                setNote("");
+                try {
+                  const from = account ?? (await connectBsc());
+                  setAccount(from);
+                  const next = await deployFixedGate(from);
+                  setPerp(next);
+                  setGateHold(true);
+                  if (mark > 0) await pushMark(from, next, market, mark);
+                  setNote(zh ? `不会停的晶体管合约已部署。把这个地址发我：${next}` : `The transistor book that does not stop is deployed. Send me this address: ${next}`);
+                } catch (err) {
+                  const message = err instanceof Error ? err.message : "";
+                  setNote(message === "oracle" ? (zh ? "只有收费地址能部署。" : "Only the fee address can deploy.") : (zh ? "没有完成。Gas Limit 填 8000000。" : "It did not finish. Set Gas Limit to 8000000."));
+                } finally {
+                  setBusy(false);
+                }
+              }}>{zh ? "部署不会停的晶体管" : "Deploy the transistor book that does not stop"}</button>
+            </div>
+          ) : null}
           {!ready ? (
             <div className="border border-sell px-2 py-2 text-sm">
               <p>{zh ? "这个标的现在开不了仓。上次写价已经超过 30 分钟。不用重新部署。收费地址再写一次这个标的就能开。超过 30 分钟没再写，会再停。" : "This market cannot open. The last post is older than 30 minutes. Do not deploy again. The fee address posts this market once. It stops again after 30 minutes without a post."}</p>

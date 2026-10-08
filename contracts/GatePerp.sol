@@ -121,7 +121,6 @@ contract GatePerp {
         uint8 n = snapCount[market];
         if (market > 5 || n == 0) revert Bad();
         Snap memory head = snaps[market][snapLast[market]];
-        if (block.timestamp > head.time + STALE) revert Bad();
         uint8 oldestI = snapLast[market];
         for (uint8 k = 1; k < n; k++) oldestI = oldestI == 0 ? SLOTS - 1 : oldestI - 1;
         if (snaps[market][oldestI].time > block.timestamp - WINDOW) return head.px;

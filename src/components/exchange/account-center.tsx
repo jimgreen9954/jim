@@ -12,7 +12,7 @@ import { currentAccount, onAccount } from "@/lib/wallet";
 import { transferCircuit, transferTransistor, txUrl } from "@/lib/xlayer";
 import { LOCK_TERMS, readLocks, type LockSeat } from "@/lib/tape-lock";
 import { readTapePool, showQuote, showTape, TAPE_TERMS, type TapePosition } from "@/lib/tape-pool";
-import { NewbieGift } from "@/components/exchange/newbie-gift";
+import { GiftDeploy, NewbieGift } from "@/components/exchange/newbie-gift";
 import { tapeText } from "@/lib/tape-mine";
 
 function money(n: number): string {
@@ -387,10 +387,11 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
         <button type="button" className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left" onClick={() => setGift((open) => !open)}>
           <span>
             <span className="block text-[11px] tracking-[0.22em] text-gold">{zh ? "新手礼包" : "Starter gift"}</span>
-            <span className="mt-1 block text-sm">{zh ? "隐藏活动。打开看规则，再决定放不放。" : "A closed activity. Open it to read the rules first."}</span>
+            <span className="mt-1 block text-sm">{zh ? "交易够 5 美元才能选编号。两枚礼包要重新部署，按钮在下面。" : "Only a fill of at least 5 dollars can be selected. The two gifts need a new deploy. The buttons are below."}</span>
           </span>
           <span className="shrink-0 text-xs text-ink/50">{gift ? (zh ? "收起" : "Close") : (zh ? "打开" : "Open")}</span>
         </button>
+        <GiftDeploy account={account} zh={zh} />
         {gift && account ? <NewbieGift account={account} zh={zh} /> : null}
       </section>
 

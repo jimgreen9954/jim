@@ -5,6 +5,7 @@ import { getProvider } from "@/lib/wallet";
 
 const KEY = "tapeliquid-gate-perp";
 const FIXED = "tapeliquid-gate-fixed";
+const HOLD = "tapeliquid-gate-hold";
 export const GATE = "0x58ead5b41cfd3627791d439402dd65571c286484";
 const USDT = BSC.usdt;
 
@@ -38,15 +39,21 @@ const erc20 = parseAbi([
 export type ChainOrder = { id: string; market: number; user: string; long: boolean; price: number; margin: number; lev: number };
 export type ChainDeal = { id: string; market: number; longUser: string; shortUser: string; entry: number; marginL: number; marginS: number; base: number; levL: number; levS: number };
 
+export function gateHolds(): boolean {
+  return typeof window !== "undefined" && /^0x[a-fA-F0-9]{40}$/.test(window.localStorage.getItem(HOLD) ?? "");
+}
+
 export function gateAddress(): string {
   if (typeof window === "undefined") return GATE;
+  const hold = window.localStorage.getItem(HOLD) ?? "";
+  if (/^0x[a-fA-F0-9]{40}$/.test(hold)) return hold;
   const saved = window.localStorage.getItem(FIXED) ?? "";
   return /^0x[a-fA-F0-9]{40}$/.test(saved) ? saved : GATE;
 }
 
 export async function deployFixedGate(from: string): Promise<string> {
   if (from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("oracle");
-  const existing = window.localStorage.getItem(FIXED) ?? "";
+  const existing = window.localStorage.getItem(HOLD) ?? "";
   if (/^0x[a-fA-F0-9]{40}$/.test(existing)) return existing;
   const args = encodeAbiParameters([{ type: "address" }], [USDT]);
   const data = (GATE_BYTECODE + args.slice(2)) as Hex;
@@ -54,6 +61,7 @@ export async function deployFixedGate(from: string): Promise<string> {
   const receipt = await (await client()).getTransactionReceipt({ hash });
   const addr = receipt.contractAddress ?? "";
   if (receipt.status !== "success" || !addr) throw new Error("revert");
+  window.localStorage.setItem(HOLD, addr);
   window.localStorage.setItem(FIXED, addr);
   return addr;
 }
