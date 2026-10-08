@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { bindGate, cancelGateChain, claimGate, closeGateChain, gateAddress, gateMark, gateReady, openGate, pushMark, readGateChain, readGateRebate, registerGate, takeGateChain, type ChainDeal, type ChainOrder } from "@/lib/gate-chain";
-import { FEE_TO, connectBsc } from "@/lib/bsc";
+import { connectBsc } from "@/lib/bsc";
 import { getTransistorDesk, type TransistorDesk } from "@/lib/transistor-market";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import { useExchange } from "@/lib/exchange-store";
@@ -271,24 +271,6 @@ export function TransistorDesk() {
               }}>{zh ? "再写一次这个标的" : "Post this market again"}</button>
             </div>
           ) : null}
-          {ready ? <button type="button" className="min-h-11 border border-gold" disabled={busy} onClick={async () => {
-            setBusy(true);
-            setNote("");
-            try {
-              const from = account ?? (await connectBsc());
-              setAccount(from);
-              if (from.toLowerCase() !== FEE_TO.toLowerCase()) {
-                setNote(zh ? `只有收费地址能写价。当前是 ${from}` : `Only the fee address can post. This wallet is ${from}`);
-                return;
-              }
-              await pushMark(from, perp, market, mark);
-              setNote(zh ? "这个标的已写入。写上之后就可以开仓，超过 30 分钟也不停。" : "This market was posted. It can open, and it does not stop after 30 minutes.");
-            } catch {
-              setNote(zh ? "没写上。可能还没到 30 秒，或这一笔挪过了 0.5%。" : "It was not posted. Wait 30 seconds, or the move was over 0.5%.");
-            } finally {
-              setBusy(false);
-            }
-          }}>{zh ? "收费地址写入这个标的" : "Fee address posts this market"}</button> : null}
           <p className="text-xs tracking-widest text-gold">{zh ? "下单" : "Open"}</p>
           <label className="text-sm">
             {zh ? "限价 BNB，空着就用参考价" : "Limit in BNB. Blank uses the mark."}
