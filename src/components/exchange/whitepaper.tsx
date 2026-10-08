@@ -106,7 +106,7 @@ const zh: Section[] = [
   {
     h: "永续",
     ps: [
-      "现在交易的 X Layer 永续是 0x3dfde13ef89f49575e73e91d3cd11127557f4d60，标记是 0xb623ee0ef23d8ea61f93cca373a4a4b27cf32fe1。晶体管永续是 0xb4b2ee90d10ecfc7ed36a58e96e03074fa8731eb。三份都没有管理员。写价地址是收费地址，写死。每次最多挪 0.5%，至少隔 30 秒。结算用过去 10 分钟均价。均价不满 10 分钟，或超过 30 分钟没有新写入，不能开仓，也不能结算。",
+      "现在的标记是 0xd21f98735a69dcb00208088e58596662df594deb，已经写入一次，刻度和 Pancake 的现价一致。晶体管永续是 0x58ead5b41cfd3627791d439402dd65571c286484。六个标的里，第一个已经写入，另外五个还要收费地址各写一次。两份都没有管理员。写价地址是收费地址，写死。每次最多挪 0.5%，至少隔 30 秒。写入一次就能开仓。超过 30 分钟没有新写入，不能开仓，也不能结算。",
       "同一份标记只挂这一本 X Layer 永续。BSC 上的 BEM 永续读 Pancake 池子的均价，不读这份标记。浅池仍可能在短时间里影响那条均价。",
       "TAPE 是 TAPELIQUID 的唯一平台币。只有这一枚，没有第二枚。矿池没有管理员，也不能改排放。",
       "返佣合约有 clerk。clerk 可以提取返佣池里的余额。不是每一份合约都没有管理员。",
@@ -256,7 +256,7 @@ const en: Section[] = [
   {
     h: "Perpetuals",
     ps: [
-      "The live X Layer perpetual is 0x3dfde13ef89f49575e73e91d3cd11127557f4d60. Its mark is 0xb623ee0ef23d8ea61f93cca373a4a4b27cf32fe1. The transistor perpetual is 0xb4b2ee90d10ecfc7ed36a58e96e03074fa8731eb. None of the three has an admin. The posting address is the fee address, and it is fixed. Each post moves at most 0.5 percent, and at least 30 seconds must pass. Settlement uses the last 10 minutes. If that average is shorter than 10 minutes, or nothing has been posted for 30 minutes, a new order cannot open and a position cannot settle.",
+      "The live mark is 0xd21f98735a69dcb00208088e58596662df594deb. It has one post, and the tick matches the Pancake price. The transistor perpetual is 0x58ead5b41cfd3627791d439402dd65571c286484. The first of the six markets is posted. The other five still need one post each from the fee address. Neither contract has an admin. The posting address is the fee address, and it is fixed. Each post moves at most 0.5 percent, and at least 30 seconds must pass. One post is enough to open. If nothing is posted for 30 minutes, a position cannot open or settle.",
       "This mark has one X Layer perpetual. The BEM perpetual on BSC reads the Pancake pool average. It does not read this mark. A thin pool can still move that average for a short time.",
       "TAPE is the only platform token of TAPELIQUID. There is one token, not a second. The mine has no admin, and the emission cannot be changed.",
       "The rebate contract has a clerk. The clerk can withdraw the rebate pool. Not every contract is without an admin.",

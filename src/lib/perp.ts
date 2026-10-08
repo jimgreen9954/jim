@@ -47,7 +47,7 @@ function tokenUnit(): bigint {
 export const KNOWN_PERP = "0xB98D14333a93D49a4E05478d002FC3944D88A3b7";
 export const BSC_REBATE = "0xce3511b6e909c9694826cfd5dbe434d457920eba";
 export const KNOWN_XPERP = "0x3dfde13ef89f49575e73e91d3cd11127557f4d60";
-export const KNOWN_XMARK = "0xb623ee0ef23d8ea61f93cca373a4a4b27cf32fe1";
+export const KNOWN_XMARK = "0xd21f98735a69dcb00208088e58596662df594deb";
 export const NEXT_XMARK = KNOWN_XMARK;
 export const BOARD = [KNOWN_PERP];
 
@@ -407,18 +407,23 @@ export function bookOf(which: Desk = desk): string {
   return BSC_REBATE;
 }
 
-export async function xReady(perp: string): Promise<boolean> {
+export async function xBookState(perp: string): Promise<"ready" | "scale" | "down"> {
   try {
     const c = await deskClient("xlayer");
-    await c.readContract({
+    const px = await c.readContract({
       address: perp as Hex,
       abi: [{ name: "mark", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] }] as const,
       functionName: "mark",
     });
-    return true;
+    if (px < 10n ** 15n) return "scale";
+    return "ready";
   } catch {
-    return false;
+    return "down";
   }
+}
+
+export async function xReady(perp: string): Promise<boolean> {
+  return (await xBookState(perp)) === "ready";
 }
 
 export async function deployBscBook(from: string): Promise<string> {
@@ -938,31 +943,25 @@ export async function deployXLayer(from: string, onStep?: (step: 1 | 2 | 3) => v
   }
 }
 
-/** Deploy a mark that can settle after one post, then the X Layer book on it. */
+/** Deploy the X Layer book on the mark that is already posted. One post is enough to settle. */
 export async function deployFixedX(from: string): Promise<string> {
   if (from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("oracle");
   const was = desk;
   desk = "xlayer";
   try {
     const rpc = await client();
-    let mark = window.localStorage.getItem(XMARK_FIXED) ?? "";
-    const fresh = !/^0x[a-fA-F0-9]{40}$/.test(mark);
-    if (fresh) {
-      const markHash = await send(from, undefined, MARK_BYTECODE, 2_000_000n);
-      const markReceipt = await rpc.waitForTransactionReceipt({ hash: markHash, timeout: 120_000 });
-      mark = markReceipt.contractAddress ?? "";
-      if (markReceipt.status !== "success" || !mark) throw new Error("revert");
-      window.localStorage.setItem(XMARK_FIXED, mark);
-    }
+    const saved = window.localStorage.getItem(XMARK_FIXED) ?? "";
+    const mark = /^0x[a-fA-F0-9]{40}$/.test(saved) ? saved : KNOWN_XMARK;
+    window.localStorage.setItem(XMARK_FIXED, mark);
     try {
       const tick = await bscTick();
       const push = encodeFunctionData({ abi: pushAbi, functionName: "push", args: [tick] });
       await send(from, mark as Hex, push, 250_000n);
-    } catch (err) {
-      if (fresh) throw err;
+    } catch {
+      // A recent post is enough. The book can still be deployed.
     }
     const existing = window.localStorage.getItem(XPERP_FIXED) ?? "";
-    if (/^0x[a-fA-F0-9]{40}$/.test(existing)) return existing;
+    if (/^0x[a-fA-F0-9]{40}$/.test(existing) && (await xBookState(existing)) === "ready") return existing;
     const args = encodeAbiParameters(
       [{ type: "address" }, { type: "address" }, { type: "uint256" }],
       [X_USDT, mark as Hex, 1_000_000n],
