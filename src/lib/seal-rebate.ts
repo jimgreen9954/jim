@@ -23,12 +23,7 @@ export type RebateChain = "bsc" | "xlayer";
 
 const ZERO = "0x0000000000000000000000000000000000000000" as Hex;
 const FACTORY = "0x4e59b44847b379578588920cA78FbF26c0B4956C" as Hex;
-const KEY = "tapeliquid-seal-rebate-v3";
-
-export const LOCKED_REBATE = {
-  xlayer: "0xBFB50E3666EeEE9d7E7c21137b8eA093Ad80F724",
-  bsc: "0xD49b7B4246dCdE401893657BD1F35e024d433Fd2",
-} as const;
+const REBATE_SALT = keccak256(toHex("TAPELIQUID-seal-v4"));
 
 const xClient = createPublicClient({ transport: http(XLAYER.rpc) });
 const bscClient = createPublicClient({ transport: http(BSC.rpc) });
@@ -117,16 +112,25 @@ function initOf(chain: RebateChain): Hex {
 }
 
 function predict(init: Hex): Hex {
-  const salt = `0x${"00".repeat(32)}` as Hex;
-  const hash = keccak256(concat(["0xff", FACTORY, salt, keccak256(init)]));
+  const hash = keccak256(concat(["0xff", FACTORY, REBATE_SALT, keccak256(init)]));
   return getAddress(`0x${hash.slice(-40)}`);
 }
+
+export const LOCKED_REBATE = {
+  xlayer: predict(initOf("xlayer")),
+  bsc: predict(initOf("bsc")),
+} as const;
 
 export async function deployRebate(chain: RebateChain): Promise<string> {
   const address = LOCKED_REBATE[chain];
   const existing = await client(chain).getBytecode({ address });
   if (existing && existing !== "0x") return address;
-  throw new Error("locked");
+  const from = chain === "xlayer" ? await connectXLayer() : await connectBsc();
+  const data = concat([REBATE_SALT, initOf(chain)]);
+  await send(chain, from, FACTORY, data, 8_000_000n);
+  const code = await client(chain).getBytecode({ address });
+  if (!code || code === "0x") throw new Error("deploy");
+  return address;
 }
 
 export type RebateState = {
@@ -140,12 +144,29 @@ export type RebateState = {
   weekly: boolean;
   claimedThisWeek: boolean;
   resetAt: number;
+  deployed: boolean;
 };
 
 export async function readRebate(chain: RebateChain, account: string | null): Promise<RebateState | null> {
   const address = savedRebate(chain);
   if (!address) return null;
   const c = client(chain);
+  const code = await c.getBytecode({ address: address as Hex });
+  if (!code || code === "0x") {
+    return {
+      address,
+      clerk: "",
+      circuits: chain === "xlayer" ? DEPLOYED.circuits : ZERO,
+      passed: false,
+      balance: 0n,
+      decimals: chain === "xlayer" ? 6 : 18,
+      symbol: chain === "xlayer" ? "USDT0" : "USDT",
+      weekly: true,
+      claimedThisWeek: false,
+      resetAt: 0,
+      deployed: false,
+    };
+  }
   const rebate = address as Hex;
   const [clerk, circuits, usdt] = await Promise.all([
     c.readContract({ address: rebate, abi: rebateAbi, functionName: "clerk" }),
@@ -189,6 +210,7 @@ export async function readRebate(chain: RebateChain, account: string | null): Pr
     weekly,
     claimedThisWeek,
     resetAt: nextMondaySgt(Number(now.timestamp)),
+    deployed: true,
   };
 }
 
