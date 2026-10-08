@@ -50,8 +50,8 @@ export function GiftDeploy({ account, zh }: { account: string | null; zh: boolea
     <div className="border-t border-gold bg-card px-4 py-3">
       <p className="text-sm leading-6">
         {zh
-          ? "现在的两枚礼包还认旧合约，新永续和新晶体管的成交不会出现。先从旧礼包取回还没被领走的，再点下面部署。部署后重新放入。把新地址发我，我写进网页。"
-          : "These two gifts still read the previous contracts, so new perpetual and transistor fills do not show. Withdraw what is left, deploy below, then add again. Send me the new addresses."}
+          ? "刚签的两枚礼包还认上一本。交易已经切到不会停的这一本，池子也是空的。再点下面一次，新成交才能选编号领取。签完把地址发我。"
+          : "The two gifts just signed still read the previous books. Trading is now on the books that do not stop, and both pools are empty. Deploy once more so a new fill can be selected. Send me the addresses."}
       </p>
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
         {moved.nand ? null : (

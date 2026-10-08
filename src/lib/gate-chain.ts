@@ -6,7 +6,7 @@ import { getProvider } from "@/lib/wallet";
 const KEY = "tapeliquid-gate-perp";
 const FIXED = "tapeliquid-gate-fixed";
 const HOLD = "tapeliquid-gate-hold";
-export const GATE = "0x58ead5b41cfd3627791d439402dd65571c286484";
+export const GATE = "0x798637b6d18cE053D69CfC0B08Ead105de352c11";
 const USDT = BSC.usdt;
 
 const abi = parseAbi([

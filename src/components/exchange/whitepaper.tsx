@@ -106,7 +106,7 @@ const zh: Section[] = [
   {
     h: "永续",
     ps: [
-      "现在交易的 X Layer 永续是 0xbe686238d5467a3303f2febf14df5fd21f80ade7，标记是 0xd21f98735a69dcb00208088e58596662df594deb，已经写入一次，结算价约 27。晶体管永续是 0x58ead5b41cfd3627791d439402dd65571c286484。六个标的里，第一个已经写入，另外五个还要收费地址各写一次。三份都没有管理员。写价地址和台费地址都是收费地址，写死。撮合和撤单各收保证金的 0.20%，打进收费地址。有推荐人时，交易者少付这笔的 4%，推荐人记 6%。",
+      "现在交易的 X Layer 永续是 0xF771BECD373af1d062169E42AB7b3B1fadE2b11b，标记是 0xba5234cd46ec5eB0DFdf4ac329FF42EB3062B4eA。已经写入一次，结算价约 27.38。写过这一次之后，超过 30 分钟不再停。晶体管永续是 0x798637b6d18cE053D69CfC0B08Ead105de352c11。六个标的里，第一个已经写入，另外五个还要收费地址各写一次。写过一次就不再停。三份都没有管理员。写价地址和台费地址都是收费地址，写死。撮合和撤单各收保证金的 0.20%，打进收费地址。有推荐人时，交易者少付这笔的 4%，推荐人记 6%。",
       "同一份标记只挂这一本 X Layer 永续。BSC 上的 BEM 永续读 Pancake 池子的均价，不读这份标记。浅池仍可能在短时间里影响那条均价。",
       "TAPE 是 TAPELIQUID 的唯一平台币。只有这一枚，没有第二枚。矿池没有管理员，也不能改排放。",
       "返佣合约有 clerk。clerk 可以提取返佣池里的余额。不是每一份合约都没有管理员。",
@@ -119,7 +119,7 @@ const zh: Section[] = [
       "X Layer 上放入的是 TAPELIQUID 的 NAND。BSC 上放入的是 BEM。放入的数量记在这个地址的份额上。只有这个地址能取回还没被领走的部分。别人不能把你的整笔转走。",
       "有人按规则领取时，池子变少，每个放入地址能取回的份额一起变少。池子空了就停。再放入，才继续发。",
       "领 NAND：一笔已记的 X Layer 永续，你这一边保证金不少于 5 USDT0，领 10 个。一个地址最多 5 次。领 BEM：BSC 的 BEM 永续或晶体管永续，每笔你这一边不少于 5 USDT，记满超过 10 笔，领一次 0.1。同一笔只能记一次。现货不记，因为那笔不在礼包合约里。",
-      "NAND 礼包在 X Layer，地址 0xfb05bf0472ab9c27b063b314a704516b086ea7d3。BEM 礼包在 BSC，地址 0xcac69f02c06bfca3bfdb1eaf1f4a60e17e718081。两份都没有管理员。",
+      "刚部署的 NAND 礼包是 0xAfcfc12981a5ccF7F0178A742E0A1D717E360790，它认的还是上一本 X Layer 永续。刚部署的 BEM 礼包是 0x5B9f90F894048a185000197E1aE1f8D81C358c82，它认的还是上一本晶体管合约。两份池子都是空的。交易已经切到不会停的这两本，所以礼包要按新地址再部署一次，新成交才领得到。两份都没有管理员。",
     ],
   },
   {
@@ -256,7 +256,7 @@ const en: Section[] = [
   {
     h: "Perpetuals",
     ps: [
-      "The live X Layer perpetual is 0xbe686238d5467a3303f2febf14df5fd21f80ade7. Its mark is 0xd21f98735a69dcb00208088e58596662df594deb. One post is in, and the settlement price is about 27. The transistor perpetual is 0x58ead5b41cfd3627791d439402dd65571c286484. The first of the six markets is posted. The other five still need one post each from the fee address. None of the three has an admin. The posting address and the fee address are the same, and both are fixed. A match and a cancel each take 0.20 percent of the margin and send it to the fee address. With a referrer, the trader pays 4 percent less of that fee and the referrer is credited 6 percent.",
+      "The live X Layer perpetual is 0xF771BECD373af1d062169E42AB7b3B1fadE2b11b. Its mark is 0xba5234cd46ec5eB0DFdf4ac329FF42EB3062B4eA. One post is in, and the settlement price is about 27.38. After that post, it does not stop at 30 minutes. The transistor perpetual is 0x798637b6d18cE053D69CfC0B08Ead105de352c11. The first of the six markets is posted. The other five still need one post each from the fee address. One post is enough, and it does not stop later. None of the three has an admin. The posting address and the fee address are the same, and both are fixed. A match and a cancel each take 0.20 percent of the margin and send it to the fee address. With a referrer, the trader pays 4 percent less of that fee and the referrer is credited 6 percent.",
       "This mark has one X Layer perpetual. The BEM perpetual on BSC reads the Pancake pool average. It does not read this mark. A thin pool can still move that average for a short time.",
       "TAPE is the only platform token of TAPELIQUID. There is one token, not a second. The mine has no admin, and the emission cannot be changed.",
       "The rebate contract has a clerk. The clerk can withdraw the rebate pool. Not every contract is without an admin.",
@@ -269,7 +269,7 @@ const en: Section[] = [
       "NAND added on X Layer is TAPELIQUID NAND. BEM added on BSC is BEM. What you add is your share. Only that address can take back what has not been claimed. Nobody can take your whole amount.",
       "When someone claims under the rule, the pool shrinks, and every remaining share shrinks with it. An empty pool stops. It pays again only after someone adds more.",
       "NAND pays 10, at most five times per address, after a counted X Layer perpetual fill with your margin at least 5 USDT0. BEM pays 0.1 once, after more than 10 counted BSC fills on the BEM perpetual or the transistor perpetual, each with your margin at least 5 USDT. One fill counts once. Spot is not counted, because that trade is not inside the gift contract.",
-      "The NAND gift is on X Layer at 0xfb05bf0472ab9c27b063b314a704516b086ea7d3. The BEM gift is on BSC at 0xcac69f02c06bfca3bfdb1eaf1f4a60e17e718081. Neither has an admin.",
+      "The NAND gift just deployed is 0xAfcfc12981a5ccF7F0178A742E0A1D717E360790. It still reads the previous X Layer book. The BEM gift just deployed is 0x5B9f90F894048a185000197E1aE1f8D81C358c82. It still reads the previous transistor book. Both pools are empty. Trading has moved to the books that do not stop, so the gifts have to be deployed once more against those books before a new fill can be claimed. Neither has an admin.",
     ],
   },
   {

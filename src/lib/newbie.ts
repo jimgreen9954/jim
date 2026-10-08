@@ -6,8 +6,8 @@ import { KNOWN_XPERP } from "@/lib/perp";
 import { getProvider } from "@/lib/wallet";
 import { connectXLayer, DEPLOYED, XLAYER } from "@/lib/xlayer";
 
-export const NAND_GIFT = "0xfb05bf0472ab9c27b063b314a704516b086ea7d3" as const;
-export const BEM_GIFT = "0xcac69f02c06bfca3bfdb1eaf1f4a60e17e718081" as const;
+export const NAND_GIFT = "0xAfcfc12981a5ccF7F0178A742E0A1D717E360790" as const;
+export const BEM_GIFT = "0x5B9f90F894048a185000197E1aE1f8D81C358c82" as const;
 
 const nandAbi = parseAbi([
   "function balance() view returns (uint256)",
@@ -48,18 +48,18 @@ export function bemGiftReady(): boolean {
 
 function nandGift(): Hex {
   if (!nandGiftReady()) throw new Error("nodeploy");
-  return activeGift("tapeliquid-nand-gift", NAND_GIFT);
+  return activeGift("tapeliquid-nand-gift-v2", NAND_GIFT);
 }
 
 function bemGift(): Hex {
   if (!bemGiftReady()) throw new Error("nodeploy");
-  return activeGift("tapeliquid-bem-gift", BEM_GIFT);
+  return activeGift("tapeliquid-bem-gift-v2", BEM_GIFT);
 }
 
 export function giftMoved(): { nand: boolean; bem: boolean } {
   if (typeof window === "undefined") return { nand: false, bem: false };
   const ok = (key: string) => /^0x[a-fA-F0-9]{40}$/.test(window.localStorage.getItem(key) ?? "");
-  return { nand: ok("tapeliquid-nand-gift"), bem: ok("tapeliquid-bem-gift") };
+  return { nand: ok("tapeliquid-nand-gift-v2"), bem: ok("tapeliquid-bem-gift-v2") };
 }
 
 function activeGift(key: string, fallback: string): Hex {
@@ -130,7 +130,7 @@ export async function deployNandGift(from: string): Promise<string> {
   const hash = await send("x", from, undefined, NAND_GIFT_BYTECODE, 3_000_000n);
   const receipt = await x.getTransactionReceipt({ hash });
   if (!receipt.contractAddress) throw new Error("revert");
-  window.localStorage.setItem("tapeliquid-nand-gift", receipt.contractAddress);
+  window.localStorage.setItem("tapeliquid-nand-gift-v2", receipt.contractAddress);
   return receipt.contractAddress;
 }
 
@@ -139,7 +139,7 @@ export async function deployBemGift(from: string): Promise<string> {
   const hash = await send("b", from, undefined, BEM_GIFT_BYTECODE, 3_000_000n);
   const receipt = await b.getTransactionReceipt({ hash });
   if (!receipt.contractAddress) throw new Error("revert");
-  window.localStorage.setItem("tapeliquid-bem-gift", receipt.contractAddress);
+  window.localStorage.setItem("tapeliquid-bem-gift-v2", receipt.contractAddress);
   return receipt.contractAddress;
 }
 
