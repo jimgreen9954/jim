@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { formatUnits } from "viem";
 import { copy } from "@/lib/copy";
-import { BSC, FEE_TO, connectBsc, pretty, units, type Balances } from "@/lib/bsc";
+import { BSC, connectBsc, pretty, units, type Balances } from "@/lib/bsc";
 import { getCandles, type Candle, type CandleFrame } from "@/lib/candles";
 import { currentAccount, onAccount, onOpenLink } from "@/lib/wallet";
 import { useExchange } from "@/lib/exchange-store";
@@ -14,7 +14,6 @@ import {
   cancelPerp,
   closePerp,
   deployXLayer,
-  deployFixedX,
   bookOf,
   bindCode,
   CLAIM_STEPS,
@@ -23,7 +22,6 @@ import {
   KNOWN_XPERP,
   liquidatePerp,
   openPerp,
-  pushMark,
   pxText,
   readChainPurse,
   readPerp,
@@ -35,8 +33,6 @@ import {
   activeBook,
   takePerp,
   usdtText,
-  xBookState,
-  xHolds,
   type BookQuote,
   type Desk,
   type PerpView,
@@ -192,9 +188,6 @@ export function RealPerp() {
   const c = copy[lang];
   const [chain, setChain] = useState<Desk>(savedDesk());
   const [perp, setPerp] = useState(() => bookOf(savedDesk()));
-  const [xLive, setXLive] = useState<"ready" | "scale" | "down">("ready");
-  const [holds, setHolds] = useState(xHolds());
-  const [redeploy, setRedeploy] = useState(false);
   const [account, setAccount] = useState<string | null>(currentAccount());
   const [view, setView] = useState<PerpView | null>(null);
   const [margin, setMargin] = useState("1");
@@ -228,17 +221,6 @@ export function RealPerp() {
     if (!account) return;
     setArm(readArm(account, perp));
   }, [account, perp, hash]);
-
-  useEffect(() => {
-    if (chain !== "xlayer" || !/^0x[a-fA-F0-9]{40}$/.test(perp)) return;
-    let dead = false;
-    const pull = () => {
-      xBookState(perp).then((ok) => { if (!dead) setXLive(ok); }).catch(() => { if (!dead) setXLive("down"); });
-    };
-    pull();
-    const id = window.setInterval(pull, 15000);
-    return () => { dead = true; window.clearInterval(id); };
-  }, [chain, perp, hash]);
 
   useEffect(() => {
     if (!account || !view || view.myDeal <= 0n || firing.current) return;
@@ -453,84 +435,6 @@ export function RealPerp() {
     <section className="border border-gold bg-card shadow-plate">
       <div className="flex flex-col gap-3 p-3">
         <p className="text-sm leading-relaxed text-ink/80 xl:col-span-12">{chain === "xlayer" ? c.perpWarnX : c.perpWarn}</p>
-        {chain === "xlayer" && !holds ? (
-          <div className="border border-sell px-3 py-2 text-sm xl:col-span-12">
-            <p>{lang === "zh"
-              ? "现在这一本，超过 30 分钟没写价，开仓和平仓都会停。下面部署的一本，写过一次就按最后的价格继续交易，不再停。钱包会连着弹三次。Gas Limit 填 8000000。旧仓还在旧合约里，要平掉得先给旧标记再写一次价。"
-              : "On the current book, opens and closes stop after 30 minutes without a post. The book below keeps the last price, so it does not stop. The wallet opens three times. Set Gas Limit to 8000000. An old position stays on the old contract."}</p>
-            <button
-              type="button"
-              className="mt-2 min-h-11 bg-ink px-3 text-paper disabled:opacity-40"
-              disabled={busy}
-              onClick={() => {
-                setBusy(true);
-                setBad(false);
-                void (async () => {
-                  try {
-                    selectDesk("xlayer");
-                    const from = account ?? (await connectXLayer());
-                    setAccount(from);
-                    const next = await deployFixedX(from);
-                    setPerp(next);
-                    setHolds(true);
-                    setNote(lang === "zh" ? `不会停的永续已部署。把这个地址发我：${next}` : `The book that does not expire is deployed. Send me this address: ${next}`);
-                  } catch (err) {
-                    const message = err instanceof Error ? err.message : "";
-                    setBad(true);
-                    setNote(message === "oracle"
-                      ? (lang === "zh" ? "只有收费地址能部署。" : "Only the fee address can deploy.")
-                      : (lang === "zh" ? "没有完成。Gas Limit 填 8000000。" : "It did not finish. Set Gas Limit to 8000000."));
-                  } finally {
-                    setBusy(false);
-                  }
-                })();
-              }}
-            >{lang === "zh" ? "部署不会停的永续" : "Deploy the book that does not stop"}</button>
-          </div>
-        ) : null}
-        {chain === "xlayer" && holds && xLive !== "ready" ? (
-          <div className="border border-sell px-3 py-2 text-sm xl:col-span-12">
-            <p>{xLive === "scale"
-              ? (lang === "zh"
-                ? "标记已经写上，但这本永续把 27 美元左右的 BEM 显示成了 0.00000027。标记不用再部署。收费地址再签一次永续，Gas Limit 填 8000000。"
-                : "The mark is posted, but this book shows a BEM price near 27 dollars as 0.00000027. The mark stays. The fee address signs the perpetual once more. Set Gas Limit to 8000000.")
-              : (lang === "zh"
-                ? "这一本还没写上价，所以现在开不了。收费地址再写一次就能开。写上之后，超过 30 分钟不再停。"
-                : "This book has no price yet, so it cannot open. The fee address posts once. After that, it does not stop at 30 minutes.")}</p>
-            <button
-              type="button"
-              className="mt-2 min-h-11 bg-ink px-3 text-paper disabled:opacity-40"
-              disabled={busy}
-              onClick={() => {
-                setBusy(true);
-                setBad(false);
-                void (async () => {
-                  try {
-                    selectDesk("xlayer");
-                    const from = account ?? (await connectXLayer());
-                    setAccount(from);
-                    if (xLive === "scale") {
-                      const next = await deployFixedX(from);
-                      setPerp(next);
-                      setNote(lang === "zh" ? `已经重新部署。把这个地址发我：${next}` : `Deployed again. Send me this address: ${next}`);
-                    } else {
-                      await pushMark(from);
-                      setNote(lang === "zh" ? "已经再写一次。可以开仓。超过 30 分钟也不停。" : "Posted again. It can open. It does not stop after 30 minutes.");
-                    }
-                  } catch (err) {
-                    const message = err instanceof Error ? err.message : "";
-                    setBad(true);
-                    setNote(message === "oracle"
-                      ? (lang === "zh" ? "只有收费地址能写这一笔。" : "Only the fee address can post this.")
-                      : (lang === "zh" ? "没有写上。可能还没到 30 秒，或这一笔挪过了 0.5%。" : "It was not posted. Wait 30 seconds, or the move was over 0.5%."));
-                  } finally {
-                    setBusy(false);
-                  }
-                })();
-              }}
-            >{xLive === "scale" ? (lang === "zh" ? "再部署永续" : "Deploy the perpetual again") : (lang === "zh" ? "再写一次价" : "Post the price again")}</button>
-          </div>
-        ) : null}
         <div className="grid grid-cols-2 gap-2 xl:col-span-12">
           <button
             type="button"
@@ -587,15 +491,6 @@ export function RealPerp() {
             }}
           >
             {c.deployX}
-          </button>
-        ) : null}
-        {chain === "xlayer" && /^0x[a-fA-F0-9]{40}$/.test(perp) ? (
-          <button type="button" className="min-h-11 border border-gold xl:col-span-12" disabled={busy} onClick={() => run(async (from) => {
-            if (from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("oracle");
-            await pushMark(from);
-            return "ok";
-          })}>
-            {c.pushMark}
           </button>
         ) : null}
         {link ? (

@@ -70,10 +70,13 @@ export function GiftDeploy({ account, zh }: { account: string | null; zh: boolea
   );
 }
 
-export function NewbieGift({ account, zh }: { account: string; zh: boolean }) {
+export function NewbieGift({ account, zh, pulse = 0 }: { account: string; zh: boolean; pulse?: number }) {
   const [row, setRow] = useState<GiftState | null>(null);
   const [fills, setFills] = useState<GiftFill[]>([]);
+  const [seen, setSeen] = useState(0);
+  const [small, setSmall] = useState(0);
   const [books, setBooks] = useState<GiftBooks | null>(null);
+  const [scan, setScan] = useState<"run" | "ok" | "bad">("run");
   const [nandAmt, setNandAmt] = useState("");
   const [bemAmt, setBemAmt] = useState("");
   const [note, setNote] = useState<string | null>(null);
@@ -85,13 +88,21 @@ export function NewbieGift({ account, zh }: { account: string; zh: boolean }) {
   useEffect(() => {
     let dead = false;
     const pull = () => {
+      setScan("run");
       readGift(account).then((next) => { if (!dead) setRow(next); }).catch(() => undefined);
-      readGiftFills(account).then((next) => { if (!dead) { setFills(next.fills); setBooks(next.books); } }).catch(() => undefined);
+      readGiftFills(account).then((next) => {
+        if (dead) return;
+        setFills(next.fills);
+        setSeen(next.seen);
+        setSmall(next.small);
+        setBooks(next.books);
+        setScan("ok");
+      }).catch(() => { if (!dead) setScan("bad"); });
     };
     pull();
-    const id = window.setInterval(pull, 15000);
+    const id = window.setInterval(pull, 20000);
     return () => { dead = true; window.clearInterval(id); };
-  }, [account]);
+  }, [account, pulse]);
 
   const say = (text: string, failed = false) => { setBad(failed); setNote(text); };
   const run = (task: () => Promise<unknown>, ok: string) => {
@@ -121,7 +132,7 @@ export function NewbieGift({ account, zh }: { account: string; zh: boolean }) {
         </div>
         <div>
           <p className="text-[11px] tracking-[0.18em] text-gold">{zh ? "不算的" : "Not counted"}</p>
-          <p className="mt-1 text-ink/80">{zh ? "现货不算。同一笔成交只能记一次。练习单不算。保证金不到 5 美元的编号不会出现。两本永续不能并成一笔。" : "Spot is not counted. One fill counts once. Practice is not counted. A fill under 5 dollars is not shown. The two books do not combine."}</p>
+          <p className="mt-1 text-ink/80">{zh ? "现货、加池、流片都不算。5 美元是你这一边锁进永续的保证金，不是买到多少币。两本永续不能并成一笔。同一笔只能记一次。" : "Spot, liquidity, and tape-out do not count. Five dollars means the margin locked on your side, not the coins you bought. The two books do not combine. One fill counts once."}</p>
         </div>
       </div>
       <div className="grid sm:grid-cols-2">
@@ -151,17 +162,25 @@ export function NewbieGift({ account, zh }: { account: string; zh: boolean }) {
         </article>
       </div>
       <div className="border-t border-gold/30 px-4 py-3">
-        <p className="text-sm">{zh ? "可选的成交" : "Fills you can count"}</p>
+        <p className="text-sm">{zh ? "可以领的成交" : "Fills you can claim"}</p>
         <p className="mt-1 text-xs leading-5 text-ink/55">
-          {zh
-            ? "只列出你这一边保证金不少于 5 美元、并且还没记过的成交。点 NAND 那一笔，先记下再领 10 个。点 BEM 那一笔，记满 11 笔才领 0.1。"
-            : "Only fills where your margin is at least 5 dollars, and that have not been counted, are listed. A NAND row is counted and then pays 10. A BEM row counts toward 0.1 after 11."}
+          {scan === "run"
+            ? (zh ? "正在读永续成交。" : "Reading perpetual fills.")
+            : scan === "bad"
+              ? (zh ? "这次没读到。点个人中心的刷新再试。" : "This read failed. Use Refresh on the account page.")
+              : seen === 0
+                ? (zh ? "这两本永续里没有你的成交。现货的 5 美元不会出现在这里。" : "You have no fill on these perpetual books. A 5 dollar spot trade does not show up here.")
+                : fills.some((fill) => fill.ok)
+                  ? (zh ? "点下面亮着的一笔。X Layer 记下后领 10 个 NAND。BSC 记满 11 笔才领 0.1 BEM。灰的那几笔保证金不到 5 美元，合约不认。" : "Select a lit row. An X Layer fill pays 10 NAND. BSC pays 0.1 BEM after 11. Grey rows are under 5 dollars of margin, so the contract rejects them.")
+                  : (zh ? `扫到你的 ${seen} 笔永续，保证金都不到 5 美元。开 5 美元会先扣千分之二，链上剩 4.99，礼包不认。要领的话，保证金至少开 5.02 美元。` : `Found ${seen} perpetual fills, all under 5 dollars of margin. A 5 dollar order loses 0.2 percent first, so 4.99 remains and the gift rejects it. Open at least 5.02 dollars of margin.`)}
         </p>
+        {row && row.nandPool < 10n && row.bemPool < 10_000_000n ? <p className="mt-2 text-xs text-sell">{zh ? "两个奖池现在都不够发。记下成交也不会打出奖励，要先有人放入。" : "Both pools are too small to pay. Counting a fill does not send a reward until someone adds funds."}</p> : null}
         {books && !books.nandLive ? <p className="mt-2 text-xs text-sell">{zh ? "NAND 礼包还认旧的 X Layer 永续，新成交不会出现。收费地址部署新礼包后才会列出。旧池子里的可以取回，新礼包要重新放入。" : "The NAND gift still reads the previous X Layer book, so new fills are not listed. The fee address deploys the new gift first. The old pool can be withdrawn. The new gift starts empty."}</p> : null}
         {books && !books.gateLive ? <p className="mt-2 text-xs text-sell">{zh ? "BEM 礼包的晶体管还认旧合约。新的晶体管成交不会出现。BSC 的 BEM 永续不受影响。" : "The BEM gift still reads the previous transistor book. New transistor fills are not listed. The BSC BEM book is unaffected."}</p> : null}
         <ul className="mt-2 flex flex-col gap-2">
           {fills.map((fill) => (
             <li key={`${fill.kind}-${fill.id}`}>
+              {fill.ok ? (
               <button
                 type="button"
                 disabled={busy || (fill.kind === "nand" ? !nandOn : !bemOn)}
@@ -193,9 +212,14 @@ export function NewbieGift({ account, zh }: { account: string; zh: boolean }) {
                 <span className="font-mono">#{fill.id} · {fill.kind === "nand" ? "X Layer" : fill.kind === "gate" ? (zh ? "晶体管" : "Transistor") : "BEM"} · {fill.side === "long" ? (zh ? "多" : "Long") : (zh ? "空" : "Short")}</span>
                 <span className="font-mono">{fill.margin} {zh ? "美元" : "USD"} · {fill.kind === "nand" ? (zh ? "领 10 NAND" : "Claim 10 NAND") : (zh ? "记入 BEM" : "Count BEM")}</span>
               </button>
+              ) : (
+                <p className="flex min-h-11 items-center justify-between gap-2 border border-gold/30 px-2 text-sm text-ink/45">
+                  <span className="font-mono">#{fill.id} · {fill.kind === "nand" ? "X Layer" : fill.kind === "gate" ? (zh ? "晶体管" : "Transistor") : "BEM"} · {fill.side === "long" ? (zh ? "多" : "Long") : (zh ? "空" : "Short")}</span>
+                  <span className="font-mono">{fill.margin} {zh ? "美元 · 不到 5" : "USD · under 5"}</span>
+                </p>
+              )}
             </li>
           ))}
-          {fills.length === 0 ? <li className="text-sm text-ink/60">{zh ? "没有达到 5 美元、还没记过的成交。" : "No uncounted fill with at least 5 dollars of your margin."}</li> : null}
         </ul>
         {books && (!books.nandLive || !books.gateLive) ? (
           <div className="mt-2 grid gap-2 sm:grid-cols-2">

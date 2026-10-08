@@ -220,11 +220,19 @@ export type GiftFill = {
   kind: "nand" | "bem" | "gate";
   side: "long" | "short";
   margin: string;
+  ok: boolean;
 };
 
 export type GiftBooks = {
   nandLive: boolean;
   gateLive: boolean;
+};
+
+export type GiftScan = {
+  fills: GiftFill[];
+  seen: number;
+  small: number;
+  books: GiftBooks;
 };
 
 const bookOfAbi = parseAbi([
@@ -252,17 +260,15 @@ async function qualifying(
   min: bigint,
   kind: GiftFill["kind"],
   gate: boolean,
-  gift: Hex,
-  from: string,
-): Promise<GiftFill[]> {
+): Promise<{ found: GiftFill[]; seen: number; small: number }> {
   const abi = gate ? gateDealAbi : bookOfAbi;
   let last = 0n;
   try {
     last = await client.readContract({ address: book, abi, functionName: "nextDeal" });
   } catch {
-    return [];
+    return { found: [], seen: 0, small: 0 };
   }
-  if (last < 1n) return [];
+  if (last < 1n) return { found: [], seen: 0, small: 0 };
   const start = last > 40n ? last - 39n : 1n;
   const ids: bigint[] = [];
   for (let id = start; id <= last; id += 1n) ids.push(id);
@@ -271,6 +277,8 @@ async function qualifying(
     allowFailure: true,
   });
   const found: GiftFill[] = [];
+  let seen = 0;
+  let small = 0;
   for (let i = 0; i < ids.length; i += 1) {
     const row = rows[i];
     if (!row || row.status !== "success" || !Array.isArray(row.result)) continue;
@@ -280,23 +288,15 @@ async function qualifying(
     const marginS = BigInt(gate ? row.result[4] : row.result[3]);
     const side = long === who ? "long" : short === who ? "short" : "";
     const margin = side === "long" ? marginL : marginS;
-    if (!side || margin < min) continue;
-    const data = encodeFunctionData({
-      abi: kind === "nand" ? nandAbi : bemAbi,
-      functionName: kind === "nand" ? "stamp" : kind === "gate" ? "stampGate" : "stampPerp",
-      args: [ids[i]],
-    });
-    try {
-      await client.call({ account: from as Hex, to: gift, data });
-    } catch {
-      continue;
-    }
-    found.push({ id: ids[i].toString(), kind, side, margin: dollars(margin, kind === "nand" ? 6 : 18) });
+    if (!side || short === "0x0000000000000000000000000000000000000000") continue;
+    seen += 1;
+    found.push({ id: ids[i].toString(), kind, side, margin: dollars(margin, kind === "nand" ? 6 : 18), ok: margin >= min });
+    if (margin < min) small += 1;
   }
-  return found.reverse();
+  return { found: found.reverse(), seen, small };
 }
 
-export async function readGiftFills(account: string): Promise<{ fills: GiftFill[]; books: GiftBooks }> {
+export async function readGiftFills(account: string): Promise<GiftScan> {
   const who = account.toLowerCase();
   const [nandBook, bemPerp, bemGate] = await Promise.all([
     x.readContract({ address: nandGift(), abi: bookOfAbi, functionName: "BOOK" }),
@@ -304,12 +304,14 @@ export async function readGiftFills(account: string): Promise<{ fills: GiftFill[
     b.readContract({ address: bemGift(), abi: bookOfAbi, functionName: "GATE" }),
   ]);
   const [nand, bem, gate] = await Promise.all([
-    qualifying(x, nandBook, who, 5_000_000n, "nand", false, nandGift(), account),
-    qualifying(b, bemPerp, who, 5n * 10n ** 18n, "bem", false, bemGift(), account),
-    qualifying(b, bemGate, who, 5n * 10n ** 18n, "gate", true, bemGift(), account),
+    qualifying(x, nandBook, who, 5_000_000n, "nand", false),
+    qualifying(b, bemPerp, who, 5n * 10n ** 18n, "bem", false),
+    qualifying(b, bemGate, who, 5n * 10n ** 18n, "gate", true),
   ]);
   return {
-    fills: [...nand, ...bem, ...gate],
+    fills: [...nand.found, ...bem.found, ...gate.found],
+    seen: nand.seen + bem.seen + gate.seen,
+    small: nand.small + bem.small + gate.small,
     books: {
       nandLive: nandBook.toLowerCase() === KNOWN_XPERP.toLowerCase(),
       gateLive: bemGate.toLowerCase() === LIVE_GATE.toLowerCase(),

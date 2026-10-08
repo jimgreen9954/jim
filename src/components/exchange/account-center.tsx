@@ -70,6 +70,9 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [sendKey, setSendKey] = useState<string | null>(null);
   const [gift, setGift] = useState(giftOpen);
+  const [pulse, setPulse] = useState(0);
+  const [freshing, setFreshing] = useState(false);
+  const [freshAt, setFreshAt] = useState("");
 
   useEffect(() => onAccount(setAccount), []);
   useEffect(() => {
@@ -79,10 +82,23 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
   }, [giftOpen]);
 
   const pull = (who: string) => {
-    setBook((prev) => prev ?? { ok: false, error: null, asOf: "", scanned: 0, bnb: "0", chips: [], circuits: [] });
+    setFreshing(true);
+    setBad(false);
     getHoldings({ data: { account: who } })
-      .then(setBook)
-      .catch((err: unknown) => setBook({ ok: false, error: err instanceof Error ? err.message : "read", asOf: "", scanned: 0, bnb: "0", chips: [], circuits: [] }));
+      .then((next) => {
+        setBook(next);
+        setFreshAt(new Date().toLocaleTimeString("en-GB", { hour12: false, timeZone: "Asia/Singapore" }));
+        if (!next.ok) {
+          setBad(true);
+          setNote(zh ? "持仓这次没读全。过几秒再刷新。" : "Holdings did not finish. Refresh again in a few seconds.");
+        }
+      })
+      .catch((err: unknown) => {
+        setBad(true);
+        setNote(err instanceof Error ? err.message : (zh ? "刷新失败。" : "Refresh failed."));
+        setBook({ ok: false, error: err instanceof Error ? err.message : "read", asOf: "", scanned: 0, bnb: "0", chips: [], circuits: [] });
+      })
+      .finally(() => setFreshing(false));
   };
 
   useEffect(() => {
@@ -373,10 +389,10 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
             <p className="text-[11px] tracking-[0.22em] text-gold">{zh ? "个人中心" : "Account"}</p>
             <h2 className="mt-1 truncate font-mono text-sm">{account}</h2>
           </div>
-          <button type="button" className="min-h-9 shrink-0 border border-gold px-3 text-xs" onClick={() => pull(account)}>{zh ? "刷新" : "Refresh"}</button>
+          <button type="button" className="min-h-9 shrink-0 border border-gold px-3 text-xs disabled:opacity-50" disabled={freshing} onClick={() => { setPulse((n) => n + 1); pull(account); }}>{freshing ? (zh ? "刷新中" : "Refreshing") : (zh ? "刷新" : "Refresh")}</button>
         </div>
         <p className="mt-4 font-display text-4xl leading-none">{total == null ? "—" : money(total)}</p>
-        <p className="mt-1 text-xs tracking-[0.16em] text-ink/50">USDT</p>
+        <p className="mt-1 text-xs tracking-[0.16em] text-ink/50">{freshAt ? (zh ? `已刷新 ${freshAt}` : `Updated ${freshAt}`) : "USDT"}</p>
         <div className="mt-4 grid gap-2 text-xs sm:grid-cols-2">
           <p className="border-t border-gold/30 pt-2"><span className="text-ink/50">{zh ? "现货" : "Spot"} </span>{spot}</p>
           <p className="border-t border-gold/30 pt-2"><span className="text-ink/50">{zh ? "永续" : "Perps"} </span>{perp}</p>
@@ -387,12 +403,12 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
         <button type="button" className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left" onClick={() => setGift((open) => !open)}>
           <span>
             <span className="block text-[11px] tracking-[0.22em] text-gold">{zh ? "新手礼包" : "Starter gift"}</span>
-            <span className="mt-1 block text-sm">{zh ? "保证金不少于 5 美元的成交才会出现。点编号就能领。池子空的时候领不到。" : "Only a fill with at least 5 dollars of margin is listed. Select it to claim. An empty pool cannot pay."}</span>
+            <span className="mt-1 block text-sm">{zh ? "只认永续里已经撮合、你这一边保证金不少于 5 美元的成交。现货不会出现。" : "Only a matched perpetual fill with at least 5 dollars of your margin. Spot does not appear."}</span>
           </span>
           <span className="shrink-0 text-xs text-ink/50">{gift ? (zh ? "收起" : "Close") : (zh ? "打开" : "Open")}</span>
         </button>
         <GiftDeploy account={account} zh={zh} />
-        {gift && account ? <NewbieGift account={account} zh={zh} /> : null}
+        {gift && account ? <NewbieGift account={account} zh={zh} pulse={pulse} /> : null}
       </section>
 
       <div className="border border-gold">
