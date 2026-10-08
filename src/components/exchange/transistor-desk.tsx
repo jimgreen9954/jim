@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { bindGate, cancelGateChain, claimGate, closeGateChain, deployFixedGate, gateAddress, gateMark, gateReady, openGate, pushMark, readGateChain, readGateRebate, registerGate, takeGateChain, type ChainDeal, type ChainOrder } from "@/lib/gate-chain";
+import { bindGate, cancelGateChain, claimGate, closeGateChain, gateAddress, gateMark, gateReady, openGate, pushMark, readGateChain, readGateRebate, registerGate, takeGateChain, type ChainDeal, type ChainOrder } from "@/lib/gate-chain";
 import { FEE_TO, connectBsc } from "@/lib/bsc";
 import { getTransistorDesk, type TransistorDesk } from "@/lib/transistor-market";
 import { currentAccount, onAccount } from "@/lib/wallet";
@@ -246,31 +246,29 @@ export function TransistorDesk() {
         <div className="flex flex-col gap-2 border border-gold bg-card p-3">
           {!ready ? (
             <div className="border border-sell px-2 py-2 text-sm">
-              <p>{zh ? "这个标的现在开不了仓。上次写价已经超过 30 分钟，结算价作废了。收费地址部署修好的一份，再写入这一个标的，就能开仓。" : "This market cannot open. The last post is older than 30 minutes, so the settlement price is void. The fee address deploys the fixed book, then posts this market."}</p>
+              <p>{zh ? "这个标的现在开不了仓。上次写价已经超过 30 分钟。不用重新部署。收费地址再写一次这个标的就能开。超过 30 分钟没再写，会再停。" : "This market cannot open. The last post is older than 30 minutes. Do not deploy again. The fee address posts this market once. It stops again after 30 minutes without a post."}</p>
               <button type="button" className="mt-2 min-h-11 w-full bg-ink text-paper disabled:opacity-40" disabled={busy} onClick={async () => {
                 setBusy(true);
                 setNote("");
                 try {
                   const from = account ?? (await connectBsc());
                   setAccount(from);
-                  const next = await deployFixedGate(from);
-                  setPerp(next);
                   if (!(mark > 0)) {
-                    setNote(zh ? `合约已部署 ${next}。参考价还没读到，等数字出来再点一次。` : `Deployed ${next}. The reference price is not in yet. Click again when it is.`);
+                    setNote(zh ? "参考价还没读到。等数字出来再点。" : "The reference price is not in yet. Click again when it is.");
                     return;
                   }
-                  await pushMark(from, next, market, mark);
+                  await pushMark(from, perp, market, mark);
                   setReady(true);
-                  setNote(zh ? `这个标的已写入，可以开仓。把这个地址发我：${next}` : `This market is posted. Send me this address: ${next}`);
+                  setNote(zh ? "这个标的已再写入，可以开仓。超过 30 分钟没再写，会再停。" : "This market was posted again. It stops if nothing is posted for 30 minutes.");
                 } catch (err) {
                   const message = err instanceof Error ? err.message : "";
                   setNote(message === "oracle"
-                    ? (zh ? "只有收费地址能部署这一本。" : "Only the fee address can deploy this book.")
-                    : (zh ? "没有完成。签名时 Gas Limit 填 8000000。" : "It did not finish. Set Gas Limit to 8000000."));
+                    ? (zh ? "只有收费地址能写这一笔。" : "Only the fee address can post this.")
+                    : (zh ? "没写上。可能还没到 30 秒，或这一笔挪过了 0.5%。" : "It was not posted. Wait 30 seconds, or the move was over 0.5%."));
                 } finally {
                   setBusy(false);
                 }
-              }}>{zh ? "部署并写入这个标的" : "Deploy and post this market"}</button>
+              }}>{zh ? "再写一次这个标的" : "Post this market again"}</button>
             </div>
           ) : null}
           {ready ? <button type="button" className="min-h-11 border border-gold" disabled={busy} onClick={async () => {

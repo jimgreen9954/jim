@@ -458,8 +458,8 @@ export function RealPerp() {
                 ? "标记已经写上，但这本永续把 27 美元左右的 BEM 显示成了 0.00000027。标记不用再部署。收费地址再签一次永续，Gas Limit 填 8000000。"
                 : "The mark is posted, but this book shows a BEM price near 27 dollars as 0.00000027. The mark stays. The fee address signs the perpetual once more. Set Gas Limit to 8000000.")
               : (lang === "zh"
-                ? "X Layer 这一本现在开不了仓。结算价作废了。收费地址部署修好的一份，写一次价就能开仓。"
-                : "This X Layer book cannot open. The settlement price is void. The fee address deploys the fixed book and posts once.")}</p>
+                ? "X Layer 这一本现在开不了仓。上次写价已经超过 30 分钟，结算价作废了。不用重新部署。收费地址再写一次，马上可以开。超过 30 分钟没再写，会再次停下。"
+                : "This X Layer book cannot open. The last post is older than 30 minutes, so the settlement price is void. Do not deploy again. The fee address posts once and it opens. If nothing is posted for 30 minutes, it stops again.")}</p>
             <button
               type="button"
               className="mt-2 min-h-11 bg-ink px-3 text-paper disabled:opacity-40"
@@ -472,21 +472,26 @@ export function RealPerp() {
                     selectDesk("xlayer");
                     const from = account ?? (await connectXLayer());
                     setAccount(from);
-                    const next = await deployFixedX(from);
-                    setPerp(next);
-                    setNote(lang === "zh" ? `已经写入一次，可以开仓。把这个地址发我，我写进网页：${next}` : `Posted once. It can open. Send me this address so I can put it on the site: ${next}`);
+                    if (xLive === "scale") {
+                      const next = await deployFixedX(from);
+                      setPerp(next);
+                      setNote(lang === "zh" ? `已经重新部署。把这个地址发我：${next}` : `Deployed again. Send me this address: ${next}`);
+                    } else {
+                      await pushMark(from);
+                      setNote(lang === "zh" ? "已经再写一次。可以开仓。超过 30 分钟没再写，会再停。" : "Posted again. It can open. It stops if nothing is posted for 30 minutes.");
+                    }
                   } catch (err) {
                     const message = err instanceof Error ? err.message : "";
                     setBad(true);
                     setNote(message === "oracle"
-                      ? (lang === "zh" ? "只有收费地址能部署这一本。" : "Only the fee address can deploy this book.")
-                      : (lang === "zh" ? "没有部署成功。签名时 Gas Limit 填 8000000。" : "It did not deploy. Set Gas Limit to 8000000."));
+                      ? (lang === "zh" ? "只有收费地址能写这一笔。" : "Only the fee address can post this.")
+                      : (lang === "zh" ? "没有写上。可能还没到 30 秒，或这一笔挪过了 0.5%。" : "It was not posted. Wait 30 seconds, or the move was over 0.5%."));
                   } finally {
                     setBusy(false);
                   }
                 })();
               }}
-            >{xLive === "scale" ? (lang === "zh" ? "再部署永续" : "Deploy the perpetual again") : (lang === "zh" ? "部署并写入一次" : "Deploy and post once")}</button>
+            >{xLive === "scale" ? (lang === "zh" ? "再部署永续" : "Deploy the perpetual again") : (lang === "zh" ? "再写一次价" : "Post the price again")}</button>
           </div>
         ) : null}
         <div className="grid grid-cols-2 gap-2 xl:col-span-12">

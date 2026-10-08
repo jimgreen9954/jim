@@ -1,6 +1,8 @@
 import { createPublicClient, encodeFunctionData, http, parseAbi, type Hex } from "viem";
 import { BSC, connectBsc, FEE_TO } from "@/lib/bsc";
+import { GATE as LIVE_GATE } from "@/lib/gate-chain";
 import { BEM_GIFT_BYTECODE, NAND_GIFT_BYTECODE } from "@/lib/newbie-artifact";
+import { KNOWN_XPERP } from "@/lib/perp";
 import { getProvider } from "@/lib/wallet";
 import { connectXLayer, DEPLOYED, XLAYER } from "@/lib/xlayer";
 
@@ -46,12 +48,18 @@ export function bemGiftReady(): boolean {
 
 function nandGift(): Hex {
   if (!nandGiftReady()) throw new Error("nodeploy");
-  return NAND_GIFT as Hex;
+  return activeGift("tapeliquid-nand-gift", NAND_GIFT);
 }
 
 function bemGift(): Hex {
   if (!bemGiftReady()) throw new Error("nodeploy");
-  return BEM_GIFT as Hex;
+  return activeGift("tapeliquid-bem-gift", BEM_GIFT);
+}
+
+function activeGift(key: string, fallback: string): Hex {
+  if (typeof window === "undefined") return fallback as Hex;
+  const saved = window.localStorage.getItem(key) ?? "";
+  return /^0x[a-fA-F0-9]{40}$/.test(saved) ? saved as Hex : fallback as Hex;
 }
 
 export type GiftState = {
@@ -116,6 +124,7 @@ export async function deployNandGift(from: string): Promise<string> {
   const hash = await send("x", from, undefined, NAND_GIFT_BYTECODE, 3_000_000n);
   const receipt = await x.getTransactionReceipt({ hash });
   if (!receipt.contractAddress) throw new Error("revert");
+  window.localStorage.setItem("tapeliquid-nand-gift", receipt.contractAddress);
   return receipt.contractAddress;
 }
 
@@ -124,6 +133,7 @@ export async function deployBemGift(from: string): Promise<string> {
   const hash = await send("b", from, undefined, BEM_GIFT_BYTECODE, 3_000_000n);
   const receipt = await b.getTransactionReceipt({ hash });
   if (!receipt.contractAddress) throw new Error("revert");
+  window.localStorage.setItem("tapeliquid-bem-gift", receipt.contractAddress);
   return receipt.contractAddress;
 }
 
@@ -199,4 +209,106 @@ export async function claimBem(from: string): Promise<Hex> {
   const data = encodeFunctionData({ abi: bemAbi, functionName: "claim" });
   await b.call({ account: from as Hex, to: gift, data });
   return send("b", from, gift, data);
+}
+
+export type GiftFill = {
+  id: string;
+  kind: "nand" | "bem" | "gate";
+  side: "long" | "short";
+  margin: string;
+};
+
+export type GiftBooks = {
+  nandLive: boolean;
+  gateLive: boolean;
+};
+
+const bookOfAbi = parseAbi([
+  "function BOOK() view returns (address)",
+  "function PERP() view returns (address)",
+  "function GATE() view returns (address)",
+  "function nextDeal() view returns (uint256)",
+  "function deals(uint256) view returns (address,address,uint96,uint96,uint128,uint128,bool,uint16,uint16)",
+]);
+
+const gateDealAbi = parseAbi([
+  "function nextDeal() view returns (uint256)",
+  "function deals(uint256) view returns (address,address,uint8,uint96,uint96,uint128,uint128,bool,uint16,uint16)",
+]);
+
+function dollars(amount: bigint, decimals: number): string {
+  const n = Number(amount) / 10 ** decimals;
+  return Number.isFinite(n) ? n.toLocaleString("en-US", { maximumFractionDigits: 2 }) : amount.toString();
+}
+
+async function qualifying(
+  client: typeof x,
+  book: Hex,
+  who: string,
+  min: bigint,
+  kind: GiftFill["kind"],
+  gate: boolean,
+  gift: Hex,
+  from: string,
+): Promise<GiftFill[]> {
+  const abi = gate ? gateDealAbi : bookOfAbi;
+  let last = 0n;
+  try {
+    last = await client.readContract({ address: book, abi, functionName: "nextDeal" });
+  } catch {
+    return [];
+  }
+  if (last < 1n) return [];
+  const start = last > 40n ? last - 39n : 1n;
+  const ids: bigint[] = [];
+  for (let id = start; id <= last; id += 1n) ids.push(id);
+  const rows = await client.multicall({
+    contracts: ids.map((id) => ({ address: book, abi, functionName: "deals" as const, args: [id] as const })),
+    allowFailure: true,
+  });
+  const found: GiftFill[] = [];
+  for (let i = 0; i < ids.length; i += 1) {
+    const row = rows[i];
+    if (!row || row.status !== "success" || !Array.isArray(row.result)) continue;
+    const long = String(row.result[0]).toLowerCase();
+    const short = String(row.result[1]).toLowerCase();
+    const marginL = BigInt(gate ? row.result[3] : row.result[2]);
+    const marginS = BigInt(gate ? row.result[4] : row.result[3]);
+    const side = long === who ? "long" : short === who ? "short" : "";
+    const margin = side === "long" ? marginL : marginS;
+    if (!side || margin < min) continue;
+    const data = encodeFunctionData({
+      abi: kind === "nand" ? nandAbi : bemAbi,
+      functionName: kind === "nand" ? "stamp" : kind === "gate" ? "stampGate" : "stampPerp",
+      args: [ids[i]],
+    });
+    try {
+      await client.call({ account: from as Hex, to: gift, data });
+    } catch {
+      continue;
+    }
+    found.push({ id: ids[i].toString(), kind, side, margin: dollars(margin, kind === "nand" ? 6 : 18) });
+  }
+  return found.reverse();
+}
+
+export async function readGiftFills(account: string): Promise<{ fills: GiftFill[]; books: GiftBooks }> {
+  const who = account.toLowerCase();
+  const [nandBook, bemPerp, bemGate] = await Promise.all([
+    x.readContract({ address: nandGift(), abi: bookOfAbi, functionName: "BOOK" }),
+    b.readContract({ address: bemGift(), abi: bookOfAbi, functionName: "PERP" }),
+    b.readContract({ address: bemGift(), abi: bookOfAbi, functionName: "GATE" }),
+  ]);
+  const [nand, bem, gate] = await Promise.all([
+    qualifying(x, nandBook, who, 5_000_000n, "nand", false, nandGift(), account),
+    qualifying(b, bemPerp, who, 5n * 10n ** 18n, "bem", false, bemGift(), account),
+    qualifying(b, bemGate, who, 5n * 10n ** 18n, "gate", true, bemGift(), account),
+  ]);
+  return {
+    fills: [...nand, ...bem, ...gate],
+    books: {
+      nandLive: nandBook.toLowerCase() === KNOWN_XPERP.toLowerCase(),
+      gateLive: bemGate.toLowerCase() === LIVE_GATE.toLowerCase(),
+    },
+  };
 }

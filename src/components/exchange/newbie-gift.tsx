@@ -4,23 +4,28 @@ import {
   bemGiftReady,
   claimBem,
   claimNand,
+  deployBemGift,
+  deployNandGift,
   depositBem,
   depositNand,
   nandGiftReady,
   readGift,
+  readGiftFills,
   stampBem,
   stampNand,
   withdrawBem,
   withdrawNand,
+  type GiftFill,
+  type GiftBooks,
   type GiftState,
 } from "@/lib/newbie";
 
 export function NewbieGift({ account, zh }: { account: string; zh: boolean }) {
   const [row, setRow] = useState<GiftState | null>(null);
+  const [fills, setFills] = useState<GiftFill[]>([]);
+  const [books, setBooks] = useState<GiftBooks | null>(null);
   const [nandAmt, setNandAmt] = useState("");
   const [bemAmt, setBemAmt] = useState("");
-  const [deal, setDeal] = useState("");
-  const [gate, setGate] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [bad, setBad] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -31,6 +36,7 @@ export function NewbieGift({ account, zh }: { account: string; zh: boolean }) {
     let dead = false;
     const pull = () => {
       readGift(account).then((next) => { if (!dead) setRow(next); }).catch(() => undefined);
+      readGiftFills(account).then((next) => { if (!dead) { setFills(next.fills); setBooks(next.books); } }).catch(() => undefined);
     };
     pull();
     const id = window.setInterval(pull, 15000);
@@ -42,7 +48,6 @@ export function NewbieGift({ account, zh }: { account: string; zh: boolean }) {
     setBusy(true);
     task().then(() => { if (ok) say(ok); }).catch(() => say(zh ? "没有完成。签名时 Gas Limit 填 3000000。资产还在原处。" : "It did not finish. Set Gas Limit to 3000000. The assets stayed put.", true)).finally(() => setBusy(false));
   };
-  const id = BigInt(deal || "0");
   const nandLeft = row ? 5n - row.nandClaimed : 0n;
   const canNand = Boolean(row && nandLeft > 0n && row.nandTrades > row.nandClaimed && row.nandPool >= 10n);
   const canBem = Boolean(row && !row.bemClaimed && row.bemTrades >= 11n && row.bemPool >= 10_000_000n);
@@ -66,7 +71,7 @@ export function NewbieGift({ account, zh }: { account: string; zh: boolean }) {
         </div>
         <div>
           <p className="text-[11px] tracking-[0.18em] text-gold">{zh ? "不算的" : "Not counted"}</p>
-          <p className="mt-1 text-ink/80">{zh ? "现货不算。同一笔成交只能记一次。练习单不算。两本永续不能并成一笔。成交编号要自己填，页面不代记。" : "Spot is not counted. One fill counts once. Practice is not counted. The two books do not combine. You enter the fill id yourself. The page does not count it for you."}</p>
+          <p className="mt-1 text-ink/80">{zh ? "现货不算。同一笔成交只能记一次。练习单不算。保证金不到 5 美元的编号不会出现。两本永续不能并成一笔。" : "Spot is not counted. One fill counts once. Practice is not counted. A fill under 5 dollars is not shown. The two books do not combine."}</p>
         </div>
       </div>
       <div className="grid sm:grid-cols-2">
@@ -95,22 +100,60 @@ export function NewbieGift({ account, zh }: { account: string; zh: boolean }) {
           <button type="button" disabled={busy || !canBem} className="mt-2 min-h-10 w-full border border-gold text-sm disabled:opacity-40" onClick={() => run(() => claimBem(account), zh ? "已领 0.1 BEM。" : "Claimed 0.1 BEM.")}>{zh ? "领取 0.1 BEM" : "Claim 0.1 BEM"}</button>
         </article>
       </div>
-      <details className="border-t border-gold/30 px-4 py-3">
-        <summary className="cursor-pointer text-sm">{zh ? "记一笔成交" : "Count a fill"}</summary>
-        <p className="mt-2 text-xs leading-5 text-ink/55">
+      <div className="border-t border-gold/30 px-4 py-3">
+        <p className="text-sm">{zh ? "可选的成交" : "Fills you can count"}</p>
+        <p className="mt-1 text-xs leading-5 text-ink/55">
           {zh
-            ? "只认已经撮合的永续，你这一边保证金不少于 5 美元。X Layer 记 NAND，最多领 5 次。BSC 的 BEM 永续和晶体管永续记 BEM，超过 10 笔领一次 0.1。同一笔只能记一次。现货不记。"
-            : "Only a matched perpetual counts, and only if your margin is at least 5 dollars. X Layer fills count toward NAND, five claims at most. BSC BEM and transistor fills count toward 0.1 BEM after more than 10. One fill counts once. Spot does not."}
+            ? "只列出你这一边保证金不少于 5 美元、并且还没记过的成交。点 NAND 那一笔，先记下再领 10 个。点 BEM 那一笔，记满 11 笔才领 0.1。"
+            : "Only fills where your margin is at least 5 dollars, and that have not been counted, are listed. A NAND row is counted and then pays 10. A BEM row counts toward 0.1 after 11."}
         </p>
-        <div className="mt-3 grid gap-2 sm:grid-cols-[8rem_1fr]">
-          <input value={deal} onChange={(event) => setDeal(event.target.value.replace(/[^\d]/g, ""))} placeholder={zh ? "成交编号" : "Fill id"} className="min-h-10 border border-gold bg-card px-2 font-mono outline-none" />
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" disabled={busy || !nandOn || id < 1n} className="min-h-10 border border-gold text-sm disabled:opacity-40" onClick={() => run(() => stampNand(account, id), zh ? "这笔 X Layer 成交已记下。" : "That X Layer fill is counted.")}>{zh ? "记入 NAND" : "Count NAND"}</button>
-            <button type="button" disabled={busy || !bemOn || id < 1n} className="min-h-10 border border-gold text-sm disabled:opacity-40" onClick={() => run(() => stampBem(account, id, gate), zh ? "这笔 BSC 成交已记下。" : "That BSC fill is counted.")}>{gate ? (zh ? "记晶体管" : "Transistor") : (zh ? "记 BEM" : "BEM")}</button>
+        {books && !books.nandLive ? <p className="mt-2 text-xs text-sell">{zh ? "NAND 礼包还认旧的 X Layer 永续，新成交不会出现。收费地址部署新礼包后才会列出。旧池子里的可以取回，新礼包要重新放入。" : "The NAND gift still reads the previous X Layer book, so new fills are not listed. The fee address deploys the new gift first. The old pool can be withdrawn. The new gift starts empty."}</p> : null}
+        {books && !books.gateLive ? <p className="mt-2 text-xs text-sell">{zh ? "BEM 礼包的晶体管还认旧合约。新的晶体管成交不会出现。BSC 的 BEM 永续不受影响。" : "The BEM gift still reads the previous transistor book. New transistor fills are not listed. The BSC BEM book is unaffected."}</p> : null}
+        <ul className="mt-2 flex flex-col gap-2">
+          {fills.map((fill) => (
+            <li key={`${fill.kind}-${fill.id}`}>
+              <button
+                type="button"
+                disabled={busy || (fill.kind === "nand" ? !nandOn : !bemOn)}
+                className="flex min-h-11 w-full items-center justify-between gap-2 border border-gold px-2 text-left text-sm disabled:opacity-40"
+                onClick={() => {
+                  setBusy(true);
+                  const take = async () => {
+                    if (fill.kind === "nand") {
+                      await stampNand(account, BigInt(fill.id));
+                      const next = await readGift(account);
+                      if (next.nandClaimed < 5n && next.nandTrades > next.nandClaimed && next.nandPool >= 10n) {
+                        await claimNand(account);
+                        return zh ? `#${fill.id} 已记下，10 个 NAND 已领。` : `#${fill.id} counted. 10 NAND claimed.`;
+                      }
+                      return zh ? `#${fill.id} 已记下。池子不够 10 个，或这个地址已经领满 5 次。` : `#${fill.id} is counted. The pool is under 10, or this address already claimed 5 times.`;
+                    }
+                    await stampBem(account, BigInt(fill.id), fill.kind === "gate");
+                    const next = await readGift(account);
+                    if (!next.bemClaimed && next.bemTrades >= 11n && next.bemPool >= 10_000_000n) {
+                      await claimBem(account);
+                      return zh ? `#${fill.id} 已记下，0.1 BEM 已领。` : `#${fill.id} counted. 0.1 BEM claimed.`;
+                    }
+                    const left = Math.max(0, 11 - Number(next.bemTrades));
+                    return zh ? `#${fill.id} 已记下。还差 ${left} 笔才领 0.1 BEM。` : `#${fill.id} is counted. ${left} more before 0.1 BEM.`;
+                  };
+                  take().then((text) => say(text)).catch(() => say(zh ? "没有完成。这笔可能已经记过。" : "It did not finish. This fill may already be counted.", true)).finally(() => setBusy(false));
+                }}
+              >
+                <span className="font-mono">#{fill.id} · {fill.kind === "nand" ? "X Layer" : fill.kind === "gate" ? (zh ? "晶体管" : "Transistor") : "BEM"} · {fill.side === "long" ? (zh ? "多" : "Long") : (zh ? "空" : "Short")}</span>
+                <span className="font-mono">{fill.margin} {zh ? "美元" : "USD"} · {fill.kind === "nand" ? (zh ? "领 10 NAND" : "Claim 10 NAND") : (zh ? "记入 BEM" : "Count BEM")}</span>
+              </button>
+            </li>
+          ))}
+          {fills.length === 0 ? <li className="text-sm text-ink/60">{zh ? "没有达到 5 美元、还没记过的成交。" : "No uncounted fill with at least 5 dollars of your margin."}</li> : null}
+        </ul>
+        {books && (!books.nandLive || !books.gateLive) ? (
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {!books.nandLive ? <button type="button" disabled={busy} className="min-h-10 border border-gold text-sm disabled:opacity-40" onClick={() => run(() => deployNandGift(account), zh ? "新的 NAND 礼包已部署。把地址发我，我写进网页。旧池子请先取回再放入新的。" : "The new NAND gift is deployed. Send me the address. Withdraw the old pool before adding to the new one.")}>{zh ? "部署认新永续的 NAND 礼包" : "Deploy the NAND gift on the live book"}</button> : null}
+            {!books.gateLive ? <button type="button" disabled={busy} className="min-h-10 border border-gold text-sm disabled:opacity-40" onClick={() => run(() => deployBemGift(account), zh ? "新的 BEM 礼包已部署。把地址发我。旧池子请先取回。" : "The new BEM gift is deployed. Send me the address. Withdraw the old pool first.")}>{zh ? "部署认新晶体管的 BEM 礼包" : "Deploy the BEM gift on the live transistor book"}</button> : null}
           </div>
-        </div>
-        <button type="button" className="mt-2 text-xs text-ink/60 underline" onClick={() => setGate((value) => !value)}>{gate ? (zh ? "正在记晶体管永续" : "Counting the transistor book") : (zh ? "正在记 BEM 永续" : "Counting the BEM book")}</button>
-      </details>
+        ) : null}
+      </div>
       {note ? <p className={`px-4 pb-3 text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
     </div>
   );

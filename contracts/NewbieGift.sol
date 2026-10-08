@@ -29,7 +29,7 @@ interface IGate {
 /// Claims pay 10 NAND and shrink every share. They stop when the pool is empty.
 contract NandGift {
     address public constant NAND = 0x3FA393d3081AcCff9E7989619B688235F6d3EE3F;
-    address public constant BOOK = 0x3Dfde13EF89F49575E73E91D3cd11127557f4D60;
+    address public constant BOOK = 0xBe686238D5467a3303F2FEBf14df5FD21F80ADe7;
     uint256 public constant ID = 0;
     uint256 public constant PAY = 10;
     uint256 public constant MAX = 5;
@@ -129,7 +129,7 @@ contract NandGift {
 contract BemGift {
     address public constant BEM = 0x5ce033B2bFCa3Af30b3e8C8457DeaF776A8b695a;
     address public constant PERP = 0xce3511b6E909c9694826cFd5Dbe434d457920EBa;
-    address public constant GATE = 0xb4B2ee90D10ECfC7ed36A58e96e03074fA8731Eb;
+    address public constant GATE = 0x58eaD5b41Cfd3627791D439402dd65571c286484;
     uint256 public constant PAY = 10_000_000;
     uint256 public constant NEED = 11;
     uint256 public constant MIN = 5 ether;
