@@ -63,7 +63,6 @@ contract TapeMark {
         Obs memory head = obs[last];
         uint32 nowT = uint32(block.timestamp);
         if (nowT > head.time + STALE) revert Bad();
-        if (nowT < head.time + WINDOW) revert Bad();
         int56 nowCum = head.cum + int56(head.tick) * int56(uint56(nowT - head.time));
         cumulatives = new int56[](secondsAgos.length);
         liquidity = new uint160[](secondsAgos.length);
@@ -79,6 +78,12 @@ contract TapeMark {
     }
 
     function _at(uint32 target) internal view returns (int56) {
+        uint8 oldestI = last;
+        for (uint8 n = 1; n < count; n++) oldestI = oldestI == 0 ? SLOTS - 1 : oldestI - 1;
+        Obs memory oldest = obs[oldestI];
+        if (target < oldest.time) {
+            return oldest.cum - int56(oldest.tick) * int56(uint56(oldest.time - target));
+        }
         uint8 i = last;
         for (uint8 n = 0; n < count; n++) {
             Obs memory row = obs[i];

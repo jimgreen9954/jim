@@ -11,6 +11,8 @@ export const REBATE_KEY = "tapeliquid-rebate-v1";
 const DESK_KEY = "tapeliquid-desk-v1";
 const XPERP_KEY = "tapeliquid-xperp-v1";
 const XMARK_KEY = "tapeliquid-xmark-v1";
+const XPERP_FIXED = "tapeliquid-xperp-fixed";
+const XMARK_FIXED = "tapeliquid-xmark-fixed";
 export const X_USDT = "0x779Ded0c9e1022225f8E0630b35a9b54bE713736" as const;
 
 export type Desk = "bsc" | "xlayer";
@@ -397,8 +399,26 @@ export function savedXPerp(): string {
 const BSC_BOOK_KEY = "tapeliquid-bsc-book";
 
 export function bookOf(which: Desk = desk): string {
-  if (which === "xlayer") return /^0x[a-fA-F0-9]{40}$/.test(KNOWN_XPERP) ? KNOWN_XPERP : savedXPerp();
+  if (which === "xlayer") {
+    const fixed = typeof window !== "undefined" ? window.localStorage.getItem(XPERP_FIXED) ?? "" : "";
+    if (/^0x[a-fA-F0-9]{40}$/.test(fixed)) return fixed;
+    return /^0x[a-fA-F0-9]{40}$/.test(KNOWN_XPERP) ? KNOWN_XPERP : savedXPerp();
+  }
   return BSC_REBATE;
+}
+
+export async function xReady(perp: string): Promise<boolean> {
+  try {
+    const c = await deskClient("xlayer");
+    await c.readContract({
+      address: perp as Hex,
+      abi: [{ name: "mark", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] }] as const,
+      functionName: "mark",
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function deployBscBook(from: string): Promise<string> {
@@ -859,8 +879,9 @@ async function bscTick(): Promise<number> {
 }
 
 export async function pushMark(from: string): Promise<void> {
+  const fixed = typeof window !== "undefined" ? window.localStorage.getItem(XMARK_FIXED) ?? "" : "";
   const saved = typeof window !== "undefined" ? window.localStorage.getItem(XMARK_KEY) ?? "" : "";
-  const mark = /^0x[a-fA-F0-9]{40}$/.test(KNOWN_XMARK) ? KNOWN_XMARK : saved;
+  const mark = /^0x[a-fA-F0-9]{40}$/.test(fixed) ? fixed : /^0x[a-fA-F0-9]{40}$/.test(KNOWN_XMARK) ? KNOWN_XMARK : saved;
   if (!/^0x[a-fA-F0-9]{40}$/.test(mark)) return;
   const was = desk;
   desk = "xlayer";
@@ -917,7 +938,46 @@ export async function deployXLayer(from: string, onStep?: (step: 1 | 2 | 3) => v
   }
 }
 
-/** Attach a perpetual to the mark that already deployed. Does not deploy another mark. */
+/** Deploy a mark that can settle after one post, then the X Layer book on it. */
+export async function deployFixedX(from: string): Promise<string> {
+  if (from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("oracle");
+  const was = desk;
+  desk = "xlayer";
+  try {
+    const rpc = await client();
+    let mark = window.localStorage.getItem(XMARK_FIXED) ?? "";
+    const fresh = !/^0x[a-fA-F0-9]{40}$/.test(mark);
+    if (fresh) {
+      const markHash = await send(from, undefined, MARK_BYTECODE, 2_000_000n);
+      const markReceipt = await rpc.waitForTransactionReceipt({ hash: markHash, timeout: 120_000 });
+      mark = markReceipt.contractAddress ?? "";
+      if (markReceipt.status !== "success" || !mark) throw new Error("revert");
+      window.localStorage.setItem(XMARK_FIXED, mark);
+    }
+    try {
+      const tick = await bscTick();
+      const push = encodeFunctionData({ abi: pushAbi, functionName: "push", args: [tick] });
+      await send(from, mark as Hex, push, 250_000n);
+    } catch (err) {
+      if (fresh) throw err;
+    }
+    const existing = window.localStorage.getItem(XPERP_FIXED) ?? "";
+    if (/^0x[a-fA-F0-9]{40}$/.test(existing)) return existing;
+    const args = encodeAbiParameters(
+      [{ type: "address" }, { type: "address" }, { type: "uint256" }],
+      [X_USDT, mark as Hex, 1_000_000n],
+    );
+    const data = (PERP_BYTECODE + args.slice(2)) as Hex;
+    const perpHash = await send(from, undefined, data, 8_000_000n);
+    const perpReceipt = await rpc.waitForTransactionReceipt({ hash: perpHash, timeout: 180_000 });
+    const perp = perpReceipt.contractAddress ?? "";
+    if (perpReceipt.status !== "success" || !perp) throw new Error("revert");
+    window.localStorage.setItem(XPERP_FIXED, perp);
+    return perp;
+  } finally {
+    desk = was;
+  }
+}
 export async function deployLockedPair(from: string): Promise<{ mark: string; perp: string }> {
   if (from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("oracle");
   const was = desk;

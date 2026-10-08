@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { bindGate, cancelGateChain, claimGate, closeGateChain, gateAddress, gateMark, openGate, pushMark, readGateChain, readGateRebate, registerGate, takeGateChain, type ChainDeal, type ChainOrder } from "@/lib/gate-chain";
+import { bindGate, cancelGateChain, claimGate, closeGateChain, deployFixedGate, gateAddress, gateMark, gateReady, openGate, pushMark, readGateChain, readGateRebate, registerGate, takeGateChain, type ChainDeal, type ChainOrder } from "@/lib/gate-chain";
 import { FEE_TO, connectBsc } from "@/lib/bsc";
 import { getTransistorDesk, type TransistorDesk } from "@/lib/transistor-market";
 import { currentAccount, onAccount } from "@/lib/wallet";
@@ -66,6 +66,7 @@ export function TransistorDesk() {
   const [busy, setBusy] = useState(false);
   const lock = useFeeLock();
   const [chainMark, setChainMark] = useState(0);
+  const [ready, setReady] = useState(true);
   const [mineCode, setMineCode] = useState("");
   const [friend, setFriend] = useState("");
   const [rebate, setRebate] = useState({ accrued: 0, code: "", referrer: "" });
@@ -94,6 +95,7 @@ export function TransistorDesk() {
       const who = currentAccount();
       if (who) readGateRebate(who).then((next) => { if (!dead) setRebate(next); }).catch(() => undefined);
       gateMark(addr, marketOf(pick.token, pick.id)).then((next) => { if (!dead) setChainMark(next); }).catch(() => undefined);
+      gateReady(addr, marketOf(pick.token, pick.id)).then((ok) => { if (!dead) setReady(ok); }).catch(() => { if (!dead) setReady(false); });
     };
     pull();
     const timer = window.setInterval(pull, 1000);
@@ -242,8 +244,36 @@ export function TransistorDesk() {
           {resting.length === 0 ? <p className="px-3 py-6 text-sm text-ink/60">{zh ? "这个标还没有人挂单。右边开多或开空，就会出现在这里。" : "No orders on this market yet. A long or a short from the ticket shows up here."}</p> : null}
         </div>
         <div className="flex flex-col gap-2 border border-gold bg-card p-3">
-          <p className="border border-gold/40 px-2 py-2 text-sm">{zh ? "结算用 10 分钟均价，只许收费地址写价。现在均价还是空的，开仓会失败。收费地址要隔 30 秒写一次，写满大约 10 分钟。每次最多挪 0.5%。" : "Settlement is a 10-minute average, and only the fee address can post it. The average is empty, so an open fails. That address posts every 30 seconds for about 10 minutes. Each step moves at most 0.5%."}</p>
-          <button type="button" className="min-h-11 border border-gold" disabled={busy} onClick={async () => {
+          {!ready ? (
+            <div className="border border-sell px-2 py-2 text-sm">
+              <p>{zh ? "这个标的现在开不了仓。上次写价已经超过 30 分钟，结算价作废了。收费地址部署修好的一份，再写入这一个标的，就能开仓。" : "This market cannot open. The last post is older than 30 minutes, so the settlement price is void. The fee address deploys the fixed book, then posts this market."}</p>
+              <button type="button" className="mt-2 min-h-11 w-full bg-ink text-paper disabled:opacity-40" disabled={busy} onClick={async () => {
+                setBusy(true);
+                setNote("");
+                try {
+                  const from = account ?? (await connectBsc());
+                  setAccount(from);
+                  const next = await deployFixedGate(from);
+                  setPerp(next);
+                  if (!(mark > 0)) {
+                    setNote(zh ? `合约已部署 ${next}。参考价还没读到，等数字出来再点一次。` : `Deployed ${next}. The reference price is not in yet. Click again when it is.`);
+                    return;
+                  }
+                  await pushMark(from, next, market, mark);
+                  setReady(true);
+                  setNote(zh ? `这个标的已写入，可以开仓。把这个地址发我：${next}` : `This market is posted. Send me this address: ${next}`);
+                } catch (err) {
+                  const message = err instanceof Error ? err.message : "";
+                  setNote(message === "oracle"
+                    ? (zh ? "只有收费地址能部署这一本。" : "Only the fee address can deploy this book.")
+                    : (zh ? "没有完成。签名时 Gas Limit 填 8000000。" : "It did not finish. Set Gas Limit to 8000000."));
+                } finally {
+                  setBusy(false);
+                }
+              }}>{zh ? "部署并写入这个标的" : "Deploy and post this market"}</button>
+            </div>
+          ) : null}
+          {ready ? <button type="button" className="min-h-11 border border-gold" disabled={busy} onClick={async () => {
             setBusy(true);
             setNote("");
             try {
@@ -254,13 +284,13 @@ export function TransistorDesk() {
                 return;
               }
               await pushMark(from, perp, market, mark);
-              setNote(zh ? "这个标的已写入。隔 30 秒再写，连续约 10 分钟后才能开仓。" : "This market was posted. Post again after 30 seconds. Opens wait about 10 minutes.");
+              setNote(zh ? "这个标的已写入。写入之后就可以开仓。超过 30 分钟没再写，结算价会作废。" : "This market was posted. It can open after the post. If nothing is posted for 30 minutes, the price expires.");
             } catch {
               setNote(zh ? "没写上。可能还没到 30 秒，或这一笔挪过了 0.5%。" : "It was not posted. Wait 30 seconds, or the move was over 0.5%.");
             } finally {
               setBusy(false);
             }
-          }}>{zh ? "收费地址写入这个标的" : "Fee address posts this market"}</button>
+          }}>{zh ? "收费地址写入这个标的" : "Fee address posts this market"}</button> : null}
           <p className="text-xs tracking-widest text-gold">{zh ? "下单" : "Open"}</p>
           <label className="text-sm">
             {zh ? "限价 BNB，空着就用参考价" : "Limit in BNB. Blank uses the mark."}

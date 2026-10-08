@@ -27,7 +27,7 @@ const zh: Section[] = [
     ps: [
       "现货在签名的钱包里成交。BSC 上的交易对走 PancakeSwap。OKB 走 X Layer 的 PotatoSwap。买到的币留在这个钱包。台费是付出金额的 0.20%，在池子手续费之外，单独付一笔，先付。后面的兑换拒签或回滚，这一笔不退。回执还没读到时，同一金额不会再收一次。",
       "永续有两本，不能并成一笔。BSC 的保证金是 USDT。X Layer 的保证金是 USDT0。保证金锁进你所选链上的那一份合约，平台不经手。没有保险基金，也没有自动减仓。亏到保证金大约一半，任何人都可以强平。没有资金费。",
-      "BSC 的 BEM 永续用 Pancake 池子大约 10 分钟的均价做标记，不用最后一笔成交去强平。浅池仍可能在短时间里带动这条均价。X Layer 永续和晶体管永续只许收费地址写价，每次最多挪 0.5%，至少隔 30 秒。结算用过去 10 分钟均价。均价不满 10 分钟，或超过 30 分钟没有新写入，不能开仓，也不能结算。",
+      "BSC 的 BEM 永续用 Pancake 池子大约 10 分钟的均价做标记，不用最后一笔成交去强平。浅池仍可能在短时间里带动这条均价。X Layer 永续和晶体管永续只许收费地址写价，每次最多挪 0.5%，至少隔 30 秒。写入一次就能开仓。连续写满 10 分钟之后，结算改用这段均价。超过 30 分钟没有新写入，不能开仓，也不能结算。",
       "推荐只作用于永续。有推荐人时，交易者少付永续台费的 4%，推荐人记 6%，其余进入收费地址。现货和流动性不参与。",
     ],
   },
@@ -176,7 +176,7 @@ const en: Section[] = [
     ps: [
       "Spot settles in the wallet that signed. BSC pairs use PancakeSwap. OKB uses PotatoSwap on X Layer. The coins you buy stay in that wallet. The desk fee is 0.20% of what you pay, on top of the pool fee, and it is a separate payment made first. If the swap is rejected or reverts, that fee stays. If the receipt has not come back, the same amount is not charged again.",
       "There are two perpetual books. They do not net. BSC margin is USDT. X Layer margin is USDT0. Margin is locked in the one contract on the chain you picked. The platform does not hold it. There is no insurance fund and no auto-deleveraging. At about half the margin lost, anyone can liquidate. There is no funding fee.",
-      "The BSC BEM perpetual uses about a 10-minute Pancake average as the mark. The last trade is not used to liquidate. A thin pool can still move that average for a short time. The X Layer perpetual and the transistor perpetual accept a price only from the fee address. Each post moves at most 0.5%, and at least 30 seconds must pass. Settlement uses the last 10 minutes. If that average is shorter than 10 minutes, or nothing new has been posted for 30 minutes, a new order cannot open and a position cannot settle.",
+      "The BSC BEM perpetual uses about a 10-minute Pancake average as the mark. The last trade is not used to liquidate. A thin pool can still move that average for a short time. The X Layer perpetual and the transistor perpetual accept a price only from the fee address. Each post moves at most 0.5%, and at least 30 seconds must pass. One post is enough to open. After 10 minutes of posts, settlement uses that average. If nothing new is posted for 30 minutes, a position cannot open or settle.",
       "Referrals apply only to perpetuals. With a referrer, the trader pays 4% less of the perpetual desk fee, the referrer is credited 6%, and the rest goes to the fee address. Spot and liquidity are outside that split.",
     ],
   },

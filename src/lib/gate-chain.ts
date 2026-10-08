@@ -1,15 +1,17 @@
 import { encodeAbiParameters, encodeFunctionData, formatUnits, parseAbi, parseUnits, type Hex } from "viem";
-import { BSC, connectBsc, readBalances } from "@/lib/bsc";
+import { BSC, FEE_TO, connectBsc, readBalances } from "@/lib/bsc";
 import { GATE_BYTECODE } from "@/lib/gate-artifact";
 import { getProvider } from "@/lib/wallet";
 
 const KEY = "tapeliquid-gate-perp";
+const FIXED = "tapeliquid-gate-fixed";
 export const GATE = "0xb4b2ee90d10ecfc7ed36a58e96e03074fa8731eb";
 const USDT = BSC.usdt;
 
 const abi = parseAbi([
   "function nextQuote() view returns (uint256)",
   "function nextDeal() view returns (uint256)",
+  "function markOf(uint8) view returns (uint256)",
   "function marks(uint8) view returns (uint256)",
   "function markedAt(uint8) view returns (uint256)",
   "function quotes(uint256) view returns (address user, uint8 market, bool long, uint96 margin, uint16 lev, bool open, uint128 price)",
@@ -37,7 +39,32 @@ export type ChainOrder = { id: string; market: number; user: string; long: boole
 export type ChainDeal = { id: string; market: number; longUser: string; shortUser: string; entry: number; marginL: number; marginS: number; base: number; levL: number; levS: number };
 
 export function gateAddress(): string {
-  return GATE;
+  if (typeof window === "undefined") return GATE;
+  const saved = window.localStorage.getItem(FIXED) ?? "";
+  return /^0x[a-fA-F0-9]{40}$/.test(saved) ? saved : GATE;
+}
+
+export async function deployFixedGate(from: string): Promise<string> {
+  if (from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("oracle");
+  const existing = window.localStorage.getItem(FIXED) ?? "";
+  if (/^0x[a-fA-F0-9]{40}$/.test(existing)) return existing;
+  const args = encodeAbiParameters([{ type: "address" }], [USDT]);
+  const data = (GATE_BYTECODE + args.slice(2)) as Hex;
+  const hash = await send(from, undefined, data, 8_000_000n);
+  const receipt = await (await client()).getTransactionReceipt({ hash });
+  const addr = receipt.contractAddress ?? "";
+  if (receipt.status !== "success" || !addr) throw new Error("revert");
+  window.localStorage.setItem(FIXED, addr);
+  return addr;
+}
+
+export async function gateReady(perp: string, market: number): Promise<boolean> {
+  try {
+    await (await client()).readContract({ address: perp as Hex, abi, functionName: "markOf", args: [market] });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function priceWei(price: number): bigint {
@@ -104,8 +131,13 @@ async function approve(from: string, perp: string, amount: bigint) {
 
 export async function gateMark(perp: string, market: number): Promise<number> {
   const c = await client();
-  const prev = await c.readContract({ address: perp as Hex, abi, functionName: "marks", args: [market] });
-  return Number(formatUnits(prev, 18));
+  try {
+    const live = await c.readContract({ address: perp as Hex, abi, functionName: "markOf", args: [market] });
+    return Number(formatUnits(live, 18));
+  } catch {
+    const prev = await c.readContract({ address: perp as Hex, abi, functionName: "marks", args: [market] });
+    return Number(formatUnits(prev, 18));
+  }
 }
 
 export async function pushMark(from: string, perp: string, market: number, price: number) {

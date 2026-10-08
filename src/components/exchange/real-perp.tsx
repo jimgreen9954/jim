@@ -14,6 +14,7 @@ import {
   cancelPerp,
   closePerp,
   deployXLayer,
+  deployFixedX,
   bookOf,
   KNOWN_XPERP,
   liquidatePerp,
@@ -28,6 +29,7 @@ import {
   activeBook,
   takePerp,
   usdtText,
+  xReady,
   type BookQuote,
   type Desk,
   type PerpView,
@@ -183,6 +185,7 @@ export function RealPerp() {
   const c = copy[lang];
   const [chain, setChain] = useState<Desk>(savedDesk());
   const [perp, setPerp] = useState(() => bookOf(savedDesk()));
+  const [xLive, setXLive] = useState(true);
   const [redeploy, setRedeploy] = useState(false);
   const [account, setAccount] = useState<string | null>(currentAccount());
   const [view, setView] = useState<PerpView | null>(null);
@@ -214,6 +217,17 @@ export function RealPerp() {
     if (!account) return;
     setArm(readArm(account, perp));
   }, [account, perp, hash]);
+
+  useEffect(() => {
+    if (chain !== "xlayer" || !/^0x[a-fA-F0-9]{40}$/.test(perp)) return;
+    let dead = false;
+    const pull = () => {
+      xReady(perp).then((ok) => { if (!dead) setXLive(ok); }).catch(() => { if (!dead) setXLive(false); });
+    };
+    pull();
+    const id = window.setInterval(pull, 15000);
+    return () => { dead = true; window.clearInterval(id); };
+  }, [chain, perp, hash]);
 
   useEffect(() => {
     if (!account || !view || view.myDeal <= 0n || firing.current) return;
@@ -326,7 +340,7 @@ export function RealPerp() {
     else if (message === "usdt") setNote(chain === "xlayer" ? c.perpNeedX : c.perpNeedUsdt);
     else if (message === "nochain") setNote(c.perpNoChain);
     else if (message === "oracle") setNote(lang === "zh" ? "只有收费地址能写标记价。" : "Only the fee address can post the mark.");
-    else if (chain === "xlayer" && /revert|execution|Bad/i.test(message)) setNote(lang === "zh" ? "没开成。十分钟均价还是空的。用收费地址隔 30 秒点一次「推进」，连续大约 10 分钟之后才能开仓。" : "It did not open. The ten-minute average is empty. The fee address posts every 30 seconds for about 10 minutes before an open can succeed.");
+    else if (chain === "xlayer" && /revert|execution|Bad/i.test(message)) setNote(lang === "zh" ? "没开成。结算价已经作废。用收费地址部署修好的一份，并写入一次。" : "It did not open. The settlement price has expired. The fee address deploys the fixed book and posts once.");
     else if (code === 4001) setNote(c.walletReject);
     else if (/RPC|publicnode|Archive|Invalid param/i.test(message)) setNote(c.rpcWait);
     else if (message === "amount") setNote(lang === "zh" ? "数量不对。先看保证金和价格有没有填上。" : "That amount is not valid. Check the margin and the price.");
@@ -407,12 +421,39 @@ export function RealPerp() {
     <section className="border border-gold bg-card shadow-plate">
       <div className="flex flex-col gap-3 p-3">
         <p className="text-sm leading-relaxed text-ink/80 xl:col-span-12">{chain === "xlayer" ? c.perpWarnX : c.perpWarn}</p>
-        {chain === "xlayer" ? (
-          <p className="border border-sell px-3 py-2 text-sm text-sell xl:col-span-12">
-            {lang === "zh"
-              ? "X Layer 这一本。标记只许收费地址写，结算用 10 分钟均价。均价现在还是空的，开仓会失败。收费地址每隔 30 秒点一次「推进」，写满约 10 分钟。"
-              : "This is the X Layer book. Only the fee address can post the mark, and settlement uses a 10-minute average. The average is empty, so an open fails. That address posts about every 30 seconds for 10 minutes."}
-          </p>
+        {chain === "xlayer" && !xLive ? (
+          <div className="border border-sell px-3 py-2 text-sm xl:col-span-12">
+            <p>{lang === "zh"
+              ? "X Layer 这一本现在开不了仓。上次写价已经超过 30 分钟，结算价作废了。连续再写，窗口会被打断，还是开不了。收费地址部署修好的一份，写一次价就能开仓。"
+              : "This X Layer book cannot open. The last post is older than 30 minutes, so the settlement price is void. Posting again and again keeps the window shut. The fee address deploys the fixed book and posts once."}</p>
+            <button
+              type="button"
+              className="mt-2 min-h-11 bg-ink px-3 text-paper disabled:opacity-40"
+              disabled={busy}
+              onClick={() => {
+                setBusy(true);
+                setBad(false);
+                void (async () => {
+                  try {
+                    selectDesk("xlayer");
+                    const from = account ?? (await connectXLayer());
+                    setAccount(from);
+                    const next = await deployFixedX(from);
+                    setPerp(next);
+                    setNote(lang === "zh" ? `已经写入一次，可以开仓。把这个地址发我，我写进网页：${next}` : `Posted once. It can open. Send me this address so I can put it on the site: ${next}`);
+                  } catch (err) {
+                    const message = err instanceof Error ? err.message : "";
+                    setBad(true);
+                    setNote(message === "oracle"
+                      ? (lang === "zh" ? "只有收费地址能部署这一本。" : "Only the fee address can deploy this book.")
+                      : (lang === "zh" ? "没有部署成功。签名时 Gas Limit 填 8000000。" : "It did not deploy. Set Gas Limit to 8000000."));
+                  } finally {
+                    setBusy(false);
+                  }
+                })();
+              }}
+            >{lang === "zh" ? "部署并写入一次" : "Deploy and post once"}</button>
+          </div>
         ) : null}
         <div className="grid grid-cols-2 gap-2 xl:col-span-12">
           <button
