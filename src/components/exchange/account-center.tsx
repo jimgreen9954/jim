@@ -387,7 +387,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
         <button type="button" className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left" onClick={() => setGift((open) => !open)}>
           <span>
             <span className="block text-[11px] tracking-[0.22em] text-gold">{zh ? "新手礼包" : "Starter gift"}</span>
-            <span className="mt-1 block text-sm">{zh ? "NAND 和 BEM。点开再充、再领。" : "NAND and BEM. Open it to deposit or claim."}</span>
+            <span className="mt-1 block text-sm">{zh ? "奖励。打开之后才能放入或领取。" : "Rewards. Open it before you add funds or claim."}</span>
           </span>
           <span className="shrink-0 text-xs text-ink/50">{gift ? (zh ? "收起" : "Close") : (zh ? "打开" : "Open")}</span>
         </button>

@@ -285,7 +285,7 @@ export type Copy = {
 
 export const copy: Record<Lang, Copy> = {
   zh: {
-    kicker: "BSC 现货 · 两本永续 · 晶圆在 X Layer",
+    kicker: "现货 · 永续 · 工房",
     thesis:
       "撮合不该关在黑盒里。买价和卖价是两只管脚，NAND 一低，锁存器写下成交。BEM 现货和永续，刻在同一片白底金线上。",
     spot: "现货",
@@ -318,8 +318,8 @@ export const copy: Record<Lang, Copy> = {
     est: "预估占用",
     buySpot: "买入现货",
     sellSpot: "卖出现货",
-    openLong: "镀金开多",
-    openShort: "蚀刻开空",
+    openLong: "开多",
+    openShort: "开空",
     addLong: "继续加多",
     addShort: "继续加空",
     closeLong: "买入平空",
@@ -589,7 +589,7 @@ export const copy: Record<Lang, Copy> = {
     },
   },
   en: {
-    kicker: "BSC SPOT · TWO PERP BOOKS · WAFER ON X LAYER",
+    kicker: "Spot · Perps · Workshop",
     thesis:
       "Matching should not sit in a black box. Bid and ask are two pads. When the NAND falls, a latch writes the fill. BEM spot and the perpetual share one white wafer ruled in gold.",
     spot: "Spot",
@@ -622,8 +622,8 @@ export const copy: Record<Lang, Copy> = {
     est: "Locks about",
     buySpot: "Buy spot",
     sellSpot: "Sell spot",
-    openLong: "Plate a long",
-    openShort: "Etch a short",
+    openLong: "Open long",
+    openShort: "Open short",
     addLong: "Add long",
     addShort: "Add short",
     closeLong: "Buy to cover",

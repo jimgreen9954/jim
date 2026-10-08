@@ -15,10 +15,29 @@ type Section = { h: string; ps: string[] };
 
 const zh: Section[] = [
   {
-    h: "规则怎么读",
+    h: "产品",
     ps: [
-      "TAPELIQUID 以晶圆为工本，以 TAPE 为唯一产出，以台费和用户铸造收入为回购来源。回购买入的 TAPE 全部销毁。官方电路挖出的 TAPE 不进入市场。开盘按已经锁进池子的资金写定。",
-      "下面先写规则。最后一节写现在链上已经有的，和还不能签名的。没有合约的步骤，页面上没有按钮。",
+      "TAPELIQUID 用来交易 BEM，并在 X Layer 上铸造晶圆、流片、挖出 TAPE。TAPE 是 TAPELIQUID 的唯一平台币，只有这一枚，在 X Layer。BEM 是 TapeOut 的代币，不是平台币。",
+      "页面分四层。交易台是现货和永续。练习只在这台浏览器里，不进实盘。工房是铸造、流片、晶体管合约和官网现货。规则就是这一页。个人中心看资产和转出，礼包收在里面，打开才出现。",
+      "没有合约的步骤，页面上没有按钮。下面先写已经能用的规则，再写计划里还不能签名的部分。",
+    ],
+  },
+  {
+    h: "交易台",
+    ps: [
+      "现货在签名的钱包里成交。BSC 上的交易对走 PancakeSwap。OKB 走 X Layer 的 PotatoSwap。买到的币留在这个钱包。台费是付出金额的 0.20%，在池子手续费之外，单独付一笔，先付。后面的兑换拒签或回滚，这一笔不退。回执还没读到时，同一金额不会再收一次。",
+      "永续有两本，不能并成一笔。BSC 的保证金是 USDT。X Layer 的保证金是 USDT0。保证金锁进你所选链上的那一份合约，平台不经手。没有保险基金，也没有自动减仓。亏到保证金大约一半，任何人都可以强平。没有资金费。",
+      "BSC 的 BEM 永续用 Pancake 池子大约 10 分钟的均价做标记，不用最后一笔成交去强平。浅池仍可能在短时间里带动这条均价。X Layer 永续和晶体管永续只许收费地址写价，每次最多挪 0.5%，至少隔 30 秒。结算用过去 10 分钟均价。均价不满 10 分钟，或超过 30 分钟没有新写入，不能开仓，也不能结算。",
+      "推荐只作用于永续。有推荐人时，交易者少付永续台费的 4%，推荐人记 6%，其余进入收费地址。现货和流动性不参与。",
+    ],
+  },
+  {
+    h: "工房",
+    ps: [
+      "先铸造 NAND 或 LATCH，再流片。流片烧掉网表里的晶体管，不能撤回，也不能再铸回来。一张最多 18,000 个 NAND，或 30,000 个 LATCH。更大的网表会失败，晶体管还在钱包里。",
+      "NAND 和 LATCH 在 X Layer 铸造，共用额度 2,100,000。未流片的库存可以转让，不算算力。额度用完后只剩转让。",
+      "晶体管合约在工房里，不在交易台。保证金是 BSC 的 USDT。结算参照收费地址写下的 10 分钟均价，不是官网页面上的另一口价。六个标的各自一本。",
+      "晶体管现货和电路现货跟 tapeout.net 的盘口。本站另收 0.20%，先付。官网没有成交，这一笔也不退。",
     ],
   },
   {
@@ -36,8 +55,7 @@ const zh: Section[] = [
     ps: [
       "TAPE 是 TAPELIQUID 的唯一平台币，只此一份，在 X Layer。没有第二枚。硬顶 21,000,000。无预挖，无团队份额，无私募。只发给已流片并且已验证的电路。未锁仓电路的领取，100% 进入该电路登记的矿工地址。销毁从已流通的币里发生，不从排放里预扣。",
       "排放不回溯。从第一笔已验证流片的那一天开始计日。晶圆不必铸完才开始。之后新的铸造和流片提高全网算力，已有电路的占比下降。",
-      "日排放和减半周期写在合约里，不设改率权限。减半周期 210,000×600 秒，约 4 年。每过一个周期，当日排放减半。各期累加不超过 21,000,000。销毁不改变日排放，只减少已流通数量。",
-      "开盘阶段日排放为 1,000。收费地址连续 30 日有台费入账后，日排放调整为 7,200，此后按减半周期执行。调整只做这一次。",
+      "日排放写在挖矿合约里，没有改率入口。现在这一份从部署时起每天排放 7,200。不是先 1,000 再改成 7,200。计划里的那一次调整没有函数，不能靠这一页改掉。减半周期按 210,000×600 秒写在规则里，约 4 年。销毁不改变当日排放，只减少已流通数量。各期累加不超过 21,000,000。",
     ],
   },
   {
@@ -95,11 +113,12 @@ const zh: Section[] = [
     ],
   },
   {
-    h: "新手礼包",
+    h: "奖励",
     ps: [
-      "个人中心有一份新手礼包。X Layer 上充的是 TAPELIQUID 的 NAND。BSC 上充的是 BEM。充进去的记在你的份额上。只有这个地址能取回自己还没被领走的那一份。别人不能把你的充值整笔转走。",
-      "有人按规则领取时，池子变少，每个充值地址能取回的份额一起变少。池子空了就停。再充进去，就继续发。",
-      "NAND 每次领 10 个，一个地址最多 5 次。要先有一笔已记的 X Layer 永续成交，你这一边的保证金不少于 5 USDT0。BEM 领一次 0.1 个。要先记满超过 10 笔 BSC 成交，每笔你这一边的保证金不少于 5 USDT。BSC 只认 BEM 永续和晶体管永续。同一笔成交只能记一次。现货不记进这个次数。",
+      "新手礼包不是充值入口，也不是理财。入口只在个人中心，默认收着，打开之后才能放入或领取。首页不放充值框。",
+      "X Layer 上放入的是 TAPELIQUID 的 NAND。BSC 上放入的是 BEM。放入的数量记在这个地址的份额上。只有这个地址能取回还没被领走的部分。别人不能把你的整笔转走。",
+      "有人按规则领取时，池子变少，每个放入地址能取回的份额一起变少。池子空了就停。再放入，才继续发。",
+      "领 NAND：一笔已记的 X Layer 永续，你这一边保证金不少于 5 USDT0，领 10 个。一个地址最多 5 次。领 BEM：BSC 的 BEM 永续或晶体管永续，每笔你这一边不少于 5 USDT，记满超过 10 笔，领一次 0.1。同一笔只能记一次。现货不记，因为那笔不在礼包合约里。",
       "NAND 礼包在 X Layer，地址 0xfb05bf0472ab9c27b063b314a704516b086ea7d3。BEM 礼包在 BSC，地址 0xcac69f02c06bfca3bfdb1eaf1f4a60e17e718081。两份都没有管理员。",
     ],
   },
@@ -145,10 +164,29 @@ const zh: Section[] = [
 
 const en: Section[] = [
   {
-    h: "How to read this",
+    h: "Product",
     ps: [
-      "Wafers are the cost. TAPE is the only output. Desk fees and user mint proceeds are the buyback. Bought TAPE is burned. TAPE mined by official circuits does not enter the market. The open is fixed by funds already locked in the pool.",
-      "The rules come first. The last sections say what is already on chain, and what cannot be signed yet. A step without a contract has no button.",
+      "TAPELIQUID trades BEM, and on X Layer it mints wafers, tapes circuits, and mines TAPE. TAPE is the only platform token. There is one, on X Layer. BEM belongs to TapeOut. It is not the platform token.",
+      "The site has four layers. The desk is spot and perpetuals. Practice stays in this browser and does not reach the live book. The workshop is minting, tape-out, transistor perps, and official spot. This page is the rulebook. The account page shows balances and transfers. The gift stays closed there until you open it.",
+      "A step without a contract has no button. The live rules come first. What is only a plan, and cannot be signed, comes after.",
+    ],
+  },
+  {
+    h: "Desk",
+    ps: [
+      "Spot settles in the wallet that signed. BSC pairs use PancakeSwap. OKB uses PotatoSwap on X Layer. The coins you buy stay in that wallet. The desk fee is 0.20% of what you pay, on top of the pool fee, and it is a separate payment made first. If the swap is rejected or reverts, that fee stays. If the receipt has not come back, the same amount is not charged again.",
+      "There are two perpetual books. They do not net. BSC margin is USDT. X Layer margin is USDT0. Margin is locked in the one contract on the chain you picked. The platform does not hold it. There is no insurance fund and no auto-deleveraging. At about half the margin lost, anyone can liquidate. There is no funding fee.",
+      "The BSC BEM perpetual uses about a 10-minute Pancake average as the mark. The last trade is not used to liquidate. A thin pool can still move that average for a short time. The X Layer perpetual and the transistor perpetual accept a price only from the fee address. Each post moves at most 0.5%, and at least 30 seconds must pass. Settlement uses the last 10 minutes. If that average is shorter than 10 minutes, or nothing new has been posted for 30 minutes, a new order cannot open and a position cannot settle.",
+      "Referrals apply only to perpetuals. With a referrer, the trader pays 4% less of the perpetual desk fee, the referrer is credited 6%, and the rest goes to the fee address. Spot and liquidity are outside that split.",
+    ],
+  },
+  {
+    h: "Workshop",
+    ps: [
+      "Mint NAND or LATCH, then tape out. Tape-out burns the transistors in the netlist. It cannot be undone or minted back. One sheet holds at most 18,000 NAND or 30,000 LATCH. A larger netlist fails, and the transistors stay in the wallet.",
+      "NAND and LATCH mint on X Layer under one cap of 2,100,000. Untaped stock can be transferred and is not hashrate. After the cap, only transfers remain.",
+      "Transistor perps live in the workshop, not on the desk. Margin is BSC USDT. Settlement uses the 10-minute average posted by the fee address, not a second price from the official page. There are six markets.",
+      "Transistor spot and circuit spot follow the tapeout.net book. This site charges an extra 0.20%, paid first. If the official fill does not happen, that fee is not returned.",
     ],
   },
   {
@@ -166,8 +204,7 @@ const en: Section[] = [
     ps: [
       "TAPE is the only platform token of TAPELIQUID. There is one token, on X Layer, and there is not a second. The hard cap is 21,000,000. No premine, no team allocation, no private sale. It is paid only to a taped and verified circuit. A claim on an unlocked circuit goes entirely to the miner address registered on that circuit. Burns come out of coins already circulating. They are not withheld from emission.",
       "Emission does not backfill. The day count starts on the day of the first verified tape-out. The wafers do not have to be fully minted first. Later mints and tape-outs raise network hashrate, so an existing circuit's share falls.",
-      "The daily amount and the halving are in the contract. There is no permission to edit the rate. A halving is 210,000 × 600 seconds, about four years. Each period, that day's emission is cut in half. The periods together do not exceed 21,000,000. A burn does not change the daily emission. It only reduces what is circulating.",
-      "The opening daily emission is 1,000. After the fee address has received desk fees for 30 consecutive days, the daily emission becomes 7,200, and halvings apply from there. That change happens once.",
+      "The daily amount is in the mine contract, and there is no function to change it. This contract emits 7,200 a day from deployment. It does not start at 1,000 and then switch. The planned switch has no function, and this page cannot create one. The halving interval in the rules is 210,000 × 600 seconds, about four years. A burn does not change the day's emission. It only reduces what is circulating. The periods together do not exceed 21,000,000.",
     ],
   },
   {
@@ -226,11 +263,12 @@ const en: Section[] = [
     ],
   },
   {
-    h: "Starter gift",
+    h: "Rewards",
     ps: [
-      "The account page has a starter gift. NAND deposited on X Layer is TAPELIQUID NAND. BEM deposited on BSC is BEM. A deposit is your share. Only that address can withdraw what has not yet been paid out. Nobody can take your whole deposit.",
-      "When someone claims under the rule, the pool shrinks, and every depositor's remaining share shrinks with it. An empty pool stops. A new deposit starts it again.",
-      "NAND pays 10 each time, at most 5 times per address. That requires a counted X Layer perpetual fill, and your side's margin must be at least 5 USDT0. BEM pays 0.1 once. That requires more than 10 counted BSC fills, each with your side's margin at least 5 USDT. BSC counts the BEM perpetual and the transistor perpetual. One fill counts once. Spot is not counted.",
+      "The starter gift is not a deposit product and not a savings account. The only entry is inside Account. It stays closed until you open it. The home page has no deposit box.",
+      "NAND added on X Layer is TAPELIQUID NAND. BEM added on BSC is BEM. What you add is your share. Only that address can take back what has not been claimed. Nobody can take your whole amount.",
+      "When someone claims under the rule, the pool shrinks, and every remaining share shrinks with it. An empty pool stops. It pays again only after someone adds more.",
+      "NAND pays 10, at most five times per address, after a counted X Layer perpetual fill with your margin at least 5 USDT0. BEM pays 0.1 once, after more than 10 counted BSC fills on the BEM perpetual or the transistor perpetual, each with your margin at least 5 USDT. One fill counts once. Spot is not counted, because that trade is not inside the gift contract.",
       "The NAND gift is on X Layer at 0xfb05bf0472ab9c27b063b314a704516b086ea7d3. The BEM gift is on BSC at 0xcac69f02c06bfca3bfdb1eaf1f4a60e17e718081. Neither has an admin.",
     ],
   },
@@ -277,7 +315,7 @@ const en: Section[] = [
 
 const specZh = [
   ["硬顶", "21,000,000 TAPE，8 位小数，无预挖，无团队份额"],
-  ["日排放", "开盘 1,000。收费地址连续 30 日有台费后，改为 7,200，只此一次"],
+  ["日排放", "每天 7,200。合约里没有改档入口"],
   ["减半", "210,000 × 600 秒，约 4 年。销毁不改变日排放"],
   ["权重", "H = b* × P × q。q 最高 4。引用其他电路则 H = 0"],
   ["分配", "已验证 99%，未验证 1%。开排第一周未验证为 0"],
@@ -291,7 +329,7 @@ const specZh = [
 
 const specEn = [
   ["Cap", "21,000,000 TAPE, 8 decimals, no premine, no team share"],
-  ["Daily emission", "1,000 at the open. One change to 7,200 after 30 days of desk fees"],
+  ["Daily emission", "7,200 a day. The contract has no switch"],
   ["Halving", "210,000 × 600 seconds, about four years. Burns do not change the daily amount"],
   ["Weight", "H = b* × P × q. q stops at 4. A netlist that calls another circuit has H = 0"],
   ["Split", "Verified 99%, unverified 1%. Unverified is 0 in the first week"],
@@ -334,8 +372,8 @@ export function Whitepaper() {
         <h2 className="mt-3 font-display text-4xl italic leading-none sm:text-5xl">{lang === "zh" ? "白皮书" : "White paper"}</h2>
         <p className="mt-4 max-w-2xl text-sm leading-7">
           {lang === "zh"
-            ? "规则写在这里。链上还没有的，不写成已经能签。"
-            : "The rules are here. What is not on chain yet is not written as something you can sign."}
+            ? "这一页按使用顺序写。先说这个产品是什么，再说钱去哪，最后才是还没有上链的部分。和页面不一致时，以这一页和链上合约为准。"
+            : "This page follows the order you use the product. What it is, where the money goes, then what is not on chain. If a screen disagrees with this page, this page and the contract win."}
         </p>
       </header>
       <div className="grid gap-px border-b border-gold bg-gold/40 sm:grid-cols-2">

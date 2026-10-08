@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { parseUnits } from "viem";
-import { useExchange } from "@/lib/exchange-store";
 import {
   bemGiftReady,
   claimBem,
@@ -100,11 +99,4 @@ export function NewbieGift({ account, zh }: { account: string; zh: boolean }) {
   );
 }
 
-export function GiftHome({ onOpen }: { onOpen: () => void }) {
-  const zh = useExchange((s) => s.lang) === "zh";
-  return (
-    <button type="button" className="min-h-11 w-fit border border-gold px-4 text-sm" onClick={onOpen}>
-      {zh ? "新手礼包" : "Starter gift"}
-    </button>
-  );
-}
+

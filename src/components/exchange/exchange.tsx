@@ -15,7 +15,6 @@ import { TransistorDesk } from "@/components/exchange/transistor-desk";
 import { TapeCanvas } from "@/components/exchange/tape-canvas";
 import { WalletBar, ConnectButton } from "@/components/exchange/wallet-bar";
 import { AccountCenter } from "@/components/exchange/account-center";
-import { GiftHome } from "@/components/exchange/newbie-gift";
 import { OfficialDesk } from "@/components/exchange/official-desk";
 import { SealRebateBox } from "@/components/exchange/seal-rebate";
 import { MineDesk } from "@/components/exchange/mine-desk";
@@ -62,7 +61,6 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
         <div className={`mx-auto flex max-w-7xl flex-col gap-3 px-3 pt-2 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-4 lg:gap-4 lg:px-6 ${floor === "paper" ? "lg:pb-10" : ""}`}>
           <Header floor={floor} desk={desk} setFloor={setFloor} setDesk={setDesk} setShop={setShop} setGiftOpen={setGiftOpen} />
           <FeeStrip />
-          {floor === "desk" && desk === "spot" ? <GiftHome onOpen={() => { setGiftOpen(true); setFloor("me"); }} /> : null}
           {floor === "desk" && desk === "spot" ? <SpotDesk /> : null}
           {floor === "desk" && desk === "perp" ? <RealPerp /> : null}
           {floor === "paper" ? <PaperFloor /> : null}
@@ -211,18 +209,20 @@ function Header({ floor, desk, setFloor, setDesk, setShop, setGiftOpen }: { floo
     ["rules", lang === "zh" ? "规则" : "Rules"],
   ] as const;
   const line = floor === "paper"
-    ? lang === "zh" ? "不进实盘成交" : "Not a live fill"
+    ? lang === "zh" ? "练习只在这台浏览器里，不会进实盘。" : "Practice stays in this browser. It does not reach the live book."
     : floor === "desk" && desk === "perp"
-      ? lang === "zh" ? "同一份合约里互相成交" : "Fills only inside this contract"
+      ? lang === "zh" ? "保证金锁在这一份合约里。BSC 和 X Layer 不能并成一笔。" : "Margin stays in this contract. BSC and X Layer do not net."
       : floor === "desk"
-        ? lang === "zh" ? "钱包里真买卖" : "Real trades in the wallet"
+        ? lang === "zh" ? "现货在钱包里成交。台费另付 0.20%。" : "Spot settles in the wallet. The 0.20% desk fee is a separate payment."
+        : floor === "shop"
+          ? lang === "zh" ? "铸造、流片、晶体管合约和官网现货。" : "Mint, tape-out, transistor perps, and official spot."
         : floor === "canvas"
-          ? lang === "zh" ? "画布先在浏览器里跑。点流片才烧这台处理器。" : "The canvas runs in the browser. Tape-out is what burns this processor."
+          ? lang === "zh" ? "先在页面上画。签名之后才流片。" : "Draw it here. It is taped only after you sign."
         : floor === "mine"
-          ? lang === "zh" ? "BEM 是官网的。TAPE 是这台处理器的。两笔分开签。" : "BEM is the official token. TAPE is this processor's. They are separate signatures."
+          ? lang === "zh" ? "领取已经挖出的币。BEM 和 TAPE 分开签名。" : "Claim coins already mined. BEM and TAPE are separate signatures."
         : floor === "me"
-          ? lang === "zh" ? "资产在你的钱包里。这一页只读，转出要另签名。" : "Assets stay in your wallet. This page only reads. Sending takes another signature."
-          : "";
+          ? lang === "zh" ? "看资产、转出。礼包在下面，打开才出现。" : "Balances and transfers. The gift stays closed until you open it."
+          : lang === "zh" ? "规则以这一页为准。" : "This page is the rulebook.";
   const go = (next: Floor) => {
     if (window.location.pathname.startsWith("/whitepaper")) {
       window.location.assign(next === "rules" ? "/whitepaper" : `/#${next === "desk" ? desk : next === "shop" ? "gate" : next === "canvas" ? "canvas" : next === "mine" ? "mine" : next === "me" ? "me" : "paper"}`);
@@ -375,13 +375,17 @@ function ShopFloor({ shop, setShop }: { shop: ShopTab; setShop: (shop: ShopTab) 
   return (
     <>
       <p className="text-sm text-ink/80">
-        {shop === "chips" || shop === "circuits"
+        {shop === "gate"
           ? lang === "zh"
-            ? "盘口跟 tapeout.net 的快照。只做写死的官网合约。本站另收千分之二，先付，官网没成交也不退。"
-            : "The book follows the tapeout.net snapshot. Only the locked official contracts. Our extra 0.2% is paid first and is not returned."
-          : lang === "zh"
-            ? "先铸造 NAND，再流片。流片烧掉晶体管，不能撤回。"
-            : "Mint NAND, then tape out. A tape-out burns transistors and cannot be undone."}
+            ? "晶体管合约。保证金是 BSC 的 USDT，结算用 10 分钟均价。和 BEM 永续不是同一本。"
+            : "Transistor perps. Margin is BSC USDT. Settlement uses a 10-minute average. This is not the BEM book."
+          : shop === "wafer"
+            ? lang === "zh"
+              ? "先铸造 NAND 或 LATCH，再流片。流片烧掉晶体管，不能撤回。"
+              : "Mint NAND or LATCH, then tape out. Tape-out burns transistors and cannot be undone."
+            : lang === "zh"
+              ? "跟 tapeout.net 的盘口。本站另收 0.20%，先付。官网没有成交，这一笔也不退。"
+              : "The book follows tapeout.net. This site charges an extra 0.20%, paid first. If the official fill fails, that fee is not returned."}
       </p>
       <div className="grid grid-cols-2 border border-gold sm:grid-cols-4">
         {([
