@@ -16,6 +16,10 @@ import {
   deployXLayer,
   deployFixedX,
   bookOf,
+  bindCode,
+  CLAIM_STEPS,
+  claimRebate,
+  codeText,
   KNOWN_XPERP,
   liquidatePerp,
   openPerp,
@@ -23,9 +27,11 @@ import {
   pxText,
   readChainPurse,
   readPerp,
+  readRebate,
   readBoard,
   savedDesk,
   selectDesk,
+  registerCode,
   activeBook,
   takePerp,
   usdtText,
@@ -194,6 +200,9 @@ export function RealPerp() {
   const [mode, setMode] = useState<"easy" | "pro">("easy");
   const [hot, setHot] = useState(false);
   const [sheet, setSheet] = useState<"book" | "mine">("book");
+  const [mineCode, setMineCode] = useState("");
+  const [friend, setFriend] = useState("");
+  const [rebate, setRebate] = useState({ accrued: 0, code: "", referrer: "" });
   const [levText, setLevText] = useState("3");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -272,6 +281,8 @@ export function RealPerp() {
         selectDesk("xlayer");
         setChain("xlayer");
         setPerp(bookOf("xlayer"));
+        setFriend(ref.trim().slice(0, 16));
+        setSheet("mine");
       } else {
         activeBook()
           .then(setPerp)
@@ -298,6 +309,25 @@ export function RealPerp() {
       dead = true;
     };
   }, [account, hash, chain]);
+
+  useEffect(() => {
+    if (!account) return;
+    let dead = false;
+    const dec = chain === "xlayer" ? 6 : 18;
+    readRebate(chain, account)
+      .then((row) => {
+        if (dead) return;
+        setRebate({
+          accrued: Number(formatUnits(row.accrued, dec)),
+          code: codeText(row.code),
+          referrer: row.referrer,
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      dead = true;
+    };
+  }, [account, chain, perp, hash]);
 
   useEffect(() => {
     if (!/^0x[a-fA-F0-9]{40}$/.test(perp)) return;
@@ -712,6 +742,32 @@ export function RealPerp() {
                             </button>
                           </div>
                         ))}
+                    <div className="border border-gold/40 px-3 py-3">
+                      <p className="text-xs tracking-widest text-gold">{lang === "zh" ? "这一本上的推荐" : "Referral on this book"}</p>
+                      <p className="mt-1 text-xs leading-5 text-ink/60">{lang === "zh" ? "只作用于这一本永续的撮合和撤单。你少付台费的 4%，推荐人记 6%，其余进收费地址。确认后不能改。BSC 和 X Layer 各算各的。" : "It applies only to matches and cancels on this book. You pay 4 percent less of the fee, the referrer is credited 6 percent, and the rest goes to the fee address. A code cannot be changed. BSC and X Layer are separate."}</p>
+                      {rebate.code ? (
+                        <p className="mt-2 font-mono text-sm">{rebate.code}</p>
+                      ) : (
+                        <div className="mt-2 flex gap-2">
+                          <input value={mineCode} onChange={(event) => setMineCode(event.target.value)} className="min-h-10 min-w-0 flex-1 border border-gold bg-transparent px-2 outline-none" placeholder={lang === "zh" ? "我的码" : "My code"} />
+                          <button type="button" disabled={busy || !account} className="min-h-10 border border-gold px-3 text-sm disabled:opacity-40" onClick={() => run((from) => registerCode(from, chain, mineCode))}>{lang === "zh" ? "确认" : "Confirm"}</button>
+                        </div>
+                      )}
+                      {rebate.referrer && rebate.referrer !== "0x0000000000000000000000000000000000000000" ? (
+                        <p className="mt-2 font-mono text-xs">{short(rebate.referrer)}</p>
+                      ) : (
+                        <div className="mt-2 flex gap-2">
+                          <input value={friend} onChange={(event) => setFriend(event.target.value)} className="min-h-10 min-w-0 flex-1 border border-gold bg-transparent px-2 outline-none" placeholder={lang === "zh" ? "对方的码" : "Their code"} />
+                          <button type="button" disabled={busy || !account} className="min-h-10 border border-gold px-3 text-sm disabled:opacity-40" onClick={() => run((from) => bindCode(from, chain, friend))}>{lang === "zh" ? "绑定" : "Bind"}</button>
+                        </div>
+                      )}
+                      <p className="mt-2 font-mono text-sm">{lang === "zh" ? "可提" : "Claimable"} {rebate.accrued.toFixed(2)} {chain === "xlayer" ? "USDT0" : "USDT"}</p>
+                      <div className="mt-2 grid grid-cols-4 gap-1">
+                        {CLAIM_STEPS.map((step) => (
+                          <button key={step} type="button" disabled={busy || rebate.accrued + 1e-9 < step} className="min-h-9 border border-gold font-mono text-xs disabled:opacity-40" onClick={() => run((from) => claimRebate(from, chain, step))}>{step}</button>
+                        ))}
+                      </div>
+                    </div>
                   </>
                 ) : null}
               </>

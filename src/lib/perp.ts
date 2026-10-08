@@ -46,7 +46,7 @@ function tokenUnit(): bigint {
 }
 export const KNOWN_PERP = "0xB98D14333a93D49a4E05478d002FC3944D88A3b7";
 export const BSC_REBATE = "0xce3511b6e909c9694826cfd5dbe434d457920eba";
-export const KNOWN_XPERP = "0x3dfde13ef89f49575e73e91d3cd11127557f4d60";
+export const KNOWN_XPERP = "0xbe686238d5467a3303f2febf14df5fd21f80ade7";
 export const KNOWN_XMARK = "0xd21f98735a69dcb00208088e58596662df594deb";
 export const NEXT_XMARK = KNOWN_XMARK;
 export const BOARD = [KNOWN_PERP];
@@ -1017,7 +1017,7 @@ export function savedRebate(): string {
 }
 
 function rebateTarget(which: Desk): { desk: Desk; addr: Hex } {
-  return which === "xlayer" ? { desk: "xlayer", addr: KNOWN_XPERP } : { desk: "bsc", addr: BSC_REBATE };
+  return { desk: which, addr: bookOf(which) as Hex };
 }
 
 export async function hasRebates(which: Desk = "bsc"): Promise<boolean> {
