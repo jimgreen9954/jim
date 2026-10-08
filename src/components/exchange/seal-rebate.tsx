@@ -93,8 +93,8 @@ export function SealRebateBox() {
       <p className="mt-1 text-sm">
         {state?.deployed
           ? zh
-            ? "这份已经部署。登记之后，永续成交的一半从这里领。取回和 BSC 记名只认下面这个部署钱包。"
-            : "This one is deployed. After you register, claim half of a perpetual fill here. Only the deployer below can withdraw or mark a BSC address."
+            ? "个人印鉴登记后，永续手续费减免一半，从这里领。下单时仍先收千分之二。取回池子和 BSC 记名只认下面这个部署钱包。"
+            : "After the personal seal is registered, half the perpetual fee is claimed here. The book still charges 0.20% first. Only the deployer below can withdraw or mark a BSC address."
           : zh
             ? "还没部署。用你要长期保管的钱包签。"
             : "Not deployed yet. Sign with the wallet you will keep."}

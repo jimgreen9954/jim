@@ -119,6 +119,11 @@ export function SealStamp() {
   return (
     <div className="border border-gold/40 p-3">
       <h3 className="font-display text-2xl italic">{c.seal}</h3>
+      <p className="mt-2 border border-gold bg-foil px-3 py-2 text-sm leading-relaxed text-ink">
+        {lang === "zh"
+          ? "做完个人印鉴，永续手续费可以减免一半。先点亮三盏，再在下面登记。下单时仍先收千分之二，已撮合的成交从领取池领回这一半。"
+          : "Finish the personal seal and half the perpetual fee can be claimed back. Light three lamps, then register below. The book still charges 0.20% first. Half of a matched fill comes back from the pool."}
+      </p>
       <SealLamps lit={lit} lang={lang} />
       <p className="mt-3 text-sm leading-relaxed">{lit >= 3 ? c.sealDone : c.sealHint}</p>
       {!account ? (
