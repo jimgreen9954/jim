@@ -577,7 +577,7 @@ export function RealPerp() {
           {!view ? <p className="px-3 py-2 text-sm text-ink/60">{lang === "zh" ? "正在读合约，读完才能开仓。" : "Reading the contract. Open waits until that finishes."}</p> : null}
           {lock.status === "bad" ? <p className="px-3 pb-2 text-sm text-sell">{lang === "zh" ? "收费地址对不上，开仓停了。" : "The fee address does not match. Opening is stopped."}</p> : null}
         </div>
-        <div className="flex min-w-0 flex-col gap-3 lg:sticky lg:top-3 lg:max-h-[calc(100vh-1.5rem)] lg:overflow-y-auto">
+        <div className="flex min-w-0 flex-col gap-3 lg:sticky lg:top-3 lg:max-h-[calc(100dvh-1.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:pb-6 lg:pr-1">
         <div className="border border-gold/40 p-3">
           <p className="text-xs tracking-widest text-gold">{c.pkTitle}</p>
           {!view?.liveDeals.length ? (

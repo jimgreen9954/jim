@@ -70,21 +70,35 @@ function Positions() {
             <p className="font-mono text-sm">{pos.leverage}×</p>
           </div>
           {danger ? <p className="mt-1 text-xs tracking-widest text-sell">{c.nearFuse}</p> : null}
-          <dl className="mt-3 grid grid-cols-2 gap-y-1 font-mono text-sm tabular-nums">
-            <dt className="text-ink/60">{c.size}</dt>
-            <dd className="text-right">{fmtSz(Math.abs(pos.size))}</dd>
-            <dt className="text-ink/60">{c.entry}</dt>
-            <dd className="text-right">{fmtPx(pos.entry)}</dd>
-            <dt className="text-ink/60">{c.mark}</dt>
-            <dd className="text-right">{fmtPx(price)}</dd>
-            <dt className="text-ink/60">{c.margin}</dt>
-            <dd className="text-right">{fmtUsd(pos.margin)}</dd>
-            <dt className="text-ink/60">{c.upnl}</dt>
-            <dd className={`text-right ${upnl >= 0 ? "text-gold" : "text-sell"}`}>{fmtUsd(upnl)}</dd>
-            <dt className="text-ink/60">{c.liq}</dt>
-            <dd className="text-right text-sell">{liq != null ? fmtPx(liq) : "—"}</dd>
-            <dt className="text-ink/60">{c.fundingPaid}</dt>
-            <dd className={`text-right ${fundingPaid > 0 ? "text-sell" : "text-gold"}`}>{fmtUsd(fundingPaid)}</dd>
+          <dl className="mt-3 flex flex-col gap-1.5 font-mono text-sm tabular-nums">
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-ink/60">{c.size}</dt>
+              <dd>{fmtSz(Math.abs(pos.size))}</dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-ink/60">{c.entry}</dt>
+              <dd>{fmtPx(pos.entry)}</dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-ink/60">{c.mark}</dt>
+              <dd>{fmtPx(price)}</dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-ink/60">{c.margin}</dt>
+              <dd>{fmtUsd(pos.margin)}</dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-ink/60">{c.upnl}</dt>
+              <dd className={upnl >= 0 ? "text-gold" : "text-sell"}>{fmtUsd(upnl)}</dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-ink/60">{c.liq}</dt>
+              <dd className="text-sell">{liq != null ? fmtPx(liq) : "—"}</dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-ink/60">{c.fundingPaid}</dt>
+              <dd className={fundingPaid > 0 ? "text-sell" : "text-gold"}>{fmtUsd(fundingPaid)}</dd>
+            </div>
           </dl>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button type="button" onClick={() => close(0.5)} className="min-h-11 border border-gold">

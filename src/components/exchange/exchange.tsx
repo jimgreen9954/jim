@@ -58,7 +58,7 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
         <SimClock />
         <BannerToast />
         <FuseFlash />
-        <div className={`mx-auto flex max-w-7xl flex-col gap-3 px-3 pt-2 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-4 lg:gap-4 lg:px-6 ${floor === "paper" ? "lg:pb-10" : ""}`}>
+        <div className={`mx-auto flex max-w-7xl flex-col gap-3 px-3 pt-2 sm:px-4 lg:gap-4 lg:px-6 ${floor === "paper" ? "pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-10" : "pb-[max(1.5rem,env(safe-area-inset-bottom))]"}`}>
           <Header floor={floor} desk={desk} setFloor={setFloor} setDesk={setDesk} setShop={setShop} setGiftOpen={setGiftOpen} />
           <FeeStrip />
           {floor === "desk" && desk === "spot" ? <SpotDesk /> : null}
@@ -340,9 +340,11 @@ function Header({ floor, desk, setFloor, setDesk, setShop, setGiftOpen }: { floo
 
 function PaperFloor() {
   const lang = useExchange((s) => s.lang);
+  const pane = useExchange((s) => s.pane);
+  const showChart = pane === "trade";
   return (
     <div className="relative">
-      <p className="pointer-events-none absolute top-16 right-4 z-10 font-display text-3xl italic text-ink/15">{lang === "zh" ? "练习 · 本地" : "Practice · local"}</p>
+      <p className="pointer-events-none absolute top-16 right-4 z-10 hidden font-display text-3xl italic text-ink/15 lg:block">{lang === "zh" ? "练习 · 本地" : "Practice · local"}</p>
       <p className="text-sm text-ink/70">{lang === "zh" ? "余额是练习金。清除只动这台浏览器，不动合约。" : "The balance is practice cash. Clear only wipes this browser, not a contract."}</p>
       <div className="grid items-start gap-4 lg:grid-cols-12">
         <aside className="hidden lg:col-span-4 lg:block">
@@ -352,8 +354,10 @@ function PaperFloor() {
         </aside>
         <div className="flex min-w-0 flex-col gap-4 lg:col-span-8">
           <MarketBar />
-          <TraceChart />
-          <Tape />
+          <div className={showChart ? "flex flex-col gap-4" : "hidden lg:flex lg:flex-col lg:gap-4"}>
+            <TraceChart />
+            <Tape />
+          </div>
           <div className="hidden gap-4 lg:grid lg:grid-cols-2">
             <Ticket />
             <Book />
@@ -501,7 +505,7 @@ function MobileNav() {
     ["die", c.die],
   ] as const;
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-gold bg-paper lg:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-gold bg-paper pb-[env(safe-area-inset-bottom)] lg:hidden">
       {items.map(([id, label]) => (
         <button
           key={id}
