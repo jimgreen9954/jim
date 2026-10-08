@@ -335,7 +335,10 @@ export function SpotDesk() {
               </button>
             ))}
           </div>
-          <p className="font-display text-4xl italic leading-none tabular-nums sm:text-5xl">{shown ? `$${shown}` : "—"}</p>
+          <p className="mt-3 flex items-baseline gap-2 leading-none">
+            <span className="font-mono text-4xl tabular-nums tracking-tight sm:text-5xl">{shown ?? "—"}</span>
+            {shown ? <span className="font-mono text-xs tracking-widest text-gold">USDT</span> : null}
+          </p>
           <p className="mt-1 font-mono text-xs text-ink/50">
             {stock
               ? lang === "zh"
