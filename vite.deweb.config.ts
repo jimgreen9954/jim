@@ -4,14 +4,27 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
 const src = fileURLToPath(new URL("./src", import.meta.url));
+const asyncHooks = fileURLToPath(new URL("./src/shims/async-hooks.js", import.meta.url));
 
 export default defineConfig({
   root: fileURLToPath(new URL("./deweb-app", import.meta.url)),
   publicDir: fileURLToPath(new URL("./deweb-public", import.meta.url)),
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    {
+      name: "browser-async-hooks",
+      enforce: "pre",
+      resolveId(id) {
+        if (id === "node:async_hooks" || id === "async_hooks") return asyncHooks;
+      },
+    },
+    react(),
+    tailwindcss(),
+  ],
   base: "./",
   resolve: {
     alias: [
+      { find: "node:async_hooks", replacement: asyncHooks },
+      { find: "async_hooks", replacement: asyncHooks },
       { find: "@/lib/candles", replacement: fileURLToPath(new URL("./src/lib/candles.browser.ts", import.meta.url)) },
       { find: "@/lib/bias", replacement: fileURLToPath(new URL("./src/lib/bias.browser.ts", import.meta.url)) },
       { find: "@/lib/tapeout-live", replacement: fileURLToPath(new URL("./src/lib/tapeout-live.browser.ts", import.meta.url)) },
