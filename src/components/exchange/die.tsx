@@ -59,9 +59,14 @@ export function SealStamp() {
 
   const onStamp = async () => {
     setBusy(true);
-    setNote(lang === "zh" ? "正在连接钱包。" : "Connecting the wallet.");
+    setNote(lang === "zh" ? "正在连接钱包。请在弹出的窗口里确认。" : "Connecting the wallet. Confirm the popup.");
     try {
-      const from = account ?? (await connectXLayer());
+      const from = await Promise.race([
+        account ? Promise.resolve(account) : connectXLayer(),
+        new Promise<string>((_, reject) => {
+          window.setTimeout(() => reject(new Error("timeout")), 20000);
+        }),
+      ]);
       setAccount(from);
       let have = await countSeal(from);
       setSealCount(have);
@@ -83,8 +88,17 @@ export function SealStamp() {
       }
       setNote(lang === "zh" ? "三张印鉴已在处理器上。再点下面的登记。订单簿费率没变。" : "Three seals are on the processor. Register below. The book fee is unchanged.");
       window.open(txUrl(hash), "_blank", "noopener,noreferrer");
-    } catch {
-      setNote(lang === "zh" ? "流片没有完成。已成功的笔数还在。NAND 或 OKB 不够也会停在这里。" : "Tape-out stopped. Circuits that already landed still count. It also stops if NAND or OKB is short.");
+    } catch (err) {
+      const timedOut = err instanceof Error && err.message === "timeout";
+      setNote(
+        timedOut
+          ? lang === "zh"
+            ? "钱包没有弹出。先点右上角连接钱包，再回来点这一下。"
+            : "No wallet popup. Connect from the top right, then tap this again."
+          : lang === "zh"
+            ? "流片没有完成。已成功的笔数还在。先连接钱包，并确认 NAND 和 OKB 够。"
+            : "Tape-out stopped. Circuits that already landed still count. Connect the wallet, and check NAND and OKB.",
+      );
     } finally {
       setBusy(false);
     }

@@ -6,7 +6,7 @@ import { equity, sessionChange } from "@/lib/match-engine";
 import { Blotter } from "@/components/exchange/blotter";
 import { Book } from "@/components/exchange/book";
 import { TraceChart } from "@/components/exchange/chart";
-import { DiePanel, SealStamp } from "@/components/exchange/die";
+import { DiePanel } from "@/components/exchange/die";
 import { Ticket } from "@/components/exchange/ticket";
 import { LiveBoard } from "@/components/exchange/live-board";
 import { RealPerp } from "@/components/exchange/real-perp";
@@ -16,7 +16,6 @@ import { TapeCanvas } from "@/components/exchange/tape-canvas";
 import { WalletBar, ConnectButton } from "@/components/exchange/wallet-bar";
 import { AccountCenter } from "@/components/exchange/account-center";
 import { OfficialDesk } from "@/components/exchange/official-desk";
-import { SealRebateBox } from "@/components/exchange/seal-rebate";
 import { MineDesk } from "@/components/exchange/mine-desk";
 import { Whitepaper } from "@/components/exchange/whitepaper";
 import { bemPrice } from "@/lib/bsc";
@@ -391,7 +390,6 @@ function ShopFloor({ shop, setShop }: { shop: ShopTab; setShop: (shop: ShopTab) 
               ? "跟 tapeout.net 的盘口。本站另收 0.20%，先付。官网没有成交，这一笔也不退。"
               : "The book follows tapeout.net. This site charges an extra 0.20%, paid first. If the official fill fails, that fee is not returned."}
       </p>
-      <SealRebateBox />
       <div className="grid grid-cols-2 border border-gold sm:grid-cols-4">
         {([
           ["gate", lang === "zh" ? "晶体管合约" : "Transistor perps"],
@@ -409,7 +407,6 @@ function ShopFloor({ shop, setShop }: { shop: ShopTab; setShop: (shop: ShopTab) 
         <>
           <WalletBar />
           <LiveBoard />
-          <SealStamp />
         </>
       ) : null}
       {shop === "chips" ? <OfficialDesk mode="chips" /> : null}

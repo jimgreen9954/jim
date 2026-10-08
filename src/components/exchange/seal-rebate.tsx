@@ -90,7 +90,15 @@ export function SealRebateBox() {
   return (
     <div className="mt-4 border border-gold/40 p-3">
       <h3 className="font-display text-2xl italic">{zh ? "手续费领取" : "Fee rebate"}</h3>
-      <p className="mt-1 text-sm">{zh ? "先部署。用你要长期保管的钱包签，不要用已经公开过的那把。" : "Deploy first. Sign with the wallet you will keep."}</p>
+      <p className="mt-1 text-sm">
+        {state?.deployed
+          ? zh
+            ? "这份已经部署。登记之后，永续成交的一半从这里领。取回和 BSC 记名只认下面这个部署钱包。"
+            : "This one is deployed. After you register, claim half of a perpetual fill here. Only the deployer below can withdraw or mark a BSC address."
+          : zh
+            ? "还没部署。用你要长期保管的钱包签。"
+            : "Not deployed yet. Sign with the wallet you will keep."}
+      </p>
       <div className="mt-3 flex gap-2">
         {(["xlayer", "bsc"] as const).map((id) => (
           <button
@@ -104,7 +112,8 @@ export function SealRebateBox() {
         ))}
       </div>
       <p className="mt-3 break-all font-mono text-xs">{state?.address ?? LOCKED_REBATE[chain]}</p>
-      {!state?.deployed ? (
+      {!state ? <p className="mt-3 text-sm">{zh ? "正在读取这份合约。" : "Reading this contract."}</p> : null}
+      {state?.deployed === false ? (
         <button
           type="button"
           disabled={busy}
