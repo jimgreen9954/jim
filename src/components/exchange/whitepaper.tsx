@@ -17,9 +17,9 @@ const zh: Section[] = [
   {
     h: "产品",
     ps: [
-      "TAPELIQUID 用来交易 BEM，并在 X Layer 上铸造晶圆、流片、挖出 TAPE。TAPE 是 TAPELIQUID 的唯一平台币，只有这一枚，在 X Layer。BEM 是 TapeOut 的代币，不是平台币。",
-      "页面分四层。交易台是现货和永续。练习只在这台浏览器里，不进实盘。工房是铸造、流片、晶体管合约和官网现货。规则就是这一页。个人中心看资产和转出，礼包收在里面，打开才出现。",
-      "没有合约的步骤，页面上没有按钮。下面先写已经能用的规则，再写计划里还不能签名的部分。",
+      "TAPELIQUID 是一所放在晶圆上的交易所。现货与永续在交易台。铸造、流片、晶体管合约在工房。TAPE 是 TAPELIQUID 的唯一平台币，只此一种，发行在 X Layer。BEM 属于 TapeOut，不是平台币。",
+      "练习只留在这台浏览器，不进入任何合约。个人中心只看这个钱包的资产和转出。新手礼包收在个人中心里，打开才看见规则。",
+      "没有合约的事，页面上不设按钮。先写已经能够签名的规则，再写尚未上链的安排。",
     ],
   },
   {
@@ -178,9 +178,9 @@ const en: Section[] = [
   {
     h: "Product",
     ps: [
-      "TAPELIQUID trades BEM, and on X Layer it mints wafers, tapes circuits, and mines TAPE. TAPE is the only platform token. There is one, on X Layer. BEM belongs to TapeOut. It is not the platform token.",
-      "The site has four layers. The desk is spot and perpetuals. Practice stays in this browser and does not reach the live book. The workshop is minting, tape-out, transistor perps, and official spot. This page is the rulebook. The account page shows balances and transfers. The gift stays closed there until you open it.",
-      "A step without a contract has no button. The live rules come first. What is only a plan, and cannot be signed, comes after.",
+      "TAPELIQUID is an exchange set on a wafer. Spot and perpetuals sit on the desk. Minting, tape-out, and the transistor book sit in the workshop. TAPE is the only platform token, and it exists only on X Layer. BEM belongs to TapeOut. It is not the platform token.",
+      "Practice stays in this browser and never enters a contract. The account page shows only this wallet's balances and transfers. The starter gift stays inside the account page, and its rules appear only after it is opened.",
+      "What has no contract has no button. The rules that can be signed come first. What is not yet on chain comes after.",
     ],
   },
   {
@@ -394,14 +394,15 @@ export function Whitepaper() {
       <header className="border-b border-gold px-5 py-7 sm:px-8">
         <p className="text-xs tracking-[0.35em] text-gold">TAPELIQUID</p>
         <h2 className="mt-3 font-display text-4xl italic leading-none sm:text-5xl">{lang === "zh" ? "白皮书" : "White paper"}</h2>
-        <p className="mt-4 max-w-2xl text-sm leading-7">
+        <p className="mt-4 max-w-2xl font-display text-lg italic leading-8 text-ink/80 sm:text-xl">
           {lang === "zh"
-            ? "这一页按使用顺序写。先说这个产品是什么，再说钱去哪，最后才是还没有上链的部分。和页面不一致时，以这一页和链上合约为准。"
-            : "This page follows the order you use the product. What it is, where the money goes, then what is not on chain. If a screen disagrees with this page, this page and the contract win."}
+            ? "晶圆是工本，TAPE 是唯一的平台币。交易、铸造、流片、领取，都在你自己的钱包里完成。页面若与合约不符，以这一页和链上合约为准。"
+            : "The wafer is the cost. TAPE is the only platform coin. Trading, minting, tape-out, and claims all settle in your own wallet. If a screen disagrees with a contract, this page and the contract win."}
         </p>
       </header>
       <div className="grid gap-px border-b border-gold bg-gold/40 sm:grid-cols-2">
-        <table className="bg-card text-left text-sm">
+        <div className="overflow-x-auto bg-card">
+          <table className="min-w-full bg-card text-left text-sm">
           <caption className="border-b border-gold/40 px-4 py-3 text-left text-xs tracking-widest text-gold">{lang === "zh" ? "参数" : "Parameters"}</caption>
           <tbody>
             {(lang === "zh" ? specZh : specEn).map(([k, v]) => (
@@ -412,7 +413,9 @@ export function Whitepaper() {
             ))}
           </tbody>
         </table>
-        <table className="bg-card text-left text-sm">
+        </div>
+        <div className="overflow-x-auto bg-card">
+          <table className="min-w-full bg-card text-left text-sm">
           <caption className="border-b border-gold/40 px-4 py-3 text-left text-xs tracking-widest text-gold">{lang === "zh" ? "现在链上" : "On chain now"}</caption>
           <tbody>
             {(lang === "zh" ? nowZh : nowEn).map(([k, v]) => (
@@ -423,6 +426,7 @@ export function Whitepaper() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
       <nav className="grid border-b border-gold sm:grid-cols-2" aria-label={lang === "zh" ? "目录" : "Contents"}>
         {sections.map((section, i) => (

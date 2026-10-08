@@ -58,7 +58,7 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
         <BannerToast />
         <FuseFlash />
         <div className={`mx-auto flex max-w-7xl flex-col gap-3 px-3 pt-2 sm:px-4 lg:gap-4 lg:px-6 ${floor === "paper" ? "pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-10" : "pb-[max(1.5rem,env(safe-area-inset-bottom))]"}`}>
-          <Header floor={floor} desk={desk} setFloor={setFloor} setDesk={setDesk} setShop={setShop} setGiftOpen={setGiftOpen} />
+          <Header floor={floor} desk={desk} shop={shop} setFloor={setFloor} setDesk={setDesk} setShop={setShop} setGiftOpen={setGiftOpen} />
           <FeeStrip />
           {floor === "desk" && desk === "spot" ? <SpotDesk /> : null}
           {floor === "desk" && desk === "perp" ? <RealPerp /> : null}
@@ -174,7 +174,7 @@ function FuseFlash() {
   );
 }
 
-function Header({ floor, desk, setFloor, setDesk, setShop, setGiftOpen }: { floor: Floor; desk: DeskTab; setFloor: (floor: Floor) => void; setDesk: (desk: DeskTab) => void; setShop: (shop: ShopTab) => void; setGiftOpen: (open: boolean) => void }) {
+function Header({ floor, desk, shop, setFloor, setDesk, setShop, setGiftOpen }: { floor: Floor; desk: DeskTab; shop: ShopTab; setFloor: (floor: Floor) => void; setDesk: (desk: DeskTab) => void; setShop: (shop: ShopTab) => void; setGiftOpen: (open: boolean) => void }) {
   const lang = useExchange((s) => s.lang);
   const setLang = useExchange((s) => s.setLang);
   const reset = useExchange((s) => s.reset);
@@ -270,9 +270,54 @@ function Header({ floor, desk, setFloor, setDesk, setShop, setGiftOpen }: { floo
             ) : null}
           </div>
         </div>
+        <div className="grid grid-cols-3 gap-1">
+          <button
+            type="button"
+            onClick={() => {
+              if (window.location.pathname.startsWith("/whitepaper")) {
+                window.location.assign("/#wafer");
+                return;
+              }
+              setFloor("shop");
+              setShop("wafer");
+            }}
+            className={`min-h-12 border px-2 text-left sm:min-h-14 sm:px-3 ${floor === "shop" && shop === "wafer" ? "border-ink bg-foil text-ink" : "border-gold bg-ink text-paper"}`}
+          >
+            <span className="block text-[10px] tracking-[0.2em] text-gold">{lang === "zh" ? "铸造" : "Mint"}</span>
+            <span className="font-display text-lg italic leading-none sm:text-2xl">{lang === "zh" ? "晶圆" : "Wafer"}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (window.location.pathname.startsWith("/whitepaper")) {
+                window.location.assign("/#canvas");
+                return;
+              }
+              setFloor("canvas");
+            }}
+            className={`min-h-12 border px-2 text-left sm:min-h-14 sm:px-3 ${floor === "canvas" ? "border-ink bg-foil text-ink" : "border-gold bg-ink text-paper"}`}
+          >
+            <span className="block text-[10px] tracking-[0.2em] text-gold">{lang === "zh" ? "处理器" : "Processor"}</span>
+            <span className="font-display text-lg italic leading-none sm:text-2xl">{lang === "zh" ? "流片" : "Tape"}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (window.location.pathname.startsWith("/whitepaper")) {
+                window.location.assign("/#mine");
+                return;
+              }
+              setFloor("mine");
+            }}
+            className={`min-h-12 border px-2 text-left sm:min-h-14 sm:px-3 ${floor === "mine" ? "border-ink bg-foil text-ink" : "border-gold bg-ink text-paper"}`}
+          >
+            <span className="block text-[10px] tracking-[0.2em] text-gold">BEM · TAPE</span>
+            <span className="font-display text-lg italic leading-none sm:text-2xl">{lang === "zh" ? "挖矿" : "Mine"}</span>
+          </button>
+        </div>
         <div className="grid grid-cols-4 border border-gold">
           {floors.map(([id, label]) => (
-            <button key={id} type="button" onClick={() => go(id)} className={`min-h-11 px-1 text-xs sm:text-sm ${floor === id ? "bg-ink text-paper" : "bg-card"}`}>
+            <button key={id} type="button" onClick={() => go(id)} className={`min-h-10 px-1 text-xs sm:min-h-11 sm:text-sm ${floor === id ? "bg-ink text-paper" : "bg-card"}`}>
               {label}
             </button>
           ))}
@@ -286,51 +331,6 @@ function Header({ floor, desk, setFloor, setDesk, setShop, setGiftOpen }: { floo
             ))}
           </div>
         ) : null}
-      </div>
-      <div className="grid grid-cols-3 gap-1">
-        <button
-          type="button"
-          onClick={() => {
-            if (window.location.pathname.startsWith("/whitepaper")) {
-              window.location.assign("/#wafer");
-              return;
-            }
-            setFloor("shop");
-            setShop("wafer");
-          }}
-          className="min-h-11 border border-gold bg-ink px-2 text-left text-paper"
-        >
-          <span className="block text-[10px] tracking-widest text-gold">{lang === "zh" ? "铸造" : "Mint"}</span>
-          <span className="font-display text-base italic leading-none sm:text-xl">{lang === "zh" ? "晶圆" : "Wafer"}</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            if (window.location.pathname.startsWith("/whitepaper")) {
-              window.location.assign("/#canvas");
-              return;
-            }
-            setFloor("canvas");
-          }}
-          className={`min-h-11 border px-2 text-left ${floor === "canvas" ? "border-ink bg-foil text-ink" : "border-gold bg-ink text-paper"}`}
-        >
-          <span className="block text-[10px] tracking-widest text-gold">{lang === "zh" ? "处理器" : "Processor"}</span>
-          <span className="font-display text-base italic leading-none sm:text-xl">{lang === "zh" ? "流片" : "Tape"}</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            if (window.location.pathname.startsWith("/whitepaper")) {
-              window.location.assign("/#mine");
-              return;
-            }
-            setFloor("mine");
-          }}
-          className={`min-h-11 border px-2 text-left ${floor === "mine" ? "border-ink bg-foil text-ink" : "border-gold bg-ink text-paper"}`}
-        >
-          <span className="block text-[10px] tracking-widest text-gold">BEM · TAPE</span>
-          <span className="font-display text-base italic leading-none sm:text-xl">{lang === "zh" ? "挖矿" : "Mine"}</span>
-        </button>
       </div>
       {line ? <p className="text-sm text-ink/70">{line}</p> : null}
     </header>
