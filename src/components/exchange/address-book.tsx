@@ -45,8 +45,8 @@ export function AddressBook({ lang }: { lang: "zh" | "en" }) {
       </ul>
       <p className="border-t border-gold/40 px-3 py-2 text-xs leading-6 text-ink/60">
         {lang === "zh"
-          ? "收费地址在 BSC 和 X Layer 上是同一个。现货台费和三本永续的千分之二都进这里。旧地址 0xb67741A0463779c0dab3fDCFE883bA7572AC0AC2 不再使用。"
-          : "The fee address is the same on BSC and X Layer. Spot fees and the 0.2% from the three perpetuals go here. 0xb67741A0463779c0dab3fDCFE883bA7572AC0AC2 is retired."}
+          ? "收费地址在 BSC 和 X Layer 上是同一个。现货台费和三本永续的千分之二都进这里。"
+          : "The fee address is the same on BSC and X Layer. Spot fees and the 0.2% from the three perpetuals go here."}
       </p>
     </section>
   );

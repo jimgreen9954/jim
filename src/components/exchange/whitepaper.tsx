@@ -28,7 +28,7 @@ const zh: Section[] = [
       "未流片的库存可以转让，不算算力。额度用完后只剩二级转让，流片继续销毁。",
       "个人持有的未流片额度，锁在榜一地址，锁到第一个减半，不参与排放。已经流片的电路保留，权重和别的矿工同一套规则。榜一地址和到期日登记之前，这一行不写一个空地址。",
       "用户铸造收入进入回购余额。官方地址铸造的金额留在原账户，不进入回购。",
-      "流片是一笔交易。节点交出成功回执时，电路编号已经在那一笔里，不是再铸第二笔。画布名单大约 8 秒重读一次，只显示最新的几张。个人中心从旧编号往后查，所以更晚。以浏览器里那笔交易为准。",
+      "流片是一笔交易。节点交出成功回执时，电路编号已经在那一笔里，不是再铸第二笔。画布名单大约 8 秒重读一次，只显示最新的几张。个人中心从较小的编号往后查，所以更晚。以浏览器里那笔交易为准。",
     ],
   },
   {
@@ -60,8 +60,7 @@ const zh: Section[] = [
   {
     h: "自愿锁仓",
     ps: [
-      "晶圆仍锁在原来的合约里。电路的新锁仓是另一份没有管理员的合约，还没有部署。收费地址签一笔之后，网页才会用它。期限仍是五档：180 天、365 天、3 年、4 年、5 年。锁着的时候，这张电路在矿池里的算力记在新合约上，继续占全网权重，继续挖 TAPE。到期前不能领。到期后可以只领 TAPE，电路还在，算力还在。领电路时，还没领的 TAPE 在同一笔里打进钱包，矿池席位也在这一笔里关掉，后面的排放不会再打进锁仓合约。",
-      "已经锁在旧合约上的电路，仍按旧合约解锁。那一份不能升级。旧的解锁是电路和当时已经结算的 TAPE 一起退回。释放之后矿池再结算的部分，可能留在旧合约里，页面取不回。网页不再向旧合约提交新的电路锁仓。别人仍可直接调用旧合约，网页停不掉。",
+      "晶圆锁在晶圆锁仓里。电路锁在电路锁仓里。电路锁仓还没有部署，收费地址签一笔之后，网页才会用它。两份都没有管理员。期限是五档：180 天、365 天、3 年、4 年、5 年。锁着的晶圆不能流片，不算算力。锁着的电路，算力记在电路锁仓上，继续占全网权重，继续挖 TAPE。到期前不能领。到期后可以只领 TAPE，电路还在，算力还在。领电路时，还没领的 TAPE 在同一笔里打进钱包，矿池席位也在这一笔里关掉。",
       "锁仓不增加 H，不另发 TAPE。规则页列出锁仓地址、对象是电路还是晶圆、档位、到期日，以及电路上尚未领取的数量。榜一地址的官方未流片额度同样走这五档，登记后写明地址与到期日。",
     ],
   },
@@ -87,14 +86,11 @@ const zh: Section[] = [
     ],
   },
   {
-    h: "现在用的两本永续",
+    h: "永续",
     ps: [
       "现在交易的 X Layer 永续是 0x3dfde13ef89f49575e73e91d3cd11127557f4d60，标记是 0xb623ee0ef23d8ea61f93cca373a4a4b27cf32fe1。晶体管永续是 0xb4b2ee90d10ecfc7ed36a58e96e03074fa8731eb。三份都没有管理员。写价地址是收费地址，写死。每次最多挪 0.5%，至少隔 30 秒。结算用过去 10 分钟均价。均价不满 10 分钟，或超过 30 分钟没有新写入，不能开仓，也不能结算。",
-      "同一份标记上还有两本空的永续，0x5c22587a069d7fb5a16b6da78ebb283d7604cb2e 和 0xbc8054ed4a3ec55c96f56424a67280cf791e6b5c。网页不用它们。不要把保证金打进去。",
-      "旧本已停用。X Layer 旧永续 0x0f22b18b67477886311ee0fb7cf684d3f48c5eca，旧标记 0xc35C8cB9FFaC92F25cAFaEdC82F03144b24bCb1d，旧晶体管永续 0xc075443ab7ebef86fe044be2c93a4ff4376ffe0b。网页不再对它们开仓。里面如果还有保证金，要自己对旧地址平仓。",
-      "BSC 上的 BEM 永续仍是原来那一份。它读 Pancake 池子的均价，不读上面这份标记。浅池仍可能在短时间里影响那条均价。",
-      "TAPE 不在这批替换里。平台币仍是现在这一枚。矿池没有升级入口。再部署一份矿池就会变成第二枚 TAPE，这一版不这么做。",
-      "电路锁仓到期释放后，若矿池再结算这段权重，收益可能打进锁仓合约。锁仓记录已经删了，页面没有提取入口。这是已部署合约的行为。这一版网页不再提交新的电路锁仓。已经锁上的仍按到期日解锁。电路退回，不等于释放之后的挖矿收益也能取回。",
+      "同一份标记只挂这一本 X Layer 永续。BSC 上的 BEM 永续读 Pancake 池子的均价，不读这份标记。浅池仍可能在短时间里影响那条均价。",
+      "TAPE 是平台币，只有这一枚。矿池没有管理员，也不能改排放。",
       "返佣合约有 clerk。clerk 可以提取返佣池里的余额。不是每一份合约都没有管理员。",
     ],
   },
@@ -121,7 +117,7 @@ const zh: Section[] = [
       `TAPE 代币 ${TAPE}。挖矿合约 ${TAPE_MINE}。都在 X Layer。硬顶 21,000,000，8 位小数，没有管理员，也没有改率入口。只有挖矿合约能铸。总供应只随领取增加。`,
       "这份挖矿合约现在的日排放是 7,200，从部署时开始，不是先 1,000 再切换。它也没有「收费地址签一次改成 7,200」的入口。权重按电路门数，也就是 b*，处理器倍率按 1。q 还没有题目验证，页面不能显示大于 1。",
       "挖矿、TAPE 池、晶圆和电路锁仓，三份都没有管理员，不能升级，不能改期限，不能改费率，也没有救援入口。误转到合约、又没有对应仓位的资产，谁都取不回，页面不会这么转。加池时和池子比例对不上的部分退回给签名的人，不会进别人的份额。",
-      "开盘池的 100,000 枚没有另铸。TAPE 池没有管理员，加池即质押，90 天到 3 年，到期才能撤。晶圆锁在原来那份没有管理员的合约里，期限是 180 天、365 天、3 年、4 年、5 年。锁着的晶圆不能流片，不算算力。电路的新锁仓还没有部署。已经锁在旧合约上的电路，解锁时当时已经结算的 TAPE 和电路一起退回。释放之后再结算的部分可能留在旧合约里。同一片电路不能锁两次。回购和 TAPE 跨链还没有合约。",
+      "开盘池的 100,000 枚没有另铸。TAPE 池没有管理员，加池即质押，90 天到 3 年，到期才能撤。晶圆锁仓没有管理员，期限是 180 天、365 天、3 年、4 年、5 年。锁着的晶圆不能流片，不算算力。电路锁仓还没有部署。同一片电路不能锁两次。回购和 TAPE 跨链还没有合约。",
       "个人中心转出晶体管可以选一对一或一对多。一对多每一行一个地址，这一行的 NAND 和 LATCH 只进这个地址，按行签名，不经过锁仓合约。电路在名单里上下滑动勾选，每一片填一个地址，勾几片签几笔。官网合约如果不提供逐个编号，这一页不能代填。",
     ],
   },
@@ -185,8 +181,7 @@ const en: Section[] = [
   {
     h: "Voluntary locks",
     ps: [
-      "Wafers stay on the original lock. A new circuit lock is a second contract with no admin. It is not deployed. The site uses it only after the fee address signs that one transaction. The terms stay 180 days, 365 days, 3 years, 4 years, and 5 years. While a circuit is locked, its mine weight sits on the new contract, keeps its share of the network, and keeps mining TAPE. Nothing can be claimed early. After unlock, TAPE can be claimed alone and the circuit keeps mining. Claiming the circuit sends any unclaimed TAPE in the same transaction and closes the mine seat, so a later emission is not minted into the lock.",
-      "A circuit already on the old lock is still released by the old contract. That contract cannot be upgraded. The old release returns the circuit and the TAPE settled at that moment together. A later settlement can stay in the old contract, and the page cannot take it out. This site no longer submits a new circuit lock to the old contract. A direct call still can. The page cannot stop that.",
+      "Wafers lock in the wafer lock. Circuits lock in the circuit lock. The circuit lock is not deployed. The site uses it after the fee address signs that one transaction. Neither contract has an admin. The terms are 180 days, 365 days, 3 years, 4 years, and 5 years. A locked wafer cannot be taped and is not hashrate. A locked circuit keeps its weight on the circuit lock, keeps its share of the network, and keeps mining TAPE. Nothing can be claimed early. After unlock, TAPE can be claimed alone and the circuit keeps mining. Claiming the circuit sends any unclaimed TAPE in the same transaction and closes the mine seat.",
       "A locked wafer cannot be transferred or taped before expiry. It is not hashrate. After expiry it can be taped. Unlock charges nothing. A lock does not raise H and does not mint extra TAPE.",
       "A lock does not raise H and does not mint extra TAPE. This page lists the address, whether it is a circuit or wafers, the term, the expiry, and the unclaimed amount on the circuit. The lead address's official untaped quota uses the same five terms. The address and expiry are written here after registration.",
     ],
@@ -213,14 +208,11 @@ const en: Section[] = [
     ],
   },
   {
-    h: "The two books in use",
+    h: "Perpetuals",
     ps: [
       "The live X Layer perpetual is 0x3dfde13ef89f49575e73e91d3cd11127557f4d60. Its mark is 0xb623ee0ef23d8ea61f93cca373a4a4b27cf32fe1. The transistor perpetual is 0xb4b2ee90d10ecfc7ed36a58e96e03074fa8731eb. None of the three has an admin. The posting address is the fee address, and it is fixed. Each post moves at most 0.5 percent, and at least 30 seconds must pass. Settlement uses the last 10 minutes. If that average is shorter than 10 minutes, or nothing has been posted for 30 minutes, a new order cannot open and a position cannot settle.",
-      "Two other perpetuals on the same mark are empty: 0x5c22587a069d7fb5a16b6da78ebb283d7604cb2e and 0xbc8054ed4a3ec55c96f56424a67280cf791e6b5c. This site does not use them. Do not send margin there.",
-      "The old books are retired. The old X Layer perpetual is 0x0f22b18b67477886311ee0fb7cf684d3f48c5eca. The old mark is 0xc35C8cB9FFaC92F25cAFaEdC82F03144b24bCb1d. The old transistor perpetual is 0xc075443ab7ebef86fe044be2c93a4ff4376ffe0b. This site no longer opens on them. Margin still inside has to be closed against the old address.",
-      "The BEM perpetual on BSC is still the original contract. It reads the Pancake pool average. It does not read the mark above. A thin pool can still move that average for a short time.",
-      "TAPE is not in this replacement. The platform token stays the one already deployed. The mine cannot be upgraded. A new mine would be a second TAPE. This version does not do that.",
-      "After a locked circuit is released, a later mine settlement can pay that interval into the lock contract. The lock seat is already gone, and the page has no withdrawal for it. That is the deployed contract. This version of the site no longer submits a new circuit lock. A circuit already locked can still be released on its date. Getting the circuit back is not the same as getting the mining reward paid in after release.",
+      "This mark has one X Layer perpetual. The BEM perpetual on BSC reads the Pancake pool average. It does not read this mark. A thin pool can still move that average for a short time.",
+      "TAPE is the platform token. There is one. The mine has no admin, and the emission cannot be changed.",
       "The rebate contract has a clerk. The clerk can withdraw the rebate pool. Not every contract is without an admin.",
     ],
   },
@@ -247,7 +239,7 @@ const en: Section[] = [
       `TAPE is ${TAPE}. The mine is ${TAPE_MINE}. Both are on X Layer. The cap is 21,000,000 with 8 decimals. There is no admin and no way to change the rate. Only the mine can mint. Supply grows only when someone claims.`,
       "That mine contract emits 7,200 a day from the moment it was deployed. It does not start at 1,000, and it has no one-time switch to 7,200. Weight is the gate count, which is b*, and the processor multiplier is 1. There is no task score yet, so q is not shown above 1.",
       "The mine, the TAPE pool, and the wafer and circuit lock have no admin. They cannot be upgraded, and the terms and the fee cannot be changed. There is no rescue function. Assets sent to a contract without a matching position cannot be taken back by anyone, and the page does not send them that way. Liquidity that does not match the pool ratio is returned to the signer. It is not added to anyone else's share.",
-      "The 100,000 opening allocation was not minted. The TAPE pool has no admin. Adding liquidity stakes it for 90 days to 3 years. Wafers lock in the original contract, which has no admin, for 180 days, 365 days, 3 years, 4 years, or 5 years. Locked wafers cannot be taped and do not count as weight. The new circuit lock is not deployed. A circuit already on the old lock returns the circuit and the TAPE settled at release together. A later settlement can stay in the old contract. The same circuit cannot be locked twice. Buyback and a TAPE bridge are not contracts yet.",
+      "The 100,000 opening allocation was not minted. The TAPE pool has no admin. Adding liquidity stakes it for 90 days to 3 years. The wafer lock has no admin. Terms are 180 days, 365 days, 3 years, 4 years, or 5 years. Locked wafers cannot be taped and do not count as weight. The circuit lock is not deployed. The same circuit cannot be locked twice. Buyback and a TAPE bridge are not contracts yet.",
       "Official BEM is still claimed from the TapeOut mine. It is not the same signature as TAPE. A large tape-out does not mint official BEM.",
       "The account page can send transistors to one address or to many. Many means one address per row, and that row's NAND and LATCH go only to that address. Each transfer is its own signature, and none of them go through the lock. Circuits are ticked in a scrolling list. Each ticked circuit has one address. One signature per circuit. If an official contract does not list token ids, this page does not invent them.",
     ],

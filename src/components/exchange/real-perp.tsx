@@ -410,8 +410,8 @@ export function RealPerp() {
         {chain === "xlayer" ? (
           <p className="border border-sell px-3 py-2 text-sm text-sell xl:col-span-12">
             {lang === "zh"
-              ? "X Layer 已换上新本。标记只许收费地址写，结算用 10 分钟均价。均价现在还是空的，开仓会失败。收费地址每隔 30 秒点一次「推进」，写满约 10 分钟。网站只用 0x3dfd…4d60，另外两份空合约不要打钱。"
-              : "The X Layer book is the new one. Only the fee address can post the mark, and settlement uses a 10-minute average. The average is empty, so an open fails. That address posts about every 30 seconds for 10 minutes. The site uses 0x3dfd…4d60. Do not send funds to the other two empty contracts."}
+              ? "X Layer 这一本。标记只许收费地址写，结算用 10 分钟均价。均价现在还是空的，开仓会失败。收费地址每隔 30 秒点一次「推进」，写满约 10 分钟。"
+              : "This is the X Layer book. Only the fee address can post the mark, and settlement uses a 10-minute average. The average is empty, so an open fails. That address posts about every 30 seconds for 10 minutes."}
           </p>
         ) : null}
         <div className="grid grid-cols-2 gap-2 xl:col-span-12">

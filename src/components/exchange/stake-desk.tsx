@@ -6,7 +6,6 @@ import {
   claimFreshCircuit,
   claimFreshTape,
   deployCircuitLock,
-  harvestLock,
   LOCK_TERMS,
   lockFreshCircuit,
   lockWafer,
@@ -120,7 +119,7 @@ export function StakeDesk() {
   const lpBem = lp.reduce((sum, row) => row.quote === 1 ? sum + slice(row.shares, reserves.bemShares, reserves.bemQuote) : sum, 0n);
   const lockedNand = seats.filter((row) => row.kind === 0).reduce((sum, row) => sum + row.amount, 0n);
   const lockedLatch = seats.filter((row) => row.kind === 1).reduce((sum, row) => sum + row.amount, 0n);
-  const circuits = seats.filter((row) => row.kind === 2);
+  const circuits = fresh;
   const lockedGates = circuits.reduce((sum, row) => sum + row.gates, 0n);
   const share = weight > 0n ? Number((lockedGates * 10000n) / weight) / 100 : 0;
   const nextUnlock = [...lp.map((row) => row.unlock), ...seats.map((row) => row.unlock)].filter((ts) => ts * 1000 > Date.now()).sort((a, b) => a - b)[0];
@@ -137,15 +136,15 @@ export function StakeDesk() {
         <h2 className="font-display text-3xl italic">{zh ? "质押" : "Stake"}</h2>
         <p className="mt-2 max-w-3xl text-sm leading-relaxed">
           {zh
-            ? "三本账分开。TAPE 池是流动性，对手是 USDT0 或 BEM，期限是 90 天到 3 年。晶圆和电路是另一份锁仓，期限是 180 天到 5 年。时间都是新加坡时间。到期前不能提前取出。锁仓合约没有管理员。"
-            : "Three books, kept apart. The TAPE pool is liquidity against USDT0 or BEM, for 90 days to 3 years. Wafers and circuits use the other lock, for 180 days to 5 years. Times are Singapore time. Nothing comes out early. The lock has no admin."}
+            ? "三本账分开。TAPE 池是流动性，对手是 USDT0 或 BEM，期限是 90 天到 3 年。晶圆锁仓和电路锁仓分开，期限是 180 天到 5 年。时间都是新加坡时间。到期前不能提前取出。合约没有管理员。"
+            : "Three books, kept apart. The TAPE pool is liquidity against USDT0 or BEM, for 90 days to 3 years. Wafers and circuits lock apart, for 180 days to 5 years. Times are Singapore time. Nothing comes out early. The contracts have no admin."}
         </p>
       </div>
       <div className="border border-sell/50 px-3 py-3 text-sm leading-6">
         <p className="text-xs tracking-widest text-sell">{zh ? "签名前看这三句" : "Read this before you sign"}</p>
         <p>{zh ? "到期前不能取。合约没有提前解锁，也没有人能帮你改日期。" : "Nothing comes out early. The contract has no early exit, and nobody can change the date."}</p>
-        <p>{zh ? "只签这一页写出来的池子和锁仓。转到别的地址，包括已经停用的旧合约，谁都取不回。" : "Sign only the pool and the lock shown on this page. Anything sent elsewhere, including the retired contracts, cannot be recovered."}</p>
-        <p>{zh ? "晶圆锁上不能流片。新电路锁着仍占全网算力，到期后 TAPE 和电路分开领。旧锁仓不能改。" : "Locked wafers cannot be taped. A circuit on the new lock keeps its weight. After unlock, TAPE and the circuit are claimed apart. The old lock cannot be changed."}</p>
+        <p>{zh ? "只签这一页写出来的池子和锁仓。转到别的地址，谁都取不回。" : "Sign only the pool and the lock shown on this page. Anything sent to another address cannot be recovered."}</p>
+        <p>{zh ? "晶圆锁上不能流片。电路锁着仍占全网算力，到期后 TAPE 和电路分开领。" : "Locked wafers cannot be taped. A locked circuit keeps its weight. After unlock, TAPE and the circuit are claimed apart."}</p>
       </div>
       <dl className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
         <Cell k={zh ? "池中 TAPE" : "TAPE in pool"} v={amt(lpTape)} />
@@ -240,12 +239,12 @@ export function StakeDesk() {
         <h3 className="font-display text-2xl italic">{zh ? "电路" : "Circuits"}</h3>
         <p className="mt-1 text-xs leading-5 text-ink/60">
           {zh
-            ? "新锁仓没有管理员。锁上后算力记在这份合约上，继续占全网权重，继续挖 TAPE。到期前不能领。到期后可以只领 TAPE，电路还在，算力还在。领电路时，没领走的 TAPE 在同一笔里打进钱包，矿池席位也在这一笔里关掉。"
-            : "The new lock has no admin. While locked, the weight sits on this contract and keeps mining TAPE. Nothing can be claimed early. After unlock, TAPE can be claimed alone and the circuit keeps mining. Claiming the circuit sends any unclaimed TAPE in the same transaction and closes the mine seat."}
+            ? "锁着的时候，算力记在电路锁仓上，继续占全网权重，继续挖 TAPE。到期前不能领。到期后可以只领 TAPE，电路还在，算力还在。领电路时，没领走的 TAPE 在同一笔里打进钱包，矿池席位也在这一笔里关掉。"
+            : "While locked, the weight sits on the circuit lock and keeps mining TAPE. Nothing can be claimed early. After unlock, TAPE can be claimed alone and the circuit keeps mining. Claiming the circuit sends any unclaimed TAPE in the same transaction and closes the mine seat."}
         </p>
         {!ready ? (
           <div className="mt-2 border border-gold/40 px-2 py-2 text-xs leading-5">
-            <p>{zh ? "这份新合约还没部署。旧的电路锁仓不再接受新的锁入。已经锁在旧合约上的，仍在下面按旧规则解锁。" : "This new contract is not deployed. The old circuit lock takes no new locks. A circuit already on the old lock is released below, under the old rule."}</p>
+            <p>{zh ? "电路锁仓还没部署。收费地址签一笔之后，这一页才能锁电路。" : "The circuit lock is not deployed. This page can lock a circuit after the fee address signs once."}</p>
             <button type="button" className="mt-2 min-h-11 border border-gold px-3" disabled={busy} onClick={() => {
               setBusy(true);
               void (async () => {
@@ -284,7 +283,7 @@ export function StakeDesk() {
                 </li>
               );
             })}
-            {account && fresh.length === 0 ? <li className="px-2 py-3 text-sm text-ink/60">{zh ? "没有锁在新合约上的电路。" : "No circuit is on the new lock."}</li> : null}
+            {account && fresh.length === 0 ? <li className="px-2 py-3 text-sm text-ink/60">{zh ? "还没有锁着的电路。" : "No circuit is locked."}</li> : null}
           </ul>
         )}
         <form className="mt-3 grid gap-2" onSubmit={(event) => {
@@ -310,27 +309,6 @@ export function StakeDesk() {
           <label className="flex gap-2 text-xs"><input type="checkbox" checked={ackCircuit} onChange={(event) => setAckCircuit(event.target.checked)} />{zh ? "我知道到期前领不了，算力记在锁仓合约上" : "I know I cannot claim early, and the weight sits on the lock"}</label>
           <button type="submit" disabled={busy || !account || !ready || !ackCircuit || !circuitId} className="min-h-11 bg-ink text-paper disabled:opacity-40">{zh ? "签名并质押电路" : "Sign and stake the circuit"}</button>
         </form>
-        <p className="mt-3 text-xs tracking-widest text-gold">{zh ? "旧锁仓" : "Old lock"}</p>
-        <p className="text-xs leading-5 text-ink/60">{zh ? "已经锁在旧合约上的，到期仍可解锁。电路和当时结算的 TAPE 一起退回。之后再结算的部分，旧合约取不回。这里不再接受新的锁入。" : "A circuit already on the old contract can still be released. The circuit and the TAPE settled at that moment come back together. A later settlement can stay in the old contract. This page does not lock a new one there."}</p>
-        <ul className="mt-2 max-h-64 overflow-auto border border-gold/40">
-          {circuits.map((row) => {
-            const due = row.unlock * 1000 <= Date.now();
-            const pct = weight > 0n ? Number((row.gates * 10000n) / weight) / 100 : 0;
-            return (
-              <li key={row.id} className="grid gap-1 border-t border-gold/30 px-2 py-2 text-xs sm:grid-cols-[1fr_auto] sm:items-center">
-                <span>
-                  #{row.ref} · {row.gates.toLocaleString("en-US")} {zh ? "门" : "gates"} · {pct.toLocaleString("en-US", { maximumFractionDigits: 2 })}%
-                  <span className="mt-1 block font-mono text-ink/50">{zh ? LOCK_TERMS[row.term]?.zh : LOCK_TERMS[row.term]?.en} · {sgt(row.start)} → {sgt(row.unlock)} · TAPE {amt(row.tape + row.pending)}</span>
-                </span>
-                <span className="flex gap-1">
-                  <button type="button" disabled={busy || row.pending === 0n} className="min-h-8 border border-gold px-2 disabled:opacity-40" onClick={() => { if (!account) return; setBusy(true); harvestLock(account, BigInt(row.id)).then(() => say(zh ? "这笔 TAPE 已记在锁仓里，还没进钱包。" : "That TAPE is now recorded in the lock, not in the wallet yet.")).catch(fail).finally(() => setBusy(false)); }}>{zh ? "入账" : "Book"}</button>
-                  <button type="button" disabled={busy || !due} className="min-h-8 border border-gold px-2 disabled:opacity-40" onClick={() => { if (!account) return; setBusy(true); releaseLock(account, BigInt(row.id)).then(() => say(zh ? "电路和 TAPE 已退回。要再挖，去挖矿页重新开工。" : "The circuit and TAPE are back. Open it again on the mine page to keep mining.")).catch(fail).finally(() => setBusy(false)); }}>{due ? (zh ? "解锁" : "Release") : (zh ? "未到期" : "Locked")}</button>
-                </span>
-              </li>
-            );
-          })}
-          {account && circuits.length === 0 ? <li className="px-2 py-3 text-sm text-ink/60">{zh ? "旧合约上没有锁着的电路。" : "No circuit is on the old lock."}</li> : null}
-        </ul>
       </article>
 
       {!account ? <button type="button" className="min-h-12 bg-ink text-paper" onClick={() => { setBusy(true); connectXLayer().then(setAccount).catch(() => say(zh ? "钱包没有连上。" : "The wallet did not connect.", true)).finally(() => setBusy(false)); }}>{zh ? "连接钱包" : "Connect"}</button> : null}

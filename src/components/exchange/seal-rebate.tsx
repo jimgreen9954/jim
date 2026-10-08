@@ -123,7 +123,7 @@ export function SealRebateBox() {
                 ? `没领就过 ${when(state.resetAt)}（新加坡周一 0 点）作废。`
                 : `Unclaimed after ${when(state.resetAt)} Singapore is dropped.`}
           </p>
-          {!state.weekly ? <p className="mt-2 text-sm text-sell">{zh ? "这份还是旧合约，没有按周领取。重新部署一份再用。" : "This rebate is the old contract. Deploy the weekly one."}</p> : null}
+          {!state.weekly ? <p className="mt-2 text-sm text-sell">{zh ? "这份领取合约不能按周领。" : "This claim contract does not pay by the week."}</p> : null}
           <div className="mt-3 flex gap-2">
             <input
               value={amount}

@@ -233,7 +233,7 @@ export function TapeCanvas() {
       setNote(zh ? `正在 ${target.name} 上流片。签名之后还要等节点交出回执，大网表会更久。回执成功，电路就已经在链上。` : `Taping on ${target.name}. After you sign, the page waits for the node to return the receipt. A large sheet takes longer. When the receipt succeeds, the circuit is already on chain.`);
       const hash = await tapeOn(target, from, netlist, nIn, nOut);
       setHeld(await readTapeDesk(target, from).then((row) => ({ nand: row.nand, latch: row.latch })));
-      setNote(zh ? `已流在 ${target.name} 上。电路在这笔交易里，不是还要再铸一笔。本页名单大约 8 秒刷新一次。个人中心要更久，它从旧编号往后查。` : `Taped on ${target.name}. The circuit is in this transaction, not a second mint. This page's list refreshes in about 8 seconds. The account page is slower because it walks older ids first.`);
+      setNote(zh ? `已流在 ${target.name} 上。电路在这笔交易里，不是还要再铸一笔。本页名单大约 8 秒刷新一次。个人中心要更久，它从较小的编号往后查。` : `Taped on ${target.name}. The circuit is in this transaction, not a second mint. This page's list refreshes in about 8 seconds. The account page is slower because it walks smaller ids first.`);
       window.open(tapeTxUrl(target, hash), "_blank", "noopener,noreferrer");
     } catch (error) {
       setBad(true);

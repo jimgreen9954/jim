@@ -242,7 +242,7 @@ export function TransistorDesk() {
           {resting.length === 0 ? <p className="px-3 py-6 text-sm text-ink/60">{zh ? "这个标还没有人挂单。右边开多或开空，就会出现在这里。" : "No orders on this market yet. A long or a short from the ticket shows up here."}</p> : null}
         </div>
         <div className="flex flex-col gap-2 border border-gold bg-card p-3">
-          <p className="border border-gold/40 px-2 py-2 text-sm">{zh ? "新本已换上。结算用 10 分钟均价，只许收费地址写价。现在均价还是空的，开仓会失败。收费地址要隔 30 秒写一次，写满大约 10 分钟。每次最多挪 0.5%。" : "The new book is live. Settlement is a 10-minute average, and only the fee address can post it. The average is empty, so an open fails. That address posts every 30 seconds for about 10 minutes. Each step moves at most 0.5%."}</p>
+          <p className="border border-gold/40 px-2 py-2 text-sm">{zh ? "结算用 10 分钟均价，只许收费地址写价。现在均价还是空的，开仓会失败。收费地址要隔 30 秒写一次，写满大约 10 分钟。每次最多挪 0.5%。" : "Settlement is a 10-minute average, and only the fee address can post it. The average is empty, so an open fails. That address posts every 30 seconds for about 10 minutes. Each step moves at most 0.5%."}</p>
           <button type="button" className="min-h-11 border border-gold" disabled={busy} onClick={async () => {
             setBusy(true);
             setNote("");
