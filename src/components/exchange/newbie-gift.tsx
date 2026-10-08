@@ -102,47 +102,9 @@ export function NewbieGift({ account, zh }: { account: string; zh: boolean }) {
 
 export function GiftHome({ onOpen }: { onOpen: () => void }) {
   const zh = useExchange((s) => s.lang) === "zh";
-  const cards = zh
-    ? [
-        ["充进去", "X Layer 充 TAPELIQUID 的 NAND。BSC 充 BEM。记在你的份额上，只有这个地址能取回还没被领走的部分。"],
-        ["领 NAND", "一笔已撮合的 X Layer 永续，你这一边保证金不少于 5 USDT0，可以领 10 个。一个地址最多 5 次。"],
-        ["领 BEM", "BSC 的 BEM 永续或晶体管永续，每笔你这一边不少于 5 USDT。超过 10 笔，领一次 0.1 BEM。"],
-      ]
-    : [
-        ["Deposit", "NAND on X Layer is TAPELIQUID NAND. BEM on BSC is BEM. Only that address withdraws what is still unclaimed."],
-        ["NAND", "One matched X Layer perpetual, with your margin at least 5 USDT0, pays 10 NAND. Five times per address."],
-        ["BEM", "BSC BEM or transistor perpetuals count when your side is at least 5 USDT. More than 10 fills pays 0.1 BEM once."],
-      ];
   return (
-    <section
-      className="cursor-pointer border border-gold"
-      role="link"
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") onOpen();
-      }}
-    >
-      <div className="flex flex-wrap items-end justify-between gap-3 px-4 py-3">
-        <div>
-          <p className="text-[11px] tracking-[0.22em] text-gold">{zh ? "新手礼包" : "Starter gift"}</p>
-          <h2 className="font-display text-2xl italic">{zh ? "先成交，再来领" : "Trade first, then claim"}</h2>
-        </div>
-        <span className="inline-flex min-h-11 items-center bg-ink px-4 text-sm text-paper">{zh ? "去个人中心领取或充值" : "Deposit or claim in Account"}</span>
-      </div>
-      <div className="grid border-t border-gold/30 md:grid-cols-3">
-        {cards.map(([title, body]) => (
-          <article key={title} className="border-t border-gold/30 px-4 py-3 md:border-t-0 md:border-l md:first:border-l-0">
-            <p className="text-sm">{title}</p>
-            <p className="mt-1 text-xs leading-5 text-ink/70">{body}</p>
-          </article>
-        ))}
-      </div>
-      <p className="border-t border-gold/30 px-4 py-2 text-xs leading-5 text-ink/55">
-        {zh
-          ? "同一笔成交只能记一次。现货不记，因为那笔不在礼包合约里。有人领取，池子按份额变少。池子空了就停，再充进去就继续发。点上面的按钮，到个人中心打开礼包。"
-          : "One fill counts once. Spot is not counted, because that trade is not inside the gift contract. A claim shrinks every share. An empty pool stops. A new deposit starts it again. The button opens the gift in Account."}
-      </p>
-    </section>
+    <button type="button" className="min-h-11 w-fit border border-gold px-4 text-sm" onClick={onOpen}>
+      {zh ? "新手礼包" : "Starter gift"}
+    </button>
   );
 }
