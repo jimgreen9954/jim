@@ -34,7 +34,7 @@ const zh: Section[] = [
   {
     h: "TAPE",
     ps: [
-      "TAPE 是 TAPELIQUID 的平台币，只此一份，在 X Layer。硬顶 21,000,000。无预挖，无团队份额，无私募。只发给已流片并且已验证的电路。未锁仓电路的领取，100% 进入该电路登记的矿工地址。销毁从已流通的币里发生，不从排放里预扣。",
+      "TAPE 是 TAPELIQUID 的唯一平台币，只此一份，在 X Layer。没有第二枚。硬顶 21,000,000。无预挖，无团队份额，无私募。只发给已流片并且已验证的电路。未锁仓电路的领取，100% 进入该电路登记的矿工地址。销毁从已流通的币里发生，不从排放里预扣。",
       "排放不回溯。从第一笔已验证流片的那一天开始计日。晶圆不必铸完才开始。之后新的铸造和流片提高全网算力，已有电路的占比下降。",
       "日排放和减半周期写在合约里，不设改率权限。减半周期 210,000×600 秒，约 4 年。每过一个周期，当日排放减半。各期累加不超过 21,000,000。销毁不改变日排放，只减少已流通数量。",
       "开盘阶段日排放为 1,000。收费地址连续 30 日有台费入账后，日排放调整为 7,200，此后按减半周期执行。调整只做这一次。",
@@ -60,7 +60,7 @@ const zh: Section[] = [
   {
     h: "自愿锁仓",
     ps: [
-      "晶圆锁在晶圆锁仓里。电路锁在电路锁仓里。电路锁仓还没有部署，收费地址签一笔之后，网页才会用它。两份都没有管理员。期限是五档：180 天、365 天、3 年、4 年、5 年。锁着的晶圆不能流片，不算算力。锁着的电路，算力记在电路锁仓上，继续占全网权重，继续挖 TAPE。到期前不能领。到期后可以只领 TAPE，电路还在，算力还在。领电路时，还没领的 TAPE 在同一笔里打进钱包，矿池席位也在这一笔里关掉。",
+      "晶圆锁在晶圆锁仓里。电路锁在电路锁仓 0x06c877cc158d9ca3547220f9fc156f39bce7013c。两份都没有管理员。期限是五档：180 天、365 天、3 年、4 年、5 年。锁着的晶圆不能流片，不算算力。锁着的电路，算力记在电路锁仓上，继续占全网权重，继续挖 TAPE。到期前不能领。到期后可以只领 TAPE，电路还在，算力还在。领电路时，还没领的 TAPE 在同一笔里打进钱包，矿池席位也在这一笔里关掉。",
       "锁仓不增加 H，不另发 TAPE。规则页列出锁仓地址、对象是电路还是晶圆、档位、到期日，以及电路上尚未领取的数量。榜一地址的官方未流片额度同样走这五档，登记后写明地址与到期日。",
     ],
   },
@@ -90,8 +90,17 @@ const zh: Section[] = [
     ps: [
       "现在交易的 X Layer 永续是 0x3dfde13ef89f49575e73e91d3cd11127557f4d60，标记是 0xb623ee0ef23d8ea61f93cca373a4a4b27cf32fe1。晶体管永续是 0xb4b2ee90d10ecfc7ed36a58e96e03074fa8731eb。三份都没有管理员。写价地址是收费地址，写死。每次最多挪 0.5%，至少隔 30 秒。结算用过去 10 分钟均价。均价不满 10 分钟，或超过 30 分钟没有新写入，不能开仓，也不能结算。",
       "同一份标记只挂这一本 X Layer 永续。BSC 上的 BEM 永续读 Pancake 池子的均价，不读这份标记。浅池仍可能在短时间里影响那条均价。",
-      "TAPE 是平台币，只有这一枚。矿池没有管理员，也不能改排放。",
+      "TAPE 是 TAPELIQUID 的唯一平台币。只有这一枚，没有第二枚。矿池没有管理员，也不能改排放。",
       "返佣合约有 clerk。clerk 可以提取返佣池里的余额。不是每一份合约都没有管理员。",
+    ],
+  },
+  {
+    h: "新手礼包",
+    ps: [
+      "个人中心有一份新手礼包。X Layer 上充的是 TAPELIQUID 的 NAND。BSC 上充的是 BEM。充进去的记在你的份额上。只有这个地址能取回自己还没被领走的那一份。别人不能把你的充值整笔转走。",
+      "有人按规则领取时，池子变少，每个充值地址能取回的份额一起变少。池子空了就停。再充进去，就继续发。",
+      "NAND 每次领 10 个，一个地址最多 5 次。要先有一笔已记的 X Layer 永续成交，你这一边的保证金不少于 5 USDT0。BEM 领一次 0.1 个。要先记满超过 10 笔 BSC 成交，每笔你这一边的保证金不少于 5 USDT。BSC 只认 BEM 永续和晶体管永续。同一笔成交只能记一次。现货不记进这个次数。",
+      "这两份礼包合约还没有部署。收费地址签过之后，地址写进这一页，才开始充值和领取。",
     ],
   },
   {
@@ -117,14 +126,14 @@ const zh: Section[] = [
       `TAPE 代币 ${TAPE}。挖矿合约 ${TAPE_MINE}。都在 X Layer。硬顶 21,000,000，8 位小数，没有管理员，也没有改率入口。只有挖矿合约能铸。总供应只随领取增加。`,
       "这份挖矿合约现在的日排放是 7,200，从部署时开始，不是先 1,000 再切换。它也没有「收费地址签一次改成 7,200」的入口。权重按电路门数，也就是 b*，处理器倍率按 1。q 还没有题目验证，页面不能显示大于 1。",
       "挖矿、TAPE 池、晶圆和电路锁仓，三份都没有管理员，不能升级，不能改期限，不能改费率，也没有救援入口。误转到合约、又没有对应仓位的资产，谁都取不回，页面不会这么转。加池时和池子比例对不上的部分退回给签名的人，不会进别人的份额。",
-      "开盘池的 100,000 枚没有另铸。TAPE 池没有管理员，加池即质押，90 天到 3 年，到期才能撤。晶圆锁仓没有管理员，期限是 180 天、365 天、3 年、4 年、5 年。锁着的晶圆不能流片，不算算力。电路锁仓还没有部署。同一片电路不能锁两次。回购和 TAPE 跨链还没有合约。",
+      "开盘池的 100,000 枚没有另铸。TAPE 池没有管理员，加池即质押，90 天到 3 年，到期才能撤。晶圆锁仓没有管理员，期限是 180 天、365 天、3 年、4 年、5 年。锁着的晶圆不能流片，不算算力。电路锁仓是 0x06c877cc158d9ca3547220f9fc156f39bce7013c。同一片电路不能锁两次。回购和 TAPE 跨链还没有合约。",
       "个人中心转出晶体管可以选一对一或一对多。一对多每一行一个地址，这一行的 NAND 和 LATCH 只进这个地址，按行签名，不经过锁仓合约。电路在名单里上下滑动勾选，每一片填一个地址，勾几片签几笔。官网合约如果不提供逐个编号，这一页不能代填。",
     ],
   },
   {
     h: "地址",
     ps: [
-      `收费 ${FEE_TO}。TAPE ${TAPE}。TAPE 挖矿 ${TAPE_MINE}。TAPE 池 0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641。锁仓 0xA28390924607F08aaD8d03F512B41b6a1c012Ace。TAPELIQUID 电路 ${DEPLOYED.circuits}。TAPELIQUID 晶体管 ${DEPLOYED.transistors}。`,
+      `收费 ${FEE_TO}。TAPE ${TAPE}。TAPE 挖矿 ${TAPE_MINE}。TAPE 池 0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641。晶圆锁仓 0xA28390924607F08aaD8d03F512B41b6a1c012Ace。电路锁仓 0x06c877cc158d9ca3547220f9fc156f39bce7013c。TAPELIQUID 电路 ${DEPLOYED.circuits}。TAPELIQUID 晶体管 ${DEPLOYED.transistors}。`,
       `BSC 永续 ${BSC_REBATE}。X Layer 永续 ${KNOWN_XPERP}。标记 ${KNOWN_XMARK}。晶体管永续 ${GATE}。流动性仓位 ${NPM}。`,
       `BSC BEM ${BSC.bem}。BSC 桥 ${BEM_BRIDGE}。X Layer BEM ${X_BEM}。官网 BEM 挖矿 0x7E2E0DC66a3bD9103E69b766afA62d9f7b697b46。`,
       `官网晶体管市场 ${OFFICIAL.transistorMarket}。官网电路市场 ${OFFICIAL.circuitMarket}。BEM 池 ${BSC.pool}。`,
@@ -155,7 +164,7 @@ const en: Section[] = [
   {
     h: "TAPE",
     ps: [
-      "TAPE is the platform token of TAPELIQUID. There is one token, on X Layer. The hard cap is 21,000,000. No premine, no team allocation, no private sale. It is paid only to a taped and verified circuit. A claim on an unlocked circuit goes entirely to the miner address registered on that circuit. Burns come out of coins already circulating. They are not withheld from emission.",
+      "TAPE is the only platform token of TAPELIQUID. There is one token, on X Layer, and there is not a second. The hard cap is 21,000,000. No premine, no team allocation, no private sale. It is paid only to a taped and verified circuit. A claim on an unlocked circuit goes entirely to the miner address registered on that circuit. Burns come out of coins already circulating. They are not withheld from emission.",
       "Emission does not backfill. The day count starts on the day of the first verified tape-out. The wafers do not have to be fully minted first. Later mints and tape-outs raise network hashrate, so an existing circuit's share falls.",
       "The daily amount and the halving are in the contract. There is no permission to edit the rate. A halving is 210,000 × 600 seconds, about four years. Each period, that day's emission is cut in half. The periods together do not exceed 21,000,000. A burn does not change the daily emission. It only reduces what is circulating.",
       "The opening daily emission is 1,000. After the fee address has received desk fees for 30 consecutive days, the daily emission becomes 7,200, and halvings apply from there. That change happens once.",
@@ -181,7 +190,7 @@ const en: Section[] = [
   {
     h: "Voluntary locks",
     ps: [
-      "Wafers lock in the wafer lock. Circuits lock in the circuit lock. The circuit lock is not deployed. The site uses it after the fee address signs that one transaction. Neither contract has an admin. The terms are 180 days, 365 days, 3 years, 4 years, and 5 years. A locked wafer cannot be taped and is not hashrate. A locked circuit keeps its weight on the circuit lock, keeps its share of the network, and keeps mining TAPE. Nothing can be claimed early. After unlock, TAPE can be claimed alone and the circuit keeps mining. Claiming the circuit sends any unclaimed TAPE in the same transaction and closes the mine seat.",
+      "Wafers lock in the wafer lock. Circuits lock in the circuit lock at 0x06c877cc158d9ca3547220f9fc156f39bce7013c. Neither contract has an admin. The terms are 180 days, 365 days, 3 years, 4 years, and 5 years. A locked wafer cannot be taped and is not hashrate. A locked circuit keeps its weight on the circuit lock, keeps its share of the network, and keeps mining TAPE. Nothing can be claimed early. After unlock, TAPE can be claimed alone and the circuit keeps mining. Claiming the circuit sends any unclaimed TAPE in the same transaction and closes the mine seat.",
       "A locked wafer cannot be transferred or taped before expiry. It is not hashrate. After expiry it can be taped. Unlock charges nothing. A lock does not raise H and does not mint extra TAPE.",
       "A lock does not raise H and does not mint extra TAPE. This page lists the address, whether it is a circuit or wafers, the term, the expiry, and the unclaimed amount on the circuit. The lead address's official untaped quota uses the same five terms. The address and expiry are written here after registration.",
     ],
@@ -212,8 +221,17 @@ const en: Section[] = [
     ps: [
       "The live X Layer perpetual is 0x3dfde13ef89f49575e73e91d3cd11127557f4d60. Its mark is 0xb623ee0ef23d8ea61f93cca373a4a4b27cf32fe1. The transistor perpetual is 0xb4b2ee90d10ecfc7ed36a58e96e03074fa8731eb. None of the three has an admin. The posting address is the fee address, and it is fixed. Each post moves at most 0.5 percent, and at least 30 seconds must pass. Settlement uses the last 10 minutes. If that average is shorter than 10 minutes, or nothing has been posted for 30 minutes, a new order cannot open and a position cannot settle.",
       "This mark has one X Layer perpetual. The BEM perpetual on BSC reads the Pancake pool average. It does not read this mark. A thin pool can still move that average for a short time.",
-      "TAPE is the platform token. There is one. The mine has no admin, and the emission cannot be changed.",
+      "TAPE is the only platform token of TAPELIQUID. There is one token, not a second. The mine has no admin, and the emission cannot be changed.",
       "The rebate contract has a clerk. The clerk can withdraw the rebate pool. Not every contract is without an admin.",
+    ],
+  },
+  {
+    h: "Starter gift",
+    ps: [
+      "The account page has a starter gift. NAND deposited on X Layer is TAPELIQUID NAND. BEM deposited on BSC is BEM. A deposit is your share. Only that address can withdraw what has not yet been paid out. Nobody can take your whole deposit.",
+      "When someone claims under the rule, the pool shrinks, and every depositor's remaining share shrinks with it. An empty pool stops. A new deposit starts it again.",
+      "NAND pays 10 each time, at most 5 times per address. That requires a counted X Layer perpetual fill, and your side's margin must be at least 5 USDT0. BEM pays 0.1 once. That requires more than 10 counted BSC fills, each with your side's margin at least 5 USDT. BSC counts the BEM perpetual and the transistor perpetual. One fill counts once. Spot is not counted.",
+      "The two gift contracts are not deployed. After the fee address signs and the addresses are written here, deposits and claims start.",
     ],
   },
   {
@@ -239,7 +257,7 @@ const en: Section[] = [
       `TAPE is ${TAPE}. The mine is ${TAPE_MINE}. Both are on X Layer. The cap is 21,000,000 with 8 decimals. There is no admin and no way to change the rate. Only the mine can mint. Supply grows only when someone claims.`,
       "That mine contract emits 7,200 a day from the moment it was deployed. It does not start at 1,000, and it has no one-time switch to 7,200. Weight is the gate count, which is b*, and the processor multiplier is 1. There is no task score yet, so q is not shown above 1.",
       "The mine, the TAPE pool, and the wafer and circuit lock have no admin. They cannot be upgraded, and the terms and the fee cannot be changed. There is no rescue function. Assets sent to a contract without a matching position cannot be taken back by anyone, and the page does not send them that way. Liquidity that does not match the pool ratio is returned to the signer. It is not added to anyone else's share.",
-      "The 100,000 opening allocation was not minted. The TAPE pool has no admin. Adding liquidity stakes it for 90 days to 3 years. The wafer lock has no admin. Terms are 180 days, 365 days, 3 years, 4 years, or 5 years. Locked wafers cannot be taped and do not count as weight. The circuit lock is not deployed. The same circuit cannot be locked twice. Buyback and a TAPE bridge are not contracts yet.",
+      "The 100,000 opening allocation was not minted. The TAPE pool has no admin. Adding liquidity stakes it for 90 days to 3 years. The wafer lock has no admin. Terms are 180 days, 365 days, 3 years, 4 years, or 5 years. Locked wafers cannot be taped and do not count as weight. The circuit lock is 0x06c877cc158d9ca3547220f9fc156f39bce7013c. The same circuit cannot be locked twice. Buyback and a TAPE bridge are not contracts yet.",
       "Official BEM is still claimed from the TapeOut mine. It is not the same signature as TAPE. A large tape-out does not mint official BEM.",
       "The account page can send transistors to one address or to many. Many means one address per row, and that row's NAND and LATCH go only to that address. Each transfer is its own signature, and none of them go through the lock. Circuits are ticked in a scrolling list. Each ticked circuit has one address. One signature per circuit. If an official contract does not list token ids, this page does not invent them.",
     ],
@@ -247,7 +265,7 @@ const en: Section[] = [
   {
     h: "Addresses",
     ps: [
-      `Fee ${FEE_TO}. TAPE ${TAPE}. TAPE mine ${TAPE_MINE}. TAPE pool 0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641. Lock 0xA28390924607F08aaD8d03F512B41b6a1c012Ace. TAPELIQUID circuits ${DEPLOYED.circuits}. TAPELIQUID transistors ${DEPLOYED.transistors}.`,
+      `Fee ${FEE_TO}. TAPE ${TAPE}. TAPE mine ${TAPE_MINE}. TAPE pool 0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641. Wafer lock 0xA28390924607F08aaD8d03F512B41b6a1c012Ace. Circuit lock 0x06c877cc158d9ca3547220f9fc156f39bce7013c. TAPELIQUID circuits ${DEPLOYED.circuits}. TAPELIQUID transistors ${DEPLOYED.transistors}.`,
       `BSC perpetual ${BSC_REBATE}. X Layer perpetual ${KNOWN_XPERP}. Mark ${KNOWN_XMARK}. Transistor perpetual ${GATE}. Liquidity positions ${NPM}.`,
       `BSC BEM ${BSC.bem}. BSC bridge ${BEM_BRIDGE}. X Layer BEM ${X_BEM}. Official BEM mine 0x7E2E0DC66a3bD9103E69b766afA62d9f7b697b46.`,
       `Official transistor market ${OFFICIAL.transistorMarket}. Official circuit market ${OFFICIAL.circuitMarket}. BEM pool ${BSC.pool}.`,

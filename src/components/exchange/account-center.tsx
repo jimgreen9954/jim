@@ -12,6 +12,7 @@ import { currentAccount, onAccount } from "@/lib/wallet";
 import { transferCircuit, transferTransistor, txUrl } from "@/lib/xlayer";
 import { LOCK_TERMS, readLocks, type LockSeat } from "@/lib/tape-lock";
 import { readTapePool, showQuote, showTape, TAPE_TERMS, type TapePosition } from "@/lib/tape-pool";
+import { NewbieGift } from "@/components/exchange/newbie-gift";
 import { tapeText } from "@/lib/tape-mine";
 
 function money(n: number): string {
@@ -373,6 +374,7 @@ export function AccountCenter() {
         </div>
         <button type="button" className="min-h-10 border border-gold px-3 text-sm" onClick={() => pull(account)}>{zh ? "刷新" : "Refresh"}</button>
       </div>
+      <NewbieGift account={account} zh={zh} />
       <div className="border border-gold">
         <div className="flex items-end justify-between gap-3 px-3 py-3">
           <div>

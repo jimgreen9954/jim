@@ -5,8 +5,7 @@ import { CIRCUIT_LOCK_BYTECODE } from "@/lib/circuit-lock-artifact";
 import { TAPE_MINE } from "@/lib/tape-mine";
 
 export const TAPE_LOCK = "0xA28390924607F08aaD8d03F512B41b6a1c012Ace" as const;
-/** Not deployed. Stays empty until the fee address creates it and the address is written here. */
-export const CIRCUIT_LOCK = "" as const;
+export const CIRCUIT_LOCK = "0x06c877cc158d9ca3547220f9fc156f39bce7013c" as const;
 
 export const LOCK_TERMS = [
   { id: 0, zh: "180 天", en: "180 days", sec: 180 * 86400 },
