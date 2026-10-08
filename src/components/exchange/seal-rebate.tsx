@@ -90,11 +90,7 @@ export function SealRebateBox() {
   return (
     <div className="mt-4 border border-gold/40 p-3">
       <h3 className="font-display text-2xl italic">{zh ? "手续费领取" : "Fee rebate"}</h3>
-      <p className="mt-2 text-sm leading-relaxed">
-        {zh
-          ? "灯亮不会自动减费。X Layer 要自己持有三张印鉴再登记。BSC 要由部署这笔的钱包把地址记上。领取只认现在的永续和晶体管永续。池子是空的，要另充，不从收费地址扣。取回和 BSC 记名只认你点部署时签名的那个钱包。一个新加坡周只能领一次，从周一 0 点到下周一 0 点。这一周没领，过点就作废，下周只算新的成交。金额按撮合日志筛出来，再按代币小数换成 USDT。有推荐人时，按少付之后的手续费再减半。同一笔成交只能进一次。"
-          : "Lamps do not lower the fee. Register three seals on X Layer. On BSC the wallet that deploys this contract marks the address. Claims read only the live perpetual and transistor books. The pool starts empty and is funded separately. Only the wallet that signs the deploy can withdraw or mark a BSC address. One claim per Singapore week, Monday 00:00 to the next Monday. Miss it and that week is gone. The next week counts only new fills. The amount uses the match log, then the token decimals, so it is in USDT. With a referrer, half of the discounted fee. A deal is included once."}
-      </p>
+      <p className="mt-1 text-sm">{zh ? "先部署。用你要长期保管的钱包签，不要用已经公开过的那把。" : "Deploy first. Sign with the wallet you will keep."}</p>
       <div className="mt-3 flex gap-2">
         {(["xlayer", "bsc"] as const).map((id) => (
           <button
@@ -107,12 +103,8 @@ export function SealRebateBox() {
           </button>
         ))}
       </div>
-      {state ? (
-        <p className="mt-3 break-all font-mono text-xs">{state.address}</p>
-      ) : (
-        <p className="mt-3 break-all font-mono text-xs">{LOCKED_REBATE[chain]}</p>
-      )}
-      {state && !state.deployed ? (
+      <p className="mt-3 break-all font-mono text-xs">{state?.address ?? LOCKED_REBATE[chain]}</p>
+      {!state?.deployed ? (
         <button
           type="button"
           disabled={busy}
@@ -126,7 +118,7 @@ export function SealRebateBox() {
           }
           className="mt-3 min-h-12 w-full border border-gold bg-ink text-paper disabled:opacity-60"
         >
-          {zh ? "用当前钱包部署" : "Deploy with this wallet"}
+          {busy ? (zh ? "签名中" : "Signing") : zh ? `部署${chain === "xlayer" ? " X Layer" : " BSC"} 手续费合约` : `Deploy the ${chain === "xlayer" ? "X Layer" : "BSC"} rebate`}
         </button>
       ) : null}
       {state?.deployed ? (

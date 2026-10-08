@@ -391,6 +391,7 @@ function ShopFloor({ shop, setShop }: { shop: ShopTab; setShop: (shop: ShopTab) 
               ? "跟 tapeout.net 的盘口。本站另收 0.20%，先付。官网没有成交，这一笔也不退。"
               : "The book follows tapeout.net. This site charges an extra 0.20%, paid first. If the official fill fails, that fee is not returned."}
       </p>
+      <SealRebateBox />
       <div className="grid grid-cols-2 border border-gold sm:grid-cols-4">
         {([
           ["gate", lang === "zh" ? "晶体管合约" : "Transistor perps"],
@@ -409,7 +410,6 @@ function ShopFloor({ shop, setShop }: { shop: ShopTab; setShop: (shop: ShopTab) 
           <WalletBar />
           <LiveBoard />
           <SealStamp />
-          <SealRebateBox />
         </>
       ) : null}
       {shop === "chips" ? <OfficialDesk mode="chips" /> : null}
