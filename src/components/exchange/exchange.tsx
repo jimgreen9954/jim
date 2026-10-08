@@ -227,8 +227,13 @@ function Header({ floor, desk, shop, setFloor, setDesk, setShop, setGiftOpen }: 
       window.location.assign(next === "rules" ? "/whitepaper" : `/#${next === "desk" ? desk : next === "shop" ? "gate" : next === "canvas" ? "canvas" : next === "mine" ? "mine" : next === "me" ? "me" : "paper"}`);
       return;
     }
-    if (next === "rules") window.location.assign("/whitepaper");
-    else setFloor(next);
+    if (next === "rules") {
+      setFloor("rules");
+      if (window.location.pathname.startsWith("/whitepaper")) return;
+      window.history.replaceState(null, "", "#rules");
+      return;
+    }
+    setFloor(next);
   };
   return (
     <header className="-mx-3 flex flex-col gap-2 px-3 sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6">
