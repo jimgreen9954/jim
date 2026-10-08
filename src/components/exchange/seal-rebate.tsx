@@ -81,8 +81,8 @@ export function SealRebateBox() {
       <h3 className="font-display text-2xl italic">{zh ? "手续费领取" : "Fee rebate"}</h3>
       <p className="mt-2 text-sm leading-relaxed">
         {zh
-          ? "灯亮不会自动减费。X Layer 要自己持有三张印鉴再登记。BSC 要部署者把地址记上。池子另充，不从收费地址扣。下面两个地址已经写死，换浏览器也不会换成新合约。一个新加坡周只能领一次，从周一 0 点到下周一 0 点。这一周没领，过点就作废，下周只算新的成交。金额按撮合日志筛出来，再按代币小数换成 USDT。有推荐人时，按少付之后的手续费再减半。同一笔成交只能进一次。"
-          : "Lamps do not lower the fee. Register three seals on X Layer. On BSC the deployer marks the address. The pool is funded separately. The two addresses below are locked in the page. A new browser does not switch the contract. One claim per Singapore week, Monday 00:00 to the next Monday. Miss it and that week is gone. The next week counts only new fills. The amount uses the match log, then the token decimals, so it is in USDT. With a referrer, half of the discounted fee. A deal is included once."}
+          ? "灯亮不会自动减费。X Layer 要自己持有三张印鉴再登记。BSC 要部署这笔的钱包把地址记上。领取只认现在的永续和晶体管永续。池子是空的，要另充，不从收费地址扣。取回只许部署钱包 0x7fa7193115a481067af731499c551c5571071528。一个新加坡周只能领一次，从周一 0 点到下周一 0 点。这一周没领，过点就作废，下周只算新的成交。金额按撮合日志筛出来，再按代币小数换成 USDT。有推荐人时，按少付之后的手续费再减半。同一笔成交只能进一次。"
+          : "Lamps do not lower the fee. Register three seals on X Layer. On BSC the deployer marks the address. Claims read only the live perpetual and transistor books. The pool starts empty and is funded separately. Only the deployer wallet 0x7fa7193115a481067af731499c551c5571071528 can withdraw. One claim per Singapore week, Monday 00:00 to the next Monday. Miss it and that week is gone. The next week counts only new fills. The amount uses the match log, then the token decimals, so it is in USDT. With a referrer, half of the discounted fee. A deal is included once."}
       </p>
       <div className="mt-3 flex gap-2">
         {(["xlayer", "bsc"] as const).map((id) => (
