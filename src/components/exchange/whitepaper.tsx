@@ -23,6 +23,18 @@ const zh: Section[] = [
     ],
   },
   {
+    h: "风险",
+    ps: [
+      "这一页是产品规则，不是审计报告，也不是收益承诺。下面的合约没有升级入口。已经锁进永续的保证金，不能靠改网页取回。",
+      "现货台费先付，是付出金额的 0.20%，在池子手续费之外。后面的兑换拒签或回滚，这一笔不退。回执还没读到时，同一金额不会再收一次。",
+      "永续没有保险基金，也没有自动减仓。亏到保证金大约一半，任何人都可以强平。BSC 与 X Layer 不能并成一笔。",
+      "BSC 的标记是 Pancake 池大约 10 分钟的均价。浅池可以在短时间里带动它。X Layer 永续和晶体管永续只接受收费地址写入的价格，不接受任意地址。连续写入时每次最多 0.5%，至少隔 30 秒。写过一次之后，不会因为 30 分钟没有新价格而停止交易。",
+      "下单用的合约地址写死在页面里，不从这台浏览器的缓存里更换。保证金只进入地址一节列出的合约。",
+      "练习只存在这台浏览器，不会进入上面的合约。止盈和止损需要这一页开着，并且钱包完成签名。拒签之后不会自动再弹，需要再点一次。",
+      "仓库公开不等于已经通过独立审计。开仓之前以这一页和钱包里的合约地址为准。",
+    ],
+  },
+  {
     h: "交易台",
     ps: [
       "现货在签名的钱包里成交。BSC 上的交易对走 PancakeSwap。OKB 走 X Layer 的 PotatoSwap。买到的币留在这个钱包。台费是付出金额的 0.20%，在池子手续费之外，单独付一笔，先付。后面的兑换拒签或回滚，这一笔不退。回执还没读到时，同一金额不会再收一次。",
@@ -169,6 +181,18 @@ const en: Section[] = [
       "TAPELIQUID trades BEM, and on X Layer it mints wafers, tapes circuits, and mines TAPE. TAPE is the only platform token. There is one, on X Layer. BEM belongs to TapeOut. It is not the platform token.",
       "The site has four layers. The desk is spot and perpetuals. Practice stays in this browser and does not reach the live book. The workshop is minting, tape-out, transistor perps, and official spot. This page is the rulebook. The account page shows balances and transfers. The gift stays closed there until you open it.",
       "A step without a contract has no button. The live rules come first. What is only a plan, and cannot be signed, comes after.",
+    ],
+  },
+  {
+    h: "Risk",
+    ps: [
+      "This page is the product rulebook. It is not an audit report and not a promise of profit. The contracts below have no upgrade path. Margin already locked in a perpetual cannot be recovered by changing the website.",
+      "The spot desk fee is paid first. It is 0.20% of the amount paid, on top of the pool fee. If the later swap is rejected or reverts, that fee is not returned. While a receipt is still missing, the same amount is not charged again.",
+      "Perpetuals have no insurance fund and no auto-deleveraging. Anyone can liquidate a position after about half the margin is lost. BSC and X Layer do not net into one trade.",
+      "The BSC mark is about a 10-minute Pancake average. A thin pool can move it for a short time. The X Layer perpetual and the transistor perpetual accept a price only from the fee address, not from an arbitrary account. While posts continue, each move is at most 0.5% and at least 30 seconds apart. After one post, trading does not stop because 30 minutes pass without a new price.",
+      "The contracts used for orders are fixed in the page. They are not replaced from this browser's cache. Margin goes only to the contracts listed in the address section.",
+      "Practice stays in this browser and does not enter those contracts. A take-profit or stop-loss needs this page open and a wallet signature. After a rejection, the wallet does not pop again until you tap retry.",
+      "A public repository is not an independent audit. Before opening a position, match this page with the contract address in the wallet.",
     ],
   },
   {

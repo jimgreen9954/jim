@@ -401,11 +401,7 @@ export function savedXPerp(): string {
 const BSC_BOOK_KEY = "tapeliquid-bsc-book";
 
 export function bookOf(which: Desk = desk): string {
-  if (which === "xlayer") {
-    const fixed = typeof window !== "undefined" ? window.localStorage.getItem(XPERP_FIXED) ?? "" : "";
-    if (/^0x[a-fA-F0-9]{40}$/.test(fixed)) return fixed;
-    return /^0x[a-fA-F0-9]{40}$/.test(KNOWN_XPERP) ? KNOWN_XPERP : savedXPerp();
-  }
+  if (which === "xlayer") return KNOWN_XPERP;
   return BSC_REBATE;
 }
 
@@ -890,10 +886,7 @@ async function bscTick(): Promise<number> {
 }
 
 export async function pushMark(from: string): Promise<void> {
-  const fixed = typeof window !== "undefined" ? window.localStorage.getItem(XMARK_FIXED) ?? "" : "";
-  const saved = typeof window !== "undefined" ? window.localStorage.getItem(XMARK_KEY) ?? "" : "";
-  const mark = /^0x[a-fA-F0-9]{40}$/.test(fixed) ? fixed : /^0x[a-fA-F0-9]{40}$/.test(KNOWN_XMARK) ? KNOWN_XMARK : saved;
-  if (!/^0x[a-fA-F0-9]{40}$/.test(mark)) return;
+  const mark = KNOWN_XMARK;
   const was = desk;
   desk = "xlayer";
   try {

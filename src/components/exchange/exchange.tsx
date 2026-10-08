@@ -242,51 +242,6 @@ function Header({ floor, desk, setFloor, setDesk, setShop, setGiftOpen }: { floo
               <p className="hidden truncate text-[10px] tracking-widest text-gold sm:block sm:text-xs">{c.kicker}</p>
             </div>
           </div>
-          <div className="order-3 grid w-full grid-cols-3 gap-1 lg:order-none lg:flex-1">
-            <button
-              type="button"
-              onClick={() => {
-                if (window.location.pathname.startsWith("/whitepaper")) {
-                  window.location.assign("/#wafer");
-                  return;
-                }
-                setFloor("shop");
-                setShop("wafer");
-              }}
-              className="min-h-11 border border-gold bg-ink px-2 text-left text-paper"
-            >
-              <span className="block text-[10px] tracking-widest text-gold">{lang === "zh" ? "铸造" : "Mint"}</span>
-              <span className="font-display text-base italic leading-none sm:text-xl">{lang === "zh" ? "晶圆" : "Wafer"}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (window.location.pathname.startsWith("/whitepaper")) {
-                  window.location.assign("/#canvas");
-                  return;
-                }
-                setFloor("canvas");
-              }}
-              className={`min-h-11 border px-2 text-left ${floor === "canvas" ? "border-ink bg-foil text-ink" : "border-gold bg-ink text-paper"}`}
-            >
-              <span className="block text-[10px] tracking-widest text-gold">{lang === "zh" ? "处理器" : "Processor"}</span>
-              <span className="font-display text-base italic leading-none sm:text-xl">{lang === "zh" ? "流片" : "Tape"}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (window.location.pathname.startsWith("/whitepaper")) {
-                  window.location.assign("/#mine");
-                  return;
-                }
-                setFloor("mine");
-              }}
-              className={`min-h-11 border px-2 text-left ${floor === "mine" ? "border-ink bg-foil text-ink" : "border-gold bg-ink text-paper"}`}
-            >
-              <span className="block text-[10px] tracking-widest text-gold">BEM · TAPE</span>
-              <span className="font-display text-base italic leading-none sm:text-xl">{lang === "zh" ? "挖矿" : "Mine"}</span>
-            </button>
-          </div>
           <div className="ml-auto flex max-w-full items-center gap-1 overflow-x-auto">
             <ConnectButton />
             <button type="button" className={`min-h-10 shrink-0 border px-2 text-xs sm:min-h-11 ${floor === "me" ? "border-ink bg-ink text-paper" : "border-gold"}`} onClick={() => { setGiftOpen(false); setFloor("me"); }}>
@@ -332,6 +287,51 @@ function Header({ floor, desk, setFloor, setDesk, setShop, setGiftOpen }: { floo
             ))}
           </div>
         ) : null}
+      </div>
+      <div className="grid grid-cols-3 gap-1">
+        <button
+          type="button"
+          onClick={() => {
+            if (window.location.pathname.startsWith("/whitepaper")) {
+              window.location.assign("/#wafer");
+              return;
+            }
+            setFloor("shop");
+            setShop("wafer");
+          }}
+          className="min-h-11 border border-gold bg-ink px-2 text-left text-paper"
+        >
+          <span className="block text-[10px] tracking-widest text-gold">{lang === "zh" ? "铸造" : "Mint"}</span>
+          <span className="font-display text-base italic leading-none sm:text-xl">{lang === "zh" ? "晶圆" : "Wafer"}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (window.location.pathname.startsWith("/whitepaper")) {
+              window.location.assign("/#canvas");
+              return;
+            }
+            setFloor("canvas");
+          }}
+          className={`min-h-11 border px-2 text-left ${floor === "canvas" ? "border-ink bg-foil text-ink" : "border-gold bg-ink text-paper"}`}
+        >
+          <span className="block text-[10px] tracking-widest text-gold">{lang === "zh" ? "处理器" : "Processor"}</span>
+          <span className="font-display text-base italic leading-none sm:text-xl">{lang === "zh" ? "流片" : "Tape"}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (window.location.pathname.startsWith("/whitepaper")) {
+              window.location.assign("/#mine");
+              return;
+            }
+            setFloor("mine");
+          }}
+          className={`min-h-11 border px-2 text-left ${floor === "mine" ? "border-ink bg-foil text-ink" : "border-gold bg-ink text-paper"}`}
+        >
+          <span className="block text-[10px] tracking-widest text-gold">BEM · TAPE</span>
+          <span className="font-display text-base italic leading-none sm:text-xl">{lang === "zh" ? "挖矿" : "Mine"}</span>
+        </button>
       </div>
       {line ? <p className="text-sm text-ink/70">{line}</p> : null}
     </header>
