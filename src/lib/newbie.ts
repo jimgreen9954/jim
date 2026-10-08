@@ -47,23 +47,15 @@ export function bemGiftReady(): boolean {
 }
 
 function nandGift(): Hex {
-  if (!nandGiftReady()) throw new Error("nodeploy");
-  return activeGift("tapeliquid-nand-gift-v2", NAND_GIFT);
+  return NAND_GIFT;
 }
 
 function bemGift(): Hex {
-  if (!bemGiftReady()) throw new Error("nodeploy");
-  return activeGift("tapeliquid-bem-gift-v2", BEM_GIFT);
+  return BEM_GIFT;
 }
 
 export function giftMoved(): { nand: boolean; bem: boolean } {
   return { nand: nandGiftReady(), bem: bemGiftReady() };
-}
-
-function activeGift(key: string, fallback: string): Hex {
-  if (typeof window === "undefined") return fallback as Hex;
-  const saved = window.localStorage.getItem(key) ?? "";
-  return /^0x[a-fA-F0-9]{40}$/.test(saved) ? saved as Hex : fallback as Hex;
 }
 
 export type GiftState = {
@@ -221,6 +213,7 @@ export type GiftFill = {
   side: "long" | "short";
   margin: string;
   ok: boolean;
+  open: boolean;
 };
 
 export type GiftBooks = {
@@ -240,12 +233,16 @@ const bookOfAbi = parseAbi([
   "function PERP() view returns (address)",
   "function GATE() view returns (address)",
   "function nextDeal() view returns (uint256)",
+  "function nextQuote() view returns (uint256)",
   "function deals(uint256) view returns (address,address,uint96,uint96,uint128,uint128,bool,uint16,uint16)",
+  "function quotes(uint256) view returns (address,bool,uint96,uint16,bool,uint128)",
 ]);
 
 const gateDealAbi = parseAbi([
   "function nextDeal() view returns (uint256)",
+  "function nextQuote() view returns (uint256)",
   "function deals(uint256) view returns (address,address,uint8,uint96,uint96,uint128,uint128,bool,uint16,uint16)",
+  "function quotes(uint256) view returns (address,uint8,bool,uint96,uint16,bool,uint128)",
 ]);
 
 function dollars(amount: bigint, decimals: number): string {
@@ -263,35 +260,72 @@ async function qualifying(
 ): Promise<{ found: GiftFill[]; seen: number; small: number }> {
   const abi = gate ? gateDealAbi : bookOfAbi;
   let last = 0n;
+  let quotes = 0n;
   try {
-    last = await client.readContract({ address: book, abi, functionName: "nextDeal" });
+    [last, quotes] = await Promise.all([
+      client.readContract({ address: book, abi, functionName: "nextDeal" }),
+      client.readContract({ address: book, abi, functionName: "nextQuote" }),
+    ]);
   } catch {
     return { found: [], seen: 0, small: 0 };
   }
-  if (last < 1n) return { found: [], seen: 0, small: 0 };
-  const start = last > 40n ? last - 39n : 1n;
-  const ids: bigint[] = [];
-  for (let id = start; id <= last; id += 1n) ids.push(id);
-  const rows = await client.multicall({
-    contracts: ids.map((id) => ({ address: book, abi, functionName: "deals" as const, args: [id] as const })),
-    allowFailure: true,
-  });
+  const dealIds: bigint[] = [];
+  const from = last > 40n ? last - 39n : 1n;
+  for (let id = from; id <= last; id += 1n) dealIds.push(id);
+  const quoteFrom = quotes > 20n ? quotes - 19n : 1n;
+  const quoteIds: bigint[] = [];
+  for (let id = quoteFrom; id <= quotes; id += 1n) quoteIds.push(id);
+  const [dealRows, quoteRows] = await Promise.all([
+    Promise.all(dealIds.map(async (id) => {
+      try {
+        return await client.readContract({ address: book, abi, functionName: "deals", args: [id] });
+      } catch {
+        return null;
+      }
+    })),
+    Promise.all(quoteIds.map(async (id) => {
+      try {
+        return await client.readContract({ address: book, abi, functionName: "quotes", args: [id] });
+      } catch {
+        return null;
+      }
+    })),
+  ]);
   const found: GiftFill[] = [];
   let seen = 0;
   let small = 0;
-  for (let i = 0; i < ids.length; i += 1) {
-    const row = rows[i];
-    if (!row || row.status !== "success" || !Array.isArray(row.result)) continue;
-    const long = String(row.result[0]).toLowerCase();
-    const short = String(row.result[1]).toLowerCase();
-    const marginL = BigInt(gate ? row.result[3] : row.result[2]);
-    const marginS = BigInt(gate ? row.result[4] : row.result[3]);
+  const decimals = kind === "nand" ? 6 : 18;
+  for (let i = 0; i < dealIds.length; i += 1) {
+    const row = dealRows[i];
+    if (!row) continue;
+    const long = String(row[0]).toLowerCase();
+    const short = String(row[1]).toLowerCase();
+    const marginL = BigInt(gate ? row[3] : row[2]);
+    const marginS = BigInt(gate ? row[4] : row[3]);
     const side = long === who ? "long" : short === who ? "short" : "";
-    const margin = side === "long" ? marginL : marginS;
     if (!side || short === "0x0000000000000000000000000000000000000000") continue;
+    const margin = side === "long" ? marginL : marginS;
+    const ok = margin >= min;
     seen += 1;
-    found.push({ id: ids[i].toString(), kind, side, margin: dollars(margin, kind === "nand" ? 6 : 18), ok: margin >= min });
-    if (margin < min) small += 1;
+    if (!ok) small += 1;
+    found.push({ id: dealIds[i].toString(), kind, side, margin: dollars(margin, decimals), ok, open: false });
+  }
+  for (let i = 0; i < quoteIds.length; i += 1) {
+    const row = quoteRows[i];
+    if (!row) continue;
+    const user = String(row[0]).toLowerCase();
+    const live = Boolean(gate ? row[5] : row[4]);
+    if (!live || user !== who) continue;
+    const long = Boolean(gate ? row[2] : row[1]);
+    const margin = BigInt(gate ? row[3] : row[2]);
+    found.push({
+      id: `q${quoteIds[i].toString()}`,
+      kind,
+      side: long ? "long" : "short",
+      margin: dollars(margin, decimals),
+      ok: false,
+      open: true,
+    });
   }
   return { found: found.reverse(), seen, small };
 }

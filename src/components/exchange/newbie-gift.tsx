@@ -171,8 +171,8 @@ export function NewbieGift({ account, zh, pulse = 0 }: { account: string; zh: bo
               : seen === 0
                 ? (zh ? "这两本永续里没有你的成交。现货的 5 美元不会出现在这里。" : "You have no fill on these perpetual books. A 5 dollar spot trade does not show up here.")
                 : fills.some((fill) => fill.ok)
-                  ? (zh ? "点下面亮着的一笔。X Layer 记下后领 10 个 NAND。BSC 记满 11 笔才领 0.1 BEM。灰的那几笔保证金不到 5 美元，合约不认。" : "Select a lit row. An X Layer fill pays 10 NAND. BSC pays 0.1 BEM after 11. Grey rows are under 5 dollars of margin, so the contract rejects them.")
-                  : (zh ? `扫到你的 ${seen} 笔永续，保证金都不到 5 美元。开 5 美元会先扣千分之二，链上剩 4.99，礼包不认。要领的话，保证金至少开 5.02 美元。` : `Found ${seen} perpetual fills, all under 5 dollars of margin. A 5 dollar order loses 0.2 percent first, so 4.99 remains and the gift rejects it. Open at least 5.02 dollars of margin.`)}
+                  ? (zh ? "亮的可以点。X Layer 记下后领 10 个 NAND。BSC 记满 11 笔才领 0.1 BEM。灰的是扣完千分之二后不到 5 美元，或者还是挂单、没人吃。" : "Lit rows can be selected. An X Layer fill pays 10 NAND. BSC pays 0.1 BEM after 11. Grey rows are under 5 dollars after the 0.2 percent fee, or still resting.")
+                  : (zh ? `扫到 ${seen} 笔已成交，扣完手续费后都不到 5 美元。开 5 美元会剩 4.99，合约不认。保证金至少开 5.02 美元才会亮。还挂着、没人吃的单也不会亮。` : `Found ${seen} fills. After the fee, all are under 5 dollars. A 5 dollar order leaves 4.99, and the contract rejects it. Open at least 5.02 dollars of margin. A resting order does not light up.`)}
         </p>
         {row && row.nandPool < 10n && row.bemPool < 10_000_000n ? <p className="mt-2 text-xs text-sell">{zh ? "两个奖池现在都不够发。记下成交也不会打出奖励，要先有人放入。" : "Both pools are too small to pay. Counting a fill does not send a reward until someone adds funds."}</p> : null}
         {books && !books.nandLive ? <p className="mt-2 text-xs text-sell">{zh ? "NAND 礼包还认旧的 X Layer 永续，新成交不会出现。收费地址部署新礼包后才会列出。旧池子里的可以取回，新礼包要重新放入。" : "The NAND gift still reads the previous X Layer book, so new fills are not listed. The fee address deploys the new gift first. The old pool can be withdrawn. The new gift starts empty."}</p> : null}
@@ -214,8 +214,8 @@ export function NewbieGift({ account, zh, pulse = 0 }: { account: string; zh: bo
               </button>
               ) : (
                 <p className="flex min-h-11 items-center justify-between gap-2 border border-gold/30 px-2 text-sm text-ink/45">
-                  <span className="font-mono">#{fill.id} · {fill.kind === "nand" ? "X Layer" : fill.kind === "gate" ? (zh ? "晶体管" : "Transistor") : "BEM"} · {fill.side === "long" ? (zh ? "多" : "Long") : (zh ? "空" : "Short")}</span>
-                  <span className="font-mono">{fill.margin} {zh ? "美元 · 不到 5" : "USD · under 5"}</span>
+                  <span className="font-mono">{fill.open ? (zh ? "挂单" : "Resting") : `#${fill.id}`} · {fill.kind === "nand" ? "X Layer" : fill.kind === "gate" ? (zh ? "晶体管" : "Transistor") : "BEM"} · {fill.side === "long" ? (zh ? "多" : "Long") : (zh ? "空" : "Short")}</span>
+                  <span className="font-mono">{fill.margin} {zh ? (fill.open ? "美元 · 还没成交" : "美元 · 不到 5") : (fill.open ? "USD · not filled" : "USD · under 5")}</span>
                 </p>
               )}
             </li>
