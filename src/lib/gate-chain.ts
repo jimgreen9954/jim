@@ -44,11 +44,7 @@ export function gateHolds(): boolean {
 }
 
 export function gateAddress(): string {
-  if (typeof window === "undefined") return GATE;
-  const hold = window.localStorage.getItem(HOLD) ?? "";
-  if (/^0x[a-fA-F0-9]{40}$/.test(hold)) return hold;
-  const saved = window.localStorage.getItem(FIXED) ?? "";
-  return /^0x[a-fA-F0-9]{40}$/.test(saved) ? saved : GATE;
+  return GATE;
 }
 
 export async function deployFixedGate(from: string): Promise<string> {
@@ -157,7 +153,7 @@ export async function pushMark(from: string, perp: string, market: number, price
   const px = priceWei(price);
   const now = BigInt(Math.floor(Date.now() / 1000));
   if (prev !== 0n && now < at + 30n) return;
-  if (prev !== 0n) {
+  if (prev !== 0n && now < at + 1800n) {
     const cap = prev + prev / 200n;
     const floor = prev - prev / 200n;
     if (px > cap || px < floor) throw new Error("step");

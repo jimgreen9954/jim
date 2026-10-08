@@ -515,7 +515,7 @@ export function RealPerp() {
                       setNote(lang === "zh" ? `已经重新部署。把这个地址发我：${next}` : `Deployed again. Send me this address: ${next}`);
                     } else {
                       await pushMark(from);
-                      setNote(lang === "zh" ? "已经再写一次。可以开仓。超过 30 分钟没再写，会再停。" : "Posted again. It can open. It stops if nothing is posted for 30 minutes.");
+                      setNote(lang === "zh" ? "已经再写一次。可以开仓。超过 30 分钟也不停。" : "Posted again. It can open. It does not stop after 30 minutes.");
                     }
                   } catch (err) {
                     const message = err instanceof Error ? err.message : "";
