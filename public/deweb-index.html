@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TAPELIQUID</title>
+    <meta name="description" content="TAPELIQUID. BEM spot and a shared perpetual. Connect a wallet and trade from the page." />
+    <link rel="icon" href="./favicon.svg" />
+    <link rel="stylesheet" href="./assets/style-AF6KgwuI.css" />
+    <style>
+      body { margin: 0; background: #f7f4ef; color: #2f2a26; font: 16px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      #boot { margin: 0; padding: 28px 20px; }
+    </style>
+  </head>
+  <body>
+    <div id="root"><p id="boot">正在打开 TAPELIQUID。</p></div>
+    <script>
+      window.addEventListener("error", function (e) {
+        var b = document.getElementById("boot");
+        if (b) b.textContent = "页面没有跑起来：" + ((e && e.message) || "未知错误");
+      });
+    </script>
+    <script type="module" src="./assets/index-Dn8rVblx.js"></script>
+  </body>
+</html>
