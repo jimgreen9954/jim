@@ -24,6 +24,7 @@ export function SealRebateBox() {
   const [state, setState] = useState<RebateState | null>(null);
   const [rows, setRows] = useState<ClaimRow[]>([]);
   const [amount, setAmount] = useState("1");
+  const [mark, setMark] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
@@ -55,8 +56,17 @@ export function SealRebateBox() {
     try {
       await work();
       setNote(ok);
-    } catch {
-      setNote(zh ? "这笔没有完成。" : "That transaction did not finish.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      setNote(
+        message === "seals"
+          ? zh
+            ? "这个钱包还没有三张印鉴。先点上面的一键流片。"
+            : "This wallet does not have three seals yet. Tape them first."
+          : zh
+            ? "这笔没有完成。看一下是不是连错链，或者池子还没充。"
+            : "That transaction did not finish. Check the chain, or fund the pool first.",
+      );
     } finally {
       setBusy(false);
     }
@@ -160,15 +170,23 @@ export function SealRebateBox() {
               {zh ? "用这三盏灯登记" : "Register these three lamps"}
             </button>
           ) : null}
-          {!onX && clerk && account && !state.passed ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => run(() => passRebate(account), zh ? "这个地址已记上。" : "This address is marked.")}
-              className="mt-3 min-h-12 w-full border border-gold disabled:opacity-60"
-            >
-              {zh ? "把这个钱包记上" : "Mark this wallet"}
-            </button>
+          {!onX && clerk ? (
+            <div className="mt-3 grid gap-2">
+              <input
+                value={mark}
+                onChange={(event) => setMark(event.target.value.trim())}
+                placeholder={account ?? (zh ? "要记上的地址" : "Address to mark")}
+                className="min-h-11 border border-gold bg-card px-3 font-mono text-xs"
+              />
+              <button
+                type="button"
+                disabled={busy || !/^0x[a-fA-F0-9]{40}$/.test(mark || account || "")}
+                onClick={() => run(() => passRebate(mark || account || ""), zh ? "这个地址已记上，可以领 BSC 的一半。" : "This address is marked and can claim the BSC half.")}
+                className="min-h-12 w-full border border-gold disabled:opacity-60"
+              >
+                {zh ? "签名，把这个地址记上" : "Sign and mark this address"}
+              </button>
+            </div>
           ) : null}
           <div className="mt-3 flex flex-col gap-2">
             <button

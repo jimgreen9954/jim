@@ -3,7 +3,7 @@ import { SealRebateBox } from "@/components/exchange/seal-rebate";
 import { copy } from "@/lib/copy";
 import { useExchange } from "@/lib/exchange-store";
 import { evalMatch } from "@/lib/match-engine";
-import { CANVAS, connectXLayer, countSeal, processorUrl, tapeSeal, txUrl } from "@/lib/xlayer";
+import { connectXLayer, countSeal, processorUrl, tapeSeal, txUrl } from "@/lib/xlayer";
 import { currentAccount, onAccount } from "@/lib/wallet";
 
 export function ChipMark({ className, hot }: { className?: string; hot?: boolean }) {
@@ -30,15 +30,9 @@ export function ChipMark({ className, hot }: { className?: string; hot?: boolean
   );
 }
 
-export function DiePanel() {
+export function SealStamp() {
   const lang = useExchange((s) => s.lang);
-  const clock = useExchange((s) => s.engine.clock);
-  const lastMine = useExchange((s) => s.engine.lastMine);
   const c = copy[lang];
-  const [bid, setBid] = useState(true);
-  const [ask, setAsk] = useState(true);
-  const lamp = evalMatch(bid, ask);
-  const hot = clock - lastMine < 4;
   const [account, setAccount] = useState<string | null>(currentAccount());
   const [sealCount, setSealCount] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -61,7 +55,7 @@ export function DiePanel() {
     return () => {
       dead = true;
     };
-  }, [account]);
+  }, [account, busy]);
 
   const onStamp = async () => {
     setBusy(true);
@@ -73,13 +67,13 @@ export function DiePanel() {
       setSealCount(have);
       const need = Math.max(0, 3 - have);
       if (need === 0) {
-        setNote(lang === "zh" ? "三盏都亮了。灯不改费率。要领一半手续费，先在下面登记。" : "All three lamps are lit. The lamps do not change the fee. Register below to claim half.");
+        setNote(lang === "zh" ? "三盏都亮了。下面用这三盏登记。盘口费率不变，登记后才能领回一半。" : "All three lamps are lit. Register them below. The book fee stays. Half can be claimed after registration.");
         return;
       }
       setNote(
         lang === "zh"
-          ? `还会确认 ${need} 次。每确认一次，亮一盏灯。每笔烧掉 3 个 NAND，支付 0.0013 OKB。`
-          : `The wallet will ask ${need} more time${need === 1 ? "" : "s"}. One confirm lights one lamp.`,
+          ? `钱包会按还差的次数逐笔确认，一共 ${need} 笔。每笔烧掉 3 个 NAND，支付 0.0013 OKB。`
+          : `The wallet asks once for each lamp still missing, ${need} in all. Each burns 3 NAND and pays 0.0013 OKB.`,
       );
       let hash = "";
       for (let i = 0; i < need; i += 1) {
@@ -87,14 +81,48 @@ export function DiePanel() {
         have += 1;
         setSealCount(have);
       }
-      setNote(lang === "zh" ? "三张印鉴已在处理器上。订单簿费率没变。领取要另外登记，再按成交领一半。" : "Three seals are on the processor. The book fee is unchanged. Register separately, then claim half on a fill.");
+      setNote(lang === "zh" ? "三张印鉴已在处理器上。再点下面的登记。订单簿费率没变。" : "Three seals are on the processor. Register below. The book fee is unchanged.");
       window.open(txUrl(hash), "_blank", "noopener,noreferrer");
     } catch {
-      setNote(lang === "zh" ? "流片没有完成。已成功的笔数还在。" : "Tape-out stopped. Any circuit that already landed still counts.");
+      setNote(lang === "zh" ? "流片没有完成。已成功的笔数还在。NAND 或 OKB 不够也会停在这里。" : "Tape-out stopped. Circuits that already landed still count. It also stops if NAND or OKB is short.");
     } finally {
       setBusy(false);
     }
   };
+
+  const lit = Math.min(sealCount ?? 0, 3);
+  return (
+    <div className="border border-gold/40 p-3">
+      <h3 className="font-display text-2xl italic">{c.seal}</h3>
+      <SealLamps lit={lit} lang={lang} />
+      <p className="mt-3 text-sm leading-relaxed">{lit >= 3 ? c.sealDone : c.sealHint}</p>
+      <button
+        type="button"
+        onClick={onStamp}
+        disabled={busy || lit >= 3}
+        className="mt-3 min-h-12 w-full border border-gold bg-ink text-paper disabled:opacity-60"
+      >
+        {busy ? (lang === "zh" ? "签名中" : "Signing") : lit >= 3 ? (lang === "zh" ? "三盏都亮了" : "All three lit") : c.stamp}
+      </button>
+      {note ? <p className="mt-2 text-sm leading-relaxed">{note}</p> : null}
+      <p className="mt-3 text-sm leading-relaxed">
+        {lang === "zh"
+          ? `这个钱包 ${sealCount == null ? "还没连接" : `${lit} / 3`}。灯不改盘口费率。永续成交仍收千分之二。登记之后，这一半从领取池领回，推荐少付的部分按少付之后再算。`
+          : `This wallet ${sealCount == null ? "is not connected" : `${lit} / 3`}. Lamps do not change the book fee. Perps still charge 0.20%. After registration, half is claimed from the pool. A referrer discount is applied before that half.`}
+      </p>
+    </div>
+  );
+}
+
+export function DiePanel() {
+  const lang = useExchange((s) => s.lang);
+  const clock = useExchange((s) => s.engine.clock);
+  const lastMine = useExchange((s) => s.engine.lastMine);
+  const c = copy[lang];
+  const [bid, setBid] = useState(true);
+  const [ask, setAsk] = useState(true);
+  const lamp = evalMatch(bid, ask);
+  const hot = clock - lastMine < 4;
 
   return (
     <section className="relative overflow-hidden border border-gold bg-card p-4 shadow-plate">
@@ -122,32 +150,8 @@ export function DiePanel() {
           <p className="mt-3 text-xs leading-relaxed text-ink/70">{c.netlistBody}</p>
         </div>
 
-        <div className="mt-4 border border-gold/40 p-3">
-          <h3 className="font-display text-2xl italic">{c.seal}</h3>
-          <SealLamps lit={Math.min(sealCount ?? 0, 3)} lang={lang} />
-          <p className="mt-3 text-sm leading-relaxed">{(sealCount ?? 0) >= 3 ? c.sealDone : c.sealHint}</p>
-          <button
-            type="button"
-            onClick={onStamp}
-            disabled={busy || (sealCount ?? 0) >= 3}
-            className="mt-3 min-h-12 w-full border border-gold bg-ink text-paper disabled:opacity-60"
-          >
-            {busy ? (lang === "zh" ? "签名中" : "Signing") : (sealCount ?? 0) >= 3 ? (lang === "zh" ? "三盏都亮了" : "All three lit") : c.stamp}
-          </button>
-          {note ? <p className="mt-2 text-sm leading-relaxed">{note}</p> : null}
-          <p className="mt-3 text-sm leading-relaxed">
-            {lang === "zh"
-              ? `这个钱包 ${sealCount == null ? "还没连接" : `${Math.min(sealCount, 3)} / 3`}。灯只计印鉴，不改盘口费率。减费是另一份合约：已撮合的成交，领回手续费的一半，每笔一次。`
-              : `This wallet ${sealCount == null ? "is not connected" : `${Math.min(sealCount, 3)} / 3`}. Lamps count seals. They do not change the book fee. The rebate is a separate contract: half the fee on a matched fill, once per deal.`}
-          </p>
-          <p className="mt-2 flex gap-4 text-sm">
-            <a className="underline decoration-gold underline-offset-4" href={CANVAS} target="_blank" rel="noreferrer">
-              {lang === "zh" ? "去画布流片" : "Tape on the canvas"}
-            </a>
-            <a className="underline decoration-gold underline-offset-4" href={processorUrl()} target="_blank" rel="noreferrer">
-              {lang === "zh" ? "处理器" : "Processor"}
-            </a>
-          </p>
+        <div className="mt-4">
+          <SealStamp />
         </div>
         <SealRebateBox />
 

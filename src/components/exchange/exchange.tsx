@@ -6,7 +6,7 @@ import { equity, sessionChange } from "@/lib/match-engine";
 import { Blotter } from "@/components/exchange/blotter";
 import { Book } from "@/components/exchange/book";
 import { TraceChart } from "@/components/exchange/chart";
-import { DiePanel } from "@/components/exchange/die";
+import { DiePanel, SealStamp } from "@/components/exchange/die";
 import { Ticket } from "@/components/exchange/ticket";
 import { LiveBoard } from "@/components/exchange/live-board";
 import { RealPerp } from "@/components/exchange/real-perp";
@@ -408,6 +408,7 @@ function ShopFloor({ shop, setShop }: { shop: ShopTab; setShop: (shop: ShopTab) 
         <>
           <WalletBar />
           <LiveBoard />
+          <SealStamp />
           <SealRebateBox />
         </>
       ) : null}
