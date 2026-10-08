@@ -15,6 +15,7 @@ import { TransistorDesk } from "@/components/exchange/transistor-desk";
 import { TapeCanvas } from "@/components/exchange/tape-canvas";
 import { WalletBar, ConnectButton } from "@/components/exchange/wallet-bar";
 import { AccountCenter } from "@/components/exchange/account-center";
+import { GiftHome } from "@/components/exchange/newbie-gift";
 import { OfficialDesk } from "@/components/exchange/official-desk";
 import { SealRebateBox } from "@/components/exchange/seal-rebate";
 import { MineDesk } from "@/components/exchange/mine-desk";
@@ -30,6 +31,7 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
   const [floor, setFloor] = useState<Floor>(start === "paper" ? "paper" : start === "gate" || start === "wafer" ? "shop" : start === "brief" ? "rules" : "desk");
   const [desk, setDesk] = useState<DeskTab>(start === "perp" ? "perp" : "spot");
   const [shop, setShop] = useState<ShopTab>(start === "wafer" ? "wafer" : "gate");
+  const [giftOpen, setGiftOpen] = useState(false);
   useEffect(() => {
     const apply = () => {
       const named = window.location.hash.replace(/^#/, "");
@@ -42,7 +44,8 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
       if (named === "circuits") { setFloor("shop"); setShop("circuits"); }
       if (named === "canvas") setFloor("canvas");
       if (named === "mine") setFloor("mine");
-      if (named === "me") setFloor("me");
+      if (named === "me" || named === "gift") setFloor("me");
+      if (named === "gift") setGiftOpen(true);
       if (named === "brief" || named === "rules") setFloor("rules");
     };
     apply();
@@ -57,15 +60,16 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
         <BannerToast />
         <FuseFlash />
         <div className={`mx-auto flex max-w-7xl flex-col gap-3 px-3 pt-2 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-4 lg:gap-4 lg:px-6 ${floor === "paper" ? "lg:pb-10" : ""}`}>
-          <Header floor={floor} desk={desk} setFloor={setFloor} setDesk={setDesk} setShop={setShop} />
+          <Header floor={floor} desk={desk} setFloor={setFloor} setDesk={setDesk} setShop={setShop} setGiftOpen={setGiftOpen} />
           <FeeStrip />
+          {floor === "desk" && desk === "spot" ? <GiftHome onOpen={() => { setGiftOpen(true); setFloor("me"); }} /> : null}
           {floor === "desk" && desk === "spot" ? <SpotDesk /> : null}
           {floor === "desk" && desk === "perp" ? <RealPerp /> : null}
           {floor === "paper" ? <PaperFloor /> : null}
           {floor === "shop" ? <ShopFloor shop={shop} setShop={setShop} /> : null}
           {floor === "canvas" ? <TapeCanvas /> : null}
           {floor === "mine" ? <MineDesk /> : null}
-          {floor === "me" ? <AccountCenter /> : null}
+          {floor === "me" ? <AccountCenter giftOpen={giftOpen} /> : null}
           {floor === "rules" ? <Whitepaper /> : null}
         </div>
         {floor === "paper" ? <MobileNav /> : null}
@@ -173,7 +177,7 @@ function FuseFlash() {
   );
 }
 
-function Header({ floor, desk, setFloor, setDesk, setShop }: { floor: Floor; desk: DeskTab; setFloor: (floor: Floor) => void; setDesk: (desk: DeskTab) => void; setShop: (shop: ShopTab) => void }) {
+function Header({ floor, desk, setFloor, setDesk, setShop, setGiftOpen }: { floor: Floor; desk: DeskTab; setFloor: (floor: Floor) => void; setDesk: (desk: DeskTab) => void; setShop: (shop: ShopTab) => void; setGiftOpen: (open: boolean) => void }) {
   const lang = useExchange((s) => s.lang);
   const setLang = useExchange((s) => s.setLang);
   const reset = useExchange((s) => s.reset);
@@ -285,7 +289,7 @@ function Header({ floor, desk, setFloor, setDesk, setShop }: { floor: Floor; des
           </div>
           <div className="ml-auto flex max-w-full items-center gap-1 overflow-x-auto">
             <ConnectButton />
-            <button type="button" className={`min-h-10 shrink-0 border px-2 text-xs sm:min-h-11 ${floor === "me" ? "border-ink bg-ink text-paper" : "border-gold"}`} onClick={() => setFloor("me")}>
+            <button type="button" className={`min-h-10 shrink-0 border px-2 text-xs sm:min-h-11 ${floor === "me" ? "border-ink bg-ink text-paper" : "border-gold"}`} onClick={() => { setGiftOpen(false); setFloor("me"); }}>
               <span className="sm:hidden">{lang === "zh" ? "我的" : "Me"}</span>
               <span className="hidden sm:inline">{lang === "zh" ? "个人中心" : "Account"}</span>
             </button>

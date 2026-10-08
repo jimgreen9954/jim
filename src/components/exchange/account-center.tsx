@@ -47,7 +47,7 @@ const ERC_NAME: Record<ErcKey, string> = {
 
 type Worth = { name: string; qty: string; px: string; usd: number | null };
 
-export function AccountCenter() {
+export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
   const lang = useExchange((s) => s.lang);
   const zh = lang === "zh";
   const [account, setAccount] = useState<string | null>(currentAccount());
@@ -69,8 +69,14 @@ export function AccountCenter() {
   const [bad, setBad] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sendKey, setSendKey] = useState<string | null>(null);
+  const [gift, setGift] = useState(giftOpen);
 
   useEffect(() => onAccount(setAccount), []);
+  useEffect(() => {
+    if (!giftOpen) return;
+    setGift(true);
+    document.getElementById("starter-gift")?.scrollIntoView({ block: "start" });
+  }, [giftOpen]);
 
   const pull = (who: string) => {
     setBook((prev) => prev ?? { ok: false, error: null, asOf: "", scanned: 0, bnb: "0", chips: [], circuits: [] });
@@ -377,7 +383,16 @@ export function AccountCenter() {
         </div>
       </div>
 
-      <NewbieGift account={account} zh={zh} />
+      <section id="starter-gift" className="border border-gold">
+        <button type="button" className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left" onClick={() => setGift((open) => !open)}>
+          <span>
+            <span className="block text-[11px] tracking-[0.22em] text-gold">{zh ? "新手礼包" : "Starter gift"}</span>
+            <span className="mt-1 block text-sm">{zh ? "NAND 和 BEM。点开再充、再领。" : "NAND and BEM. Open it to deposit or claim."}</span>
+          </span>
+          <span className="shrink-0 text-xs text-ink/50">{gift ? (zh ? "收起" : "Close") : (zh ? "打开" : "Open")}</span>
+        </button>
+        {gift && account ? <NewbieGift account={account} zh={zh} /> : null}
+      </section>
 
       <div className="border border-gold">
         <div className="flex items-center justify-between px-4 py-3">
