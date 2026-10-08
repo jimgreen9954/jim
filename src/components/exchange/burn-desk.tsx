@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { ashCircuit, ashTape, ashWafer, ASH, readAsh, type AshBoard } from "@/lib/burn";
-import { tapeText, readTapeMine, type TapeSeat } from "@/lib/tape-mine";
+import { ashTape, ashWafer, ASH, readAsh, type AshBoard } from "@/lib/burn";
+import { claimTape, tapeText, readTapeMine, type TapeSeat } from "@/lib/tape-mine";
 import { tapeUnits } from "@/lib/tape-pool";
 import { currentAccount, onAccount } from "@/lib/wallet";
-import { catchKindSupply, connectXLayer, transistorHeld, type KindSupply } from "@/lib/xlayer";
+import { catchKindSupply, connectXLayer, transferCircuit, transistorHeld, type KindSupply } from "@/lib/xlayer";
 import { useExchange } from "@/lib/exchange-store";
 
 function pct(part: bigint, whole: bigint): string {
@@ -48,7 +48,7 @@ export function BurnDesk() {
       transistorHeld(account).then((row) => { if (!dead) setHeld((prev) => ({ ...prev, nand: row.nand, latch: row.latch })); }).catch(() => undefined);
     };
     pull();
-    const id = window.setInterval(pull, 15000);
+    const id = window.setInterval(pull, 30_000);
     catchKindSupply((row) => { if (!dead) setKind(row); }).catch(() => undefined);
     return () => { dead = true; window.clearInterval(id); };
   }, [account]);
@@ -86,7 +86,7 @@ export function BurnDesk() {
         </div>
         {asset === "circuit" ? (
           <>
-            <p className="mt-3 text-xs text-ink/60">{zh ? `这个钱包还能销毁 ${owned.length} 片。勾选。挖矿中的要签三笔：先结算，打进黑洞，再退出算力。` : `${owned.length} can be burned from this wallet. A live one takes three signatures: settle, send, then drop the weight.`}</p>
+            <p className="mt-3 text-xs text-ink/60">{zh ? `这个钱包还能销毁 ${owned.length} 片。勾选。挖矿中的要签三笔，每一笔都会先出钱包，不会三笔叠在一起才弹。` : `${owned.length} can be burned from this wallet. A live one takes three signatures. The wallet opens for each one. They are not held until all three are ready.`}</p>
             <ul className="mt-2 max-h-48 overflow-auto border border-gold/40">
               {owned.map((row) => (
                 <li key={row.id}>
@@ -130,9 +130,20 @@ export function BurnDesk() {
               const run = async () => {
                 if (asset === "tape") return ashTape(account, tapeUnits(amount));
                 if (asset === "nand" || asset === "latch") return ashWafer(account, asset === "nand" ? 0 : 1, BigInt(amount || "0"));
-                for (const id of picked) {
+                for (let i = 0; i < picked.length; i += 1) {
+                  const id = picked[i];
                   const row = owned.find((item) => item.id === id);
-                  await ashCircuit(account, BigInt(id), Boolean(row?.on));
+                  const mark = zh ? `第 ${i + 1} / ${picked.length} 片` : `${i + 1} / ${picked.length}`;
+                  if (row?.on) {
+                    say(zh ? `${mark}：先领走待领的 TAPE。` : `${mark}: claim the pending TAPE first.`);
+                    await claimTape(account, [BigInt(id)]);
+                  }
+                  say(zh ? `${mark}：打进黑洞。` : `${mark}: send it to the dead address.`);
+                  await transferCircuit(account, ASH, BigInt(id));
+                  if (row?.on) {
+                    say(zh ? `${mark}：退出算力。` : `${mark}: drop the weight.`);
+                    await claimTape(account, [BigInt(id)]);
+                  }
                 }
               };
               run()

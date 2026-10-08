@@ -35,7 +35,7 @@ const xlayer = defineChain({
   contracts: { multicall3: { address: "0xcA11bde05977b3631167028862bE2a173976CA11" } },
 });
 
-const client = createPublicClient({ chain: xlayer, transport: http(XLAYER.rpc) });
+const client = createPublicClient({ chain: xlayer, transport: http(XLAYER.rpc, { timeout: 12_000 }) });
 
 export function tapeText(amount: bigint): string {
   return formatUnits(amount, 8);
@@ -71,7 +71,20 @@ function dailyAt(start: bigint): bigint {
   return DAY >> era;
 }
 
-export async function readTapeMine(account: string | null): Promise<TapeBoard> {
+let mineFlight: Promise<TapeBoard> | null = null;
+let mineKey = "";
+
+export function readTapeMine(account: string | null): Promise<TapeBoard> {
+  const key = (account ?? "").toLowerCase();
+  if (mineFlight && mineKey === key) return mineFlight;
+  mineKey = key;
+  mineFlight = loadTapeMine(account).finally(() => {
+    mineFlight = null;
+  });
+  return mineFlight;
+}
+
+async function loadTapeMine(account: string | null): Promise<TapeBoard> {
   const [supply, cap, weight, balance, start, next] = await Promise.all([
     client.readContract({ address: TAPE, abi: tokenAbi, functionName: "totalSupply" }),
     client.readContract({ address: TAPE, abi: tokenAbi, functionName: "CAP" }),
@@ -132,8 +145,24 @@ export async function readTapeMine(account: string | null): Promise<TapeBoard> {
   return { supply, cap, weight, balance, start, daily, circuits: Math.max(0, last), open, seats, scanOk };
 }
 
+async function preflight(to: Hex, from: string, data: Hex) {
+  const call = client.call({ account: from as Hex, to, data });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const slow = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error("slow")), 6_000);
+  });
+  try {
+    await Promise.race([call, slow]);
+  } catch (err) {
+    if (err instanceof Error && err.message === "slow") return;
+    throw err;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 async function send(from: string, data: Hex): Promise<Hex> {
-  await client.call({ account: from as Hex, to: TAPE_MINE, data });
+  await preflight(TAPE_MINE, from, data);
   await connectXLayer();
   const eth = getProvider();
   if (!eth) throw new Error("nowallet");
@@ -141,7 +170,7 @@ async function send(from: string, data: Hex): Promise<Hex> {
     method: "eth_sendTransaction",
     params: [{ from, to: TAPE_MINE, data }],
   })) as Hex;
-  const receipt = await client.waitForTransactionReceipt({ hash, timeout: 180_000 });
+  const receipt = await client.waitForTransactionReceipt({ hash, timeout: 90_000 });
   if (receipt.status !== "success") throw new Error("revert");
   return hash;
 }

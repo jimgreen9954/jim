@@ -28,12 +28,13 @@ export function MineDesk() {
     let dead = false;
     const pull = () => {
       readPodStats().then((row) => { if (!dead) setStats(row); }).catch(() => undefined);
+      if (sheet !== "claim") return;
       readTapeMine(account).then((row) => { if (!dead) { setTape(row); setTapeErr(null); } }).catch(() => { if (!dead) setTapeErr(zh ? "链上没读到。失败不会写成 0。" : "The chain did not answer. A miss is not written as zero."); });
     };
     pull();
-    const id = window.setInterval(pull, 15000);
+    const id = window.setInterval(pull, sheet === "claim" ? 30_000 : 60_000);
     return () => { dead = true; window.clearInterval(id); };
-  }, [account]);
+  }, [account, sheet]);
 
   useEffect(() => {
     if (!account) {
@@ -126,8 +127,8 @@ export function MineDesk() {
         <h2 className="font-display text-3xl italic">{zh ? "领 TAPE" : "Claim TAPE"}</h2>
         <p className="mt-2 text-sm leading-relaxed">
           {zh
-            ? "数字每 15 秒从挖矿合约重读，并扫这台处理器上的电路。只有已经开工的电路才有 TAPE。权重是门数，q 记 1。这一页不托管。"
-            : "Figures are reread from the mine every 15 seconds, across this processor's circuits. Only an opened circuit earns TAPE. Weight is the gate count, and q stays at 1. This page does not custody."}
+            ? "排放和余额马上读。你的电路从最近 300 张里对，对完才出待领，对的时候不挡住签名。"
+            : "Emission and the balance come back first. Your circuits are matched in the latest 300. Pending shows when that match finishes, and it does not block the signature."}
         </p>
         <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
           <Cell k={zh ? "今天排放" : "Daily emission"} v={tape ? `${amount(tape.daily)} TAPE` : "—"} />
@@ -188,8 +189,10 @@ export function MineDesk() {
               onClick={() => {
                 setBusy(true);
                 claimTape(account, (tape?.seats ?? []).filter((row) => row.on && row.pending > 0n).map((row) => BigInt(row.id)))
-                  .then(() => readTapeMine(account).then((row) => setTape(row)))
-                  .then(() => say(zh ? "TAPE 已领到这个钱包。" : "TAPE is in this wallet."))
+                  .then(() => {
+                    say(zh ? "TAPE 已领到这个钱包。名单随后再对。" : "TAPE is in this wallet. The list refreshes after.");
+                    readTapeMine(account).then((row) => setTape(row)).catch(() => undefined);
+                  })
                   .catch((error) => say(error instanceof Error && /rejected|denied/i.test(error.message) ? (zh ? "你取消了。" : "You cancelled.") : (zh ? "领取没有完成。TAPE 还在合约里。" : "The claim did not finish."), true))
                   .finally(() => setBusy(false));
               }}

@@ -25,7 +25,7 @@ const xlayer = defineChain({
   contracts: { multicall3: { address: "0xcA11bde05977b3631167028862bE2a173976CA11" } },
 });
 
-const client = createPublicClient({ chain: xlayer, transport: http(XLAYER.rpc) });
+const client = createPublicClient({ chain: xlayer, transport: http(XLAYER.rpc, { timeout: 12_000 }) });
 
 export type AshBoard = {
   tape: bigint;
@@ -38,6 +38,45 @@ export type AshBoard = {
   scanOk: boolean;
 };
 
+let deadCircuits: { n: number; taped: number; at: number } | null = null;
+let deadFlight: Promise<number> | null = null;
+
+async function countDead(last: number): Promise<number> {
+  if (deadCircuits && deadCircuits.taped === last && Date.now() - deadCircuits.at < 60_000) return deadCircuits.n;
+  if (deadFlight) return deadFlight;
+  const ids = Array.from({ length: Math.max(0, Math.min(last, 2000)) }, (_, i) => i + 1);
+  deadFlight = (async () => {
+    let circuits = 0;
+    const jobs: Promise<void>[] = [];
+    for (let i = 0; i < ids.length; i += 200) {
+      const slice = ids.slice(i, i + 200);
+      jobs.push(client.multicall({
+        contracts: slice.map((id) => ({
+          address: DEPLOYED.circuits,
+          abi: circuitAbi,
+          functionName: "ownerOf" as const,
+          args: [BigInt(id)] as const,
+        })),
+        allowFailure: true,
+      }).then((rows) => {
+        for (const row of rows) {
+          if (row.status === "success" && typeof row.result === "string" && row.result.toLowerCase() === ASH.toLowerCase()) circuits += 1;
+        }
+      }));
+      if (jobs.length >= 3) {
+        await Promise.all(jobs);
+        jobs.length = 0;
+      }
+    }
+    if (jobs.length) await Promise.all(jobs);
+    deadCircuits = { n: circuits, taped: last, at: Date.now() };
+    return circuits;
+  })().finally(() => {
+    deadFlight = null;
+  });
+  return deadFlight;
+}
+
 export async function readAsh(): Promise<AshBoard> {
   const [tape, tapeSupply, tapeCap, held, next] = await Promise.all([
     client.readContract({ address: TAPE, abi: tokenAbi, functionName: "balanceOf", args: [ASH] }),
@@ -47,29 +86,18 @@ export async function readAsh(): Promise<AshBoard> {
     client.readContract({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "nextId" }),
   ]);
   const last = Number(next) - 1;
-  const ids = Array.from({ length: Math.max(0, Math.min(last, 2000)) }, (_, i) => i + 1);
-  let circuits = 0;
-  let scanOk = true;
-  try {
-    for (let i = 0; i < ids.length; i += 80) {
-      const slice = ids.slice(i, i + 80);
-      const rows = await client.multicall({
-        contracts: slice.map((id) => ({
-          address: DEPLOYED.circuits,
-          abi: circuitAbi,
-          functionName: "ownerOf" as const,
-          args: [BigInt(id)] as const,
-        })),
-        allowFailure: true,
-      });
-      for (const row of rows) {
-        if (row.status === "success" && typeof row.result === "string" && row.result.toLowerCase() === ASH.toLowerCase()) circuits += 1;
-      }
-    }
-  } catch {
-    scanOk = false;
-  }
-  return { tape, tapeSupply, tapeCap, nand: held.nand, latch: held.latch, circuits, taped: Math.max(0, last), scanOk };
+  const fresh = deadCircuits && deadCircuits.taped === last && Date.now() - deadCircuits.at < 60_000;
+  if (!fresh) countDead(last).catch(() => undefined);
+  return {
+    tape,
+    tapeSupply,
+    tapeCap,
+    nand: held.nand,
+    latch: held.latch,
+    circuits: deadCircuits?.n ?? 0,
+    taped: Math.max(0, last),
+    scanOk: Boolean(fresh),
+  };
 }
 
 async function sendTape(from: string, amount: bigint): Promise<Hex> {
