@@ -554,63 +554,43 @@ export function processorUrl(): string {
 
 export const CANVAS = "https://tapeout.net/#canvas";
 
-/** Personal chop: four inputs, one output, three NAND gates. */
-export async function countSeal(owner: string): Promise<number> {
+async function sealHits(owner: string, limit: number): Promise<bigint[]> {
   const next = await client.readContract({
     address: DEPLOYED.circuits,
     abi: circuitAbi,
     functionName: "nextId",
   });
-  const last = Number(next);
-  let count = 0;
-  const ids = Array.from({ length: Math.max(0, last - 1) }, (_, i) => BigInt(i + 1));
-  for (let i = 0; i < ids.length; i += 8) {
-    const slice = ids.slice(i, i + 8);
-    const rows = await Promise.all(
-      slice.map(async (id) => {
-        try {
-          const [who, info] = await Promise.all([
-            client.readContract({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "ownerOf", args: [id] }),
-            client.readContract({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "circuitInfo", args: [id] }),
-          ]);
-          return who.toLowerCase() === owner.toLowerCase() && info[0] === 4n && info[1] === 1n && info[3] === 3n;
-        } catch {
-          return false;
-        }
-      }),
-    );
-    count += rows.filter(Boolean).length;
+  const last = Number(next) - 1;
+  if (last < 1) return [];
+  const ids = Array.from({ length: last }, (_, i) => BigInt(i + 1));
+  const found: bigint[] = [];
+  for (let i = 0; i < ids.length && found.length < limit; i += 80) {
+    const slice = ids.slice(i, i + 80);
+    const rows = await client.multicall({
+      contracts: slice.flatMap((id) => [
+        { address: DEPLOYED.circuits, abi: circuitAbi, functionName: "ownerOf" as const, args: [id] as const },
+        { address: DEPLOYED.circuits, abi: circuitAbi, functionName: "circuitInfo" as const, args: [id] as const },
+      ]),
+      allowFailure: true,
+    });
+    for (let j = 0; j < slice.length; j += 1) {
+      const who = rows[j * 2];
+      const info = rows[j * 2 + 1];
+      if (who.status !== "success" || info.status !== "success") continue;
+      const shape = info.result as readonly [bigint, bigint, bigint, bigint];
+      if (String(who.result).toLowerCase() === owner.toLowerCase() && shape[0] === 4n && shape[1] === 1n && shape[3] === 3n) found.push(slice[j]);
+    }
   }
-  return count;
+  return found.slice(0, limit);
+}
+
+/** Personal chop: four inputs, one output, three NAND gates. */
+export async function countSeal(owner: string): Promise<number> {
+  return (await sealHits(owner, 260)).length;
 }
 
 export async function sealIds(owner: string): Promise<bigint[]> {
-  const next = await client.readContract({
-    address: DEPLOYED.circuits,
-    abi: circuitAbi,
-    functionName: "nextId",
-  });
-  const last = Number(next);
-  const found: bigint[] = [];
-  const ids = Array.from({ length: Math.max(0, last - 1) }, (_, i) => BigInt(i + 1));
-  for (let i = 0; i < ids.length && found.length < 3; i += 8) {
-    const slice = ids.slice(i, i + 8);
-    const rows = await Promise.all(
-      slice.map(async (id) => {
-        try {
-          const [who, info] = await Promise.all([
-            client.readContract({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "ownerOf", args: [id] }),
-            client.readContract({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "circuitInfo", args: [id] }),
-          ]);
-          return who.toLowerCase() === owner.toLowerCase() && info[0] === 4n && info[1] === 1n && info[3] === 3n ? id : null;
-        } catch {
-          return null;
-        }
-      }),
-    );
-    for (const id of rows) if (id != null) found.push(id);
-  }
-  return found.slice(0, 3);
+  return sealHits(owner, 3);
 }
 
 export const TAPE_SHEET = { nand: 18000, latch: 30000 } as const;

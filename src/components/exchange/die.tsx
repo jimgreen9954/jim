@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { SealRebateBox } from "@/components/exchange/seal-rebate";
+import { ConnectButton } from "@/components/exchange/wallet-bar";
 import { copy } from "@/lib/copy";
 import { useExchange } from "@/lib/exchange-store";
 import { evalMatch } from "@/lib/match-engine";
-import { connectXLayer, countSeal, processorUrl, tapeSeal, txUrl } from "@/lib/xlayer";
+import { countSeal, processorUrl, tapeSeal, transistorHeld, txUrl } from "@/lib/xlayer";
 import { currentAccount, onAccount } from "@/lib/wallet";
 
 export function ChipMark({ className, hot }: { className?: string; hot?: boolean }) {
@@ -58,46 +59,56 @@ export function SealStamp() {
   }, [account, busy]);
 
   const onStamp = async () => {
+    if (!account) {
+      setNote(lang === "zh" ? "先点下面的 OKX 或币安。连上之后，再点一键流片。" : "Connect OKX or Binance below, then tap tape-out.");
+      return;
+    }
     setBusy(true);
-    setNote(lang === "zh" ? "正在连接钱包。请在弹出的窗口里确认。" : "Connecting the wallet. Confirm the popup.");
+    setNote(lang === "zh" ? "正在看这个钱包的 NAND 和已经亮的灯。" : "Checking NAND and lamps on this wallet.");
     try {
-      const from = await Promise.race([
-        account ? Promise.resolve(account) : connectXLayer(),
-        new Promise<string>((_, reject) => {
-          window.setTimeout(() => reject(new Error("timeout")), 20000);
-        }),
-      ]);
-      setAccount(from);
-      let have = await countSeal(from);
+      const from = account;
+      const [held, have] = await Promise.all([transistorHeld(from), countSeal(from)]);
       setSealCount(have);
       const need = Math.max(0, 3 - have);
       if (need === 0) {
-        setNote(lang === "zh" ? "三盏都亮了。下面用这三盏登记。盘口费率不变，登记后才能领回一半。" : "All three lamps are lit. Register them below. The book fee stays. Half can be claimed after registration.");
+        setNote(lang === "zh" ? "三盏都亮了。下面用这三盏登记。" : "All three lamps are lit. Register them below.");
+        return;
+      }
+      if (held.nand < BigInt(need * 3)) {
+        setNote(
+          lang === "zh"
+            ? `这个钱包只有 ${held.nand.toString()} 个 NAND。还差 ${need} 盏，每盏要烧掉 3 个。先铸造再点。`
+            : `This wallet holds ${held.nand.toString()} NAND. ${need} lamp${need === 1 ? "" : "s"} still missing, and each burns 3. Mint first.`,
+        );
         return;
       }
       setNote(
         lang === "zh"
-          ? `钱包会按还差的次数逐笔确认，一共 ${need} 笔。每笔烧掉 3 个 NAND，支付 0.0013 OKB。`
-          : `The wallet asks once for each lamp still missing, ${need} in all. Each burns 3 NAND and pays 0.0013 OKB.`,
+          ? `钱包会弹出 ${need} 次。每一次确认亮一盏。切到 X Layer，每笔烧掉 3 个 NAND，再付 0.0013 OKB。`
+          : `The wallet pops up ${need} time${need === 1 ? "" : "s"}. Switch to X Layer. Each burn is 3 NAND plus 0.0013 OKB.`,
       );
       let hash = "";
       for (let i = 0; i < need; i += 1) {
         hash = await tapeSeal(from);
-        have += 1;
-        setSealCount(have);
+        setSealCount(have + i + 1);
       }
-      setNote(lang === "zh" ? "三张印鉴已在处理器上。再点下面的登记。订单簿费率没变。" : "Three seals are on the processor. Register below. The book fee is unchanged.");
+      setNote(lang === "zh" ? "三张印鉴已在处理器上。再点下面的登记。" : "Three seals are on the processor. Register below.");
       window.open(txUrl(hash), "_blank", "noopener,noreferrer");
     } catch (err) {
-      const timedOut = err instanceof Error && err.message === "timeout";
+      const code = (err as { code?: number }).code;
+      const message = err instanceof Error ? err.message : "";
       setNote(
-        timedOut
+        code === 4001
           ? lang === "zh"
-            ? "钱包没有弹出。先点右上角连接钱包，再回来点这一下。"
-            : "No wallet popup. Connect from the top right, then tap this again."
-          : lang === "zh"
-            ? "流片没有完成。已成功的笔数还在。先连接钱包，并确认 NAND 和 OKB 够。"
-            : "Tape-out stopped. Circuits that already landed still count. Connect the wallet, and check NAND and OKB.",
+            ? "你在钱包里拒绝了。灯没有变。"
+            : "The wallet rejected it. The lamps did not change."
+          : message.toLowerCase().includes("insufficient")
+            ? lang === "zh"
+              ? "OKB 不够付 0.0013，或 NAND 在签名时不够。"
+              : "Not enough OKB for 0.0013, or NAND ran out while signing."
+            : lang === "zh"
+              ? "流片没有上链。看钱包是不是停在 X Layer，NAND 和 OKB 够不够。"
+              : "Tape-out did not land. Check X Layer, NAND, and OKB.",
       );
     } finally {
       setBusy(false);
@@ -110,14 +121,21 @@ export function SealStamp() {
       <h3 className="font-display text-2xl italic">{c.seal}</h3>
       <SealLamps lit={lit} lang={lang} />
       <p className="mt-3 text-sm leading-relaxed">{lit >= 3 ? c.sealDone : c.sealHint}</p>
-      <button
-        type="button"
-        onClick={onStamp}
-        disabled={busy || lit >= 3}
-        className="mt-3 min-h-12 w-full border border-gold bg-ink text-paper disabled:opacity-60"
-      >
-        {busy ? (lang === "zh" ? "签名中" : "Signing") : lit >= 3 ? (lang === "zh" ? "三盏都亮了" : "All three lit") : c.stamp}
-      </button>
+      {!account ? (
+        <div className="mt-3">
+          <ConnectButton />
+          <p className="mt-2 text-sm">{lang === "zh" ? "先连钱包。连上之后，一键流片才会弹出签名。" : "Connect first. Tape-out asks for a signature only after that."}</p>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={onStamp}
+          disabled={busy || lit >= 3}
+          className="mt-3 min-h-12 w-full border border-gold bg-ink text-paper disabled:opacity-60"
+        >
+          {busy ? (lang === "zh" ? "签名中" : "Signing") : lit >= 3 ? (lang === "zh" ? "三盏都亮了" : "All three lit") : c.stamp}
+        </button>
+      )}
       {note ? <p className="mt-2 text-sm leading-relaxed">{note}</p> : null}
       <p className="mt-3 text-sm leading-relaxed">
         {lang === "zh"
