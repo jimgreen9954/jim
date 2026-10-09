@@ -28,30 +28,214 @@
     <script>
       (function () {
         var orig = window.fetch.bind(window);
-        var hosts = ["https://tapeout.net/", "https://api-tapeout.firsto.ai/"];
-        function relay(url) {
-          var own = "https://trade.yizhantoken.com/api/feed?u=" + encodeURIComponent(url);
-          var alt = "https://cors.eu.org/" + url;
-          return orig(own).then(function (res) {
-            var type = res.headers.get("content-type") || "";
-            if (res.ok && type.indexOf("json") >= 0) return res;
-            return orig(alt);
-          }, function () {
-            return orig(alt);
+        var RPCS = ["https://bsc-dataseed.bnbchain.org", "https://bsc-rpc.publicnode.com", "https://1rpc.io/bnb"];
+        var MULTI = "0xcA11bde05977b3631167028862bE2a173976CA11";
+        var MARKET = "0xA6a80C1919a8326022d7c601a488888C13aA16E4";
+        var CIRCUIT = "0x6feEbbEbC07BcB90bd1Ac8b0CF9BaA4f0fF2B46f";
+        var NAMES_URL = "https://cdn.jsdelivr.net/gh/jimgreen9954/jim@main/public/workshop-names.txt";
+        var FALLBACK = "TapeOut|0xb1024b89886b9a34aa4ff5f31c411d708b20a14c|0xcc42ba5de07f01b472a5b14cf45abcca79eb8087\nBlonskr_No1|0x1f5cb4aeae1807bf60c3b9c0d8adbcc14e91f12c|0xe2dfd802081c7a05341e20b6582b04b908e8550c\nGenesis CPU|0x50a994e71615474b55559ff4f500928fbc339dd9|0x1d23bf70ec6baad95f396ea38f8a8415119dfde6";
+        var mem = {};
+        var busy = 0;
+        var waiters = [];
+        function takeSlot() {
+          return new Promise(function (resolve) {
+            if (busy < 4) { busy += 1; resolve(); }
+            else waiters.push(resolve);
           });
+        }
+        function releaseSlot() {
+          var next = waiters.shift();
+          if (next) next();
+          else busy -= 1;
+        }
+        function word(n) { return BigInt(n).toString(16).padStart(64, "0"); }
+        function addr(a) { return a.toLowerCase().replace(/^0x/, "").padStart(64, "0"); }
+        function encode(calls) {
+          var tuples = calls.map(function (c) {
+            var bytes = c.data.replace(/^0x/, "");
+            var padded = bytes + "0".repeat((64 - (bytes.length % 64)) % 64);
+            return addr(c.to) + word(1) + word(96) + word(bytes.length / 2) + padded;
+          });
+          var head = word(calls.length);
+          var body = "";
+          var offset = calls.length * 32;
+          for (var i = 0; i < tuples.length; i++) {
+            head += word(offset);
+            body += tuples[i];
+            offset += tuples[i].length / 2;
+          }
+          return "0x82ad56cb" + word(32) + head + body;
+        }
+        function decode(hex) {
+          var raw = String(hex || "").replace(/^0x/, "");
+          function wordAt(byte) { return BigInt("0x" + raw.slice(byte * 2, byte * 2 + 64)); }
+          var arrOff = Number(wordAt(0));
+          var n = Number(wordAt(arrOff));
+          var out = [];
+          for (var i = 0; i < n; i++) {
+            var rel = Number(wordAt(arrOff + 32 + i * 32));
+            var base = arrOff + 32 + rel;
+            if (wordAt(base) !== 1n) { out.push(null); continue; }
+            var retOff = Number(wordAt(base + 32));
+            var retLen = Number(wordAt(base + retOff));
+            var start = (base + retOff + 32) * 2;
+            out.push("0x" + raw.slice(start, start + retLen * 2));
+          }
+          return out;
+        }
+        function rpc(to, data) {
+          var body = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: to, data: data }, "latest"] });
+          var attempt = 0;
+          function once() {
+            return takeSlot().then(function () {
+              return orig(RPCS[attempt % RPCS.length], { method: "POST", headers: { "content-type": "application/json" }, body: body });
+            }).then(function (res) { return res.json(); }).then(function (json) {
+              releaseSlot();
+              if (!json.result) throw new Error("rpc");
+              return json.result;
+            }, function (err) {
+              releaseSlot();
+              throw err;
+            }).catch(function (err) {
+              attempt += 1;
+              if (attempt >= RPCS.length * 2) throw err;
+              return once();
+            });
+          }
+          return once();
+        }
+        function field(ret, i) { return BigInt("0x" + ret.slice(2 + 64 * i, 2 + 64 * (i + 1))); }
+        function addressOf(ret, i) { return "0x" + ret.slice(2 + 64 * i + 24, 2 + 64 * (i + 1)); }
+        function scan(to, sel, next, takeRow) {
+          var starts = [];
+          for (var s = 1; s < next; s += 300) starts.push(s);
+          var cursor = 0;
+          var found = [];
+          function worker() {
+            if (cursor >= starts.length) return Promise.resolve();
+            var start = starts[cursor];
+            cursor += 1;
+            var n = Math.min(300, next - start);
+            var calls = [];
+            for (var k = 0; k < n; k++) calls.push({ to: to, data: sel + (start + k).toString(16).padStart(64, "0") });
+            return rpc(MULTI, encode(calls)).then(decode).then(function (rows) {
+              rows.forEach(function (ret, idx) { if (ret) takeRow(found, start + idx, ret); });
+              return worker();
+            });
+          }
+          return Promise.all([worker(), worker(), worker(), worker()]).then(function () { return found; });
+        }
+        function nameMaps(text) {
+          var byTrans = {};
+          var byCirc = {};
+          String(text || "").split("\n").forEach(function (line) {
+            var p = line.split("|");
+            if (p.length < 3 || !p[0]) return;
+            byCirc[p[1].toLowerCase()] = p[0];
+            byTrans[p[2].toLowerCase()] = p[0];
+          });
+          return { byTrans: byTrans, byCirc: byCirc, text: text };
+        }
+        function names() {
+          if (mem.names) return mem.names;
+          mem.names = orig(NAMES_URL).then(function (res) {
+            if (!res.ok) throw new Error("names");
+            return res.text();
+          }).catch(function () { return FALLBACK; }).then(nameMaps);
+          return mem.names;
+        }
+        function market() {
+          return names().then(function () {
+            return rpc(MARKET, "0xdc269049");
+          }).then(function (hex) {
+            return scan(MARKET, "4423c5f1", Number(BigInt(hex)), function (found, id, ret) {
+              var remaining = field(ret, 5);
+              if (remaining <= 0n) return;
+              found.push({
+                id: id,
+                buyer: addressOf(ret, 0),
+                transistors: addressOf(ret, 1),
+                tokenId: Number(field(ret, 3)),
+                price: field(ret, 2).toString(),
+                remaining: remaining.toString()
+              });
+            });
+          }).then(function (openBids) {
+            return { generatedAt: new Date().toISOString(), lastBlock: null, openBids: openBids };
+          });
+        }
+        function circuits() {
+          return names().then(function (maps) {
+            return rpc(CIRCUIT, "0xaaccf1ec").then(function (hex) {
+              return scan(CIRCUIT, "de74e57b", Number(BigInt(hex)), function (found, id, ret) {
+                var price = field(ret, 2);
+                if (price <= 0n) return;
+                var circuitsAddr = addressOf(ret, 1);
+                found.push({
+                  id: id,
+                  seller: addressOf(ret, 0),
+                  circuits: circuitsAddr,
+                  circuitId: field(ret, 4).toString(),
+                  price: price.toString(),
+                  valid: true,
+                  revoked: false,
+                  procName: maps.byCirc[circuitsAddr.toLowerCase()] || circuitsAddr.slice(0, 8),
+                  gateCount: 0,
+                  nIn: 0,
+                  nOut: 0
+                });
+              });
+            });
+          }).then(function (listings) {
+            return { generatedAt: new Date().toISOString(), listings: listings };
+          });
+        }
+        function processors() {
+          return names().then(function (maps) {
+            var cpus = String(maps.text || "").split("\n").map(function (line) {
+              var p = line.split("|");
+              return { name: p[0], address: p[1], transistors: p[2] };
+            }).filter(function (row) { return row.name && row.address && row.transistors; });
+            return { cpus: cpus };
+          });
+        }
+        function remember(key, make) {
+          var hit = mem[key];
+          if (hit && hit.body && Date.now() - hit.at < 45000) return Promise.resolve(hit.body);
+          if (hit && hit.pending) return hit.pending;
+          var pending = make().then(function (body) {
+            mem[key] = { at: Date.now(), body: body };
+            return body;
+          }, function (err) { delete mem[key]; throw err; });
+          mem[key] = { pending: pending };
+          return pending;
+        }
+        function jsonResponse(body) {
+          return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
         }
         window.fetch = function (input, init) {
           try {
             var url = typeof input === "string" ? input : (input && input.url) || "";
-            if (hosts.some(function (host) { return url.indexOf(host) === 0; })) return relay(url);
+            var path = url.split("?")[0];
+            if (path === "https://tapeout.net/market.json") return remember("market", market).then(jsonResponse);
+            if (path === "https://tapeout.net/circuit-market.json") return remember("circuits", circuits).then(jsonResponse);
+            if (path === "https://tapeout.net/processors.json") return remember("processors", processors).then(jsonResponse);
           } catch (e) {}
           return orig(input, init);
         };
+        function fixUnit() {
+          var nodes = document.querySelectorAll("p.font-mono.text-2xl.tabular-nums");
+          for (var i = 0; i < nodes.length; i++) {
+            var text = nodes[i].textContent || "";
+            if (/\sOKB$/.test(text)) nodes[i].textContent = text.replace(/\sOKB$/, " BNB");
+          }
+        }
+        new MutationObserver(fixUnit).observe(document.documentElement, { subtree: true, childList: true, characterData: true });
       })();
     </script>
   </head>
   <body>
-    <div id="root"><p id="boot">正在打开 TAPELIQUID。</p></div>
+    <div id="root"><p id="boot">正在打开 TAPELIQUID。工房的现货盘口从链上读，第一次大约十几秒。</p></div>
     <script>
       window.addEventListener("error", function (e) {
         var b = document.getElementById("boot");
