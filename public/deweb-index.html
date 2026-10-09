@@ -29,13 +29,21 @@
       (function () {
         var orig = window.fetch.bind(window);
         var hosts = ["https://tapeout.net/", "https://api-tapeout.firsto.ai/"];
+        function relay(url) {
+          var own = "https://trade.yizhantoken.com/api/feed?u=" + encodeURIComponent(url);
+          var alt = "https://cors.eu.org/" + url;
+          return orig(own).then(function (res) {
+            var type = res.headers.get("content-type") || "";
+            if (res.ok && type.indexOf("json") >= 0) return res;
+            return orig(alt);
+          }, function () {
+            return orig(alt);
+          });
+        }
         window.fetch = function (input, init) {
           try {
             var url = typeof input === "string" ? input : (input && input.url) || "";
-            if (hosts.some(function (host) { return url.indexOf(host) === 0; })) {
-              var next = "https://trade.yizhantoken.com/api/feed?u=" + encodeURIComponent(url);
-              input = typeof input === "string" ? next : new Request(next, input);
-            }
+            if (hosts.some(function (host) { return url.indexOf(host) === 0; })) return relay(url);
           } catch (e) {}
           return orig(input, init);
         };
