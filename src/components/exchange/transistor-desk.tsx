@@ -219,9 +219,9 @@ export function TransistorDesk() {
               <p className="font-display text-2xl italic">{gate ? `${gate.name} / ${gate.kind}` : "NAND"}</p>
             </div>
             <div className="text-right">
-              <p className="text-xs tracking-widest text-gold">{zh ? "链上最新成交" : "Last on-chain trade"}</p>
-              <p className="font-mono text-2xl tabular-nums">{px(mark)} OKB</p>
-              <p className={`font-mono text-xs ${chainMark > 0 && mark > 0 && (chainMark / mark < 0.97 || chainMark / mark > 1.03) ? "text-sell" : "text-ink/50"}`}>{zh ? "合约结算" : "Contract"} {chainMark > 0 ? px(chainMark) : "—"}</p>
+              <p className="text-xs tracking-widest text-gold">{zh ? "官网最新成交" : "Latest official trade"}</p>
+              <p className="font-mono text-2xl tabular-nums">{px(mark)} BNB</p>
+              <p className={`font-mono text-xs ${chainMark > 0 && mark > 0 && (chainMark / mark < 0.97 || chainMark / mark > 1.03) ? "text-sell" : "text-ink/50"}`}>{zh ? "合约结算" : "Contract"} {chainMark > 0 ? `${px(chainMark)} BNB` : "—"}{chainMark > 0 && mark > 0 && (chainMark / mark < 0.97 || chainMark / mark > 1.03) ? (zh ? " · 跟最新成交有差，每 30 秒最多挪 0.5%" : " · lags the latest trade, 0.5% every 30s") : ""}</p>
             </div>
           </div>
           <div className="grid grid-cols-[5rem_1fr_4.5rem_auto] gap-2 px-2 py-1 text-xs text-ink/50">
