@@ -301,12 +301,17 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
   return (
     <section className="grid gap-3">
       <article className="border border-gold bg-card px-3 py-4 sm:px-4">
-        <p className="text-[11px] tracking-[0.22em] text-gold">X Layer · 1 TAPE = 0.1 USDT0</p>
-        <h2 className="mt-1 font-display text-3xl italic">{zh ? "回购" : "Buyback"}</h2>
+        <p className="text-[11px] tracking-[0.22em] text-gold">{zh ? "自愿回购" : "Voluntary buyback"}</p>
+        <h2 className="mt-1 font-display text-3xl italic leading-tight sm:text-4xl">1 TAPE = 0.1 USDT0</h2>
         <p className="mt-2 text-sm leading-6">
           {zh
-            ? "只收整数枚。池子里的 USDT0 不够，这一笔不会成交，也不会先收 TAPE。买到的 TAPE 记在充 USDT0 的地址上，只有这个地址能取，取回去自己加池。这份合约不加池。"
-            : "Whole TAPE only. If the USDT0 in the pool is short, the sale does not happen and no TAPE is taken. Bought TAPE is owed to the address that funded the USDT0. Only that address can take it out and add it to a pool. This contract does not add liquidity."}
+            ? "回收价写死了：一枚整的 TAPE 换 0.1 USDT0。这不是现货价。只收整数枚，半枚不收。"
+            : "The buyback price is fixed: one whole TAPE pays 0.1 USDT0. That is not the spot price. Whole TAPE only. A fraction is refused."}
+        </p>
+        <p className="mt-2 text-sm leading-6">
+          {zh
+            ? "矿工自愿参与。愿意的人自己充 USDT0，按这个价买下别人的 TAPE，取回去自己加池。不卖、不充都可以，没有人被要求参加。池子里的 USDT0 不够，这一笔不会成交，也不会先收 TAPE。买到的 TAPE 记在充 USDT0 的地址上，只有这个地址能取。这份合约不加池。"
+            : "Miners join only if they want to. Someone who wants to fund it adds USDT0, buys other people's TAPE at this price, and takes that TAPE out to add a pool. Selling and funding are optional. Nobody is required to join. If the USDT0 in the pool is short, the sale does not happen and no TAPE is taken. Bought TAPE is owed only to the address that added the USDT0. This contract does not add liquidity."}
         </p>
         <p className="mt-2 break-all font-mono text-[11px] text-ink/50">
           <a className="underline" href={`${XLAYER.explorer}/address/${desk}`} target="_blank" rel="noreferrer">{desk}</a>
@@ -315,13 +320,13 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
         {miss ? <p className="mt-1 text-xs text-ink/55">{zh ? "这一次没读到。不写成 0。" : "This read missed. It is not shown as zero."}</p> : null}
         <div className="mt-3 grid gap-3 lg:grid-cols-2">
           <label className="grid gap-1 text-xs text-ink/55">
-            {zh ? "卖出 TAPE，整数" : "Sell whole TAPE"}
+            {zh ? "卖出整数枚，每枚到账 0.1 USDT0" : "Sell whole TAPE, 0.1 USDT0 each"}
             <input value={sellAmt} onChange={(event) => setSellAmt(event.target.value)} inputMode="numeric" placeholder="1" className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono text-base text-ink" />
             <span>{zh ? "钱包" : "Wallet"} {row ? deskText(row.tapeBal, 8) : "—"} TAPE · {zh ? "到账" : "You get"} {/^[1-9]\d*$/.test(sellAmt.trim()) ? (Number(sellAmt.trim()) * 0.1).toLocaleString("en-US", { maximumFractionDigits: 1 }) : "—"} USDT0</span>
             <button type="button" disabled={busy} className="min-h-12 bg-ink text-sm text-paper disabled:opacity-40" onClick={() => run(() => sellTape(account ?? "", wholeTape(sellAmt)), zh ? "已换成 USDT0。" : "Sold for USDT0.", "desk")}>{zh ? "卖出" : "Sell"}</button>
           </label>
           <label className="grid gap-1 text-xs text-ink/55">
-            {zh ? "充入 USDT0，用来买 TAPE" : "Add USDT0 to buy TAPE"}
+            {zh ? "自愿充入 USDT0，按 0.1 买 TAPE" : "Voluntarily add USDT0 to buy at 0.1"}
             <input value={usdtAmt} onChange={(event) => setUsdtAmt(event.target.value)} inputMode="decimal" placeholder="100" className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono text-base text-ink" />
             <span>{zh ? "钱包" : "Wallet"} {row ? deskText(row.usdtBal, 6, 2) : "—"} · {zh ? "可取回" : "Yours"} {row ? deskText(row.usdtLeft, 6, 2) : "—"} USDT0 · {zh ? "已买到" : "Bought"} {row ? deskText(row.tapeOwed, 8) : "—"} TAPE</span>
             <p className="leading-5">{zh ? "不会自动把钱包里的 USDT0 充进去。先填数量。点充入要签两笔：第一笔授权，币还在钱包；第二笔才进这个回购合约。" : "It does not deposit the wallet balance by itself. Type an amount. Add asks for two signatures: approve first, the coins stay put; the second one deposits."}</p>
