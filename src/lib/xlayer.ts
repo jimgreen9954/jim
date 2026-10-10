@@ -537,8 +537,8 @@ export async function catchKindSupply(onStep?: (row: KindSupply) => void): Promi
   let row = loadKind() ?? { ...KIND_BASE };
   onStep?.(row);
   const head = await client.getBlockNumber();
-  const span = 4_000n;
-  for (let round = 0; round < 4 && row.block < head; round += 1) {
+  const span = 100n;
+  for (let round = 0; round < 8 && row.block < head; round += 1) {
     const from = row.block + 1n;
     const to = from + span - 1n > head ? head : from + span - 1n;
     const logs = (await client.request({
