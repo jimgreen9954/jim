@@ -19,6 +19,38 @@ export default defineConfig({
     },
     react(),
     tailwindcss(),
+    {
+      name: "deweb-one-file",
+      apply: "build",
+      enforce: "post",
+      generateBundle(_, bundle) {
+        const cssName = Object.keys(bundle).find((name) => name.endsWith(".css"));
+        const jsName = Object.keys(bundle).find((name) => name.endsWith(".js"));
+        const htmlName = Object.keys(bundle).find((name) => name.endsWith(".html"));
+        if (cssName && jsName) {
+          const cssFile = bundle[cssName];
+          const jsFile = bundle[jsName];
+          if (cssFile.type === "asset" && jsFile.type === "chunk") {
+            const css = typeof cssFile.source === "string" ? cssFile.source : new TextDecoder().decode(cssFile.source);
+            jsFile.code = `document.head.appendChild(Object.assign(document.createElement("style"),{textContent:${JSON.stringify(css)}}));${jsFile.code}`;
+            delete bundle[cssName];
+          }
+        }
+        if (htmlName && bundle[htmlName].type === "asset") {
+          const htmlFile = bundle[htmlName];
+          const html = typeof htmlFile.source === "string" ? htmlFile.source : new TextDecoder().decode(htmlFile.source);
+          htmlFile.source = html.replace(/<link rel="stylesheet"[^>]*>\s*/g, "");
+        }
+      },
+      transformIndexHtml(html) {
+        return html
+          .replaceAll(" crossorigin", "")
+          .replace(
+            '<div id="root"></div>',
+            '<div id="root"><p style="margin:0;padding:28px 20px;font:16px/1.5 sans-serif;color:#1a1a1a;background:#fff">TAPELIQUID 正在打开。</p></div>',
+          );
+      },
+    },
   ],
   base: "./",
   resolve: {
@@ -48,6 +80,8 @@ export default defineConfig({
     rollupOptions: {
       output: {
         inlineDynamicImports: true,
+        entryFileNames: "app.js",
+        assetFileNames: "[name][extname]",
       },
     },
   },
