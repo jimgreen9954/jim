@@ -219,7 +219,8 @@ async function loadTapeMine(account: string | null, onHead?: (board: TapeBoard) 
       if (seatRow && seatRow[3]) open += 1;
       const ownerAddr = owner?.status === "success" && typeof owner.result === "string" ? owner.result : null;
       if (!ownerAddr) missed += 1;
-      if (mine && ownerAddr && ownerAddr.toLowerCase() === mine) mineIds.push(ids[i]);
+      const seatOwner = seatRow && typeof seatRow[0] === "string" ? seatRow[0].toLowerCase() : "";
+      if (mine && ((ownerAddr && ownerAddr.toLowerCase() === mine) || seatOwner === mine)) mineIds.push(ids[i]);
     }
     if (missed > Math.max(8, Math.floor(ids.length / 20))) throw new Error("scan");
     const detailCalls = mineIds.flatMap((id) => [

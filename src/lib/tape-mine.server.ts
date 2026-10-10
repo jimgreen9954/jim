@@ -152,7 +152,8 @@ export async function loadTapeSeats(account: string | null): Promise<TapeWire> {
     if (seatRow && seatRow[3]) open += 1;
     const ownerAddr = owner?.status === "success" && typeof owner.result === "string" ? owner.result : null;
     if (!ownerAddr) missed += 1;
-    if (who && ownerAddr && ownerAddr.toLowerCase() === who) mineIds.push(ids[i]);
+    const seatOwner = seatRow && typeof seatRow[0] === "string" ? seatRow[0].toLowerCase() : "";
+    if (who && ((ownerAddr && ownerAddr.toLowerCase() === who) || seatOwner === who)) mineIds.push(ids[i]);
   }
   if (missed > Math.max(8, Math.floor(ids.length / 20))) throw new Error("scan");
   const detailCalls = mineIds.flatMap((id) => [

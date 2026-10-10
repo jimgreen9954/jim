@@ -174,7 +174,7 @@ export function MineDesk() {
               )}
             </li>
           ))}
-          {account && tape && tape.seats.length === 0 ? <li className="px-2 py-3 text-sm text-ink/60">{zh ? "这个地址名下没有可开工的 TAPELIQUID 电路。锁进质押的电路不在这张表，去质押页看。" : "This address holds no TAPELIQUID circuit to open. A staked circuit is not on this list. See Stake."}</li> : null}
+          {account && tape?.scanOk && tape.seats.length === 0 ? <li className="px-2 py-3 text-sm text-ink/60">{zh ? "这个地址名下没有电路。锁进质押的电路不在这张表，去质押页看。" : "This address holds no circuit. A staked circuit is not on this list. See Stake."}</li> : null}
         </ul>
         <div className="mt-3 grid grid-cols-2 gap-2">
           {!account ? (
