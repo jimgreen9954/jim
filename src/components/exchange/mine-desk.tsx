@@ -21,6 +21,7 @@ export function MineDesk() {
   const [bad, setBad] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sheet, setSheet] = useState<"claim" | "stake" | "ash">("claim");
+  const [networkOpen, setNetworkOpen] = useState(false);
 
   useEffect(() => onAccount((next) => setAccount(next)), []);
 
@@ -76,38 +77,34 @@ export function MineDesk() {
 
   return (
     <section className="flex flex-col gap-3">
-      <article className="border border-gold bg-card px-3 py-3">
-        <p className="text-xs tracking-widest text-gold">{zh ? "全网 TAPE" : "TAPE network"}</p>
-        <h2 className="font-display text-3xl italic">{zh ? "现在在转的，和还没领的" : "What is out, and what is not claimed"}</h2>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          <div className="border border-ink px-3 py-3">
-            <p className="text-xs tracking-widest text-ink/50">{zh ? "实时流通" : "Circulating"}</p>
-            <p className="mt-1 font-mono text-2xl tabular-nums">{tape ? `${amount(circulating)} TAPE` : "—"}</p>
-            <p className="mt-1 text-xs text-ink/55">{zh ? "已领出，减去黑洞、池子和两份锁仓合约" : "Claimed, minus the dead address, the pool, and both locks"}</p>
+      <article className="border border-gold bg-card">
+        <button type="button" onClick={() => setNetworkOpen((open) => !open)} className="flex min-h-11 w-full items-center justify-between px-3 text-left text-sm">
+          <span>{zh ? "全网 TAPE" : "TAPE network"}</span>
+          <span className="text-xs text-ink/50">{networkOpen ? (zh ? "收起" : "Hide") : (zh ? "打开" : "Open")}</span>
+        </button>
+        {networkOpen ? (
+          <div className="border-t border-gold/40 px-3 py-3">
+            <dl className="grid grid-cols-2 gap-2 text-sm lg:grid-cols-4">
+              <Cell k={zh ? "实时流通" : "Circulating"} v={tape ? amount(circulating) : "—"} />
+              <Cell k={zh ? "已挖未领" : "Mined, not claimed"} v={tape?.scanOk ? amount(tape.pendingNet) : "—"} />
+              <Cell k={zh ? "已领出" : "Claimed"} v={tape ? `${amount(tape.supply)} · ${claimedPct.toFixed(2)}%` : "—"} />
+              <Cell k={zh ? "销毁" : "Burned"} v={tape ? `${amount(tape.burned)} · ${burnedPct.toFixed(2)}%` : "—"} />
+              <Cell k={zh ? "还没挖出" : "Not yet mined"} v={tape?.scanOk ? amount(unmined) : "—"} />
+              <Cell k={zh ? "今日排放" : "Today"} v={tape ? amount(tape.daily) : "—"} />
+              <Cell k={zh ? "正在挖的矿机" : "Mining"} v={tape?.scanOk ? tape.open.toLocaleString("en-US") : "—"} />
+              <Cell k={zh ? "质押中的矿机" : "Staked miners"} v={tape?.scanOk ? tape.staked.toLocaleString("en-US") : "—"} />
+              <Cell k={zh ? "质押占算力" : "Staked weight"} v={tape?.scanOk ? `${stakedPct.toFixed(2)}%` : "—"} />
+              <Cell k={zh ? "质押里还没领" : "Unclaimed in stake"} v={tape?.scanOk ? amount(tape.pendingStaked) : "—"} />
+              <Cell k={zh ? "池子里的 TAPE" : "TAPE in the pool"} v={tape ? amount(tape.pooled) : "—"} />
+              <Cell k={zh ? "锁仓合约里的 TAPE" : "TAPE in the locks"} v={tape ? amount(tape.locked) : "—"} />
+            </dl>
+            <p className="mt-2 text-xs leading-5 text-ink/55">
+              {zh
+                ? "流通是已领出减去黑洞、池子和两份锁仓。已挖未领还没铸出，不算流通。矿机张数大约 45 秒加总一次，没加总完不写成 0。"
+                : "Circulating is claimed TAPE minus the dead address, the pool, and both locks. Unclaimed TAPE is not minted yet. Miner counts refresh about every 45 seconds and are not shown as zero before the sum finishes."}
+            </p>
           </div>
-          <div className="border border-ink px-3 py-3">
-            <p className="text-xs tracking-widest text-ink/50">{zh ? "已挖未领" : "Mined, not claimed"}</p>
-            <p className="mt-1 font-mono text-2xl tabular-nums">{tape?.scanOk ? `${amount(tape.pendingNet)} TAPE` : "—"}</p>
-            <p className="mt-1 text-xs text-ink/55">{zh ? "还没铸出来，不算进流通" : "Not minted yet, so it is not circulating"}</p>
-          </div>
-        </div>
-        <dl className="mt-3 grid grid-cols-2 gap-2 text-sm lg:grid-cols-4">
-          <Cell k={zh ? "已领出" : "Claimed"} v={tape ? `${amount(tape.supply)} · ${claimedPct.toFixed(2)}%` : "—"} />
-          <Cell k={zh ? "销毁" : "Burned"} v={tape ? `${amount(tape.burned)} · ${burnedPct.toFixed(2)}%` : "—"} />
-          <Cell k={zh ? "还没挖出" : "Not yet mined"} v={tape?.scanOk ? amount(unmined) : "—"} />
-          <Cell k={zh ? "今日排放" : "Today"} v={tape ? amount(tape.daily) : "—"} />
-          <Cell k={zh ? "正在挖的矿机" : "Mining"} v={tape?.scanOk ? tape.open.toLocaleString("en-US") : "—"} />
-          <Cell k={zh ? "质押中的矿机" : "Staked miners"} v={tape?.scanOk ? tape.staked.toLocaleString("en-US") : "—"} />
-          <Cell k={zh ? "质押占算力" : "Staked weight"} v={tape?.scanOk ? `${stakedPct.toFixed(2)}%` : "—"} />
-          <Cell k={zh ? "质押里还没领" : "Unclaimed in stake"} v={tape?.scanOk ? `${amount(tape.pendingStaked)} TAPE` : "—"} />
-          <Cell k={zh ? "池子里的 TAPE" : "TAPE in the pool"} v={tape ? amount(tape.pooled) : "—"} />
-          <Cell k={zh ? "锁仓合约里的 TAPE" : "TAPE in the locks"} v={tape ? amount(tape.locked) : "—"} />
-        </dl>
-        <p className="mt-2 text-xs leading-5 text-ink/55">
-          {zh
-            ? "流通和销毁按代币余额读，马上更新。矿机张数和未领要把每张开工的电路加总，大约 45 秒一次。没加总完不写成 0。质押算力只算锁在电路锁仓、并且还在挖的那些。"
-            : "Circulation and burns are token balances. Miner counts and unclaimed TAPE are summed across open circuits, about every 45 seconds. An unfinished sum is not shown as zero. Staked weight counts only circuits in the circuit lock that are still mining."}
-        </p>
+        ) : null}
       </article>
       <div className="grid grid-cols-3 border border-gold">
         <button type="button" onClick={() => setSheet("claim")} className={`min-h-11 text-sm ${sheet === "claim" ? "bg-ink text-paper" : ""}`}>{zh ? "领取" : "Claim"}</button>
