@@ -135,7 +135,7 @@ export function MineDesk() {
         <h2 className="font-display text-3xl italic">{zh ? "领 TAPE" : "Claim TAPE"}</h2>
         <p className="mt-2 text-sm leading-relaxed">
           {zh
-            ? "排放和余额马上读。这个地址名下的电路全部对上，不限最近的编号。对完才出待领。"
+            ? "排放和余额马上读。这个地址名下的电路全部对上。流片不会自动开工，没开工的排在最上面，点「开工」才开始挖。"
             : "Emission and the balance come back first. Every circuit held by this address is matched, not only the newest numbers."}
         </p>
         <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">

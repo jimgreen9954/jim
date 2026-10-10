@@ -256,7 +256,7 @@ async function loadTapeMine(account: string | null, onHead?: (board: TapeBoard) 
   } catch {
     scanOk = false;
   }
-  seats.sort((a, b) => Number(b.on) - Number(a.on) || Number(b.id) - Number(a.id));
+  seats.sort((a, b) => Number(a.on) - Number(b.on) || Number(b.id) - Number(a.id));
   return { supply, cap, weight, balance, start, daily, circuits: Math.max(0, last), open, seats, scanOk, scanning: false };
 }
 

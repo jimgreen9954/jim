@@ -181,7 +181,7 @@ export async function loadTapeSeats(account: string | null): Promise<TapeWire> {
     const share = on && row.weight > 0n ? (row.daily * gates) / row.weight : 0n;
     seats.push({ id: String(mineIds[i]), gates: gates.toString(), on, pending: pendingAmt.toString(), share: text(share) });
   }
-  seats.sort((a, b) => Number(b.on) - Number(a.on) || Number(b.id) - Number(a.id));
+  seats.sort((a, b) => Number(a.on) - Number(b.on) || Number(b.id) - Number(a.id));
   const body = pack(row, open, seats, true, false);
   cache.set(key, { at: Date.now(), body });
   return body;
