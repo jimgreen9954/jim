@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { bemPrice } from "@/lib/bsc";
-import { readTapePool } from "@/lib/tape-pool";
+import { formatEther } from "viem";
+import { bscBemBalance, BSC_BRIDGE, quoteBridge, sendBridge, type BridgeQuote } from "@/lib/bem-bridge";
+import { bemPrice, BSC } from "@/lib/bsc";
+import { readTapePool, TAPE_BEM } from "@/lib/tape-pool";
 import {
   claimStakeBem,
   claimStakeTape,
@@ -25,6 +27,64 @@ import {
   type DeskState,
 } from "@/lib/tape-desk";
 import { XLAYER } from "@/lib/xlayer";
+
+function OfficialBridge({ account, zh, xBem }: { account: string | null; zh: boolean; xBem: bigint | null }) {
+  const [open, setOpen] = useState(false);
+  const [toX, setToX] = useState(true);
+  const [amt, setAmt] = useState("");
+  const [bscBal, setBscBal] = useState<bigint | null>(null);
+  const [quote, setQuote] = useState<BridgeQuote | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [bad, setBad] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const amount = /^[0-9]*\.?[0-9]+$/.test(amt.trim()) ? (() => { try { return units(amt, 8); } catch { return null; } })() : null;
+
+  useEffect(() => {
+    if (!open || !account) return;
+    let dead = false;
+    bscBemBalance(account).then((value) => { if (!dead) setBscBal(value); }).catch(() => { if (!dead) setBscBal(null); });
+    return () => { dead = true; };
+  }, [open, account, busy]);
+
+  useEffect(() => {
+    if (!open || !account || !amount) { setQuote(null); return; }
+    let dead = false;
+    quoteBridge(toX, account, amount).then((next) => { if (!dead) setQuote(next); }).catch(() => { if (!dead) setQuote(null); });
+    return () => { dead = true; };
+  }, [open, account, toX, amount]);
+
+  return (
+    <div className="mt-3 border border-gold/40">
+      <button type="button" className="flex min-h-11 w-full items-center justify-between px-3 text-left" onClick={() => setOpen((value) => !value)}>
+        <span className="text-sm">{zh ? "官方跨链" : "Official bridge"}</span>
+        <span className="text-xs text-ink/50">{open ? (zh ? "收起" : "Hide") : (zh ? "打开" : "Open")}</span>
+      </button>
+      {open ? (
+        <div className="grid gap-2 border-t border-gold/30 px-3 py-3">
+          <p className="text-xs leading-5 text-ink/60">{zh ? "调用 TapeOut 已经在用的桥。BSC 锁 BEM，X Layer 铸出等量再扣桥自己的费。回来则烧掉 X Layer 的 BEM。只进当前这个钱包。本站不经手，不另收费。TAPE 不能走。" : "This calls the bridge TapeOut already runs. BSC locks BEM and X Layer mints the same amount minus the bridge's own fee. The return trip burns X Layer BEM. It arrives in this wallet. This site does not custody it and adds no fee. TAPE cannot use it."}</p>
+          <div className="grid grid-cols-2 border border-gold text-sm">
+            <button type="button" className={`min-h-11 ${toX ? "bg-ink text-paper" : ""}`} onClick={() => setToX(true)}>BSC → X Layer</button>
+            <button type="button" className={`min-h-11 ${!toX ? "bg-ink text-paper" : ""}`} onClick={() => setToX(false)}>X Layer → BSC</button>
+          </div>
+          <input value={amt} onChange={(event) => setAmt(event.target.value)} inputMode="decimal" placeholder={zh ? "BEM 数量" : "BEM amount"} className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono text-sm" />
+          <p className="text-xs text-ink/55">{zh ? "可转" : "Available"} {toX ? (bscBal == null ? "—" : deskText(bscBal, 8)) : (xBem == null ? "—" : deskText(xBem, 8))} BEM</p>
+          <p className="text-xs leading-5">{zh ? "这次到账" : "This quote arrives"} {quote ? deskText(quote.received, 8) : "—"} BEM · {zh ? "桥留下" : "Bridge keeps"} {quote ? deskText(quote.sent - quote.received, 8) : "—"} · {toX ? "BNB" : "OKB"} {quote ? formatEther(quote.nativeFee) : "—"}</p>
+          <button type="button" disabled={busy || !account || !amount || !quote} className="min-h-12 bg-ink text-sm text-paper disabled:opacity-40" onClick={() => {
+            if (!account || !amount) return;
+            setBusy(true);
+            sendBridge(toX, account, amount).then(() => { setBad(false); setNote(zh ? "已提交。到账要等桥的消息，不是这一笔里立刻到。" : "Submitted. It arrives with the bridge message, not in this transaction."); }).catch(() => { setBad(true); setNote(zh ? "没有跨过去。签名留在这一页。BEM 还在原来的链上。" : "It did not cross. Stay on this page. The BEM is still on the original chain."); }).finally(() => setBusy(false));
+          }}>{toX ? (zh ? "签名转到 X Layer" : "Sign to X Layer") : (zh ? "签名转回 BSC" : "Sign back to BSC")}</button>
+          <p className="break-all font-mono text-[11px] text-ink/40">
+            <a className="underline" href={`${BSC.explorer}/address/${BSC_BRIDGE}`} target="_blank" rel="noreferrer">BSC {BSC_BRIDGE}</a>
+            {" · "}
+            <a className="underline" href={`${XLAYER.explorer}/address/${TAPE_BEM}`} target="_blank" rel="noreferrer">X Layer {TAPE_BEM}</a>
+          </p>
+          {note ? <p className={`text-sm leading-6 ${bad ? "text-sell" : ""}`}>{note}</p> : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function apy(pot: bigint, potDec: number, potPx: number | null, staked: bigint, stakeDec: number, stakePx: number | null): string {
   if (potPx == null || stakePx == null || staked === 0n) return "—";
@@ -113,6 +173,7 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
             : "A fixed bid, not the spot price. Deploy this X Layer contract first. It has no admin. Only the address that added USDT0 can take back what is unspent. A seller is paid USDT0 at once and cannot take the TAPE back."}
         </p>
         <button type="button" disabled={busy} className="mt-3 min-h-12 w-full bg-ink text-sm text-paper disabled:opacity-40 sm:w-auto sm:px-6" onClick={deploy}>{zh ? "部署回购合约" : "Deploy the buyback"}</button>
+        <OfficialBridge account={account} zh={zh} xBem={null} />
         {note ? <p className={`mt-2 break-all text-sm leading-6 ${bad ? "text-sell" : ""}`}>{note}</p> : null}
       </section>
     );
@@ -178,7 +239,7 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
         </article>
         <article className="border border-gold bg-card px-3 py-4 sm:px-4">
           <h3 className="font-display text-2xl italic">{zh ? "质押 BEM，领 TAPE" : "Stake BEM, earn TAPE"}</h3>
-          <p className="mt-2 text-sm leading-6">{zh ? "这里的 BEM 是 X Layer 上的。BSC 的 BEM 先用官方桥转过来，本站不经手。本金只有你能取。TAPE 奖励还没分出去的，只有充的人能取。" : "This BEM is on X Layer. Bridge BSC BEM yourself. This site does not touch that bridge. Only you can take your principal. Unvested TAPE goes back only to the address that added it."}</p>
+          <p className="mt-2 text-sm leading-6">{zh ? "这里的 BEM 是 X Layer 上的。BSC 的 BEM 用旁边收起的官方桥转过来。本站不经手。本金只有你能取。TAPE 奖励还没分出去的，只有充的人能取。" : "This BEM is on X Layer. Move BSC BEM with the official bridge beside this. This site does not custody it. Only you can take your principal. Unvested TAPE goes back only to the address that added it."}</p>
           <p className="mt-2 text-sm">{zh ? "年化" : "APY"} <span className="font-mono">{bemApy}{bemApy === "—" ? "" : "%"}</span></p>
           <p className="mt-1 text-xs leading-5 text-ink/55">{zh ? `已质押 ${row ? deskText(row.bemStakedTotal, 8) : "—"} BEM。未分完 ${row ? deskText(row.tapePot, 8) : "—"} TAPE。你的本金 ${row ? deskText(row.bemStaked, 8) : "—"}，待领 ${row ? deskText(row.tapeOwedStake, 8) : "—"} TAPE。你还没分完的奖励 ${row ? deskText(row.tapeSponsor, 8) : "—"} TAPE。` : `Staked ${row ? deskText(row.bemStakedTotal, 8) : "—"} BEM. Unvested ${row ? deskText(row.tapePot, 8) : "—"} TAPE. Yours ${row ? deskText(row.bemStaked, 8) : "—"}, pending ${row ? deskText(row.tapeOwedStake, 8) : "—"} TAPE. Your unvested reward ${row ? deskText(row.tapeSponsor, 8) : "—"} TAPE.`}</p>
           <div className="mt-3 grid gap-2">
@@ -194,6 +255,7 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
               <button type="button" disabled={busy || !row || row.tapeOwedStake === 0n} className="min-h-12 border border-gold text-sm disabled:opacity-40" onClick={() => run(() => claimStakeTape(account ?? ""), zh ? "TAPE 已领取。" : "TAPE claimed.")}>{zh ? "领取" : "Claim"}</button>
             </div>
           </div>
+          <OfficialBridge account={account} zh={zh} xBem={row ? row.bemBal : null} />
         </article>
       </div>
       <p className="text-xs leading-5 text-ink/55">
