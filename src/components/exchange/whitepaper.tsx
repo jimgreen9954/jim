@@ -59,7 +59,7 @@ const zh: Section[] = [
       "未流片的库存可以转让，不算算力。额度用完后只剩二级转让，流片继续销毁。",
       "个人持有的未流片额度，锁在榜一地址，锁到第一个减半，不参与排放。已经流片的电路保留，权重和别的矿工同一套规则。榜一地址和到期日登记之前，这一行不写一个空地址。",
       "用户铸造收入进入回购余额。官方地址铸造的金额留在原账户，不进入回购。",
-      "流片是一笔交易。节点交出成功回执时，电路编号已经在那一笔里，不是再铸第二笔。画布名单大约 8 秒重读一次，只显示最新的几张。个人中心从较小的编号往后查，所以更晚。以浏览器里那笔交易为准。",
+      "流片是一笔交易。节点交出成功回执时，电路编号已经在那一笔里，不是再铸第二笔。这张电路不会自动变成矿机。挖 TAPE 要到挖矿页再签一笔开工，不签就没有权重，也没有待领。开工不再付 0.0013 OKB。",
     ],
   },
   {
@@ -220,7 +220,7 @@ const en: Section[] = [
       "Untaped stock can be transferred and is not hashrate. After the cap, only secondary transfers remain. Tape-out still destroys.",
       "Untaped stock held personally stays locked at the lead address until the first halving and does not earn. Circuits already taped keep their weight under the same rule as every other miner. No address is printed here until that lead address and its expiry are registered.",
       "User mint proceeds go to the buyback balance. Amounts minted by an official address stay in that account and do not enter the buyback.",
-      "A tape-out is one transaction. When the node returns a successful receipt, the circuit id is already in that transaction. It is not a second mint. The canvas list rereads about every 8 seconds and shows only the latest few. The account page walks older ids first, so it is later. The transaction in the explorer is the record.",
+      "A tape-out is one transaction. When the node returns a successful receipt, the circuit id is already in that transaction. It is not a second mint. The circuit does not start mining by itself. TAPE starts only after a second signature on the mine page. That signature does not pay another 0.0013 OKB.",
     ],
   },
   {

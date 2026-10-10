@@ -135,8 +135,8 @@ export function MineDesk() {
         <h2 className="font-display text-3xl italic">{zh ? "领 TAPE" : "Claim TAPE"}</h2>
         <p className="mt-2 text-sm leading-relaxed">
           {zh
-            ? "排放和余额马上读。这个地址名下的电路全部对上。流片不会自动开工，没开工的排在最上面，点「开工」才开始挖。"
-            : "Emission and the balance come back first. Every circuit held by this address is matched, not only the newest numbers."}
+            ? "流片和开工是两笔。电路在钱包里，只说明流片成功。没点「开工」的排在最上面，不签就不会挖，也没有待领。开工不用再付 0.0013 OKB。"
+            : "Tape-out and opening are two signatures. A circuit in the wallet only means tape-out succeeded. Ones not opened yet sit at the top. They do not mine, and nothing is claimable, until you open them. Opening does not charge another 0.0013 OKB."}
         </p>
         <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
           <Cell k={zh ? "今天排放" : "Daily emission"} v={tape ? `${amount(tape.daily)} TAPE` : "—"} />
@@ -160,7 +160,7 @@ export function MineDesk() {
             <li key={row.id} className="grid grid-cols-[3.5rem_4.5rem_4rem_1fr_auto] items-center gap-2 border-t border-gold/30 px-2 py-2 font-mono text-xs">
               <span>#{row.id}</span>
               <span>{Number(row.gates).toLocaleString("en-US")}</span>
-              <span>{row.on ? (zh ? "挖矿" : "Live") : (zh ? "未开工" : "Off")}</span>
+              <span>{row.on ? (zh ? "挖矿" : "Live") : (zh ? "还没开工" : "Not open")}</span>
               <span className="text-right">{amount(row.pending)}</span>
               {row.on ? <span className="text-right">{row.share}</span> : (
                 <button

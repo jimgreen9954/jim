@@ -389,8 +389,8 @@ function ShopFloor({ shop, setShop }: { shop: ShopTab; setShop: (shop: ShopTab) 
             : "Transistor perps. Margin is BSC USDT. Settlement uses a 10-minute average. This is not the BEM book."
           : shop === "wafer"
             ? lang === "zh"
-              ? "先铸造 NAND 或 LATCH，再流片。流片烧掉晶体管，不能撤回。"
-              : "Mint NAND or LATCH, then tape out. Tape-out burns transistors and cannot be undone."
+              ? "先铸造 NAND 或 LATCH，再流片。流片成功只得到电路。要挖 TAPE，还要到挖矿页再签一笔开工。"
+              : "Mint NAND or LATCH, then tape out. Tape-out only creates the circuit. Mining TAPE takes a second signature on the mine page."
             : lang === "zh"
               ? "跟 tapeout.net 的盘口。本站另收 0.20%，先付。官网没有成交，这一笔也不退。"
               : "The book follows tapeout.net. This site charges an extra 0.20%, paid first. If the official fill fails, that fee is not returned."}

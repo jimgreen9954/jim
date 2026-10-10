@@ -378,7 +378,7 @@ function RecipeGrid({
       }
       setNote(lang === "zh" ? `正在流片 ${short(n, l)}。签名之后还要等回执。回执成功，电路就在链上。` : `Taping ${short(n, l)}. After you sign, this waits for the receipt. The circuit is on chain when that receipt succeeds.`);
       const hash = await tapeRecipe(from, n, l);
-      setNote(lang === "zh" ? `流片完成 ${short(n, l)}。电路在这笔交易里。名单要过几秒才显示，个人中心更慢。` : `Taped ${short(n, l)}. The circuit is in this transaction. The list can take a few seconds. The account page is slower.`);
+      setNote(lang === "zh" ? `流片完成 ${short(n, l)}。电路已经在这笔交易里，但还没开工。到挖矿页对这张点「开工」，再签一笔，才会进矿机。不用再付 0.0013 OKB。` : `Taped ${short(n, l)}. The circuit is in this transaction, but it is not mining yet. Open it on the mine page with a second signature. That one does not pay another 0.0013 OKB.`);
       setPick(null);
       onDone(hash);
       window.open(txUrl(hash), "_blank", "noopener,noreferrer");
@@ -407,8 +407,8 @@ function RecipeGrid({
       <h3 className="font-display text-xl italic">{lang === "zh" ? "按配方直接流片" : "Tape a recipe directly"}</h3>
       <p className="mt-1 text-sm leading-relaxed text-ink/80">
         {lang === "zh"
-          ? "要自己接线，点页顶「流片 TAPELIQUID」进画布。下面这些配方不画图，确认后直接烧掉。工本 H 等于 NAND 加 LATCH，不是官网 BEM 算力。每次另付 0.0013 OKB，不能撤回。签名之后还要等回执。回执成功，电路就在链上。名单要过几秒才显示。"
-          : "To draw the wires yourself, use Tape TAPELIQUID at the top. These recipes skip the drawing and burn on confirm. H is NAND plus LATCH, not official BEM hashrate. Each one also pays 0.0013 OKB and cannot be undone. After you sign, the page waits for the receipt. The circuit exists when that receipt succeeds. This list can take a few seconds to show it."}
+          ? "要自己接线，点页顶「流片 TAPELIQUID」进画布。下面这些配方不画图，确认后直接烧掉。每次另付 0.0013 OKB。回执成功只代表电路有了编号。挖矿还要再签一笔开工，不签就不会出现在矿机里。"
+          : "To draw the wires yourself, use Tape TAPELIQUID at the top. These recipes skip the drawing and burn on confirm. Each one pays 0.0013 OKB. A successful receipt only means the circuit has an id. Mining starts with a second signature. Without that, it does not show as a miner."}
       </p>
       <div className="mt-3 grid grid-cols-2 gap-2">
         {RECIPES.map(([n, l]) => {
