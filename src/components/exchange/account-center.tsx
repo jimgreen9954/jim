@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react";
-import { formatEther, formatUnits, type Hex } from "viem";
-import { bemPrice, bnbPrice, ERC_BOOKS, ercPrice, readAsset, readBalances, txUrl as bscTx, type ErcKey } from "@/lib/bsc";
+import { encodeFunctionData, formatEther, formatUnits, parseAbi, parseUnits, type Hex } from "viem";
+import { bemPrice, bnbPrice, BNB_GAS_RESERVE, BSC, connectBsc, ERC_BOOKS, ercPrice, readAsset, readBalances, txUrl as bscTx, type ErcKey } from "@/lib/bsc";
 import { useExchange } from "@/lib/exchange-store";
 import { getHoldings, type ChipRow, type CircuitRow, type Holdings } from "@/lib/holdings";
 import { readGateChain } from "@/lib/gate-chain";
 import { getOfficialBooks } from "@/lib/official-books";
 import { transferBscCircuit, transferBscTransistor } from "@/lib/official-trade";
-import { okbPrice, readOkbPurse } from "@/lib/okb";
+import { okbPrice, OKB, readOkbPurse } from "@/lib/okb";
 import { BSC_REBATE, KNOWN_XPERP, readPerp } from "@/lib/perp";
-import { currentAccount, onAccount } from "@/lib/wallet";
-import { transferCircuit, transferTransistor, txUrl } from "@/lib/xlayer";
+import { currentAccount, getProvider, onAccount } from "@/lib/wallet";
+import { connectXLayer, transferCircuit, transferTransistor, txUrl, XLAYER } from "@/lib/xlayer";
 import { LOCK_TERMS, readLocks, type LockSeat } from "@/lib/tape-lock";
-import { readTapePool, showQuote, showTape, TAPE_TERMS, type TapePosition } from "@/lib/tape-pool";
+import { readTapePool, showQuote, showTape, TAPE_BEM, TAPE_TERMS, TAPE_TOKEN, TAPE_USDT, type TapePosition } from "@/lib/tape-pool";
 import { GiftDeploy, NewbieGift } from "@/components/exchange/newbie-gift";
 import { tapeText } from "@/lib/tape-mine";
 
@@ -45,7 +45,34 @@ const ERC_NAME: Record<ErcKey, string> = {
   googl: "谷歌",
 };
 
-type Worth = { name: string; qty: string; px: string; usd: number | null };
+type Worth = {
+  key: string;
+  name: string;
+  qty: string;
+  px: string;
+  usd: number | null;
+  chain: "bsc" | "xlayer" | "";
+  kind: "native" | "erc20" | "chip" | "locked";
+  token?: string;
+  decimals?: number;
+  raw?: bigint;
+  chipId?: 0 | 1;
+  ours?: boolean;
+};
+
+const erc20Abi = parseAbi(["function transfer(address to, uint256 amount) returns (bool)"]);
+
+function place(rows: Worth[]): Worth[] {
+  const pin = (key: string) => (key === "tape" ? 0 : key === "bem" ? 1 : 2);
+  return [...rows].sort((a, b) => {
+    const rank = pin(a.key) - pin(b.key);
+    if (rank) return rank;
+    const left = a.usd ?? -1;
+    const right = b.usd ?? -1;
+    if (left !== right) return right - left;
+    return a.name.localeCompare(b.name);
+  });
+}
 
 export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
   const lang = useExchange((s) => s.lang);
@@ -73,6 +100,11 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
   const [pulse, setPulse] = useState(0);
   const [freshing, setFreshing] = useState(false);
   const [freshAt, setFreshAt] = useState("");
+  const [holdOpen, setHoldOpen] = useState(false);
+  const [pickKey, setPickKey] = useState("");
+  const [sendTo, setSendTo] = useState("");
+  const [sendAmt, setSendAmt] = useState("");
+  const [holdTick, setHoldTick] = useState(0);
 
   useEffect(() => onAccount(setAccount), []);
   useEffect(() => {
@@ -151,50 +183,48 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
   }, [account]);
 
   useEffect(() => {
-    if (!account || !book?.ok) return;
+    if (!account) {
+      setWorth(null);
+      return;
+    }
     let dead = false;
-    const keys = Object.keys(ERC_BOOKS) as ErcKey[];
-    (async () => {
-      const [bal, purse, bemRaw, bnbRaw, okbRaw, bids, perpView, ercBal, gate] = await Promise.all([
+    let flight = 0;
+    const load = async () => {
+      const mine = ++flight;
+      const keys = Object.keys(ERC_BOOKS) as ErcKey[];
+      const [bal, purse, bemRaw, bnbRaw, okbRaw, ercBal, pool] = await Promise.all([
         readBalances(account).catch(() => null),
         readOkbPurse(account).catch(() => null),
         bemPrice().catch(() => ""),
         bnbPrice().catch(() => ""),
         okbPrice().catch(() => ""),
-        getOfficialBooks().catch(() => null),
-        readPerp(BSC_REBATE, account).catch(() => null),
         Promise.all(keys.map((key) => readAsset(account, ERC_BOOKS[key].token).catch(() => 0n))),
-        readGateChain(KNOWN_XPERP).catch(() => null),
+        readTapePool(account).catch(() => null),
       ]);
-      const priced = await Promise.all(keys.map((key, index) => (ercBal[index] > 0n ? ercPrice(key).catch(() => "") : Promise.resolve(""))));
-      if (dead) return;
+      if (dead || mine !== flight) return;
       const bnbUsd = num(bnbRaw);
+      const bemUsd = num(bemRaw);
       const lines: Worth[] = [];
-      const add = (name: string, qty: string, px: string, usd: number | null) => {
-        if (!(num(qty) > 0)) return;
-        lines.push({ name, qty, px, usd: usd != null && Number.isFinite(usd) ? usd : null });
+      const add = (row: Worth) => {
+        if (!(num(row.qty) > 0)) return;
+        lines.push({ ...row, usd: row.usd != null && Number.isFinite(row.usd) ? row.usd : null });
       };
       if (bal) {
         const usdt = Number(formatUnits(bal.usdt, 18));
-        add("USDT", qtyOf(bal.usdt, 18, 2), "1 USDT", usdt);
-        add("BNB", qtyOf(bal.bnb, 18, 6), bnbRaw ? `${bnbRaw} USDT` : "—", Number(formatEther(bal.bnb)) * bnbUsd);
-        add("BEM", qtyOf(bal.bem, 8, 4), bemRaw ? `${bemRaw} USDT` : "—", Number(formatUnits(bal.bem, 8)) * num(bemRaw));
+        add({ key: "usdt", name: "USDT", qty: qtyOf(bal.usdt, 18, 2), px: "1 USDT", usd: usdt, chain: "bsc", kind: "erc20", token: BSC.usdt, decimals: 18, raw: bal.usdt });
+        add({ key: "bnb", name: "BNB", qty: qtyOf(bal.bnb, 18, 6), px: bnbRaw ? `${bnbRaw} USDT` : "—", usd: Number(formatEther(bal.bnb)) * bnbUsd, chain: "bsc", kind: "native", decimals: 18, raw: bal.bnb });
+        add({ key: "bem", name: "BEM", qty: qtyOf(bal.bem, 8, 4), px: bemRaw ? `${bemRaw} USDT` : "—", usd: Number(formatUnits(bal.bem, 8)) * bemUsd, chain: "bsc", kind: "erc20", token: BSC.bem, decimals: 8, raw: bal.bem });
       }
       if (purse) {
-        add("OKB", qtyOf(purse.okb, 18, 6), okbRaw ? `${okbRaw} USDT` : "—", Number(formatEther(purse.okb)) * num(okbRaw));
-        add("X Layer USDT", qtyOf(purse.usdt, 18, 2), "1 USDT", Number(formatUnits(purse.usdt, 18)));
+        add({ key: "okb", name: "OKB", qty: qtyOf(purse.okb, 18, 6), px: okbRaw ? `${okbRaw} USDT` : "—", usd: Number(formatEther(purse.okb)) * num(okbRaw), chain: "xlayer", kind: "native", decimals: 18, raw: purse.okb });
+        add({ key: "xusdt", name: zh ? "X Layer USDT" : "X Layer USDT", qty: qtyOf(purse.usdt, 18, 2), px: "1 USDT", usd: Number(formatUnits(purse.usdt, 18)), chain: "xlayer", kind: "erc20", token: OKB.usdt, decimals: 18, raw: purse.usdt });
       }
-      keys.forEach((key, index) => {
-        const token = ERC_BOOKS[key];
-        add(ERC_NAME[key], qtyOf(ercBal[index], token.decimals, 4), priced[index] ? `${priced[index]} USDT` : "—", Number(formatUnits(ercBal[index], token.decimals)) * num(priced[index]));
-      });
-      const pool = await readTapePool(account).catch(() => null);
-      if (pool && !dead) {
-        const tapePx = pool.usdt.tape > 0n && pool.usdt.quote > 0n
-          ? Number(formatUnits(pool.usdt.quote, 6)) / Number(formatUnits(pool.usdt.tape, 8))
-          : 0;
-        add("TAPE", qtyOf(pool.tape, 8, 4), tapePx > 0 ? `${tapePx.toFixed(4)} USDT` : "—", tapePx > 0 ? Number(formatUnits(pool.tape, 8)) * tapePx : null);
-        const bemPx = num(bemRaw);
+      const tapePx = pool && pool.usdt.tape > 0n && pool.usdt.quote > 0n ? Number(formatUnits(pool.usdt.quote, 6)) / Number(formatUnits(pool.usdt.tape, 8)) : 0;
+      if (pool) {
+        add({ key: "tape", name: "TAPE", qty: qtyOf(pool.tape, 8, 4), px: tapePx > 0 ? `${tapePx.toFixed(4)} USDT` : "—", usd: tapePx > 0 ? Number(formatUnits(pool.tape, 8)) * tapePx : null, chain: "xlayer", kind: "erc20", token: TAPE_TOKEN, decimals: 8, raw: pool.tape });
+        add({ key: "usdt0", name: "USDT0", qty: qtyOf(pool.usdtBal, 6, 2), px: "1 USDT", usd: Number(formatUnits(pool.usdtBal, 6)), chain: "xlayer", kind: "erc20", token: TAPE_USDT, decimals: 6, raw: pool.usdtBal });
+        const xbemUsd = tapePx > 0 && pool.bem.quote > 0n && pool.bem.tape > 0n ? (Number(formatUnits(pool.bem.tape, 8)) / Number(formatUnits(pool.bem.quote, 8))) * tapePx : Number.NaN;
+        add({ key: "xbem", name: zh ? "X Layer BEM" : "X Layer BEM", qty: qtyOf(pool.bemBal, 8, 4), px: Number.isFinite(xbemUsd) ? `${xbemUsd.toFixed(4)} USDT` : "—", usd: Number.isFinite(xbemUsd) ? Number(formatUnits(pool.bemBal, 8)) * xbemUsd : null, chain: "xlayer", kind: "erc20", token: TAPE_BEM, decimals: 8, raw: pool.bemBal });
         for (const pos of pool.positions) {
           if (typeof pos.shares !== "bigint") continue;
           const side = pos.quote === 0 ? pool.usdt : pool.bem;
@@ -202,35 +232,59 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
           const tape = (pos.shares * side.tape) / side.shares;
           const other = (pos.shares * side.quote) / side.shares;
           const tapeUsd = tapePx > 0 ? Number(formatUnits(tape, 8)) * tapePx : 0;
-          const otherUsd = pos.quote === 0 ? Number(formatUnits(other, 6)) : Number(formatUnits(other, 8)) * (Number.isFinite(bemPx) ? bemPx : 0);
+          const otherUsd = pos.quote === 0 ? Number(formatUnits(other, 6)) : Number(formatUnits(other, 8)) * (Number.isFinite(bemUsd) ? bemUsd : 0);
           lines.push({
+            key: `stake-${pos.id}`,
             name: zh ? (pos.quote === 0 ? "TAPE/USDT0 质押" : "TAPE/BEM 质押") : pos.quote === 0 ? "TAPE/USDT0 stake" : "TAPE/BEM stake",
             qty: `${qtyOf(tape, 8, 4)} TAPE`,
             px: tapePx > 0 ? `${tapePx.toFixed(4)} USDT` : "—",
             usd: tapeUsd + otherUsd > 0 ? tapeUsd + otherUsd : null,
+            chain: "xlayer",
+            kind: "locked",
           });
         }
       }
+      setWorth(place(lines));
+      setWorthAt(new Date().toLocaleTimeString("en-GB", { hour12: false, timeZone: "Asia/Singapore" }));
+      const [priced, bids, perpView, gate] = await Promise.all([
+        Promise.all(keys.map((key, index) => (ercBal[index] > 0n ? ercPrice(key).catch(() => "") : Promise.resolve("")))),
+        book?.ok ? getOfficialBooks().catch(() => null) : Promise.resolve(null),
+        readPerp(BSC_REBATE, account).catch(() => null),
+        readGateChain(KNOWN_XPERP).catch(() => null),
+      ]);
+      if (dead || mine !== flight) return;
+      keys.forEach((key, index) => {
+        const token = ERC_BOOKS[key];
+        add({ key, name: ERC_NAME[key], qty: qtyOf(ercBal[index], token.decimals, 4), px: priced[index] ? `${priced[index]} USDT` : "—", usd: Number(formatUnits(ercBal[index], token.decimals)) * num(priced[index]), chain: "bsc", kind: "erc20", token: token.token, decimals: token.decimals, raw: ercBal[index] });
+      });
       const bidOf = (transistors: string, tokenId: number) => {
         const rows = (bids?.bids ?? []).filter((row) => row.transistors.toLowerCase() === transistors.toLowerCase() && row.tokenId === tokenId && row.remaining > 0);
         return rows.reduce<null | (typeof rows)[number]>((best, row) => (!best || row.priceBnb > best.priceBnb ? row : best), null);
       };
-      for (const chip of book.chips) {
+      for (const chip of book?.chips ?? []) {
         ([["NAND", 0, chip.nand], ["LATCH", 1, chip.latch]] as const).forEach(([label, id, raw]) => {
           const q = Number(raw);
           if (!(q > 0)) return;
           const bid = bidOf(chip.transistors, id);
           lines.push({
+            key: `chip-${chip.chain}-${chip.transistors}-${id}`,
             name: `${chip.name} ${label}`,
             qty: q.toLocaleString("en-US"),
             px: bid ? `${bid.priceBnb} BNB` : (zh ? "无买单" : "No bid"),
             usd: bid && bnbUsd > 0 ? q * bid.priceBnb * bnbUsd : null,
+            chain: chip.chain,
+            kind: "chip",
+            token: chip.transistors,
+            decimals: 0,
+            raw: BigInt(raw),
+            chipId: id,
+            ours: chip.ours,
           });
         });
       }
       if (perpView && perpView.margin > 0n) {
         const q = Number(formatUnits(perpView.margin, 18));
-        add(zh ? "BSC 永续保证金" : "BSC perp margin", q.toFixed(2), "1 USDT", q);
+        lines.push({ key: "bsc-margin", name: zh ? "BSC 永续保证金" : "BSC perp margin", qty: q.toFixed(2), px: "1 USDT", usd: q, chain: "bsc", kind: "locked" });
       }
       if (gate) {
         const who = account.toLowerCase();
@@ -240,17 +294,15 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
           if (deal.longUser.toLowerCase() === who) locked += deal.marginL;
           if (deal.shortUser.toLowerCase() === who) locked += deal.marginS;
         }
-        add(zh ? "X Layer 永续保证金" : "X Layer perp margin", locked.toFixed(2), "1 USDT", locked);
+        if (locked > 0) lines.push({ key: "x-margin", name: zh ? "X Layer 永续保证金" : "X Layer perp margin", qty: locked.toFixed(2), px: "1 USDT", usd: locked, chain: "xlayer", kind: "locked" });
       }
-      setWorth(lines);
+      setWorth(place(lines));
       setWorthAt(new Date().toLocaleTimeString("en-GB", { hour12: false, timeZone: "Asia/Singapore" }));
-    })().catch(() => {
-      if (!dead) setWorth([]);
-    });
-    return () => {
-      dead = true;
     };
-  }, [account, book, zh]);
+    load().catch(() => { if (!dead) setWorth((prev) => prev ?? []); });
+    const id = window.setInterval(() => { load().catch(() => undefined); }, 8000);
+    return () => { dead = true; window.clearInterval(id); };
+  }, [account, book, zh, holdTick]);
 
   if (!account) {
     return <p className="border border-gold px-3 py-4 text-sm">{zh ? "右上角先登入。这一页只读你的地址，不保管资产。" : "Sign in at the top right. This page only reads your address."}</p>;
@@ -378,8 +430,78 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
 
   const chips = book?.chips ?? [];
   const circuits = book?.circuits ?? [];
-
   const total = worth ? worth.reduce((sum, row) => sum + (row.usd ?? 0), 0) : null;
+  const picked = (worth ?? []).find((row) => row.key === pickKey) ?? null;
+
+  const sendHolding = async () => {
+    if (!picked || !account || picked.kind === "locked" || picked.raw == null || picked.decimals == null) {
+      setBad(true);
+      setNote(zh ? "这项锁在合约里，不能在这里转。" : "This is locked in a contract and cannot be sent from here.");
+      return;
+    }
+    const dest = sendTo.trim();
+    if (!/^0x[a-fA-F0-9]{40}$/.test(dest) || dest.toLowerCase() === account.toLowerCase()) {
+      setBad(true);
+      setNote(zh ? "收款地址不对，也不能转给自己。" : "The address is not valid, and you cannot send it to yourself.");
+      return;
+    }
+    let amount: bigint;
+    try {
+      amount = parseUnits(sendAmt.trim(), picked.decimals);
+    } catch {
+      setBad(true);
+      setNote(zh ? "数量不对。" : "The amount is not valid.");
+      return;
+    }
+    if (amount <= 0n || amount > picked.raw) {
+      setBad(true);
+      setNote(zh ? "数量超过余额。" : "That is more than the balance.");
+      return;
+    }
+    if (picked.kind === "native") {
+      const reserve = picked.chain === "bsc" ? BNB_GAS_RESERVE : OKB.gasReserve;
+      if (amount + reserve > picked.raw) {
+        setBad(true);
+        setNote(zh ? "要留一点做 gas，不能把余额转光。" : "Leave enough for gas. The full balance cannot be sent.");
+        return;
+      }
+    }
+    setBusy(true);
+    setBad(false);
+    try {
+      let hash = "";
+      if (picked.kind === "chip") {
+        hash = picked.ours
+          ? await transferTransistor(account, dest, picked.chipId ?? 0, amount)
+          : await transferBscTransistor(account, picked.token as Hex, picked.chipId ?? 0, amount, dest);
+      } else if (picked.chain === "bsc") {
+        await connectBsc();
+        const eth = getProvider();
+        if (!eth) throw new Error("nowallet");
+        const chainId = BSC.hex;
+        hash = (picked.kind === "native"
+          ? await eth.request({ method: "eth_sendTransaction", params: [{ from: account, to: dest, value: `0x${amount.toString(16)}`, chainId }] })
+          : await eth.request({ method: "eth_sendTransaction", params: [{ from: account, to: picked.token, data: encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [dest as Hex, amount] }), chainId }] })) as string;
+      } else {
+        await connectXLayer();
+        const eth = getProvider();
+        if (!eth) throw new Error("nowallet");
+        const chainId = XLAYER.hex;
+        hash = (picked.kind === "native"
+          ? await eth.request({ method: "eth_sendTransaction", params: [{ from: account, to: dest, value: `0x${amount.toString(16)}`, chainId }] })
+          : await eth.request({ method: "eth_sendTransaction", params: [{ from: account, to: picked.token, data: encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [dest as Hex, amount] }), chainId }] })) as string;
+      }
+      window.open(picked.chain === "xlayer" ? txUrl(hash) : bscTx(hash), "_blank", "noopener,noreferrer");
+      setNote(zh ? "已提交。余额随后再读。" : "Submitted. The balance is read again after.");
+      setHoldTick((n) => n + 1);
+      pull(account);
+    } catch (error) {
+      setBad(true);
+      setNote(say(error, zh));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <section className="flex flex-col gap-3">
@@ -412,27 +534,57 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
       </section>
 
       <div className="border border-gold">
-        <div className="flex items-center justify-between px-4 py-3">
-          <p className="text-[11px] tracking-[0.22em] text-gold">{zh ? "持仓" : "Holdings"}</p>
-          <p className="text-xs text-ink/50">{worthAt ? (zh ? `现价 ${worthAt}` : `Prices ${worthAt}`) : (zh ? "正在取现价" : "Reading prices")}</p>
-        </div>
-        <ul>
-          {(worth ?? []).map((row, index) => (
-            <li key={`${row.name}-${index}`} className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3 border-t border-gold/30 px-4 py-2.5">
-              <div className="min-w-0">
-                <p className="truncate text-sm">{row.name}</p>
-                <p className="truncate font-mono text-xs text-ink/55">{row.qty}{row.px && row.px !== "—" ? ` · ${row.px}` : ""}</p>
+        <button type="button" className="flex w-full items-center justify-between px-4 py-3 text-left" onClick={() => setHoldOpen((open) => !open)}>
+          <span>
+            <span className="block text-[11px] tracking-[0.22em] text-gold">{zh ? "持仓" : "Holdings"}</span>
+            <span className="mt-1 block text-xs text-ink/55">{worth ? (zh ? `${worth.length} 项 · ${worthAt}` : `${worth.length} · ${worthAt}`) : (zh ? "正在读余额" : "Reading balances")}</span>
+          </span>
+          <span className="text-xs text-ink/50">{holdOpen ? (zh ? "收起" : "Hide") : (zh ? "打开" : "Open")}</span>
+        </button>
+        {holdOpen ? (
+          <>
+            <ul>
+              {(worth ?? []).map((row) => (
+                <li key={row.key} className="border-t border-gold/30">
+                  <button type="button" className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3 px-4 py-2.5 text-left ${pickKey === row.key ? "bg-gold/10" : ""}`} onClick={() => setPickKey(row.key)}>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm">{row.name}</span>
+                      <span className="block truncate font-mono text-xs text-ink/55">{row.chain === "bsc" ? "BSC" : row.chain === "xlayer" ? "X Layer" : ""}{row.chain ? " · " : ""}{row.qty}{row.px && row.px !== "—" ? ` · ${row.px}` : ""}</span>
+                    </span>
+                    <span className="font-mono text-sm">{row.usd == null ? "—" : money(row.usd)}</span>
+                  </button>
+                </li>
+              ))}
+              {worth && worth.length === 0 ? <li className="border-t border-gold/30 px-4 py-3 text-sm text-ink/60">{zh ? "这个地址没有读到余额。" : "No balance on this address."}</li> : null}
+              {!worth ? <li className="border-t border-gold/30 px-4 py-3 text-sm text-ink/60">{zh ? "正在读余额。" : "Reading balances."}</li> : null}
+            </ul>
+            {picked ? (
+              <div className="border-t border-gold/30 px-4 py-3">
+                <p className="text-sm">{picked.name}</p>
+                <p className="mt-1 font-mono text-xs text-ink/55">{picked.chain === "bsc" ? "BSC" : "X Layer"} · {picked.qty} · {picked.px}</p>
+                {picked.token ? <p className="mt-1 break-all font-mono text-[11px] text-ink/40">{picked.token}</p> : null}
+                {picked.kind === "locked" ? (
+                  <p className="mt-2 text-xs text-ink/60">{zh ? "这项锁在合约里，不能在这里转出。" : "This is locked in a contract and cannot be sent from here."}</p>
+                ) : (
+                  <div className="mt-2 grid gap-2">
+                    <input className="min-h-10 border border-gold/50 bg-transparent px-2 font-mono text-xs" placeholder={zh ? "收款地址" : "Recipient"} value={sendTo} onChange={(event) => setSendTo(event.target.value)} />
+                    <div className="flex gap-2">
+                      <input className="min-h-10 min-w-0 flex-1 border border-gold/50 bg-transparent px-2 font-mono text-xs" placeholder={zh ? "数量" : "Amount"} value={sendAmt} onChange={(event) => setSendAmt(event.target.value)} />
+                      <button type="button" className="min-h-10 border border-gold px-3 text-xs" onClick={() => {
+                        if (picked.raw == null || picked.decimals == null) return;
+                        const reserve = picked.kind === "native" ? (picked.chain === "bsc" ? BNB_GAS_RESERVE : OKB.gasReserve) : 0n;
+                        const max = picked.raw > reserve ? picked.raw - reserve : 0n;
+                        setSendAmt(formatUnits(max, picked.decimals));
+                      }}>{zh ? "全部" : "Max"}</button>
+                    </div>
+                    <button type="button" disabled={busy} className="min-h-11 bg-ink text-sm text-paper disabled:opacity-40" onClick={sendHolding}>{zh ? "签名转出" : "Sign and send"}</button>
+                  </div>
+                )}
               </div>
-              <p className="font-mono text-sm">{row.usd == null ? "—" : money(row.usd)}</p>
-            </li>
-          ))}
-          {worth && worth.length === 0 ? <li className="border-t border-gold/30 px-4 py-3 text-sm text-ink/60">{zh ? "这个地址没有读到余额。" : "No balance on this address."}</li> : null}
-          {!worth ? <li className="border-t border-gold/30 px-4 py-3 text-sm text-ink/60">{zh ? "正在读余额。" : "Reading balances."}</li> : null}
-        </ul>
-        <details className="border-t border-gold/30 px-4 py-2 text-xs text-ink/55">
-          <summary className="cursor-pointer">{zh ? "计价怎么算" : "How this is priced"}</summary>
-          <p className="mt-2 leading-5">{zh ? "USDT 和 X Layer USDT 按 1 枚 = 1 USDT。钱包里的 TAPE 用 TAPE/USDT0 池子价。加进池子的 TAPE 在下面的质押里。BNB、BEM、OKB 和美股代币用各自池子现价。晶体管用这台处理器的最高买单，再乘 BNB 现价。没有买单的不计。电路和未实现盈亏不算。" : "USDT and X Layer USDT count at 1. Wallet TAPE uses the TAPE/USDT0 pool. Staked TAPE is listed below. BNB, BEM, OKB and the stock tokens use their pool price. Transistors use that processor's best bid times the BNB price. No bid means it is left out. Circuits and unrealized PnL are not included."}</p>
-        </details>
+            ) : <p className="border-t border-gold/30 px-4 py-2 text-xs text-ink/50">{zh ? "点一项，再填地址和数量。" : "Pick one, then enter an address and an amount."}</p>}
+            <p className="border-t border-gold/30 px-4 py-2 text-xs leading-5 text-ink/55">{zh ? "TAPE 在最前，BEM 其次，其余按金额从高到低。钱包余额约 8 秒重读，不等电路名单。质押和保证金不能在这里转。TAPE 用 TAPE/USDT0 池子价。晶体管用最高买单。没有价格的金额写成 —，不写成 0。" : "TAPE is first, BEM is second, then the rest by value. Wallet balances refresh about every 8 seconds and do not wait for the circuit list. Stakes and margin cannot be sent here. TAPE uses the TAPE/USDT0 pool. A missing price is shown as —, not zero."}</p>
+          </>
+        ) : null}
       </div>
 
       <StakeLines zh={zh} stakes={stakes} />
