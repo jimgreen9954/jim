@@ -140,7 +140,7 @@ function LockList({ locks, zh, busy, empty, onTake }: { locks: TermLock[]; zh: b
               <span className="block text-ink/55">{zh ? "到期，新加坡时间" : "Unlocks, Singapore"} {sgWhen(row.unlock)}</span>
             </p>
             <button type="button" disabled={busy || !ready} className="min-h-11 w-full border border-gold px-3 text-sm disabled:opacity-40 sm:w-auto" onClick={() => onTake(row.index)}>
-              {ready ? (zh ? "取回本金" : "Take principal") : (zh ? "未到期" : "Locked")}
+              {ready ? (zh ? "取回本金" : "Take principal") : (zh ? "到期再取" : "After expiry")}
             </button>
           </li>
         );
@@ -327,23 +327,6 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
     }
   };
 
-  if (!desk) {
-    return (
-      <section className="border border-gold bg-card px-3 py-4 sm:px-4">
-        <p className="text-[11px] tracking-[0.22em] text-gold">{zh ? "回购" : "Buyback"}</p>
-        <h2 className="mt-1 font-display text-3xl italic">{zh ? "0.1 美元收一枚 TAPE" : "0.1 dollar for one TAPE"}</h2>
-        <p className="mt-2 text-sm leading-6">
-          {zh
-            ? "固定价，不是现货价。先用买方地址部署这一份。买方地址写死为 0x585d2DF4B8fDDA783B074555e6F3787e3fCB39D7。只有这个地址能充 X Layer 的 USDT0，也只有这个地址能取回没花掉的 USDT0 和买到的 TAPE。其他地址不能充 USDT0，只能卖出整数枚 TAPE，卖出当时收到 USDT0。Gas Limit 填 5000000。部署完把地址发我写进页面。"
-            : "A fixed bid, not the spot price. Deploy this from the buyer address. The buyer is fixed as 0x585d2DF4B8fDDA783B074555e6F3787e3fCB39D7. Only that address can add X Layer USDT0, and only that address can take back unspent USDT0 and bought TAPE. Every other address cannot add USDT0. It can only sell whole TAPE and is paid USDT0 in that same transaction. Set Gas Limit to 5000000, then send me the address to hardcode."}
-        </p>
-        <button type="button" disabled={busy} className="mt-3 min-h-12 w-full bg-ink text-sm text-paper disabled:opacity-40 sm:w-auto sm:px-6" onClick={deploy}>{zh ? "部署回购合约" : "Deploy the buyback"}</button>
-        <OfficialBridge account={account} zh={zh} xBem={null} />
-        {note ? <p className={`mt-2 break-all text-sm leading-6 ${bad ? "text-sell" : ""}`}>{note}</p> : null}
-      </section>
-    );
-  }
-
   const maxTape = row && row.usdtPool > 0n ? row.usdtPool / 100_000n : 0n;
   const tapeApy = stake ? apy(stake.bemPot, 8, bemPx, stake.tapeStakedTotal, 8, tapePx) : "—";
   const bemApy = stake ? apy(stake.tapePot, 8, tapePx, stake.bemStakedTotal, 8, bemPx) : "—";
@@ -370,6 +353,13 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
           </div>
         </dl>
         <p className="mt-2 break-all font-mono text-[11px] text-ink/50">{zh ? "买方" : "Buyer"} {TAPE_BUYER}</p>
+        {!desk ? (
+          <>
+            <p className="mt-3 text-sm leading-6">{zh ? "新回购还没部署。只有上面这个地址能充 USDT0 和取回剩余。下面的质押不靠这份合约，现在就能看。" : "The new buyback is not deployed yet. Only the address above can deposit USDT0 and take back what is left. Stake below does not use this contract and can be read now."}</p>
+            <button type="button" disabled={busy} className="mt-3 min-h-12 w-full bg-ink text-sm text-paper disabled:opacity-40 sm:w-auto sm:px-6" onClick={deploy}>{zh ? "部署回购合约" : "Deploy the buyback"}</button>
+          </>
+        ) : (
+          <>
         <p className="mt-1 break-all font-mono text-[11px] text-ink/50">
           <a className="underline" href={`${XLAYER.explorer}/address/${desk}`} target="_blank" rel="noreferrer">{desk}</a>
         </p>
@@ -399,6 +389,8 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
           <p className="text-sm leading-6">{zh ? "这里不能充 USDT0。只能卖出左边的整数枚 TAPE，卖出当时收到 USDT0。充入和取回剩余 USDT0，只属于上面的买方地址。" : "USDT0 cannot be deposited here. Sell whole TAPE on the left and receive USDT0 in that transaction. Depositing and withdrawing the remaining USDT0 belong only to the buyer address above."}</p>
           )}
         </div>
+          </>
+        )}
       </article>
       {!term ? (
         <article className="border border-gold bg-card px-3 py-4 sm:px-4">
