@@ -158,8 +158,8 @@ function apy(pot: bigint, potDec: number, potPx: number | null, staked: bigint, 
 }
 
 export function TapeDesk({ account, zh }: { account: string | null; zh: boolean }) {
-  const [desk, setDesk] = useState<string | null>(null);
-  const [term, setTerm] = useState<string | null>(null);
+  const [desk, setDesk] = useState<string | null>(() => deskAddress());
+  const [term, setTerm] = useState<string | null>(() => termAddress());
   const [row, setRow] = useState<DeskState | null>(null);
   const [stake, setStake] = useState<TermState | null>(null);
   const [miss, setMiss] = useState(false);

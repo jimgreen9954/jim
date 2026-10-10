@@ -4,8 +4,8 @@ import { TAPE_BEM, TAPE_TOKEN } from "@/lib/tape-pool";
 import { getProvider } from "@/lib/wallet";
 import { connectXLayer, XLAYER } from "@/lib/xlayer";
 
-/** Empty until the timed stake contract is deployed and this constant is filled in. */
-export const TAPE_TERM = "" as const;
+/** Deployed timed stake. Creation bytecode matches contracts/TapeTerm.sol. No admin. */
+export const TAPE_TERM = "0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A" as const;
 
 const KEY = "tapeliquid-term";
 const abi = parseAbi([
