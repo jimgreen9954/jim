@@ -1,3 +1,4 @@
+import { createServerFn } from "@tanstack/react-start";
 import { createPublicClient, defineChain, encodeFunctionData, fallback, formatUnits, http, parseAbi, type Hex } from "viem";
 import { connectXLayer, DEPLOYED, XLAYER } from "@/lib/xlayer";
 import { getProvider } from "@/lib/wallet";
@@ -78,6 +79,56 @@ function dailyAt(start: bigint): bigint {
   return DAY >> era;
 }
 
+export type TapeWire = {
+  supply: string;
+  cap: string;
+  weight: string;
+  balance: string;
+  start: string;
+  daily: string;
+  circuits: number;
+  open: number;
+  scanOk: boolean;
+  scanning: boolean;
+  seats: { id: string; gates: string; on: boolean; pending: string; share: string }[];
+};
+
+function asAccount(input: { account?: string } | undefined) {
+  const account = (input?.account ?? "").trim();
+  if (account && !/^0x[0-9a-fA-F]{40}$/.test(account)) throw new Error("account");
+  return account;
+}
+
+export const getTapeHead = createServerFn({ method: "POST" })
+  .validator(asAccount)
+  .handler(async ({ data }) => {
+    const { loadTapeHead } = await import("./tape-mine.server");
+    return loadTapeHead(data || null);
+  });
+
+export const getTapeSeats = createServerFn({ method: "POST" })
+  .validator(asAccount)
+  .handler(async ({ data }) => {
+    const { loadTapeSeats } = await import("./tape-mine.server");
+    return loadTapeSeats(data || null);
+  });
+
+function boardFrom(wire: TapeWire): TapeBoard {
+  return {
+    supply: BigInt(wire.supply),
+    cap: BigInt(wire.cap),
+    weight: BigInt(wire.weight),
+    balance: BigInt(wire.balance),
+    start: BigInt(wire.start),
+    daily: BigInt(wire.daily),
+    circuits: wire.circuits,
+    open: wire.open,
+    scanOk: wire.scanOk,
+    scanning: wire.scanning,
+    seats: wire.seats.map((row) => ({ ...row, pending: BigInt(row.pending) })),
+  };
+}
+
 let mineFlight: Promise<TapeBoard> | null = null;
 let mineKey = "";
 
@@ -85,10 +136,24 @@ export function readTapeMine(account: string | null, onHead?: (board: TapeBoard)
   const key = (account ?? "").toLowerCase();
   if (mineFlight && mineKey === key) return mineFlight;
   mineKey = key;
-  mineFlight = loadTapeMine(account, onHead).finally(() => {
+  mineFlight = readThroughSite(account, onHead).finally(() => {
     mineFlight = null;
   });
   return mineFlight;
+}
+
+async function readThroughSite(account: string | null, onHead?: (board: TapeBoard) => void): Promise<TapeBoard> {
+  try {
+    const head = boardFrom(await getTapeHead({ data: { account: account ?? "" } }));
+    onHead?.({ ...head, scanning: true, seats: [], scanOk: false });
+    try {
+      return boardFrom(await getTapeSeats({ data: { account: account ?? "" } }));
+    } catch {
+      return { ...head, scanning: false, scanOk: false, seats: [] };
+    }
+  } catch {
+    return loadTapeMine(account, onHead);
+  }
 }
 
 async function readChunk(contracts: readonly unknown[]) {

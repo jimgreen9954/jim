@@ -100,7 +100,7 @@ async function ensureXLayer(): Promise<void> {
           {
             chainId: XLAYER.hex,
             chainName: "X Layer",
-            rpcUrls: [XLAYER.rpc],
+            rpcUrls: ["https://xlayerrpc.okx.com", XLAYER.rpc, "https://xlayer.drpc.org"],
             nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
             blockExplorerUrls: [XLAYER.explorer],
           },
