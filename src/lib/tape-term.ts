@@ -180,7 +180,22 @@ export async function fundTermBem(from: string, amount: bigint) {
   await approve(from, TAPE_BEM, amount);
   return call(from, encodeFunctionData({ abi, functionName: "fundBem", args: [amount] }));
 }
-export async function withdrawTermBem(from: string, amount: bigint) {
+const YEAR = 365n * 24n * 60n * 60n;
+
+async function rewardThatFits(from: string, kind: "bem" | "tape"): Promise<bigint> {
+  const fresh = await readTerm(from);
+  if (!fresh) throw new Error("term");
+  const cap = kind === "bem"
+    ? (fresh.bemSponsor < fresh.bemPot ? fresh.bemSponsor : fresh.bemPot)
+    : (fresh.tapeSponsor < fresh.tapePot ? fresh.tapeSponsor : fresh.tapePot);
+  const slip = cap * 180n / YEAR + 1n;
+  const amount = cap > slip ? cap - slip : cap;
+  if (amount <= 0n) throw new Error("amount");
+  return amount;
+}
+
+export async function withdrawTermBem(from: string, _amount: bigint) {
+  const amount = await rewardThatFits(from, "bem");
   return call(from, encodeFunctionData({ abi, functionName: "withdrawBem", args: [amount] }));
 }
 export async function stakeTermBem(from: string, amount: bigint, term: TermId) {
@@ -197,6 +212,7 @@ export async function fundTermTape(from: string, amount: bigint) {
   await approve(from, TAPE_TOKEN, amount);
   return call(from, encodeFunctionData({ abi, functionName: "fundTape", args: [amount] }));
 }
-export async function withdrawTermTape(from: string, amount: bigint) {
+export async function withdrawTermTape(from: string, _amount: bigint) {
+  const amount = await rewardThatFits(from, "tape");
   return call(from, encodeFunctionData({ abi, functionName: "withdrawTapeReward", args: [amount] }));
 }

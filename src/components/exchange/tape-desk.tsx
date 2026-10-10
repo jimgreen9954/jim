@@ -216,7 +216,7 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
     return () => { dead = true; window.clearInterval(id); };
   }, [account, desk, term]);
 
-  const run = (task: () => Promise<unknown>, ok: string, refresh: "desk" | "term", kind: "usdt" | "stake" | "reward" = "usdt") => {
+  const run = (task: () => Promise<unknown>, ok: string, refresh: "desk" | "term", kind: "usdt" | "stake" | "reward" | "unvest" = "usdt") => {
     if (!account) {
       setBad(true);
       setNote(zh ? "先在右上角登入。这一页不会跳进 OKX。" : "Sign in at the top right. This page stays here.");
@@ -256,7 +256,9 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
         }
         setNote(kind === "stake"
           ? (zh ? "没有锁上。要签两笔：第一笔只授权，币还在钱包；第二笔才锁进期限合约。两笔都要确认。Gas Limit 填 500000。" : "It did not lock. Two signatures: the first only approves and the coins stay in the wallet; the second locks them. Confirm both. Set Gas Limit to 500000.")
-          : kind === "reward"
+          : kind === "unvest"
+            ? (zh ? "没有取回来。刷新后再点一次。已经按 365 天开始分出去的那一点不能退，其余的可以退。" : "It did not come back. Refresh and tap it once more. The trace that already started vesting over 365 days cannot be returned. The rest can.")
+            : kind === "reward"
             ? (zh ? "奖励没有充进去。要签两笔：第一笔只授权；第二笔才充入。两笔都要确认。Gas Limit 填 500000。" : "The reward did not go in. Two signatures: approve, then deposit. Confirm both. Set Gas Limit to 500000.")
             : (zh ? "没有充进去。要签两笔：第一笔只授权，币还在钱包；第二笔才进回购。两笔都要确认。地址是上面这一份。Gas Limit 填 500000。" : "It did not go in. Two signatures: the first only approves, the coins stay in the wallet; the second deposits. Confirm both. The address is the one above. Set Gas Limit to 500000."));
       })
@@ -443,7 +445,7 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
             <input value={rewardBem} onChange={(event) => setRewardBem(event.target.value)} inputMode="decimal" placeholder={zh ? "充入 BEM 奖励" : "BEM reward"} className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono text-base text-ink sm:text-sm" />
             <div className="grid grid-cols-3 gap-2">
               <button type="button" disabled={busy || !term} className="min-h-12 border border-gold px-1 text-sm disabled:opacity-40" onClick={() => run(() => fundTermBem(account ?? "", units(rewardBem, 8)), zh ? "BEM 奖励已充入。" : "BEM reward added.", "term", "reward")}>{zh ? "充奖励" : "Add"}</button>
-              <button type="button" disabled={busy || !term || !stake || stake.bemSponsor === 0n} className="min-h-12 border border-gold px-1 text-sm disabled:opacity-40" onClick={() => run(() => withdrawTermBem(account ?? "", stake?.bemSponsor ?? 0n), zh ? "未分完的 BEM 已取回。" : "Unvested BEM is back.", "term", "reward")}>{zh ? "取未分完" : "Unvested"}</button>
+              <button type="button" disabled={busy || !term || !stake || stake.bemSponsor === 0n} className="min-h-12 border border-gold px-1 text-sm disabled:opacity-40" onClick={() => run(() => withdrawTermBem(account ?? "", stake?.bemSponsor ?? 0n), zh ? "能退的 BEM 已取回。已经开始分给质押的那一点留在池子里。" : "The BEM that can be returned is back. The part that already started vesting stays in the pool.", "term", "unvest")}>{zh ? "取未分完" : "Unvested"}</button>
               <button type="button" disabled={busy || !term || !stake || stake.bemOwed === 0n} className="min-h-12 border border-gold px-1 text-sm disabled:opacity-40" onClick={() => run(() => claimTermBem(account ?? ""), zh ? "BEM 已领取。本金还锁着。" : "BEM claimed. Principal stays locked.", "term", "stake")}>{zh ? "领取" : "Claim"}</button>
             </div>
           </div>
@@ -481,7 +483,7 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
             <input value={rewardTape} onChange={(event) => setRewardTape(event.target.value)} inputMode="decimal" placeholder={zh ? "充入 TAPE 奖励" : "TAPE reward"} className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono text-base text-ink sm:text-sm" />
             <div className="grid grid-cols-3 gap-2">
               <button type="button" disabled={busy || !term} className="min-h-12 border border-gold px-1 text-sm disabled:opacity-40" onClick={() => run(() => fundTermTape(account ?? "", units(rewardTape, 8)), zh ? "TAPE 奖励已充入。" : "TAPE reward added.", "term", "reward")}>{zh ? "充奖励" : "Add"}</button>
-              <button type="button" disabled={busy || !term || !stake || stake.tapeSponsor === 0n} className="min-h-12 border border-gold px-1 text-sm disabled:opacity-40" onClick={() => run(() => withdrawTermTape(account ?? "", stake?.tapeSponsor ?? 0n), zh ? "未分完的 TAPE 已取回。" : "Unvested TAPE is back.", "term", "reward")}>{zh ? "取未分完" : "Unvested"}</button>
+              <button type="button" disabled={busy || !term || !stake || stake.tapeSponsor === 0n} className="min-h-12 border border-gold px-1 text-sm disabled:opacity-40" onClick={() => run(() => withdrawTermTape(account ?? "", stake?.tapeSponsor ?? 0n), zh ? "能退的 TAPE 已取回。已经开始分给质押的那一点留在池子里。" : "The TAPE that can be returned is back. The part that already started vesting stays in the pool.", "term", "unvest")}>{zh ? "取未分完" : "Unvested"}</button>
               <button type="button" disabled={busy || !term || !stake || stake.tapeOwed === 0n} className="min-h-12 border border-gold px-1 text-sm disabled:opacity-40" onClick={() => run(() => claimTermTape(account ?? ""), zh ? "TAPE 已领取。本金还锁着。" : "TAPE claimed. Principal stays locked.", "term", "stake")}>{zh ? "领取" : "Claim"}</button>
             </div>
           </div>
