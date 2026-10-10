@@ -29,7 +29,7 @@ export function MineDesk() {
     const pull = () => {
       readPodStats().then((row) => { if (!dead) setStats(row); }).catch(() => undefined);
       if (sheet !== "claim") return;
-      readTapeMine(account).then((row) => { if (!dead) { setTape(row); setTapeErr(null); } }).catch(() => { if (!dead) setTapeErr(zh ? "链上没读到。失败不会写成 0。" : "The chain did not answer. A miss is not written as zero."); });
+      readTapeMine(account, (head) => { if (!dead) { setTape(head); setTapeErr(null); } }).then((row) => { if (!dead) { setTape(row); setTapeErr(null); } }).catch(() => { if (!dead) setTapeErr(zh ? "链上没读到。失败不会写成 0。" : "The chain did not answer. A miss is not written as zero."); });
     };
     pull();
     const id = window.setInterval(pull, sheet === "claim" ? 30_000 : 60_000);
@@ -139,7 +139,7 @@ export function MineDesk() {
           <Cell k={zh ? "这地址约占今日" : "About today"} v={account && tape ? `${amount(myShare)} TAPE` : "—"} />
         </dl>
         <p className="mt-3 text-sm">{zh ? "这个地址待领" : "Pending here"} <span className="font-mono">{account && tape ? `${amount(pendingTape)} TAPE` : "—"}</span></p>
-        <p className="mt-1 text-xs text-ink/50">{tapeErr ? tapeErr : !tape?.scanOk ? (zh ? "排放读到了，电路名单这次没扫全。刷新再试，不要把空名单当成没有电路。" : "Emission is in. The circuit list did not finish. Refresh before treating an empty list as none.") : account && tape ? (zh ? `钱包 ${amount(tape.balance)} TAPE · 日排放写死 7,200` : `Wallet ${amount(tape.balance)} TAPE · 7,200 a day, fixed`) : (zh ? "连上 X Layer 后读这个地址的电路" : "Connect on X Layer to read this address")}</p>
+        <p className="mt-1 text-xs text-ink/50">{tapeErr ? tapeErr : tape?.scanning ? (zh ? "排放已经读到。正在对最近 300 张电路，对完才列出待领。" : "Emission is in. Matching the latest 300 circuits. Pending shows when that finishes.") : !tape?.scanOk ? (zh ? "排放读到了，电路名单这次没扫全。刷新再试，不要把空名单当成没有电路。" : "Emission is in. The circuit list did not finish. Refresh before treating an empty list as none.") : account && tape ? (zh ? `钱包 ${amount(tape.balance)} TAPE · 日排放写死 7,200` : `Wallet ${amount(tape.balance)} TAPE · 7,200 a day, fixed`) : (zh ? "连上 X Layer 后读这个地址的电路" : "Connect on X Layer to read this address")}</p>
         <div className="mt-2 grid grid-cols-[3.5rem_4.5rem_4rem_1fr_5rem] gap-2 px-2 text-xs text-ink/50">
           <span>{zh ? "编号" : "Id"}</span>
           <span>{zh ? "门数" : "Gates"}</span>

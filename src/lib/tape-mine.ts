@@ -1,4 +1,4 @@
-import { createPublicClient, defineChain, encodeFunctionData, formatUnits, http, parseAbi, type Hex } from "viem";
+import { createPublicClient, defineChain, encodeFunctionData, fallback, formatUnits, http, parseAbi, type Hex } from "viem";
 import { connectXLayer, DEPLOYED, XLAYER } from "@/lib/xlayer";
 import { getProvider } from "@/lib/wallet";
 
@@ -35,7 +35,12 @@ const xlayer = defineChain({
   contracts: { multicall3: { address: "0xcA11bde05977b3631167028862bE2a173976CA11" } },
 });
 
-const client = createPublicClient({ chain: xlayer, transport: http(XLAYER.rpc, { timeout: 12_000 }) });
+const RPCS = [XLAYER.rpc, "https://xlayerrpc.okx.com", "https://xlayer.drpc.org"];
+
+const client = createPublicClient({
+  chain: xlayer,
+  transport: fallback(RPCS.map((url) => http(url, { timeout: 8_000, retryCount: 0 })), { rank: false }),
+});
 
 export function tapeText(amount: bigint): string {
   return formatUnits(amount, 8);
@@ -60,10 +65,12 @@ export type TapeBoard = {
   open: number;
   seats: TapeSeat[];
   scanOk: boolean;
+  scanning: boolean;
 };
 
 const DAY = 7200n * 10n ** 8n;
 const HALVING = 210_000n * 600n;
+const CAP = 21_000_000n * 10n ** 8n;
 
 function dailyAt(start: bigint): bigint {
   const era = (BigInt(Math.floor(Date.now() / 1000)) - start) / HALVING;
@@ -74,29 +81,58 @@ function dailyAt(start: bigint): bigint {
 let mineFlight: Promise<TapeBoard> | null = null;
 let mineKey = "";
 
-export function readTapeMine(account: string | null): Promise<TapeBoard> {
+export function readTapeMine(account: string | null, onHead?: (board: TapeBoard) => void): Promise<TapeBoard> {
   const key = (account ?? "").toLowerCase();
   if (mineFlight && mineKey === key) return mineFlight;
   mineKey = key;
-  mineFlight = loadTapeMine(account).finally(() => {
+  mineFlight = loadTapeMine(account, onHead).finally(() => {
     mineFlight = null;
   });
   return mineFlight;
 }
 
-async function loadTapeMine(account: string | null): Promise<TapeBoard> {
-  const [supply, cap, weight, balance, start, next] = await Promise.all([
-    client.readContract({ address: TAPE, abi: tokenAbi, functionName: "totalSupply" }),
-    client.readContract({ address: TAPE, abi: tokenAbi, functionName: "CAP" }),
-    client.readContract({ address: TAPE_MINE, abi: mineAbi, functionName: "totalWeight" }),
-    account
-      ? client.readContract({ address: TAPE, abi: tokenAbi, functionName: "balanceOf", args: [account as Hex] })
-      : Promise.resolve(0n),
-    client.readContract({ address: TAPE_MINE, abi: mineAbi, functionName: "start" }),
-    client.readContract({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "nextId" }),
-  ]);
-  if (cap !== 21_000_000n * 10n ** 8n) throw new Error("cap");
+async function readChunk(contracts: readonly unknown[]) {
+  const out: { status: string; result?: unknown }[] = [];
+  for (let i = 0; i < contracts.length; i += 180) {
+    const part = await client.multicall({
+      contracts: contracts.slice(i, i + 180) as never,
+      allowFailure: true,
+      batchSize: 180,
+    });
+    out.push(...(part as { status: string; result?: unknown }[]));
+  }
+  return out;
+}
+
+async function loadTapeMine(account: string | null, onHead?: (board: TapeBoard) => void): Promise<TapeBoard> {
+  const who = (account ?? "") as Hex;
+  const headCalls = [
+    { address: TAPE, abi: tokenAbi, functionName: "totalSupply" as const },
+    { address: TAPE, abi: tokenAbi, functionName: "CAP" as const },
+    { address: TAPE_MINE, abi: mineAbi, functionName: "totalWeight" as const },
+    { address: TAPE_MINE, abi: mineAbi, functionName: "start" as const },
+    { address: DEPLOYED.circuits, abi: circuitAbi, functionName: "nextId" as const },
+    ...(account ? [{ address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [who] as const }] : []),
+  ];
+  const head = await client.multicall({ contracts: headCalls, allowFailure: false });
+  const supply = head[0] as bigint;
+  const cap = head[1] as bigint;
+  const weight = head[2] as bigint;
+  const start = head[3] as bigint;
+  const next = head[4] as bigint;
+  const balance = account ? (head[5] as bigint) : 0n;
+  if (cap !== CAP) throw new Error("cap");
+  const daily = dailyAt(start);
   const last = Number(next) - 1;
+  const partial: TapeBoard = {
+    supply, cap, weight, balance, start, daily,
+    circuits: Math.max(0, last),
+    open: 0,
+    seats: [],
+    scanOk: false,
+    scanning: true,
+  };
+  onHead?.(partial);
   const ids: number[] = [];
   for (let id = last; id >= 1 && ids.length < 300; id -= 1) ids.push(id);
   const calls = ids.flatMap((id) => [
@@ -108,12 +144,9 @@ async function loadTapeMine(account: string | null): Promise<TapeBoard> {
   let open = 0;
   const seats: TapeSeat[] = [];
   let scanOk = true;
-  const who = account?.toLowerCase() ?? "";
-  const daily = dailyAt(start);
+  const mine = account?.toLowerCase() ?? "";
   try {
-    const read = calls.length
-      ? await client.multicall({ contracts: calls, allowFailure: true, batchSize: 120 })
-      : [];
+    const read = calls.length ? await readChunk(calls) : [];
     for (let i = 0; i < ids.length; i += 1) {
       const owner = read[i * 4];
       const info = read[i * 4 + 1];
@@ -124,7 +157,7 @@ async function loadTapeMine(account: string | null): Promise<TapeBoard> {
       const seatRow = seat?.status === "success" && Array.isArray(seat.result) ? seat.result : null;
       const pendingAmt = pending?.status === "success" && typeof pending.result === "bigint" ? pending.result : null;
       if (seatRow && seatRow[3]) open += 1;
-      if (!who || !ownerAddr || ownerAddr.toLowerCase() !== who) continue;
+      if (!mine || !ownerAddr || ownerAddr.toLowerCase() !== mine) continue;
       if (!infoRow || pendingAmt == null || !seatRow) continue;
       const gates = infoRow[3];
       if (typeof gates !== "bigint") continue;
@@ -142,7 +175,7 @@ async function loadTapeMine(account: string | null): Promise<TapeBoard> {
     scanOk = false;
   }
   seats.sort((a, b) => Number(b.on) - Number(a.on) || Number(b.id) - Number(a.id));
-  return { supply, cap, weight, balance, start, daily, circuits: Math.max(0, last), open, seats, scanOk };
+  return { supply, cap, weight, balance, start, daily, circuits: Math.max(0, last), open, seats, scanOk, scanning: false };
 }
 
 async function preflight(to: Hex, from: string, data: Hex) {
