@@ -133,20 +133,29 @@ async function send(from: string, to: Hex | undefined, data: Hex): Promise<Hex> 
   return hash;
 }
 
+async function probe(from: string, to: Hex, data: Hex) {
+  try {
+    await client.call({ account: from as Hex, to, data });
+  } catch (err) {
+    const text = err instanceof Error ? `${err.name} ${err.message}` : "";
+    if (/revert|invalid opcode|execution/i.test(text)) throw err;
+  }
+}
+
 async function approve(from: string, token: Hex, amount: bigint) {
   const term = termAddress();
   if (!term) throw new Error("term");
   const allowance = await client.readContract({ address: token, abi: erc20, functionName: "allowance", args: [from as Hex, term] });
   if (allowance >= amount) return;
   const data = encodeFunctionData({ abi: erc20, functionName: "approve", args: [term, amount] });
-  await client.call({ account: from as Hex, to: token, data });
+  await probe(from, token, data);
   await send(from, token, data);
 }
 
 async function call(from: string, data: Hex) {
   const term = termAddress();
   if (!term) throw new Error("term");
-  await client.call({ account: from as Hex, to: term, data });
+  await probe(from, term, data);
   return send(from, term, data);
 }
 
