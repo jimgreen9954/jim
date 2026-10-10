@@ -102,8 +102,8 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
   const [freshAt, setFreshAt] = useState("");
   const [holdOpen, setHoldOpen] = useState(false);
   const [pickKey, setPickKey] = useState("");
-  const [sendTo, setSendTo] = useState("");
-  const [sendAmt, setSendAmt] = useState("");
+  const [sends, setSends] = useState<{ to: string; amt: string }[]>([{ to: "", amt: "" }]);
+  const [sendAck, setSendAck] = useState(false);
   const [holdTick, setHoldTick] = useState(0);
 
   useEffect(() => onAccount(setAccount), []);
@@ -434,70 +434,86 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
   const picked = (worth ?? []).find((row) => row.key === pickKey) ?? null;
 
   const sendHolding = async () => {
+    if (!sendAck) {
+      setBad(true);
+      setNote(zh ? "先勾上确认，再转。" : "Tick the confirmation before sending.");
+      return;
+    }
     if (!picked || !account || picked.kind === "locked" || picked.raw == null || picked.decimals == null) {
       setBad(true);
       setNote(zh ? "这项锁在合约里，不能在这里转。" : "This is locked in a contract and cannot be sent from here.");
       return;
     }
-    const dest = sendTo.trim();
-    if (!/^0x[a-fA-F0-9]{40}$/.test(dest) || dest.toLowerCase() === account.toLowerCase()) {
-      setBad(true);
-      setNote(zh ? "收款地址不对，也不能转给自己。" : "The address is not valid, and you cannot send it to yourself.");
-      return;
-    }
-    let amount: bigint;
-    try {
-      amount = parseUnits(sendAmt.trim(), picked.decimals);
-    } catch {
-      setBad(true);
-      setNote(zh ? "数量不对。" : "The amount is not valid.");
-      return;
-    }
-    if (amount <= 0n || amount > picked.raw) {
-      setBad(true);
-      setNote(zh ? "数量超过余额。" : "That is more than the balance.");
-      return;
-    }
-    if (picked.kind === "native") {
-      const reserve = picked.chain === "bsc" ? BNB_GAS_RESERVE : OKB.gasReserve;
-      if (amount + reserve > picked.raw) {
+    const jobs: { to: string; amount: bigint }[] = [];
+    for (const row of sends) {
+      if (!row.to.trim() && !row.amt.trim()) continue;
+      const dest = row.to.trim();
+      if (!/^0x[a-fA-F0-9]{40}$/.test(dest) || dest.toLowerCase() === account.toLowerCase()) {
         setBad(true);
-        setNote(zh ? "要留一点做 gas，不能把余额转光。" : "Leave enough for gas. The full balance cannot be sent.");
+        setNote(zh ? "有一行地址不对，或是你自己。" : "One address is not valid, or it is your own.");
         return;
       }
+      let amount: bigint;
+      try {
+        amount = parseUnits(row.amt.trim(), picked.decimals);
+      } catch {
+        setBad(true);
+        setNote(zh ? "有一行数量不对。" : "One amount is not valid.");
+        return;
+      }
+      if (amount <= 0n) {
+        setBad(true);
+        setNote(zh ? "每一行都要有数量。" : "Every row needs an amount.");
+        return;
+      }
+      jobs.push({ to: dest, amount });
+    }
+    if (jobs.length === 0 || jobs.length > 20) {
+      setBad(true);
+      setNote(zh ? "一次 1 到 20 行。" : "Use 1 to 20 rows.");
+      return;
+    }
+    const sum = jobs.reduce((total, row) => total + row.amount, 0n);
+    const reserve = picked.kind === "native" ? (picked.chain === "bsc" ? BNB_GAS_RESERVE : OKB.gasReserve) : 0n;
+    if (sum + reserve > picked.raw) {
+      setBad(true);
+      setNote(picked.kind === "native" ? (zh ? "加起来超过余额，还要留一点 gas。" : "The rows exceed the balance, and gas still has to be left.") : (zh ? "加起来超过余额。" : "The rows add up to more than the balance."));
+      return;
     }
     setBusy(true);
     setBad(false);
+    const chainId = picked.chain === "bsc" ? BSC.hex : XLAYER.hex;
     try {
-      let hash = "";
-      if (picked.kind === "chip") {
-        hash = picked.ours
-          ? await transferTransistor(account, dest, picked.chipId ?? 0, amount)
-          : await transferBscTransistor(account, picked.token as Hex, picked.chipId ?? 0, amount, dest);
-      } else if (picked.chain === "bsc") {
-        await connectBsc();
-        const eth = getProvider();
-        if (!eth) throw new Error("nowallet");
-        const chainId = BSC.hex;
-        hash = (picked.kind === "native"
-          ? await eth.request({ method: "eth_sendTransaction", params: [{ from: account, to: dest, value: `0x${amount.toString(16)}`, chainId }] })
-          : await eth.request({ method: "eth_sendTransaction", params: [{ from: account, to: picked.token, data: encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [dest as Hex, amount] }), chainId }] })) as string;
-      } else {
-        await connectXLayer();
-        const eth = getProvider();
-        if (!eth) throw new Error("nowallet");
-        const chainId = XLAYER.hex;
-        hash = (picked.kind === "native"
-          ? await eth.request({ method: "eth_sendTransaction", params: [{ from: account, to: dest, value: `0x${amount.toString(16)}`, chainId }] })
-          : await eth.request({ method: "eth_sendTransaction", params: [{ from: account, to: picked.token, data: encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [dest as Hex, amount] }), chainId }] })) as string;
+      if (picked.chain === "bsc") await connectBsc();
+      else await connectXLayer();
+      const eth = getProvider();
+      if (!eth) throw new Error("nowallet");
+      for (let i = 0; i < jobs.length; i += 1) {
+        const job = jobs[i];
+        setNote(zh ? `第 ${i + 1} / ${jobs.length} 笔，请在钱包确认。` : `Signature ${i + 1} of ${jobs.length}. Confirm it in the wallet.`);
+        let hash = "";
+        if (picked.kind === "chip") {
+          hash = picked.ours
+            ? await transferTransistor(account, job.to, picked.chipId ?? 0, job.amount)
+            : await transferBscTransistor(account, picked.token as Hex, picked.chipId ?? 0, job.amount, job.to);
+        } else if (picked.kind === "native") {
+          hash = (await eth.request({ method: "eth_sendTransaction", params: [{ from: account, to: job.to, value: `0x${job.amount.toString(16)}`, chainId }] })) as string;
+        } else {
+          hash = (await eth.request({
+            method: "eth_sendTransaction",
+            params: [{ from: account, to: picked.token, data: encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [job.to as Hex, job.amount] }), chainId }],
+          })) as string;
+        }
+        window.open(picked.chain === "xlayer" ? txUrl(hash) : bscTx(hash), "_blank", "noopener,noreferrer");
       }
-      window.open(picked.chain === "xlayer" ? txUrl(hash) : bscTx(hash), "_blank", "noopener,noreferrer");
-      setNote(zh ? "已提交。余额随后再读。" : "Submitted. The balance is read again after.");
+      setNote(zh ? `${jobs.length} 笔都已提交。余额随后再读。` : `Submitted ${jobs.length}. The balance is read again after.`);
+      setSendAck(false);
+      setSends([{ to: "", amt: "" }]);
       setHoldTick((n) => n + 1);
       pull(account);
     } catch (error) {
       setBad(true);
-      setNote(say(error, zh));
+      setNote(say(error, zh) + (zh ? " 已经确认成功的那几笔不会退回。" : " Ones that already confirmed do not come back."));
     } finally {
       setBusy(false);
     }
@@ -546,7 +562,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
             <ul>
               {(worth ?? []).map((row) => (
                 <li key={row.key} className="border-t border-gold/30">
-                  <button type="button" className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3 px-4 py-2.5 text-left ${pickKey === row.key ? "bg-gold/10" : ""}`} onClick={() => setPickKey(row.key)}>
+                  <button type="button" className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3 px-4 py-2.5 text-left ${pickKey === row.key ? "bg-gold/10" : ""}`} onClick={() => { setPickKey(row.key); setSendAck(false); }}>
                     <span className="min-w-0">
                       <span className="block truncate text-sm">{row.name}</span>
                       <span className="block truncate font-mono text-xs text-ink/55">{row.chain === "bsc" ? "BSC" : row.chain === "xlayer" ? "X Layer" : ""}{row.chain ? " · " : ""}{row.qty}{row.px && row.px !== "—" ? ` · ${row.px}` : ""}</span>
@@ -567,17 +583,43 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
                   <p className="mt-2 text-xs text-ink/60">{zh ? "这项锁在合约里，不能在这里转出。" : "This is locked in a contract and cannot be sent from here."}</p>
                 ) : (
                   <div className="mt-2 grid gap-2">
-                    <input className="min-h-10 border border-gold/50 bg-transparent px-2 font-mono text-xs" placeholder={zh ? "收款地址" : "Recipient"} value={sendTo} onChange={(event) => setSendTo(event.target.value)} />
+                    {sends.map((row, index) => (
+                      <div key={index} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_7.5rem_auto]">
+                        <input className="min-h-10 border border-gold/50 bg-transparent px-2 font-mono text-xs" placeholder={zh ? "收款地址" : "Recipient"} value={row.to} onChange={(event) => {
+                          const value = event.target.value;
+                          setSendAck(false);
+                          setSends((list) => list.map((item, at) => at === index ? { ...item, to: value } : item));
+                        }} />
+                        <input className="min-h-10 border border-gold/50 bg-transparent px-2 font-mono text-xs" placeholder={zh ? "数量" : "Amount"} value={row.amt} onChange={(event) => {
+                          const value = event.target.value;
+                          setSendAck(false);
+                          setSends((list) => list.map((item, at) => at === index ? { ...item, amt: value } : item));
+                        }} />
+                        <button type="button" className="min-h-10 border border-gold px-2 text-xs" onClick={() => {
+                          setSendAck(false);
+                          if (sends.length === 1) setSends([{ to: "", amt: "" }]);
+                          else setSends((list) => list.filter((_, at) => at !== index));
+                        }}>{zh ? "去掉" : "Remove"}</button>
+                      </div>
+                    ))}
                     <div className="flex gap-2">
-                      <input className="min-h-10 min-w-0 flex-1 border border-gold/50 bg-transparent px-2 font-mono text-xs" placeholder={zh ? "数量" : "Amount"} value={sendAmt} onChange={(event) => setSendAmt(event.target.value)} />
+                      <button type="button" className="min-h-10 border border-gold px-3 text-xs" onClick={() => { setSendAck(false); setSends((list) => list.length >= 20 ? list : [...list, { to: "", amt: "" }]); }}>{zh ? "再加一行" : "Add a row"}</button>
                       <button type="button" className="min-h-10 border border-gold px-3 text-xs" onClick={() => {
                         if (picked.raw == null || picked.decimals == null) return;
                         const reserve = picked.kind === "native" ? (picked.chain === "bsc" ? BNB_GAS_RESERVE : OKB.gasReserve) : 0n;
-                        const max = picked.raw > reserve ? picked.raw - reserve : 0n;
-                        setSendAmt(formatUnits(max, picked.decimals));
-                      }}>{zh ? "全部" : "Max"}</button>
+                        const used = sends.slice(1).reduce((sum, row) => {
+                          try { return sum + parseUnits(row.amt.trim() || "0", picked.decimals!); } catch { return sum; }
+                        }, 0n);
+                        const max = picked.raw > reserve + used ? picked.raw - reserve - used : 0n;
+                        setSendAck(false);
+                        setSends((list) => list.map((item, at) => at === 0 ? { ...item, amt: formatUnits(max, picked.decimals!) } : item));
+                      }}>{zh ? "第一行全部" : "Max on row 1"}</button>
                     </div>
-                    <button type="button" disabled={busy} className="min-h-11 bg-ink text-sm text-paper disabled:opacity-40" onClick={sendHolding}>{zh ? "签名转出" : "Sign and send"}</button>
+                    <label className="flex items-start gap-2 text-xs leading-5">
+                      <input type="checkbox" className="mt-1" checked={sendAck} onChange={(event) => setSendAck(event.target.checked)} />
+                      <span>{zh ? "我已核对每一行的地址和数量。不勾这一项不能转。" : "I checked every address and amount. It cannot be sent until this is ticked."}</span>
+                    </label>
+                    <button type="button" disabled={busy || !sendAck} className="min-h-11 bg-ink text-sm text-paper disabled:opacity-40" onClick={sendHolding}>{zh ? "签名转出" : "Sign and send"}</button>
                   </div>
                 )}
               </div>
