@@ -72,6 +72,14 @@ const zh: Section[] = [
     ],
   },
   {
+    h: "回购",
+    ps: [
+      "回购在挖矿页，不在交易台。1 枚 TAPE 固定换 0.1 USDT0，只收整数枚。这不是现货价。USDT0 由任何人充入。卖出的 TAPE 按当时的份额记到充入 USDT0 的地址上。只有这个地址能取回还没花掉的 USDT0，和已经买到的 TAPE。卖家当时拿到 USDT0，不能再把 TAPE 取回。池子不够就整笔失败，不会先收 TAPE。取回的 TAPE 自己去加池。回购合约不加池。",
+      "分红两池，和回购在同一份 X Layer 合约里。质押 TAPE，奖励是 X Layer 的 BEM。质押 X Layer 的 BEM，奖励是 TAPE。本金只有质押的地址能取回。奖励由任何人充入。还没按时间分出去的，只有充入的地址能取回。已经分给质押的，不能再取回。一年按 365 天把当时还没分完的奖励分完。年化用这个数和池子现价来算。有人再质押，或取走还没分完的奖励，年化就变。价格读不到就写成 —，不写成 0。",
+      "BSC 的 BEM 不进这份合约。一份合约读不到另一条链。要质押 BEM 领 TAPE，先用官方桥转到 X Layer。本站不经手那座桥。合约没有管理员，不能升级。地址在部署之后写在这一页。部署之前，页面上没有地址。",
+    ],
+  },
+  {
     h: "权重",
     ps: [
       "单电路权重 H = b* × P × q。b* 是这张电路流片时真实烧掉的 NAND 与 LATCH 之和，每颗记 1。P 是这张电路所属处理器的倍率，开排前写死。q 是该题、该处理器上的设计质量。",
@@ -232,6 +240,14 @@ const en: Section[] = [
       "The mine page keeps Network TAPE closed until it is opened. The opened ledger subtracts line by line: claimed, burned, the pool, the circuit lock, and the wafer lock. Unclaimed TAPE is split between ordinary miners and staked miners. Miner counts, weight, and unclaimed amounts are summed about every 45 seconds and are not shown as zero before the sum finishes. Halving times are Singapore time.",
       "Emission does not backfill. The day count starts on the day of the first verified tape-out. The wafers do not have to be fully minted first. Later mints and tape-outs raise network hashrate, so an existing circuit's share falls.",
       "The daily amount is in the mine contract, and there is no function to change it. This contract emits 7,200 a day from deployment. It does not start at 1,000 and then switch. The planned switch has no function, and this page cannot create one. The halving interval in the rules is 210,000 × 600 seconds, about four years. A burn does not change the day's emission. It only reduces what is circulating. The periods together do not exceed 21,000,000.",
+    ],
+  },
+  {
+    h: "Buyback",
+    ps: [
+      "The buyback is on the mine page, not on the desk. One TAPE converts at a fixed 0.1 USDT0, and only whole TAPE is accepted. That is not the spot price. Anyone can add USDT0. TAPE that is sold is credited to the addresses that funded the USDT0, in proportion to their share at the sale. Only that address can take back unspent USDT0 and the TAPE it has bought. The seller receives USDT0 at once and cannot take the TAPE back. If the pool is short, the whole sale fails and no TAPE is taken. TAPE taken back is added to a pool by that address. The buyback contract does not add liquidity.",
+      "Two dividend pools sit in the same X Layer contract. Staked TAPE earns X Layer BEM. Staked X Layer BEM earns TAPE. Only the staking address can take its principal back. Anyone can add rewards. Only the address that added a reward can take back the part that has not vested. What has already vested to stakers cannot be taken back. The unvested pot pays out over 365 days. APY uses that amount and the current pool price. It changes when someone stakes or withdraws unvested rewards. A missing price is shown as —, not zero.",
+      "BSC BEM does not enter this contract. One contract cannot read the other chain. To stake BEM for TAPE, bridge it to X Layer first. This site does not custody that bridge. The contract has no admin and cannot be upgraded. Its address is written here after deployment. Before that, the page has no address.",
     ],
   },
   {
