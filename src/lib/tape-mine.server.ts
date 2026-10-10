@@ -23,6 +23,10 @@ const circuitAbi = parseAbi([
 
 const TAPE = "0x8f2d517D3d62019CD8D7F08ae178Be05BBb6EBE3" as const;
 const MINE = "0x60b1b7cae1bbd0e84ac3e1e43f933712f3ab67e8" as const;
+const ASH = "0x000000000000000000000000000000000000dEaD" as const;
+const POOL = "0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641" as const;
+const CIRCUIT_LOCK = "0x06c877cc158d9ca3547220f9fc156f39bce7013c" as const;
+const WAFER_LOCK = "0xA28390924607F08aaD8d03F512B41b6a1c012Ace" as const;
 const CAP = 21_000_000n * 10n ** 8n;
 const DAY = 7200n * 10n ** 8n;
 const HALVING = 210_000n * 600n;
@@ -52,6 +56,13 @@ export type TapeWire = {
   daily: string;
   circuits: number;
   open: number;
+  burned: string;
+  pooled: string;
+  locked: string;
+  pendingNet: string;
+  pendingStaked: string;
+  staked: number;
+  stakedWeight: string;
   scanOk: boolean;
   scanning: boolean;
   seats: { id: string; gates: string; on: boolean; pending: string; share: string }[];
@@ -81,6 +92,10 @@ async function headOf(account: string | null) {
     { address: MINE, abi: mineAbi, functionName: "totalWeight" as const },
     { address: MINE, abi: mineAbi, functionName: "start" as const },
     { address: CIRCUITS, abi: circuitAbi, functionName: "nextId" as const },
+    { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [ASH] as const },
+    { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [POOL] as const },
+    { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [CIRCUIT_LOCK] as const },
+    { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [WAFER_LOCK] as const },
     ...(account ? [{ address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [who] as const }] : []),
   ];
   const head = await client.multicall({ contracts: calls, allowFailure: false });
@@ -92,14 +107,24 @@ async function headOf(account: string | null) {
     supply: head[0] as bigint,
     cap,
     weight: head[2] as bigint,
-    balance: account ? (head[5] as bigint) : 0n,
+    balance: account ? (head[9] as bigint) : 0n,
     start,
     daily: dailyAt(start),
     last: Number(next) - 1,
+    burned: head[5] as bigint,
+    pooled: head[6] as bigint,
+    locked: (head[7] as bigint) + (head[8] as bigint),
   };
 }
 
-function pack(row: Awaited<ReturnType<typeof headOf>>, open: number, seats: TapeWire["seats"], scanOk: boolean, scanning: boolean): TapeWire {
+function pack(
+  row: Awaited<ReturnType<typeof headOf>>,
+  open: number,
+  seats: TapeWire["seats"],
+  scanOk: boolean,
+  scanning: boolean,
+  net: { pendingNet: bigint; pendingStaked: bigint; staked: number; stakedWeight: bigint } = { pendingNet: 0n, pendingStaked: 0n, staked: 0, stakedWeight: 0n },
+): TapeWire {
   return {
     supply: row.supply.toString(),
     cap: row.cap.toString(),
@@ -109,6 +134,13 @@ function pack(row: Awaited<ReturnType<typeof headOf>>, open: number, seats: Tape
     daily: row.daily.toString(),
     circuits: Math.max(0, row.last),
     open,
+    burned: row.burned.toString(),
+    pooled: row.pooled.toString(),
+    locked: row.locked.toString(),
+    pendingNet: net.pendingNet.toString(),
+    pendingStaked: net.pendingStaked.toString(),
+    staked: net.staked,
+    stakedWeight: net.stakedWeight.toString(),
     scanOk,
     scanning,
     seats,
@@ -125,7 +157,16 @@ export async function loadTapeHead(account: string | null): Promise<TapeWire> {
   return body;
 }
 
-type Census = { at: number; last: number; open: number; owners: Map<string, number[]> };
+type Census = {
+  at: number;
+  last: number;
+  open: number;
+  staked: number;
+  stakedWeight: bigint;
+  pendingNet: bigint;
+  pendingStaked: bigint;
+  owners: Map<string, number[]>;
+};
 let census: Census | null = null;
 let censusFlight: Promise<Census> | null = null;
 
@@ -146,15 +187,29 @@ async function ownerCensus(last: number): Promise<Census> {
     }
     const owners = new Map<string, number[]>();
     let open = 0;
+    let staked = 0;
+    let stakedWeight = 0n;
     let missed = 0;
+    const openIds: number[] = [];
+    const stakedOn = new Set<number>();
+    const lock = CIRCUIT_LOCK.toLowerCase();
     for (let i = 0; i < ids.length; i += 1) {
       const owner = owned[i * 2];
       const seat = owned[i * 2 + 1];
       const seatRow = seat?.status === "success" && Array.isArray(seat.result) ? seat.result : null;
-      if (seatRow && seatRow[3]) open += 1;
       const ownerAddr = owner?.status === "success" && typeof owner.result === "string" ? owner.result.toLowerCase() : "";
       if (!ownerAddr) missed += 1;
       const seatOwner = seatRow && typeof seatRow[0] === "string" ? seatRow[0].toLowerCase() : "";
+      const locked = seatOwner === lock || ownerAddr === lock;
+      if (locked) staked += 1;
+      if (seatRow && seatRow[3]) {
+        open += 1;
+        openIds.push(ids[i]);
+        if (locked) {
+          stakedWeight += typeof seatRow[1] === "bigint" ? seatRow[1] : 0n;
+          stakedOn.add(ids[i]);
+        }
+      }
       for (const who of new Set([ownerAddr, seatOwner].filter((item) => item && item !== "0x0000000000000000000000000000000000000000"))) {
         const list = owners.get(who) ?? [];
         list.push(ids[i]);
@@ -162,7 +217,22 @@ async function ownerCensus(last: number): Promise<Census> {
       }
     }
     if (missed > Math.max(8, Math.floor(ids.length / 20))) throw new Error("scan");
-    census = { at: Date.now(), last, open, owners };
+    let pendingNet = 0n;
+    let pendingStaked = 0n;
+    for (let i = 0; i < openIds.length; i += 180) {
+      const slice = openIds.slice(i, i + 180);
+      const part = await client.multicall({
+        contracts: slice.map((id) => ({ address: MINE, abi: mineAbi, functionName: "pendingOf" as const, args: [BigInt(id)] as const })),
+        allowFailure: true,
+        batchSize: 180,
+      });
+      part.forEach((row, index) => {
+        const amt = row.status === "success" && typeof row.result === "bigint" ? row.result : 0n;
+        pendingNet += amt;
+        if (stakedOn.has(slice[index])) pendingStaked += amt;
+      });
+    }
+    census = { at: Date.now(), last, open, staked, stakedWeight, pendingNet, pendingStaked, owners };
     return census;
   })().finally(() => {
     censusFlight = null;
@@ -204,7 +274,7 @@ export async function loadTapeSeats(account: string | null): Promise<TapeWire> {
     seats.push({ id: String(mineIds[i]), gates: gates.toString(), on, pending: pendingAmt.toString(), share: text(share) });
   }
   seats.sort((a, b) => Number(a.on) - Number(b.on) || Number(b.id) - Number(a.id));
-  const body = pack(row, found.open, seats, true, false);
+  const body = pack(row, found.open, seats, true, false, found);
   cache.set(key, { at: Date.now(), body });
   return body;
 }

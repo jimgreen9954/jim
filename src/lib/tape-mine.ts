@@ -64,14 +64,28 @@ export type TapeBoard = {
   daily: bigint;
   circuits: number;
   open: number;
+  burned: bigint;
+  pooled: bigint;
+  locked: bigint;
+  pendingNet: bigint;
+  pendingStaked: bigint;
+  staked: number;
+  stakedWeight: bigint;
   seats: TapeSeat[];
   scanOk: boolean;
   scanning: boolean;
 };
 
-const DAY = 7200n * 10n ** 8n;
+const LOCKS = [
+  "0x06c877cc158d9ca3547220f9fc156f39bce7013c",
+  "0xA28390924607F08aaD8d03F512B41b6a1c012Ace",
+] as const;
+const POOL = "0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641";
+const ASH = "0x000000000000000000000000000000000000dEaD";
+const CIRCUIT_LOCK = LOCKS[0].toLowerCase();
 const HALVING = 210_000n * 600n;
 const CAP = 21_000_000n * 10n ** 8n;
+const DAY = 7200n * 10n ** 8n;
 
 function dailyAt(start: bigint): bigint {
   const era = (BigInt(Math.floor(Date.now() / 1000)) - start) / HALVING;
@@ -88,6 +102,13 @@ export type TapeWire = {
   daily: string;
   circuits: number;
   open: number;
+  burned: string;
+  pooled: string;
+  locked: string;
+  pendingNet: string;
+  pendingStaked: string;
+  staked: number;
+  stakedWeight: string;
   scanOk: boolean;
   scanning: boolean;
   seats: { id: string; gates: string; on: boolean; pending: string; share: string }[];
@@ -123,6 +144,13 @@ function boardFrom(wire: TapeWire): TapeBoard {
     daily: BigInt(wire.daily),
     circuits: wire.circuits,
     open: wire.open,
+    burned: BigInt(wire.burned ?? "0"),
+    pooled: BigInt(wire.pooled ?? "0"),
+    locked: BigInt(wire.locked ?? "0"),
+    pendingNet: BigInt(wire.pendingNet ?? "0"),
+    pendingStaked: BigInt(wire.pendingStaked ?? "0"),
+    staked: wire.staked ?? 0,
+    stakedWeight: BigInt(wire.stakedWeight ?? "0"),
     scanOk: wire.scanOk,
     scanning: wire.scanning,
     seats: wire.seats.map((row) => ({ ...row, pending: BigInt(row.pending) })),
@@ -187,6 +215,10 @@ async function loadTapeMine(account: string | null, onHead?: (board: TapeBoard) 
     { address: TAPE_MINE, abi: mineAbi, functionName: "totalWeight" as const },
     { address: TAPE_MINE, abi: mineAbi, functionName: "start" as const },
     { address: DEPLOYED.circuits, abi: circuitAbi, functionName: "nextId" as const },
+    { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [ASH as Hex] as const },
+    { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [POOL as Hex] as const },
+    { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [LOCKS[0] as Hex] as const },
+    { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [LOCKS[1] as Hex] as const },
     ...(account ? [{ address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [who] as const }] : []),
   ];
   const head = await client.multicall({ contracts: headCalls, allowFailure: false });
@@ -195,7 +227,10 @@ async function loadTapeMine(account: string | null, onHead?: (board: TapeBoard) 
   const weight = head[2] as bigint;
   const start = head[3] as bigint;
   const next = head[4] as bigint;
-  const balance = account ? (head[5] as bigint) : 0n;
+  const burned = head[5] as bigint;
+  const pooled = head[6] as bigint;
+  const locked = (head[7] as bigint) + (head[8] as bigint);
+  const balance = account ? (head[9] as bigint) : 0n;
   if (cap !== CAP) throw new Error("cap");
   const daily = dailyAt(start);
   const last = Number(next) - 1;
@@ -203,6 +238,13 @@ async function loadTapeMine(account: string | null, onHead?: (board: TapeBoard) 
     supply, cap, weight, balance, start, daily,
     circuits: Math.max(0, last),
     open: 0,
+    burned,
+    pooled,
+    locked,
+    pendingNet: 0n,
+    pendingStaked: 0n,
+    staked: 0,
+    stakedWeight: 0n,
     seats: [],
     scanOk: false,
     scanning: true,
@@ -215,24 +257,47 @@ async function loadTapeMine(account: string | null, onHead?: (board: TapeBoard) 
     { address: TAPE_MINE, abi: mineAbi, functionName: "seat" as const, args: [BigInt(id)] as const },
   ]);
   let open = 0;
+  let staked = 0;
+  let stakedWeight = 0n;
   let missed = 0;
   const mineIds: number[] = [];
+  const openIds: number[] = [];
+  const stakedOn = new Set<number>();
   let scanOk = true;
   const seats: TapeSeat[] = [];
   const mine = account?.toLowerCase() ?? "";
+  let pendingNet = 0n;
+  let pendingStaked = 0n;
   try {
     const owned = ownedCalls.length ? await readChunk(ownedCalls) : [];
     for (let i = 0; i < ids.length; i += 1) {
       const owner = owned[i * 2];
       const seat = owned[i * 2 + 1];
       const seatRow = seat?.status === "success" && Array.isArray(seat.result) ? seat.result : null;
-      if (seatRow && seatRow[3]) open += 1;
       const ownerAddr = owner?.status === "success" && typeof owner.result === "string" ? owner.result : null;
       if (!ownerAddr) missed += 1;
       const seatOwner = seatRow && typeof seatRow[0] === "string" ? seatRow[0].toLowerCase() : "";
+      const locked = seatOwner === CIRCUIT_LOCK || ownerAddr?.toLowerCase() === CIRCUIT_LOCK;
+      if (locked) staked += 1;
+      if (seatRow && seatRow[3]) {
+        open += 1;
+        openIds.push(ids[i]);
+        if (locked) {
+          stakedWeight += typeof seatRow[1] === "bigint" ? seatRow[1] : 0n;
+          stakedOn.add(ids[i]);
+        }
+      }
       if (mine && ((ownerAddr && ownerAddr.toLowerCase() === mine) || seatOwner === mine)) mineIds.push(ids[i]);
     }
     if (missed > Math.max(8, Math.floor(ids.length / 20))) throw new Error("scan");
+    const pendingCalls = openIds.map((id) => ({ address: TAPE_MINE, abi: mineAbi, functionName: "pendingOf" as const, args: [BigInt(id)] as const }));
+    const pendingRows = pendingCalls.length ? await readChunk(pendingCalls) : [];
+    openIds.forEach((id, index) => {
+      const row = pendingRows[index];
+      const amt = row?.status === "success" && typeof row.result === "bigint" ? row.result : 0n;
+      pendingNet += amt;
+      if (stakedOn.has(id)) pendingStaked += amt;
+    });
     const detailCalls = mineIds.flatMap((id) => [
       { address: DEPLOYED.circuits, abi: circuitAbi, functionName: "circuitInfo" as const, args: [BigInt(id)] as const },
       { address: TAPE_MINE, abi: mineAbi, functionName: "pendingOf" as const, args: [BigInt(id)] as const },
@@ -257,7 +322,7 @@ async function loadTapeMine(account: string | null, onHead?: (board: TapeBoard) 
     scanOk = false;
   }
   seats.sort((a, b) => Number(a.on) - Number(b.on) || Number(b.id) - Number(a.id));
-  return { supply, cap, weight, balance, start, daily, circuits: Math.max(0, last), open, seats, scanOk, scanning: false };
+  return { supply, cap, weight, balance, start, daily, circuits: Math.max(0, last), open, burned, pooled, locked, pendingNet, pendingStaked, staked, stakedWeight, seats, scanOk, scanning: false };
 }
 
 async function preflight(to: Hex, from: string, data: Hex) {
