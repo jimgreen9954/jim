@@ -131,38 +131,54 @@ export async function loadTapeSeats(account: string | null): Promise<TapeWire> {
   if (hit && Date.now() - hit.at < 20_000) return hit.body;
   const row = await headOf(account);
   const ids: number[] = [];
-  for (let id = row.last; id >= 1 && ids.length < 300; id -= 1) ids.push(id);
-  const calls = ids.flatMap((id) => [
+  for (let id = 1; id <= row.last && ids.length < 8000; id += 1) ids.push(id);
+  const ownedCalls = ids.flatMap((id) => [
     { address: CIRCUITS, abi: circuitAbi, functionName: "ownerOf" as const, args: [BigInt(id)] as const },
-    { address: CIRCUITS, abi: circuitAbi, functionName: "circuitInfo" as const, args: [BigInt(id)] as const },
     { address: MINE, abi: mineAbi, functionName: "seat" as const, args: [BigInt(id)] as const },
-    { address: MINE, abi: mineAbi, functionName: "pendingOf" as const, args: [BigInt(id)] as const },
   ]);
-  const read: { status: string; result?: unknown }[] = [];
-  for (let i = 0; i < calls.length; i += 180) {
-    const part = await client.multicall({ contracts: calls.slice(i, i + 180) as never, allowFailure: true, batchSize: 180 });
-    read.push(...(part as { status: string; result?: unknown }[]));
+  const owned: { status: string; result?: unknown }[] = [];
+  for (let i = 0; i < ownedCalls.length; i += 240) {
+    const part = await client.multicall({ contracts: ownedCalls.slice(i, i + 240) as never, allowFailure: true, batchSize: 240 });
+    owned.push(...(part as { status: string; result?: unknown }[]));
   }
   const who = account?.toLowerCase() ?? "";
   let open = 0;
-  const seats: TapeWire["seats"] = [];
+  let missed = 0;
+  const mineIds: number[] = [];
   for (let i = 0; i < ids.length; i += 1) {
-    const owner = read[i * 4];
-    const info = read[i * 4 + 1];
-    const seat = read[i * 4 + 2];
-    const pending = read[i * 4 + 3];
-    const ownerAddr = owner?.status === "success" && typeof owner.result === "string" ? owner.result : null;
-    const infoRow = info?.status === "success" && Array.isArray(info.result) ? info.result : null;
+    const owner = owned[i * 2];
+    const seat = owned[i * 2 + 1];
     const seatRow = seat?.status === "success" && Array.isArray(seat.result) ? seat.result : null;
-    const pendingAmt = pending?.status === "success" && typeof pending.result === "bigint" ? pending.result : null;
     if (seatRow && seatRow[3]) open += 1;
-    if (!who || !ownerAddr || ownerAddr.toLowerCase() !== who) continue;
+    const ownerAddr = owner?.status === "success" && typeof owner.result === "string" ? owner.result : null;
+    if (!ownerAddr) missed += 1;
+    if (who && ownerAddr && ownerAddr.toLowerCase() === who) mineIds.push(ids[i]);
+  }
+  if (missed > Math.max(8, Math.floor(ids.length / 20))) throw new Error("scan");
+  const detailCalls = mineIds.flatMap((id) => [
+    { address: CIRCUITS, abi: circuitAbi, functionName: "circuitInfo" as const, args: [BigInt(id)] as const },
+    { address: MINE, abi: mineAbi, functionName: "pendingOf" as const, args: [BigInt(id)] as const },
+    { address: MINE, abi: mineAbi, functionName: "seat" as const, args: [BigInt(id)] as const },
+  ]);
+  const detail: { status: string; result?: unknown }[] = [];
+  for (let i = 0; i < detailCalls.length; i += 180) {
+    const part = await client.multicall({ contracts: detailCalls.slice(i, i + 180) as never, allowFailure: true, batchSize: 180 });
+    detail.push(...(part as { status: string; result?: unknown }[]));
+  }
+  const seats: TapeWire["seats"] = [];
+  for (let i = 0; i < mineIds.length; i += 1) {
+    const info = detail[i * 3];
+    const pending = detail[i * 3 + 1];
+    const seat = detail[i * 3 + 2];
+    const infoRow = info?.status === "success" && Array.isArray(info.result) ? info.result : null;
+    const pendingAmt = pending?.status === "success" && typeof pending.result === "bigint" ? pending.result : null;
+    const seatRow = seat?.status === "success" && Array.isArray(seat.result) ? seat.result : null;
     if (!infoRow || pendingAmt == null || !seatRow) continue;
     const gates = infoRow[3];
     if (typeof gates !== "bigint") continue;
     const on = Boolean(seatRow[3]);
     const share = on && row.weight > 0n ? (row.daily * gates) / row.weight : 0n;
-    seats.push({ id: String(ids[i]), gates: gates.toString(), on, pending: pendingAmt.toString(), share: text(share) });
+    seats.push({ id: String(mineIds[i]), gates: gates.toString(), on, pending: pendingAmt.toString(), share: text(share) });
   }
   seats.sort((a, b) => Number(b.on) - Number(a.on) || Number(b.id) - Number(a.id));
   const body = pack(row, open, seats, true, false);

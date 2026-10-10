@@ -199,42 +199,48 @@ async function loadTapeMine(account: string | null, onHead?: (board: TapeBoard) 
   };
   onHead?.(partial);
   const ids: number[] = [];
-  for (let id = last; id >= 1 && ids.length < 300; id -= 1) ids.push(id);
-  const calls = ids.flatMap((id) => [
+  for (let id = 1; id <= last && ids.length < 8000; id += 1) ids.push(id);
+  const ownedCalls = ids.flatMap((id) => [
     { address: DEPLOYED.circuits, abi: circuitAbi, functionName: "ownerOf" as const, args: [BigInt(id)] as const },
-    { address: DEPLOYED.circuits, abi: circuitAbi, functionName: "circuitInfo" as const, args: [BigInt(id)] as const },
     { address: TAPE_MINE, abi: mineAbi, functionName: "seat" as const, args: [BigInt(id)] as const },
-    { address: TAPE_MINE, abi: mineAbi, functionName: "pendingOf" as const, args: [BigInt(id)] as const },
   ]);
   let open = 0;
-  const seats: TapeSeat[] = [];
+  let missed = 0;
+  const mineIds: number[] = [];
   let scanOk = true;
+  const seats: TapeSeat[] = [];
   const mine = account?.toLowerCase() ?? "";
   try {
-    const read = calls.length ? await readChunk(calls) : [];
+    const owned = ownedCalls.length ? await readChunk(ownedCalls) : [];
     for (let i = 0; i < ids.length; i += 1) {
-      const owner = read[i * 4];
-      const info = read[i * 4 + 1];
-      const seat = read[i * 4 + 2];
-      const pending = read[i * 4 + 3];
-      const ownerAddr = owner?.status === "success" && typeof owner.result === "string" ? owner.result : null;
-      const infoRow = info?.status === "success" && Array.isArray(info.result) ? info.result : null;
+      const owner = owned[i * 2];
+      const seat = owned[i * 2 + 1];
       const seatRow = seat?.status === "success" && Array.isArray(seat.result) ? seat.result : null;
-      const pendingAmt = pending?.status === "success" && typeof pending.result === "bigint" ? pending.result : null;
       if (seatRow && seatRow[3]) open += 1;
-      if (!mine || !ownerAddr || ownerAddr.toLowerCase() !== mine) continue;
+      const ownerAddr = owner?.status === "success" && typeof owner.result === "string" ? owner.result : null;
+      if (!ownerAddr) missed += 1;
+      if (mine && ownerAddr && ownerAddr.toLowerCase() === mine) mineIds.push(ids[i]);
+    }
+    if (missed > Math.max(8, Math.floor(ids.length / 20))) throw new Error("scan");
+    const detailCalls = mineIds.flatMap((id) => [
+      { address: DEPLOYED.circuits, abi: circuitAbi, functionName: "circuitInfo" as const, args: [BigInt(id)] as const },
+      { address: TAPE_MINE, abi: mineAbi, functionName: "pendingOf" as const, args: [BigInt(id)] as const },
+      { address: TAPE_MINE, abi: mineAbi, functionName: "seat" as const, args: [BigInt(id)] as const },
+    ]);
+    const detail = detailCalls.length ? await readChunk(detailCalls) : [];
+    for (let i = 0; i < mineIds.length; i += 1) {
+      const info = detail[i * 3];
+      const pending = detail[i * 3 + 1];
+      const seat = detail[i * 3 + 2];
+      const infoRow = info?.status === "success" && Array.isArray(info.result) ? info.result : null;
+      const pendingAmt = pending?.status === "success" && typeof pending.result === "bigint" ? pending.result : null;
+      const seatRow = seat?.status === "success" && Array.isArray(seat.result) ? seat.result : null;
       if (!infoRow || pendingAmt == null || !seatRow) continue;
       const gates = infoRow[3];
       if (typeof gates !== "bigint") continue;
       const on = Boolean(seatRow[3]);
       const share = on && weight > 0n ? (daily * gates) / weight : 0n;
-      seats.push({
-        id: String(ids[i]),
-        gates: gates.toString(),
-        on,
-        pending: pendingAmt,
-        share: tapeText(share),
-      });
+      seats.push({ id: String(mineIds[i]), gates: gates.toString(), on, pending: pendingAmt, share: tapeText(share) });
     }
   } catch {
     scanOk = false;

@@ -127,8 +127,8 @@ export function MineDesk() {
         <h2 className="font-display text-3xl italic">{zh ? "领 TAPE" : "Claim TAPE"}</h2>
         <p className="mt-2 text-sm leading-relaxed">
           {zh
-            ? "排放和余额马上读。你的电路从最近 300 张里对，对完才出待领，对的时候不挡住签名。"
-            : "Emission and the balance come back first. Your circuits are matched in the latest 300. Pending shows when that match finishes, and it does not block the signature."}
+            ? "排放和余额马上读。这个地址名下的电路全部对上，不限最近的编号。对完才出待领。"
+            : "Emission and the balance come back first. Every circuit held by this address is matched, not only the newest numbers."}
         </p>
         <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
           <Cell k={zh ? "今天排放" : "Daily emission"} v={tape ? `${amount(tape.daily)} TAPE` : "—"} />
@@ -139,7 +139,7 @@ export function MineDesk() {
           <Cell k={zh ? "这地址约占今日" : "About today"} v={account && tape ? `${amount(myShare)} TAPE` : "—"} />
         </dl>
         <p className="mt-3 text-sm">{zh ? "这个地址待领" : "Pending here"} <span className="font-mono">{account && tape ? `${amount(pendingTape)} TAPE` : "—"}</span></p>
-        <p className="mt-1 text-xs text-ink/50">{tapeErr ? tapeErr : tape?.scanning ? (zh ? "排放已经读到。正在对最近 300 张电路，对完才列出待领。" : "Emission is in. Matching the latest 300 circuits. Pending shows when that finishes.") : !tape?.scanOk ? (zh ? "排放读到了，电路名单这次没扫全。刷新再试，不要把空名单当成没有电路。" : "Emission is in. The circuit list did not finish. Refresh before treating an empty list as none.") : account && tape ? (zh ? `钱包 ${amount(tape.balance)} TAPE · 日排放写死 7,200` : `Wallet ${amount(tape.balance)} TAPE · 7,200 a day, fixed`) : (zh ? "连上 X Layer 后读这个地址的电路" : "Connect on X Layer to read this address")}</p>
+        <p className="mt-1 text-xs text-ink/50">{tapeErr ? tapeErr : tape?.scanning ? (zh ? "排放已经读到。正在对这个地址名下的全部电路。" : "Emission is in. Matching every circuit held by this address.") : !tape?.scanOk ? (zh ? "排放读到了，电路名单这次没扫全。刷新再试，不要把空名单当成没有电路。" : "Emission is in. The circuit list did not finish. Refresh before treating an empty list as none.") : account && tape ? (zh ? `钱包 ${amount(tape.balance)} TAPE · 日排放写死 7,200` : `Wallet ${amount(tape.balance)} TAPE · 7,200 a day, fixed`) : (zh ? "连上 X Layer 后读这个地址的电路" : "Connect on X Layer to read this address")}</p>
         <div className="mt-2 grid grid-cols-[3.5rem_4.5rem_4rem_1fr_5rem] gap-2 px-2 text-xs text-ink/50">
           <span>{zh ? "编号" : "Id"}</span>
           <span>{zh ? "门数" : "Gates"}</span>
