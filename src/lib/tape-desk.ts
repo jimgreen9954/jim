@@ -5,7 +5,7 @@ import { getProvider } from "@/lib/wallet";
 import { connectXLayer, XLAYER } from "@/lib/xlayer";
 
 /** Buyback bytecode matches contracts/TapeBid.sol. The old desk is not used. */
-export const TAPE_DESK = "" as const;
+export const TAPE_DESK = "0x53fa6A76ce9A3fE08698E04a4E9A674bd77a9DfF" as const;
 export const TAPE_BUYER = "0x585d2DF4B8fDDA783B074555e6F3787e3fCB39D7" as const;
 
 const KEY = "tapeliquid-bid";
