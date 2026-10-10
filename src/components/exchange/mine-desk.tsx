@@ -148,7 +148,7 @@ export function MineDesk() {
         <button type="button" onClick={() => setSheet("claim")} className={`min-h-11 px-1 text-xs sm:text-sm ${sheet === "claim" ? "bg-ink text-paper" : ""}`}>{zh ? "领取" : "Claim"}</button>
         <button type="button" onClick={() => setSheet("stake")} className={`min-h-11 px-1 text-xs sm:text-sm ${sheet === "stake" ? "bg-ink text-paper" : ""}`}>{zh ? "质押" : "Stake"}</button>
         <button type="button" onClick={() => setSheet("ash")} className={`min-h-11 px-1 text-xs sm:text-sm ${sheet === "ash" ? "bg-ink text-paper" : ""}`}>{zh ? "销毁" : "Burn"}</button>
-        <button type="button" onClick={() => setSheet("bid")} className={`min-h-11 px-1 text-xs sm:text-sm ${sheet === "bid" ? "bg-ink text-paper" : ""}`}>{zh ? "回购" : "Bid"}</button>
+        <button type="button" onClick={() => setSheet("bid")} className={`min-h-11 px-1 text-xs sm:text-sm ${sheet === "bid" ? "bg-ink text-paper" : ""}`}>{zh ? "库藏" : "Reserve"}</button>
       </div>
       {sheet === "stake" ? <StakeDesk /> : sheet === "ash" ? <BurnDesk /> : sheet === "bid" ? <TapeDesk account={account} zh={zh} /> : (
     <section className="grid items-start gap-4 lg:grid-cols-2">
