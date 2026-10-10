@@ -4,8 +4,8 @@ import { TAPE_BEM, TAPE_TOKEN, TAPE_USDT } from "@/lib/tape-pool";
 import { getProvider } from "@/lib/wallet";
 import { connectXLayer, XLAYER } from "@/lib/xlayer";
 
-/** Filled after the desk is deployed. Until then, only the browser that deployed it can read the address. */
-export const TAPE_DESK = "" as const;
+/** The one deployed desk. Bytecode matches contracts/TapeDesk.sol. No admin. */
+export const TAPE_DESK = "0x72e28d564A90eF3E76f599bC210454f5360E200C" as const;
 
 const KEY = "tapeliquid-desk";
 const abi = parseAbi([
