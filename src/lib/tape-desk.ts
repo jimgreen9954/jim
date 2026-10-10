@@ -75,20 +75,34 @@ async function send(from: string, to: Hex | undefined, data: Hex): Promise<Hex> 
   return hash;
 }
 
+async function probe(from: string, to: Hex, data: Hex) {
+  try {
+    await client.call({ account: from as Hex, to, data });
+  } catch (err) {
+    const text = err instanceof Error ? `${err.name} ${err.message}` : "";
+    if (/revert|invalid opcode|execution/i.test(text)) throw err;
+  }
+}
+
 async function approve(from: string, token: Hex, amount: bigint) {
   const desk = deskAddress();
   if (!desk) throw new Error("desk");
   const allowance = await client.readContract({ address: token, abi: erc20, functionName: "allowance", args: [from as Hex, desk] });
   if (allowance >= amount) return;
+  if (allowance > 0n) {
+    const zero = encodeFunctionData({ abi: erc20, functionName: "approve", args: [desk, 0n] });
+    await probe(from, token, zero);
+    await send(from, token, zero);
+  }
   const data = encodeFunctionData({ abi: erc20, functionName: "approve", args: [desk, amount] });
-  await client.call({ account: from as Hex, to: token, data });
+  await probe(from, token, data);
   await send(from, token, data);
 }
 
 async function call(from: string, data: Hex) {
   const desk = deskAddress();
   if (!desk) throw new Error("desk");
-  await client.call({ account: from as Hex, to: desk, data });
+  await probe(from, desk, data);
   return send(from, desk, data);
 }
 
@@ -107,7 +121,9 @@ export function wholeTape(text: string): bigint {
 }
 
 export function units(text: string, decimals: number): bigint {
-  const amount = parseUnits(text.trim(), decimals);
+  const cleaned = text.trim().replace(/,/g, "");
+  if (!/^\d+(\.\d+)?$/.test(cleaned)) throw new Error("amount");
+  const amount = parseUnits(cleaned, decimals);
   if (amount <= 0n) throw new Error("amount");
   return amount;
 }

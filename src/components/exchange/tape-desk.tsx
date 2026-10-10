@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { formatEther } from "viem";
+import { formatEther, formatUnits } from "viem";
 import { bscBemBalance, BSC_BRIDGE, quoteBridge, sendBridge, type BridgeQuote } from "@/lib/bem-bridge";
 import { bemPrice, BSC } from "@/lib/bsc";
 import { readTapePool, TAPE_BEM } from "@/lib/tape-pool";
@@ -224,9 +224,19 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
           if (next) setStake(next);
         }
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : "";
+        const code = (err as { code?: number }).code;
         setBad(true);
-        setNote(zh ? "没有完成。签名留在这一页，点「去 OKX 确认」。不要让网站跳进 OKX。Gas Limit 填 5000000。资产还在原处。" : "It did not finish. Stay on this page and tap Confirm in OKX. Do not let the site open inside OKX. Set Gas Limit to 5000000. The assets stayed put.");
+        if (message === "amount" || message === "integer") {
+          setNote(zh ? "数量是空的，或不是数字。充 USDT0 先在右边那一格填写，或点全部。卖 TAPE 只能填整数。" : "The amount is empty or not a number. Type the USDT0 on the right, or tap All. TAPE sells are whole numbers.");
+          return;
+        }
+        if (code === 4001) {
+          setNote(zh ? "签名取消了。USDT0 还在钱包，没有充进去。" : "The signature was cancelled. The USDT0 is still in the wallet.");
+          return;
+        }
+        setNote(zh ? "没有充进去。要签两笔：第一笔只授权，币还在钱包；第二笔才进回购。两笔都要确认。地址是上面这一份。Gas Limit 填 500000。" : "It did not go in. Two signatures: the first only approves, the coins stay in the wallet; the second deposits. Confirm both. The address is the one above. Set Gas Limit to 500000.");
       })
       .finally(() => setBusy(false));
   };
@@ -312,10 +322,12 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
           </label>
           <label className="grid gap-1 text-xs text-ink/55">
             {zh ? "充入 USDT0，用来买 TAPE" : "Add USDT0 to buy TAPE"}
-            <input value={usdtAmt} onChange={(event) => setUsdtAmt(event.target.value)} inputMode="decimal" placeholder="0.1" className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono text-base text-ink" />
+            <input value={usdtAmt} onChange={(event) => setUsdtAmt(event.target.value)} inputMode="decimal" placeholder="100" className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono text-base text-ink" />
             <span>{zh ? "钱包" : "Wallet"} {row ? deskText(row.usdtBal, 6, 2) : "—"} · {zh ? "可取回" : "Yours"} {row ? deskText(row.usdtLeft, 6, 2) : "—"} USDT0 · {zh ? "已买到" : "Bought"} {row ? deskText(row.tapeOwed, 8) : "—"} TAPE</span>
-            <div className="grid grid-cols-3 gap-2">
-              <button type="button" disabled={busy} className="min-h-12 bg-ink px-1 text-sm text-paper disabled:opacity-40" onClick={() => run(() => fundUsdt(account ?? "", units(usdtAmt, 6)), zh ? "USDT0 已充入。" : "USDT0 added.", "desk")}>{zh ? "充入" : "Add"}</button>
+            <p className="leading-5">{zh ? "不会自动把钱包里的 USDT0 充进去。先填数量。点充入要签两笔：第一笔授权，币还在钱包；第二笔才进这个回购合约。" : "It does not deposit the wallet balance by itself. Type an amount. Add asks for two signatures: approve first, the coins stay put; the second one deposits."}</p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <button type="button" disabled={busy || !row || row.usdtBal === 0n} className="min-h-12 border border-gold px-1 text-sm disabled:opacity-40" onClick={() => setUsdtAmt(row ? formatUnits(row.usdtBal, 6) : "")}>{zh ? "全部" : "All"}</button>
+              <button type="button" disabled={busy} className="min-h-12 bg-ink px-1 text-sm text-paper disabled:opacity-40" onClick={() => run(() => fundUsdt(account ?? "", units(usdtAmt, 6)), zh ? "USDT0 已充入。池子要等这一页重新读到才变。" : "USDT0 is in. The pool changes when this page reads it again.", "desk")}>{zh ? "充入" : "Add"}</button>
               <button type="button" disabled={busy || !row || row.usdtLeft === 0n} className="min-h-12 border border-gold px-1 text-sm disabled:opacity-40" onClick={() => run(() => withdrawUsdt(account ?? "", row?.usdtLeft ?? 0n), zh ? "没花掉的 USDT0 已取回。" : "Unspent USDT0 is back.", "desk")}>{zh ? "取 USDT0" : "Take USDT0"}</button>
               <button type="button" disabled={busy || !row || row.tapeOwed === 0n} className="min-h-12 border border-gold px-1 text-sm disabled:opacity-40" onClick={() => run(() => withdrawBought(account ?? "", row?.tapeOwed ?? 0n), zh ? "买到的 TAPE 已取回。" : "Bought TAPE is back.", "desk")}>{zh ? "取 TAPE" : "Take TAPE"}</button>
             </div>
