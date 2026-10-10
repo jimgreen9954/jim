@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { BSC } from "@/lib/bsc";
 import { useExchange } from "@/lib/exchange-store";
 import { bemText, claimPod, getPodMiners, POD, readPodPending, readPodStats, type PodStats } from "@/lib/pod";
-import { claimTape, openTape, readTapeMine, TAPE, TAPE_MINE, tapeText, type TapeBoard } from "@/lib/tape-mine";
+import { claimTape, openTape, readTapeMine, TAPE, TAPE_BOOK, TAPE_MINE, tapeEra, tapeText, type TapeBoard } from "@/lib/tape-mine";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import { connectXLayer, XLAYER } from "@/lib/xlayer";
 import { StakeDesk } from "@/components/exchange/stake-desk";
@@ -71,9 +71,15 @@ export function MineDesk() {
 
   const circulating = tape ? (tape.supply > tape.burned + tape.pooled + tape.locked ? tape.supply - tape.burned - tape.pooled - tape.locked : 0n) : 0n;
   const unmined = tape && tape.scanOk ? (tape.cap > tape.supply + tape.pendingNet ? tape.cap - tape.supply - tape.pendingNet : 0n) : 0n;
-  const claimedPct = tape && tape.cap > 0n ? Number((tape.supply * 10000n) / tape.cap) / 100 : 0;
-  const burnedPct = tape && tape.supply > 0n ? Number((tape.burned * 10000n) / tape.supply) / 100 : 0;
-  const stakedPct = tape && tape.weight > 0n ? Number((tape.stakedWeight * 10000n) / tape.weight) / 100 : 0;
+  const freePending = tape && tape.scanOk && tape.pendingNet > tape.pendingStaked ? tape.pendingNet - tape.pendingStaked : 0n;
+  const freeWeight = tape && tape.scanOk && tape.weight > tape.stakedWeight ? tape.weight - tape.stakedWeight : 0n;
+  const idle = tape && tape.scanOk ? Math.max(0, tape.circuits - tape.open) : 0;
+  const stakedIdle = tape && tape.scanOk ? Math.max(0, tape.staked - tape.stakedLive) : 0;
+  const todayStaked = tape && tape.scanOk && tape.weight > 0n ? (tape.daily * tape.stakedWeight) / tape.weight : 0n;
+  const todayFree = tape && tape.scanOk ? tape.daily - todayStaked : 0n;
+  const era = tape ? tapeEra(tape.start) : null;
+  const share = (part: bigint, whole: bigint) => (whole > 0n ? `${(Number((part * 10000n) / whole) / 100).toFixed(2)}%` : "—");
+  const when = (sec: bigint) => new Intl.DateTimeFormat(zh ? "zh-CN" : "en-GB", { timeZone: "Asia/Singapore", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(Number(sec) * 1000));
 
   return (
     <section className="flex flex-col gap-3">
@@ -82,29 +88,60 @@ export function MineDesk() {
           <span>{zh ? "全网 TAPE" : "TAPE network"}</span>
           <span className="text-xs text-ink/50">{networkOpen ? (zh ? "收起" : "Hide") : (zh ? "打开" : "Open")}</span>
         </button>
-        {networkOpen ? (
-          <div className="border-t border-gold/40 px-3 py-3">
-            <dl className="grid grid-cols-2 gap-2 text-sm lg:grid-cols-4">
-              <Cell k={zh ? "实时流通" : "Circulating"} v={tape ? amount(circulating) : "—"} />
-              <Cell k={zh ? "已挖未领" : "Mined, not claimed"} v={tape?.scanOk ? amount(tape.pendingNet) : "—"} />
-              <Cell k={zh ? "已领出" : "Claimed"} v={tape ? `${amount(tape.supply)} · ${claimedPct.toFixed(2)}%` : "—"} />
-              <Cell k={zh ? "销毁" : "Burned"} v={tape ? `${amount(tape.burned)} · ${burnedPct.toFixed(2)}%` : "—"} />
-              <Cell k={zh ? "还没挖出" : "Not yet mined"} v={tape?.scanOk ? amount(unmined) : "—"} />
-              <Cell k={zh ? "今日排放" : "Today"} v={tape ? amount(tape.daily) : "—"} />
-              <Cell k={zh ? "正在挖的矿机" : "Mining"} v={tape?.scanOk ? tape.open.toLocaleString("en-US") : "—"} />
-              <Cell k={zh ? "质押中的矿机" : "Staked miners"} v={tape?.scanOk ? tape.staked.toLocaleString("en-US") : "—"} />
-              <Cell k={zh ? "质押占算力" : "Staked weight"} v={tape?.scanOk ? `${stakedPct.toFixed(2)}%` : "—"} />
-              <Cell k={zh ? "质押里还没领" : "Unclaimed in stake"} v={tape?.scanOk ? amount(tape.pendingStaked) : "—"} />
-              <Cell k={zh ? "池子里的 TAPE" : "TAPE in the pool"} v={tape ? amount(tape.pooled) : "—"} />
-              <Cell k={zh ? "锁仓合约里的 TAPE" : "TAPE in the locks"} v={tape ? amount(tape.locked) : "—"} />
-            </dl>
+        {networkOpen && tape ? (
+          <div className="border-t border-gold/40 px-3 py-2">
+            <Book title={zh ? "流通是这样减出来的" : "How circulation is subtracted"}>
+              <Line k={zh ? "已领出" : "Claimed"} v={`${amount(tape.supply)} · ${share(tape.supply, tape.cap)} ${zh ? "硬顶" : "of cap"}`} />
+              <Line k={zh ? "减 黑洞销毁" : "Minus burned"} v={`${amount(tape.burned)} · ${share(tape.burned, tape.supply)} ${zh ? "已领出" : "of claimed"}`} />
+              <Line k={zh ? "减 TAPE 池" : "Minus the pool"} v={amount(tape.pooled)} />
+              <Line k={zh ? "减 电路锁仓里已领未提出" : "Minus circuit lock"} v={amount(tape.circuitHeld)} />
+              <Line k={zh ? "减 晶圆锁仓里的 TAPE" : "Minus wafer lock"} v={amount(tape.waferHeld)} />
+              <Line k={zh ? "等于 实时流通" : "Equals circulating"} v={`${amount(circulating)} · ${share(circulating, tape.supply)} ${zh ? "已领出" : "of claimed"} · ${share(circulating, tape.cap)} ${zh ? "硬顶" : "of cap"}`} />
+            </Book>
+            <Book title={zh ? "还没进流通" : "Not circulating yet"}>
+              <Line k={zh ? "已挖未领" : "Mined, not claimed"} v={tape.scanOk ? `${amount(tape.pendingNet)} · ${share(tape.pendingNet, tape.supply + tape.pendingNet)} ${zh ? "已挖" : "of mined"}` : "—"} />
+              <Line k={zh ? "其中普通矿机未领" : "Of that, open wallets"} v={tape.scanOk ? amount(freePending) : "—"} />
+              <Line k={zh ? "其中质押矿机未领" : "Of that, staked miners"} v={tape.scanOk ? amount(tape.pendingStaked) : "—"} />
+              <Line k={zh ? "还没挖出" : "Not yet mined"} v={tape.scanOk ? `${amount(unmined)} · ${share(unmined, tape.cap)} ${zh ? "硬顶" : "of cap"}` : "—"} />
+              <Line k={zh ? "硬顶" : "Cap"} v={amount(tape.cap)} />
+              <Line k={zh ? "今日排放" : "Today"} v={amount(tape.daily)} />
+            </Book>
+            <Book title={zh ? "矿机和算力" : "Miners and weight"}>
+              <Line k={zh ? "已流片" : "Taped"} v={tape.scanOk ? tape.circuits.toLocaleString("en-US") : "—"} />
+              <Line k={zh ? "正在挖" : "Mining"} v={tape.scanOk ? `${tape.open.toLocaleString("en-US")} · ${share(BigInt(tape.open), BigInt(tape.circuits))}` : "—"} />
+              <Line k={zh ? "没在挖" : "Not mining"} v={tape.scanOk ? idle.toLocaleString("en-US") : "—"} />
+              <Line k={zh ? "质押中" : "Staked"} v={tape.scanOk ? tape.staked.toLocaleString("en-US") : "—"} />
+              <Line k={zh ? "质押且正在挖" : "Staked and mining"} v={tape.scanOk ? tape.stakedLive.toLocaleString("en-US") : "—"} />
+              <Line k={zh ? "质押但没在挖" : "Staked, not mining"} v={tape.scanOk ? stakedIdle.toLocaleString("en-US") : "—"} />
+              <Line k={zh ? "全网算力" : "Network weight"} v={tape.scanOk ? tape.weight.toLocaleString("en-US") : "—"} />
+              <Line k={zh ? "质押算力" : "Staked weight"} v={tape.scanOk ? `${tape.stakedWeight.toLocaleString("en-US")} · ${share(tape.stakedWeight, tape.weight)}` : "—"} />
+              <Line k={zh ? "普通算力" : "Wallet weight"} v={tape.scanOk ? `${freeWeight.toLocaleString("en-US")} · ${share(freeWeight, tape.weight)}` : "—"} />
+              <Line k={zh ? "质押约占今日" : "Stake about today"} v={tape.scanOk ? amount(todayStaked) : "—"} />
+              <Line k={zh ? "普通约占今日" : "Wallets about today"} v={tape.scanOk ? amount(todayFree) : "—"} />
+            </Book>
+            <Book title={zh ? "减半" : "Halving"}>
+              <Line k={zh ? "开始" : "Started"} v={when(tape.start)} />
+              <Line k={zh ? "下一次减半" : "Next halving"} v={era ? `${when(era.next)} · ${zh ? "新加坡" : "Singapore"}` : "—"} />
+              <Line k={zh ? "现在是第几期" : "Era"} v={era ? (era.era + 1n).toString() : "—"} />
+            </Book>
             <p className="mt-2 text-xs leading-5 text-ink/55">
               {zh
-                ? "流通是已领出减去黑洞、池子和两份锁仓。已挖未领还没铸出，不算流通。矿机张数大约 45 秒加总一次，没加总完不写成 0。"
-                : "Circulating is claimed TAPE minus the dead address, the pool, and both locks. Unclaimed TAPE is not minted yet. Miner counts refresh about every 45 seconds and are not shown as zero before the sum finishes."}
+                ? "已挖未领还没铸出，不算流通。矿机和未领大约 45 秒加总一次，没加完不写成 0。时间是新加坡时间。质押只认电路锁仓 0x06c877…013c。"
+                : "Unclaimed TAPE is not minted, so it is not circulating. Miner totals refresh about every 45 seconds and are not shown as zero early. Times are Singapore. Stake means the circuit lock."}
+            </p>
+            <p className="mt-1 break-all text-xs text-ink/40">
+              <a className="underline" href={`${XLAYER.explorer}/address/${TAPE}`} target="_blank" rel="noreferrer">TAPE</a>
+              {" · "}
+              <a className="underline" href={`${XLAYER.explorer}/address/${TAPE_BOOK.ash}`} target="_blank" rel="noreferrer">{zh ? "黑洞" : "Burn"}</a>
+              {" · "}
+              <a className="underline" href={`${XLAYER.explorer}/address/${TAPE_BOOK.pool}`} target="_blank" rel="noreferrer">{zh ? "池" : "Pool"}</a>
+              {" · "}
+              <a className="underline" href={`${XLAYER.explorer}/address/${TAPE_BOOK.circuit}`} target="_blank" rel="noreferrer">{zh ? "电路锁仓" : "Circuit lock"}</a>
+              {" · "}
+              <a className="underline" href={`${XLAYER.explorer}/address/${TAPE_BOOK.wafer}`} target="_blank" rel="noreferrer">{zh ? "晶圆锁仓" : "Wafer lock"}</a>
             </p>
           </div>
-        ) : null}
+        ) : networkOpen ? <p className="border-t border-gold/40 px-3 py-3 text-xs text-ink/55">{zh ? "链上还没读到。失败不会写成 0。" : "The chain has not answered. A miss is not written as zero."}</p> : null}
       </article>
       <div className="grid grid-cols-3 border border-gold">
         <button type="button" onClick={() => setSheet("claim")} className={`min-h-11 text-sm ${sheet === "claim" ? "bg-ink text-paper" : ""}`}>{zh ? "领取" : "Claim"}</button>
@@ -266,6 +303,24 @@ export function MineDesk() {
     </section>
       )}
     </section>
+  );
+}
+
+function Book({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="mt-3">
+      <h3 className="text-xs tracking-widest text-gold">{title}</h3>
+      <dl>{children}</dl>
+    </section>
+  );
+}
+
+function Line({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 border-t border-gold/30 py-1.5 text-xs">
+      <dt className="text-ink/60">{k}</dt>
+      <dd className="text-right font-mono">{v}</dd>
+    </div>
   );
 }
 

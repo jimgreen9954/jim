@@ -67,9 +67,12 @@ export type TapeBoard = {
   burned: bigint;
   pooled: bigint;
   locked: bigint;
+  circuitHeld: bigint;
+  waferHeld: bigint;
   pendingNet: bigint;
   pendingStaked: bigint;
   staked: number;
+  stakedLive: number;
   stakedWeight: bigint;
   seats: TapeSeat[];
   scanOk: boolean;
@@ -86,6 +89,18 @@ const CIRCUIT_LOCK = LOCKS[0].toLowerCase();
 const HALVING = 210_000n * 600n;
 const CAP = 21_000_000n * 10n ** 8n;
 const DAY = 7200n * 10n ** 8n;
+export const TAPE_BOOK = {
+  ash: ASH,
+  pool: POOL,
+  circuit: LOCKS[0],
+  wafer: LOCKS[1],
+} as const;
+
+export function tapeEra(start: bigint): { era: bigint; next: bigint } {
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  const era = now <= start ? 0n : (now - start) / HALVING;
+  return { era, next: start + (era + 1n) * HALVING };
+}
 
 function dailyAt(start: bigint): bigint {
   const era = (BigInt(Math.floor(Date.now() / 1000)) - start) / HALVING;
@@ -105,9 +120,12 @@ export type TapeWire = {
   burned: string;
   pooled: string;
   locked: string;
+  circuitHeld: string;
+  waferHeld: string;
   pendingNet: string;
   pendingStaked: string;
   staked: number;
+  stakedLive: number;
   stakedWeight: string;
   scanOk: boolean;
   scanning: boolean;
@@ -147,9 +165,12 @@ function boardFrom(wire: TapeWire): TapeBoard {
     burned: BigInt(wire.burned ?? "0"),
     pooled: BigInt(wire.pooled ?? "0"),
     locked: BigInt(wire.locked ?? "0"),
+    circuitHeld: BigInt(wire.circuitHeld ?? "0"),
+    waferHeld: BigInt(wire.waferHeld ?? "0"),
     pendingNet: BigInt(wire.pendingNet ?? "0"),
     pendingStaked: BigInt(wire.pendingStaked ?? "0"),
     staked: wire.staked ?? 0,
+    stakedLive: wire.stakedLive ?? 0,
     stakedWeight: BigInt(wire.stakedWeight ?? "0"),
     scanOk: wire.scanOk,
     scanning: wire.scanning,
@@ -229,7 +250,9 @@ async function loadTapeMine(account: string | null, onHead?: (board: TapeBoard) 
   const next = head[4] as bigint;
   const burned = head[5] as bigint;
   const pooled = head[6] as bigint;
-  const locked = (head[7] as bigint) + (head[8] as bigint);
+  const circuitHeld = head[7] as bigint;
+  const waferHeld = head[8] as bigint;
+  const locked = circuitHeld + waferHeld;
   const balance = account ? (head[9] as bigint) : 0n;
   if (cap !== CAP) throw new Error("cap");
   const daily = dailyAt(start);
@@ -241,9 +264,12 @@ async function loadTapeMine(account: string | null, onHead?: (board: TapeBoard) 
     burned,
     pooled,
     locked,
+    circuitHeld,
+    waferHeld,
     pendingNet: 0n,
     pendingStaked: 0n,
     staked: 0,
+    stakedLive: 0,
     stakedWeight: 0n,
     seats: [],
     scanOk: false,
@@ -258,6 +284,7 @@ async function loadTapeMine(account: string | null, onHead?: (board: TapeBoard) 
   ]);
   let open = 0;
   let staked = 0;
+  let stakedLive = 0;
   let stakedWeight = 0n;
   let missed = 0;
   const mineIds: number[] = [];
@@ -283,6 +310,7 @@ async function loadTapeMine(account: string | null, onHead?: (board: TapeBoard) 
         open += 1;
         openIds.push(ids[i]);
         if (locked) {
+          stakedLive += 1;
           stakedWeight += typeof seatRow[1] === "bigint" ? seatRow[1] : 0n;
           stakedOn.add(ids[i]);
         }
@@ -322,7 +350,7 @@ async function loadTapeMine(account: string | null, onHead?: (board: TapeBoard) 
     scanOk = false;
   }
   seats.sort((a, b) => Number(a.on) - Number(b.on) || Number(b.id) - Number(a.id));
-  return { supply, cap, weight, balance, start, daily, circuits: Math.max(0, last), open, burned, pooled, locked, pendingNet, pendingStaked, staked, stakedWeight, seats, scanOk, scanning: false };
+  return { supply, cap, weight, balance, start, daily, circuits: Math.max(0, last), open, burned, pooled, locked, circuitHeld, waferHeld, pendingNet, pendingStaked, staked, stakedLive, stakedWeight, seats, scanOk, scanning: false };
 }
 
 async function preflight(to: Hex, from: string, data: Hex) {

@@ -59,9 +59,12 @@ export type TapeWire = {
   burned: string;
   pooled: string;
   locked: string;
+  circuitHeld: string;
+  waferHeld: string;
   pendingNet: string;
   pendingStaked: string;
   staked: number;
+  stakedLive: number;
   stakedWeight: string;
   scanOk: boolean;
   scanning: boolean;
@@ -113,6 +116,8 @@ async function headOf(account: string | null) {
     last: Number(next) - 1,
     burned: head[5] as bigint,
     pooled: head[6] as bigint,
+    circuitHeld: head[7] as bigint,
+    waferHeld: head[8] as bigint,
     locked: (head[7] as bigint) + (head[8] as bigint),
   };
 }
@@ -123,7 +128,7 @@ function pack(
   seats: TapeWire["seats"],
   scanOk: boolean,
   scanning: boolean,
-  net: { pendingNet: bigint; pendingStaked: bigint; staked: number; stakedWeight: bigint } = { pendingNet: 0n, pendingStaked: 0n, staked: 0, stakedWeight: 0n },
+  net: { pendingNet: bigint; pendingStaked: bigint; staked: number; stakedLive: number; stakedWeight: bigint } = { pendingNet: 0n, pendingStaked: 0n, staked: 0, stakedLive: 0, stakedWeight: 0n },
 ): TapeWire {
   return {
     supply: row.supply.toString(),
@@ -137,9 +142,12 @@ function pack(
     burned: row.burned.toString(),
     pooled: row.pooled.toString(),
     locked: row.locked.toString(),
+    circuitHeld: row.circuitHeld.toString(),
+    waferHeld: row.waferHeld.toString(),
     pendingNet: net.pendingNet.toString(),
     pendingStaked: net.pendingStaked.toString(),
     staked: net.staked,
+    stakedLive: net.stakedLive,
     stakedWeight: net.stakedWeight.toString(),
     scanOk,
     scanning,
@@ -162,6 +170,7 @@ type Census = {
   last: number;
   open: number;
   staked: number;
+  stakedLive: number;
   stakedWeight: bigint;
   pendingNet: bigint;
   pendingStaked: bigint;
@@ -188,6 +197,7 @@ async function ownerCensus(last: number): Promise<Census> {
     const owners = new Map<string, number[]>();
     let open = 0;
     let staked = 0;
+    let stakedLive = 0;
     let stakedWeight = 0n;
     let missed = 0;
     const openIds: number[] = [];
@@ -206,6 +216,7 @@ async function ownerCensus(last: number): Promise<Census> {
         open += 1;
         openIds.push(ids[i]);
         if (locked) {
+          stakedLive += 1;
           stakedWeight += typeof seatRow[1] === "bigint" ? seatRow[1] : 0n;
           stakedOn.add(ids[i]);
         }
@@ -232,7 +243,7 @@ async function ownerCensus(last: number): Promise<Census> {
         if (stakedOn.has(slice[index])) pendingStaked += amt;
       });
     }
-    census = { at: Date.now(), last, open, staked, stakedWeight, pendingNet, pendingStaked, owners };
+    census = { at: Date.now(), last, open, staked, stakedLive, stakedWeight, pendingNet, pendingStaked, owners };
     return census;
   })().finally(() => {
     censusFlight = null;
