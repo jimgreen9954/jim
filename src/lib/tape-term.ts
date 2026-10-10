@@ -78,15 +78,9 @@ async function locksOf(term: Hex, who: Hex, countName: "tapeLockCount" | "bemLoc
   const count = await client.readContract({ address: term, abi, functionName: countName, args: [who] });
   const n = Number(count);
   if (!Number.isSafeInteger(n) || n <= 0) return [];
-  const rows = await client.multicall({
-    contracts: Array.from({ length: n }, (_, index) => ({
-      address: term,
-      abi,
-      functionName: rowName,
-      args: [who, BigInt(index)] as const,
-    })),
-    allowFailure: false,
-  });
+  const rows = await Promise.all(Array.from({ length: n }, (_, index) =>
+    client.readContract({ address: term, abi, functionName: rowName, args: [who, BigInt(index)] }),
+  ));
   return rows.map((row, index) => ({
     index,
     amount: row[0],
