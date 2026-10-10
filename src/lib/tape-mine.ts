@@ -142,14 +142,24 @@ export function readTapeMine(account: string | null, onHead?: (board: TapeBoard)
   return mineFlight;
 }
 
+function until<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const slow = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error("slow")), ms);
+  });
+  return Promise.race([work, slow]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
 async function readThroughSite(account: string | null, onHead?: (board: TapeBoard) => void): Promise<TapeBoard> {
   try {
-    const head = boardFrom(await getTapeHead({ data: { account: account ?? "" } }));
+    const head = boardFrom(await until(getTapeHead({ data: { account: account ?? "" } }), 8_000));
     onHead?.({ ...head, scanning: true, seats: [], scanOk: false });
     try {
-      return boardFrom(await getTapeSeats({ data: { account: account ?? "" } }));
+      return boardFrom(await until(getTapeSeats({ data: { account: account ?? "" } }), 20_000));
     } catch {
-      return { ...head, scanning: false, scanOk: false, seats: [] };
+      return loadTapeMine(account, onHead);
     }
   } catch {
     return loadTapeMine(account, onHead);
