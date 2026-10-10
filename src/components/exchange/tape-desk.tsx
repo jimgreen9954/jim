@@ -303,16 +303,20 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
       <article className="border border-gold bg-card px-3 py-4 sm:px-4">
         <p className="text-[11px] tracking-[0.22em] text-gold">{zh ? "自愿回购" : "Voluntary buyback"}</p>
         <h2 className="mt-1 font-display text-3xl italic leading-tight sm:text-4xl">1 TAPE = 0.1 USDT0</h2>
-        <p className="mt-2 text-sm leading-6">
-          {zh
-            ? "回收价写死了：一枚整的 TAPE 换 0.1 USDT0。这不是现货价。只收整数枚，半枚不收。"
-            : "The buyback price is fixed: one whole TAPE pays 0.1 USDT0. That is not the spot price. Whole TAPE only. A fraction is refused."}
-        </p>
-        <p className="mt-2 text-sm leading-6">
-          {zh
-            ? "矿工自愿参与。愿意的人自己充 USDT0，按这个价买下别人的 TAPE，取回去自己加池。不卖、不充都可以，没有人被要求参加。池子里的 USDT0 不够，这一笔不会成交，也不会先收 TAPE。买到的 TAPE 记在充 USDT0 的地址上，只有这个地址能取。这份合约不加池。"
-            : "Miners join only if they want to. Someone who wants to fund it adds USDT0, buys other people's TAPE at this price, and takes that TAPE out to add a pool. Selling and funding are optional. Nobody is required to join. If the USDT0 in the pool is short, the sale does not happen and no TAPE is taken. Bought TAPE is owed only to the address that added the USDT0. This contract does not add liquidity."}
-        </p>
+        <dl className="mt-3 grid gap-3 text-sm leading-6">
+          <div>
+            <dt className="text-[11px] tracking-[0.16em] text-gold">{zh ? "回收价" : "Price"}</dt>
+            <dd>{zh ? "1 枚整数 TAPE 结算 0.1 USDT0。价格写在合约中，不随现货变动。不足 1 枚不予接受。" : "One whole TAPE settles for 0.1 USDT0. The price is in the contract and does not follow the spot market. Less than one TAPE is not accepted."}</dd>
+          </div>
+          <div>
+            <dt className="text-[11px] tracking-[0.16em] text-gold">{zh ? "参与" : "Participation"}</dt>
+            <dd>{zh ? "自愿。矿工可向本合约充入 USDT0，按上述价格购入他人卖出的 TAPE，取出后自行添加流动性。本合约不代为加池。不出售、不出资，不影响挖矿和其他持仓。" : "Voluntary. A miner may add USDT0, buy TAPE that others sell at the price above, and withdraw it to add liquidity. This contract does not add liquidity. Declining to sell or to fund does not affect mining or any other holding."}</dd>
+          </div>
+          <div>
+            <dt className="text-[11px] tracking-[0.16em] text-gold">{zh ? "结算" : "Settlement"}</dt>
+            <dd>{zh ? "可支付余额不足时，该笔整单失败，不会预先收取 TAPE。购得的 TAPE 按成交当时的出资份额登记。尚未使用的 USDT0 只属于对应的出资地址，仅该地址可以取回。卖出方于成交时收到 USDT0，不能取回已卖出的 TAPE。" : "If the balance cannot cover the order, the whole order fails and no TAPE is taken first. Bought TAPE is credited by each funder's share at the time of the sale. Unused USDT0 belongs only to the address that provided it, and only that address can withdraw it. The seller is paid USDT0 at settlement and cannot take the sold TAPE back."}</dd>
+          </div>
+        </dl>
         <p className="mt-2 break-all font-mono text-[11px] text-ink/50">
           <a className="underline" href={`${XLAYER.explorer}/address/${desk}`} target="_blank" rel="noreferrer">{desk}</a>
         </p>
@@ -329,7 +333,7 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
             {zh ? "自愿充入 USDT0，按 0.1 买 TAPE" : "Voluntarily add USDT0 to buy at 0.1"}
             <input value={usdtAmt} onChange={(event) => setUsdtAmt(event.target.value)} inputMode="decimal" placeholder="100" className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono text-base text-ink" />
             <span>{zh ? "钱包" : "Wallet"} {row ? deskText(row.usdtBal, 6, 2) : "—"} · {zh ? "可取回" : "Yours"} {row ? deskText(row.usdtLeft, 6, 2) : "—"} USDT0 · {zh ? "已买到" : "Bought"} {row ? deskText(row.tapeOwed, 8) : "—"} TAPE</span>
-            <p className="leading-5">{zh ? "不会自动把钱包里的 USDT0 充进去。先填数量。点充入要签两笔：第一笔授权，币还在钱包；第二笔才进这个回购合约。" : "It does not deposit the wallet balance by itself. Type an amount. Add asks for two signatures: approve first, the coins stay put; the second one deposits."}</p>
+            <p className="leading-5">{zh ? "充入金额须自行填写，不会按钱包余额自动转入。签署两笔：第一笔为授权，资产仍留在钱包；第二笔为充入。" : "Enter the amount. The wallet balance is not deposited automatically. Two signatures: the first approves and leaves the assets in the wallet; the second deposits."}</p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <button type="button" disabled={busy || !row || row.usdtBal === 0n} className="min-h-12 border border-gold px-1 text-sm disabled:opacity-40" onClick={() => setUsdtAmt(row ? formatUnits(row.usdtBal, 6) : "")}>{zh ? "全部" : "All"}</button>
               <button type="button" disabled={busy} className="min-h-12 bg-ink px-1 text-sm text-paper disabled:opacity-40" onClick={() => run(() => fundUsdt(account ?? "", units(usdtAmt, 6)), zh ? "USDT0 已充入。池子要等这一页重新读到才变。" : "USDT0 is in. The pool changes when this page reads it again.", "desk")}>{zh ? "充入" : "Add"}</button>
