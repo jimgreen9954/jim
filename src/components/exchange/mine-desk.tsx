@@ -29,7 +29,15 @@ export function MineDesk() {
     const pull = () => {
       readPodStats().then((row) => { if (!dead) setStats(row); }).catch(() => undefined);
       if (sheet !== "claim") return;
-      readTapeMine(account, (head) => { if (!dead) { setTape(head); setTapeErr(null); } }).then((row) => { if (!dead) { setTape(row); setTapeErr(null); } }).catch(() => { if (!dead) setTapeErr(zh ? "链上没读到。失败不会写成 0。" : "The chain did not answer. A miss is not written as zero."); });
+      readTapeMine(account, (head) => {
+        if (dead) return;
+        setTapeErr(null);
+        setTape((prev) => prev && prev.seats.length > 0 ? { ...head, seats: prev.seats, open: prev.open, scanning: true, scanOk: prev.scanOk } : head);
+      }).then((row) => {
+        if (dead) return;
+        setTapeErr(null);
+        setTape((prev) => row.scanOk || !prev?.seats.length ? row : { ...prev, scanning: false });
+      }).catch(() => { if (!dead) setTapeErr(zh ? "链上没读到。失败不会写成 0。" : "The chain did not answer. A miss is not written as zero."); });
     };
     pull();
     const id = window.setInterval(pull, sheet === "claim" ? 30_000 : 60_000);
