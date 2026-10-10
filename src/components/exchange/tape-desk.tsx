@@ -148,6 +148,16 @@ function LockList({ locks, zh, busy, empty, onTake }: { locks: TermLock[]; zh: b
   );
 }
 
+function Figure({ k, v, sub }: { k: string; v: string; sub?: string }) {
+  return (
+    <div className="min-w-0 border border-gold px-3 py-2">
+      <p className="text-[11px] tracking-[0.16em] text-gold">{k}</p>
+      <p className="break-all font-mono text-base leading-7 sm:text-lg">{v}</p>
+      {sub ? <p className="break-all text-xs leading-5 text-ink/70">{sub}</p> : null}
+    </div>
+  );
+}
+
 function apy(pot: bigint, potDec: number, potPx: number | null, staked: bigint, stakeDec: number, stakePx: number | null): string {
   if (!potPx || !stakePx || staked === 0n) return "—";
   if (pot === 0n) return "0";
@@ -403,9 +413,13 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
       <div className="grid gap-3 lg:grid-cols-2">
         <article className="border border-gold bg-card px-3 py-4 sm:px-4">
           <h3 className="font-display text-2xl italic">{zh ? "质押 TAPE，领 BEM" : "Stake TAPE, earn BEM"}</h3>
-          <p className="mt-2 text-sm leading-6">{zh ? "先选期限，再勾确认。到期前本金取不出。BEM 奖励不用等到期。谁充的奖励，没分完的只有谁能取。" : "Pick a term, then tick the box. Principal cannot leave early. BEM rewards do not wait. Only the address that added a reward can take back what has not vested."}</p>
-          <p className="mt-2 text-sm">{zh ? "年化" : "APY"} <span className="font-mono">{tapeApy === "—" ? (zh ? "还没有质押本金，现在算不出来" : "No principal yet") : `${tapeApy}%`}</span></p>
-          <p className="mt-1 text-xs leading-5 text-ink/55">{zh ? `已质押 ${stake ? deskText(stake.tapeStakedTotal, 8) : "—"} TAPE。未分完 ${stake ? deskText(stake.bemPot, 8) : "—"} BEM。你的本金 ${stake ? deskText(stake.tapeStaked, 8) : "—"}，待领 ${stake ? deskText(stake.bemOwed, 8) : "—"} BEM。你还没分完的奖励 ${stake ? deskText(stake.bemSponsor, 8) : "—"} BEM。` : `Staked ${stake ? deskText(stake.tapeStakedTotal, 8) : "—"} TAPE. Unvested ${stake ? deskText(stake.bemPot, 8) : "—"} BEM. Yours ${stake ? deskText(stake.tapeStaked, 8) : "—"}, pending ${stake ? deskText(stake.bemOwed, 8) : "—"} BEM. Your unvested reward ${stake ? deskText(stake.bemSponsor, 8) : "—"} BEM.`}</p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <Figure k={zh ? "可质押" : "Available"} v={!account ? (zh ? "未登入" : "Sign in") : stake ? `${deskText(stake.tapeBal, 8)} TAPE` : "—"} />
+            <Figure k={zh ? "已质押" : "Staked"} v={!account ? (zh ? "未登入" : "Sign in") : stake ? `${deskText(stake.tapeStaked, 8)} TAPE` : "—"} sub={zh ? `全池 ${stake ? deskText(stake.tapeStakedTotal, 8) : "—"} TAPE` : `Pool ${stake ? deskText(stake.tapeStakedTotal, 8) : "—"} TAPE`} />
+          </div>
+          <p className="mt-2 text-sm leading-6">{zh ? "可质押是这个钱包里的 TAPE。已质押是你已经锁上的本金。全池不需要登入也能看见。" : "Available is the TAPE in this wallet. Staked is the principal you already locked. The pool total does not need a sign-in."}</p>
+          <p className="mt-2 text-sm">{zh ? "年化" : "APY"} <span className="font-mono">{tapeApy === "—" ? (stake && stake.tapeStakedTotal > 0n ? (zh ? "价格没读到" : "Price missed") : (zh ? "还没有质押本金，现在算不出来" : "No principal yet")) : `${tapeApy}%`}</span></p>
+          <p className="mt-1 text-xs leading-5">{zh ? `未分完 ${stake ? deskText(stake.bemPot, 8) : "—"} BEM。待领 ${stake ? deskText(stake.bemOwed, 8) : "—"} BEM。你还没分完的奖励 ${stake ? deskText(stake.bemSponsor, 8) : "—"} BEM。` : `Unvested ${stake ? deskText(stake.bemPot, 8) : "—"} BEM. Pending ${stake ? deskText(stake.bemOwed, 8) : "—"} BEM. Your unvested reward ${stake ? deskText(stake.bemSponsor, 8) : "—"} BEM.`}</p>
           {stakeMiss ? <p className="mt-1 text-xs text-ink/55">{zh ? "期限这一次没读到。不写成 0。" : "This stake read missed. It is not shown as zero."}</p> : null}
           <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
             {TERMS.map((item) => (
@@ -418,13 +432,14 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
               <input value={tapeAmt} onChange={(event) => setTapeAmt(event.target.value)} inputMode="decimal" placeholder={zh ? "锁入 TAPE 数量" : "TAPE to lock"} className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono text-base text-ink sm:text-sm" />
               <button type="button" disabled={!stake || stake.tapeBal === 0n} className="min-h-12 border border-gold px-3 text-sm disabled:opacity-40" onClick={() => setTapeAmt(stake ? formatUnits(stake.tapeBal, 8) : "")}>{zh ? "全部" : "All"}</button>
             </div>
-            <p className="text-xs leading-5 text-ink/55">{zh ? "钱包可锁" : "Wallet"} {stake ? deskText(stake.tapeBal, 8) : "—"} TAPE。{zh ? "不会按余额自动锁定。要签两笔：第一笔授权，币还在钱包；第二笔才锁进期限合约。" : "It does not lock the balance by itself. Two signatures: approve first, the coins stay in the wallet; the second locks them."}</p>
+            <p className="text-xs leading-5 text-ink/70">{zh ? "填数量，或点全部。不会按可质押自动锁定。要签两笔：第一笔授权，币还在钱包；第二笔才锁上。" : "Enter an amount, or tap All. It does not lock the available balance by itself. Two signatures: approve first; the second locks."}</p>
             <label className="flex min-h-11 items-start gap-2 text-xs leading-5">
               <input type="checkbox" className="mt-1 size-4 shrink-0" checked={tapeAck} onChange={(event) => setTapeAck(event.target.checked)} />
               <span>{zh ? `我知道这笔 TAPE 锁 ${termLabel(tapeTerm, true)}，到期前不能取回本金。` : `I know this TAPE locks for ${termLabel(tapeTerm, false)}. Principal cannot leave early.`}</span>
             </label>
             <button type="button" disabled={busy || !term} className="min-h-12 bg-ink text-sm text-paper disabled:opacity-40" onClick={() => lock("tape")}>{zh ? `质押 ${termLabel(tapeTerm, true)}` : `Stake ${termLabel(tapeTerm, false)}`}</button>
-            <LockList locks={stake?.tapeLocks ?? []} zh={zh} busy={busy || !term} empty={zh ? (term ? "还没有锁仓。" : "部署之后记在这里。") : (term ? "No lock yet." : "Shown after deploy.")} onTake={(index) => run(() => unstakeTermTape(account ?? "", index), zh ? "到期本金已取回。" : "Expired principal is back.", "term", "stake")} />
+            <p className="text-xs text-ink/70">{zh ? "你的锁仓" : "Your locks"}</p>
+            <LockList locks={stake?.tapeLocks ?? []} zh={zh} busy={busy || !term} empty={zh ? (!account ? "登入后显示你已经质押的。" : stake && stake.tapeStaked > 0n ? "本金已记上。锁仓明细这一次没列出来。" : term ? "你还没有锁仓。" : "部署之后记在这里。") : (!account ? "Shown after sign-in." : stake && stake.tapeStaked > 0n ? "Principal is recorded. The lock rows missed this read." : term ? "You have no lock yet." : "Shown after deploy.")} onTake={(index) => run(() => unstakeTermTape(account ?? "", index), zh ? "到期本金已取回。" : "Expired principal is back.", "term", "stake")} />
             <input value={rewardBem} onChange={(event) => setRewardBem(event.target.value)} inputMode="decimal" placeholder={zh ? "充入 BEM 奖励" : "BEM reward"} className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono text-base text-ink sm:text-sm" />
             <div className="grid grid-cols-3 gap-2">
               <button type="button" disabled={busy || !term} className="min-h-12 border border-gold px-1 text-sm disabled:opacity-40" onClick={() => run(() => fundTermBem(account ?? "", units(rewardBem, 8)), zh ? "BEM 奖励已充入。" : "BEM reward added.", "term", "reward")}>{zh ? "充奖励" : "Add"}</button>
@@ -435,9 +450,13 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
         </article>
         <article className="border border-gold bg-card px-3 py-4 sm:px-4">
           <h3 className="font-display text-2xl italic">{zh ? "质押 BEM，领 TAPE" : "Stake BEM, earn TAPE"}</h3>
-          <p className="mt-2 text-sm leading-6">{zh ? "这里的 BEM 是 X Layer 上的。BSC 的先用下面收起的官方桥转过来。本站不经手。本金按期限锁，TAPE 奖励可以先领。" : "This BEM is on X Layer. Move BSC BEM with the official bridge below. This site does not custody it. Principal follows the term. TAPE rewards can be claimed earlier."}</p>
-          <p className="mt-2 text-sm">{zh ? "年化" : "APY"} <span className="font-mono">{bemApy === "—" ? (zh ? "还没有质押本金，现在算不出来" : "No principal yet") : `${bemApy}%`}</span></p>
-          <p className="mt-1 text-xs leading-5 text-ink/55">{zh ? `已质押 ${stake ? deskText(stake.bemStakedTotal, 8) : "—"} BEM。未分完 ${stake ? deskText(stake.tapePot, 8) : "—"} TAPE。你的本金 ${stake ? deskText(stake.bemStaked, 8) : "—"}，待领 ${stake ? deskText(stake.tapeOwed, 8) : "—"} TAPE。你还没分完的奖励 ${stake ? deskText(stake.tapeSponsor, 8) : "—"} TAPE。` : `Staked ${stake ? deskText(stake.bemStakedTotal, 8) : "—"} BEM. Unvested ${stake ? deskText(stake.tapePot, 8) : "—"} TAPE. Yours ${stake ? deskText(stake.bemStaked, 8) : "—"}, pending ${stake ? deskText(stake.tapeOwed, 8) : "—"} TAPE. Your unvested reward ${stake ? deskText(stake.tapeSponsor, 8) : "—"} TAPE.`}</p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <Figure k={zh ? "可质押" : "Available"} v={!account ? (zh ? "未登入" : "Sign in") : stake ? `${deskText(stake.bemBal, 8)} BEM` : "—"} />
+            <Figure k={zh ? "已质押" : "Staked"} v={!account ? (zh ? "未登入" : "Sign in") : stake ? `${deskText(stake.bemStaked, 8)} BEM` : "—"} sub={zh ? `全池 ${stake ? deskText(stake.bemStakedTotal, 8) : "—"} BEM` : `Pool ${stake ? deskText(stake.bemStakedTotal, 8) : "—"} BEM`} />
+          </div>
+          <p className="mt-2 text-sm leading-6">{zh ? "可质押是这个钱包里的 X Layer BEM。已质押是你已经锁上的本金。BSC 的 BEM 要先用下面的官方桥转过来，本站不经手。" : "Available is the X Layer BEM in this wallet. Staked is the principal you already locked. BSC BEM has to cross on the official bridge below. This site does not custody it."}</p>
+          <p className="mt-2 text-sm">{zh ? "年化" : "APY"} <span className="font-mono">{bemApy === "—" ? (stake && stake.bemStakedTotal > 0n ? (zh ? "价格没读到" : "Price missed") : (zh ? "还没有质押本金，现在算不出来" : "No principal yet")) : `${bemApy}%`}</span></p>
+          <p className="mt-1 text-xs leading-5">{zh ? `未分完 ${stake ? deskText(stake.tapePot, 8) : "—"} TAPE。待领 ${stake ? deskText(stake.tapeOwed, 8) : "—"} TAPE。你还没分完的奖励 ${stake ? deskText(stake.tapeSponsor, 8) : "—"} TAPE。` : `Unvested ${stake ? deskText(stake.tapePot, 8) : "—"} TAPE. Pending ${stake ? deskText(stake.tapeOwed, 8) : "—"} TAPE. Your unvested reward ${stake ? deskText(stake.tapeSponsor, 8) : "—"} TAPE.`}</p>
           <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
             {TERMS.map((item) => (
               <button key={item.id} type="button" className={`min-h-11 px-1 text-sm ${bemTerm === item.id ? "bg-ink text-paper" : "border border-gold"}`} onClick={() => { setBemTerm(item.id); setBemAck(false); }}>{zh ? item.zh : item.en}</button>
@@ -449,13 +468,14 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
               <input value={bemAmt} onChange={(event) => setBemAmt(event.target.value)} inputMode="decimal" placeholder={zh ? "锁入 BEM 数量" : "BEM to lock"} className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono text-base text-ink sm:text-sm" />
               <button type="button" disabled={!stake || stake.bemBal === 0n} className="min-h-12 border border-gold px-3 text-sm disabled:opacity-40" onClick={() => setBemAmt(stake ? formatUnits(stake.bemBal, 8) : "")}>{zh ? "全部" : "All"}</button>
             </div>
-            <p className="text-xs leading-5 text-ink/55">{zh ? "钱包可锁" : "Wallet"} {stake ? deskText(stake.bemBal, 8) : "—"} BEM。{zh ? "不会按余额自动锁定。要签两笔：第一笔授权，币还在钱包；第二笔才锁进期限合约。" : "It does not lock the balance by itself. Two signatures: approve first, the coins stay in the wallet; the second locks them."}</p>
+            <p className="text-xs leading-5 text-ink/70">{zh ? "填数量，或点全部。不会按可质押自动锁定。要签两笔：第一笔授权，币还在钱包；第二笔才锁上。" : "Enter an amount, or tap All. It does not lock the available balance by itself. Two signatures: approve first; the second locks."}</p>
             <label className="flex min-h-11 items-start gap-2 text-xs leading-5">
               <input type="checkbox" className="mt-1 size-4 shrink-0" checked={bemAck} onChange={(event) => setBemAck(event.target.checked)} />
               <span>{zh ? `我知道这笔 BEM 锁 ${termLabel(bemTerm, true)}，到期前不能取回本金。` : `I know this BEM locks for ${termLabel(bemTerm, false)}. Principal cannot leave early.`}</span>
             </label>
             <button type="button" disabled={busy || !term} className="min-h-12 bg-ink text-sm text-paper disabled:opacity-40" onClick={() => lock("bem")}>{zh ? `质押 ${termLabel(bemTerm, true)}` : `Stake ${termLabel(bemTerm, false)}`}</button>
-            <LockList locks={stake?.bemLocks ?? []} zh={zh} busy={busy || !term} empty={zh ? (term ? "还没有锁仓。" : "部署之后记在这里。") : (term ? "No lock yet." : "Shown after deploy.")} onTake={(index) => run(() => unstakeTermBem(account ?? "", index), zh ? "到期本金已取回。" : "Expired principal is back.", "term", "stake")} />
+            <p className="text-xs text-ink/70">{zh ? "你的锁仓" : "Your locks"}</p>
+            <LockList locks={stake?.bemLocks ?? []} zh={zh} busy={busy || !term} empty={zh ? (!account ? "登入后显示你已经质押的。" : stake && stake.bemStaked > 0n ? "本金已记上。锁仓明细这一次没列出来。" : term ? "你还没有锁仓。" : "部署之后记在这里。") : (!account ? "Shown after sign-in." : stake && stake.bemStaked > 0n ? "Principal is recorded. The lock rows missed this read." : term ? "You have no lock yet." : "Shown after deploy.")} onTake={(index) => run(() => unstakeTermBem(account ?? "", index), zh ? "到期本金已取回。" : "Expired principal is back.", "term", "stake")} />
             <input value={rewardTape} onChange={(event) => setRewardTape(event.target.value)} inputMode="decimal" placeholder={zh ? "充入 TAPE 奖励" : "TAPE reward"} className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono text-base text-ink sm:text-sm" />
             <div className="grid grid-cols-3 gap-2">
               <button type="button" disabled={busy || !term} className="min-h-12 border border-gold px-1 text-sm disabled:opacity-40" onClick={() => run(() => fundTermTape(account ?? "", units(rewardTape, 8)), zh ? "TAPE 奖励已充入。" : "TAPE reward added.", "term", "reward")}>{zh ? "充奖励" : "Add"}</button>
