@@ -98,7 +98,7 @@ export function TransistorDesk() {
       gateReady(addr, marketOf(pick.token, pick.id)).then((ok) => { if (!dead) setReady(ok); }).catch(() => { if (!dead) setReady(false); });
     };
     pull();
-    const timer = window.setInterval(pull, 1000);
+    const timer = window.setInterval(pull, 8000);
     return () => {
       dead = true;
       window.clearInterval(timer);

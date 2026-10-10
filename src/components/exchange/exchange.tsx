@@ -126,7 +126,7 @@ function SimClock() {
         });
     };
     pull();
-    const priceId = window.setInterval(pull, 1000);
+    const priceId = window.setInterval(pull, 8000);
     return () => {
       dead = true;
       window.clearInterval(id);

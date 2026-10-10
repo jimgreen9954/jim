@@ -129,11 +129,14 @@ export function WalletBar() {
 
   useEffect(() => {
     let dead = false;
-    catchKindSupply((row) => {
-      if (!dead) setKinds(row);
-    }).catch(() => undefined);
+    const timer = window.setTimeout(() => {
+      catchKindSupply((row) => {
+        if (!dead) setKinds(row);
+      }).catch(() => undefined);
+    }, 2500);
     return () => {
       dead = true;
+      window.clearTimeout(timer);
     };
   }, [hash]);
 

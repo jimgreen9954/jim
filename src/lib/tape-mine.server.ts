@@ -125,37 +125,59 @@ export async function loadTapeHead(account: string | null): Promise<TapeWire> {
   return body;
 }
 
+type Census = { at: number; last: number; open: number; owners: Map<string, number[]> };
+let census: Census | null = null;
+let censusFlight: Promise<Census> | null = null;
+
+async function ownerCensus(last: number): Promise<Census> {
+  if (census && census.last === last && Date.now() - census.at < 45_000) return census;
+  if (censusFlight) return censusFlight;
+  censusFlight = (async () => {
+    const ids: number[] = [];
+    for (let id = 1; id <= last && ids.length < 8000; id += 1) ids.push(id);
+    const calls = ids.flatMap((id) => [
+      { address: CIRCUITS, abi: circuitAbi, functionName: "ownerOf" as const, args: [BigInt(id)] as const },
+      { address: MINE, abi: mineAbi, functionName: "seat" as const, args: [BigInt(id)] as const },
+    ]);
+    const owned: { status: string; result?: unknown }[] = [];
+    for (let i = 0; i < calls.length; i += 240) {
+      const part = await client.multicall({ contracts: calls.slice(i, i + 240) as never, allowFailure: true, batchSize: 240 });
+      owned.push(...(part as { status: string; result?: unknown }[]));
+    }
+    const owners = new Map<string, number[]>();
+    let open = 0;
+    let missed = 0;
+    for (let i = 0; i < ids.length; i += 1) {
+      const owner = owned[i * 2];
+      const seat = owned[i * 2 + 1];
+      const seatRow = seat?.status === "success" && Array.isArray(seat.result) ? seat.result : null;
+      if (seatRow && seatRow[3]) open += 1;
+      const ownerAddr = owner?.status === "success" && typeof owner.result === "string" ? owner.result.toLowerCase() : "";
+      if (!ownerAddr) missed += 1;
+      const seatOwner = seatRow && typeof seatRow[0] === "string" ? seatRow[0].toLowerCase() : "";
+      for (const who of new Set([ownerAddr, seatOwner].filter((item) => item && item !== "0x0000000000000000000000000000000000000000"))) {
+        const list = owners.get(who) ?? [];
+        list.push(ids[i]);
+        owners.set(who, list);
+      }
+    }
+    if (missed > Math.max(8, Math.floor(ids.length / 20))) throw new Error("scan");
+    census = { at: Date.now(), last, open, owners };
+    return census;
+  })().finally(() => {
+    censusFlight = null;
+  });
+  return censusFlight;
+}
+
 export async function loadTapeSeats(account: string | null): Promise<TapeWire> {
   const key = `s:${(account ?? "").toLowerCase()}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < 20_000) return hit.body;
   const row = await headOf(account);
-  const ids: number[] = [];
-  for (let id = 1; id <= row.last && ids.length < 8000; id += 1) ids.push(id);
-  const ownedCalls = ids.flatMap((id) => [
-    { address: CIRCUITS, abi: circuitAbi, functionName: "ownerOf" as const, args: [BigInt(id)] as const },
-    { address: MINE, abi: mineAbi, functionName: "seat" as const, args: [BigInt(id)] as const },
-  ]);
-  const owned: { status: string; result?: unknown }[] = [];
-  for (let i = 0; i < ownedCalls.length; i += 240) {
-    const part = await client.multicall({ contracts: ownedCalls.slice(i, i + 240) as never, allowFailure: true, batchSize: 240 });
-    owned.push(...(part as { status: string; result?: unknown }[]));
-  }
+  const found = await ownerCensus(row.last);
   const who = account?.toLowerCase() ?? "";
-  let open = 0;
-  let missed = 0;
-  const mineIds: number[] = [];
-  for (let i = 0; i < ids.length; i += 1) {
-    const owner = owned[i * 2];
-    const seat = owned[i * 2 + 1];
-    const seatRow = seat?.status === "success" && Array.isArray(seat.result) ? seat.result : null;
-    if (seatRow && seatRow[3]) open += 1;
-    const ownerAddr = owner?.status === "success" && typeof owner.result === "string" ? owner.result : null;
-    if (!ownerAddr) missed += 1;
-    const seatOwner = seatRow && typeof seatRow[0] === "string" ? seatRow[0].toLowerCase() : "";
-    if (who && ((ownerAddr && ownerAddr.toLowerCase() === who) || seatOwner === who)) mineIds.push(ids[i]);
-  }
-  if (missed > Math.max(8, Math.floor(ids.length / 20))) throw new Error("scan");
+  const mineIds = who ? (found.owners.get(who) ?? []) : [];
   const detailCalls = mineIds.flatMap((id) => [
     { address: CIRCUITS, abi: circuitAbi, functionName: "circuitInfo" as const, args: [BigInt(id)] as const },
     { address: MINE, abi: mineAbi, functionName: "pendingOf" as const, args: [BigInt(id)] as const },
@@ -182,7 +204,7 @@ export async function loadTapeSeats(account: string | null): Promise<TapeWire> {
     seats.push({ id: String(mineIds[i]), gates: gates.toString(), on, pending: pendingAmt.toString(), share: text(share) });
   }
   seats.sort((a, b) => Number(a.on) - Number(b.on) || Number(b.id) - Number(a.id));
-  const body = pack(row, open, seats, true, false);
+  const body = pack(row, found.open, seats, true, false);
   cache.set(key, { at: Date.now(), body });
   return body;
 }
