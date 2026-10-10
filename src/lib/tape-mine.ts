@@ -252,8 +252,8 @@ async function preflight(to: Hex, from: string, data: Hex) {
   try {
     await Promise.race([call, slow]);
   } catch (err) {
-    if (err instanceof Error && err.message === "slow") return;
-    throw err;
+    const message = err instanceof Error ? err.message : "";
+    if (/revert|execution reverted/i.test(message)) throw err;
   } finally {
     if (timer) clearTimeout(timer);
   }
@@ -268,8 +268,13 @@ async function send(from: string, data: Hex): Promise<Hex> {
     method: "eth_sendTransaction",
     params: [{ from, to: TAPE_MINE, data }],
   })) as Hex;
-  const receipt = await client.waitForTransactionReceipt({ hash, timeout: 90_000 });
-  if (receipt.status !== "success") throw new Error("revert");
+  try {
+    const receipt = await client.waitForTransactionReceipt({ hash, timeout: 90_000 });
+    if (receipt.status !== "success") throw new Error("revert");
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    if (/revert|execution reverted/i.test(message)) throw err;
+  }
   return hash;
 }
 

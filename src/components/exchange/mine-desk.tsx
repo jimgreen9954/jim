@@ -193,7 +193,17 @@ export function MineDesk() {
                     say(zh ? "TAPE 已领到这个钱包。名单随后再对。" : "TAPE is in this wallet. The list refreshes after.");
                     readTapeMine(account).then((row) => setTape(row)).catch(() => undefined);
                   })
-                  .catch((error) => say(error instanceof Error && /rejected|denied/i.test(error.message) ? (zh ? "你取消了。" : "You cancelled.") : (zh ? "领取没有完成。TAPE 还在合约里。" : "The claim did not finish."), true))
+                  .catch((error) => {
+                    const message = error instanceof Error ? error.message : "";
+                    say(
+                      /rejected|denied|4001/i.test(message)
+                        ? (zh ? "你取消了。" : "You cancelled.")
+                        : message === "chain"
+                          ? (zh ? "电脑上的 OKX 还没到 X Layer。弹窗里切换并确认，再点领取。" : "OKX on this computer is not on X Layer. Switch in the prompt, then claim.")
+                          : (zh ? "领取没有完成。TAPE 还在合约里。" : "The claim did not finish."),
+                      true,
+                    );
+                  })
                   .finally(() => setBusy(false));
               }}
             >

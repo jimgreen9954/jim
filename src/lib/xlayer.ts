@@ -85,31 +85,44 @@ export function formatOkb(wei: bigint): string {
   return formatEther(wei);
 }
 
+async function onXLayer(): Promise<boolean> {
+  const eth = ethereum();
+  if (!eth) return false;
+  try {
+    const id = await eth.request({ method: "eth_chainId" });
+    const text = typeof id === "string" ? id : String(id ?? "");
+    return Number.parseInt(text, text.startsWith("0x") ? 16 : 10) === XLAYER.chainId;
+  } catch {
+    return false;
+  }
+}
+
 async function ensureXLayer(): Promise<void> {
   const eth = ethereum();
   if (!eth) throw new Error("nowallet");
+  if (await onXLayer()) return;
+  const add = {
+    chainId: XLAYER.hex,
+    chainName: "X Layer",
+    rpcUrls: ["https://xlayerrpc.okx.com", XLAYER.rpc, "https://xlayer.drpc.org"],
+    nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
+    blockExplorerUrls: [XLAYER.explorer],
+  };
   try {
     await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: XLAYER.hex }] });
   } catch (err) {
     const code = (err as { code?: number }).code;
-    const message = err instanceof Error ? err.message : "";
-    if (code === 4902 || message.includes("Unrecognized")) {
-      await eth.request({
-        method: "wallet_addEthereumChain",
-        params: [
-          {
-            chainId: XLAYER.hex,
-            chainName: "X Layer",
-            rpcUrls: ["https://xlayerrpc.okx.com", XLAYER.rpc, "https://xlayer.drpc.org"],
-            nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
-            blockExplorerUrls: [XLAYER.explorer],
-          },
-        ],
-      });
-    } else {
-      throw err;
+    if (code === 4001) throw err;
+    try {
+      await eth.request({ method: "wallet_addEthereumChain", params: [add] });
+    } catch (addErr) {
+      if ((addErr as { code?: number }).code === 4001) throw addErr;
+    }
+    if (!(await onXLayer())) {
+      await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: XLAYER.hex }] });
     }
   }
+  if (!(await onXLayer())) throw new Error("chain");
 }
 
 export async function connectXLayer(): Promise<string> {
