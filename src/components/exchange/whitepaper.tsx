@@ -65,7 +65,8 @@ const zh: Section[] = [
   {
     h: "TAPE",
     ps: [
-      "TAPE 是 TAPELIQUID 的唯一平台币，只此一份，在 X Layer。没有第二枚。硬顶 21,000,000。无预挖，无团队份额，无私募。只发给已流片并且已开工的电路。未锁仓电路的领取进入该电路登记的矿工地址。页面上的实时流通等于已领出减去黑洞、TAPE 池和两份锁仓合约里的余额。已挖还没领的还没有铸出来，不算进流通。销毁占比是黑洞余额除以已领出。",
+      "TAPE 是 TAPELIQUID 的唯一平台币，只此一份，在 X Layer。没有第二枚。硬顶 21,000,000。无预挖，无团队份额，无私募。只发给已流片并且已开工的电路。未锁仓电路的领取进入该电路登记的矿工地址。实时流通等于已领出减去黑洞、TAPE 池、电路锁仓和晶圆锁仓里的余额。已挖还没领的还没有铸出来，不算进流通。销毁占比是黑洞余额除以已领出。",
+      "挖矿页的「全网 TAPE」默认收着。打开之后按账本列，不写成大字。流通一行一行减：已领出、黑洞、TAPE 池、电路锁仓、晶圆锁仓。已挖未领再拆成普通矿机和质押矿机。矿机张数、算力和未领大约 45 秒加总一次。没加完不写成 0。减半时间用新加坡时间。",
       "排放不回溯。从第一笔已验证流片的那一天开始计日。晶圆不必铸完才开始。之后新的铸造和流片提高全网算力，已有电路的占比下降。",
       "日排放写在挖矿合约里，没有改率入口。现在这一份从部署时起每天排放 7,200。不是先 1,000 再改成 7,200。计划里的那一次调整没有函数，不能靠这一页改掉。减半周期按 210,000×600 秒写在规则里，约 4 年。销毁不改变当日排放，只减少已流通数量。各期累加不超过 21,000,000。",
     ],
@@ -100,7 +101,8 @@ const zh: Section[] = [
       "开盘对手可以是 USDT，也可以是 BEM。计划中的开盘池放入 100,000 枚 TAPE 与 1,000 USDT，单价 0.01 USDT。这 100,000 枚不从矿工排放预支，锁至第一个减半，不能单方抽走。",
       "现货买卖要等用户自己加池，并且池子价值达到 10,000 美元之后才开启。吃进池子的 TAPE 只来自用户已经领取、自己加进去的部分，对手是 USDT 或 BEM。矿工加池使用已领取的 TAPE 和自己的对手币。加池算流动性，不算额外算力。",
       "用户加池时选定锁定期，只有五档：三个月、六个月、一年、两年、三年。池子凭证锁死。到期才能一键撤回。到期前不能拆。",
-      "个人中心的资产表列出这个钱包还拿着的 TAPE，价格用 TAPE/USDT0 池子价。已经加进池子的 TAPE 另起一行，写成质押，不从钱包余额里消失。到期日用新加坡时间，写在同一页的质押名单里。",
+      "个人中心的持仓默认收着。打开之后，钱包余额大约 8 秒重读一次，不等电路名单。顺序是 TAPE、BSC 的 BEM，其余按金额从高到低。没有价格的写成 —，不写成 0。TAPE 用 TAPE/USDT0 池子价。已经加进池子的 TAPE 另起一行，写成质押，不从钱包余额里消失。到期日用新加坡时间，写在同一页的质押名单里。",
+      "持仓里的转出分一对一和一对多。先填地址和数量，再勾确认，不勾不能签。一对多每一行一个地址，最多 20 行，按行签名。加起来不能超过余额。BNB 和 OKB 要留下 gas。签完留在这一页，不打开新窗口。质押和永续保证金锁在合约里，不能在这里转。",
       "自愿销毁没有单独的 burn 函数。TAPE、NAND、LATCH 和电路打进黑洞 0x000000000000000000000000000000000000dEaD，不能取回。TAPE 占比是黑洞余额除以已领出。电路占比是黑洞里的片数除以已流片。NAND 和 LATCH 把流片烧掉的和黑洞里的加在一起，再除以该种类已铸。",
       "开盘时若只有那 100,000 枚锁在池里，流通数量只计这 100,000。在两边都锁入、并且池子价值到 10,000 美元之前，现货按钮不开。",
     ],
@@ -158,7 +160,7 @@ const zh: Section[] = [
       "这份挖矿合约现在的日排放是 7,200，从部署时开始，不是先 1,000 再切换。它也没有「收费地址签一次改成 7,200」的入口。权重按电路门数，也就是 b*，处理器倍率按 1。q 还没有题目验证，页面不能显示大于 1。",
       "挖矿、TAPE 池、晶圆和电路锁仓，三份都没有管理员，不能升级，不能改期限，不能改费率，也没有救援入口。误转到合约、又没有对应仓位的资产，谁都取不回，页面不会这么转。加池时和池子比例对不上的部分退回给签名的人，不会进别人的份额。",
       "开盘池的 100,000 枚没有另铸。TAPE 池没有管理员，加池即质押，90 天到 3 年，到期才能撤。晶圆锁仓没有管理员，期限是 180 天、365 天、3 年、4 年、5 年。锁着的晶圆不能流片，不算算力。电路锁仓是 0x06c877cc158d9ca3547220f9fc156f39bce7013c。同一片电路不能锁两次。回购和 TAPE 跨链还没有合约。",
-      "个人中心转出晶体管可以选一对一或一对多。一对多每一行一个地址，这一行的 NAND 和 LATCH 只进这个地址，按行签名，不经过锁仓合约。电路在名单里上下滑动勾选，每一片填一个地址，勾几片签几笔。官网合约如果不提供逐个编号，这一页不能代填。",
+      "个人中心的持仓可以转出这个钱包还拿着的币、NAND 和 LATCH。一对一是一个地址。一对多每一行一个地址，这一行的数量只进这个地址，按行签名，不经过锁仓合约。先勾确认才能签。页面不跳走。电路在名单里上下滑动勾选，每一片填一个地址，勾几片签几笔。官网合约如果不提供逐个编号，这一页不能代填。",
     ],
   },
   {
@@ -226,7 +228,8 @@ const en: Section[] = [
   {
     h: "TAPE",
     ps: [
-      "TAPE is the only platform token of TAPELIQUID. There is one token, on X Layer, and there is not a second. The hard cap is 21,000,000. No premine, no team allocation, no private sale. It is paid only to a taped circuit that has been opened. A claim on an unlocked circuit goes to the miner address registered on that circuit. Circulating supply is claimed TAPE minus the dead address, the TAPE pool, and both lock contracts. Mined TAPE that has not been claimed is not minted yet, so it is not circulating. The burn share is the dead balance divided by claimed supply.",
+      "TAPE is the only platform token of TAPELIQUID. There is one token, on X Layer, and there is not a second. The hard cap is 21,000,000. No premine, no team allocation, no private sale. It is paid only to a taped circuit that has been opened. A claim on an unlocked circuit goes to the miner address registered on that circuit. Circulating supply is claimed TAPE minus the dead address, the TAPE pool, the circuit lock, and the wafer lock. Mined TAPE that has not been claimed is not minted yet, so it is not circulating. The burn share is the dead balance divided by claimed supply.",
+      "The mine page keeps Network TAPE closed until it is opened. The opened ledger subtracts line by line: claimed, burned, the pool, the circuit lock, and the wafer lock. Unclaimed TAPE is split between ordinary miners and staked miners. Miner counts, weight, and unclaimed amounts are summed about every 45 seconds and are not shown as zero before the sum finishes. Halving times are Singapore time.",
       "Emission does not backfill. The day count starts on the day of the first verified tape-out. The wafers do not have to be fully minted first. Later mints and tape-outs raise network hashrate, so an existing circuit's share falls.",
       "The daily amount is in the mine contract, and there is no function to change it. This contract emits 7,200 a day from deployment. It does not start at 1,000 and then switch. The planned switch has no function, and this page cannot create one. The halving interval in the rules is 210,000 × 600 seconds, about four years. A burn does not change the day's emission. It only reduces what is circulating. The periods together do not exceed 21,000,000.",
     ],
@@ -262,7 +265,8 @@ const en: Section[] = [
       "The counter asset may be USDT or BEM. The planned opening pool is 100,000 TAPE and 1,000 USDT, at 0.01 USDT. Those 100,000 are not taken in advance from miner emission. They stay locked until the first halving and cannot be pulled by one side.",
       "Spot turns on only after users have added their own liquidity and the pool is worth 10,000 dollars. TAPE that the pool takes comes only from TAPE a user already claimed and added. The other side is USDT or BEM. A miner adds claimed TAPE and their own counter asset. Liquidity is not extra hashrate.",
       "Adding a pool picks a lock. The only terms are three months, six months, one year, two years, and three years. The position is locked. It can be removed in one action at expiry, and not before.",
-      "The account page lists TAPE still in the wallet, priced from the TAPE/USDT0 pool. TAPE already added to a pool is a separate stake row, so it does not vanish from the total. The expiry is Singapore time, on the same page.",
+      "Holdings on the account page stay closed until opened. Wallet balances are reread about every 8 seconds and do not wait for the circuit list. TAPE is first, BSC BEM is second, and the rest follow by value. A missing price is a dash, not zero. Wallet TAPE uses the TAPE/USDT0 pool. TAPE already added to a pool is a separate stake row, so it does not vanish from the total. The expiry is Singapore time, on the same page.",
+      "A holding can be sent to one address or to many. The address and amount are entered first, then a confirmation is ticked. It cannot be signed before that tick. Many means one address per row, at most 20, and one signature per row. The rows cannot add up to more than the balance. BNB and OKB leave gas behind. The page does not open a new window. A stake and perpetual margin stay in their contracts and cannot be sent from here.",
       "There is no burn function. TAPE, NAND, LATCH and a circuit sent to 0x000000000000000000000000000000000000dEaD cannot be taken back. TAPE's share is the dead balance divided by claimed supply. A circuit's share is dead holdings divided by taped circuits. NAND and LATCH add tape-out burns to the dead balance, then divide by that kind's minted amount.",
       "If only those 100,000 sit in the pool at the open, circulating TAPE is those 100,000. The spot button stays off until both sides are locked and the pool is worth 10,000 dollars.",
     ],
@@ -321,7 +325,7 @@ const en: Section[] = [
       "The mine, the TAPE pool, and the wafer and circuit lock have no admin. They cannot be upgraded, and the terms and the fee cannot be changed. There is no rescue function. Assets sent to a contract without a matching position cannot be taken back by anyone, and the page does not send them that way. Liquidity that does not match the pool ratio is returned to the signer. It is not added to anyone else's share.",
       "The 100,000 opening allocation was not minted. The TAPE pool has no admin. Adding liquidity stakes it for 90 days to 3 years. The wafer lock has no admin. Terms are 180 days, 365 days, 3 years, 4 years, or 5 years. Locked wafers cannot be taped and do not count as weight. The circuit lock is 0x06c877cc158d9ca3547220f9fc156f39bce7013c. The same circuit cannot be locked twice. Buyback and a TAPE bridge are not contracts yet.",
       "Official BEM is still claimed from the TapeOut mine. It is not the same signature as TAPE. A large tape-out does not mint official BEM.",
-      "The account page can send transistors to one address or to many. Many means one address per row, and that row's NAND and LATCH go only to that address. Each transfer is its own signature, and none of them go through the lock. Circuits are ticked in a scrolling list. Each ticked circuit has one address. One signature per circuit. If an official contract does not list token ids, this page does not invent them.",
+      "Holdings on the account page can send coins, NAND, and LATCH still in the wallet. One means one address. Many means one address per row, and that row's amount goes only to that address. Each transfer is its own signature, and none of them go through the lock. The confirmation has to be ticked first. The page does not leave. Circuits are ticked in a scrolling list. Each ticked circuit has one address. One signature per circuit. If an official contract does not list token ids, this page does not invent them.",
     ],
   },
   {
