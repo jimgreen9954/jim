@@ -494,7 +494,7 @@ export function RealPerp() {
           </button>
         ) : null}
         {link ? (
-          <a href={link} className="inline-flex min-h-12 items-center justify-center bg-ink px-3 text-paper xl:col-span-12">
+          <a href={link} target="_blank" rel="noreferrer" className="inline-flex min-h-12 items-center justify-center bg-ink px-3 text-paper xl:col-span-12">
             {c.signOkx}
           </a>
         ) : null}

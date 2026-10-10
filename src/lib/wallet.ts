@@ -68,25 +68,67 @@ export function binanceInjected(): Eth | null {
   return null;
 }
 
-function captureOkxOpen() {
+function holdNavigation(url: string): boolean {
+  const text = url.toLowerCase();
+  const wallet =
+    text.startsWith("okx://") ||
+    text.startsWith("okxwallet://") ||
+    text.startsWith("okxweb3://") ||
+    text.includes("link.okx.com") ||
+    text.includes("web3.okx.com") ||
+    text.includes("web3link.okx.com") ||
+    text.includes("okx.com/download") ||
+    text.includes("/ul/connect");
+  if (!wallet && !text.includes("dapp/url") && !text.includes("dappurl=")) return false;
+  if (text.includes("dapp/url") || text.includes("dappurl=") || text.includes("wallet/dapp")) return true;
+  publishLink(url);
+  return true;
+}
+
+function stayOnPage() {
+  if (typeof window === "undefined" || armed) return;
+  armed = true;
   const original = window.open.bind(window);
   window.open = (url?: string | URL, target?: string, features?: string) => {
     const text = url == null ? "" : String(url);
-    if (text.includes("okx") || text.includes("topic=") || text.includes("/ul/connect")) {
-      publishLink(text);
-      return null;
-    }
+    if (holdNavigation(text)) return null;
     return original(url, target, features);
+  };
+  const proto = Location.prototype;
+  const desc = Object.getOwnPropertyDescriptor(proto, "href");
+  if (desc?.get && desc.set) {
+    try {
+      Object.defineProperty(proto, "href", {
+        configurable: true,
+        enumerable: desc.enumerable ?? true,
+        get() {
+          return desc.get!.call(this);
+        },
+        set(value: string) {
+          const text = String(value);
+          if (holdNavigation(text)) return;
+          desc.set!.call(this, text);
+        },
+      });
+    } catch {
+      /* Some browsers refuse the setter. window.open is still held. */
+    }
+  }
+  const assign = proto.assign;
+  proto.assign = function (url: string | URL) {
+    const text = String(url);
+    if (holdNavigation(text)) return;
+    return assign.call(this, url);
+  };
+  const replace = proto.replace;
+  proto.replace = function (url: string | URL) {
+    const text = String(url);
+    if (holdNavigation(text)) return;
+    return replace.call(this, url);
   };
 }
 
 let armed = false;
-
-function armCapture() {
-  if (typeof window === "undefined" || armed) return;
-  armed = true;
-  captureOkxOpen();
-}
 
 async function useInjected(eth: Eth): Promise<string> {
   dropped = false;
@@ -99,6 +141,8 @@ async function useInjected(eth: Eth): Promise<string> {
   return next;
 }
 
+const quiet = { redirect: "none" as const, openUniversalUrl: true };
+
 async function connectOkxRemote(): Promise<string> {
   const { OKXUniversalProvider, OpenAppLinkType } = await import("@okxconnect/universal-provider");
   const okx = await OKXUniversalProvider.init({
@@ -108,12 +152,14 @@ async function connectOkxRemote(): Promise<string> {
     },
     openAppLinkType: OpenAppLinkType.UniversalLink,
   });
-  armCapture();
-  okx.on("display_uri", (uri: string) => publishLink(String(uri)));
+  stayOnPage();
+  okx.on("display_uri", (uri: string) => {
+    const text = String(uri);
+    if (text.toLowerCase().startsWith("wc:")) return;
+    holdNavigation(text);
+  });
   const signClient = (okx as { client?: { sessionConfig?: Record<string, unknown> } }).client;
-  if (signClient) {
-    signClient.sessionConfig = { ...(signClient.sessionConfig ?? {}), openUniversalUrl: true, redirect: "back" };
-  }
+  if (signClient) signClient.sessionConfig = { ...(signClient.sessionConfig ?? {}), ...quiet };
   if (!okx.connected()) {
     await new Promise((resolve, reject) => {
       const timer = window.setTimeout(() => {
@@ -131,7 +177,7 @@ async function connectOkxRemote(): Promise<string> {
               },
             },
           },
-          sessionConfig: { redirect: "back", openUniversalUrl: true },
+          sessionConfig: quiet,
         })
         .then((session) => {
           window.clearTimeout(timer);
@@ -146,7 +192,8 @@ async function connectOkxRemote(): Promise<string> {
   }
   const wrapped: Eth = {
     request: async (args) => {
-      armCapture();
+      stayOnPage();
+      if (signClient) signClient.sessionConfig = { ...(signClient.sessionConfig ?? {}), ...quiet };
       if (args.method === "wallet_switchEthereumChain" || args.method === "eth_sendTransaction") {
         const hex =
           args.method === "wallet_switchEthereumChain"
@@ -182,8 +229,7 @@ export async function connectKind(which: WalletKind): Promise<string> {
     throw new Error("binanceapp");
   }
   if (eth) return useInjected(eth);
-  const here = window.location.href;
-  publishLink(`https://www.okx.com/download?deeplink=${encodeURIComponent(`okx://wallet/dapp/url?dappUrl=${encodeURIComponent(here)}`)}`);
+  stayOnPage();
   return connectOkxRemote();
 }
 

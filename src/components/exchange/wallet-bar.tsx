@@ -31,18 +31,26 @@ export function ConnectButton() {
   const [link, setLink] = useState<string | null>(null);
   useEffect(() => onAccount(setAccount), []);
   useEffect(() => onOpenLink(setLink), []);
-  if (link) {
+  if (link && !account) {
     const binance = link.includes("binance.com");
     return (
-      <a href={link} className="inline-flex min-h-11 items-center border border-gold bg-ink px-3 text-sm text-paper">
-        {binance ? (lang === "zh" ? "打开币安" : "Open Binance") : lang === "zh" ? "打开 OKX" : "Open OKX"}
-      </a>
+      <span className="flex max-w-[18rem] flex-wrap items-center gap-1 sm:max-w-none sm:gap-2">
+        <a href={link} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center border border-gold bg-ink px-3 text-sm text-paper">
+          {binance ? (lang === "zh" ? "打开币安" : "Open Binance") : lang === "zh" ? "去 OKX 确认" : "Confirm in OKX"}
+        </a>
+        <span className="text-[11px] leading-4 text-ink/55">{lang === "zh" ? "这一页不跳走" : "This page stays"}</span>
+      </span>
     );
   }
   if (account) {
     return (
-      <span className="flex max-w-[11rem] gap-1 sm:max-w-none sm:gap-2">
+      <span className="flex max-w-[18rem] flex-wrap items-center gap-1 sm:max-w-none sm:gap-2">
         <span className="inline-flex min-h-10 max-w-28 items-center truncate border border-gold bg-card px-2 font-mono text-xs sm:min-h-11 sm:max-w-40 sm:px-3 sm:text-sm">{short(account)}</span>
+        {link ? (
+          <a href={link} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center border border-gold bg-ink px-2 text-xs text-paper sm:min-h-11 sm:text-sm">
+            {lang === "zh" ? "去 OKX 确认" : "Confirm in OKX"}
+          </a>
+        ) : null}
         <button type="button" className="min-h-10 shrink-0 border border-gold px-2 text-xs sm:min-h-11 sm:px-3 sm:text-sm" onClick={() => void disconnectWallet()}>
           {lang === "zh" ? "退出" : "Out"}
         </button>
@@ -59,7 +67,7 @@ export function ConnectButton() {
           disabled={busy}
           onClick={() => {
             setBusy(true);
-            setNote(lang === "zh" ? "正在打开钱包…" : "Opening the wallet…");
+            setNote(lang === "zh" ? "停在这一页。去 OKX 点确认，不要让网站跳进去。" : "Stay on this page. Confirm in OKX. Do not open the site inside it.");
             connectKind(which)
               .catch((err: unknown) => {
                 if (err instanceof Error && err.message === "binanceapp") return;

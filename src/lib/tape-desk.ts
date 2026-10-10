@@ -15,22 +15,6 @@ const abi = parseAbi([
   "function sell(uint256)",
   "function bidOf(address) view returns (uint256 usdtLeft, uint256 tapeOwed)",
   "function usdtPool() view returns (uint256)",
-  "function stakeTape(uint256)",
-  "function unstakeTape(uint256)",
-  "function claimBem()",
-  "function fundBem(uint256)",
-  "function withdrawBem(uint256)",
-  "function stakeBem(uint256)",
-  "function unstakeBem(uint256)",
-  "function claimTape()",
-  "function fundTape(uint256)",
-  "function withdrawTapeReward(uint256)",
-  "function tapeStakeOf(address) view returns (uint256 amount, uint256 bemOwed)",
-  "function bemStakeOf(address) view returns (uint256 amount, uint256 tapeOwed)",
-  "function bemSponsorOf(address) view returns (uint256)",
-  "function tapeSponsorOf(address) view returns (uint256)",
-  "function tapeStakePot() view returns (uint256 staked, uint256 pot)",
-  "function bemStakePot() view returns (uint256 staked, uint256 pot)",
 ]);
 const erc20 = parseAbi([
   "function approve(address,uint256) returns (bool)",
@@ -55,47 +39,26 @@ export type DeskState = {
   tapeBal: bigint;
   usdtBal: bigint;
   bemBal: bigint;
-  tapeStaked: bigint;
-  bemOwed: bigint;
-  bemStaked: bigint;
-  tapeOwedStake: bigint;
-  bemPot: bigint;
-  tapePot: bigint;
-  tapeStakedTotal: bigint;
-  bemStakedTotal: bigint;
-  bemSponsor: bigint;
-  tapeSponsor: bigint;
 };
 
 const empty: DeskState = {
   usdtPool: 0n, usdtLeft: 0n, tapeOwed: 0n, tapeBal: 0n, usdtBal: 0n, bemBal: 0n,
-  tapeStaked: 0n, bemOwed: 0n, bemStaked: 0n, tapeOwedStake: 0n, bemPot: 0n, tapePot: 0n,
-  tapeStakedTotal: 0n, bemStakedTotal: 0n, bemSponsor: 0n, tapeSponsor: 0n,
 };
 
 export async function readDesk(account: string | null): Promise<DeskState | null> {
   const desk = deskAddress();
   if (!desk) return null;
   const who = (account ?? "0x0000000000000000000000000000000000000000") as Hex;
-  const [usdtPool, bid, tapeBal, usdtBal, bemBal, tapeSeat, bemSeat, tapePot, bemPot, bemSponsor, tapeSponsor] = await Promise.all([
+  const [usdtPool, bid, tapeBal, usdtBal, bemBal] = await Promise.all([
     client.readContract({ address: desk, abi, functionName: "usdtPool" }),
     client.readContract({ address: desk, abi, functionName: "bidOf", args: [who] }),
     account ? client.readContract({ address: TAPE_TOKEN, abi: erc20, functionName: "balanceOf", args: [who] }) : 0n,
     account ? client.readContract({ address: TAPE_USDT, abi: erc20, functionName: "balanceOf", args: [who] }) : 0n,
     account ? client.readContract({ address: TAPE_BEM, abi: erc20, functionName: "balanceOf", args: [who] }) : 0n,
-    client.readContract({ address: desk, abi, functionName: "tapeStakeOf", args: [who] }),
-    client.readContract({ address: desk, abi, functionName: "bemStakeOf", args: [who] }),
-    client.readContract({ address: desk, abi, functionName: "tapeStakePot" }),
-    client.readContract({ address: desk, abi, functionName: "bemStakePot" }),
-    client.readContract({ address: desk, abi, functionName: "bemSponsorOf", args: [who] }),
-    client.readContract({ address: desk, abi, functionName: "tapeSponsorOf", args: [who] }),
   ]);
   return {
     ...empty,
     usdtPool, usdtLeft: bid[0], tapeOwed: bid[1], tapeBal, usdtBal, bemBal,
-    tapeStaked: tapeSeat[0], bemOwed: tapeSeat[1], bemStaked: bemSeat[0], tapeOwedStake: bemSeat[1],
-    bemPot: tapePot[1], tapePot: bemPot[1], tapeStakedTotal: tapePot[0], bemStakedTotal: bemPot[0],
-    bemSponsor, tapeSponsor,
   };
 }
 
@@ -169,38 +132,4 @@ export async function withdrawBought(from: string, amount: bigint) {
 export async function sellTape(from: string, amount: bigint) {
   await approve(from, TAPE_TOKEN, amount);
   return call(from, encodeFunctionData({ abi, functionName: "sell", args: [amount] }));
-}
-export async function stakeTape(from: string, amount: bigint) {
-  await approve(from, TAPE_TOKEN, amount);
-  return call(from, encodeFunctionData({ abi, functionName: "stakeTape", args: [amount] }));
-}
-export async function unstakeTape(from: string, amount: bigint) {
-  return call(from, encodeFunctionData({ abi, functionName: "unstakeTape", args: [amount] }));
-}
-export async function claimStakeBem(from: string) {
-  return call(from, encodeFunctionData({ abi, functionName: "claimBem" }));
-}
-export async function fundBemReward(from: string, amount: bigint) {
-  await approve(from, TAPE_BEM, amount);
-  return call(from, encodeFunctionData({ abi, functionName: "fundBem", args: [amount] }));
-}
-export async function withdrawBemReward(from: string, amount: bigint) {
-  return call(from, encodeFunctionData({ abi, functionName: "withdrawBem", args: [amount] }));
-}
-export async function stakeBem(from: string, amount: bigint) {
-  await approve(from, TAPE_BEM, amount);
-  return call(from, encodeFunctionData({ abi, functionName: "stakeBem", args: [amount] }));
-}
-export async function unstakeBem(from: string, amount: bigint) {
-  return call(from, encodeFunctionData({ abi, functionName: "unstakeBem", args: [amount] }));
-}
-export async function claimStakeTape(from: string) {
-  return call(from, encodeFunctionData({ abi, functionName: "claimTape" }));
-}
-export async function fundTapeReward(from: string, amount: bigint) {
-  await approve(from, TAPE_TOKEN, amount);
-  return call(from, encodeFunctionData({ abi, functionName: "fundTape", args: [amount] }));
-}
-export async function withdrawTapeReward(from: string, amount: bigint) {
-  return call(from, encodeFunctionData({ abi, functionName: "withdrawTapeReward", args: [amount] }));
 }

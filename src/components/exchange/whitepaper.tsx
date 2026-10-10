@@ -75,8 +75,9 @@ const zh: Section[] = [
     h: "回购",
     ps: [
       "回购在挖矿页，不在交易台。1 枚 TAPE 固定换 0.1 USDT0，只收整数枚。这不是现货价。USDT0 由任何人充入。卖出的 TAPE 按当时的份额记到充入 USDT0 的地址上。只有这个地址能取回还没花掉的 USDT0，和已经买到的 TAPE。卖家当时拿到 USDT0，不能再把 TAPE 取回。池子不够就整笔失败，不会先收 TAPE。取回的 TAPE 自己去加池。回购合约不加池。",
-      "分红两池，和回购在同一份 X Layer 合约里。质押 TAPE，奖励是 X Layer 的 BEM。质押 X Layer 的 BEM，奖励是 TAPE。本金只有质押的地址能取回。奖励由任何人充入。还没按时间分出去的，只有充入的地址能取回。已经分给质押的，不能再取回。一年按 365 天把当时还没分完的奖励分完。年化用这个数和池子现价来算。有人再质押，或取走还没分完的奖励，年化就变。价格读不到就写成 —，不写成 0。",
-      "BSC 的 BEM 不进这份合约。一份合约读不到另一条链。要质押 BEM 领 TAPE，先在回购旁边打开收起的官方桥，转到 X Layer。点开之后调用的是 TapeOut 的桥，本站不经手，不另收费。TAPE 不能走这座桥。回购合约是 0x72e28d564A90eF3E76f599bC210454f5360E200C。没有管理员，不能升级。价格、代币和 365 天都写在合约里。直接把币转到合约、不走充入函数的，取不回来。",
+      "分红不在这份回购合约里。回购合约里原先的质押没有期限，页面已经不再往那里存。期限质押是另一份 X Layer 合约，六档写死：90 天、180 天、270 天、365 天、730 天、1095 天，也就是三个月、六个月、九个月、一年、两年、三年。到期之前本金取不出。奖励可以先领。同一个池子，一个人最多同时有 16 笔没到期的。",
+      "质押 TAPE，奖励是 X Layer 的 BEM。质押 X Layer 的 BEM，奖励是 TAPE。本金只有质押的地址能取回。奖励谁都可以充。还没按 365 天分出去的，只有充入的地址能取回。已经分给质押的不能再取。年化用还没分完的奖励和池子现价来算。有人再质押，或取走还没分完的奖励，年化就变。价格读不到写成 —，不写成 0。这份期限合约没有管理员，不能升级。地址要在挖矿页点一次部署才有，现在还没有写死的地址。直接把币转到合约、不走充入函数的，取不回来。",
+      "BSC 的 BEM 不进这份合约。一份合约读不到另一条链。要质押 BEM 领 TAPE，先在回购旁边打开收起的官方桥，转到 X Layer。点开之后调用的是 TapeOut 的桥，本站不经手，不另收费。TAPE 不能走这座桥。回购合约是 0x72e28d564A90eF3E76f599bC210454f5360E200C。没有管理员，不能升级。0.1 USDT0、代币和 365 天都写在合约里。直接把币转到合约、不走充入函数的，取不回来。",
     ],
   },
   {
@@ -167,7 +168,7 @@ const zh: Section[] = [
       `TAPE 代币 ${TAPE}。挖矿合约 ${TAPE_MINE}。都在 X Layer。硬顶 21,000,000，8 位小数，没有管理员，也没有改率入口。只有挖矿合约能铸。总供应只随领取增加。`,
       "这份挖矿合约现在的日排放是 7,200，从部署时开始，不是先 1,000 再切换。它也没有「收费地址签一次改成 7,200」的入口。权重按电路门数，也就是 b*，处理器倍率按 1。q 还没有题目验证，页面不能显示大于 1。",
       "挖矿、TAPE 池、晶圆和电路锁仓，三份都没有管理员，不能升级，不能改期限，不能改费率，也没有救援入口。误转到合约、又没有对应仓位的资产，谁都取不回，页面不会这么转。加池时和池子比例对不上的部分退回给签名的人，不会进别人的份额。",
-      "开盘池的 100,000 枚没有另铸。TAPE 池没有管理员，加池即质押，90 天到 3 年，到期才能撤。晶圆锁仓没有管理员，期限是 180 天、365 天、3 年、4 年、5 年。锁着的晶圆不能流片，不算算力。电路锁仓是 0x06c877cc158d9ca3547220f9fc156f39bce7013c。同一片电路不能锁两次。回购和 TAPE 跨链还没有合约。",
+      "开盘池的 100,000 枚没有另铸。TAPE 池没有管理员，加池即质押，90 天到 3 年，到期才能撤。加池没有九个月这一档。晶圆锁仓没有管理员，期限是 180 天、365 天、3 年、4 年、5 年。锁着的晶圆不能流片，不算算力。电路锁仓是 0x06c877cc158d9ca3547220f9fc156f39bce7013c。同一片电路不能锁两次。回购合约是 0x72e28d564A90eF3E76f599bC210454f5360E200C。期限质押还没有写死的地址，要在挖矿页部署。TAPE 跨链还没有合约。",
       "个人中心的持仓可以转出这个钱包还拿着的币、NAND 和 LATCH。一对一是一个地址。一对多每一行一个地址，这一行的数量只进这个地址，按行签名，不经过锁仓合约。先勾确认才能签。页面不跳走。电路在名单里上下滑动勾选，每一片填一个地址，勾几片签几笔。官网合约如果不提供逐个编号，这一页不能代填。",
     ],
   },
@@ -246,8 +247,9 @@ const en: Section[] = [
     h: "Buyback",
     ps: [
       "The buyback is on the mine page, not on the desk. One TAPE converts at a fixed 0.1 USDT0, and only whole TAPE is accepted. That is not the spot price. Anyone can add USDT0. TAPE that is sold is credited to the addresses that funded the USDT0, in proportion to their share at the sale. Only that address can take back unspent USDT0 and the TAPE it has bought. The seller receives USDT0 at once and cannot take the TAPE back. If the pool is short, the whole sale fails and no TAPE is taken. TAPE taken back is added to a pool by that address. The buyback contract does not add liquidity.",
-      "Two dividend pools sit in the same X Layer contract. Staked TAPE earns X Layer BEM. Staked X Layer BEM earns TAPE. Only the staking address can take its principal back. Anyone can add rewards. Only the address that added a reward can take back the part that has not vested. What has already vested to stakers cannot be taken back. The unvested pot pays out over 365 days. APY uses that amount and the current pool price. It changes when someone stakes or withdraws unvested rewards. A missing price is shown as —, not zero.",
-      "BSC BEM does not enter this contract. One contract cannot read the other chain. To stake BEM for TAPE, open the collapsed official bridge beside the buyback and move it to X Layer. That button calls TapeOut's bridge. This site does not custody it and adds no fee. TAPE cannot use that bridge. The buyback contract is 0x72e28d564A90eF3E76f599bC210454f5360E200C. It has no admin and cannot be upgraded. The price, the tokens, and the 365 days are in the contract. Tokens sent to the contract without the deposit function cannot be taken back.",
+      "Two dividend pools are not inside the buyback contract. The old stake on that contract had no lock, and the page no longer deposits there. Timed stake is a separate X Layer contract. The six terms are fixed at 90, 180, 270, 365, 730 and 1,095 days: 3 months, 6 months, 9 months, 1 year, 2 years and 3 years. Principal cannot leave before expiry. Rewards can be claimed earlier. One person can have 16 open locks in a pool.",
+      "Staked TAPE earns X Layer BEM. Staked X Layer BEM earns TAPE. Only the staking address can take its principal back. Anyone can add rewards. Only the address that added a reward can take back the part that has not vested over 365 days. What has already vested to stakers cannot be taken back. APY uses the unvested pot and the current pool price. It changes when someone stakes or withdraws unvested rewards. A missing price is shown as —, not zero. This timed contract has no admin and cannot be upgraded. It has no hardcoded address until it is deployed once from the mine page. Tokens sent to the contract without the deposit function cannot be taken back.",
+      "BSC BEM does not enter this contract. One contract cannot read the other chain. To stake BEM for TAPE, open the collapsed official bridge beside the buyback and move it to X Layer. That button calls TapeOut's bridge. This site does not custody it and adds no fee. TAPE cannot use that bridge. The buyback contract is 0x72e28d564A90eF3E76f599bC210454f5360E200C. It has no admin and cannot be upgraded. The 0.1 USDT0 price, the tokens, and the 365 days are in the contract. Tokens sent to the contract without the deposit function cannot be taken back.",
     ],
   },
   {
@@ -339,7 +341,7 @@ const en: Section[] = [
       `TAPE is ${TAPE}. The mine is ${TAPE_MINE}. Both are on X Layer. The cap is 21,000,000 with 8 decimals. There is no admin and no way to change the rate. Only the mine can mint. Supply grows only when someone claims.`,
       "That mine contract emits 7,200 a day from the moment it was deployed. It does not start at 1,000, and it has no one-time switch to 7,200. Weight is the gate count, which is b*, and the processor multiplier is 1. There is no task score yet, so q is not shown above 1.",
       "The mine, the TAPE pool, and the wafer and circuit lock have no admin. They cannot be upgraded, and the terms and the fee cannot be changed. There is no rescue function. Assets sent to a contract without a matching position cannot be taken back by anyone, and the page does not send them that way. Liquidity that does not match the pool ratio is returned to the signer. It is not added to anyone else's share.",
-      "The 100,000 opening allocation was not minted. The TAPE pool has no admin. Adding liquidity stakes it for 90 days to 3 years. The wafer lock has no admin. Terms are 180 days, 365 days, 3 years, 4 years, or 5 years. Locked wafers cannot be taped and do not count as weight. The circuit lock is 0x06c877cc158d9ca3547220f9fc156f39bce7013c. The same circuit cannot be locked twice. Buyback and a TAPE bridge are not contracts yet.",
+      "The 100,000 opening allocation was not minted. The TAPE pool has no admin. Adding liquidity stakes it for 90 days to 3 years. That pool has no 9-month term. The wafer lock has no admin. Terms are 180 days, 365 days, 3 years, 4 years, or 5 years. Locked wafers cannot be taped and do not count as weight. The circuit lock is 0x06c877cc158d9ca3547220f9fc156f39bce7013c. The same circuit cannot be locked twice. The buyback contract is 0x72e28d564A90eF3E76f599bC210454f5360E200C. Timed stake has no hardcoded address until it is deployed from the mine page. TAPE still has no bridge contract.",
       "Official BEM is still claimed from the TapeOut mine. It is not the same signature as TAPE. A large tape-out does not mint official BEM.",
       "Holdings on the account page can send coins, NAND, and LATCH still in the wallet. One means one address. Many means one address per row, and that row's amount goes only to that address. Each transfer is its own signature, and none of them go through the lock. The confirmation has to be ticked first. The page does not leave. Circuits are ticked in a scrolling list. Each ticked circuit has one address. One signature per circuit. If an official contract does not list token ids, this page does not invent them.",
     ],
@@ -365,7 +367,8 @@ const specZh = [
   ["分配", "已验证 99%，未验证 1%。开排第一周未验证为 0"],
   ["台费", "付出金额的 0.20%，在池子手续费之外"],
   ["现货", "TAPE/USDT、TAPE/BEM。池子价值到 10,000 美元才开"],
-  ["加池锁定期", "三个月、六个月、一年、两年、三年。到期才能撤"],
+  ["加池锁定期", "三个月、六个月、一年、两年、三年。到期才能撤。没有九个月"],
+  ["分红锁仓", "三个月、六个月、九个月、一年、两年、三年。到期才能取本金"],
   ["晶圆与电路锁仓", "半年、一年、三年、四年、五年"],
   ["一张流片", "18,000 NAND，或 30,000 LATCH。更大写不进链"],
   ["电路何时在", "回执成功就在链上。页面名单稍后才显示"],
@@ -379,7 +382,8 @@ const specEn = [
   ["Split", "Verified 99%, unverified 1%. Unverified is 0 in the first week"],
   ["Desk fee", "0.20% of what is paid, on top of the pool fee"],
   ["Spot", "TAPE/USDT and TAPE/BEM. Off until the pool is worth 10,000 dollars"],
-  ["Pool lock", "3 months, 6 months, 1 year, 2 years, 3 years. Withdraw only at expiry"],
+  ["Pool lock", "3 months, 6 months, 1 year, 2 years, 3 years. No 9-month term. Withdraw only at expiry"],
+  ["Dividend lock", "3 months, 6 months, 9 months, 1 year, 2 years, 3 years. Principal only at expiry"],
   ["Wafer and circuit lock", "6 months, 1 year, 3 years, 4 years, 5 years"],
   ["One tape-out", "18,000 NAND, or 30,000 LATCH. Larger than that does not fit"],
   ["When the circuit exists", "On chain when the receipt succeeds. The page list shows it later"],
@@ -393,7 +397,7 @@ const nowZh = [
   ["总供应", "只随领取增加。10 万枚开盘种子没有另铸"],
   ["TAPE 池", "0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641，没有管理员"],
   ["锁仓", "0xA28390924607F08aaD8d03F512B41b6a1c012Ace，没有管理员"],
-  ["还不能签", "回购、TAPE 跨链"],
+  ["还不能签", "期限质押的固定地址、TAPE 跨链"],
 ];
 
 const nowEn = [
@@ -404,7 +408,7 @@ const nowEn = [
   ["Supply", "Grows only when claimed. The 100,000 seed was not minted"],
   ["TAPE pool", "0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641, no admin"],
   ["Lock", "0xA28390924607F08aaD8d03F512B41b6a1c012Ace, no admin"],
-  ["Not signable yet", "Buyback, a TAPE bridge"],
+  ["Not signable yet", "A fixed timed-stake address, a TAPE bridge"],
 ];
 export function Whitepaper() {
   const lang = useExchange((s) => s.lang);
