@@ -10,6 +10,7 @@ import {
   fundUsdt,
   readDesk,
   sellTape,
+  TAPE_BUYER,
   units,
   wholeTape,
   withdrawBought,
@@ -333,8 +334,8 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
         <h2 className="mt-1 font-display text-3xl italic">{zh ? "0.1 美元收一枚 TAPE" : "0.1 dollar for one TAPE"}</h2>
         <p className="mt-2 text-sm leading-6">
           {zh
-            ? "固定价，不是现货价。先部署这一份 X Layer 合约。没有管理员。谁充进的 USDT0，只有谁能取回没花掉的。卖家当时换成 USDT0，TAPE 不能再取回。"
-            : "A fixed bid, not the spot price. Deploy this X Layer contract first. It has no admin. Only the address that added USDT0 can take back what is unspent. A seller is paid USDT0 at once and cannot take the TAPE back."}
+            ? "固定价，不是现货价。先用买方地址部署这一份。买方地址写死为 0x585d2DF4B8fDDA783B074555e6F3787e3fCB39D7。只有这个地址能充 X Layer 的 USDT0，也只有这个地址能取回没花掉的 USDT0 和买到的 TAPE。其他地址不能充 USDT0，只能卖出整数枚 TAPE，卖出当时收到 USDT0。Gas Limit 填 5000000。部署完把地址发我写进页面。"
+            : "A fixed bid, not the spot price. Deploy this from the buyer address. The buyer is fixed as 0x585d2DF4B8fDDA783B074555e6F3787e3fCB39D7. Only that address can add X Layer USDT0, and only that address can take back unspent USDT0 and bought TAPE. Every other address cannot add USDT0. It can only sell whole TAPE and is paid USDT0 in that same transaction. Set Gas Limit to 5000000, then send me the address to hardcode."}
         </p>
         <button type="button" disabled={busy} className="mt-3 min-h-12 w-full bg-ink text-sm text-paper disabled:opacity-40 sm:w-auto sm:px-6" onClick={deploy}>{zh ? "部署回购合约" : "Deploy the buyback"}</button>
         <OfficialBridge account={account} zh={zh} xBem={null} />
@@ -352,7 +353,7 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
   return (
     <section className="grid gap-3">
       <article className="border border-gold bg-card px-3 py-4 sm:px-4">
-        <p className="text-[11px] tracking-[0.22em] text-gold">{zh ? "自愿回购" : "Voluntary buyback"}</p>
+        <p className="text-[11px] tracking-[0.22em] text-gold">{zh ? "回购" : "Buyback"}</p>
         <h2 className="mt-1 font-display text-3xl italic leading-tight sm:text-4xl">1 TAPE = 0.1 USDT0</h2>
         <dl className="mt-3 grid gap-3 text-sm leading-6">
           <div>
@@ -360,15 +361,16 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
             <dd>{zh ? "1 枚整数 TAPE 结算 0.1 USDT0。价格写在合约中，不随现货变动。不足 1 枚不予接受。" : "One whole TAPE settles for 0.1 USDT0. The price is in the contract and does not follow the spot market. Less than one TAPE is not accepted."}</dd>
           </div>
           <div>
-            <dt className="text-[11px] tracking-[0.16em] text-gold">{zh ? "参与" : "Participation"}</dt>
-            <dd>{zh ? "自愿。矿工可向本合约充入 USDT0，按上述价格购入他人卖出的 TAPE，取出后自行添加流动性。本合约不代为加池。不出售、不出资，不影响挖矿和其他持仓。" : "Voluntary. A miner may add USDT0, buy TAPE that others sell at the price above, and withdraw it to add liquidity. This contract does not add liquidity. Declining to sell or to fund does not affect mining or any other holding."}</dd>
+            <dt className="text-[11px] tracking-[0.16em] text-gold">{zh ? "谁能充" : "Who can fund"}</dt>
+            <dd>{zh ? "只有买方地址可以充入 X Layer 的 USDT0，也只有这个地址可以取回还没花掉的 USDT0 和已经买到的 TAPE。其他地址不能在这里充 USDT0。" : "Only the buyer address can deposit X Layer USDT0. Only that address can withdraw USDT0 that has not been spent, and the TAPE it has bought. No other address can deposit USDT0 here."}</dd>
           </div>
           <div>
-            <dt className="text-[11px] tracking-[0.16em] text-gold">{zh ? "结算" : "Settlement"}</dt>
-            <dd>{zh ? "可支付余额不足时，该笔整单失败，不会预先收取 TAPE。购得的 TAPE 按成交当时的出资份额登记。尚未使用的 USDT0 只属于对应的出资地址，仅该地址可以取回。卖出方于成交时收到 USDT0，不能取回已卖出的 TAPE。" : "If the balance cannot cover the order, the whole order fails and no TAPE is taken first. Bought TAPE is credited by each funder's share at the time of the sale. Unused USDT0 belongs only to the address that provided it, and only that address can withdraw it. The seller is paid USDT0 at settlement and cannot take the sold TAPE back."}</dd>
+            <dt className="text-[11px] tracking-[0.16em] text-gold">{zh ? "用户" : "Sellers"}</dt>
+            <dd>{zh ? "只能卖出整数枚 TAPE。卖出当时收到 USDT0，不能把已卖出的 TAPE 取回。池子里的 USDT0 不够，这一笔整单失败，不会先收 TAPE。这份合约不加池。" : "A seller can only sell whole TAPE. USDT0 is paid in that same transaction. Sold TAPE cannot be taken back. If the USDT0 cannot cover the order, the whole order fails and no TAPE is taken. This contract does not add liquidity."}</dd>
           </div>
         </dl>
-        <p className="mt-2 break-all font-mono text-[11px] text-ink/50">
+        <p className="mt-2 break-all font-mono text-[11px] text-ink/50">{zh ? "买方" : "Buyer"} {TAPE_BUYER}</p>
+        <p className="mt-1 break-all font-mono text-[11px] text-ink/50">
           <a className="underline" href={`${XLAYER.explorer}/address/${desk}`} target="_blank" rel="noreferrer">{desk}</a>
         </p>
         <p className="mt-3 text-sm">{zh ? "池子可付" : "Pool can pay"} <span className="font-mono">{row ? deskText(row.usdtPool, 6, 2) : "—"} USDT0</span> · {zh ? "最多再收" : "Room for"} <span className="font-mono">{row ? maxTape.toLocaleString("en-US") : "—"} TAPE</span></p>
@@ -380,11 +382,12 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
             <span>{zh ? "钱包" : "Wallet"} {row ? deskText(row.tapeBal, 8) : "—"} TAPE · {zh ? "到账" : "You get"} {/^[1-9]\d*$/.test(sellAmt.trim()) ? (Number(sellAmt.trim()) * 0.1).toLocaleString("en-US", { maximumFractionDigits: 1 }) : "—"} USDT0</span>
             <button type="button" disabled={busy} className="min-h-12 bg-ink text-sm text-paper disabled:opacity-40" onClick={() => run(() => sellTape(account ?? "", wholeTape(sellAmt)), zh ? "已换成 USDT0。" : "Sold for USDT0.", "desk")}>{zh ? "卖出" : "Sell"}</button>
           </label>
+          {account?.toLowerCase() === TAPE_BUYER.toLowerCase() ? (
           <label className="grid gap-1 text-xs text-ink/55">
-            {zh ? "自愿充入 USDT0，按 0.1 买 TAPE" : "Voluntarily add USDT0 to buy at 0.1"}
+            {zh ? "买方充入 USDT0。别人没有这一格。" : "Buyer deposits USDT0. Others do not get this form."}
             <input value={usdtAmt} onChange={(event) => setUsdtAmt(event.target.value)} inputMode="decimal" placeholder="100" className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono text-base text-ink" />
-            <span>{zh ? "钱包" : "Wallet"} {row ? deskText(row.usdtBal, 6, 2) : "—"} · {zh ? "可取回" : "Yours"} {row ? deskText(row.usdtLeft, 6, 2) : "—"} USDT0 · {zh ? "已买到" : "Bought"} {row ? deskText(row.tapeOwed, 8) : "—"} TAPE</span>
-            <p className="leading-5">{zh ? "充入金额须自行填写，不会按钱包余额自动转入。签署两笔：第一笔为授权，资产仍留在钱包；第二笔为充入。" : "Enter the amount. The wallet balance is not deposited automatically. Two signatures: the first approves and leaves the assets in the wallet; the second deposits."}</p>
+            <span>{zh ? "钱包" : "Wallet"} {row ? deskText(row.usdtBal, 6, 2) : "—"} · {zh ? "可取回" : "Unspent"} {row ? deskText(row.usdtLeft, 6, 2) : "—"} USDT0 · {zh ? "已买到" : "Bought"} {row ? deskText(row.tapeOwed, 8) : "—"} TAPE</span>
+            <p className="leading-5">{zh ? "只有这个地址能充，也只有这个地址能取回没花掉的 USDT0 和买到的 TAPE。充入要签两笔：第一笔授权，币还在钱包；第二笔才充入。" : "Only this address can deposit, and only this address can take back unspent USDT0 and bought TAPE. Two signatures: approve first, the coins stay in the wallet; the second deposits."}</p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <button type="button" disabled={busy || !row || row.usdtBal === 0n} className="min-h-12 border border-gold px-1 text-sm disabled:opacity-40" onClick={() => setUsdtAmt(row ? formatUnits(row.usdtBal, 6) : "")}>{zh ? "全部" : "All"}</button>
               <button type="button" disabled={busy} className="min-h-12 bg-ink px-1 text-sm text-paper disabled:opacity-40" onClick={() => run(() => fundUsdt(account ?? "", units(usdtAmt, 6)), zh ? "USDT0 已充入。池子要等这一页重新读到才变。" : "USDT0 is in. The pool changes when this page reads it again.", "desk")}>{zh ? "充入" : "Add"}</button>
@@ -392,6 +395,9 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
               <button type="button" disabled={busy || !row || row.tapeOwed === 0n} className="min-h-12 border border-gold px-1 text-sm disabled:opacity-40" onClick={() => run(() => withdrawBought(account ?? "", row?.tapeOwed ?? 0n), zh ? "买到的 TAPE 已取回。" : "Bought TAPE is back.", "desk")}>{zh ? "取 TAPE" : "Take TAPE"}</button>
             </div>
           </label>
+          ) : (
+          <p className="text-sm leading-6">{zh ? "这里不能充 USDT0。只能卖出左边的整数枚 TAPE，卖出当时收到 USDT0。充入和取回剩余 USDT0，只属于上面的买方地址。" : "USDT0 cannot be deposited here. Sell whole TAPE on the left and receive USDT0 in that transaction. Depositing and withdrawing the remaining USDT0 belong only to the buyer address above."}</p>
+          )}
         </div>
       </article>
       {!term ? (

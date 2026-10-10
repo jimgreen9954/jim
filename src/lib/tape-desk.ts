@@ -4,17 +4,19 @@ import { TAPE_BEM, TAPE_TOKEN, TAPE_USDT } from "@/lib/tape-pool";
 import { getProvider } from "@/lib/wallet";
 import { connectXLayer, XLAYER } from "@/lib/xlayer";
 
-/** The one deployed desk. Bytecode matches contracts/TapeDesk.sol. No admin. */
-export const TAPE_DESK = "0x72e28d564A90eF3E76f599bC210454f5360E200C" as const;
+/** Buyback bytecode matches contracts/TapeBid.sol. The old desk is not used. */
+export const TAPE_DESK = "" as const;
+export const TAPE_BUYER = "0x585d2DF4B8fDDA783B074555e6F3787e3fCB39D7" as const;
 
-const KEY = "tapeliquid-desk";
+const KEY = "tapeliquid-bid";
 const abi = parseAbi([
   "function fundUsdt(uint256)",
   "function withdrawUsdt(uint256)",
   "function withdrawTape(uint256)",
   "function sell(uint256)",
-  "function bidOf(address) view returns (uint256 usdtLeft, uint256 tapeOwed)",
   "function usdtPool() view returns (uint256)",
+  "function tapeBought() view returns (uint256)",
+  "function BUYER() view returns (address)",
 ]);
 const erc20 = parseAbi([
   "function approve(address,uint256) returns (bool)",
@@ -49,16 +51,17 @@ export async function readDesk(account: string | null): Promise<DeskState | null
   const desk = deskAddress();
   if (!desk) return null;
   const who = (account ?? "0x0000000000000000000000000000000000000000") as Hex;
-  const [usdtPool, bid, tapeBal, usdtBal, bemBal] = await Promise.all([
+  const [usdtPool, tapeBought, tapeBal, usdtBal, bemBal] = await Promise.all([
     client.readContract({ address: desk, abi, functionName: "usdtPool" }),
-    client.readContract({ address: desk, abi, functionName: "bidOf", args: [who] }),
+    client.readContract({ address: desk, abi, functionName: "tapeBought" }),
     account ? client.readContract({ address: TAPE_TOKEN, abi: erc20, functionName: "balanceOf", args: [who] }) : 0n,
     account ? client.readContract({ address: TAPE_USDT, abi: erc20, functionName: "balanceOf", args: [who] }) : 0n,
     account ? client.readContract({ address: TAPE_BEM, abi: erc20, functionName: "balanceOf", args: [who] }) : 0n,
   ]);
+  const mine = !!account && account.toLowerCase() === TAPE_BUYER.toLowerCase();
   return {
     ...empty,
-    usdtPool, usdtLeft: bid[0], tapeOwed: bid[1], tapeBal, usdtBal, bemBal,
+    usdtPool, usdtLeft: mine ? usdtPool : 0n, tapeOwed: mine ? tapeBought : 0n, tapeBal, usdtBal, bemBal,
   };
 }
 
