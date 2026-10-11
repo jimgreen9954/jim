@@ -19,7 +19,7 @@ const zhBody: Section[] = [
   {
     h: "产品",
     ps: [
-      "TAPELIQUID 是以晶圆为记账单位的交易所。现货与永续在交易台。铸造、流片与晶体管合约在工房。TAPE 是唯一平台币，仅发行于 X Layer，没有第二枚。BEM 属于 tapeout，不是平台币。",
+      "TAPELIQUID 是以晶圆为记账单位的交易所。现货与永续在交易台。铸造、流片与晶体管合约在工房。TAPE 是唯一平台币，仅发行于 X Layer，没有第二枚。BEM 属于 tapeout 协议官方代表。",
       "练习记录只存在于本机浏览器，不进入任何合约。个人中心仅展示当前钱包的资产与转出。新手礼包收在个人中心内，打开后才显示规则。",
       "没有对应合约的事项，页面不提供按钮。能够签名的规则写在前面。尚未上链的安排写在后面。",
     ],
@@ -198,7 +198,7 @@ const en: Section[] = [
   {
     h: "Product",
     ps: [
-      "TAPELIQUID is an exchange that accounts in wafers. Spot and perpetuals are on the desk. Minting, tape-out and the transistor book are in the workshop. TAPE is the only platform token. It is issued only on X Layer. BEM belongs to tapeout and is not the platform token.",
+      "TAPELIQUID is an exchange that accounts in wafers. Spot and perpetuals are on the desk. Minting, tape-out and the transistor book are in the workshop. TAPE is the only platform token. It is issued only on X Layer. BEM is the official representative of the tapeout protocol.",
       "Practice records remain in this browser and never enter a contract. The account page shows only the connected wallet's balances and transfers. The starter gift is inside the account page. Its rules appear only after it is opened.",
       "An action without a contract has no button. Rules that can be signed are stated first. Arrangements that are not yet on chain follow.",
     ],
@@ -473,8 +473,8 @@ export function Whitepaper() {
         </div>
         <p className="mt-4 border border-gold/30 bg-card px-4 py-3 text-sm leading-6">
           {zh
-            ? "TAPE 是唯一平台币，只在 X Layer。NAND 与 LATCH 是晶体管。电路按张交易，写明输入、输出和门数。BEM 属于 tapeout，不是平台币。"
-            : "TAPE is the only platform coin, and only on X Layer. NAND and LATCH are the transistors. A circuit trades as one piece, with its inputs, outputs, and gates. BEM belongs to tapeout. It is not the platform coin."}
+            ? "TAPE 是唯一平台币，只在 X Layer。NAND 与 LATCH 是晶体管。电路按张交易，写明输入、输出和门数。BEM 属于 tapeout 协议官方代表。"
+            : "TAPE is the only platform coin, and only on X Layer. NAND and LATCH are the transistors. A circuit trades as one piece, with its inputs, outputs, and gates. BEM is the official representative of the tapeout protocol."}
         </p>
         <div id="paper-now" className="mt-8 grid scroll-mt-24 gap-px bg-gold/30 sm:grid-cols-2">
           <table className="bg-paper text-left text-sm">
