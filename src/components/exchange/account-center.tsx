@@ -130,7 +130,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
       .catch((err: unknown) => {
         setBad(true);
         setNote(err instanceof Error ? err.message : (zh ? "刷新失败。" : "Refresh failed."));
-        setBook({ ok: false, error: err instanceof Error ? err.message : "read", asOf: "", scanned: 0, bnb: "0", chips: [], circuits: [] });
+        setBook((prev) => prev ?? { ok: false, error: err instanceof Error ? err.message : "read", asOf: "", scanned: 0, bnb: "0", chips: [], circuits: [] });
       })
       .finally(() => setFreshing(false));
   };
@@ -138,7 +138,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
   useEffect(() => {
     if (!account) return;
     pull(account);
-    const id = window.setInterval(() => pull(account), 20000);
+    const id = window.setInterval(() => pull(account), 60000);
     readBalances(account)
       .then(async (row) => {
         const [bem, bnb] = await Promise.all([bemPrice().catch(() => "0"), bnbPrice().catch(() => "0")]);
@@ -180,7 +180,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
       }).catch(() => { if (!dead) setStakes(null); });
     };
     pullStakes();
-    const id = window.setInterval(pullStakes, 15000);
+    const id = window.setInterval(pullStakes, 45000);
     return () => { dead = true; window.clearInterval(id); };
   }, [account]);
 
@@ -302,7 +302,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
       setWorthAt(new Date().toLocaleTimeString("en-GB", { hour12: false, timeZone: "Asia/Singapore" }));
     };
     load().catch(() => { if (!dead) setWorth((prev) => prev ?? []); });
-    const id = window.setInterval(() => { load().catch(() => undefined); }, 8000);
+    const id = window.setInterval(() => { load().catch(() => undefined); }, 20000);
     return () => { dead = true; window.clearInterval(id); };
   }, [account, book, zh, holdTick]);
 
@@ -655,7 +655,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
                 )}
               </div>
             ) : <p className="border-t border-gold/30 px-3 py-3 text-xs text-ink/50 sm:px-4">{zh ? "点一项资产。一对一或一对多都在下面填，不会跳走。" : "Pick an asset. One or many stays on this page."}</p>}
-            <p className="border-t border-gold/30 px-4 py-2 text-xs leading-5 text-ink/55">{zh ? "TAPE 在最前，BEM 其次，其余按金额从高到低。钱包余额约 8 秒重读，不等电路名单。质押和保证金不能在这里转。TAPE 用 TAPE/USDT0 池子价。晶体管用最高买单。没有价格的金额写成 —，不写成 0。" : "TAPE is first, BEM is second, then the rest by value. Wallet balances refresh about every 8 seconds and do not wait for the circuit list. Stakes and margin cannot be sent here. TAPE uses the TAPE/USDT0 pool. A missing price is shown as —, not zero."}</p>
+            <p className="border-t border-gold/30 px-4 py-2 text-xs leading-5 text-ink/55">{zh ? "TAPE 在最前，BEM 其次，其余按金额从高到低。钱包余额约 20 秒重读，不等电路名单。质押和保证金不能在这里转。TAPE 用 TAPE/USDT0 池子价。晶体管用最高买单。没有价格的金额写成 —，不写成 0。" : "TAPE is first, BEM is second, then the rest by value. Wallet balances refresh about every 20 seconds and do not wait for the circuit list. Stakes and margin cannot be sent here. TAPE uses the TAPE/USDT0 pool. A missing price is shown as —, not zero."}</p>
           </>
         ) : null}
       </div>
@@ -666,9 +666,9 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
         <p className="text-xs text-ink/50">
           {book?.ok
             ? zh
-              ? `tapeout ${book.scanned} 台，加本站。20 秒重读。`
-              : `${book.scanned} tapeout processors, plus this site. Every 20s.`
-            : zh ? `正在读链上${book?.error ? `（${book.error}）` : ""}` : "Reading the chain."}
+              ? `tapeout ${book.scanned} 台，加本站。约一分钟重读。`
+              : `${book.scanned} tapeout processors, plus this site. About once a minute.`
+            : zh ? (book ? `正在读链上${book.error ? `（${book.error}）` : ""}` : "正在读这个地址的晶体管和电路。") : (book ? "Reading the chain." : "Reading this address.")}
         </p>
       </div>
       <div className="grid grid-cols-2 border border-gold text-sm">
@@ -682,7 +682,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
 
       {tab === "chips" ? (
         <div className="flex flex-col gap-2">
-          {chips.length === 0 ? <p className="border border-gold px-4 py-3 text-sm text-ink/60">{zh ? "这个地址没有晶体管。" : "This address has no transistors."}</p> : null}
+          {book == null ? <p className="border border-gold px-4 py-3 text-sm text-ink/60">{zh ? "正在读晶体管。" : "Reading transistors."}</p> : chips.length === 0 ? <p className="border border-gold px-4 py-3 text-sm text-ink/60">{zh ? "这个地址没有晶体管。" : "This address has no transistors."}</p> : null}
           {chips.map((row) => {
             const key = `${row.chain}:${row.transistors}`;
             const open = sendKey === key;
@@ -750,7 +750,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
         <div className="flex flex-col gap-2">
           <p className="text-xs leading-5 text-ink/55">{zh ? "勾选一片，填一个地址。勾几片签几笔，从钱包直接转出。地址填错取不回。" : "Tick a circuit and give it one address. One signature each, straight from the wallet. A wrong address is gone."}</p>
           <ul className="max-h-[28rem] overflow-auto border border-gold">
-            {circuits.length === 0 ? <li className="px-4 py-3 text-sm text-ink/60">{zh ? "没有电路。" : "No circuits."}</li> : null}
+            {book == null ? <li className="px-4 py-3 text-sm text-ink/60">{zh ? "正在读电路。" : "Reading circuits."}</li> : circuits.length === 0 ? <li className="px-4 py-3 text-sm text-ink/60">{zh ? "没有电路。" : "No circuits."}</li> : null}
             {circuits.map((row, index) => {
               const key = `${row.chain}:${row.circuits}:${row.id ?? "n"}:${index}`;
               const pick = row.id ? picks[`${row.chain}:${row.circuits}:${row.id}`] : undefined;

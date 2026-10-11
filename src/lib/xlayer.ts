@@ -356,29 +356,60 @@ export async function transistorHeld(owner: string): Promise<{ nand: bigint; lat
   return { nand, latch };
 }
 
+let circuitIndex: { at: number; last: number; owners: Map<string, bigint[]> } | null = null;
+let circuitFlight: Promise<{ at: number; last: number; owners: Map<string, bigint[]> }> | null = null;
+
+async function ownedCircuits(): Promise<{ at: number; last: number; owners: Map<string, bigint[]> }> {
+  if (circuitIndex && Date.now() - circuitIndex.at < 180_000) return circuitIndex;
+  if (circuitFlight) return circuitFlight;
+  circuitFlight = (async () => {
+    const next = await client.readContract({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "nextId" });
+    const last = Number(next) - 1;
+    const owners = new Map<string, bigint[]>();
+    if (last < 1) {
+      circuitIndex = { at: Date.now(), last, owners };
+      return circuitIndex;
+    }
+    const ids = Array.from({ length: Math.min(last, 4000) }, (_, i) => BigInt(i + 1));
+    for (let i = 0; i < ids.length; i += 400) {
+      const slice = ids.slice(i, i + 400);
+      const rows = await client.multicall({
+        contracts: slice.map((id) => ({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "ownerOf" as const, args: [id] as const })),
+        allowFailure: true,
+        batchSize: 1024,
+      });
+      rows.forEach((row, index) => {
+        if (row.status !== "success" || typeof row.result !== "string") return;
+        const who = row.result.toLowerCase();
+        const list = owners.get(who) ?? [];
+        list.push(slice[index]);
+        owners.set(who, list);
+      });
+    }
+    circuitIndex = { at: Date.now(), last, owners };
+    return circuitIndex;
+  })().finally(() => {
+    circuitFlight = null;
+  });
+  return circuitFlight;
+}
+
 export async function myCircuits(owner: string): Promise<{ id: string; gates: string; nIn: string; nOut: string }[]> {
-  const next = await client.readContract({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "nextId" });
-  const last = Number(next) - 1;
-  if (last < 1) return [];
-  const cap = Math.min(last, 250);
+  const index = await ownedCircuits();
+  const ids = index.owners.get(owner.toLowerCase()) ?? [];
+  if (ids.length === 0) return [];
   const found: { id: string; gates: string; nIn: string; nOut: string }[] = [];
-  for (let id = 1; id <= cap; id += 8) {
-    const slice = Array.from({ length: Math.min(8, cap - id + 1) }, (_, i) => BigInt(id + i));
-    const rows = await Promise.all(
-      slice.map(async (tokenId) => {
-        try {
-          const [who, info] = await Promise.all([
-            client.readContract({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "ownerOf", args: [tokenId] }),
-            client.readContract({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "circuitInfo", args: [tokenId] }),
-          ]);
-          if (who.toLowerCase() !== owner.toLowerCase()) return null;
-          return { id: tokenId.toString(), nIn: info[0].toString(), nOut: info[1].toString(), gates: info[3].toString() };
-        } catch {
-          return null;
-        }
-      }),
-    );
-    for (const row of rows) if (row) found.push(row);
+  for (let i = 0; i < ids.length; i += 80) {
+    const slice = ids.slice(i, i + 80);
+    const rows = await client.multicall({
+      contracts: slice.map((id) => ({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "circuitInfo" as const, args: [id] as const })),
+      allowFailure: true,
+    });
+    rows.forEach((row, index) => {
+      if (row.status !== "success" || !Array.isArray(row.result)) return;
+      const info = row.result as readonly [bigint, bigint, bigint, bigint];
+      found.push({ id: slice[index].toString(), nIn: info[0].toString(), nOut: info[1].toString(), gates: info[3].toString() });
+    });
   }
   return found;
 }

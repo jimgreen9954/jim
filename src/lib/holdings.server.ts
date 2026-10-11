@@ -16,7 +16,7 @@ let cpuCache: { at: number; rows: Cpu[] } | null = null;
 const client = createPublicClient({ chain: bsc, transport: http(BSC.rpc) });
 
 async function processors(): Promise<Cpu[]> {
-  if (cpuCache && Date.now() - cpuCache.at < 60_000) return cpuCache.rows;
+  if (cpuCache && Date.now() - cpuCache.at < 600_000) return cpuCache.rows;
   const res = await fetch("https://tapeout.net/processors.json", {
     headers: { accept: "application/json" },
     signal: AbortSignal.timeout(20000),
@@ -33,14 +33,14 @@ const resultCache = new Map<string, { at: number; row: Holdings }>();
 export async function loadHoldings(account: `0x${string}` | string): Promise<Holdings> {
   const key = account.toLowerCase();
   const hit = resultCache.get(key);
-  if (hit && Date.now() - hit.at < 15_000) return hit.row;
+  if (hit && Date.now() - hit.at < 60_000) return hit.row;
   const row = await readHoldings(account);
   if (row.ok) {
     resultCache.set(key, { at: Date.now(), row });
     if (resultCache.size > 200) {
       const now = Date.now();
       for (const [cachedKey, cached] of resultCache) {
-        if (now - cached.at > 15_000) resultCache.delete(cachedKey);
+        if (now - cached.at > 60_000) resultCache.delete(cachedKey);
       }
       while (resultCache.size > 200) {
         const oldest = resultCache.keys().next().value;
@@ -76,7 +76,7 @@ async function readHoldings(account: `0x${string}` | string): Promise<Holdings> 
       { address: cpu.transistors as `0x${string}`, abi: erc1155, functionName: "balanceOf" as const, args: [owner, 1n] as const },
       { address: cpu.address as `0x${string}`, abi: erc721, functionName: "balanceOf" as const, args: [owner] as const },
     ]);
-    const read = await client.multicall({ contracts: calls, allowFailure: true, batchSize: 150 });
+    const read = await client.multicall({ contracts: calls, allowFailure: true, batchSize: 512 });
     const chips: ChipRow[] = [
       {
         chain: "xlayer",
@@ -97,6 +97,7 @@ async function readHoldings(account: `0x${string}` | string): Promise<Holdings> 
       listed: false,
       priceBnb: null,
     }));
+    const pending: { cpu: Cpu; count: bigint; cap: bigint }[] = [];
     for (let index = 0; index < cpus.length; index += 1) {
       const cpu = cpus[index];
       const nand = read[index * 3];
@@ -118,51 +119,57 @@ async function readHoldings(account: `0x${string}` | string): Promise<Holdings> 
       }
       if (c > 0n) {
         const cap = c > 40n ? 40n : c;
-        let ids: string[] = [];
-        try {
-          ids = (await Promise.all(
-            Array.from({ length: Number(cap) }, (_, i) =>
-              client.readContract({
-                address: cpu.address as `0x${string}`,
-                abi: erc721,
-                functionName: "tokenOfOwnerByIndex",
-                args: [owner, BigInt(i)],
-              }),
-            ),
-          )).map((id) => id.toString());
-        } catch {
-          ids = [];
+        pending.push({ cpu, count: c, cap });
+      }
+    }
+    if (pending.length > 0) {
+      const idCalls = pending.flatMap((row) =>
+        Array.from({ length: Number(row.cap) }, (_, i) => ({
+          address: row.cpu.address as `0x${string}`,
+          abi: erc721,
+          functionName: "tokenOfOwnerByIndex" as const,
+          args: [owner, BigInt(i)] as const,
+        })),
+      );
+      const idRows = await client.multicall({ contracts: idCalls, allowFailure: true, batchSize: 512 });
+      let cursor = 0;
+      for (const row of pending) {
+        const ids: string[] = [];
+        for (let i = 0; i < Number(row.cap); i += 1) {
+          const hit = idRows[cursor + i];
+          if (hit?.status === "success") ids.push((hit.result as bigint).toString());
         }
+        cursor += Number(row.cap);
         if (ids.length === 0) {
           circuits.push({
             chain: "bsc",
-            name: cpu.name,
-            circuits: cpu.address,
+            name: row.cpu.name,
+            circuits: row.cpu.address,
             id: null,
-            count: c.toString(),
+            count: row.count.toString(),
             listed: false,
             priceBnb: null,
           });
         } else {
           for (const id of ids) {
-            const hit = listed.get(`${cpu.address.toLowerCase()}:${id}`);
+            const hit = listed.get(`${row.cpu.address.toLowerCase()}:${id}`);
             circuits.push({
               chain: "bsc",
-              name: cpu.name,
-              circuits: cpu.address,
+              name: row.cpu.name,
+              circuits: row.cpu.address,
               id,
               count: "1",
               listed: Boolean(hit),
               priceBnb: hit && Number.isFinite(Number(hit.price)) ? Number(hit.price) / 1e18 : null,
             });
           }
-          if (c > 40n) {
+          if (row.count > 40n) {
             circuits.push({
               chain: "bsc",
-              name: cpu.name,
-              circuits: cpu.address,
+              name: row.cpu.name,
+              circuits: row.cpu.address,
               id: null,
-              count: (c - 40n).toString(),
+              count: (row.count - 40n).toString(),
               listed: false,
               priceBnb: null,
             });
