@@ -1,4 +1,4 @@
-import { createPublicClient, encodeFunctionData, http, parseAbi, parseAbiItem, type Hex } from "viem";
+import { createPublicClient, encodeFunctionData, formatUnits, http, parseAbi, parseAbiItem, type Hex } from "viem";
 import { FEE_TO, splitDeskFee, TxPending, type PoolPrint, units, pretty } from "@/lib/bsc";
 import { ensureProvider, rememberAccount } from "@/lib/wallet";
 import { XLAYER } from "@/lib/xlayer";
@@ -13,6 +13,16 @@ export const OKB = {
 };
 
 const xClient = createPublicClient({ transport: http(XLAYER.rpc, { timeout: 12_000 }) });
+
+export async function xCap(token: Hex): Promise<number> {
+  const abi = parseAbi(["function totalSupply() view returns (uint256)", "function decimals() view returns (uint8)"]);
+  const [raw, decimals] = await Promise.all([
+    xClient.readContract({ address: token, abi, functionName: "totalSupply" }),
+    xClient.readContract({ address: token, abi, functionName: "decimals" }),
+  ]);
+  const n = Number(formatUnits(raw, decimals));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
 
 const routerAbi = parseAbi([
   "function getAmountsOut(uint256 amountIn, address[] path) view returns (uint256[] amounts)",

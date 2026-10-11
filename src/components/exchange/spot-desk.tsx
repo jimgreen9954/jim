@@ -23,6 +23,7 @@ import {
   swapBem,
   swapBnb,
   swapListed,
+  tokenCap,
   txUrl,
   TxPending,
   units,
@@ -34,7 +35,7 @@ import { STOCK_KEYS, STOCKS, type StockKey } from "@/lib/stocks";
 import { getSpotCandles } from "@/lib/candles";
 import type { Candle } from "@/lib/bem-ohlcv";
 import type { SpotFrame } from "@/lib/spot-ohlcv";
-import { connectX, okbAddressUrl, okbPrice, okbPrints, okbTxUrl, OKB, quoteOkb, readOkbPurse, swapOkb } from "@/lib/okb";
+import { connectX, okbAddressUrl, okbPrice, okbPrints, okbTxUrl, OKB, quoteOkb, readOkbPurse, swapOkb, xCap } from "@/lib/okb";
 import { XLAYER } from "@/lib/xlayer";
 import { currentAccount, connectKind, onAccount, onOpenLink } from "@/lib/wallet";
 import { Kline } from "@/components/exchange/kline";
@@ -77,6 +78,7 @@ export function SpotDesk() {
   const [assetBal, setAssetBal] = useState<bigint | null>(null);
   const [frame, setFrame] = useState<SpotFrame>("1m");
   const [bars, setBars] = useState<Candle[]>([]);
+  const [supply, setSupply] = useState<number | null>(null);
   const [lane, setLane] = useState<"trade" | "lp">("trade");
   const lock = useFeeLock();
 
@@ -130,6 +132,15 @@ export function SpotDesk() {
       dead = true;
     };
   }, [pair, frame, hash]);
+
+  useEffect(() => {
+    let dead = false;
+    const listed = isErcKey(pair) ? ERC_BOOKS[pair].token : null;
+    const job = pair === "okb" ? xCap(OKB.wokb) : tokenCap(pair === "bnb" ? BSC.wbnb : listed ?? BSC.bem);
+    job.then((n) => { if (!dead) setSupply(n || null); }).catch(() => { if (!dead) setSupply(null); });
+    return () => { dead = true; };
+  }, [pair]);
+
   useEffect(() => {
     const listed = isErcKey(pair) ? ERC_BOOKS[pair] : null;
     const base = pair === "okb" ? OKB.wokb : pair === "bnb" ? BSC.wbnb : listed ? listed.token : BSC.bem;
@@ -373,7 +384,7 @@ export function SpotDesk() {
               </button>
             ))}
           </div>
-          <Kline bars={bars} lang={lang} desk="spot" />
+          <Kline bars={bars} lang={lang} desk="spot" supply={supply} />
           <h2 className="mt-4 text-xs tracking-widest text-gold">{lang === "zh" ? "链上成交 · 地址是签名的钱包" : "On-chain fills · the address signed the trade"}</h2>
           <div className="mt-2 overflow-x-auto">
           <div className="grid min-w-[22rem] grid-cols-[3rem_1fr_5rem_7.5rem] gap-2 font-mono text-xs text-ink/45">

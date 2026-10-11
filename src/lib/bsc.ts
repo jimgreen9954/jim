@@ -231,6 +231,16 @@ export async function ercPrice(key: ErcKey): Promise<string> {
   return pretty(out, BSC.usdtDecimals, 2);
 }
 
+export async function tokenCap(token: Hex): Promise<number> {
+  const abi = parseAbi(["function totalSupply() view returns (uint256)", "function decimals() view returns (uint8)"]);
+  const [raw, decimals] = await Promise.all([
+    client.readContract({ address: token, abi, functionName: "totalSupply" }),
+    client.readContract({ address: token, abi, functionName: "decimals" }),
+  ]);
+  const n = Number(formatUnits(raw, decimals));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 export async function readAsset(account: string, token: Hex): Promise<bigint> {
   return client.readContract({ address: token, abi: erc20, functionName: "balanceOf", args: [account as Hex] });
 }

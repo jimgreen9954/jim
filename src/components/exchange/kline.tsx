@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { readBias, type Bias } from "@/lib/bias";
-import { fmtPct, fmtPx, fmtSz } from "@/lib/format";
+import { fmtPct, fmtPx, fmtSz, fmtUsd } from "@/lib/format";
 
 export type Bar = { t?: number; o: number; h: number; l: number; c: number; v?: number };
 
@@ -13,11 +13,14 @@ type Drag = { i: number; mode: Grip; origin: Pt; a: Pt; b: Pt };
 const PAINTS = ["#2f2a26", "#b5a48e", "#efe6d8", "#9e1b12", "#1f6b45", "#1d4e89"];
 
 const VB_W = 860;
-const VB_H = 420;
 const PAD = { l: 8, r: 76, t: 10, b: 22 };
 const PRICE_H = 276;
 const VOL_TOP = PAD.t + PRICE_H + 14;
 const VOL_H = 78;
+const OSC = 62;
+const RSI_TOP = VOL_TOP + VOL_H + 16;
+const STOCH_TOP = RSI_TOP + OSC + 12;
+const VB_H = STOCH_TOP + OSC + 18;
 
 function sma(rows: Bar[], n: number): Array<number | null> {
   return rows.map((_, i) => {
@@ -45,6 +48,53 @@ function vma(rows: Bar[], n: number): Array<number | null> {
   });
 }
 
+function rsi(rows: Bar[], n = 14): Array<number | null> {
+  const out: Array<number | null> = rows.map(() => null);
+  if (rows.length <= n) return out;
+  let gain = 0;
+  let loss = 0;
+  for (let i = 1; i <= n; i += 1) {
+    const diff = rows[i].c - rows[i - 1].c;
+    if (diff >= 0) gain += diff;
+    else loss -= diff;
+  }
+  let avgGain = gain / n;
+  let avgLoss = loss / n;
+  out[n] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+  for (let i = n + 1; i < rows.length; i += 1) {
+    const diff = rows[i].c - rows[i - 1].c;
+    avgGain = (avgGain * (n - 1) + Math.max(diff, 0)) / n;
+    avgLoss = (avgLoss * (n - 1) + Math.max(-diff, 0)) / n;
+    out[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+  }
+  return out;
+}
+
+function stoch(rows: Bar[], n = 14, smooth = 3): { k: Array<number | null>; d: Array<number | null> } {
+  const k = rows.map((_, i) => {
+    if (i < n - 1) return null;
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (let j = 0; j < n; j += 1) {
+      lo = Math.min(lo, rows[i - j].l);
+      hi = Math.max(hi, rows[i - j].h);
+    }
+    if (!(hi > lo)) return 50;
+    return ((rows[i].c - lo) / (hi - lo)) * 100;
+  });
+  const d = k.map((_, i) => {
+    if (i < n + smooth - 2) return null;
+    let sum = 0;
+    for (let j = 0; j < smooth; j += 1) {
+      const value = k[i - j];
+      if (value == null) return null;
+      sum += value;
+    }
+    return sum / smooth;
+  });
+  return { k, d };
+}
+
 function pathOf(values: Array<number | null>, x: (i: number) => number, y: (p: number) => number): string {
   let d = "";
   values.forEach((value, i) => {
@@ -70,16 +120,49 @@ function clock(t: number): string {
   return `${bit("year")}-${bit("month")}-${bit("day")} ${bit("hour")}:${bit("minute")}:${bit("second")}`;
 }
 
+function OscPane({
+  top,
+  label,
+  a,
+  b,
+  x,
+  marks,
+}: {
+  top: number;
+  label: string;
+  a: Array<number | null>;
+  b: Array<number | null> | null;
+  x: (i: number) => number;
+  marks: number[];
+}) {
+  const y = (value: number) => top + ((100 - value) / 100) * OSC;
+  return (
+    <g>
+      <line x1={PAD.l} x2={VB_W - PAD.r} y1={top} y2={top} stroke="var(--color-gold)" strokeOpacity="0.35" />
+      {marks.map((mark) => (
+        <line key={mark} x1={PAD.l} x2={VB_W - PAD.r} y1={y(mark)} y2={y(mark)} stroke="var(--color-gold)" strokeOpacity="0.25" strokeDasharray="2 3" />
+      ))}
+      <path d={pathOf(a, x, y)} fill="none" stroke="var(--color-gold)" strokeWidth="1.25" />
+      {b ? <path d={pathOf(b, x, y)} fill="none" stroke="var(--color-ink)" strokeOpacity="0.7" strokeWidth="1.25" /> : null}
+      <text x={PAD.l + 2} y={top + 11} fill="var(--color-ink)" fontSize="10" fontFamily="IBM Plex Mono, monospace">
+        {label}
+      </text>
+    </g>
+  );
+}
+
 export function Kline({
   bars,
   entry = 0,
   mark = 0,
+  supply = null,
   lang,
   desk = "tape",
 }: {
   bars: Bar[];
   entry?: number;
   mark?: number;
+  supply?: number | null;
   lang: "zh" | "en";
   desk?: string;
 }) {
@@ -202,6 +285,10 @@ export function Kline({
   const ma7 = sma(all, 7).slice(start, start + rows.length);
   const ma25 = sma(all, 25).slice(start, start + rows.length);
   const volMa = vma(all, 20).slice(start, start + rows.length);
+  const rsiLine = rsi(all).slice(start, start + rows.length);
+  const osc = stoch(all);
+  const stochK = osc.k.slice(start, start + rows.length);
+  const stochD = osc.d.slice(start, start + rows.length);
   const lows = rows.map((bar) => bar.l);
   const highs = rows.map((bar) => bar.h);
   let lo = Math.min(...lows);
@@ -423,6 +510,9 @@ export function Kline({
         ) : null}
         {ma7[safeIdx] != null ? <span className="text-gold">MA7 {fmtPx(ma7[safeIdx])}</span> : null}
         {ma25[safeIdx] != null ? <span className="text-ink/60">MA25 {fmtPx(ma25[safeIdx])}</span> : null}
+        <span>{zh ? "市值" : "Mkt"} {supply != null && supply > 0 ? fmtUsd(supply * focus.c) : "—"}</span>
+        <span>RSI {rsiLine[safeIdx] != null ? rsiLine[safeIdx]!.toFixed(1) : "—"}</span>
+        <span>Stoch {stochK[safeIdx] != null ? `${stochK[safeIdx]!.toFixed(1)}/${stochD[safeIdx] != null ? stochD[safeIdx]!.toFixed(1) : "—"}` : "—"}</span>
         {focus.t && focus.t > 1e9 ? <span className="text-ink">新加坡 {clock(focus.t)}</span> : null}
       </p>
       <div ref={plotRef} className="relative">
@@ -433,7 +523,7 @@ export function Kline({
       <svg
         ref={svgRef}
         viewBox={`0 0 ${VB_W} ${VB_H}`}
-        className="h-52 w-full touch-none overflow-hidden sm:h-72 lg:h-96"
+        className="h-80 w-full touch-none overflow-hidden sm:h-[32rem] lg:h-[40rem]"
         overflow="hidden"
         style={{ cursor: tool === "look" ? "grab" : "crosshair" }}
         role="img"
@@ -529,6 +619,8 @@ export function Kline({
         <text x={VB_W - 6} y={VOL_TOP + 11} textAnchor="end" fill="var(--color-ink)" fontSize="10" fontFamily="IBM Plex Mono, monospace">
           {fmtSz(focus.v ?? last.v ?? 0)}
         </text>
+        <OscPane top={RSI_TOP} label="RSI" a={rsiLine} b={null} x={x} marks={[30, 70]} />
+        <OscPane top={STOCH_TOP} label="Stoch" a={stochK} b={stochD} x={x} marks={[20, 80]} />
         {guides.map((guide) => (
           <g key={guide.label}>
             <line x1={PAD.l} x2={VB_W - PAD.r} y1={y(guide.p)} y2={y(guide.p)} stroke={guide.color} strokeDasharray={guide.dash} strokeOpacity="0.8" />

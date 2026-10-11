@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { formatUnits } from "viem";
 import { copy } from "@/lib/copy";
-import { BSC, FEE_TO, connectBsc, pretty, units, type Balances } from "@/lib/bsc";
+import { BSC, FEE_TO, connectBsc, pretty, tokenCap, units, type Balances } from "@/lib/bsc";
 import { getCandles, type Candle, type CandleFrame } from "@/lib/candles";
 import { currentAccount, onAccount, onOpenLink } from "@/lib/wallet";
 import { useExchange } from "@/lib/exchange-store";
@@ -28,6 +28,7 @@ import {
   readPerp,
   readRebate,
   readBoard,
+  rememberXBem,
   savedDesk,
   savedXBemPerp,
   selectDesk,
@@ -40,6 +41,8 @@ import {
   type PerpView,
 } from "@/lib/perp";
 import { connectXLayer, XLAYER } from "@/lib/xlayer";
+import { TAPE_BEM } from "@/lib/tape-pool";
+import { xCap } from "@/lib/okb";
 
 function short(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
@@ -190,7 +193,8 @@ export function RealPerp() {
   const c = copy[lang];
   const [chain, setChain] = useState<Desk>(savedDesk());
   const [perp, setPerp] = useState(() => bookOf(savedDesk()));
-  const [xbem, setXbem] = useState(savedXBemPerp);
+  const [xbem, setXbem] = useState("");
+  const [pasted, setPasted] = useState("");
   const [deployNote, setDeployNote] = useState<string | null>(null);
   const [account, setAccount] = useState<string | null>(currentAccount());
   const [view, setView] = useState<PerpView | null>(null);
@@ -210,6 +214,7 @@ export function RealPerp() {
   const [link, setLink] = useState<string | null>(null);
   const [bal, setBal] = useState<Balances | null>(null);
   const [prices, setPrices] = useState<Candle[]>([]);
+  const [supply, setSupply] = useState<number | null>(null);
   const [frame, setFrame] = useState<CandleFrame>("1m");
   const [limit, setLimit] = useState("");
   const [board, setBoard] = useState<{ perp: string; quote: BookQuote }[]>([]);
@@ -220,6 +225,20 @@ export function RealPerp() {
   const [card, setCard] = useState<"long" | "short" | null>(null);
   const lock = useFeeLock();
   const firing = useRef(false);
+
+  useEffect(() => {
+    const saved = savedXBemPerp();
+    if (!saved) return;
+    setXbem(saved);
+    if (savedDesk() === "xlayer") setPerp(saved);
+  }, []);
+
+  useEffect(() => {
+    let dead = false;
+    const job = chain === "xlayer" ? xCap(TAPE_BEM) : tokenCap(BSC.bem);
+    job.then((n) => { if (!dead) setSupply(n || null); }).catch(() => { if (!dead) setSupply(null); });
+    return () => { dead = true; };
+  }, [chain]);
 
   useEffect(() => {
     if (!account) return;
@@ -526,7 +545,36 @@ export function RealPerp() {
             >
               {busy ? (lang === "zh" ? "等待钱包确认" : "Waiting for the wallet") : (lang === "zh" ? "部署读 X Layer 池子的新永续" : "Deploy the book that reads the X Layer pools")}
             </button>
-            {deployNote ? <p className={`text-sm leading-6 ${bad ? "text-sell" : ""}`}>{deployNote}</p> : <p className="text-sm leading-6 text-ink/70">{lang === "zh" ? "提交后由钱包确认。共三笔签名：标记合约、初始观察、永续合约。" : "The wallet confirms the request. Three signatures: the mark, the first observation, and the perpetual."}</p>}
+            {deployNote ? <p className={`text-sm leading-6 ${bad ? "text-sell" : ""}`}>{deployNote}</p> : <p className="text-sm leading-6 text-ink/70">{lang === "zh" ? "若已经部署过，把永续地址贴在下面。本机记得之后，部署按钮会收起。" : "If it is already deployed, paste the perpetual address. Once this device remembers it, the deploy button goes away."}</p>}
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <input value={pasted} onChange={(event) => setPasted(event.target.value)} placeholder="0x" className="min-h-12 border border-gold bg-transparent px-2 font-mono text-sm" />
+              <button
+                type="button"
+                className="min-h-12 border border-gold px-4 text-sm disabled:opacity-40"
+                disabled={busy}
+                onClick={() => {
+                  setBusy(true);
+                  setBad(false);
+                  setDeployNote(lang === "zh" ? "正在核对链上合约。" : "Checking the contract.");
+                  rememberXBem(pasted)
+                    .then((addr) => {
+                      setXbem(addr);
+                      setPerp(addr);
+                      setChain("xlayer");
+                      selectDesk("xlayer");
+                      setBad(false);
+                      setDeployNote(addr);
+                    })
+                    .catch(() => {
+                      setBad(true);
+                      setDeployNote(lang === "zh" ? "这个地址不是可用的永续合约。" : "That address is not a usable perpetual.");
+                    })
+                    .finally(() => setBusy(false));
+                }}
+              >
+                {lang === "zh" ? "使用已部署的地址" : "Use the deployed address"}
+              </button>
+            </div>
           </div>
         ) : null}
         <p className="text-sm leading-6 text-ink/70">{chain === "xlayer" ? c.perpWarnX : c.perpWarn}</p>
@@ -594,6 +642,7 @@ export function RealPerp() {
             }
             entry={entryN}
             mark={markN}
+            supply={supply}
             lang={lang}
             desk="perp"
           />

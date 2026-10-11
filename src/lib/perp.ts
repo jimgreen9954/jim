@@ -413,6 +413,15 @@ export function bookOf(which: Desk = desk): string {
   return BSC_REBATE;
 }
 
+export async function rememberXBem(address: string): Promise<string> {
+  const perp = address.trim();
+  if (!/^0x[a-fA-F0-9]{40}$/.test(perp)) throw new Error("address");
+  const state = await xBookState(perp);
+  if (state === "down") throw new Error("empty");
+  window.localStorage.setItem(XBEM_PERP_KEY, perp);
+  return perp;
+}
+
 export async function xBookState(perp: string): Promise<"ready" | "scale" | "down"> {
   try {
     const c = await deskClient("xlayer");
