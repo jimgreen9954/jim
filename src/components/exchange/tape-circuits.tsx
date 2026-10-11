@@ -79,6 +79,7 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
   const [pick, setPick] = useState<string>("");
   const [price, setPrice] = useState("");
   const [chart, setChart] = useState(false);
+  const [sheet, setSheet] = useState(false);
   const [busy, setBusy] = useState(false);
   const [bad, setBad] = useState(false);
   const [note, setNote] = useState("");
@@ -177,9 +178,9 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
   };
 
   return (
-    <section className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
+    <section className="grid items-start gap-4 pb-36 lg:grid-cols-[minmax(0,1fr)_22rem] lg:pb-0">
       <div className="min-w-0">
-        <div className="grid grid-cols-2 gap-px overflow-hidden bg-gold/30 sm:grid-cols-4 xl:grid-cols-7">
+        <div className="flex gap-px overflow-x-auto bg-gold/30 lg:grid lg:grid-cols-7 lg:overflow-visible">
           {[
             [zh ? "在售" : "Listed", String(lists.length)],
             [zh ? "最低卖价" : "Best ask", bestAsk != null ? `${usdtText(bestAsk, 4)}` : "—"],
@@ -189,7 +190,7 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
             [zh ? "锁着" : "Locked", String(locked.length)],
             [zh ? "已读成交" : "Prints", prints.length ? `${usdtText(traded, 2)}` : "—"],
           ].map(([k, v]) => (
-            <p key={k} className="bg-card px-3 py-3">
+            <p key={k} className="min-w-[8.5rem] flex-1 bg-card px-3 py-3 lg:min-w-0">
               <span className="block text-[10px] tracking-[0.16em] text-ink/40"><Hint label={k} text={tip(zh, k)} /></span>
               <span className="mt-1 block font-mono text-[15px] tabular-nums">{v}</span>
             </p>
@@ -202,25 +203,23 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
               : `Emission ${cutTape(pace.daily)} TAPE · weight ${pace.weight.toLocaleString("en-US")}. Daily output assumes the circuit is already mining.`
             : zh ? "全网权重还没读到。不估日产出。" : "Network weight is not in yet."}
         </p>
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <div className="flex bg-foil/80 p-0.5">
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="grid grid-cols-3 bg-foil/80 p-0.5 sm:flex">
             {(["book", "mine", "tape"] as const).map((id) => (
-              <button key={id} type="button" onClick={() => setTab(id)} className={`px-3 py-1.5 text-[13px] ${tab === id ? "bg-card text-ink" : "text-ink/45"}`}>
+              <button key={id} type="button" onClick={() => setTab(id)} className={`px-3 py-2 text-center text-[13px] sm:py-1.5 ${tab === id ? "bg-card text-ink" : "text-ink/45"}`}>
                 {id === "book" ? (zh ? "在售" : "Book") : id === "mine" ? (zh ? `我的 ${owned.length + locked.length}` : "Mine") : zh ? "成交" : "Prints"}
               </button>
             ))}
           </div>
-          {tab === "book" ? (
-            <div className="flex gap-1 text-[12px]">
-              {(["day", "ask", "hash"] as const).map((id) => (
-                <button key={id} type="button" onClick={() => setSort(id)} className={`px-2 py-1 ${sort === id ? "text-ink underline decoration-gold underline-offset-4" : "text-ink/40"}`}>
-                  <Hint label={id === "day" ? (zh ? "日产能价" : "Day") : id === "ask" ? (zh ? "卖价" : "Ask") : zh ? "算力" : "Hash"} text={id === "day" ? (zh ? "按卖价除以估算日产，从低到高。单位是 USDT0 / 每日 1 TAPE。鼠标移开说明就消失。" : "Sort by ask divided by estimated daily TAPE, low to high.") : id === "ask" ? (zh ? "按买方要付的 USDT0，从低到高。这是卖价，不是日产能价。" : "Sort by the USDT0 the buyer pays, low to high.") : (zh ? "按门数从高到低。开工后这就是占全网权重的算力。" : "Sort by gate count, high to low.")} />
-                </button>
-              ))}
-            </div>
-          ) : null}
-          {bars.length > 1 ? <button type="button" onClick={() => setChart((on) => !on)} className="ml-auto px-2 py-1 text-[12px] text-ink/60 underline decoration-gold/70 underline-offset-4">{chart ? (zh ? "收起 K 线" : "Hide chart") : (zh ? "成交 K 线" : "Chart")}</button> : <span className="ml-auto" />}
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={zh ? "编号或卖家" : "Search"} className="h-8 w-36 border-b border-gold/60 bg-transparent px-1 text-[12px] outline-none placeholder:text-ink/30" />
+          <div className="flex min-w-0 items-center gap-2">
+            {tab === "book" ? (["day", "ask", "hash"] as const).map((id) => (
+              <button key={id} type="button" onClick={() => setSort(id)} className={`shrink-0 px-1 py-1 text-[12px] ${sort === id ? "text-ink underline decoration-gold underline-offset-4" : "text-ink/40"}`}>
+                <Hint label={id === "day" ? (zh ? "日产能价" : "Day") : id === "ask" ? (zh ? "卖价" : "Ask") : zh ? "算力" : "Hash"} text={id === "day" ? (zh ? "按卖价除以估算日产，从低到高。单位是 USDT0 / 每日 1 TAPE。鼠标移开说明就消失。" : "Sort by ask divided by estimated daily TAPE, low to high.") : id === "ask" ? (zh ? "按买方要付的 USDT0，从低到高。这是卖价，不是日产能价。" : "Sort by the USDT0 the buyer pays, low to high.") : (zh ? "按门数从高到低。开工后这就是占全网权重的算力。" : "Sort by gate count, high to low.")} />
+              </button>
+            )) : null}
+            {bars.length > 1 ? <button type="button" onClick={() => setChart((on) => !on)} className="shrink-0 px-1 py-1 text-[12px] text-ink/60 underline decoration-gold/70 underline-offset-4">{chart ? (zh ? "收起" : "Hide") : (zh ? "K 线" : "Chart")}</button> : null}
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={zh ? "编号或卖家" : "Search"} className="h-9 min-w-0 flex-1 border-b border-gold/60 bg-transparent px-1 text-[13px] outline-none placeholder:text-ink/30 sm:w-36 sm:flex-none" />
+          </div>
         </div>
         {chart && bars.length > 1 ? (
           <div className="mt-3 overflow-hidden bg-card">
@@ -229,7 +228,31 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
           </div>
         ) : null}
         {tab === "book" ? (
-          <div className="mt-3 max-h-[34rem] overflow-auto bg-card">
+          <>
+            <ul className="mt-3 grid gap-px bg-gold/30 lg:hidden">
+              {book.length === 0 ? <li className="bg-card px-3 py-8 text-center text-[13px] text-ink/45">{miss ? (zh ? "盘口这一次没读到。" : "The book did not load.") : loaded ? (zh ? "现在没有在售。" : "Nothing is listed.") : (zh ? "正在读。" : "Reading.")}</li> : null}
+              {book.map(({ row, shape, share, day }) => {
+                const mine = account != null && row.seller.toLowerCase() === account.toLowerCase();
+                return (
+                  <li key={row.id.toString()} className="bg-card px-3 py-3" onClick={() => { setPick(row.id.toString()); setSheet(true); }}>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="font-mono text-sm">#{row.id.toString()}</span>
+                      <span className="font-mono text-lg tabular-nums">{usdtText(row.price, 4)}</span>
+                    </div>
+                    <p className="mt-1 font-mono text-[12px] text-ink/55">{shapeLine(shape)}</p>
+                    <dl className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
+                      <div><dt className="text-ink/40"><Hint label={zh ? "算力" : "Hash"} text={zh ? "门数。开工后按这个数占全网权重。" : "Gate count."} /></dt><dd className="font-mono">{shape ? Number(shape.gates).toLocaleString("en-US") : "—"}</dd></div>
+                      <div><dt className="text-ink/40"><Hint label={zh ? "日产" : "Day"} text={zh ? "假设已经开工，大约每天的 TAPE。没开工不是到账。" : "Estimated TAPE per day if already mining."} /></dt><dd className="font-mono">{share != null ? cutTape(share) : "—"}</dd></div>
+                      <div><dt className="text-ink/40"><Hint label={zh ? "日产能价" : "Day px"} text={zh ? "卖价除以估算日产。单位是 USDT0 / 每日 1 TAPE。" : "Ask divided by estimated daily TAPE."} /></dt><dd className="font-mono">{num(day, day != null && day >= 100 ? 2 : 4)}</dd></div>
+                    </dl>
+                    {mine
+                      ? <button type="button" disabled={busy} className="mt-3 min-h-11 w-full border border-gold text-sm disabled:opacity-40" onClick={(event) => { event.stopPropagation(); run((from) => cancelSpotCircuit(from, row.id), zh ? "已撤下。" : "Cancelled."); }}>{zh ? "撤下" : "Cancel"}</button>
+                      : <button type="button" disabled={busy} className="mt-3 min-h-11 w-full bg-[#f23645] text-sm text-white disabled:opacity-40" onClick={(event) => { event.stopPropagation(); setPick(row.id.toString()); run((from) => buySpotCircuit(from, row.id, row.price), zh ? "已买下。" : "Bought."); }}>{zh ? "买入" : "Buy"}</button>}
+                  </li>
+                );
+              })}
+            </ul>
+          <div className="mt-3 hidden max-h-[34rem] overflow-auto bg-card lg:block">
             <table className="w-full min-w-[64rem] text-left text-[12px]">
               <thead className="sticky top-0 bg-foil/90 text-ink/45">
                 <tr>
@@ -254,7 +277,7 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
                   const cut = row.price * 20n / 10000n;
                   const on = pick === row.id.toString();
                   return (
-                    <tr key={row.id.toString()} className={`cursor-pointer border-t border-gold/15 ${on ? "bg-foil/70" : "hover:bg-foil/40"}`} onClick={() => setPick(row.id.toString())}>
+                    <tr key={row.id.toString()} className={`cursor-pointer border-t border-gold/15 ${on ? "bg-foil/70" : "hover:bg-foil/40"}`} onClick={() => { setPick(row.id.toString()); setSheet(true); }}>
                       <td className="px-3 py-2.5 font-mono tabular-nums">#{row.id.toString()}</td>
                       <td className="px-3 py-2.5 font-mono whitespace-nowrap text-ink/80">{shapeLine(shape)}</td>
                       <td className="px-3 py-2.5 text-right font-mono tabular-nums">{shape ? Number(shape.gates).toLocaleString("en-US") : "—"}</td>
@@ -275,11 +298,17 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
               </tbody>
             </table>
           </div>
+          </>
         ) : null}
-        {tab === "mine" ? <Mine zh={zh} account={account} owned={owned} locked={locked} shapes={shapes} pace={pace} pick={pick} busy={busy} onPick={setPick} onClaim={(id) => run((from) => claimFreshCircuit(from, BigInt(id)), zh ? "已领回钱包。" : "Claimed.")} /> : null}
+        {tab === "mine" ? <Mine zh={zh} account={account} owned={owned} locked={locked} shapes={shapes} pace={pace} pick={pick} busy={busy} onPick={(id) => { setPick(id); setSheet(true); }} onClaim={(id) => run((from) => claimFreshCircuit(from, BigInt(id)), zh ? "已领回钱包。" : "Claimed.")} /> : null}
         {tab === "tape" ? <Prints zh={zh} rows={prints} /> : null}
       </div>
-      <aside className="bg-card px-5 py-5 lg:sticky lg:top-3">
+      <aside className="fixed inset-x-0 z-40 max-h-[68dvh] overflow-y-auto border-t border-gold bg-paper px-3 py-2 max-lg:bottom-[calc(3rem+env(safe-area-inset-bottom))] lg:sticky lg:top-3 lg:z-auto lg:max-h-none lg:overflow-visible lg:border-0 lg:bg-card lg:px-5 lg:py-5">
+        <button type="button" className="flex min-h-11 w-full items-center justify-between text-sm lg:hidden" onClick={() => setSheet((on) => !on)}>
+          <span className="font-mono">{pick ? `#${pick}` : (zh ? "点一行" : "Pick a row")}</span>
+          <span className="text-ink/50">{sheet ? (zh ? "收起" : "Close") : (zh ? "报价" : "Quote")}</span>
+        </button>
+        <div className={sheet ? "pb-1" : "hidden lg:block"}>
         <p className="text-[10px] tracking-[0.22em] text-ink/40">{pickedList ? (zh ? "买入" : "BUY") : zh ? "挂出" : "LIST"}</p>
         <p className="mt-3 font-display text-4xl italic leading-none">{pick ? `#${pick}` : (zh ? "点一行" : "Pick")}</p>
         {pick ? <p className="mt-2 font-mono text-[13px] text-ink/60">{shapeLine(pickedShape)} · {pickedShape ? Number(pickedShape.gates).toLocaleString("en-US") : "—"} H</p> : null}
@@ -305,6 +334,7 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
         ) : null}
         {!pick ? <p className="mt-5 text-[13px] leading-6 text-ink/45">{zh ? "在售里点一行就能买。要挂的话，先去「我的」。" : "Pick a listed row to buy. To list, open Mine."}</p> : null}
         {note ? <p className={`mt-3 text-[12px] leading-5 ${bad ? "text-sell" : "text-ink/70"}`}>{note}</p> : null}
+        </div>
       </aside>
     </section>
   );
@@ -339,7 +369,28 @@ function tip(zh: boolean, label: string): string {
 
 function Mine({ zh, account, owned, locked, shapes, pace, pick, busy, onPick, onClaim }: { zh: boolean; account: string | null; owned: { id: string; gates: string; nIn: string; nOut: string }[]; locked: CircuitSeat[]; shapes: Map<string, Shape>; pace: Pace | null; pick: string; busy: boolean; onPick: (id: string) => void; onClaim: (id: string) => void }) {
   return (
-    <div className="mt-3 max-h-[34rem] overflow-auto bg-card">
+    <>
+    <ul className="mt-3 grid gap-px bg-gold/30 lg:hidden">
+      {owned.length + locked.length === 0 ? <li className="bg-card px-3 py-8 text-center text-[13px] text-ink/45">{account ? (zh ? "这个钱包没有可挂的电路。" : "Nothing in this wallet.") : (zh ? "先连接钱包。" : "Connect a wallet.")}</li> : null}
+      {owned.map((row) => (
+        <li key={row.id} className={`bg-card px-3 py-3 ${pick === row.id ? "bg-foil" : ""}`} onClick={() => onPick(row.id)}>
+          <div className="flex items-baseline justify-between font-mono"><span>#{row.id}</span><span>{Number(row.gates).toLocaleString("en-US")} H</span></div>
+          <p className="mt-1 text-[12px] text-ink/55">{row.nIn}→{row.nOut}</p>
+          <p className="mt-2 text-[12px] text-ink/45">{zh ? "点这一行，再在下面的报价里挂出。" : "Tap the row, then list it in the quote below."}</p>
+        </li>
+      ))}
+      {locked.map((row) => {
+        const due = row.unlock * 1000 <= Date.now();
+        return (
+          <li key={row.id} className="bg-card px-3 py-3">
+            <div className="flex items-baseline justify-between font-mono"><span>#{row.circuitId}</span><span>{row.gates.toLocaleString("en-US")} H</span></div>
+            <p className="mt-1 text-[12px] text-ink/55">{due ? (zh ? "到期可领" : "Due") : (zh ? "锁着" : "Locked")}</p>
+            {due ? <button type="button" disabled={busy} className="mt-3 min-h-11 w-full border border-gold text-sm" onClick={() => onClaim(row.id)}>{zh ? "领回" : "Claim"}</button> : null}
+          </li>
+        );
+      })}
+    </ul>
+    <div className="mt-3 hidden max-h-[34rem] overflow-auto bg-card lg:block">
       <table className="w-full min-w-[40rem] text-left text-[12px]">
         <thead className="sticky top-0 bg-foil/90 text-ink/45">
           <tr>
@@ -390,6 +441,7 @@ function Mine({ zh, account, owned, locked, shapes, pace, pick, busy, onPick, on
         </tbody>
       </table>
     </div>
+    </>
   );
 }
 
