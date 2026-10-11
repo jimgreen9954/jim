@@ -51,7 +51,7 @@ const zhBody: Section[] = [
       "先铸造 NAND 或 LATCH，再流片。流片烧掉网表里的晶体管，不能撤回，也不能再铸回来。一张最多 18,000 个 NAND，或 30,000 个 LATCH。更大的网表会失败，晶体管还在钱包里。",
       "NAND 和 LATCH 在 X Layer 铸造，共用额度 2,100,000。未流片的库存可以转让，不算算力。额度用完后只剩转让。",
       "晶体管合约在工房里，不在交易台。保证金是 BSC 的 USDT。结算参照收费地址写下的 10 分钟均价，不是 tapeout 页面上的另一口价。六个标的各自一本。",
-      "晶体管现货和电路现货跟 tapeout.net 的盘口。本站另收 0.20%，先付。tapeout 没有成交，这一笔也不退。",
+      "tapeout 的晶体管现货只同步买单。卖出就是吃其中一档，写明买价、剩余和总额。tapeout 的电路页读公开盘口。官方盘和已经签名的卖单都能买。日产能价是卖价除以预计 24 小时 BEM。算力是计入挖矿的权重。带虚线的字，鼠标停上出说明，移开消失。本站另收 0.20%，先付。后面那笔没有成交，这一笔不退。",
     ],
   },
   {
@@ -85,7 +85,8 @@ const zhBody: Section[] = [
   {
     h: "现货",
     ps: [
-      `工房现货是 X Layer 上的订单簿，不属于交易台。一份合约分四本账：TAPE、NAND、LATCH 以 USDT0 报价，电路按张定价。同一价格并为一档，先挂的订单在前。买方按该档价格支付。卖方实收 99.8%，千分之二进入收费地址。可成交部分即时成交，剩余部分继续挂单。页面列出卖盘可买、买盘可卖、已读成交与手续费，并按所填价格给出可成交数量与剩余挂出数量。费率、两个代币、晶体管、电路与收费地址均写在合约中。没有管理员，不能改费率，不能升级。未通过挂单函数直接转入的资产无法取回。地址是 ${TAPE_SPOT}，已经部署。每台设备都读这一份。`,
+      `工房现货是 X Layer 上的订单簿，不属于交易台。一份合约分四本账：TAPE、NAND、LATCH 以 USDT0 报价，电路按张定价。同一价格并为一档，先挂的订单在前。买方按该档价格支付。卖方实收 99.8%，千分之二进入收费地址。可成交部分即时成交，剩余部分继续挂单。页面列出卖盘可买、买盘可卖、已读成交与手续费，并按所填价格给出可成交数量与剩余挂出数量。NAND 和 LATCH 只收整数。切换市场时先清空上一本，空的市场不写成 0，也不把别的币的挂单留在这一本上。费率、两个代币、晶体管、电路与收费地址均写在合约中。没有管理员，不能改费率，不能升级。未通过挂单函数直接转入的资产无法取回。地址是 ${TAPE_SPOT}，已经部署。每台设备都读这一份。`,
+      "电路和 TAPE、NAND、LATCH 分开。在售只列已经挂出的电路。钱包里没挂的，和锁仓里的，在「我的」，不写进盘口。在「我的」点一行，再填 USDT0 挂出。买方付挂出价。卖方实收 99.8%。每一行写结构、算力、卖价、千分之二、卖方实收、估算日产、日产能价和卖家。算力是门数。估算日产等于当日排放乘以这张门数，再除以全网权重，并且假设这张已经开工。没开工不是实际到账。日产能价等于挂出价除以估算日产，单位是 USDT0 / 每日 1 TAPE，只用来比较。占全网是门数除以当前全网权重。带虚线的字，鼠标停上出说明，移开消失。成交不满两笔不画 K 线。这份电路合约只记录输入、输出、状态和门数，不记录每张用了多少 NAND 和 LATCH，所以这一页不写晶体均价。",
       "挖矿页只做领取、质押、销毁和库藏。NAND、LATCH 与电路在顶栏的 TAPELIQUID。晶体管合约在顶栏的 tapeout。铸造已经结束，页面不再提供铸造入口。钱包中既有的 NAND 与 LATCH 仍可流片，也可在 TAPELIQUID 卖出。",
     ],
   },
@@ -230,7 +231,7 @@ const en: Section[] = [
       "Mint NAND or LATCH, then tape out. Tape-out burns the transistors in the netlist. It cannot be undone or minted back. One sheet holds at most 18,000 NAND or 30,000 LATCH. A larger netlist fails, and the transistors stay in the wallet.",
       "NAND and LATCH mint on X Layer under one cap of 2,100,000. Untaped stock can be transferred and is not hashrate. After the cap, only transfers remain.",
       "Transistor perps live in the workshop, not on the desk. Margin is BSC USDT. Settlement uses the 10-minute average posted by the fee address, not a second price from the tapeout page. There are six markets.",
-      "Transistor spot and circuit spot follow the tapeout book. This site charges an extra 0.20%, paid first. If the tapeout fill does not happen, that fee is not returned.",
+      "The tapeout transistor book lists bids only. Selling fills one of them, with the bid, the size left, and the total. The tapeout circuit page reads the public book. An official listing and a signed ask can both be bought. The day-output price is the ask divided by estimated BEM over 24 hours. Hash is the weight counted for mining. A dotted word shows a note while the pointer is on it, and the note hides when the pointer leaves. This site charges an extra 0.20%, paid first. If the later fill does not happen, that fee is not returned.",
     ],
   },
   {
@@ -264,7 +265,8 @@ const en: Section[] = [
   {
     h: "Spot",
     ps: [
-      `Workshop spot is an X Layer order book. It is not the desk. One contract holds four books. TAPE, NAND and LATCH are quoted in USDT0. Each circuit is priced on its own. One price is one level, and the earlier order stands in front. The buyer pays that level. The seller receives 99.8 percent. The 0.2 percent is paid to the fee address. Size that can cross fills at once. The remainder rests. The page states the size offered by asks, the size bid, the prints read, the fees collected, and, at the price entered, how much would fill and how much would rest. The fee, both tokens, the transistors, the circuits and the fee address are written in the contract. There is no administrator. The fee cannot be changed and the contract cannot be upgraded. Assets sent to the contract outside an order cannot be recovered. The address is ${TAPE_SPOT}, and it is deployed. Every device reads this contract.`,
+      `Workshop spot is an X Layer order book. It is not the desk. One contract holds four books. TAPE, NAND and LATCH are quoted in USDT0. Each circuit is priced on its own. One price is one level, and the earlier order stands in front. The buyer pays that level. The seller receives 99.8 percent. The 0.2 percent is paid to the fee address. Size that can cross fills at once. The remainder rests. The page states the size offered by asks, the size bid, the prints read, the fees collected, and, at the price entered, how much would fill and how much would rest. NAND and LATCH are whole numbers. Switching markets clears the previous book. An empty market is not shown as zero, and another coin's orders are not left on it. The fee, both tokens, the transistors, the circuits and the fee address are written in the contract. There is no administrator. The fee cannot be changed and the contract cannot be upgraded. Assets sent to the contract outside an order cannot be recovered. The address is ${TAPE_SPOT}, and it is deployed. Every device reads this contract.`,
+      "Circuits are separate from TAPE, NAND and LATCH. The book lists only circuits that are already offered. Circuits still in the wallet, and circuits still locked, are under Mine. They are not written into the book. Pick a row under Mine, then enter a USDT0 ask. The buyer pays that ask. The seller receives 99.8 percent. Each row shows shape, hash, ask, the 0.2 percent, what the seller receives, estimated daily output, the day-output price, and the seller. Hash is the gate count. Estimated daily output is today's emission times that gate count, divided by network weight, and it assumes the circuit is already mining. If it has not been started, that figure is not a receipt. The day-output price is the ask divided by that estimate. The unit is USDT0 per 1 TAPE per day. It is for comparison. Share of the network is the gate count divided by the current network weight. A dotted word shows a note while the pointer is on it, and the note hides when the pointer leaves. Fewer than two prints do not draw a chart. This circuit contract records inputs, outputs, state and gates. It does not record how many NAND and LATCH one circuit used, so this page does not show a crystal average.",
       "The mine page is claims, staking, burns, and the reserve. NAND, LATCH, and circuits are under TAPELIQUID in the top bar. Transistor contracts are under tapeout. Minting has ended and the mint control is no longer shown. NAND and LATCH already held in a wallet may still be taped out, or sold on TAPELIQUID.",
     ],
   },
@@ -388,6 +390,7 @@ const specZh = [
   ["晶圆与电路锁仓", "半年、一年、三年、四年、五年"],
   ["一张流片", "18,000 NAND，或 30,000 LATCH。更大写不进链"],
   ["电路何时在", "回执成功就在链上。页面名单稍后才显示"],
+  ["电路现货", "按张。卖方实收 99.8%。日产能价是估算，没开工不是到账"],
 ];
 
 const specEn = [
@@ -403,6 +406,7 @@ const specEn = [
   ["Wafer and circuit lock", "6 months, 1 year, 3 years, 4 years, 5 years"],
   ["One tape-out", "18,000 NAND, or 30,000 LATCH. Larger than that does not fit"],
   ["When the circuit exists", "On chain when the receipt succeeds. The page list shows it later"],
+  ["Circuit spot", "Sold whole. The seller receives 99.8 percent. The day price is an estimate, not a receipt"],
 ];
 
 const nowZh = [
