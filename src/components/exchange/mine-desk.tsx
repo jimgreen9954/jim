@@ -8,8 +8,6 @@ import { connectXLayer, XLAYER } from "@/lib/xlayer";
 import { StakeDesk } from "@/components/exchange/stake-desk";
 import { BurnDesk } from "@/components/exchange/burn-desk";
 import { TapeDesk } from "@/components/exchange/tape-desk";
-import { TapeSpotDesk } from "@/components/exchange/tape-spot";
-import { TransistorDesk } from "@/components/exchange/transistor-desk";
 
 export function MineDesk() {
   const lang = useExchange((s) => s.lang);
@@ -25,7 +23,6 @@ export function MineDesk() {
   const [busy, setBusy] = useState(false);
   const [sheet, setSheet] = useState<"claim" | "stake" | "ash" | "bid">("claim");
   const [networkOpen, setNetworkOpen] = useState(false);
-  const [trade, setTrade] = useState<null | "bsc" | "x">(null);
 
   useEffect(() => onAccount((next) => setAccount(next)), []);
 
@@ -156,16 +153,6 @@ export function MineDesk() {
           </div>
         ) : networkOpen ? <p className="border-t border-gold/40 px-3 py-3 text-xs text-ink/55">{zh ? "链上还没读到。失败不会写成 0。" : "The chain has not answered. A miss is not written as zero."}</p> : null}
       </article>
-      <div className="grid grid-cols-2 border border-gold">
-        <button type="button" onClick={() => setTrade((cur) => cur === "bsc" ? null : "bsc")} className={`min-h-11 px-2 text-left text-sm ${trade === "bsc" ? "bg-ink text-paper" : ""}`}>
-          <span className={trade === "bsc" ? "text-gold" : "text-ink/45"}>tapeout </span>{zh ? "晶体管合约" : "contracts"}
-        </button>
-        <button type="button" onClick={() => setTrade((cur) => cur === "x" ? null : "x")} className={`min-h-11 border-l border-gold px-2 text-left text-sm ${trade === "x" ? "bg-ink text-paper" : ""}`}>
-          TAPELIQUID
-        </button>
-      </div>
-      {trade === "bsc" ? <TransistorDesk /> : null}
-      {trade === "x" ? <TapeSpotDesk zh={zh} lanes={[1, 2]} /> : null}
       <p className="text-xs tracking-widest text-gold">{zh ? "领取" : "Claim"}</p>
       <div className="grid grid-cols-2 border border-gold lg:grid-cols-4">
         <button type="button" onClick={() => setSheet("claim")} className={`min-h-11 px-1 text-xs sm:text-sm ${sheet === "claim" ? "bg-ink text-paper" : ""}`}>{zh ? "领取" : "Claim"}</button>
