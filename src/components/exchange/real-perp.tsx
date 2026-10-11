@@ -22,12 +22,14 @@ import {
   KNOWN_XPERP,
   liquidatePerp,
   openPerp,
+  pokeXBem,
   pxText,
   readChainPurse,
   readPerp,
   readRebate,
   readBoard,
   savedDesk,
+  savedXBemPerp,
   selectDesk,
   registerCode,
   activeBook,
@@ -188,6 +190,7 @@ export function RealPerp() {
   const c = copy[lang];
   const [chain, setChain] = useState<Desk>(savedDesk());
   const [perp, setPerp] = useState(() => bookOf(savedDesk()));
+  const [xbem, setXbem] = useState(savedXBemPerp);
   const [account, setAccount] = useState<string | null>(currentAccount());
   const [view, setView] = useState<PerpView | null>(null);
   const [margin, setMargin] = useState("1");
@@ -229,7 +232,9 @@ export function RealPerp() {
     const id = view.myDeal.toString();
     if (row.deal && row.deal !== id) return;
     if (!row.deal && row.before != null && row.before === id) return;
-    const px = live && live > 0 ? live : view.mark > 0n ? Number(formatUnits(view.mark, 18)) : 0;
+    const px = chain === "xlayer"
+      ? (view.mark > 0n ? Number(formatUnits(view.mark, 18)) : 0)
+      : (live && live > 0 ? live : view.mark > 0n ? Number(formatUnits(view.mark, 18)) : 0);
     if (!(px > 0)) return;
     const hit = row.long ? px >= row.tp || px <= row.sl : px <= row.tp || px >= row.sl;
     if (!hit) return;
@@ -333,11 +338,14 @@ export function RealPerp() {
           if (!dead) setBoard(rows);
         })
         .catch(() => undefined);
-      getCandles({ data: frame })
-        .then((next) => {
-          if (!dead) setPrices(next);
-        })
-        .catch(() => undefined);
+      if (chain === "xlayer") setPrices([]);
+      else {
+        getCandles({ data: frame })
+          .then((next) => {
+            if (!dead) setPrices(next);
+          })
+          .catch(() => undefined);
+      }
     };
     load();
     const timer = window.setInterval(load, 12000);
@@ -346,6 +354,14 @@ export function RealPerp() {
       window.clearInterval(timer);
     };
   }, [perp, account, hash, frame, chain]);
+
+  useEffect(() => {
+    if (chain !== "xlayer" || !account || !xbem) return;
+    const id = window.setInterval(() => {
+      pokeXBem(account).catch(() => undefined);
+    }, 35000);
+    return () => window.clearInterval(id);
+  }, [chain, account, xbem]);
 
   const fail = (err: unknown) => {
     const code = (err as { code?: number }).code;
@@ -423,7 +439,9 @@ export function RealPerp() {
         { id: "push", margin: "10", lev: 10 },
       ]
     : presets;
-  const markN = live && live > 0 ? live : view && view.mark > 0n ? Number(formatUnits(view.mark, 18)) : 0;
+  const markN = chain === "xlayer"
+    ? (view && view.mark > 0n ? Number(formatUnits(view.mark, 18)) : 0)
+    : (live && live > 0 ? live : view && view.mark > 0n ? Number(formatUnits(view.mark, 18)) : 0);
   const entryN = view && view.dealEntry > 0n ? Number(formatUnits(view.dealEntry, 18)) : 0;
   const pick = (nextMargin: string, nextLev: number) => {
     setMargin(nextMargin);
@@ -464,7 +482,7 @@ export function RealPerp() {
         {chain === "xlayer" && !/^0x[a-fA-F0-9]{40}$/.test(KNOWN_XPERP) ? (
           <p className="text-sm leading-relaxed xl:col-span-12">{c.xOpen}</p>
         ) : null}
-        {chain === "xlayer" && !/^0x[a-fA-F0-9]{40}$/.test(perp) ? (
+        {chain === "xlayer" && !xbem ? (
           <button
             type="button"
             className="min-h-12 bg-ink text-paper xl:col-span-12"
@@ -481,6 +499,7 @@ export function RealPerp() {
                   setAccount(from);
                   const addr = await deployXLayer(from, (step) => setNote(steps[step - 1]));
                   setPerp(addr);
+                  setXbem(addr);
                   setNote(addr);
                 } catch (err) {
                   fail(err);
@@ -490,7 +509,7 @@ export function RealPerp() {
               })();
             }}
           >
-            {c.deployX}
+            {lang === "zh" ? "部署读 X Layer 池子的新永续" : "Deploy the book that reads the X Layer pools"}
           </button>
         ) : null}
         {link ? (
@@ -973,8 +992,8 @@ export function RealPerp() {
                         v:
                           chain === "xlayer"
                             ? lang === "zh"
-                              ? "由 BSC 池子推进，每 30 秒最多挪一点。没有资金费。没有保险基金，没有自动减仓。"
-                              : "Pushed from the BSC pool, a small step every 30 seconds. No funding. No insurance fund. No auto-deleveraging."
+                              ? "读 X Layer 的 OKB/BEM 和 USDT0/WOKB。每 30 秒最多挪 0.5%。不再用 BSC。没有资金费。没有保险基金，没有自动减仓。"
+                              : "Reads the X Layer OKB/BEM and USDT0/WOKB pools. At most 0.5% every 30 seconds. Not the BSC price. No funding. No insurance fund. No auto-deleveraging."
                             : lang === "zh"
                               ? "Pancake 池大约 10 分钟均价。没有资金费。没有保险基金，没有自动减仓。"
                               : "About a 10-minute Pancake average. No funding. No insurance fund. No auto-deleveraging.",

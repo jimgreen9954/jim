@@ -15,6 +15,8 @@ const XPERP_FIXED = "tapeliquid-xperp-fixed";
 const XPERP_HOLD = "tapeliquid-xperp-hold";
 const XMARK_FIXED = "tapeliquid-xmark-fixed";
 const XMARK_HOLD = "tapeliquid-xmark-hold";
+const XBEM_MARK_KEY = "tapeliquid-xbem-mark";
+const XBEM_PERP_KEY = "tapeliquid-xbem-perp";
 export const X_USDT = "0x779Ded0c9e1022225f8E0630b35a9b54bE713736" as const;
 
 export type Desk = "bsc" | "xlayer";
@@ -400,8 +402,14 @@ export function savedXPerp(): string {
 
 const BSC_BOOK_KEY = "tapeliquid-bsc-book";
 
+export function savedXBemPerp(): string {
+  if (typeof window === "undefined") return "";
+  const saved = window.localStorage.getItem(XBEM_PERP_KEY) ?? "";
+  return /^0x[a-fA-F0-9]{40}$/.test(saved) ? saved : "";
+}
+
 export function bookOf(which: Desk = desk): string {
-  if (which === "xlayer") return KNOWN_XPERP;
+  if (which === "xlayer") return savedXBemPerp() || KNOWN_XPERP;
   return BSC_REBATE;
 }
 
@@ -885,57 +893,57 @@ async function bscTick(): Promise<number> {
   return row[1];
 }
 
-export async function pushMark(from: string): Promise<void> {
-  const mark = KNOWN_XMARK;
+const pokeAbi = [
+  { name: "poke", type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
+] as const;
+
+export async function pokeXBem(from: string): Promise<void> {
+  const mark = typeof window === "undefined" ? "" : window.localStorage.getItem(XBEM_MARK_KEY) ?? "";
+  if (!/^0x[a-fA-F0-9]{40}$/.test(mark)) return;
   const was = desk;
   desk = "xlayer";
   try {
-    const tick = await bscTick();
-    const data = encodeFunctionData({ abi: pushAbi, functionName: "push", args: [tick] });
-    await send(from, mark as Hex, data);
-  } catch {
+    const data = encodeFunctionData({ abi: pokeAbi, functionName: "poke" });
+    await send(from, mark as Hex, data, 400_000n);
+  } finally {
     desk = was;
-    return;
   }
-  desk = was;
+}
+
+export async function pushMark(from: string): Promise<void> {
+  await pokeXBem(from);
 }
 
 export async function deployXLayer(from: string, onStep?: (step: 1 | 2 | 3) => void): Promise<string> {
+  if (from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("oracle");
   const was = desk;
   desk = "xlayer";
   try {
     const rpc = await client();
-    let mark = typeof window !== "undefined" ? window.localStorage.getItem(XMARK_KEY) ?? "" : "";
-    const fresh = !/^0x[a-fA-F0-9]{40}$/.test(mark);
+    let mark = typeof window !== "undefined" ? window.localStorage.getItem(XBEM_MARK_KEY) ?? "" : "";
     if (!/^0x[a-fA-F0-9]{40}$/.test(mark)) {
       onStep?.(1);
-      const markHash = await send(from, undefined, MARK_BYTECODE);
-      const markReceipt = await rpc.waitForTransactionReceipt({ hash: markHash, timeout: 90_000 });
+      const markHash = await send(from, undefined, MARK_BYTECODE, 6_000_000n);
+      const markReceipt = await rpc.waitForTransactionReceipt({ hash: markHash, timeout: 120_000 });
       mark = markReceipt.contractAddress ?? "";
-      if (!mark) throw new Error("revert");
-      window.localStorage.setItem(XMARK_KEY, mark);
+      if (markReceipt.status !== "success" || !mark) throw new Error("revert");
+      window.localStorage.setItem(XBEM_MARK_KEY, mark);
     }
     onStep?.(2);
-    try {
-      const tick = await bscTick();
-      const push = encodeFunctionData({ abi: pushAbi, functionName: "push", args: [tick] });
-      await send(from, mark as Hex, push);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "";
-      if (fresh || message !== "revert") throw err;
-    }
-    const existing = savedXPerp();
-    if (/^0x[a-fA-F0-9]{40}$/.test(existing)) return existing;
+    const poke = encodeFunctionData({ abi: pokeAbi, functionName: "poke" });
+    await send(from, mark as Hex, poke, 400_000n);
+    const existing = typeof window !== "undefined" ? window.localStorage.getItem(XBEM_PERP_KEY) ?? "" : "";
+    if (/^0x[a-fA-F0-9]{40}$/.test(existing) && (await xBookState(existing)) === "ready") return existing;
     onStep?.(3);
     const args = encodeAbiParameters(
       [{ type: "address" }, { type: "address" }, { type: "uint256" }],
       [X_USDT, mark as Hex, 1_000_000n],
     );
     const data = (PERP_BYTECODE + args.slice(2)) as Hex;
-    const perpHash = await send(from, undefined, data);
-    const perpReceipt = await rpc.waitForTransactionReceipt({ hash: perpHash, timeout: 90_000 });
+    const perpHash = await send(from, undefined, data, 8_000_000n);
+    const perpReceipt = await rpc.waitForTransactionReceipt({ hash: perpHash, timeout: 180_000 });
     if (perpReceipt.status !== "success" || !perpReceipt.contractAddress) throw new Error("revert");
-    window.localStorage.setItem(XPERP_KEY, perpReceipt.contractAddress);
+    window.localStorage.setItem(XBEM_PERP_KEY, perpReceipt.contractAddress);
     return perpReceipt.contractAddress;
   } finally {
     desk = was;
@@ -958,9 +966,8 @@ export async function deployFixedX(from: string): Promise<string> {
       window.localStorage.setItem(XMARK_HOLD, mark);
       window.localStorage.setItem(XMARK_FIXED, mark);
     }
-    const tick = await bscTick();
-    const push = encodeFunctionData({ abi: pushAbi, functionName: "push", args: [tick] });
-    await send(from, mark as Hex, push, 250_000n);
+    const poke = encodeFunctionData({ abi: pokeAbi, functionName: "poke" });
+    await send(from, mark as Hex, poke, 400_000n);
     const existing = window.localStorage.getItem(XPERP_HOLD) ?? "";
     if (/^0x[a-fA-F0-9]{40}$/.test(existing) && (await xBookState(existing)) === "ready") return existing;
     const args = encodeAbiParameters(
