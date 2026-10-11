@@ -6,7 +6,7 @@ import { getProvider } from "@/lib/wallet";
 import { DEPLOYED, connectXLayer, XLAYER } from "@/lib/xlayer";
 
 /** X Layer order book. Creation bytecode matches contracts/TapeSpot.sol. No admin. */
-export const TAPE_SPOT = "" as const;
+export const TAPE_SPOT = "0x0df2C3790Cc50453925D1cd76F06DFf4856Ba3ce" as const;
 export const SPOT_FEE = FEE_TO;
 
 const KEY = "tapeliquid-spot";
@@ -50,6 +50,13 @@ export function spotAddress(): Hex | null {
   if (typeof window === "undefined") return null;
   const saved = window.localStorage.getItem(KEY) ?? "";
   return /^0x[a-fA-F0-9]{40}$/.test(saved) ? saved as Hex : null;
+}
+
+export async function spotReady(): Promise<boolean> {
+  const spot = spotAddress();
+  if (!spot) return false;
+  const code = await client.getBytecode({ address: spot });
+  return !!code && code !== "0x";
 }
 
 export async function rememberSpot(address: string): Promise<Hex> {
@@ -198,12 +205,15 @@ async function call(from: string, data: Hex) {
 }
 
 export async function deploySpot(from: string): Promise<string> {
+  if (from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("onlyfee");
   const hash = await send(from, undefined, TAPE_SPOT_BYTECODE);
   const receipt = await client.getTransactionReceipt({ hash });
-  if (!receipt.contractAddress) throw new Error("revert");
-  window.localStorage.setItem(KEY, receipt.contractAddress);
+  const landed = receipt.contractAddress ?? "";
+  if (!landed) throw new Error("revert");
+  if (TAPE_SPOT && landed.toLowerCase() !== TAPE_SPOT.toLowerCase()) throw new Error("nonce");
+  window.localStorage.setItem(KEY, landed);
   window.localStorage.setItem(BLOCK_KEY, receipt.blockNumber.toString());
-  return receipt.contractAddress;
+  return landed;
 }
 
 export function spotBase(market: SpotMarket, amount: string): bigint {

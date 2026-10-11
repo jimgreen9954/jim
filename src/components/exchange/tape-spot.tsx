@@ -15,8 +15,8 @@ import {
   readSpotBook,
   readSpotPrints,
   readSpotPurse,
-  rememberSpot,
   spotAddress,
+  spotReady,
   spotBase,
   spotPrice,
   usdtText,
@@ -114,7 +114,7 @@ function Row({ level, max, bid, market, onPick }: { level: Level; max: bigint; b
 export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (SpotMarket | "circuit")[] }) {
   const choices = lanes ?? ([0, 1, 2, "circuit"] as const);
   const [spot, setSpot] = useState<string | null>(null);
-  const [pasted, setPasted] = useState("");
+  const [ready, setReady] = useState(false);
   const [account, setAccount] = useState<string | null>(currentAccount());
   const [lane, setLane] = useState<SpotMarket | "circuit">(choices[0] ?? 0);
   const [side, setSide] = useState<"buy" | "sell">("buy");
@@ -137,9 +137,19 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
 
   useEffect(() => onAccount(setAccount), []);
   useEffect(() => setSpot(spotAddress()), []);
+  useEffect(() => {
+    if (!spot) return;
+    let dead = false;
+    const look = () => {
+      spotReady().then((ok) => { if (!dead) setReady(ok); }).catch(() => { if (!dead) setReady(false); });
+    };
+    look();
+    const id = window.setInterval(look, 8000);
+    return () => { dead = true; window.clearInterval(id); };
+  }, [spot]);
 
   useEffect(() => {
-    if (!spot || lane === "circuit") return;
+    if (!spot || !ready || lane === "circuit") return;
     let dead = false;
     const pull = () => {
       if (document.hidden) return;
@@ -168,10 +178,10 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
     const onShow = () => { if (!document.hidden) pull(); };
     document.addEventListener("visibilitychange", onShow);
     return () => { dead = true; window.clearInterval(id); document.removeEventListener("visibilitychange", onShow); };
-  }, [spot, market, account, lane]);
+  }, [spot, ready, market, account, lane]);
 
   useEffect(() => {
-    if (!spot || lane !== "circuit") return;
+    if (!spot || !ready || lane !== "circuit") return;
     let dead = false;
     const pull = () => {
       Promise.all([readListings(), account ? myCircuits(account) : Promise.resolve([])]).then(([rows, mine]) => {
@@ -183,7 +193,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
     pull();
     const id = window.setInterval(pull, 15000);
     return () => { dead = true; window.clearInterval(id); };
-  }, [spot, lane, account]);
+  }, [spot, ready, lane, account]);
 
   const askBook = useMemo(() => sumSide(asks, market), [asks, market]);
   const bidBook = useMemo(() => sumSide(bids, market), [bids, market]);
@@ -201,14 +211,18 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
     setBad(false);
     setNote(zh ? "正在连接 X Layer 钱包。请在钱包中确认。" : "Connecting the X Layer wallet. Confirm the request there.");
     task().then((result) => {
-      if (typeof result === "string" && /^0x[a-fA-F0-9]{40}$/.test(result)) setSpot(result);
-      else setSpot(spotAddress());
+      if (typeof result === "string" && /^0x[a-fA-F0-9]{40}$/.test(result)) {
+        setSpot(result);
+        setReady(true);
+      } else setSpot(spotAddress());
       setBad(false);
       setNote(ok);
     }).catch((err: unknown) => {
       const text = err instanceof Error ? err.message : "";
       setBad(true);
       if ((err as { code?: number }).code === 4001) setNote(zh ? "签名取消了。币还在钱包。" : "Cancelled. The coins stayed in the wallet.");
+      else if (text === "onlyfee") setNote(zh ? "只有收费地址能签这一次。" : "Only the fee address can sign this.");
+      else if (text === "nonce") setNote(zh ? "收费地址在这之前又发过别的交易，地址对不上。把新地址发过来，我改页面。" : "The fee address sent another transaction first, so the address no longer matches. Send the new one and the page will be updated.");
       else if (text === "amount" || text === "price") setNote(zh ? "价格和数量都要填。NAND 和 LATCH 只收整数。" : "Enter a price and an amount. NAND and LATCH are whole numbers.");
       else if (/self/i.test(text)) setNote(zh ? "这一档是你自己挂的。先撤掉，再吃。" : "That level is your own. Cancel it before taking it.");
       else if (text === "chain") setNote(zh ? "钱包还停在别的链。切到 X Layer 再签。" : "The wallet is on another chain. Switch to X Layer, then sign.");
@@ -242,17 +256,14 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
     setAmount(market === 0 ? formatUnits(cut, 8) : cut.toString());
   };
 
-  if (!spot) {
+  if (!ready) {
     return (
       <article className="border border-gold bg-card px-3 py-4">
         <p className="text-[11px] tracking-[0.22em] text-gold">{zh ? "现货" : "Spot"}</p>
-        <h3 className="mt-1 font-display text-2xl italic sm:text-3xl">{zh ? "本机尚未保存订单簿地址" : "No order-book address is saved on this device"}</h3>
-        <p className="mt-2 text-sm leading-6">{zh ? "收费地址在 X Layer 上的合约里没有这份订单簿。钱包记录里如果还有部署回执，把地址贴上。没有的话，用下面的按钮再部署一次。" : "The fee address has no order book among its X Layer contracts. Paste the address from the wallet receipt, or deploy it again below."}</p>
-        <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-          <input value={pasted} onChange={(event) => setPasted(event.target.value)} placeholder="0x" className="min-h-12 border border-gold bg-transparent px-2 font-mono text-sm" />
-          <button type="button" disabled={busy} className="min-h-12 border border-gold px-4 text-sm disabled:opacity-40" onClick={() => run(() => rememberSpot(pasted), zh ? "地址已保存。本机可以交易。" : "Address saved. This device can trade.")}>{zh ? "使用该地址" : "Use this address"}</button>
-        </div>
-        <button type="button" disabled={busy} className="mt-2 min-h-12 w-full bg-ink px-4 text-sm text-paper disabled:opacity-40" onClick={() => run(() => deploySpot(account ?? ""), zh ? "现货合约已部署。请将地址交回，以便写入页面。" : "Deployed. Return the address so it can be written into the page.")}>{busy ? (zh ? "等待钱包确认" : "Waiting for the wallet") : (zh ? "重新部署" : "Deploy again")}</button>
+        <h3 className="mt-1 font-display text-2xl italic sm:text-3xl">{zh ? "订单簿还差一次签名" : "The book needs one signature"}</h3>
+        <p className="mt-2 text-sm leading-6">{zh ? "地址已经写在页面上。用收费地址签下面这一次，不要先做别的转账。签完之后，每台设备都能看到盘口。" : "The address is already on the page. Sign this once from the fee address, and do not send another transfer first. After that, every device sees the book."}</p>
+        <p className="mt-2 break-all font-mono text-xs">{spot}</p>
+        <button type="button" disabled={busy} className="mt-3 min-h-12 w-full bg-ink px-4 text-sm text-paper disabled:opacity-40" onClick={() => run(() => deploySpot(account ?? ""), zh ? "订单簿已上线。" : "The book is live.")}>{busy ? (zh ? "等待钱包确认" : "Waiting for the wallet") : (zh ? "部署订单簿" : "Deploy the book")}</button>
         {note ? <p className={`mt-2 text-sm leading-6 ${bad ? "text-sell" : ""}`}>{note}</p> : null}
       </article>
     );
