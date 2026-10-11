@@ -64,11 +64,13 @@ export function WorkshopRisk({ zh }: { zh: boolean }) {
   );
 
   return (
-    <article className="border border-gold bg-card px-3 py-3">
-      <p className="text-sm leading-6">{zh ? "交易可以亏光。只用能接受归零的资金，仓位自己安排。本站不判断该买多少，也不保证回本。" : "A trade can go to zero. Use only money you can lose, and size the position yourself. This site does not decide the size and does not promise a break-even."}</p>
-      <button type="button" onClick={() => setOpen((on) => !on)} className="mt-2 min-h-11 text-sm underline decoration-gold underline-offset-4">{open ? (zh ? "收起盈亏计算" : "Hide the calculator") : (zh ? "盈亏、亏损、回本" : "Profit, loss, break-even")}</button>
+    <div>
+      <button type="button" onClick={() => setOpen((on) => !on)} className="min-h-10 text-sm underline decoration-gold underline-offset-4">
+        {open ? (zh ? "收起盈亏计算" : "Hide the calculator") : (zh ? "盈亏、亏损、回本" : "Profit, loss, break-even")}
+      </button>
       {open ? (
-        <div className="mt-3 grid gap-3">
+        <div className="mt-2 grid gap-3 border border-gold bg-card px-3 py-3">
+          <p className="text-xs leading-5 text-ink/60">{zh ? "可能亏光。只用能归零的资金。本站不代为决定仓位。" : "It can go to zero. Use only money you can lose. This site does not size the position."}</p>
           <div className="grid grid-cols-2 gap-2">
             <button type="button" onClick={() => setSide("long")} className={`min-h-11 border border-gold text-sm ${side === "long" ? "bg-ink text-paper" : ""}`}>{zh ? "先买后卖" : "Buy, then sell"}</button>
             <button type="button" onClick={() => setSide("short")} className={`min-h-11 border border-gold text-sm ${side === "short" ? "bg-ink text-paper" : ""}`}>{zh ? "先卖后买" : "Sell, then buy"}</button>
@@ -136,6 +138,6 @@ export function WorkshopRisk({ zh }: { zh: boolean }) {
           ) : <p className="text-sm text-ink/60">{zh ? "填入场价之后才计算。止损要在入场价的亏损一侧。" : "Enter a price to calculate. The stop has to be on the losing side of the entry."}</p>}
         </div>
       ) : null}
-    </article>
+    </div>
   );
 }
