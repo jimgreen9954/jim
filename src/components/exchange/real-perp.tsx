@@ -606,6 +606,7 @@ export function RealPerp() {
             <div className="text-right">
               <p className="text-xs tracking-widest text-gold">{c.mark}</p>
               <p className="font-mono text-2xl tabular-nums">{markN > 0 ? markN.toFixed(4) : "—"}</p>
+              {prices.at(-1)?.c ? <p className="font-mono text-xs text-ink/50">{lang === "zh" ? "K 线最后一笔" : "Last candle"} {prices.at(-1)!.c.toFixed(4)}</p> : null}
             </div>
           </div>
           <div className="flex flex-col gap-2 px-3 pt-2">
@@ -869,6 +870,28 @@ export function RealPerp() {
                     </button>
                   ))}
                 </div>
+                {mode === "easy" ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button type="button" onClick={() => setLimit("")} className={`min-h-11 border border-gold text-sm ${limit.trim() ? "" : "bg-ink text-paper"}`}>
+                        {lang === "zh" ? "标记价" : "Mark"} {markN > 0 ? markN.toFixed(4) : ""}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { if (!limit.trim() && markN > 0) setLimit(markN.toFixed(4)); }}
+                        className={`min-h-11 border border-gold text-sm ${limit.trim() ? "bg-ink text-paper" : ""}`}
+                      >
+                        {lang === "zh" ? "自己定价" : "My price"}
+                      </button>
+                    </div>
+                    {limit.trim() ? (
+                      <label className="border border-gold/40 px-3 py-2">
+                        <span className="block text-xs tracking-widest text-gold">{c.limitPrice}</span>
+                        <input value={limit} onChange={(event) => setLimit(event.target.value)} inputMode="decimal" className="w-full bg-transparent font-mono text-3xl outline-none" />
+                      </label>
+                    ) : <p className="text-xs leading-5 text-ink/60">{lang === "zh" ? "这一单用标记价。标记是大约 10 分钟的均价，不是 K 线最后一笔。" : "This order uses the mark. The mark is about a 10-minute average, not the last candle."}</p>}
+                  </>
+                ) : null}
                 {mode === "pro" ? (
                 <label className="border border-gold/40 px-3 py-2">
                   <span className="block text-xs tracking-widest text-gold">{c.limitPrice}</span>

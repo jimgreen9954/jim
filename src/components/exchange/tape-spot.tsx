@@ -114,8 +114,8 @@ function Row({ level, max, bid, market, onPick }: { level: Level; max: bigint; b
 
 export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (SpotMarket | "circuit")[] }) {
   const choices = lanes ?? ([0, 1, 2, "circuit"] as const);
-  const [spot, setSpot] = useState<string | null>(null);
-  const [ready, setReady] = useState(false);
+  const [spot, setSpot] = useState<string | null>(() => spotAddress());
+  const [ready, setReady] = useState(true);
   const [account, setAccount] = useState<string | null>(currentAccount());
   const [lane, setLane] = useState<SpotMarket | "circuit">(choices[0] ?? 0);
   const [side, setSide] = useState<"buy" | "sell">("buy");
@@ -143,7 +143,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
     if (!spot) return;
     let dead = false;
     const look = () => {
-      spotReady().then((ok) => { if (!dead) setReady(ok); }).catch(() => { if (!dead) setReady(false); });
+      spotReady().then((ok) => { if (!dead && !ok) setReady(false); }).catch(() => undefined);
     };
     look();
     const id = window.setInterval(look, 8000);

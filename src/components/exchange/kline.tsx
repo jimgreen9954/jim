@@ -293,9 +293,8 @@ export function Kline({
   const highs = rows.map((bar) => bar.h);
   let lo = Math.min(...lows);
   let hi = Math.max(...highs);
-  const band = Math.max(hi - lo, hi * 0.004, 1e-8);
   for (const extra of [entry, mark]) {
-    if (extra > 0 && extra > lo - band * 0.12 && extra < hi + band * 0.12) {
+    if (extra > 0) {
       lo = Math.min(lo, extra);
       hi = Math.max(hi, extra);
     }
@@ -498,6 +497,8 @@ export function Kline({
           {chg >= 0 ? "+" : ""}
           {fmtPx(chg)} {fmtPct(prev ? chg / prev : 0)}
         </span>
+        {mark > 0 ? <span>{zh ? "标记" : "Mark"} {fmtPx(mark)}</span> : null}
+        <span>{zh ? "这根收盘" : "Close"} {fmtPx(focus.c)}</span>
         <span>O {fmtPx(focus.o)}</span>
         <span>H {fmtPx(focus.h)}</span>
         <span>L {fmtPx(focus.l)}</span>
@@ -723,9 +724,9 @@ export function Kline({
             </text>
           </g>
         ) : null}
-        <rect x={VB_W - PAD.r + 2} y={y(last.c) - 8} width={PAD.r - 4} height={16} fill={upLast ? "var(--color-gold)" : "var(--color-sell)"} />
-        <text x={VB_W - 6} y={y(last.c) + 4} textAnchor="end" fill="var(--color-paper)" fontSize="11" fontFamily="IBM Plex Mono, monospace">
-          {fmtPx(last.c)}
+        <rect x={VB_W - PAD.r + 2} y={y(mark > 0 ? mark : last.c) - 8} width={PAD.r - 4} height={16} fill={upLast ? "var(--color-gold)" : "var(--color-sell)"} />
+        <text x={VB_W - 6} y={y(mark > 0 ? mark : last.c) + 4} textAnchor="end" fill="var(--color-paper)" fontSize="11" fontFamily="IBM Plex Mono, monospace">
+          {fmtPx(mark > 0 ? mark : last.c)}
         </text>
         {hover != null ? (
           <>
