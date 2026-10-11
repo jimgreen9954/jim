@@ -226,6 +226,7 @@ function until<T>(work: Promise<T>, ms: number): Promise<T> {
 }
 
 async function readThroughSite(account: string | null, onHead?: (board: TapeBoard) => void): Promise<TapeBoard> {
+  if (import.meta.env.VITE_TAPE_STATIC === "1") return loadTapeMine(account, onHead, true);
   try {
     const head = boardFrom(await until(getTapeHead({ data: { account: account ?? "" } }), 8_000));
     onHead?.({ ...head, scanning: true, seats: [], scanOk: false });

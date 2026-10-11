@@ -67,8 +67,12 @@ export default defineConfig({
       { find: "@/lib/official-books", replacement: fileURLToPath(new URL("./src/lib/official-books.browser.ts", import.meta.url)) },
       { find: "@/lib/pod", replacement: fileURLToPath(new URL("./src/lib/pod.browser.ts", import.meta.url)) },
       { find: "@/lib/tape-targets", replacement: fileURLToPath(new URL("./src/lib/tape-targets.browser.ts", import.meta.url)) },
+      { find: "@/lib/circuit-board", replacement: fileURLToPath(new URL("./src/lib/circuit-board.browser.ts", import.meta.url)) },
       { find: "@", replacement: src },
     ],
+  },
+  define: {
+    "import.meta.env.VITE_TAPE_STATIC": JSON.stringify("1"),
   },
   server: { fs: { allow: [fileURLToPath(new URL(".", import.meta.url))] } },
   build: {
