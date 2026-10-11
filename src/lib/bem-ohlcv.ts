@@ -2,6 +2,7 @@ export type Candle = { t?: number; o: number; h: number; l: number; c: number; v
 export type CandleFrame = "15s" | "1m" | "5m" | "15m" | "1h" | "4h" | "1d" | "1w" | "1M" | "3M" | "1y";
 
 const POOL = "https://api.geckoterminal.com/api/v2/networks/bsc/pools/0x3098d7a051045000d68ec0360753a40c8cabea31/ohlcv";
+const XPOOL = "https://api.geckoterminal.com/api/v2/networks/x-layer/pools/0x24e2c7d83a298c388872b77619cf654941222db5b9f342e788b218b3f485b6a4/ohlcv";
 
 const direct: Record<Exclude<CandleFrame, "1w" | "1M" | "3M" | "1y">, { path: string; aggregate: number; limit: number }> = {
   "15s": { path: "second", aggregate: 15, limit: 300 },
@@ -27,9 +28,17 @@ function parse(rows: number[][] | undefined): Candle[] {
 }
 
 async function fetchOhlcv(path: string, aggregate: number, limit: number): Promise<Candle[]> {
-  const res = await fetch(`${POOL}/${path}?aggregate=${aggregate}&limit=${limit}&currency=usd`, { headers: { accept: "application/json" } });
+  return fetchBook(POOL, path, aggregate, limit, "");
+}
+
+async function fetchXOhlcv(path: string, aggregate: number, limit: number): Promise<Candle[]> {
+  return fetchBook(XPOOL, path, aggregate, limit, "&token=quote");
+}
+
+async function fetchBook(base: string, path: string, aggregate: number, limit: number, extra: string): Promise<Candle[]> {
+  const res = await fetch(`${base}/${path}?aggregate=${aggregate}&limit=${limit}&currency=usd${extra}`, { headers: { accept: "application/json" } });
   if (!res.ok) {
-    if (limit > 300) return fetchOhlcv(path, aggregate, 300);
+    if (limit > 300) return fetchBook(base, path, aggregate, 300, extra);
     return [];
   }
   const body = (await res.json()) as { data?: { attributes?: { ohlcv_list?: number[][] } } };
@@ -88,6 +97,38 @@ async function load(frame: CandleFrame): Promise<Candle[]> {
   }
   const spec = direct[frame];
   return fetchOhlcv(spec.path, spec.aggregate, spec.limit);
+}
+
+export async function pullXBem(frame: CandleFrame): Promise<Candle[]> {
+  const key = `x:${frame in direct || frame === "1w" || frame === "1M" || frame === "3M" || frame === "1y" ? frame : "1m"}`;
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < 45_000 && hit.rows.length > 0) return hit.rows;
+  try {
+    const rows = await loadX(key.slice(2) as CandleFrame);
+    if (rows.length === 0) return hit?.rows ?? [];
+    cache.set(key, { at: Date.now(), rows });
+    return rows;
+  } catch {
+    return hit?.rows ?? [];
+  }
+}
+
+async function loadX(frame: CandleFrame): Promise<Candle[]> {
+  if (frame === "1w" || frame === "1M" || frame === "3M" || frame === "1y") {
+    const days = await fetchXOhlcv("day", 1, 1000);
+    if (frame === "1w") return fold(days, weekKey);
+    if (frame === "1M") return fold(days, (t) => {
+      const { y, m } = sgtDate(t);
+      return `${y}-${String(m).padStart(2, "0")}`;
+    });
+    if (frame === "3M") return fold(days, (t) => {
+      const { y, m } = sgtDate(t);
+      return `${y}-Q${Math.floor((m - 1) / 3) + 1}`;
+    });
+    return fold(days, (t) => String(sgtDate(t).y));
+  }
+  const spec = direct[frame];
+  return fetchXOhlcv(spec.path, spec.aggregate, spec.limit);
 }
 
 export async function pullBem(frame: CandleFrame): Promise<Candle[]> {

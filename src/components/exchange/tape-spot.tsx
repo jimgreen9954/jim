@@ -247,7 +247,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
       <article className="border border-gold bg-card px-3 py-4">
         <p className="text-[11px] tracking-[0.22em] text-gold">{zh ? "现货" : "Spot"}</p>
         <h3 className="mt-1 font-display text-2xl italic sm:text-3xl">{zh ? "本机尚未保存订单簿地址" : "No order-book address is saved on this device"}</h3>
-        <p className="mt-2 text-sm leading-6">{zh ? "已部署的地址只保存在签署时的浏览器。更换设备会显示为尚未接入。请粘贴地址，或重新部署。" : "A deployed address is kept only in the browser that signed it. Another device is not connected until the address is entered. Paste it, or deploy again."}</p>
+        <p className="mt-2 text-sm leading-6">{zh ? "收费地址在 X Layer 上的合约里没有这份订单簿。钱包记录里如果还有部署回执，把地址贴上。没有的话，用下面的按钮再部署一次。" : "The fee address has no order book among its X Layer contracts. Paste the address from the wallet receipt, or deploy it again below."}</p>
         <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
           <input value={pasted} onChange={(event) => setPasted(event.target.value)} placeholder="0x" className="min-h-12 border border-gold bg-transparent px-2 font-mono text-sm" />
           <button type="button" disabled={busy} className="min-h-12 border border-gold px-4 text-sm disabled:opacity-40" onClick={() => run(() => rememberSpot(pasted), zh ? "地址已保存。本机可以交易。" : "Address saved. This device can trade.")}>{zh ? "使用该地址" : "Use this address"}</button>

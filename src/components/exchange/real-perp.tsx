@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { formatUnits } from "viem";
 import { copy } from "@/lib/copy";
 import { BSC, FEE_TO, connectBsc, pretty, tokenCap, units, type Balances } from "@/lib/bsc";
-import { getCandles, type Candle, type CandleFrame } from "@/lib/candles";
+import { getCandles, getXCandles, type Candle, type CandleFrame } from "@/lib/candles";
 import { currentAccount, onAccount, onOpenLink } from "@/lib/wallet";
 import { useExchange } from "@/lib/exchange-store";
 import { SignCard } from "@/components/exchange/sign-card";
@@ -358,14 +358,12 @@ export function RealPerp() {
           if (!dead) setBoard(rows);
         })
         .catch(() => undefined);
-      if (chain === "xlayer") setPrices([]);
-      else {
-        getCandles({ data: frame })
-          .then((next) => {
-            if (!dead) setPrices(next);
-          })
-          .catch(() => undefined);
-      }
+      const candles = chain === "xlayer" ? getXCandles({ data: frame }) : getCandles({ data: frame });
+      candles
+        .then((next) => {
+          if (!dead) setPrices(next);
+        })
+        .catch(() => undefined);
     };
     load();
     const timer = window.setInterval(load, 12000);
@@ -592,6 +590,7 @@ export function RealPerp() {
           <div className="flex flex-wrap items-end justify-between gap-3 border-b border-gold/30 px-3 py-3">
             <div>
               <p className="font-display text-2xl italic">BEM / USDT</p>
+              {chain === "xlayer" ? <p className="mt-1 max-w-xl text-xs leading-5 text-ink/60">{lang === "zh" ? "K 线是 X Layer 上 OKB/BEM 的成交，按美元计。这口池大约 500 美元，现价约 36 到 40。BSC 的 Pancake 池是另一口，大约 27。两口不互相同步。" : "Candles are fills on the X Layer OKB/BEM pool, in dollars. That pool holds about 500 dollars, so the price sits near 36 to 40. The BSC Pancake pool is a different book, near 27. They do not sync."}</p> : null}
               <p className="mt-1 break-all font-mono text-xs text-ink/60">
                 {perp || "—"}
                 {/^0x[a-fA-F0-9]{40}$/.test(perp) ? (
