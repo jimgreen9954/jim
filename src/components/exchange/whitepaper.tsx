@@ -48,8 +48,8 @@ const zh: Section[] = [
     ps: [
       "先铸造 NAND 或 LATCH，再流片。流片烧掉网表里的晶体管，不能撤回，也不能再铸回来。一张最多 18,000 个 NAND，或 30,000 个 LATCH。更大的网表会失败，晶体管还在钱包里。",
       "NAND 和 LATCH 在 X Layer 铸造，共用额度 2,100,000。未流片的库存可以转让，不算算力。额度用完后只剩转让。",
-      "晶体管合约在工房里，不在交易台。保证金是 BSC 的 USDT。结算参照收费地址写下的 10 分钟均价，不是官网页面上的另一口价。六个标的各自一本。",
-      "晶体管现货和电路现货跟 tapeout.net 的盘口。本站另收 0.20%，先付。官网没有成交，这一笔也不退。",
+      "晶体管合约在工房里，不在交易台。保证金是 BSC 的 USDT。结算参照收费地址写下的 10 分钟均价，不是 tapeout 页面上的另一口价。六个标的各自一本。",
+      "晶体管现货和电路现货跟 tapeout.net 的盘口。本站另收 0.20%，先付。tapeout 没有成交，这一笔也不退。",
     ],
   },
   {
@@ -77,14 +77,14 @@ const zh: Section[] = [
       "库藏在挖矿页，不在交易台。这一格上面是回购，下面是期限质押。回收价为 1 枚整数 TAPE 结算 0.1 USDT0，写在合约中，不随现货变动。不足 1 枚不予接受。只有买方地址 0x585d2DF4B8fDDA783B074555e6F3787e3fCB39D7 可以充入 X Layer 的 USDT0，也只有这个地址可以取回还没花掉的 USDT0 和已经买到的 TAPE。其他地址不能在这里充 USDT0。用户只能卖出整数枚 TAPE，卖出当时收到 USDT0，不能把已卖出的 TAPE 取回。池子不够则整笔失败，不会先收 TAPE。这份合约不加池。旧回购 0x72e28d564A90eF3E76f599bC210454f5360E200C 不再使用。现在这一份是 0x53fa6A76ce9A3fE08698E04a4E9A674bd77a9DfF。",
       "分红不在这份回购合约里。回购合约里原先的质押没有期限，页面已经不再往那里存。期限质押是另一份 X Layer 合约，六档写死：90 天、180 天、270 天、365 天、730 天、1095 天，也就是三个月、六个月、九个月、一年、两年、三年。到期之前本金取不出。奖励可以先领。同一个池子，一个人最多同时有 16 笔没到期的。",
       "质押 TAPE，奖励是 X Layer 的 BEM。质押 X Layer 的 BEM，奖励是 TAPE。页面上「可质押」是这个钱包里还能锁的数量，「已质押」是这个地址已经锁上的本金，下面另写全池。每一笔锁仓写数量、期限和新加坡时间的到期日。没到期不能取本金。到期后同一行签一笔，本金回到钱包。领取只领奖励，不退本金。奖励谁都可以充。还没按 365 天分出去的，只有充入的地址能取回。已经分给质押的不能再取。年化用还没分完的奖励和池子现价来算。有人再质押，或取走还没分完的奖励，年化就变。价格读不到写成 —，不写成 0。这份期限合约没有管理员，不能升级。地址是 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A。直接把币转到合约、不走质押函数的，取不回来。",
-      "BSC 的 BEM 不进这份合约。一份合约读不到另一条链。X Layer 上的 BEM 是 0x60e62Efa9405d6873C5deaBD4E6CC91c25363952。BSC 上的 BEM 是另一份。要质押 BEM 领 TAPE，先在回购旁边打开收起的官方桥，转到 X Layer。点开之后调用的是 TapeOut 的桥，本站不经手，不另收费。TAPE 不能走这座桥。新回购只允许买方地址充入和取回 USDT0，没有管理员，不能升级。0.1 USDT0 和两个代币写在合约里。直接把币转到合约、不走充入或卖出函数的，取不回来。",
+      "BSC 的 BEM 不进这份合约。一份合约读不到另一条链。X Layer 上的 BEM 是 0x60e62Efa9405d6873C5deaBD4E6CC91c25363952。BSC 上的 BEM 是另一份。要质押 BEM 领 TAPE，先在回购旁边打开收起的 tapeout 桥，转到 X Layer。点开之后调用的是 tapeout 的桥，本站不经手，不另收费。TAPE 不能走这座桥。新回购只允许买方地址充入和取回 USDT0，没有管理员，不能升级。0.1 USDT0 和两个代币写在合约里。直接把币转到合约、不走充入或卖出函数的，取不回来。",
     ],
   },
   {
     h: "现货",
     ps: [
       "工房里的现货是 X Layer 上的订单簿，不在交易台。四本账写在同一份合约里：TAPE、NAND、LATCH 用 USDT0 报价，电路一张一个价。同一价格并成一档，先挂的排在前面。买方按那一档的价格支付。卖方实收 99.8%，千分之二进收费地址。吃得上的当场成交，剩下的挂着。没有管理员，不能改费率，不能升级。直接把币转到合约、不走挂单的，取不回来。合约从工房或挖矿页部署，地址写死后大家用同一份。",
-      "挖矿页最上面是两处交易，点开才进。左边是 BSC 晶体管合约，保证金是 BSC 的 USDT。右边是 X Layer 现货晶体管，NAND 和 LATCH 用 USDT0 报价。下面才是领取。铸造已经结束，页面不再放铸造入口。已经在钱包里的 NAND 和 LATCH 可以流片，也可以在这本现货里卖。",
+      "挖矿页最上面是两处交易，点开才进。左边是 tapeout 晶体管合约，保证金是 BSC 的 USDT。右边是 TAPELIQUID，NAND 和 LATCH 用 USDT0 报价。下面才是领取。铸造已经结束，页面不再放铸造入口。已经在钱包里的 NAND 和 LATCH 可以流片，也可以在 TAPELIQUID 里卖。",
     ],
   },
   {
@@ -176,7 +176,7 @@ const zh: Section[] = [
       "这份挖矿合约现在的日排放是 7,200，从部署时开始，不是先 1,000 再切换。它也没有「收费地址签一次改成 7,200」的入口。权重按电路门数，也就是 b*，处理器倍率按 1。q 还没有题目验证，页面不能显示大于 1。",
       "挖矿、TAPE 池、晶圆和电路锁仓，三份都没有管理员，不能升级，不能改期限，不能改费率，也没有救援入口。误转到合约、又没有对应仓位的资产，谁都取不回，页面不会这么转。加池时和池子比例对不上的部分退回给签名的人，不会进别人的份额。",
       "开盘池的 100,000 枚没有另铸。TAPE 池没有管理员，加池即质押，90 天到 3 年，到期才能撤。加池没有九个月这一档。晶圆锁仓没有管理员，期限是 180 天、365 天、3 年、4 年、5 年。锁着的晶圆不能流片，不算算力。电路锁仓是 0x06c877cc158d9ca3547220f9fc156f39bce7013c。同一片电路不能锁两次。回购合约旧地址 0x72e28d564A90eF3E76f599bC210454f5360E200C 不再使用。现在的回购是 0x53fa6A76ce9A3fE08698E04a4E9A674bd77a9DfF，买方写死。期限质押是 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A。两份都没有管理员。TAPE 跨链还没有合约。",
-      "个人中心的持仓可以转出这个钱包还拿着的币、NAND 和 LATCH。一对一是一个地址。一对多每一行一个地址，这一行的数量只进这个地址，按行签名，不经过锁仓合约。先勾确认才能签。页面不跳走。电路在名单里上下滑动勾选，每一片填一个地址，勾几片签几笔。官网合约如果不提供逐个编号，这一页不能代填。",
+      "个人中心的持仓可以转出这个钱包还拿着的币、NAND 和 LATCH。一对一是一个地址。一对多每一行一个地址，这一行的数量只进这个地址，按行签名，不经过锁仓合约。先勾确认才能签。页面不跳走。电路在名单里上下滑动勾选，每一片填一个地址，勾几片签几笔。tapeout 合约如果不提供逐个编号，这一页不能代填。",
     ],
   },
   {
@@ -184,8 +184,8 @@ const zh: Section[] = [
     ps: [
       `收费 ${FEE_TO}。TAPE ${TAPE}。TAPE 挖矿 ${TAPE_MINE}。TAPE 池 0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641。晶圆锁仓 0xA28390924607F08aaD8d03F512B41b6a1c012Ace。电路锁仓 0x06c877cc158d9ca3547220f9fc156f39bce7013c。回购 0x53fa6A76ce9A3fE08698E04a4E9A674bd77a9DfF。旧回购 0x72e28d564A90eF3E76f599bC210454f5360E200C 不再使用。期限质押 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A。TAPELIQUID 电路 ${DEPLOYED.circuits}。TAPELIQUID 晶体管 ${DEPLOYED.transistors}。`,
       `BSC 永续 ${BSC_REBATE}。X Layer 永续 ${KNOWN_XPERP}。标记 ${KNOWN_XMARK}。晶体管永续 ${GATE}。流动性仓位 ${NPM}。`,
-      `BSC BEM ${BSC.bem}。BSC 桥 ${BEM_BRIDGE}。X Layer BEM ${X_BEM}。官网 BEM 挖矿 0x7E2E0DC66a3bD9103E69b766afA62d9f7b697b46。`,
-      `官网晶体管市场 ${OFFICIAL.transistorMarket}。官网电路市场 ${OFFICIAL.circuitMarket}。BEM 池 ${BSC.pool}。`,
+      `BSC BEM ${BSC.bem}。BSC 桥 ${BEM_BRIDGE}。X Layer BEM ${X_BEM}。tapeout BEM 挖矿 0x7E2E0DC66a3bD9103E69b766afA62d9f7b697b46。`,
+      `tapeout 晶体管市场 ${OFFICIAL.transistorMarket}。tapeout 电路市场 ${OFFICIAL.circuitMarket}。BEM 池 ${BSC.pool}。`,
       `X Layer 印鉴领取 ${LOCKED_REBATE.xlayer}。BSC 印鉴领取 ${LOCKED_REBATE.bsc}。`,
       "改规则的当天改这一页。链上合约没有改率入口的，不能用这一页把已经部署的排放改掉。",
     ],
@@ -227,8 +227,8 @@ const en: Section[] = [
     ps: [
       "Mint NAND or LATCH, then tape out. Tape-out burns the transistors in the netlist. It cannot be undone or minted back. One sheet holds at most 18,000 NAND or 30,000 LATCH. A larger netlist fails, and the transistors stay in the wallet.",
       "NAND and LATCH mint on X Layer under one cap of 2,100,000. Untaped stock can be transferred and is not hashrate. After the cap, only transfers remain.",
-      "Transistor perps live in the workshop, not on the desk. Margin is BSC USDT. Settlement uses the 10-minute average posted by the fee address, not a second price from the official page. There are six markets.",
-      "Transistor spot and circuit spot follow the tapeout.net book. This site charges an extra 0.20%, paid first. If the official fill does not happen, that fee is not returned.",
+      "Transistor perps live in the workshop, not on the desk. Margin is BSC USDT. Settlement uses the 10-minute average posted by the fee address, not a second price from the tapeout page. There are six markets.",
+      "Transistor spot and circuit spot follow the tapeout book. This site charges an extra 0.20%, paid first. If the tapeout fill does not happen, that fee is not returned.",
     ],
   },
   {
@@ -256,14 +256,14 @@ const en: Section[] = [
       "The reserve is on the mine page, not on the desk. The top of that tab is the buyback. Timed stake is below it. The price is one whole TAPE for 0.1 USDT0. It is written in the contract and does not follow the spot market. Less than one TAPE is not accepted. Only the buyer address 0x585d2DF4B8fDDA783B074555e6F3787e3fCB39D7 can deposit X Layer USDT0, and only that address can withdraw USDT0 that has not been spent and the TAPE it has bought. No other address can deposit USDT0 here. A user can only sell whole TAPE, is paid USDT0 in that transaction, and cannot take the sold TAPE back. If the pool cannot cover the order, the whole order fails and no TAPE is taken. This contract does not add liquidity. The old buyback 0x72e28d564A90eF3E76f599bC210454f5360E200C is no longer used. This one is 0x53fa6A76ce9A3fE08698E04a4E9A674bd77a9DfF.",
       "Two dividend pools are not inside the buyback contract. The old stake on that contract had no lock, and the page no longer deposits there. Timed stake is a separate X Layer contract. The six terms are fixed at 90, 180, 270, 365, 730 and 1,095 days: 3 months, 6 months, 9 months, 1 year, 2 years and 3 years. Principal cannot leave before expiry. Rewards can be claimed earlier. One person can have 16 open locks in a pool.",
       "Staked TAPE earns X Layer BEM. Staked X Layer BEM earns TAPE. On the page, Available is what this wallet can still lock. Staked is the principal this address has already locked, with the pool total written under it. Each lock shows the amount, the term, and the Singapore expiry. Principal cannot be taken before that time. After expiry, one signature on that row returns the principal. Claim pays rewards only, not principal. Anyone can add rewards. Only the address that added a reward can take back the part that has not vested over 365 days. What has already vested to stakers cannot be taken back. APY uses the unvested pot and the current pool price. It changes when someone stakes or withdraws unvested rewards. A missing price is shown as —, not zero. This timed contract has no admin and cannot be upgraded. The address is 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A. Tokens sent to the contract without the stake function cannot be taken back.",
-      "BSC BEM does not enter this contract. One contract cannot read the other chain. BEM on X Layer is 0x60e62Efa9405d6873C5deaBD4E6CC91c25363952. BEM on BSC is a different contract. To stake BEM for TAPE, open the collapsed official bridge beside the buyback and move it to X Layer. That button calls TapeOut's bridge. This site does not custody it and adds no fee. TAPE cannot use that bridge. The new buyback lets only the buyer address deposit and withdraw USDT0. It has no admin and cannot be upgraded. The 0.1 USDT0 price and the two tokens are in the contract. Tokens sent to the contract without the deposit or sell function cannot be taken back.",
+      "BSC BEM does not enter this contract. One contract cannot read the other chain. BEM on X Layer is 0x60e62Efa9405d6873C5deaBD4E6CC91c25363952. BEM on BSC is a different contract. To stake BEM for TAPE, open the collapsed tapeout bridge beside the buyback and move it to X Layer. That button calls the tapeout bridge. This site does not custody it and adds no fee. TAPE cannot use that bridge. The new buyback lets only the buyer address deposit and withdraw USDT0. It has no admin and cannot be upgraded. The 0.1 USDT0 price and the two tokens are in the contract. Tokens sent to the contract without the deposit or sell function cannot be taken back.",
     ],
   },
   {
     h: "Spot",
     ps: [
       "Workshop spot is an X Layer order book, not the desk. One contract holds four books. TAPE, NAND and LATCH are quoted in USDT0. Each circuit has its own price. One price is one level, and the earlier order stands in front. The buyer pays that price. The seller receives 99.8 percent. The 0.2 percent goes to the fee address. What crosses fills immediately. The rest rests. There is no admin, and the fee cannot be changed. Tokens sent to the contract without an order cannot be taken back. The contract is deployed from the workshop or the mine page, and the address is pinned so everyone uses the same one.",
-      "The mine page opens on two markets. The left one is the BSC transistor contracts, margined in BSC USDT. The right one is X Layer spot transistors, NAND and LATCH quoted in USDT0. Claims are below them. Minting is closed and the mint entry is gone. NAND and LATCH already in a wallet can still be taped, or sold on this book.",
+      "The mine page opens on two markets. The left one is the tapeout transistor contracts, margined in BSC USDT. The right one is TAPELIQUID, NAND and LATCH quoted in USDT0. Claims are below them. Minting is closed and the mint entry is gone. NAND and LATCH already in a wallet can still be taped, or sold on TAPELIQUID.",
     ],
   },
   {
@@ -356,7 +356,7 @@ const en: Section[] = [
       "That mine contract emits 7,200 a day from the moment it was deployed. It does not start at 1,000, and it has no one-time switch to 7,200. Weight is the gate count, which is b*, and the processor multiplier is 1. There is no task score yet, so q is not shown above 1.",
       "The mine, the TAPE pool, and the wafer and circuit lock have no admin. They cannot be upgraded, and the terms and the fee cannot be changed. There is no rescue function. Assets sent to a contract without a matching position cannot be taken back by anyone, and the page does not send them that way. Liquidity that does not match the pool ratio is returned to the signer. It is not added to anyone else's share.",
       "The 100,000 opening allocation was not minted. The TAPE pool has no admin. Adding liquidity stakes it for 90 days to 3 years. That pool has no 9-month term. The wafer lock has no admin. Terms are 180 days, 365 days, 3 years, 4 years, or 5 years. Locked wafers cannot be taped and do not count as weight. The circuit lock is 0x06c877cc158d9ca3547220f9fc156f39bce7013c. The same circuit cannot be locked twice. The old buyback 0x72e28d564A90eF3E76f599bC210454f5360E200C is no longer used. The current one is 0x53fa6A76ce9A3fE08698E04a4E9A674bd77a9DfF, with the buyer fixed. Timed stake is 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A. Neither has an admin. TAPE still has no bridge contract.",
-      "Official BEM is still claimed from the TapeOut mine. It is not the same signature as TAPE. A large tape-out does not mint official BEM.",
+      "tapeout BEM is still claimed from the tapeout mine. It is not the same signature as TAPE. A large tape-out does not mint tapeout BEM.",
       "Holdings on the account page can send coins, NAND, and LATCH still in the wallet. One means one address. Many means one address per row, and that row's amount goes only to that address. Each transfer is its own signature, and none of them go through the lock. The confirmation has to be ticked first. The page does not leave. Circuits are ticked in a scrolling list. Each ticked circuit has one address. One signature per circuit. If an official contract does not list token ids, this page does not invent them.",
     ],
   },
@@ -365,8 +365,8 @@ const en: Section[] = [
     ps: [
       `Fee ${FEE_TO}. TAPE ${TAPE}. TAPE mine ${TAPE_MINE}. TAPE pool 0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641. Wafer lock 0xA28390924607F08aaD8d03F512B41b6a1c012Ace. Circuit lock 0x06c877cc158d9ca3547220f9fc156f39bce7013c. Buyback 0x53fa6A76ce9A3fE08698E04a4E9A674bd77a9DfF. Old buyback 0x72e28d564A90eF3E76f599bC210454f5360E200C is no longer used. Timed stake 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A. TAPELIQUID circuits ${DEPLOYED.circuits}. TAPELIQUID transistors ${DEPLOYED.transistors}.`,
       `BSC perpetual ${BSC_REBATE}. X Layer perpetual ${KNOWN_XPERP}. Mark ${KNOWN_XMARK}. Transistor perpetual ${GATE}. Liquidity positions ${NPM}.`,
-      `BSC BEM ${BSC.bem}. BSC bridge ${BEM_BRIDGE}. X Layer BEM ${X_BEM}. Official BEM mine 0x7E2E0DC66a3bD9103E69b766afA62d9f7b697b46.`,
-      `Official transistor market ${OFFICIAL.transistorMarket}. Official circuit market ${OFFICIAL.circuitMarket}. BEM pool ${BSC.pool}.`,
+      `BSC BEM ${BSC.bem}. BSC bridge ${BEM_BRIDGE}. X Layer BEM ${X_BEM}. tapeout BEM mine 0x7E2E0DC66a3bD9103E69b766afA62d9f7b697b46.`,
+      `tapeout transistor market ${OFFICIAL.transistorMarket}. tapeout circuit market ${OFFICIAL.circuitMarket}. BEM pool ${BSC.pool}.`,
       `X Layer seal claim ${LOCKED_REBATE.xlayer}. BSC seal claim ${LOCKED_REBATE.bsc}.`,
       "When a rule changes, this page changes the same day. A sentence here cannot change an emission that the deployed contract has no function to edit.",
     ],

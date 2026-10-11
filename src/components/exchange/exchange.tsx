@@ -28,7 +28,7 @@ type ShopTab = "gate" | "chips" | "circuits" | "book";
 export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp" | "gate" | "wafer" | "brief" }) {
   const [floor, setFloor] = useState<Floor>(start === "paper" ? "paper" : start === "gate" || start === "wafer" ? "shop" : start === "brief" ? "rules" : "desk");
   const [desk, setDesk] = useState<DeskTab>(start === "perp" ? "perp" : "spot");
-  const [shop, setShop] = useState<ShopTab>(start === "wafer" ? "book" : "gate");
+  const [shop, setShop] = useState<ShopTab>(start === "gate" ? "gate" : "book");
   const [giftOpen, setGiftOpen] = useState(false);
   useEffect(() => {
     const apply = () => {
@@ -214,7 +214,7 @@ function Header({ floor, desk, setFloor, setDesk, setGiftOpen }: { floor: Floor;
       : floor === "desk"
         ? lang === "zh" ? "现货在钱包里成交。台费另付 0.20%。" : "Spot settles in the wallet. The 0.20% desk fee is a separate payment."
         : floor === "shop"
-          ? lang === "zh" ? "BSC 晶体管合约、X Layer 现货、流片。铸造已经结束。" : "BSC transistor contracts, X Layer spot, and tape-out. Minting is closed."
+          ? lang === "zh" ? "tapeout 在一组。TAPELIQUID 是本站现货。铸造已经结束。" : "tapeout sits together. TAPELIQUID is this house. Minting is closed."
         : floor === "canvas"
           ? lang === "zh" ? "先在页面上画。签名之后才流片。" : "Draw it here. It is taped only after you sign."
         : floor === "mine"
@@ -224,7 +224,7 @@ function Header({ floor, desk, setFloor, setDesk, setGiftOpen }: { floor: Floor;
           : lang === "zh" ? "规则以这一页为准。" : "This page is the rulebook.";
   const go = (next: Floor) => {
     if (window.location.pathname.startsWith("/whitepaper")) {
-      window.location.assign(next === "rules" ? "/whitepaper" : `/#${next === "desk" ? desk : next === "shop" ? "gate" : next === "canvas" ? "canvas" : next === "mine" ? "mine" : next === "me" ? "me" : "paper"}`);
+      window.location.assign(next === "rules" ? "/whitepaper" : `/#${next === "desk" ? desk : next === "shop" ? "book" : next === "canvas" ? "canvas" : next === "mine" ? "mine" : next === "me" ? "me" : "paper"}`);
       return;
     }
     if (next === "rules") {
@@ -365,37 +365,48 @@ function PaperFloor() {
 
 function ShopFloor({ shop, setShop }: { shop: ShopTab; setShop: (shop: ShopTab) => void }) {
   const lang = useExchange((s) => s.lang);
+  const zh = lang === "zh";
+  const tapeout = ([
+    ["gate", zh ? "晶体管合约" : "Transistor contracts"],
+    ["chips", zh ? "晶体管" : "Transistors"],
+    ["circuits", zh ? "电路" : "Circuits"],
+  ] as const);
   return (
     <>
+      <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+        <button type="button" onClick={() => setShop("book")} className={`border px-3 py-3 text-left ${shop === "book" ? "border-ink bg-ink text-paper" : "border-gold bg-card"}`}>
+          <span className={`block text-[10px] tracking-[0.22em] ${shop === "book" ? "text-gold" : "text-gold"}`}>{zh ? "本站" : "This house"}</span>
+          <span className="font-display text-3xl italic leading-none">TAPELIQUID</span>
+          <span className={`mt-2 block text-xs ${shop === "book" ? "text-paper/70" : "text-ink/55"}`}>NAND · LATCH · TAPE · {zh ? "电路" : "circuits"}</span>
+        </button>
+        <div className={`border ${shop === "book" ? "border-gold" : "border-ink"} bg-card`}>
+          <p className="px-3 pt-2 text-[10px] tracking-[0.22em] text-gold">tapeout</p>
+          <div className="grid grid-cols-3">
+            {tapeout.map(([id, label]) => (
+              <button key={id} type="button" onClick={() => setShop(id)} className={`min-h-14 px-1 text-sm ${shop === id ? "bg-ink text-paper" : ""}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
       <p className="text-sm text-ink/80">
         {shop === "gate"
-          ? lang === "zh"
-            ? "BSC 晶体管合约。保证金是 BSC 的 USDT，结算用 10 分钟均价。和 BEM 永续不是同一本。"
-            : "BSC transistor contracts. Margin is BSC USDT. Settlement uses a 10-minute average. This is not the BEM book."
+          ? zh
+            ? "tapeout 晶体管合约。保证金是 BSC 的 USDT，结算用 10 分钟均价。和 BEM 永续不是同一本。"
+            : "tapeout transistor contracts. Margin is BSC USDT. Settlement uses a 10-minute average. This is not the BEM book."
           : shop === "book"
-            ? lang === "zh"
-              ? "X Layer 现货。NAND、LATCH、TAPE 用 USDT0 报价，同价并成一档。电路一张一个价。买方按价格付，卖方实收 99.8%。"
-              : "X Layer spot. NAND, LATCH and TAPE are quoted in USDT0. One price is one level. Each circuit has its own price. The buyer pays the price. The seller receives 99.8 percent."
-            : lang === "zh"
-              ? "跟 tapeout.net 的盘口。本站另收 0.20%，先付。官网没有成交，这一笔也不退。铸造已经结束，页面不再放。"
-              : "The book follows tapeout.net. This site charges an extra 0.20%, paid first. If the official fill fails, that fee is not returned. Minting is closed and is no longer on the page."}
+            ? zh
+              ? "TAPELIQUID。NAND、LATCH、TAPE 用 USDT0 报价，同价并成一档。电路一张一个价。买方按价格付，卖方实收 99.8%。"
+              : "TAPELIQUID. NAND, LATCH and TAPE are quoted in USDT0. One price is one level. Each circuit has its own price. The buyer pays the price. The seller receives 99.8 percent."
+            : zh
+              ? "跟 tapeout 的盘口。本站另收 0.20%，先付。tapeout 没有成交，这一笔也不退。"
+              : "The book follows tapeout. This site charges an extra 0.20%, paid first. If the tapeout fill fails, that fee is not returned."}
       </p>
-      <div className="grid grid-cols-2 border border-gold sm:grid-cols-4">
-        {([
-          ["gate", lang === "zh" ? "BSC 合约" : "BSC contracts"],
-          ["book", lang === "zh" ? "X Layer 现货" : "X Layer spot"],
-          ["chips", lang === "zh" ? "官网晶体管" : "Official chips"],
-          ["circuits", lang === "zh" ? "官网电路" : "Official circuits"],
-        ] as const).map(([id, label]) => (
-          <button key={id} type="button" onClick={() => setShop(id)} className={`min-h-11 px-1 text-xs leading-tight sm:text-sm ${shop === id ? "bg-ink text-paper" : ""}`}>
-            {label}
-          </button>
-        ))}
-      </div>
       {shop === "gate" ? <TransistorDesk /> : null}
       {shop === "chips" ? <OfficialDesk mode="chips" /> : null}
       {shop === "circuits" ? <OfficialDesk mode="circuits" /> : null}
-      {shop === "book" ? <TapeSpotDesk zh={lang === "zh"} /> : null}
+      {shop === "book" ? <TapeSpotDesk zh={zh} /> : null}
     </>
   );
 }

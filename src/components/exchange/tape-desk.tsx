@@ -93,7 +93,7 @@ function OfficialBridge({ account, zh, xBem }: { account: string | null; zh: boo
   return (
     <div className="mt-3 border border-gold/40">
       <button type="button" className="flex min-h-11 w-full items-center justify-between px-3 text-left" onClick={() => setOpen((value) => !value)}>
-        <span className="text-sm">{zh ? "官方跨链" : "Official bridge"}</span>
+        <span className="text-sm">{zh ? "tapeout 跨链" : "tapeout bridge"}</span>
         <span className="text-xs text-ink/50">{open ? (zh ? "收起" : "Hide") : (zh ? "打开" : "Open")}</span>
       </button>
       {open ? (
@@ -464,7 +464,7 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
             <p className="text-xs text-ink/70">{zh ? "你的锁仓。到期后这一行才能取回本金。" : "Your locks. Principal can be taken from this row only after expiry."}</p>
             <LockList locks={stake?.bemLocks ?? []} zh={zh} busy={busy || !term} empty={zh ? (!account ? "登入后显示你已经质押的。" : stake && stake.bemStaked > 0n ? "本金已记上。锁仓明细这一次没列出来。" : term ? "你还没有锁仓。" : "部署之后记在这里。") : (!account ? "Shown after sign-in." : stake && stake.bemStaked > 0n ? "Principal is recorded. The lock rows missed this read." : term ? "You have no lock yet." : "Shown after deploy.")} onTake={(index) => run(() => unstakeTermBem(account ?? "", index), zh ? "到期本金已取回。" : "Expired principal is back.", "term", "stake")} />
           </div>
-          <p className="mt-2 text-sm leading-6">{zh ? "可质押是这个钱包里的 X Layer BEM。已质押是你已经锁上的本金。BSC 的 BEM 要先用下面的官方桥转过来，本站不经手。" : "Available is the X Layer BEM in this wallet. Staked is the principal you already locked. BSC BEM has to cross on the official bridge below. This site does not custody it."}</p>
+          <p className="mt-2 text-sm leading-6">{zh ? "可质押是这个钱包里的 X Layer BEM。已质押是你已经锁上的本金。BSC 的 BEM 要先用下面的 tapeout 桥转过来，本站不经手。" : "Available is the X Layer BEM in this wallet. Staked is the principal you already locked. BSC BEM has to cross on the tapeout bridge below. This site does not custody it."}</p>
           <p className="mt-2 text-sm">{zh ? "年化" : "APY"} <span className="font-mono">{bemApy === "—" ? (stake && stake.bemStakedTotal > 0n ? (zh ? "价格没读到" : "Price missed") : (zh ? "还没有质押本金，现在算不出来" : "No principal yet")) : `${bemApy}%`}</span></p>
           <p className="mt-1 text-xs leading-5">{zh ? `未分完 ${stake ? deskText(stake.tapePot, 8) : "—"} TAPE。待领 ${stake ? deskText(stake.tapeOwed, 8) : "—"} TAPE。你还没分完的奖励 ${stake ? deskText(stake.tapeSponsor, 8) : "—"} TAPE。` : `Unvested ${stake ? deskText(stake.tapePot, 8) : "—"} TAPE. Pending ${stake ? deskText(stake.tapeOwed, 8) : "—"} TAPE. Your unvested reward ${stake ? deskText(stake.tapeSponsor, 8) : "—"} TAPE.`}</p>
           <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">

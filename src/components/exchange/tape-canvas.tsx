@@ -240,7 +240,7 @@ export function TapeCanvas() {
       const message = error instanceof Error ? `${error.message} ${"shortMessage" in error ? String((error as { shortMessage?: string }).shortMessage ?? "") : ""}` : "";
       setNote(
         message === "short" || message.startsWith("short")
-          ? zh ? "这台的 NAND 或 LATCH 不够。TAPELIQUID 去晶圆铸造，官网那台去 tapeout.net 铸造。" : "This processor does not have enough NAND or LATCH. Mint TAPELIQUID on the wafer. Mint an official one on tapeout.net."
+          ? zh ? "这台的 NAND 或 LATCH 不够。TAPELIQUID 去晶圆铸造，tapeout 那台去 tapeout.net 铸造。" : "This processor does not have enough NAND or LATCH. Mint TAPELIQUID on the wafer. Mint a tapeout one on tapeout.net."
           : message === "okb" || /insufficient funds/i.test(message)
             ? zh ? `流片费是 ${fee} ${target.chain === "bsc" ? "BNB" : "OKB"}。这个地址不够付费，也付不了 gas。晶体管没动。` : `The tape fee is ${fee} ${target.chain === "bsc" ? "BNB" : "OKB"}. This address cannot pay it. The transistors did not move.`
             : /SSTORE2|too large|out of gas/i.test(message)
@@ -336,7 +336,7 @@ export function TapeCanvas() {
       <div className="flex min-w-0 flex-col gap-3 lg:col-span-8">
         <div className="border border-gold bg-card px-3 py-3">
           <p className="text-xs tracking-widest text-gold">{zh ? "选一台再画" : "Pick a processor, then draw"}</p>
-          <input value={find} onChange={(event) => setFind(event.target.value)} placeholder={zh ? "搜官网处理器，例如 Genesis、Blonskr" : "Search an official processor"} className="mt-2 w-full border border-gold bg-paper px-3 py-2 outline-none" />
+          <input value={find} onChange={(event) => setFind(event.target.value)} placeholder={zh ? "搜 tapeout 处理器，例如 Genesis、Blonskr" : "Search a tapeout processor"} className="mt-2 w-full border border-gold bg-paper px-3 py-2 outline-none" />
           <div className="mt-2 flex gap-2 overflow-x-auto">
             {shownTargets.map((row) => (
               <button key={row.circuits} type="button" onClick={() => setTarget(row)} className={`min-h-10 shrink-0 border px-3 text-sm ${target.circuits.toLowerCase() === row.circuits.toLowerCase() ? "border-ink bg-ink text-paper" : "border-gold"}`}>
@@ -344,7 +344,7 @@ export function TapeCanvas() {
               </button>
             ))}
           </div>
-          <p className="mt-2 text-sm text-ink/70">{zh ? `当前是 ${target.name}。烧掉的是这台的 NAND 和 LATCH。${!find.trim() ? " 其他官网处理器输入名字再选。" : ""}` : `Taping ${target.name}. This burns that processor's NAND and LATCH.`}</p>
+          <p className="mt-2 text-sm text-ink/70">{zh ? `当前是 ${target.name}。烧掉的是这台的 NAND 和 LATCH。${!find.trim() ? " 其他 tapeout 处理器输入名字再选。" : ""}` : `Taping ${target.name}. This burns that processor's NAND and LATCH.`}</p>
         </div>
         <div className="border border-gold bg-card px-3 py-3">
           <p className="text-xs tracking-widest text-gold">{zh ? "画布 · 先在浏览器里跑" : "Canvas · runs in the browser first"}</p>
@@ -588,7 +588,7 @@ export function TapeCanvas() {
             <Row k={zh ? `这地址的 ${unit}` : `${unit} here`} v={okb == null ? "—" : `${formatEther(okb)} ${unit}`} />
             <Row k={zh ? "费进哪里" : "Fee goes"} v={zh ? "这台处理器的协议流片费，不进本站收费地址" : "That processor's protocol fee, not this site's fee address"} />
             <Row k={zh ? "得到" : "You get"} v={zh ? `${target.name} 上的一张电路` : `One circuit on ${target.name}`} />
-            <Row k={zh ? "官网" : "Official"} v={zh ? `同一份合约，已流片 ${total}` : `Same contract, ${total} taped`} />
+            <Row k={zh ? "tapeout" : "tapeout"} v={zh ? `同一份合约，已流片 ${total}` : `Same contract, ${total} taped`} />
           </dl>
           {okbShort ? <p className="mt-2 text-sm text-sell">{zh ? `流片费 ${fee} ${unit}，这个地址只有 ${okb == null ? "—" : formatEther(okb)} ${unit}。NAND 没问题的话，是 ${unit} 不够，所以签不出去。` : `The fee is ${fee} ${unit}. This address has ${okb == null ? "—" : formatEther(okb)} ${unit}.`}</p> : null}
           <label className="mt-3 flex items-start gap-2 text-sm">
@@ -644,7 +644,7 @@ export function TapeCanvas() {
               {copied ? (zh ? "地址已复制" : "Address copied") : (zh ? "复制这台处理器" : "Copy this processor")}
             </button>
             <a className="underline decoration-gold underline-offset-4" href={tapePage(target)} target="_blank" rel="noreferrer">
-              {zh ? "官网同一条" : "Official page"}
+              {zh ? "tapeout 同一条" : "tapeout page"}
             </a>
           </div>
           {note ? <p className={`mt-2 text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
