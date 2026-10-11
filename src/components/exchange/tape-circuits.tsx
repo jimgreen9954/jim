@@ -78,7 +78,7 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
   const [query, setQuery] = useState("");
   const [pick, setPick] = useState<string>("");
   const [price, setPrice] = useState("");
-  const [chart, setChart] = useState(true);
+  const [chart, setChart] = useState(false);
   const [busy, setBusy] = useState(false);
   const [bad, setBad] = useState(false);
   const [note, setNote] = useState("");
@@ -174,9 +174,9 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
   };
 
   return (
-    <section className="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_20rem]">
+    <section className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
       <div className="min-w-0">
-        <div className="grid grid-cols-2 border border-gold/50 text-xs sm:grid-cols-4 xl:grid-cols-7">
+        <div className="grid grid-cols-2 gap-px overflow-hidden bg-gold/30 sm:grid-cols-4 xl:grid-cols-7">
           {[
             [zh ? "在售" : "Listed", String(lists.length)],
             [zh ? "最低卖价" : "Best ask", bestAsk != null ? `${usdtText(bestAsk, 4)}` : "—"],
@@ -186,43 +186,49 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
             [zh ? "锁着" : "Locked", String(locked.length)],
             [zh ? "已读成交" : "Prints", prints.length ? `${usdtText(traded, 2)}` : "—"],
           ].map(([k, v]) => (
-            <p key={k} className="border-gold/30 px-2 py-2 [&:not(:last-child)]:border-r">
-              <span className="block text-[10px] text-ink/45"><Hint label={k} text={tip(zh, k)} /></span>
-              <span className="font-mono text-sm">{v}</span>
+            <p key={k} className="bg-card px-3 py-3">
+              <span className="block text-[10px] tracking-[0.16em] text-ink/40"><Hint label={k} text={tip(zh, k)} /></span>
+              <span className="mt-1 block font-mono text-[15px] tabular-nums">{v}</span>
             </p>
           ))}
         </div>
-        <p className="mt-2 text-[11px] leading-5 text-ink/50">
+        <p className="mt-3 max-w-3xl text-[12px] leading-6 text-ink/50">
           {pace
             ? zh
-              ? `今日排放 ${cutTape(pace.daily)} TAPE，全网权重 ${pace.weight.toLocaleString("en-US")}。日产出是假设这张已经开工。没开工不是实际到账。日产能价的单位是 USDT0 / 每日 1 TAPE。`
-              : `Today's emission is ${cutTape(pace.daily)} TAPE. Network weight is ${pace.weight.toLocaleString("en-US")}. Daily output assumes the circuit is already mining.`
+              ? `今日排放 ${cutTape(pace.daily)} TAPE · 全网权重 ${pace.weight.toLocaleString("en-US")}。日产出按已经开工估算，没开工不是到账。日产能价单位是 USDT0 / 每日 1 TAPE。`
+              : `Emission ${cutTape(pace.daily)} TAPE · weight ${pace.weight.toLocaleString("en-US")}. Daily output assumes the circuit is already mining.`
             : zh ? "全网权重还没读到。不估日产出。" : "Network weight is not in yet."}
         </p>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          {(["book", "mine", "tape"] as const).map((id) => (
-            <button key={id} type="button" onClick={() => setTab(id)} className={`border-b-2 px-2 py-1 text-sm ${tab === id ? "border-ink font-medium" : "border-transparent text-ink/55"}`}>
-              {id === "book" ? (zh ? "在售" : "Book") : id === "mine" ? (zh ? `我的 ${owned.length + locked.length}` : "Mine") : zh ? "成交" : "Prints"}
-            </button>
-          ))}
-          {tab === "book" ? (["day", "ask", "hash"] as const).map((id) => (
-            <button key={id} type="button" onClick={() => setSort(id)} className={`border px-2 py-1 text-xs ${sort === id ? "border-ink" : "border-gold"}`}>
-              {id === "day" ? (zh ? "日产能价" : "Day") : id === "ask" ? (zh ? "卖价" : "Ask") : zh ? "算力" : "Hash"}
-            </button>
-          )) : null}
-          <button type="button" onClick={() => setChart((on) => !on)} className="ml-auto border border-gold px-2 py-1 text-xs">{zh ? "成交 K 线" : "Chart"}</button>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={zh ? "搜编号或卖家" : "Search"} className="min-h-8 w-36 border border-gold/50 bg-transparent px-2 text-xs outline-none" />
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <div className="flex bg-foil/80 p-0.5">
+            {(["book", "mine", "tape"] as const).map((id) => (
+              <button key={id} type="button" onClick={() => setTab(id)} className={`px-3 py-1.5 text-[13px] ${tab === id ? "bg-card text-ink" : "text-ink/45"}`}>
+                {id === "book" ? (zh ? "在售" : "Book") : id === "mine" ? (zh ? `我的 ${owned.length + locked.length}` : "Mine") : zh ? "成交" : "Prints"}
+              </button>
+            ))}
+          </div>
+          {tab === "book" ? (
+            <div className="flex gap-1 text-[12px]">
+              {(["day", "ask", "hash"] as const).map((id) => (
+                <button key={id} type="button" onClick={() => setSort(id)} className={`px-2 py-1 ${sort === id ? "text-ink underline decoration-gold underline-offset-4" : "text-ink/40"}`}>
+                  {id === "day" ? (zh ? "日产能价" : "Day") : id === "ask" ? (zh ? "卖价" : "Ask") : zh ? "算力" : "Hash"}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {bars.length > 1 ? <button type="button" onClick={() => setChart((on) => !on)} className="ml-auto px-2 py-1 text-[12px] text-ink/60 underline decoration-gold/70 underline-offset-4">{chart ? (zh ? "收起 K 线" : "Hide chart") : (zh ? "成交 K 线" : "Chart")}</button> : <span className="ml-auto" />}
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={zh ? "编号或卖家" : "Search"} className="h-8 w-36 border-b border-gold/60 bg-transparent px-1 text-[12px] outline-none placeholder:text-ink/30" />
         </div>
         {chart && bars.length > 1 ? (
-          <div className="mt-2 border border-gold/40 bg-card">
-            <p className="px-2 pt-2 text-[11px] text-ink/45"><Hint label={zh ? "成交价 K 线" : "Trade chart"} text={zh ? "每根是一小时的电路成交价，单位 USDT0。不是日产能价。不满两笔不画。" : "Each candle is one hour of circuit sale prices in USDT0, not the day-output price."} /></p>
+          <div className="mt-3 overflow-hidden bg-card">
+            <p className="px-3 pt-3 text-[11px] tracking-[0.14em] text-ink/40"><Hint label={zh ? "成交价" : "Prints"} text={zh ? "每根是一小时的电路成交价，单位 USDT0。不是日产能价。" : "Each candle is one hour of sale prices in USDT0."} /></p>
             <Kline bars={bars} mark={bestAsk != null ? Number(bestAsk) / 1e6 : 0} lang={zh ? "zh" : "en"} desk="circuit" />
           </div>
-        ) : chart ? <p className="mt-2 text-[11px] text-ink/45">{zh ? "成交不满两笔，不画 K 线。" : "Fewer than two prints. No chart."}</p> : null}
+        ) : null}
         {tab === "book" ? (
-          <div className="mt-2 max-h-[32rem] overflow-auto border border-gold/40">
-            <table className="w-full min-w-[64rem] text-left text-xs">
-              <thead className="sticky top-0 bg-paper text-ink/45">
+          <div className="mt-3 max-h-[34rem] overflow-auto bg-card">
+            <table className="w-full min-w-[64rem] text-left text-[12px]">
+              <thead className="sticky top-0 bg-foil/90 text-ink/45">
                 <tr>
                   {[
                     [zh ? "电路" : "Circuit", zh ? "编号。一整张，不能拆。" : "One circuit. It cannot be split."],
@@ -234,30 +240,31 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
                     [zh ? "估算日产" : "Day", zh ? "按今天的排放和全网权重，开工后大约每天的 TAPE。" : "Estimated TAPE per day if this circuit were mining now."],
                     [zh ? "日产能价" : "Day px", zh ? "卖价除以估算日产。单位是 USDT0 / 每日 1 TAPE。只用来比较。" : "Ask divided by estimated daily TAPE. USDT0 per 1 TAPE per day."],
                     [zh ? "卖家" : "Seller", zh ? "现在挂着这张的地址。" : "The address listing it."],
-                  ].map(([label, text]) => <th key={label} className="px-2 py-2 font-normal"><Hint label={label} text={text} /></th>)}
-                  <th className="sticky right-0 bg-paper px-2 py-2 text-right font-normal">{zh ? "买入" : "Buy"}</th>
+                  ].map(([label, text]) => <th key={label} className="px-3 py-2.5 text-left font-normal tracking-[0.08em]"><Hint label={label} text={text} /></th>)}
+                  <th className="sticky right-0 bg-foil/95 px-3 py-2.5 text-right font-normal tracking-[0.08em]">{zh ? "买入" : "Buy"}</th>
                 </tr>
               </thead>
               <tbody>
-                {book.length === 0 ? <tr><td colSpan={10} className="px-3 py-6 text-ink/55">{zh ? "现在没有在售的电路。钱包里的在「我的」。" : "Nothing is listed. Wallet circuits are under Mine."}</td></tr> : null}
+                {book.length === 0 ? <tr><td colSpan={10} className="px-3 py-10 text-center text-ink/45">{zh ? "现在没有在售的电路。钱包里的在「我的」。" : "Nothing is listed. Wallet circuits are under Mine."}</td></tr> : null}
                 {book.map(({ row, shape, share, day }) => {
                   const mine = account != null && row.seller.toLowerCase() === account.toLowerCase();
                   const cut = row.price * 20n / 10000n;
+                  const on = pick === row.id.toString();
                   return (
-                    <tr key={row.id.toString()} className={`cursor-pointer border-t border-gold/20 ${pick === row.id.toString() ? "bg-gold/10" : ""}`} onClick={() => setPick(row.id.toString())}>
-                      <td className="px-2 py-1.5 font-mono">#{row.id.toString()}</td>
-                      <td className="px-2 py-1.5 font-mono whitespace-nowrap">{shapeLine(shape)}</td>
-                      <td className="px-2 py-1.5 font-mono">{shape ? Number(shape.gates).toLocaleString("en-US") : "—"}</td>
-                      <td className="px-2 py-1.5 font-mono">{usdtText(row.price, 4)}</td>
-                      <td className="px-2 py-1.5 font-mono">{usdtText(cut, 4)}</td>
-                      <td className="px-2 py-1.5 font-mono">{usdtText(row.price - cut, 4)}</td>
-                      <td className="px-2 py-1.5 font-mono">{share != null ? cutTape(share) : "—"}</td>
-                      <td className="px-2 py-1.5 font-mono">{num(day, day != null && day >= 100 ? 2 : 4)}</td>
-                      <td className="px-2 py-1.5 font-mono">{mine ? (zh ? "我" : "Me") : short(row.seller)}</td>
-                      <td className="sticky right-0 bg-paper px-2 py-1.5 text-right">
+                    <tr key={row.id.toString()} className={`cursor-pointer border-t border-gold/15 ${on ? "bg-foil/70" : "hover:bg-foil/40"}`} onClick={() => setPick(row.id.toString())}>
+                      <td className="px-3 py-2.5 font-mono tabular-nums">#{row.id.toString()}</td>
+                      <td className="px-3 py-2.5 font-mono whitespace-nowrap text-ink/80">{shapeLine(shape)}</td>
+                      <td className="px-3 py-2.5 text-right font-mono tabular-nums">{shape ? Number(shape.gates).toLocaleString("en-US") : "—"}</td>
+                      <td className="px-3 py-2.5 text-right font-mono tabular-nums">{usdtText(row.price, 4)}</td>
+                      <td className="px-3 py-2.5 text-right font-mono tabular-nums text-ink/55">{usdtText(cut, 4)}</td>
+                      <td className="px-3 py-2.5 text-right font-mono tabular-nums">{usdtText(row.price - cut, 4)}</td>
+                      <td className="px-3 py-2.5 text-right font-mono tabular-nums">{share != null ? cutTape(share) : "—"}</td>
+                      <td className="px-3 py-2.5 text-right font-mono tabular-nums">{num(day, day != null && day >= 100 ? 2 : 4)}</td>
+                      <td className="px-3 py-2.5 font-mono text-ink/60">{mine ? (zh ? "我" : "Me") : short(row.seller)}</td>
+                      <td className={`sticky right-0 px-3 py-2 text-right ${on ? "bg-foil/70" : "bg-card"}`}>
                         {mine
-                          ? <button type="button" disabled={busy} className="min-h-7 border border-gold px-2 disabled:opacity-40" onClick={(event) => { event.stopPropagation(); run((from) => cancelSpotCircuit(from, row.id), zh ? "已撤下。" : "Cancelled."); }}>{zh ? "撤下" : "Cancel"}</button>
-                          : <button type="button" disabled={busy} className="min-h-7 bg-[#f23645] px-2 text-white disabled:opacity-40" onClick={(event) => { event.stopPropagation(); setPick(row.id.toString()); run((from) => buySpotCircuit(from, row.id, row.price), zh ? "已买下。" : "Bought."); }}>{zh ? "买入" : "Buy"}</button>}
+                          ? <button type="button" disabled={busy} className="min-h-8 border border-gold/80 px-3 text-[12px] disabled:opacity-40" onClick={(event) => { event.stopPropagation(); run((from) => cancelSpotCircuit(from, row.id), zh ? "已撤下。" : "Cancelled."); }}>{zh ? "撤下" : "Cancel"}</button>
+                          : <button type="button" disabled={busy} className="min-h-8 bg-[#f23645] px-3 text-[12px] text-white disabled:opacity-40" onClick={(event) => { event.stopPropagation(); setPick(row.id.toString()); run((from) => buySpotCircuit(from, row.id, row.price), zh ? "已买下。" : "Bought."); }}>{zh ? "买入" : "Buy"}</button>}
                       </td>
                     </tr>
                   );
@@ -269,39 +276,39 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
         {tab === "mine" ? <Mine zh={zh} owned={owned} locked={locked} shapes={shapes} pace={pace} pick={pick} busy={busy} onPick={setPick} onClaim={(id) => run((from) => claimFreshCircuit(from, BigInt(id)), zh ? "已领回钱包。" : "Claimed.")} /> : null}
         {tab === "tape" ? <Prints zh={zh} rows={prints} /> : null}
       </div>
-      <aside className="border border-gold bg-card px-3 py-3 lg:sticky lg:top-3">
-        <p className="text-[11px] tracking-[0.16em] text-gold">{pickedList ? (zh ? "买入这一张" : "Buy") : zh ? "挂出或查看" : "List or inspect"}</p>
-        <p className="mt-2 font-mono text-2xl">{pick ? `#${pick}` : (zh ? "先点一行" : "Pick a row")}</p>
-        {pick ? <p className="mt-1 font-mono text-sm text-ink/70">{shapeLine(pickedShape)} · {zh ? "算力" : "H"} {pickedShape ? Number(pickedShape.gates).toLocaleString("en-US") : "—"}</p> : null}
-        <dl className="mt-3 border-t border-gold/30 text-xs">
+      <aside className="bg-card px-5 py-5 lg:sticky lg:top-3">
+        <p className="text-[10px] tracking-[0.22em] text-ink/40">{pickedList ? (zh ? "买入" : "BUY") : zh ? "挂出" : "LIST"}</p>
+        <p className="mt-3 font-display text-4xl italic leading-none">{pick ? `#${pick}` : (zh ? "点一行" : "Pick")}</p>
+        {pick ? <p className="mt-2 font-mono text-[13px] text-ink/60">{shapeLine(pickedShape)} · {pickedShape ? Number(pickedShape.gates).toLocaleString("en-US") : "—"} H</p> : null}
+        <dl className="mt-5">
           <Line k={zh ? "估算日产" : "Est. day"} v={pickedShare != null ? `${cutTape(pickedShare)} TAPE` : "—"} />
-          <Line k={zh ? "报价" : "Quote"} v={quote != null ? `${usdtText(quote, 4)} USDT0` : "—"} />
+          <Line k={zh ? "报价" : "Quote"} v={quote != null ? `${usdtText(quote, 4)}` : "—"} />
           <Line k={zh ? "千分之二" : "0.20%"} v={fee != null ? usdtText(fee, 4) : "—"} />
           <Line k={zh ? "卖方实收" : "Seller gets"} v={net != null ? usdtText(net, 4) : "—"} />
-          <Line k={zh ? "日产能价" : "Day px"} v={quoteDay != null ? `${num(quoteDay, quoteDay >= 100 ? 2 : 4)} USDT0` : "—"} />
+          <Line k={zh ? "日产能价" : "Day px"} v={quoteDay != null ? num(quoteDay, quoteDay >= 100 ? 2 : 4) : "—"} />
         </dl>
-        <p className="mt-2 text-[11px] leading-5 text-ink/50">{zh ? "日产能价 = 报价 ÷ 估算日产。比较用，不是承诺。买方付报价，卖方拿 99.8%。" : "Day price is the quote divided by estimated daily TAPE. The buyer pays the quote. The seller receives 99.8 percent."}</p>
+        <p className="mt-4 text-[12px] leading-6 text-ink/45">{zh ? "买方付报价。卖方拿 99.8%。日产能价只用来比较。" : "The buyer pays the quote. The seller receives 99.8 percent."}</p>
         {pickedList && account?.toLowerCase() !== pickedList.seller.toLowerCase() ? (
-          <button type="button" disabled={busy} className="mt-3 min-h-11 w-full bg-[#f23645] text-sm text-white disabled:opacity-40" onClick={() => run((from) => buySpotCircuit(from, pickedList.id, pickedList.price), zh ? "已买下。" : "Bought.")}>{zh ? `买入 #${pick}` : `Buy #${pick}`}</button>
+          <button type="button" disabled={busy} className="mt-5 min-h-12 w-full bg-[#f23645] text-sm text-white disabled:opacity-40" onClick={() => run((from) => buySpotCircuit(from, pickedList.id, pickedList.price), zh ? "已买下。" : "Bought.")}>{zh ? `买入  ${usdtText(pickedList.price, 2)}` : `Buy ${usdtText(pickedList.price, 2)}`}</button>
         ) : null}
         {pickedOwn ? (
           <>
-            <label className="mt-3 grid gap-1 text-xs text-ink/55">
-              {zh ? "挂出价 USDT0" : "Ask, USDT0"}
-              <input value={price} onChange={(event) => setPrice(event.target.value)} inputMode="decimal" className="min-h-11 border border-gold/50 bg-transparent px-2 font-mono text-base text-ink" />
+            <label className="mt-5 grid gap-2 text-[12px] text-ink/45">
+              {zh ? "挂出价" : "Ask"}
+              <input value={price} onChange={(event) => setPrice(event.target.value)} inputMode="decimal" placeholder="USDT0" className="h-12 border-b border-gold bg-transparent font-mono text-lg text-ink outline-none" />
             </label>
-            <button type="button" disabled={busy || typed == null} className="mt-2 min-h-11 w-full bg-ink text-sm text-paper disabled:opacity-40" onClick={() => typed != null && run((from) => listSpotCircuit(from, BigInt(pick), typed), zh ? "已挂上。" : "Listed.")}>{zh ? "挂出这一张" : "List this one"}</button>
+            <button type="button" disabled={busy || typed == null} className="mt-4 min-h-12 w-full bg-ink text-sm text-paper disabled:opacity-40" onClick={() => typed != null && run((from) => listSpotCircuit(from, BigInt(pick), typed), zh ? "已挂上。" : "Listed.")}>{zh ? "挂出这一张" : "List this one"}</button>
           </>
         ) : null}
-        {!pick ? <p className="mt-3 text-xs leading-5 text-ink/55">{zh ? "在售里点一行就能买。钱包里的在「我的」，点一行再挂。" : "Pick a listed row to buy. Wallet circuits are under Mine."}</p> : null}
-        {note ? <p className={`mt-2 text-xs leading-5 ${bad ? "text-sell" : ""}`}>{note}</p> : null}
+        {!pick ? <p className="mt-5 text-[13px] leading-6 text-ink/45">{zh ? "在售里点一行就能买。要挂的话，先去「我的」。" : "Pick a listed row to buy. To list, open Mine."}</p> : null}
+        {note ? <p className={`mt-3 text-[12px] leading-5 ${bad ? "text-sell" : "text-ink/70"}`}>{note}</p> : null}
       </aside>
     </section>
   );
 }
 
 function Line({ k, v }: { k: string; v: string }) {
-  return <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-2 border-b border-gold/20 py-1"><dt className="text-ink/45">{k}</dt><dd className="text-right font-mono">{v}</dd></div>;
+  return <div className="flex items-baseline justify-between gap-3 border-b border-gold/20 py-2.5 text-[13px]"><dt className="text-ink/40">{k}</dt><dd className="font-mono tabular-nums">{v}</dd></div>;
 }
 
 function tip(zh: boolean, label: string): string {
@@ -329,9 +336,9 @@ function tip(zh: boolean, label: string): string {
 
 function Mine({ zh, owned, locked, shapes, pace, pick, busy, onPick, onClaim }: { zh: boolean; owned: { id: string; gates: string; nIn: string; nOut: string }[]; locked: CircuitSeat[]; shapes: Map<string, Shape>; pace: Pace | null; pick: string; busy: boolean; onPick: (id: string) => void; onClaim: (id: string) => void }) {
   return (
-    <div className="mt-2 max-h-[32rem] overflow-auto border border-gold/40">
-      <table className="w-full min-w-[40rem] text-left text-xs">
-        <thead className="sticky top-0 bg-paper text-ink/45">
+    <div className="mt-3 max-h-[34rem] overflow-auto bg-card">
+      <table className="w-full min-w-[40rem] text-left text-[12px]">
+        <thead className="sticky top-0 bg-foil/90 text-ink/45">
           <tr>
             <th className="px-2 py-2 font-normal">{zh ? "电路" : "Circuit"}</th>
             <th className="px-2 py-2 font-normal">{zh ? "结构" : "Shape"}</th>
@@ -380,9 +387,9 @@ function Mine({ zh, owned, locked, shapes, pace, pick, busy, onPick, onClaim }: 
 
 function Prints({ zh, rows }: { zh: boolean; rows: CircuitPrint[] }) {
   return (
-    <div className="mt-2 max-h-[32rem] overflow-auto border border-gold/40">
-      <table className="w-full min-w-[36rem] text-left text-xs">
-        <thead className="sticky top-0 bg-paper text-ink/45">
+    <div className="mt-3 max-h-[34rem] overflow-auto bg-card">
+      <table className="w-full min-w-[36rem] text-left text-[12px]">
+        <thead className="sticky top-0 bg-foil/90 text-ink/45">
           <tr>{[zh ? "时间" : "Age", zh ? "电路" : "Circuit", zh ? "成交价" : "Price", zh ? "手续费" : "Fee", zh ? "买方" : "Buyer", zh ? "卖方" : "Seller", ""].map((head) => <th key={head || "tx"} className="px-2 py-2 font-normal">{head}</th>)}</tr>
         </thead>
         <tbody>

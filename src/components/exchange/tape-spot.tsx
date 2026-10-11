@@ -282,10 +282,10 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   return (
     <section className="grid gap-3">
       {choices.length > 1 ? (
-        <div className="flex gap-1 overflow-x-auto border-b border-gold/40">
+        <div className="flex gap-6 overflow-x-auto border-b border-gold/30">
           {choices.map((id) => (
-            <button key={String(id)} type="button" onClick={() => setLane(id)} className={`shrink-0 border-b-2 px-3 py-2 text-sm ${lane === id ? "border-ink font-medium" : "border-transparent text-ink/55"}`}>
-              {id === "circuit" ? (zh ? "电路" : "Circuits") : NAMES[id]}
+            <button key={String(id)} type="button" onClick={() => setLane(id)} className={`shrink-0 border-b-2 px-0.5 py-3 text-[13px] tracking-[0.12em] ${lane === id ? "border-ink text-ink" : "border-transparent text-ink/40"}`}>
+              {id === "circuit" ? (zh ? "电路" : "CIRCUITS") : NAMES[id]}
             </button>
           ))}
         </div>
