@@ -34,6 +34,48 @@ function cost(market: number, size: bigint, price: bigint): bigint {
   return market === 0 ? size * price / UNIT : size * price;
 }
 
+function sumSide(rows: Level[], market: number) {
+  return rows.reduce((sum, row) => ({ base: sum.base + row.size, quote: sum.quote + cost(market, row.size, row.price), lots: sum.lots + row.lots }), { base: 0n, quote: 0n, lots: 0 });
+}
+
+function Stat({ k, v, s }: { k: string; v: string; s: string }) {
+  return <p className="border-gold/30 px-2 py-2 sm:border-l sm:first:border-l-0"><span className="block text-[10px] text-ink/45">{k}</span><span className="font-mono">{v}</span><span className="mt-0.5 block text-[10px] text-ink/45">{s}</span></p>;
+}
+
+function Plan({ zh, market, side, price, amount, asks, bids, purse, name }: { zh: boolean; market: SpotMarket; side: "buy" | "sell"; price: string; amount: string; asks: Level[]; bids: Level[]; purse: SpotPurse | null; name: string }) {
+  let px = 0n;
+  let qty = 0n;
+  try {
+    px = spotPrice(price);
+    qty = amount.trim() ? spotBase(market, amount) : 0n;
+  } catch {
+    return null;
+  }
+  const unit = market === 0 ? UNIT : 1n;
+  const walletBuy = purse && px > 0n ? purse.usdt * unit / px : 0n;
+  const walletSell = purse ? (market === 0 ? purse.tape : market === 1 ? purse.nand : purse.latch) : 0n;
+  const book = side === "buy" ? asks : bids;
+  let left = qty;
+  let filled = 0n;
+  let pay = 0n;
+  for (const row of book) {
+    if (left === 0n) break;
+    if (side === "buy" ? row.price > px : row.price < px) break;
+    const take = left < row.size ? left : row.size;
+    filled += take;
+    pay += cost(market, take, row.price);
+    left -= take;
+  }
+  return (
+    <div className="mt-2 grid grid-cols-2 gap-px bg-gold/30 text-xs">
+      <p className="bg-card px-2 py-2"><span className="block text-[10px] text-ink/45">{zh ? "这一价钱包最多买" : "Wallet can buy here"}</span><span className="font-mono">{purse ? `${baseText(market, walletBuy)} ${name}` : "—"}</span></p>
+      <p className="bg-card px-2 py-2"><span className="block text-[10px] text-ink/45">{zh ? "钱包最多卖" : "Wallet can sell"}</span><span className="font-mono">{purse ? `${baseText(market, walletSell)} ${name}` : "—"}</span></p>
+      <p className="bg-card px-2 py-2"><span className="block text-[10px] text-ink/45">{zh ? "这一笔能吃到" : "This order takes"}</span><span className="font-mono">{qty > 0n ? `${baseText(market, filled)} · ${usdtText(pay, 4)}` : "—"}</span></p>
+      <p className="bg-card px-2 py-2"><span className="block text-[10px] text-ink/45">{zh ? "吃完剩下挂出" : "Rest after the take"}</span><span className="font-mono">{qty > 0n ? baseText(market, left) : "—"}</span></p>
+    </div>
+  );
+}
+
 function Quote({ zh, market, side, price, amount }: { zh: boolean; market: SpotMarket; side: "buy" | "sell"; price: string; amount: string }) {
   let pay = 0n;
   let fee = 0n;
@@ -140,6 +182,9 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
     return () => { dead = true; window.clearInterval(id); };
   }, [spot, lane, account]);
 
+  const askBook = useMemo(() => sumSide(asks, market), [asks, market]);
+  const bidBook = useMemo(() => sumSide(bids, market), [bids, market]);
+  const traded = useMemo(() => prints.reduce((sum, row) => ({ n: sum.n + 1, quote: sum.quote + row.quote, fee: sum.fee + row.fee }), { n: 0, quote: 0n, fee: 0n }), [prints]);
   const askView = useMemo(() => [...asks].reverse(), [asks]);
   const maxAsk = asks.reduce((m, row) => row.size > m ? row.size : m, 0n);
   const maxBid = bids.reduce((m, row) => row.size > m ? row.size : m, 0n);
@@ -161,7 +206,10 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
       if ((err as { code?: number }).code === 4001) setNote(zh ? "签名取消了。币还在钱包。" : "Cancelled. The coins stayed in the wallet.");
       else if (text === "amount" || text === "price") setNote(zh ? "价格和数量都要填。NAND 和 LATCH 只收整数。" : "Enter a price and an amount. NAND and LATCH are whole numbers.");
       else if (/self/i.test(text)) setNote(zh ? "这一档是你自己挂的。先撤掉，再吃。" : "That level is your own. Cancel it before taking it.");
-      else setNote(zh ? "没有成交。要先授权再挂。Gas Limit 填 800000。同价先挂的先成交，一次最多吃 40 笔。" : "It did not fill. Approve, then place. Set Gas Limit to 800000. Earlier orders at a price fill first, up to 40 lots.");
+      else if (text === "spot") setNote(zh ? "现货地址还没写进页面。部署过的浏览器才能看到盘口，别的地址下不了单。把合约地址发我。" : "The spot address is not in the page. Only the browser that deployed it can see the book.");
+      else if (text === "fee") setNote(zh ? "这一笔太小，千分之二舍成 0。合约不收这种单。" : "This order is too small. The 0.2 percent rounds to zero.");
+      else if (/nowallet/i.test(text)) setNote(zh ? "没有检测到 X Layer 钱包。" : "No X Layer wallet was found.");
+      else setNote(zh ? `没有成交。${text ? text.slice(0, 80) : "先授权，再挂单。"}` : `It did not fill. ${text ? text.slice(0, 80) : "Approve, then place."}`);
     }).finally(() => setBusy(false));
   };
 
@@ -269,7 +317,13 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
               ))}
             </div>
             {miss ? <p className="px-2 py-2 text-xs text-ink/55">{zh ? "这一次没读到。不写成 0。" : "This read missed. It is not shown as zero."}</p> : null}
-            <p className="px-3 py-2 text-[11px] leading-5 text-ink/50">{zh ? "同一价格并成一档，笔数写在右边。先挂的先成交。点一档，把价格和数量填进右边。" : "One price is one level. The count is on the right. Earlier orders fill first. Tap a level to fill the ticket."}</p>
+            <div className="grid grid-cols-2 border-t border-gold/40 text-xs sm:grid-cols-4">
+              <Stat k={zh ? "卖盘可买" : "Asks can buy"} v={`${baseText(market, askBook.base)} ${name}`} s={zh ? `折合 ${usdtText(askBook.quote, 2)} · ${askBook.lots} 笔` : `${usdtText(askBook.quote, 2)} · ${askBook.lots}`} />
+              <Stat k={zh ? "买盘可卖" : "Bids can sell"} v={`${baseText(market, bidBook.base)} ${name}`} s={zh ? `折合 ${usdtText(bidBook.quote, 2)} · ${bidBook.lots} 笔` : `${usdtText(bidBook.quote, 2)} · ${bidBook.lots}`} />
+              <Stat k={zh ? "已读成交" : "Prints read"} v={`${traded.n}${zh ? " 笔" : ""}`} s={`${usdtText(traded.quote, 2)} USDT0`} />
+              <Stat k={zh ? "已收手续费" : "Fees read"} v={`${usdtText(traded.fee, 4)} USDT0`} s={zh ? "只算读到的成交" : "Of the prints read"} />
+            </div>
+            <p className="px-3 py-2 text-[11px] leading-5 text-ink/50">{zh ? "同一价格并成一档。卖盘可买是挂着的全部卖单。买盘可卖是挂着的全部买单。点一档，价格和数量填进右边。" : "One price is one level. Tap a level to fill the ticket."} {spot}</p>
           </article>
           <article className="border border-gold bg-card px-3 py-3">
             <div className="grid grid-cols-2 border border-gold">
@@ -300,6 +354,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
               ))}
             </div>
             <Quote zh={zh} market={market} side={side} price={price} amount={amount} />
+            <Plan zh={zh} market={market} side={side} price={price} amount={amount} asks={asks} bids={bids} purse={purse} name={name} />
             <p className="mt-2 text-xs leading-5 text-ink/60">
               {zh ? "两边都按钱包余额。买入切 USDT0，卖出切这种币。买方按价格付，卖方实收 99.8%。" : "Both figures are the wallet. Buy cuts USDT0. Sell cuts this coin. The buyer pays the price. The seller receives 99.8 percent."}
             </p>

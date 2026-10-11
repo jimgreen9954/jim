@@ -58,11 +58,21 @@ export type CircuitAsk = { id: bigint; seller: string; price: bigint };
 export type SpotPrint = { tx: string; market: number; price: bigint; base: bigint; quote: bigint; fee: bigint; taker: string; maker: string };
 export type SpotPurse = { usdt: bigint; tape: bigint; nand: bigint; latch: bigint };
 
-function levels(row: readonly [bigint, readonly bigint[], readonly bigint[], readonly number[]]): Level[] {
-  const n = Number(row[0]);
+function levels(row: unknown): Level[] {
+  const tuple = Array.isArray(row) ? row : null;
+  const named = row as { count?: bigint; price?: readonly bigint[]; size?: readonly bigint[]; lots?: readonly number[] };
+  const count = Number(tuple ? tuple[0] : named.count ?? 0);
+  const price = (tuple ? tuple[1] : named.price) as readonly bigint[] | undefined;
+  const size = (tuple ? tuple[2] : named.size) as readonly bigint[] | undefined;
+  const lots = (tuple ? tuple[3] : named.lots) as readonly number[] | undefined;
   const out: Level[] = [];
-  for (let i = 0; i < n; i += 1) out.push({ price: row[1][i] ?? 0n, size: row[2][i] ?? 0n, lots: Number(row[3][i] ?? 0) });
+  for (let i = 0; i < count; i += 1) out.push({ price: price?.[i] ?? 0n, size: size?.[i] ?? 0n, lots: Number(lots?.[i] ?? 0) });
   return out;
+}
+
+export function spotCost(market: SpotMarket, base: bigint, price: bigint): bigint {
+  if (base <= 0n || price <= 0n) return 0n;
+  return market === 0 ? base * price / 100_000_000n : base * price;
 }
 
 export async function readSpotBook(market: SpotMarket): Promise<{ bids: Level[]; asks: Level[] } | null> {
@@ -203,7 +213,9 @@ export function spotPrice(text: string): bigint {
 }
 
 export async function placeSpot(from: string, market: SpotMarket, bid: boolean, price: bigint, amount: bigint) {
-  if (bid) await approveErc20(from, TAPE_USDT, price * (market === 0 ? amount / 100_000_000n + 1n : amount) * 2n);
+  const need = spotCost(market, amount, price);
+  if (need * 20n / 10000n === 0n) throw new Error("fee");
+  if (bid) await approveErc20(from, TAPE_USDT, need);
   else if (market === 0) await approveErc20(from, TAPE_TOKEN, amount);
   else await approveAll(from, DEPLOYED.transistors, "wafer");
   return call(from, encodeFunctionData({ abi, functionName: "place", args: [market, bid, price, amount] }));
