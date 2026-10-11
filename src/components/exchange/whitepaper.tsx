@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { BSC_REBATE, KNOWN_XMARK, KNOWN_XPERP, PREV_XMARK, PREV_XPERP } from "@/lib/perp";
 import { GATE } from "@/lib/gate-chain";
 import { BSC, FEE_TO } from "@/lib/bsc";
@@ -14,7 +15,7 @@ const X_BEM = "0x60e62Efa9405d6873C5deaBD4E6CC91c25363952";
 
 type Section = { h: string; ps: string[] };
 
-const zh: Section[] = [
+const zhBody: Section[] = [
   {
     h: "产品",
     ps: [
@@ -429,79 +430,102 @@ const nowEn = [
 ];
 export function Whitepaper() {
   const lang = useExchange((s) => s.lang);
-  const sections = lang === "zh" ? zh : en;
+  const zh = lang === "zh";
+  const sections = zh ? zhBody : en;
+  const [on, setOn] = useState(0);
+  const jump = (i: number) => {
+    setOn(i);
+    document.getElementById(`paper-${i}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
   return (
-    <article className="border border-gold bg-card shadow-plate">
-      <header className="border-b border-gold px-5 py-7 sm:px-8">
-        <p className="text-xs tracking-[0.35em] text-gold">TAPELIQUID</p>
-        <h2 className="mt-3 font-display text-4xl italic leading-none sm:text-5xl">{lang === "zh" ? "白皮书" : "White paper"}</h2>
-        <p className="mt-4 max-w-2xl font-display text-lg italic leading-8 text-ink/80 sm:text-xl">
-          {lang === "zh"
-            ? "晶圆是工本，TAPE 是唯一的平台币。交易、铸造、流片、领取，都在你自己的钱包里完成。页面若与合约不符，以这一页和链上合约为准。"
-            : "The wafer is the cost. TAPE is the only platform coin. Trading, minting, tape-out, and claims all settle in your own wallet. If a screen disagrees with a contract, this page and the contract win."}
+    <div className="lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] lg:items-start">
+      <aside className="border-b border-gold/40 bg-paper lg:sticky lg:top-14 lg:max-h-[calc(100dvh-4rem)] lg:overflow-y-auto lg:border-b-0 lg:border-r">
+        <p className="px-4 pt-4 text-sm font-medium">{zh ? "TAPELIQUID 说明" : "TAPELIQUID guide"}</p>
+        <nav className="mt-2 flex gap-1 overflow-x-auto px-2 pb-3 lg:flex-col lg:overflow-visible lg:px-0 lg:pb-6" aria-label={zh ? "目录" : "Contents"}>
+          {sections.map((section, i) => (
+            <button key={section.h} type="button" onClick={() => jump(i)} className={`shrink-0 border-l-2 px-4 py-2 text-left text-sm ${on === i ? "border-ink bg-card font-medium" : "border-transparent text-ink/60"}`}>
+              <span className="mr-2 font-mono text-[11px] text-ink/40">{String(i + 1).padStart(2, "0")}</span>
+              {section.h}
+            </button>
+          ))}
+        </nav>
+      </aside>
+      <article className="min-w-0 px-1 py-6 sm:px-6 lg:px-10">
+        <p className="text-[11px] tracking-[0.22em] text-gold">TAPELIQUID</p>
+        <h2 className="mt-2 max-w-3xl font-display text-4xl leading-tight sm:text-5xl">{zh ? "从这里开始使用 TAPELIQUID" : "Start here with TAPELIQUID"}</h2>
+        <p className="mt-4 max-w-2xl text-sm leading-7 text-ink/75">
+          {zh
+            ? "先看清平台币、晶体管和电路，再做第一笔。说明只写已经能签名的规则。页面和合约不一致时，以这一页和链上合约为准。"
+            : "Read the platform coin, the transistors, and the circuits before the first order. This page only states rules you can sign. If a screen disagrees with a contract, this page and the contract win."}
         </p>
-      </header>
-      <div className="grid gap-px border-b border-gold bg-gold/40 sm:grid-cols-2">
-        <div className="overflow-x-auto bg-card">
-          <table className="min-w-full bg-card text-left text-sm">
-          <caption className="border-b border-gold/40 px-4 py-3 text-left text-xs tracking-widest text-gold">{lang === "zh" ? "参数" : "Parameters"}</caption>
-          <tbody>
-            {(lang === "zh" ? specZh : specEn).map(([k, v]) => (
-              <tr key={k} className="border-b border-gold/30">
-                <th className="w-36 px-4 py-2 align-top font-normal text-ink/60">{k}</th>
-                <td className="px-4 py-2">{v}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="mt-6 grid border border-gold/40 sm:grid-cols-3">
+          {[
+            ["01", zh ? "第一次使用" : "First visit", zh ? "TAPE、NAND、LATCH 和电路各是什么" : "What TAPE, NAND, LATCH, and a circuit are", 0],
+            ["02", zh ? "开始交易" : "Trade", zh ? "现货盘口、永续和电路按张定价" : "The spot book, perpetuals, and circuit prices", sections.findIndex((section) => section.h === (zh ? "现货" : "Spot"))],
+            ["03", zh ? "地址与参数" : "Addresses", zh ? "收费地址、排放和现在链上的合约" : "The fee address, emission, and live contracts", sections.length],
+          ].map(([n, title, line, target]) => (
+            <button key={String(n)} type="button" onClick={() => (typeof target === "number" && target >= 0 && target < sections.length ? jump(target) : document.getElementById("paper-now")?.scrollIntoView({ behavior: "smooth" }))} className="border-gold/40 px-4 py-4 text-left not-last:border-b sm:not-last:border-b-0 sm:[&:not(:last-child)]:border-r">
+              <span className="font-mono text-[11px] text-gold">{n}</span>
+              <span className="mt-2 block text-base font-medium">{title}</span>
+              <span className="mt-1 block text-xs leading-5 text-ink/60">{line}</span>
+            </button>
+          ))}
         </div>
-        <div className="overflow-x-auto bg-card">
-          <table className="min-w-full bg-card text-left text-sm">
-          <caption className="border-b border-gold/40 px-4 py-3 text-left text-xs tracking-widest text-gold">{lang === "zh" ? "现在链上" : "On chain now"}</caption>
-          <tbody>
-            {(lang === "zh" ? nowZh : nowEn).map(([k, v]) => (
-              <tr key={k} className="border-b border-gold/30">
-                <th className="w-36 px-4 py-2 align-top font-normal text-ink/60">{k}</th>
-                <td className="break-all px-4 py-2 font-mono text-xs sm:text-sm">{v}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <p className="mt-4 border border-gold/30 bg-card px-4 py-3 text-sm leading-6">
+          {zh
+            ? "TAPE 是唯一平台币，只在 X Layer。NAND 与 LATCH 是晶体管。电路按张交易，写明输入、输出和门数。BEM 属于 tapeout，不是平台币。"
+            : "TAPE is the only platform coin, and only on X Layer. NAND and LATCH are the transistors. A circuit trades as one piece, with its inputs, outputs, and gates. BEM belongs to tapeout. It is not the platform coin."}
+        </p>
+        <div id="paper-now" className="mt-8 grid scroll-mt-24 gap-px bg-gold/30 sm:grid-cols-2">
+          <table className="bg-paper text-left text-sm">
+            <caption className="px-4 py-3 text-left text-xs tracking-widest text-gold">{zh ? "参数" : "Parameters"}</caption>
+            <tbody>
+              {(zh ? specZh : specEn).map(([k, v]) => (
+                <tr key={k} className="border-t border-gold/20">
+                  <th className="w-36 px-4 py-2 align-top font-normal text-ink/55">{k}</th>
+                  <td className="px-4 py-2">{v}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <table className="bg-paper text-left text-sm">
+            <caption className="px-4 py-3 text-left text-xs tracking-widest text-gold">{zh ? "现在链上" : "On chain now"}</caption>
+            <tbody>
+              {(zh ? nowZh : nowEn).map(([k, v]) => (
+                <tr key={k} className="border-t border-gold/20">
+                  <th className="w-36 px-4 py-2 align-top font-normal text-ink/55">{k}</th>
+                  <td className="break-all px-4 py-2 font-mono text-xs sm:text-sm">{v}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </div>
-      <nav className="grid border-b border-gold sm:grid-cols-2" aria-label={lang === "zh" ? "目录" : "Contents"}>
-        {sections.map((section, i) => (
-          <a key={section.h} href={`#paper-${i}`} className="flex min-h-11 items-center border-b border-gold/40 px-4 py-2 text-sm hover:bg-paper sm:odd:border-r">
-            {section.h}
+        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          <a className="border border-gold/40 px-3 py-3" href={`${BSC.explorer}/address/${FEE_TO}`} target="_blank" rel="noreferrer">
+            <span className="block text-[11px] tracking-widest text-gold">{zh ? "收费地址" : "Fee address"}</span>
+            <span className="mt-1 block break-all font-mono text-xs">{FEE_TO}</span>
           </a>
-        ))}
-      </nav>
-      <div className="grid gap-3 border-b border-gold px-5 py-4 sm:grid-cols-3 sm:px-8">
-        <a className="border border-gold/50 p-3 hover:border-gold" href={`${BSC.explorer}/address/${FEE_TO}`} target="_blank" rel="noreferrer">
-          <span className="block text-xs tracking-widest text-gold">{lang === "zh" ? "收费地址" : "Fee address"}</span>
-          <span className="mt-1 block break-all font-mono text-xs">{FEE_TO}</span>
-        </a>
-        <a className="border border-gold/50 p-3 hover:border-gold" href={`${XLAYER.explorer}/address/${TAPE}`} target="_blank" rel="noreferrer">
-          <span className="block text-xs tracking-widest text-gold">TAPE</span>
-          <span className="mt-1 block break-all font-mono text-xs">{TAPE}</span>
-        </a>
-        <a className="border border-gold/50 p-3 hover:border-gold" href={`${XLAYER.explorer}/address/${TAPE_MINE}`} target="_blank" rel="noreferrer">
-          <span className="block text-xs tracking-widest text-gold">{lang === "zh" ? "挖矿" : "Mine"}</span>
-          <span className="mt-1 block break-all font-mono text-xs">{TAPE_MINE}</span>
-        </a>
-      </div>
-      <div className="flex flex-col gap-8 px-5 py-7 sm:px-8">
-        {sections.map((section, i) => (
-          <section key={section.h} id={`paper-${i}`} className="scroll-mt-28 border-t border-gold/40 pt-4">
-            <h3 className="font-display text-3xl italic">{section.h}</h3>
-            {section.ps.map((p) => (
-              <p key={p.slice(0, 48)} className="mt-3 max-w-3xl text-sm leading-7">
-                {p}
-              </p>
-            ))}
-          </section>
-        ))}
-      </div>
-    </article>
+          <a className="border border-gold/40 px-3 py-3" href={`${XLAYER.explorer}/address/${TAPE}`} target="_blank" rel="noreferrer">
+            <span className="block text-[11px] tracking-widest text-gold">TAPE</span>
+            <span className="mt-1 block break-all font-mono text-xs">{TAPE}</span>
+          </a>
+          <a className="border border-gold/40 px-3 py-3" href={`${XLAYER.explorer}/address/${TAPE_MINE}`} target="_blank" rel="noreferrer">
+            <span className="block text-[11px] tracking-widest text-gold">{zh ? "挖矿" : "Mine"}</span>
+            <span className="mt-1 block break-all font-mono text-xs">{TAPE_MINE}</span>
+          </a>
+        </div>
+        <div className="mt-10 flex flex-col gap-12">
+          {sections.map((section, i) => (
+            <section key={section.h} id={`paper-${i}`} className="scroll-mt-24">
+              <p className="font-mono text-[11px] text-gold">{String(i + 1).padStart(2, "0")} / {section.h}</p>
+              <h3 className="mt-2 font-display text-3xl leading-none">{section.h}</h3>
+              {section.ps.map((p) => (
+                <p key={p.slice(0, 48)} className="mt-3 max-w-3xl text-sm leading-7 text-ink/85">{p}</p>
+              ))}
+            </section>
+          ))}
+        </div>
+      </article>
+    </div>
   );
 }
