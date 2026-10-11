@@ -100,7 +100,7 @@ const zh: Section[] = [
   {
     h: "自愿锁仓",
     ps: [
-      "晶圆锁在晶圆锁仓里。电路锁在电路锁仓 0x06c877cc158d9ca3547220f9fc156f39bce7013c。两份都没有管理员。期限是五档：180 天、365 天、3 年、4 年、5 年。锁着的晶圆不能流片，不算算力。锁着的电路，算力记在电路锁仓上，继续占全网权重，继续挖 TAPE。到期前不能领。到期后可以只领 TAPE，电路还在，算力还在。领电路时，还没领的 TAPE 在同一笔里打进钱包，矿池席位也在这一笔里关掉。",
+      "晶圆锁在晶圆锁仓里。电路锁在电路锁仓 0x06c877cc158d9ca3547220f9fc156f39bce7013c。两份都没有管理员。期限是五档：180 天、365 天、3 年、4 年、5 年。锁着的晶圆不能流片，不算算力。锁着的电路，算力记在电路锁仓上，继续占全网权重，继续挖 TAPE。到期前，电路和还没领的 TAPE 都不能领出来。到期后两样都能领。可以只领 TAPE，电路继续留着挖。也可以领电路，没领的 TAPE 在同一笔里打进钱包，矿池席位也在这一笔里关掉。",
       "锁仓不增加 H，不另发 TAPE。规则页列出锁仓地址、对象是电路还是晶圆、档位、到期日，以及电路上尚未领取的数量。榜一地址的官方未流片额度同样走这五档，登记后写明地址与到期日。",
     ],
   },
@@ -272,7 +272,7 @@ const en: Section[] = [
   {
     h: "Voluntary locks",
     ps: [
-      "Wafers lock in the wafer lock. Circuits lock in the circuit lock at 0x06c877cc158d9ca3547220f9fc156f39bce7013c. Neither contract has an admin. The terms are 180 days, 365 days, 3 years, 4 years, and 5 years. A locked wafer cannot be taped and is not hashrate. A locked circuit keeps its weight on the circuit lock, keeps its share of the network, and keeps mining TAPE. Nothing can be claimed early. After unlock, TAPE can be claimed alone and the circuit keeps mining. Claiming the circuit sends any unclaimed TAPE in the same transaction and closes the mine seat.",
+      "Wafers lock in the wafer lock. Circuits lock in the circuit lock at 0x06c877cc158d9ca3547220f9fc156f39bce7013c. Neither contract has an admin. The terms are 180 days, 365 days, 3 years, 4 years, and 5 years. A locked wafer cannot be taped and is not hashrate. A locked circuit keeps its weight on the circuit lock, keeps its share of the network, and keeps mining TAPE. Before the date, neither the circuit nor unclaimed TAPE can leave. After the date, both can. TAPE can be claimed alone and the circuit keeps mining. Claiming the circuit sends any unclaimed TAPE in the same transaction and closes the mine seat.",
       "A locked wafer cannot be transferred or taped before expiry. It is not hashrate. After expiry it can be taped. Unlock charges nothing. A lock does not raise H and does not mint extra TAPE.",
       "A lock does not raise H and does not mint extra TAPE. This page lists the address, whether it is a circuit or wafers, the term, the expiry, and the unclaimed amount on the circuit. The lead address's official untaped quota uses the same five terms. The address and expiry are written here after registration.",
     ],

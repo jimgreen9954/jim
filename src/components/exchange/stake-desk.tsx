@@ -239,8 +239,8 @@ export function StakeDesk() {
         <h3 className="font-display text-2xl italic">{zh ? "电路" : "Circuits"}</h3>
         <p className="mt-1 text-xs leading-5 text-ink/60">
           {zh
-            ? "锁着的时候，算力记在电路锁仓上，继续占全网权重，继续挖 TAPE。到期前不能领。到期后可以只领 TAPE，电路还在，算力还在。领电路时，没领走的 TAPE 在同一笔里打进钱包，矿池席位也在这一笔里关掉。"
-            : "While locked, the weight sits on the circuit lock and keeps mining TAPE. Nothing can be claimed early. After unlock, TAPE can be claimed alone and the circuit keeps mining. Claiming the circuit sends any unclaimed TAPE in the same transaction and closes the mine seat."}
+            ? "到期后，电路和还没领的 TAPE 都可以领出来。到期前两样都不能领。到期后可以只点「领 TAPE」，电路继续锁着，算力还在。点「领电路」时，电路回到这个钱包，没领走的 TAPE 在同一笔里一起进来，矿池席位也在这一笔里关掉。锁着的时候算力记在电路锁仓上，继续占全网权重，继续挖。"
+            : "After the date, both the circuit and any unclaimed TAPE can be taken out. Neither can leave before then. Claim TAPE alone and the circuit stays locked, still mining. Claim the circuit and it returns to this wallet; unclaimed TAPE comes in that same transaction, and the mine seat closes. While locked, the weight sits on the circuit lock and keeps its share."}
         </p>
         {!ready ? (
           <div className="mt-2 border border-gold/40 px-2 py-2 text-xs leading-5">
@@ -278,7 +278,7 @@ export function StakeDesk() {
                   </span>
                   <span className="flex gap-1">
                     <button type="button" disabled={busy || !due || row.pending === 0n} className="min-h-8 border border-gold px-2 disabled:opacity-40" onClick={() => { if (!account) return; setBusy(true); claimFreshTape(account, BigInt(row.id)).then(() => say(zh ? "TAPE 已进这个钱包。电路还锁着，算力还在。" : "TAPE is in this wallet. The circuit stays locked and keeps its weight.")).catch(fail).finally(() => setBusy(false)); }}>{due ? (zh ? "领 TAPE" : "Claim TAPE") : (zh ? "未到期" : "Locked")}</button>
-                    <button type="button" disabled={busy || !due} className="min-h-8 border border-gold px-2 disabled:opacity-40" onClick={() => { if (!account) return; setBusy(true); claimFreshCircuit(account, BigInt(row.id)).then(() => say(zh ? "电路已退回。没领的 TAPE 在同一笔里进了钱包。算力已停，要再挖就去挖矿页开工。" : "The circuit is back. Unclaimed TAPE came with it. Weight has stopped. Open it on the mine page to mine again.")).catch(fail).finally(() => setBusy(false)); }}>{zh ? "领电路" : "Claim circuit"}</button>
+                    <button type="button" disabled={busy || !due} className="min-h-8 border border-gold px-2 disabled:opacity-40" onClick={() => { if (!account) return; setBusy(true); claimFreshCircuit(account, BigInt(row.id)).then(() => say(zh ? "电路已退回。没领的 TAPE 在同一笔里进了钱包。算力已停，要再挖就去挖矿页开工。" : "The circuit is back. Unclaimed TAPE came with it. Weight has stopped. Open it on the mine page to mine again.")).catch(fail).finally(() => setBusy(false)); }}>{due ? (zh ? "领电路" : "Claim circuit") : (zh ? "未到期" : "Locked")}</button>
                   </span>
                 </li>
               );
@@ -305,8 +305,8 @@ export function StakeDesk() {
           <div className="grid grid-cols-3 gap-1 sm:grid-cols-5">
             {LOCK_TERMS.map((row) => <button key={row.id} type="button" onClick={() => { setCircuitTerm(row.id); setAckCircuit(false); }} className={`min-h-10 border px-1 text-xs ${circuitTerm === row.id ? "border-ink bg-ink text-paper" : "border-gold"}`}>{zh ? row.zh : row.en}</button>)}
           </div>
-          <p className="border border-sell/40 px-2 py-2 text-xs leading-5">{zh ? `锁到 ${circuitUntil}（新加坡）。到期前不能领。锁上时，这张电路上已经记给你的 TAPE 会先打进钱包。` : `Locked until ${circuitUntil} Singapore time. Nothing can be claimed early. TAPE already booked to this wallet is paid out when you lock.`}</p>
-          <label className="flex gap-2 text-xs"><input type="checkbox" checked={ackCircuit} onChange={(event) => setAckCircuit(event.target.checked)} />{zh ? "我知道到期前领不了，算力记在锁仓合约上" : "I know I cannot claim early, and the weight sits on the lock"}</label>
+          <p className="border border-sell/40 px-2 py-2 text-xs leading-5">{zh ? `锁到 ${circuitUntil}（新加坡）。到期前电路和 TAPE 都不能领。到期后两样都能领：可以只领 TAPE，电路继续留着挖；也可以领电路，没领的 TAPE 同一笔进钱包。锁上这一下，这张电路上已经记给你的 TAPE 会先打进钱包。` : `Locked until ${circuitUntil} Singapore time. Before that date neither the circuit nor the TAPE can leave. After it, both can: claim TAPE alone and the circuit keeps mining, or claim the circuit and any unclaimed TAPE comes with it. TAPE already booked to this wallet is paid out when you lock.`}</p>
+          <label className="flex gap-2 text-xs"><input type="checkbox" checked={ackCircuit} onChange={(event) => setAckCircuit(event.target.checked)} />{zh ? "我知道到期前电路和 TAPE 都领不了。到期后两样都能领。" : "I know neither the circuit nor the TAPE can leave early. After the date, both can."}</label>
           <button type="submit" disabled={busy || !account || !ready || !ackCircuit || !circuitId} className="min-h-11 bg-ink text-paper disabled:opacity-40">{zh ? "签名并质押电路" : "Sign and stake the circuit"}</button>
         </form>
       </article>
