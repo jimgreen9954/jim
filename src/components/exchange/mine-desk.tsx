@@ -8,6 +8,8 @@ import { connectXLayer, XLAYER } from "@/lib/xlayer";
 import { StakeDesk } from "@/components/exchange/stake-desk";
 import { BurnDesk } from "@/components/exchange/burn-desk";
 import { TapeDesk } from "@/components/exchange/tape-desk";
+import { TapeSpotDesk } from "@/components/exchange/tape-spot";
+import { SpotDesk } from "@/components/exchange/spot-desk";
 
 export function MineDesk() {
   const lang = useExchange((s) => s.lang);
@@ -23,6 +25,8 @@ export function MineDesk() {
   const [busy, setBusy] = useState(false);
   const [sheet, setSheet] = useState<"claim" | "stake" | "ash" | "bid">("claim");
   const [networkOpen, setNetworkOpen] = useState(false);
+  const [bemOpen, setBemOpen] = useState(false);
+  const [tapeOpen, setTapeOpen] = useState(false);
 
   useEffect(() => onAccount((next) => setAccount(next)), []);
 
@@ -143,6 +147,20 @@ export function MineDesk() {
             </p>
           </div>
         ) : networkOpen ? <p className="border-t border-gold/40 px-3 py-3 text-xs text-ink/55">{zh ? "链上还没读到。失败不会写成 0。" : "The chain has not answered. A miss is not written as zero."}</p> : null}
+      </article>
+      <article className="border border-gold bg-card">
+        <button type="button" onClick={() => setBemOpen((open) => !open)} className="flex min-h-12 w-full items-center justify-between px-3 text-left">
+          <span className="font-display text-2xl italic">{zh ? "BSC 的 BEM" : "BSC BEM"}</span>
+          <span className="text-xs text-ink/50">{bemOpen ? (zh ? "收起" : "Hide") : (zh ? "打开交易" : "Open")}</span>
+        </button>
+        {bemOpen ? <div className="border-t border-gold/40 p-2"><SpotDesk /></div> : null}
+      </article>
+      <article className="border border-gold bg-card">
+        <button type="button" onClick={() => setTapeOpen((open) => !open)} className="flex min-h-12 w-full items-center justify-between px-3 text-left">
+          <span className="font-display text-2xl italic">{zh ? "X Layer 的 TAPE" : "X Layer TAPE"}</span>
+          <span className="text-xs text-ink/50">{tapeOpen ? (zh ? "收起" : "Hide") : (zh ? "打开交易" : "Open")}</span>
+        </button>
+        {tapeOpen ? <div className="border-t border-gold/40 p-2"><TapeSpotDesk zh={zh} only={0} /></div> : null}
       </article>
       <div className="grid grid-cols-4 border border-gold">
         <button type="button" onClick={() => setSheet("claim")} className={`min-h-11 px-1 text-xs sm:text-sm ${sheet === "claim" ? "bg-ink text-paper" : ""}`}>{zh ? "领取" : "Claim"}</button>

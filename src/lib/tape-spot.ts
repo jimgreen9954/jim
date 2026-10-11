@@ -1,0 +1,241 @@
+import { createPublicClient, encodeFunctionData, formatUnits, http, parseAbi, parseAbiItem, parseUnits, type Hex } from "viem";
+import { TAPE_SPOT_BYTECODE } from "@/lib/tape-spot-artifact";
+import { FEE_TO } from "@/lib/bsc";
+import { TAPE_TOKEN, TAPE_USDT } from "@/lib/tape-pool";
+import { getProvider } from "@/lib/wallet";
+import { DEPLOYED, connectXLayer, XLAYER } from "@/lib/xlayer";
+
+/** X Layer order book. Creation bytecode matches contracts/TapeSpot.sol. No admin. */
+export const TAPE_SPOT = "" as const;
+export const SPOT_FEE = FEE_TO;
+
+const KEY = "tapeliquid-spot";
+const BLOCK_KEY = "tapeliquid-spot-block";
+
+const takeEvent = parseAbiItem("event Take(uint64 indexed id, address indexed taker, address indexed maker, uint8 market, uint128 price, uint128 base, uint128 quote, uint128 fee)");
+const abi = parseAbi([
+  "function place(uint8,bool,uint128,uint128) returns (uint64)",
+  "function cancel(uint64)",
+  "function listCircuit(uint256,uint128)",
+  "function cancelCircuit(uint256)",
+  "function buyCircuit(uint256)",
+  "function book(uint8,bool,uint256) view returns (uint256 count, uint128[] price, uint128[] size, uint32[] lots)",
+  "function myOrders(address) view returns (uint64[] ids, uint8[] markets, bool[] bids, uint128[] prices, uint128[] lefts)",
+  "function listingCount() view returns (uint256)",
+  "function listings(uint256,uint256) view returns (uint256[] ids, address[] sellers, uint128[] prices)",
+  "event Take(uint64 indexed id, address indexed taker, address indexed maker, uint8 market, uint128 price, uint128 base, uint128 quote, uint128 fee)",
+]);
+const erc20 = parseAbi([
+  "function approve(address,uint256) returns (bool)",
+  "function allowance(address,address) view returns (uint256)",
+  "function balanceOf(address) view returns (uint256)",
+]);
+const erc1155 = parseAbi([
+  "function balanceOf(address,uint256) view returns (uint256)",
+  "function isApprovedForAll(address,address) view returns (bool)",
+  "function setApprovalForAll(address,bool)",
+]);
+const erc721 = parseAbi([
+  "function isApprovedForAll(address,address) view returns (bool)",
+  "function setApprovalForAll(address,bool)",
+]);
+
+const client = createPublicClient({ transport: http(XLAYER.rpc) });
+
+export type SpotMarket = 0 | 1 | 2;
+
+export function spotAddress(): Hex | null {
+  const fixed = TAPE_SPOT as string;
+  if (/^0x[a-fA-F0-9]{40}$/.test(fixed)) return fixed as Hex;
+  if (typeof window === "undefined") return null;
+  const saved = window.localStorage.getItem(KEY) ?? "";
+  return /^0x[a-fA-F0-9]{40}$/.test(saved) ? saved as Hex : null;
+}
+
+export type Level = { price: bigint; size: bigint; lots: number };
+export type OpenOrder = { id: bigint; market: number; bid: boolean; price: bigint; left: bigint };
+export type CircuitAsk = { id: bigint; seller: string; price: bigint };
+export type SpotPrint = { tx: string; market: number; price: bigint; base: bigint; quote: bigint; fee: bigint; taker: string; maker: string };
+export type SpotPurse = { usdt: bigint; tape: bigint; nand: bigint; latch: bigint };
+
+function levels(row: readonly [bigint, readonly bigint[], readonly bigint[], readonly number[]]): Level[] {
+  const n = Number(row[0]);
+  const out: Level[] = [];
+  for (let i = 0; i < n; i += 1) out.push({ price: row[1][i] ?? 0n, size: row[2][i] ?? 0n, lots: Number(row[3][i] ?? 0) });
+  return out;
+}
+
+export async function readSpotBook(market: SpotMarket): Promise<{ bids: Level[]; asks: Level[] } | null> {
+  const spot = spotAddress();
+  if (!spot) return null;
+  const [bids, asks] = await Promise.all([
+    client.readContract({ address: spot, abi, functionName: "book", args: [market, true, 24n] }),
+    client.readContract({ address: spot, abi, functionName: "book", args: [market, false, 24n] }),
+  ]);
+  return { bids: levels(bids), asks: levels(asks) };
+}
+
+export async function readMyOrders(account: string): Promise<OpenOrder[]> {
+  const spot = spotAddress();
+  if (!spot) return [];
+  const row = await client.readContract({ address: spot, abi, functionName: "myOrders", args: [account as Hex] });
+  return row[0].map((id, i) => ({ id, market: row[1][i] ?? 0, bid: row[2][i] ?? false, price: row[3][i] ?? 0n, left: row[4][i] ?? 0n }));
+}
+
+export async function readListings(): Promise<CircuitAsk[]> {
+  const spot = spotAddress();
+  if (!spot) return [];
+  const count = await client.readContract({ address: spot, abi, functionName: "listingCount" });
+  if (count === 0n) return [];
+  const n = count > 40n ? 40n : count;
+  const row = await client.readContract({ address: spot, abi, functionName: "listings", args: [0n, n] });
+  return row[0].map((id, i) => ({ id, seller: row[1][i] ?? "", price: row[2][i] ?? 0n }));
+}
+
+export async function readSpotPrints(market: SpotMarket | null): Promise<SpotPrint[]> {
+  const spot = spotAddress();
+  if (!spot) return [];
+  const tip = await client.getBlockNumber();
+  const saved = typeof window === "undefined" ? 0n : BigInt(window.localStorage.getItem(BLOCK_KEY) || "0");
+  const from = saved > 0n && tip - saved < 200_000n ? saved : tip > 20_000n ? tip - 20_000n : 0n;
+  const logs = await client.getLogs({ address: spot, event: takeEvent, fromBlock: from, toBlock: tip });
+  return logs
+    .map((log) => ({
+      tx: log.transactionHash ?? "",
+      market: Number(log.args.market ?? 0),
+      price: log.args.price ?? 0n,
+      base: log.args.base ?? 0n,
+      quote: log.args.quote ?? 0n,
+      fee: log.args.fee ?? 0n,
+      taker: log.args.taker ?? "",
+      maker: log.args.maker ?? "",
+    }))
+    .filter((row) => market == null || row.market === market)
+    .reverse()
+    .slice(0, 24);
+}
+
+export async function readSpotPurse(account: string | null): Promise<SpotPurse | null> {
+  if (!account) return null;
+  const who = account as Hex;
+  const [usdt, tape, nand, latch] = await Promise.all([
+    client.readContract({ address: TAPE_USDT, abi: erc20, functionName: "balanceOf", args: [who] }),
+    client.readContract({ address: TAPE_TOKEN, abi: erc20, functionName: "balanceOf", args: [who] }),
+    client.readContract({ address: DEPLOYED.transistors, abi: erc1155, functionName: "balanceOf", args: [who, 0n] }),
+    client.readContract({ address: DEPLOYED.transistors, abi: erc1155, functionName: "balanceOf", args: [who, 1n] }),
+  ]);
+  return { usdt, tape, nand, latch };
+}
+
+async function send(from: string, to: Hex | undefined, data: Hex): Promise<Hex> {
+  await connectXLayer();
+  const eth = getProvider();
+  if (!eth) throw new Error("nowallet");
+  const tx: { from: string; to?: Hex; data: Hex; chainId: string; gas?: Hex } = { from, data, chainId: XLAYER.hex };
+  if (to) tx.to = to;
+  else tx.gas = "0x4c4b40";
+  const hash = (await eth.request({ method: "eth_sendTransaction", params: [tx] })) as Hex;
+  const receipt = await client.waitForTransactionReceipt({ hash, timeout: 180_000 });
+  if (receipt.status !== "success") throw new Error("revert");
+  return hash;
+}
+
+async function probe(from: string, to: Hex, data: Hex) {
+  try {
+    await client.call({ account: from as Hex, to, data });
+  } catch (err) {
+    const text = err instanceof Error ? `${err.name} ${err.message}` : "";
+    if (/revert|invalid opcode|execution/i.test(text)) throw err;
+  }
+}
+
+async function approveErc20(from: string, token: Hex, amount: bigint) {
+  const spot = spotAddress();
+  if (!spot) throw new Error("spot");
+  const allowance = await client.readContract({ address: token, abi: erc20, functionName: "allowance", args: [from as Hex, spot] });
+  if (allowance >= amount) return;
+  const data = encodeFunctionData({ abi: erc20, functionName: "approve", args: [spot, amount] });
+  await probe(from, token, data);
+  await send(from, token, data);
+}
+
+async function approveAll(from: string, token: Hex, kind: "wafer" | "circuit") {
+  const spot = spotAddress();
+  if (!spot) throw new Error("spot");
+  const table = kind === "wafer" ? erc1155 : erc721;
+  const ok = await client.readContract({ address: token, abi: table, functionName: "isApprovedForAll", args: [from as Hex, spot] });
+  if (ok) return;
+  const data = encodeFunctionData({ abi: table, functionName: "setApprovalForAll", args: [spot, true] });
+  await probe(from, token, data);
+  await send(from, token, data);
+}
+
+async function call(from: string, data: Hex) {
+  const spot = spotAddress();
+  if (!spot) throw new Error("spot");
+  await probe(from, spot, data);
+  return send(from, spot, data);
+}
+
+export async function deploySpot(from: string): Promise<string> {
+  const hash = await send(from, undefined, TAPE_SPOT_BYTECODE);
+  const receipt = await client.getTransactionReceipt({ hash });
+  if (!receipt.contractAddress) throw new Error("revert");
+  window.localStorage.setItem(KEY, receipt.contractAddress);
+  window.localStorage.setItem(BLOCK_KEY, receipt.blockNumber.toString());
+  return receipt.contractAddress;
+}
+
+export function spotBase(market: SpotMarket, amount: string): bigint {
+  const text = amount.trim();
+  if (market === 0) {
+    if (!/^\d+(\.\d{1,8})?$/.test(text)) throw new Error("amount");
+    return parseUnits(text, 8);
+  }
+  if (!/^[1-9]\d*$/.test(text)) throw new Error("amount");
+  return BigInt(text);
+}
+
+export function spotPrice(text: string): bigint {
+  const raw = text.trim();
+  if (!/^\d+(\.\d{1,6})?$/.test(raw) || Number(raw) <= 0) throw new Error("price");
+  return parseUnits(raw, 6);
+}
+
+export async function placeSpot(from: string, market: SpotMarket, bid: boolean, price: bigint, amount: bigint) {
+  if (bid) await approveErc20(from, TAPE_USDT, price * (market === 0 ? amount / 100_000_000n + 1n : amount) * 2n);
+  else if (market === 0) await approveErc20(from, TAPE_TOKEN, amount);
+  else await approveAll(from, DEPLOYED.transistors, "wafer");
+  return call(from, encodeFunctionData({ abi, functionName: "place", args: [market, bid, price, amount] }));
+}
+
+export async function cancelSpot(from: string, id: bigint) {
+  return call(from, encodeFunctionData({ abi, functionName: "cancel", args: [id] }));
+}
+
+export async function listSpotCircuit(from: string, id: bigint, price: bigint) {
+  await approveAll(from, DEPLOYED.circuits, "circuit");
+  return call(from, encodeFunctionData({ abi, functionName: "listCircuit", args: [id, price] }));
+}
+
+export async function cancelSpotCircuit(from: string, id: bigint) {
+  return call(from, encodeFunctionData({ abi, functionName: "cancelCircuit", args: [id] }));
+}
+
+export async function buySpotCircuit(from: string, id: bigint, price: bigint) {
+  await approveErc20(from, TAPE_USDT, price);
+  return call(from, encodeFunctionData({ abi, functionName: "buyCircuit", args: [id] }));
+}
+
+export function usdtText(amount: bigint, digits = 4): string {
+  const [whole, frac = ""] = formatUnits(amount, 6).split(".");
+  const cut = frac.slice(0, digits).replace(/0+$/, "");
+  return `${Number(whole).toLocaleString("en-US")}${cut ? `.${cut}` : ""}`;
+}
+
+export function baseText(market: number, amount: bigint): string {
+  if (market !== 0) return amount.toLocaleString("en-US");
+  const [whole, frac = ""] = formatUnits(amount, 8).split(".");
+  const cut = frac.slice(0, 4).replace(/0+$/, "");
+  return `${Number(whole).toLocaleString("en-US")}${cut ? `.${cut}` : ""}`;
+}

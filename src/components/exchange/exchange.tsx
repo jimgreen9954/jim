@@ -16,6 +16,7 @@ import { TapeCanvas } from "@/components/exchange/tape-canvas";
 import { WalletBar, ConnectButton } from "@/components/exchange/wallet-bar";
 import { AccountCenter } from "@/components/exchange/account-center";
 import { OfficialDesk } from "@/components/exchange/official-desk";
+import { TapeSpotDesk } from "@/components/exchange/tape-spot";
 import { MineDesk } from "@/components/exchange/mine-desk";
 import { Whitepaper } from "@/components/exchange/whitepaper";
 import { bemPrice } from "@/lib/bsc";
@@ -23,7 +24,7 @@ import { FeeLockProvider, useFeeLock } from "@/lib/fee-lock";
 
 type Floor = "desk" | "paper" | "shop" | "rules" | "canvas" | "me" | "mine";
 type DeskTab = "spot" | "perp";
-type ShopTab = "gate" | "wafer" | "chips" | "circuits";
+type ShopTab = "gate" | "wafer" | "chips" | "circuits" | "book";
 
 export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp" | "gate" | "wafer" | "brief" }) {
   const [floor, setFloor] = useState<Floor>(start === "paper" ? "paper" : start === "gate" || start === "wafer" ? "shop" : start === "brief" ? "rules" : "desk");
@@ -40,6 +41,7 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
       if (named === "wafer") { setFloor("shop"); setShop("wafer"); }
       if (named === "chips") { setFloor("shop"); setShop("chips"); }
       if (named === "circuits") { setFloor("shop"); setShop("circuits"); }
+      if (named === "book") { setFloor("shop"); setShop("book"); }
       if (named === "canvas") setFloor("canvas");
       if (named === "mine") setFloor("mine");
       if (named === "me" || named === "gift") setFloor("me");
@@ -391,16 +393,21 @@ function ShopFloor({ shop, setShop }: { shop: ShopTab; setShop: (shop: ShopTab) 
             ? lang === "zh"
               ? "先铸造 NAND 或 LATCH，再流片。流片成功只得到电路。要挖 TAPE，还要到挖矿页再签一笔开工。"
               : "Mint NAND or LATCH, then tape out. Tape-out only creates the circuit. Mining TAPE takes a second signature on the mine page."
-            : lang === "zh"
+            : shop === "book"
+              ? lang === "zh"
+                ? "X Layer 的订单簿。TAPE、NAND、LATCH 用 USDT0 报价。同价并成一档。电路一张一个价。买方按价格付，卖方实收 99.8%。"
+                : "The X Layer book. TAPE, NAND and LATCH are quoted in USDT0. One price is one level. Each circuit has its own price. The buyer pays the price. The seller receives 99.8 percent."
+              : lang === "zh"
               ? "跟 tapeout.net 的盘口。本站另收 0.20%，先付。官网没有成交，这一笔也不退。"
               : "The book follows tapeout.net. This site charges an extra 0.20%, paid first. If the official fill fails, that fee is not returned."}
       </p>
-      <div className="grid grid-cols-2 border border-gold sm:grid-cols-4">
+      <div className="grid grid-cols-2 border border-gold sm:grid-cols-5">
         {([
           ["gate", lang === "zh" ? "晶体管合约" : "Transistor perps"],
           ["wafer", lang === "zh" ? "晶圆" : "Wafer"],
           ["chips", lang === "zh" ? "晶体管现货" : "Transistor spot"],
           ["circuits", lang === "zh" ? "电路现货" : "Circuit spot"],
+          ["book", lang === "zh" ? "现货" : "Book"],
         ] as const).map(([id, label]) => (
           <button key={id} type="button" onClick={() => setShop(id)} className={`min-h-11 px-1 text-xs leading-tight sm:text-sm ${shop === id ? "bg-ink text-paper" : ""}`}>
             {label}
@@ -416,6 +423,7 @@ function ShopFloor({ shop, setShop }: { shop: ShopTab; setShop: (shop: ShopTab) 
       ) : null}
       {shop === "chips" ? <OfficialDesk mode="chips" /> : null}
       {shop === "circuits" ? <OfficialDesk mode="circuits" /> : null}
+      {shop === "book" ? <TapeSpotDesk zh={lang === "zh"} /> : null}
     </>
   );
 }

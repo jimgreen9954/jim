@@ -81,6 +81,13 @@ const zh: Section[] = [
     ],
   },
   {
+    h: "现货",
+    ps: [
+      "工房里的现货是 X Layer 上的订单簿，不在交易台。四本账写在同一份合约里：TAPE、NAND、LATCH 用 USDT0 报价，电路一张一个价。同一价格并成一档，先挂的排在前面。买方按那一档的价格支付。卖方实收 99.8%，千分之二进收费地址。吃得上的当场成交，剩下的挂着。没有管理员，不能改费率，不能升级。直接把币转到合约、不走挂单的，取不回来。合约从工房或挖矿页部署，地址写死后大家用同一份。",
+      "挖矿页先是两扇关上的门。BSC 的 BEM 点开才是 BEM 现货。X Layer 的 TAPE 点开才是这本 TAPE 订单簿。不点开，进不去交易。",
+    ],
+  },
+  {
     h: "权重",
     ps: [
       "单电路权重 H = b* × P × q。b* 是这张电路流片时真实烧掉的 NAND 与 LATCH 之和，每颗记 1。P 是这张电路所属处理器的倍率，开排前写死。q 是该题、该处理器上的设计质量。",
@@ -250,6 +257,13 @@ const en: Section[] = [
       "Two dividend pools are not inside the buyback contract. The old stake on that contract had no lock, and the page no longer deposits there. Timed stake is a separate X Layer contract. The six terms are fixed at 90, 180, 270, 365, 730 and 1,095 days: 3 months, 6 months, 9 months, 1 year, 2 years and 3 years. Principal cannot leave before expiry. Rewards can be claimed earlier. One person can have 16 open locks in a pool.",
       "Staked TAPE earns X Layer BEM. Staked X Layer BEM earns TAPE. On the page, Available is what this wallet can still lock. Staked is the principal this address has already locked, with the pool total written under it. Each lock shows the amount, the term, and the Singapore expiry. Principal cannot be taken before that time. After expiry, one signature on that row returns the principal. Claim pays rewards only, not principal. Anyone can add rewards. Only the address that added a reward can take back the part that has not vested over 365 days. What has already vested to stakers cannot be taken back. APY uses the unvested pot and the current pool price. It changes when someone stakes or withdraws unvested rewards. A missing price is shown as —, not zero. This timed contract has no admin and cannot be upgraded. The address is 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A. Tokens sent to the contract without the stake function cannot be taken back.",
       "BSC BEM does not enter this contract. One contract cannot read the other chain. BEM on X Layer is 0x60e62Efa9405d6873C5deaBD4E6CC91c25363952. BEM on BSC is a different contract. To stake BEM for TAPE, open the collapsed official bridge beside the buyback and move it to X Layer. That button calls TapeOut's bridge. This site does not custody it and adds no fee. TAPE cannot use that bridge. The new buyback lets only the buyer address deposit and withdraw USDT0. It has no admin and cannot be upgraded. The 0.1 USDT0 price and the two tokens are in the contract. Tokens sent to the contract without the deposit or sell function cannot be taken back.",
+    ],
+  },
+  {
+    h: "Spot",
+    ps: [
+      "Workshop spot is an X Layer order book, not the desk. One contract holds four books. TAPE, NAND and LATCH are quoted in USDT0. Each circuit has its own price. One price is one level, and the earlier order stands in front. The buyer pays that price. The seller receives 99.8 percent. The 0.2 percent goes to the fee address. What crosses fills immediately. The rest rests. There is no admin, and the fee cannot be changed. Tokens sent to the contract without an order cannot be taken back. The contract is deployed from the workshop or the mine page, and the address is pinned so everyone uses the same one.",
+      "The mine page opens on two closed doors. BSC BEM opens the BEM spot book. X Layer TAPE opens this TAPE book. Neither trade is visible until its door is opened.",
     ],
   },
   {
