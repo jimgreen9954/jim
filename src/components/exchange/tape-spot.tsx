@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { formatUnits } from "viem";
 import { circuitShapes, myCircuits, XLAYER } from "@/lib/xlayer";
 import { claimFreshCircuit, readCircuitLocks, type CircuitSeat } from "@/lib/tape-lock";
+import { readTapePace, tapeText } from "@/lib/tape-mine";
+import { Hint } from "@/components/exchange/hint";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import {
   baseText,
@@ -40,7 +42,18 @@ function sumSide(rows: Level[], market: number) {
   return rows.reduce((sum, row) => ({ base: sum.base + row.size, quote: sum.quote + cost(market, row.size, row.price), lots: sum.lots + row.lots }), { base: 0n, quote: 0n, lots: 0 });
 }
 
-function Stat({ k, v, s }: { k: string; v: string; s: string }) {
+function yieldOf(gates: string, price: bigint | null, pace: { daily: bigint; weight: bigint } | null): { tape: string; day: string } {
+  let count = 0n;
+  try { count = BigInt(gates || "0"); } catch { return { tape: "—", day: "—" }; }
+  if (!pace || pace.weight <= 0n || count <= 0n) return { tape: "—", day: "—" };
+  const share = (pace.daily * count) / pace.weight;
+  const tape = `${tapeText(share)} TAPE`;
+  if (price == null || share <= 0n) return { tape, day: "—" };
+  const human = (Number(price) / 1e6) / (Number(share) / 1e8);
+  return { tape, day: Number.isFinite(human) ? human.toLocaleString("en-US", { maximumFractionDigits: 4 }) : "—" };
+}
+
+function Stat({ k, v, s }: { k: ReactNode; v: string; s: string }) {
   return <p className="border-gold/30 px-2 py-2 sm:border-l sm:first:border-l-0"><span className="block text-[10px] text-ink/45">{k}</span><span className="font-mono">{v}</span><span className="mt-0.5 block text-[10px] text-ink/45">{s}</span></p>;
 }
 
@@ -134,6 +147,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   const [lists, setLists] = useState<CircuitAsk[]>([]);
   const [owned, setOwned] = useState<{ id: string; gates: string; nIn: string; nOut: string }[]>([]);
   const [shapes, setShapes] = useState<Map<string, { nIn: string; nOut: string; state: string; gates: string }>>(new Map());
+  const [pace, setPace] = useState<{ daily: bigint; weight: bigint } | null>(null);
   const [locked, setLocked] = useState<CircuitSeat[]>([]);
   const [circuitId, setCircuitId] = useState("");
   const [tab, setTab] = useState<"tape" | "mine">("tape");
@@ -201,6 +215,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
         setLocked(seats);
         const ids = rows.map((row) => row.id);
         if (ids.length) circuitShapes(ids).then((next) => { if (!dead) setShapes(next); }).catch(() => undefined);
+        readTapePace().then((next) => { if (!dead) setPace(next); }).catch(() => undefined);
       }).catch(() => undefined);
     };
     pull();
@@ -323,58 +338,67 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
                 <thead className="text-ink/45">
                   <tr className="border-b border-gold/30">
                     <th className="px-2 py-2 font-normal">{zh ? "电路" : "Circuit"}</th>
-                    <th className="px-2 py-2 font-normal">{zh ? "输入" : "In"}</th>
-                    <th className="px-2 py-2 font-normal">{zh ? "输出" : "Out"}</th>
-                    <th className="px-2 py-2 font-normal">{zh ? "门" : "Gates"}</th>
-                    <th className="px-2 py-2 font-normal">{zh ? "价格" : "Price"}</th>
+                    <th className="px-2 py-2 font-normal"><Hint label={zh ? "结构" : "Shape"} text={zh ? "输入到输出，再加状态数。电路按张卖，不能拆开。" : "Inputs, outputs, and state bits. A circuit sells whole."} /></th>
+                    <th className="px-2 py-2 font-normal"><Hint label={zh ? "算力" : "Hash"} text={zh ? "这里的算力就是门数。开工之后按门数占全网 TAPE 权重。没开工，这个数不算进实际产出。" : "Hash here is the gate count. It counts toward TAPE only after the circuit is started."} /></th>
+                    <th className="px-2 py-2 font-normal"><Hint label={zh ? "卖价" : "Ask"} text={zh ? "买方付出的 USDT0。卖方实收 99.8%。千分之二先从成交里扣。" : "USDT0 the buyer pays. The seller receives 99.8 percent."} /></th>
+                    <th className="px-2 py-2 font-normal"><Hint label={zh ? "日产出" : "Day"} text={zh ? "假设这张已经开工，按今天的排放和全网权重，大约每天分到的 TAPE。没开工就不是实际到账。" : "TAPE per day if this circuit were already mining at today's emission and network weight."} /></th>
+                    <th className="px-2 py-2 font-normal"><Hint label={zh ? "日产能价" : "Day px"} text={zh ? "卖价除以估算日产出。只用来比较，不是收益承诺。全网权重变了，这个价就变。" : "Ask divided by the estimated daily TAPE. A comparison, not a promise."} /></th>
                     <th className="px-2 py-2 font-normal">{zh ? "状态" : "State"}</th>
                     <th className="px-2 py-2 text-right font-normal">{zh ? "操作" : "Act"}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {lists.length === 0 && owned.length === 0 ? (
-                    <tr><td colSpan={7} className="px-3 py-6 text-ink/55">{zh ? "还没有挂出的电路，钱包里也没有可挂的。" : "Nothing is listed, and the wallet has none to list."}</td></tr>
+                    <tr><td colSpan={8} className="px-3 py-6 text-ink/55">{zh ? "还没有挂出的电路，钱包里也没有可挂的。" : "Nothing is listed, and the wallet has none to list."}</td></tr>
                   ) : null}
                   {lists.map((row) => {
                     const shape = shapes.get(row.id.toString());
                     const mine = account && row.seller.toLowerCase() === account.toLowerCase();
+                    const out = yieldOf(shape?.gates ?? "0", row.price, pace);
                     return (
                       <tr key={`l-${row.id}`} className="border-t border-gold/20">
                         <td className="px-2 py-2 font-mono">#{row.id.toString()}</td>
-                        <td className="px-2 py-2 font-mono">{shape?.nIn ?? "—"}</td>
-                        <td className="px-2 py-2 font-mono">{shape?.nOut ?? "—"}</td>
+                        <td className="px-2 py-2 font-mono">{zh ? "入" : "In"} {shape?.nIn ?? "—"} → {zh ? "出" : "Out"} {shape?.nOut ?? "—"}<br />{zh ? "态" : "St"} {shape?.state ?? "—"}</td>
                         <td className="px-2 py-2 font-mono">{shape ? Number(shape.gates).toLocaleString("en-US") : "—"}</td>
                         <td className="px-2 py-2 font-mono">{usdtText(row.price, 4)}</td>
+                        <td className="px-2 py-2 font-mono">{out.tape}</td>
+                        <td className="px-2 py-2 font-mono">{out.day}</td>
                         <td className="px-2 py-2">{mine ? (zh ? "我挂的" : "Mine") : (zh ? "在售" : "Listed")}</td>
                         <td className="px-2 py-2 text-right">
                           {mine
                             ? <button type="button" disabled={busy} className="min-h-8 border border-gold px-2 disabled:opacity-40" onClick={() => run(() => cancelSpotCircuit(account, row.id), zh ? "电路已撤下。" : "The circuit is off the book.")}>{zh ? "撤下" : "Cancel"}</button>
-                            : <button type="button" disabled={busy} className="min-h-8 bg-[#089981] px-2 text-white disabled:opacity-40" onClick={() => run(() => buySpotCircuit(account ?? "", row.id, row.price), zh ? "电路已买下。" : "The circuit is yours.")}>{zh ? "买入" : "Buy"}</button>}
+                            : <button type="button" disabled={busy} className="min-h-8 bg-[#f23645] px-2 text-white disabled:opacity-40" onClick={() => run(() => buySpotCircuit(account ?? "", row.id, row.price), zh ? "电路已买下。" : "The circuit is yours.")}>{zh ? "买入" : "Buy"}</button>}
                         </td>
                       </tr>
                     );
                   })}
-                  {owned.map((row) => (
+                  {owned.map((row) => {
+                    const out = yieldOf(row.gates, null, pace);
+                    return (
                     <tr key={`o-${row.id}`} className={`border-t border-gold/20 ${circuitId === row.id ? "bg-gold/10" : ""}`}>
                       <td className="px-2 py-2 font-mono">#{row.id}</td>
-                      <td className="px-2 py-2 font-mono">{row.nIn}</td>
-                      <td className="px-2 py-2 font-mono">{row.nOut}</td>
+                      <td className="px-2 py-2 font-mono">{zh ? "入" : "In"} {row.nIn} → {zh ? "出" : "Out"} {row.nOut}</td>
                       <td className="px-2 py-2 font-mono">{Number(row.gates).toLocaleString("en-US")}</td>
                       <td className="px-2 py-2 text-ink/45">—</td>
+                      <td className="px-2 py-2 font-mono">{out.tape}</td>
+                      <td className="px-2 py-2">—</td>
                       <td className="px-2 py-2">{zh ? "在钱包" : "Wallet"}</td>
                       <td className="px-2 py-2 text-right">
                         <button type="button" className="min-h-8 border border-gold px-2" onClick={() => setCircuitId(row.id)}>{zh ? "挂出" : "List"}</button>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                   {locked.map((row) => {
                     const due = row.unlock * 1000 <= Date.now();
+                    const out = yieldOf(String(row.gates), null, pace);
                     return (
                       <tr key={`k-${row.id}`} className="border-t border-gold/20 text-ink/60">
                         <td className="px-2 py-2 font-mono">#{row.circuitId}</td>
                         <td className="px-2 py-2">—</td>
-                        <td className="px-2 py-2">—</td>
                         <td className="px-2 py-2 font-mono">{row.gates.toLocaleString("en-US")}</td>
+                        <td className="px-2 py-2">—</td>
+                        <td className="px-2 py-2 font-mono">{out.tape}</td>
                         <td className="px-2 py-2">—</td>
                         <td className="px-2 py-2">{due ? (zh ? "到期可领" : "Claim") : (zh ? "锁着" : "Locked")}</td>
                         <td className="px-2 py-2 text-right">
@@ -416,11 +440,14 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
                 <br />
                 {zh ? "卖一" : "Ask"} {bestAsk > 0n ? usdtText(bestAsk, 4) : "—"}
                 <br />
-                {zh ? "价差" : "Spread"} {spread > 0n ? usdtText(spread, 4) : "—"}
+                <Hint label={zh ? "价差" : "Spread"} text={zh ? "卖一减去买一。价差越小，买卖两边越靠近。" : "Best ask minus best bid. A smaller spread means the two sides are closer."} /> {spread > 0n ? usdtText(spread, 4) : "—"}
               </p>
             </div>
             <div className="grid grid-cols-[1.1fr_0.8fr_0.9fr_auto] px-2 pb-1 font-mono text-[11px] text-ink/45">
-              <span>{zh ? "价格" : "Price"}</span><span>{zh ? "数量" : "Size"}</span><span>{zh ? "总额" : "Total"}</span><span className="text-right">{zh ? "指定成交" : "Take"}</span>
+              <Hint label={zh ? "价格" : "Price"} text={zh ? "这一档的单价，单位 USDT0。同一价格的单子已经并成一档，先挂的在前。" : "This level's price in USDT0. Orders at the same price are already merged."} />
+              <Hint label={zh ? "数量" : "Size"} text={zh ? `这一档还没成交的 ${name}。NAND 和 LATCH 只收整数。` : `${name} still open at this price. NAND and LATCH are whole numbers.`} />
+              <Hint label={zh ? "总额" : "Total"} text={zh ? "这一档的价格乘数量，还没扣千分之二。" : "Price times size at this level, before the 0.2 percent."} />
+              <span className="text-right"><Hint label={zh ? "指定成交" : "Take"} text={zh ? "按这一档的数量填进下单。数量还可以改少。" : "Fills the ticket with this level. You can still type less."} /></span>
             </div>
             <div className="max-h-[min(22rem,42vh)] overflow-y-auto border-t border-gold/30">
               {askView.length === 0 ? <p className="px-2 py-2 text-xs text-ink/55">{zh ? "卖盘空着。" : "No asks."}</p> : askView.map((level) => (
@@ -435,10 +462,10 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
             </div>
             {miss ? <p className="px-2 py-2 text-xs text-ink/55">{zh ? "这一次没读到。不写成 0。" : "This read missed. It is not shown as zero."}</p> : null}
             <div className="grid grid-cols-2 border-t border-gold/40 text-xs sm:grid-cols-4">
-              <Stat k={zh ? "卖盘可买" : "Asks can buy"} v={`${baseText(market, askBook.base)} ${name}`} s={zh ? `折合 ${usdtText(askBook.quote, 2)} · ${askBook.lots} 笔` : `${usdtText(askBook.quote, 2)} · ${askBook.lots}`} />
-              <Stat k={zh ? "买盘可卖" : "Bids can sell"} v={`${baseText(market, bidBook.base)} ${name}`} s={zh ? `折合 ${usdtText(bidBook.quote, 2)} · ${bidBook.lots} 笔` : `${usdtText(bidBook.quote, 2)} · ${bidBook.lots}`} />
-              <Stat k={zh ? "已读成交" : "Prints read"} v={`${traded.n}${zh ? " 笔" : ""}`} s={`${usdtText(traded.quote, 2)} USDT0`} />
-              <Stat k={zh ? "已收手续费" : "Fees read"} v={`${usdtText(traded.fee, 4)} USDT0`} s={zh ? "只算读到的成交" : "Of the prints read"} />
+              <Stat k={<Hint label={zh ? "卖盘可买" : "Asks can buy"} text={zh ? "所有卖单加起来，现在还能买多少。折合是按各档价格算的 USDT0。" : "Size still offered by asks, and its USDT0 value."} />} v={`${baseText(market, askBook.base)} ${name}`} s={zh ? `折合 ${usdtText(askBook.quote, 2)} · ${askBook.lots} 笔` : `${usdtText(askBook.quote, 2)} · ${askBook.lots}`} />
+              <Stat k={<Hint label={zh ? "买盘可卖" : "Bids can sell"} text={zh ? "所有买单加起来，现在还能卖多少。" : "Size still bid, and its USDT0 value."} />} v={`${baseText(market, bidBook.base)} ${name}`} s={zh ? `折合 ${usdtText(bidBook.quote, 2)} · ${bidBook.lots} 笔` : `${usdtText(bidBook.quote, 2)} · ${bidBook.lots}`} />
+              <Stat k={<Hint label={zh ? "已读成交" : "Prints read"} text={zh ? "这段区块里读到的成交笔数和金额。更早的不在这行里。" : "Prints read in this block window. Older ones are not included."} />} v={`${traded.n}${zh ? " 笔" : ""}`} s={`${usdtText(traded.quote, 2)} USDT0`} />
+              <Stat k={<Hint label={zh ? "已收手续费" : "Fees read"} text={zh ? "这些成交里已经扣下的千分之二，进收费地址。卖方实收 99.8%。" : "The 0.2 percent already taken on these prints. Sellers receive 99.8 percent."} />} v={`${usdtText(traded.fee, 4)} USDT0`} s={zh ? "只算读到的成交" : "Of the prints read"} />
             </div>
             <p className="px-3 py-2 text-[11px] leading-5 text-ink/50">{zh ? "同一价格并成一档。点价格填右边，点右边的按钮按这一档的数量成交，数量仍可改少。" : "One price is one level. Tap the price to fill the ticket. The button takes that size, and you can still type less."}</p>
           </article>

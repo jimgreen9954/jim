@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { copy } from "@/lib/copy";
 import { startPersistence, useExchange } from "@/lib/exchange-store";
 import { fmtPct, fmtPx, fmtUsd } from "@/lib/format";
@@ -196,7 +196,18 @@ function InviteDock() {
   const [accrued, setAccrued] = useState(0);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const dock = useRef<HTMLDivElement>(null);
   useEffect(() => onAccount(setAccount), []);
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: PointerEvent) => {
+      const node = event.target;
+      if (node instanceof Node && dock.current?.contains(node)) return;
+      setOpen(false);
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [open]);
   useEffect(() => {
     const hash = window.location.hash.replace(/^#/, "");
     const fromHash = hash.startsWith("ref=") ? decodeURIComponent(hash.slice(4)) : "";
@@ -240,13 +251,11 @@ function InviteDock() {
   };
   const unit = chain === "xlayer" ? "USDT0" : "USDT";
   return (
-    <div className="relative">
+    <div className="relative" ref={dock}>
       <button type="button" className={`min-h-9 px-2 text-xs ${open ? "bg-ink text-paper" : "text-ink/80"}`} onClick={() => setOpen((on) => !on)}>
         {zh ? "邀请" : "Invite"}
       </button>
       {open ? (
-        <>
-          <button type="button" aria-label={zh ? "关闭邀请" : "Close invite"} className="fixed inset-0 z-40 cursor-default bg-transparent" onClick={() => setOpen(false)} />
           <div className="absolute right-0 top-full z-50 mt-2 w-[min(22rem,calc(100vw-1.5rem))] border border-gold bg-paper p-3 text-sm shadow-plate">
           <div className="grid grid-cols-2 border border-gold">
             <button type="button" className={`min-h-9 ${chain === "xlayer" ? "bg-ink text-paper" : ""}`} onClick={() => setChain("xlayer")}>X Layer</button>
@@ -284,7 +293,6 @@ function InviteDock() {
           </div>
           {note ? <p className="mt-2 text-xs leading-5">{note}</p> : null}
           </div>
-        </>
       ) : null}
     </div>
   );

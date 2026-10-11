@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Hint } from "@/components/exchange/hint";
 import { bindGate, cancelGateChain, claimGate, closeGateChain, gateAddress, gateMark, gateReady, openGate, pushMark, readGateChain, readGateRebate, registerGate, takeGateChain, type ChainDeal, type ChainOrder } from "@/lib/gate-chain";
 import { connectBsc } from "@/lib/bsc";
 import { getTransistorDesk, type TransistorDesk } from "@/lib/transistor-market";
@@ -220,15 +221,15 @@ export function TransistorDesk() {
               <p className="font-display text-2xl italic">{gate ? `${gate.name} / ${gate.kind}` : "NAND"}</p>
             </div>
             <div className="text-right">
-              <p className="text-xs tracking-widest text-gold">{zh ? "tapeout 最新成交" : "Latest tapeout trade"}</p>
+              <p className="text-xs tracking-widest text-gold"><Hint label={zh ? "tapeout 最新成交" : "Latest tapeout trade"} text={zh ? "tapeout 上这一档 NAND 或 LATCH 的最新成交价。合约结算跟着它走，不是你填的限价。连续推进一次最多 0.5%。" : "The latest tapeout trade for this NAND or LATCH. Settlement follows it, not your limit. Each push moves at most 0.5 percent."} /></p>
               <p className="font-mono text-2xl tabular-nums">{px(mark)} BNB</p>
               <p className={`font-mono text-xs ${chainMark > 0 && mark > 0 && (chainMark / mark < 0.97 || chainMark / mark > 1.03) ? "text-sell" : "text-ink/50"}`}>{zh ? "合约结算" : "Contract"} {chainMark > 0 ? `${px(chainMark)} BNB` : "—"}{chainMark > 0 && mark > 0 && (chainMark / mark < 0.97 || chainMark / mark > 1.03) ? (zh ? " · 跟最新成交有差，每 30 秒最多挪 0.5%" : " · lags the latest trade, 0.5% every 30s") : ""}</p>
             </div>
           </div>
           <div className="grid grid-cols-[5rem_1fr_4.5rem_auto] gap-2 px-2 py-1 text-xs text-ink/50">
-            <span>{zh ? "价格" : "Price"}</span>
+            <Hint label={zh ? "价格" : "Price"} text={zh ? "这张挂单的限价，单位 BNB。成交和盈亏仍按推进后的结算价，不按这口限价分钱。" : "The order's limit in BNB. PnL still uses the pushed settlement price."} />
             <span>{zh ? "地址" : "Address"}</span>
-            <span>{zh ? "保证金" : "Margin"}</span>
+            <Hint label={zh ? "保证金" : "Margin"} text={zh ? "锁进这份合约的 BSC USDT。亏到大约一半，任何人都可以强平。" : "BSC USDT locked in this contract. Around half down, anyone can liquidate."} />
             <span />
           </div>
           {asks.map((row) => (
@@ -278,7 +279,7 @@ export function TransistorDesk() {
             <input value={limit} onChange={(event) => setLimit(event.target.value)} inputMode="decimal" placeholder={px(mark)} className="mt-1 w-full border border-gold bg-transparent px-2 py-2 font-mono outline-none" />
           </label>
           <label className="text-sm">
-            {zh ? "保证金 USDT" : "Margin USDT"}
+            <Hint label={zh ? "保证金 USDT" : "Margin USDT"} text={zh ? "开仓锁进合约的 BSC USDT。名义大约是保证金乘杠杆。平台不经手。" : "BSC USDT locked when you open. Notional is about margin times leverage."} />
             <input value={margin} onChange={(event) => setMargin(event.target.value)} inputMode="decimal" className="mt-1 w-full border border-gold bg-transparent px-2 py-2 font-mono outline-none" />
           </label>
           <div className="grid grid-cols-3 gap-1">
@@ -290,7 +291,7 @@ export function TransistorDesk() {
             <button type="button" disabled={busy} className="min-h-11 bg-ink text-paper disabled:opacity-50" onClick={() => place(true)}>{zh ? "开多" : "Long"}</button>
             <button type="button" disabled={busy} className="min-h-11 border border-gold disabled:opacity-50" onClick={() => place(false)}>{zh ? "开空" : "Short"}</button>
           </div>
-          <p className="text-xs leading-relaxed text-ink/60">{zh ? "划走 BSC 的 USDT。盈亏按推进后的 tapeout 价，不按限价。" : "Moves BSC USDT. PnL uses the pushed tapeout price, not your limit."}</p>
+          <p className="text-xs leading-relaxed text-ink/60"><Hint label={zh ? "结算" : "Settlement"} text={zh ? "盈亏按推进后的 tapeout 价，不按你填的限价。没有保险基金。BSC 和 X Layer 不能并成一笔。" : "PnL uses the pushed tapeout price, not your limit. There is no insurance fund."} /></p>
           {perp ? <p className="break-all font-mono text-xs">{perp}</p> : null}
           <p className="text-xs tracking-widest text-gold">{zh ? "这份合约上的推荐" : "Referral on this contract"}</p>
           {rebate.code ? (

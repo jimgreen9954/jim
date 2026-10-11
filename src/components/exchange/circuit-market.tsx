@@ -5,6 +5,41 @@ import { BSC, TxPending, txUrl } from "@/lib/bsc";
 import { connectBsc } from "@/lib/bsc";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import { Kline } from "@/components/exchange/kline";
+import { Hint } from "@/components/exchange/hint";
+
+function noted(zh: boolean, label: string): string | null {
+  const notes: Record<string, string> = zh
+    ? {
+        "日产能参考价": "买下每天产出 1 BEM 的电路，参考要花多少 BNB。这是全市场的参考，不是某一张的卖价。",
+        "挂单算力": "现在还挂着的电路，算力 H 加在一起。",
+        H: "算力 H 是这张电路当前计入挖矿的权重。验证过的进验证池，没验证的进另一池。",
+        "日产能价": "卖价除以预计 24 小时产出的 BEM。越低，同样的钱买到的日产出越多。",
+        "卖价": "卖方挂出的单价。买方按这个数付 BNB。它不是日产能价。",
+        "算力均价": "卖价除以算力 H。每一份算力花了多少 BNB。",
+        "晶体均价": "卖价除以这张电路直接用掉的 NAND 和 LATCH 之和。",
+        "预计24h": "按现在的全网权重，这张电路大约每天分到的 BEM。有人新开工，这个数会变。",
+        "日产能 K 线": "每根蜡烛是一小时的日产能价。鼠标停在字上出说明，移开就消失。绿涨红跌。",
+        "算力": "按算力 H 从高到低排。H 是这张电路计入挖矿的权重。",
+      }
+    : {
+        "Day-output ref": "BNB for one BEM of daily output. A market reference, not one circuit's ask.",
+        "Listed H": "Hash of the circuits still offered, added together.",
+        H: "Hash currently counted for mining.",
+        "Day px": "Ask divided by estimated BEM over 24 hours. Lower buys more daily output.",
+        Ask: "The seller's price in BNB. Not the day-output price.",
+        "Per H": "Ask divided by hash.",
+        Crystal: "Ask divided by the NAND plus LATCH used in this circuit.",
+        "24h": "Estimated BEM this circuit receives in a day at the current network weight.",
+        Hash: "Sort by hash, high to low.",
+        "Day chart": "Each candle is one hour of the day-output price. The note hides when the pointer leaves.",
+      };
+  return notes[label] ?? null;
+}
+
+function Label({ zh, text }: { zh: boolean; text: string }) {
+  const tip = noted(zh, text);
+  return tip ? <Hint label={text} text={tip} /> : <>{text}</>;
+}
 
 function num(value: number | null | undefined, digits = 4): string {
   if (value == null || !Number.isFinite(value)) return "—";
@@ -118,7 +153,7 @@ export function CircuitMarket({ zh, lang }: { zh: boolean; lang: "zh" | "en" }) 
             [zh ? "挂单算力" : "Listed H", board?.listedHash != null ? board.listedHash.toLocaleString("en-US") : "—"],
           ].map(([k, v]) => (
             <p key={k} className="border-gold/30 px-2 py-2 [&:not(:last-child)]:border-r">
-              <span className="block text-[10px] text-ink/45">{k}</span>
+              <span className="block text-[10px] text-ink/45"><Label zh={zh} text={k} /></span>
               <span className="font-mono text-sm">{v}</span>
             </p>
           ))}
@@ -129,10 +164,13 @@ export function CircuitMarket({ zh, lang }: { zh: boolean; lang: "zh" | "en" }) 
               {id === "official" ? (zh ? "官方矿机" : "Official") : id === "other" ? (zh ? "其他电路" : "Other") : id === "mine" ? (zh ? "我的电路" : "Mine") : zh ? "成交" : "Prints"}
             </button>
           ))}
-          <button type="button" onClick={() => setChart((on) => !on)} className={`ml-auto border px-2 py-1 text-xs ${chart ? "border-ink bg-ink text-paper" : "border-gold"}`}>{zh ? "日产能 K 线" : "Chart"}</button>
+          <span className="ml-auto inline-flex items-center gap-1">
+            <Label zh={zh} text={zh ? "日产能 K 线" : "Day chart"} />
+            <button type="button" onClick={() => setChart((on) => !on)} className={`border px-2 py-1 text-xs ${chart ? "border-ink bg-ink text-paper" : "border-gold"}`}>{chart ? (zh ? "收起" : "Hide") : (zh ? "展开" : "Show")}</button>
+          </span>
           {(["day", "ask", "hash"] as const).map((id) => (
             <button key={id} type="button" onClick={() => setSort(id)} className={`border px-2 py-1 text-xs ${sort === id ? "border-ink" : "border-gold"}`}>
-              {id === "day" ? (zh ? "日产能价" : "Day px") : id === "ask" ? (zh ? "卖价" : "Ask") : zh ? "算力" : "Hash"}
+              {id === "day" ? <Label zh={zh} text={zh ? "日产能价" : "Day px"} /> : id === "ask" ? <Label zh={zh} text={zh ? "卖价" : "Ask"} /> : <Label zh={zh} text={zh ? "算力" : "Hash"} />}
             </button>
           ))}
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={zh ? "搜处理器或编号" : "Search"} className="min-h-8 w-36 border border-gold/50 bg-transparent px-2 text-xs outline-none" />
@@ -206,7 +244,7 @@ function Book({ zh, rows, picked, busy, onPick, onBuy }: { zh: boolean; rows: Ci
         <thead className="sticky top-0 bg-paper text-ink/45">
           <tr>
             {[zh ? "时间" : "Age", zh ? "电路" : "Circuit", zh ? "结构" : "Shape", zh ? "状态" : "Status", "H", zh ? "晶体均价" : "Crystal", zh ? "算力均价" : "Per H", zh ? "预计24h" : "24h", zh ? "日产能价" : "Day px", zh ? "卖价" : "Ask", zh ? "最高出价" : "Bid"].map((head) => (
-              <th key={head} className="px-2 py-2 font-normal">{head}</th>
+              <th key={head} className="px-2 py-2 font-normal"><Label zh={zh} text={head} /></th>
             ))}
             <th className="sticky right-0 bg-paper px-2 py-2 text-right font-normal">{zh ? "买入" : "Buy"}</th>
           </tr>
@@ -246,7 +284,7 @@ function Prints({ zh, rows }: { zh: boolean; rows: CircuitPrint[] }) {
         <thead className="sticky top-0 bg-paper text-ink/45">
           <tr>
             {[zh ? "时间" : "Time", zh ? "电路" : "Circuit", zh ? "结构" : "Shape", zh ? "状态" : "Status", "H", zh ? "晶体均价" : "Crystal", zh ? "算力均价" : "Per H", zh ? "预计24h" : "24h", zh ? "日产能价" : "Day px", zh ? "成交价" : "Price", zh ? "买卖" : "Who"].map((head) => (
-              <th key={head} className="px-2 py-2 font-normal">{head}</th>
+              <th key={head} className="px-2 py-2 font-normal"><Label zh={zh} text={head} /></th>
             ))}
           </tr>
         </thead>

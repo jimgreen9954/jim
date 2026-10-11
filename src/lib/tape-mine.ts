@@ -111,6 +111,21 @@ function dailyAt(start: bigint): bigint {
   return DAY >> era;
 }
 
+export async function readTapePace(): Promise<{ daily: bigint; weight: bigint } | null> {
+  try {
+    const [weight, start] = await client.multicall({
+      contracts: [
+        { address: TAPE_MINE, abi: mineAbi, functionName: "totalWeight" },
+        { address: TAPE_MINE, abi: mineAbi, functionName: "start" },
+      ],
+      allowFailure: false,
+    });
+    return { daily: dailyAt(start), weight };
+  } catch {
+    return null;
+  }
+}
+
 export type TapeWire = {
   supply: string;
   cap: string;
