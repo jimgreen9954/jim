@@ -523,7 +523,7 @@ export function Kline({
       <svg
         ref={svgRef}
         viewBox={`0 0 ${VB_W} ${VB_H}`}
-        className="h-80 w-full touch-none overflow-hidden sm:h-[32rem] lg:h-[40rem]"
+        className="block h-auto w-full touch-none overflow-hidden"
         overflow="hidden"
         style={{ cursor: tool === "look" ? "grab" : "crosshair" }}
         role="img"

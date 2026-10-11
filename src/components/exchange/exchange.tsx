@@ -373,7 +373,7 @@ function ShopFloor({ shop, setShop }: { shop: ShopTab; setShop: (shop: ShopTab) 
   ] as const);
   return (
     <>
-      <div className="grid grid-cols-2 border border-gold sm:grid-cols-4">
+      <div className="grid grid-cols-2 border border-gold lg:grid-cols-4">
         <button type="button" onClick={() => setShop("book")} className={`min-h-14 px-2 text-sm leading-tight sm:min-h-11 ${shop === "book" ? "bg-ink text-paper" : ""}`}>
           <span className="block text-[10px] tracking-[0.14em] text-gold">X Layer</span>
           TAPELIQUID

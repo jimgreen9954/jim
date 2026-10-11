@@ -5,6 +5,7 @@ import { NPM } from "@/lib/lp";
 import { OFFICIAL } from "@/lib/official-books";
 import { LOCKED_REBATE } from "@/lib/seal-rebate";
 import { TAPE, TAPE_MINE } from "@/lib/tape-mine";
+import { TAPE_SPOT } from "@/lib/tape-spot";
 import { DEPLOYED, XLAYER } from "@/lib/xlayer";
 import { useExchange } from "@/lib/exchange-store";
 
@@ -25,7 +26,7 @@ const zh: Section[] = [
   {
     h: "风险",
     ps: [
-      "本页是产品规则，不是审计报告，也不是收益承诺。下列合约没有升级入口。已经锁入永续的保证金，不能通过修改网页取回。",
+      "本页是产品规则，不是审计报告，也不是收益承诺。下列合约没有升级入口。已经锁入永续的保证金，不能通过修改网页取回。没有管理员也不等于不能被攻击：合约没有经过独立审计。浅池上的标记价仍可能被带动。返佣合约的 clerk 只能取走返佣池里还没领的余额，不能动用户锁着的保证金。不通过下单函数直接转进合约的资产，谁都取不回。",
       "现货台费先付，是付出金额的 0.20%，在池子手续费之外。后面的兑换拒签或回滚，这一笔不退。回执还没读到时，同一金额不会再收一次。",
       "永续没有保险基金，也没有自动减仓。亏到保证金大约一半，任何人都可以强平。BSC 与 X Layer 不能并成一笔。",
       "BSC 标记价取 PancakeSwap 池约 10 分钟的时间加权均价。流动性不足时，该均价仍可能在短时间内被带动。新的 X Layer 永续不再采用收费地址写入的 BSC 价格。标记价由 Uniswap v4 的 OKB/BEM 与 Uniswap v3 的 USDT0/WOKB 合成。任何地址均可提交推进。连续推进时，单次变动不超过 0.5%，间隔不少于 30 秒。中断超过 30 分钟后，下一次推进可以采用池子即时价格。晶体管永续的标记仍仅接受收费地址写入。",
@@ -83,7 +84,7 @@ const zh: Section[] = [
   {
     h: "现货",
     ps: [
-      "工房现货是 X Layer 上的订单簿，不属于交易台。一份合约分四本账：TAPE、NAND、LATCH 以 USDT0 报价，电路按张定价。同一价格并为一档，先挂的订单在前。买方按该档价格支付。卖方实收 99.8%，千分之二进入收费地址。可成交部分即时成交，剩余部分继续挂单。页面列出卖盘可买、买盘可卖、已读成交与手续费，并按所填价格给出可成交数量与剩余挂出数量。费率、两个代币、晶体管、电路与收费地址均写在合约中。没有管理员，不能改费率，不能升级。未通过挂单函数直接转入的资产无法取回。若合约已经部署，其地址尚未写入本页。写入之前，只有完成部署的浏览器可以下单。",
+      `工房现货是 X Layer 上的订单簿，不属于交易台。一份合约分四本账：TAPE、NAND、LATCH 以 USDT0 报价，电路按张定价。同一价格并为一档，先挂的订单在前。买方按该档价格支付。卖方实收 99.8%，千分之二进入收费地址。可成交部分即时成交，剩余部分继续挂单。页面列出卖盘可买、买盘可卖、已读成交与手续费，并按所填价格给出可成交数量与剩余挂出数量。费率、两个代币、晶体管、电路与收费地址均写在合约中。没有管理员，不能改费率，不能升级。未通过挂单函数直接转入的资产无法取回。地址写在页面上，是 ${TAPE_SPOT}。收费地址按这个地址签一次部署之后，每台设备都能下单。在那一笔确认之前，这个地址上还没有合约。`,
       "挖矿页上方为两处交易入口，展开后进入。左侧为 tapeout 晶体管合约，保证金为 BSC 的 USDT。右侧为 TAPELIQUID，NAND 与 LATCH 以 USDT0 报价。领取在下方。铸造已经结束，页面不再提供铸造入口。钱包中既有的 NAND 与 LATCH 仍可流片，也可在 TAPELIQUID 卖出。",
     ],
   },
@@ -182,7 +183,7 @@ const zh: Section[] = [
   {
     h: "地址",
     ps: [
-      `收费 ${FEE_TO}。TAPE ${TAPE}。TAPE 挖矿 ${TAPE_MINE}。TAPE 池 0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641。晶圆锁仓 0xA28390924607F08aaD8d03F512B41b6a1c012Ace。电路锁仓 0x06c877cc158d9ca3547220f9fc156f39bce7013c。回购 0x53fa6A76ce9A3fE08698E04a4E9A674bd77a9DfF。旧回购 0x72e28d564A90eF3E76f599bC210454f5360E200C 不再使用。期限质押 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A。TAPELIQUID 电路 ${DEPLOYED.circuits}。TAPELIQUID 晶体管 ${DEPLOYED.transistors}。`,
+      `收费 ${FEE_TO}。TAPE ${TAPE}。TAPE 挖矿 ${TAPE_MINE}。TAPE 池 0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641。晶圆锁仓 0xA28390924607F08aaD8d03F512B41b6a1c012Ace。电路锁仓 0x06c877cc158d9ca3547220f9fc156f39bce7013c。回购 0x53fa6A76ce9A3fE08698E04a4E9A674bd77a9DfF。旧回购 0x72e28d564A90eF3E76f599bC210454f5360E200C 不再使用。期限质押 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A。工房现货 ${TAPE_SPOT}。TAPELIQUID 电路 ${DEPLOYED.circuits}。TAPELIQUID 晶体管 ${DEPLOYED.transistors}。`,
       `BSC 永续 ${BSC_REBATE}。X Layer 永续 ${KNOWN_XPERP}。标记 ${KNOWN_XMARK}。晶体管永续 ${GATE}。流动性仓位 ${NPM}。`,
       `BSC BEM ${BSC.bem}。BSC 桥 ${BEM_BRIDGE}。X Layer BEM ${X_BEM}。tapeout BEM 挖矿 0x7E2E0DC66a3bD9103E69b766afA62d9f7b697b46。`,
       `tapeout 晶体管市场 ${OFFICIAL.transistorMarket}。tapeout 电路市场 ${OFFICIAL.circuitMarket}。BEM 池 ${BSC.pool}。`,
@@ -204,7 +205,7 @@ const en: Section[] = [
   {
     h: "Risk",
     ps: [
-      "This page is the product rulebook. It is not an audit and it is not a statement of expected return. The contracts below have no upgrade path. Margin already locked in a perpetual cannot be recovered by editing the website.",
+      "This page is the product rulebook. It is not an audit and it is not a statement of expected return. The contracts below have no upgrade path. Margin already locked in a perpetual cannot be recovered by editing the website. No administrator does not mean the contracts cannot be attacked. They have not had an independent audit. A mark that reads a thin pool can still be moved. The rebate contract's clerk can take only the unclaimed balance in the rebate pool, not margin locked by users. Assets sent straight to a contract, outside an order, cannot be recovered.",
       "The spot desk fee is paid first. It is 0.20% of the amount paid, on top of the pool fee. If the later swap is rejected or reverts, that fee is not returned. While a receipt is still missing, the same amount is not charged again.",
       "Perpetuals have no insurance fund and no auto-deleveraging. Anyone can liquidate a position after about half the margin is lost. BSC and X Layer do not net into one trade.",
       "The BSC mark is a roughly 10-minute time-weighted average of the PancakeSwap pool. Thin liquidity can still move that average for a short interval. The new X Layer perpetual does not accept a BSC price posted by the fee address. Its mark is composed from the Uniswap v4 OKB/BEM pool and the Uniswap v3 USDT0/WOKB pool. Any address may submit an update. Consecutive updates move the mark by at most 0.5 percent and must be at least 30 seconds apart. After 30 minutes without an update, the next update may adopt the spot price of the pools. The transistor perpetual still accepts a mark only from the fee address.",
@@ -262,7 +263,7 @@ const en: Section[] = [
   {
     h: "Spot",
     ps: [
-      "Workshop spot is an X Layer order book. It is not the desk. One contract holds four books. TAPE, NAND and LATCH are quoted in USDT0. Each circuit is priced on its own. One price is one level, and the earlier order stands in front. The buyer pays that level. The seller receives 99.8 percent. The 0.2 percent is paid to the fee address. Size that can cross fills at once. The remainder rests. The page states the size offered by asks, the size bid, the prints read, the fees collected, and, at the price entered, how much would fill and how much would rest. The fee, both tokens, the transistors, the circuits and the fee address are written in the contract. There is no administrator. The fee cannot be changed and the contract cannot be upgraded. Assets sent to the contract outside an order cannot be recovered. If the contract has been deployed, its address is not yet written into this page. Until it is, only the browser that deployed it can trade.",
+      `Workshop spot is an X Layer order book. It is not the desk. One contract holds four books. TAPE, NAND and LATCH are quoted in USDT0. Each circuit is priced on its own. One price is one level, and the earlier order stands in front. The buyer pays that level. The seller receives 99.8 percent. The 0.2 percent is paid to the fee address. Size that can cross fills at once. The remainder rests. The page states the size offered by asks, the size bid, the prints read, the fees collected, and, at the price entered, how much would fill and how much would rest. The fee, both tokens, the transistors, the circuits and the fee address are written in the contract. There is no administrator. The fee cannot be changed and the contract cannot be upgraded. Assets sent to the contract outside an order cannot be recovered. The address on this page is ${TAPE_SPOT}. After the fee address signs the deployment for that address, every device can trade. Until that transaction is confirmed, there is no contract there.`,
       "The mine page opens with two markets. The left market is the tapeout transistor contracts, margined in BSC USDT. The right market is TAPELIQUID. NAND and LATCH are quoted in USDT0. Claims are below. Minting has ended and the mint control is no longer shown. NAND and LATCH already held in a wallet may still be taped out, or sold on TAPELIQUID.",
     ],
   },
@@ -363,7 +364,7 @@ const en: Section[] = [
   {
     h: "Addresses",
     ps: [
-      `Fee ${FEE_TO}. TAPE ${TAPE}. TAPE mine ${TAPE_MINE}. TAPE pool 0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641. Wafer lock 0xA28390924607F08aaD8d03F512B41b6a1c012Ace. Circuit lock 0x06c877cc158d9ca3547220f9fc156f39bce7013c. Buyback 0x53fa6A76ce9A3fE08698E04a4E9A674bd77a9DfF. Old buyback 0x72e28d564A90eF3E76f599bC210454f5360E200C is no longer used. Timed stake 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A. TAPELIQUID circuits ${DEPLOYED.circuits}. TAPELIQUID transistors ${DEPLOYED.transistors}.`,
+      `Fee ${FEE_TO}. TAPE ${TAPE}. TAPE mine ${TAPE_MINE}. TAPE pool 0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641. Wafer lock 0xA28390924607F08aaD8d03F512B41b6a1c012Ace. Circuit lock 0x06c877cc158d9ca3547220f9fc156f39bce7013c. Buyback 0x53fa6A76ce9A3fE08698E04a4E9A674bd77a9DfF. Old buyback 0x72e28d564A90eF3E76f599bC210454f5360E200C is no longer used. Timed stake 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A. Workshop spot ${TAPE_SPOT}. TAPELIQUID circuits ${DEPLOYED.circuits}. TAPELIQUID transistors ${DEPLOYED.transistors}.`,
       `BSC perpetual ${BSC_REBATE}. X Layer perpetual ${KNOWN_XPERP}. Mark ${KNOWN_XMARK}. Transistor perpetual ${GATE}. Liquidity positions ${NPM}.`,
       `BSC BEM ${BSC.bem}. BSC bridge ${BEM_BRIDGE}. X Layer BEM ${X_BEM}. tapeout BEM mine 0x7E2E0DC66a3bD9103E69b766afA62d9f7b697b46.`,
       `tapeout transistor market ${OFFICIAL.transistorMarket}. tapeout circuit market ${OFFICIAL.circuitMarket}. BEM pool ${BSC.pool}.`,

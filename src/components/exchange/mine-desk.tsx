@@ -167,7 +167,7 @@ export function MineDesk() {
       {trade === "bsc" ? <TransistorDesk /> : null}
       {trade === "x" ? <TapeSpotDesk zh={zh} lanes={[1, 2]} /> : null}
       <p className="text-xs tracking-widest text-gold">{zh ? "领取" : "Claim"}</p>
-      <div className="grid grid-cols-4 border border-gold">
+      <div className="grid grid-cols-2 border border-gold lg:grid-cols-4">
         <button type="button" onClick={() => setSheet("claim")} className={`min-h-11 px-1 text-xs sm:text-sm ${sheet === "claim" ? "bg-ink text-paper" : ""}`}>{zh ? "领取" : "Claim"}</button>
         <button type="button" onClick={() => setSheet("stake")} className={`min-h-11 px-1 text-xs sm:text-sm ${sheet === "stake" ? "bg-ink text-paper" : ""}`}>{zh ? "质押" : "Stake"}</button>
         <button type="button" onClick={() => setSheet("ash")} className={`min-h-11 px-1 text-xs sm:text-sm ${sheet === "ash" ? "bg-ink text-paper" : ""}`}>{zh ? "销毁" : "Burn"}</button>
