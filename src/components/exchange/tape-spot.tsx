@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { formatUnits } from "viem";
-import { myCircuits, XLAYER } from "@/lib/xlayer";
+import { circuitShapes, myCircuits, XLAYER } from "@/lib/xlayer";
 import { claimFreshCircuit, readCircuitLocks, type CircuitSeat } from "@/lib/tape-lock";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import {
@@ -99,19 +99,21 @@ function Quote({ zh, market, side, price, amount }: { zh: boolean; market: SpotM
   );
 }
 
-function Row({ level, max, bid, market, tag, onPick }: { level: Level; max: bigint; bid: boolean; market: number; tag?: string; onPick: () => void }) {
+function Row({ level, max, bid, market, tag, act, onPick, onAct }: { level: Level; max: bigint; bid: boolean; market: number; tag?: string; act: string; onPick: () => void; onAct: () => void }) {
   const width = max > 0n ? Number((level.size * 100n) / max) : 0;
   return (
-    <button type="button" onClick={onPick} className="relative grid min-h-8 grid-cols-[1.2fr_1fr_1fr_2rem] items-center px-2 text-left font-mono text-[13px] tabular-nums">
-      <span className={`absolute inset-y-0 right-0 ${bid ? "bg-gold/25" : "bg-sell/15"}`} style={{ width: `${Math.max(width, 2)}%` }} />
-      <span className={`relative flex items-baseline gap-1 ${bid ? "text-ink" : "text-sell"}`}>
+    <div role="button" tabIndex={0} onClick={onPick} onKeyDown={(event) => { if (event.key === "Enter") onPick(); }} className="relative grid min-h-8 w-full cursor-pointer grid-cols-[1.1fr_0.8fr_0.9fr_auto] items-center px-2 text-left font-mono text-[13px] tabular-nums">
+      <span className={`absolute inset-y-0 right-0 ${bid ? "bg-[#089981]/10" : "bg-[#f23645]/10"}`} style={{ width: `${Math.max(width, 2)}%` }} />
+      <span className={`relative flex items-baseline gap-1 ${bid ? "text-[#089981]" : "text-[#f23645]"}`}>
         {usdtText(level.price, 4)}
         {tag ? <span className="rounded-sm bg-gold/30 px-1 text-[10px] leading-4 text-ink/70">{tag}</span> : null}
       </span>
       <span className="relative">{baseText(market, level.size)}</span>
       <span className="relative text-ink/70">{usdtText(cost(market, level.size, level.price), 2)}</span>
-      <span className="relative text-right text-ink/45">{level.lots}</span>
-    </button>
+      <span className="relative">
+        <button type="button" onClick={(event) => { event.stopPropagation(); onAct(); }} className={`inline-flex min-h-7 items-center px-2 text-[11px] ${bid ? "bg-[#089981] text-white" : "bg-[#f23645] text-white"}`}>≤{baseText(market, level.size)} {act}</button>
+      </span>
+    </div>
   );
 }
 
@@ -130,7 +132,8 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   const [orders, setOrders] = useState<OpenOrder[]>([]);
   const [prints, setPrints] = useState<SpotPrint[]>([]);
   const [lists, setLists] = useState<CircuitAsk[]>([]);
-  const [owned, setOwned] = useState<{ id: string; gates: string }[]>([]);
+  const [owned, setOwned] = useState<{ id: string; gates: string; nIn: string; nOut: string }[]>([]);
+  const [shapes, setShapes] = useState<Map<string, { nIn: string; nOut: string; state: string; gates: string }>>(new Map());
   const [locked, setLocked] = useState<CircuitSeat[]>([]);
   const [circuitId, setCircuitId] = useState("");
   const [tab, setTab] = useState<"tape" | "mine">("tape");
@@ -194,8 +197,10 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
       Promise.all([readListings(), account ? myCircuits(account) : Promise.resolve([]), account ? readCircuitLocks(account) : Promise.resolve([])]).then(([rows, mine, seats]) => {
         if (dead) return;
         setLists(rows);
-        setOwned(mine.map((row) => ({ id: row.id, gates: row.gates })));
+        setOwned(mine.map((row) => ({ id: row.id, gates: row.gates, nIn: row.nIn, nOut: row.nOut })));
         setLocked(seats);
+        const ids = rows.map((row) => row.id);
+        if (ids.length) circuitShapes(ids).then((next) => { if (!dead) setShapes(next); }).catch(() => undefined);
       }).catch(() => undefined);
     };
     pull();
@@ -305,50 +310,98 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
         </div>
       ) : null}
       {lane === "circuit" ? (
-        <article className="border border-gold bg-card px-3 py-4">
-          <h3 className="font-display text-2xl italic">{zh ? "TAPELIQUID 电路" : "TAPELIQUID circuits"}</h3>
-          <p className="mt-1 text-xs leading-5 text-ink/60">{zh ? "一张电路一个价，不和别的并档。买方付标价。卖方实收 99.8%。锁着的电路不在钱包里，这里挂不上。" : "Each circuit has its own price. The buyer pays it. The seller receives 99.8 percent. A locked circuit is not in the wallet and cannot be listed."}</p>
-          <ul className="mt-3 border border-gold/40">
-            {lists.length === 0 ? <li className="px-2 py-3 text-sm text-ink/60">{zh ? "还没有挂出的电路。" : "No circuit is listed."}</li> : null}
-            {lists.map((row) => (
-              <li key={row.id.toString()} className="grid gap-2 border-t border-gold/30 px-2 py-2 text-sm sm:grid-cols-[1fr_auto] sm:items-center">
-                <span className="font-mono">#{row.id.toString()} · {usdtText(row.price, 4)} USDT0</span>
-                {account && row.seller.toLowerCase() === account.toLowerCase()
-                  ? <button type="button" disabled={busy} className="min-h-10 border border-gold px-3 text-sm disabled:opacity-40" onClick={() => run(() => cancelSpotCircuit(account, row.id), zh ? "电路已撤下。" : "The circuit is off the book.")}>{zh ? "撤下" : "Cancel"}</button>
-                  : <button type="button" disabled={busy} className="min-h-10 bg-ink px-3 text-sm text-paper disabled:opacity-40" onClick={() => run(() => buySpotCircuit(account ?? "", row.id, row.price), zh ? "电路已买下。" : "The circuit is yours.")}>{zh ? "买入" : "Buy"}</button>}
-              </li>
-            ))}
-          </ul>
-          <div className="mt-3 grid gap-2">
-            <p className="text-xs text-ink/60">{!account ? (zh ? "先连接钱包，才能列出这个地址名下的电路。" : "Connect the wallet to list its circuits.") : zh ? `钱包里可挂 ${owned.length} 张。锁着的 ${locked.length} 张不能挂，到期领回后才能选。` : `${owned.length} in the wallet can be listed. ${locked.length} are locked and cannot be listed until claimed.`}</p>
-            <div className="max-h-52 overflow-auto border border-gold">
-              {owned.length === 0 ? <p className="px-2 py-3 text-sm text-ink/60">{zh ? "钱包里没有可挂的 TAPELIQUID 电路。" : "No TAPELIQUID circuit in the wallet can be listed."}</p> : null}
-              {owned.map((row) => (
-                <button key={row.id} type="button" onClick={() => setCircuitId(row.id)} className={`flex min-h-11 w-full items-center justify-between border-t border-gold/30 px-2 text-left text-sm first:border-t-0 ${circuitId === row.id ? "bg-ink text-paper" : ""}`}>
-                  <span className="font-mono">#{row.id}</span>
-                  <span>{Number(row.gates).toLocaleString("en-US")} {zh ? "门" : "gates"}</span>
-                </button>
-              ))}
+        <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <article className="min-w-0 border border-gold bg-card">
+            <div className="grid grid-cols-3 border-b border-gold/40 text-xs sm:grid-cols-4">
+              <p className="px-3 py-2"><span className="block text-[10px] text-ink/45">{zh ? "在售" : "Listed"}</span><span className="font-mono text-base">{lists.length}</span></p>
+              <p className="px-3 py-2"><span className="block text-[10px] text-ink/45">{zh ? "钱包可挂" : "In wallet"}</span><span className="font-mono text-base">{owned.length}</span></p>
+              <p className="px-3 py-2"><span className="block text-[10px] text-ink/45">{zh ? "锁着" : "Locked"}</span><span className="font-mono text-base">{locked.length}</span></p>
+              <p className="hidden px-3 py-2 sm:block"><span className="block text-[10px] text-ink/45">{zh ? "结算" : "Settle"}</span><span className="font-mono text-base">99.8%</span></p>
             </div>
-            {locked.length > 0 ? (
-              <ul className="border border-gold/40">
-                {locked.map((row) => {
-                  const due = row.unlock * 1000 <= Date.now();
-                  return (
-                    <li key={row.id} className="grid gap-2 border-t border-gold/30 px-2 py-2 text-sm first:border-t-0 sm:grid-cols-[1fr_auto] sm:items-center">
-                      <span className="font-mono">#{row.circuitId} · {row.gates.toLocaleString("en-US")} {zh ? "门" : "gates"} · {due ? (zh ? "已到期" : "Unlocked") : (zh ? "未到期" : "Locked")}</span>
-                      {due ? <button type="button" disabled={busy} className="min-h-10 border border-gold px-3 text-sm disabled:opacity-40" onClick={() => run(() => claimFreshCircuit(account ?? "", BigInt(row.id)), zh ? "电路已领回钱包。" : "The circuit is back in the wallet.")}>{zh ? "领回" : "Claim"}</button> : <span className="text-xs text-ink/50">{zh ? "锁着不能挂" : "Locked"}</span>}
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : null}
-            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-              <input value={price} onChange={(event) => setPrice(event.target.value)} inputMode="decimal" placeholder={zh ? "整张价格 USDT0" : "Price in USDT0"} className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono" />
-              <button type="button" disabled={busy || !circuitId} className="min-h-12 bg-ink px-4 text-sm text-paper disabled:opacity-40" onClick={() => run(() => listSpotCircuit(account ?? "", BigInt(circuitId), spotPrice(price)), zh ? "电路已挂上。" : "The circuit is listed.")}>{circuitId ? (zh ? `挂出 #${circuitId}` : `List #${circuitId}`) : (zh ? "先选电路" : "Pick one")}</button>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[40rem] text-left text-xs">
+                <thead className="text-ink/45">
+                  <tr className="border-b border-gold/30">
+                    <th className="px-2 py-2 font-normal">{zh ? "电路" : "Circuit"}</th>
+                    <th className="px-2 py-2 font-normal">{zh ? "输入" : "In"}</th>
+                    <th className="px-2 py-2 font-normal">{zh ? "输出" : "Out"}</th>
+                    <th className="px-2 py-2 font-normal">{zh ? "门" : "Gates"}</th>
+                    <th className="px-2 py-2 font-normal">{zh ? "价格" : "Price"}</th>
+                    <th className="px-2 py-2 font-normal">{zh ? "状态" : "State"}</th>
+                    <th className="px-2 py-2 text-right font-normal">{zh ? "操作" : "Act"}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lists.length === 0 && owned.length === 0 ? (
+                    <tr><td colSpan={7} className="px-3 py-6 text-ink/55">{zh ? "还没有挂出的电路，钱包里也没有可挂的。" : "Nothing is listed, and the wallet has none to list."}</td></tr>
+                  ) : null}
+                  {lists.map((row) => {
+                    const shape = shapes.get(row.id.toString());
+                    const mine = account && row.seller.toLowerCase() === account.toLowerCase();
+                    return (
+                      <tr key={`l-${row.id}`} className="border-t border-gold/20">
+                        <td className="px-2 py-2 font-mono">#{row.id.toString()}</td>
+                        <td className="px-2 py-2 font-mono">{shape?.nIn ?? "—"}</td>
+                        <td className="px-2 py-2 font-mono">{shape?.nOut ?? "—"}</td>
+                        <td className="px-2 py-2 font-mono">{shape ? Number(shape.gates).toLocaleString("en-US") : "—"}</td>
+                        <td className="px-2 py-2 font-mono">{usdtText(row.price, 4)}</td>
+                        <td className="px-2 py-2">{mine ? (zh ? "我挂的" : "Mine") : (zh ? "在售" : "Listed")}</td>
+                        <td className="px-2 py-2 text-right">
+                          {mine
+                            ? <button type="button" disabled={busy} className="min-h-8 border border-gold px-2 disabled:opacity-40" onClick={() => run(() => cancelSpotCircuit(account, row.id), zh ? "电路已撤下。" : "The circuit is off the book.")}>{zh ? "撤下" : "Cancel"}</button>
+                            : <button type="button" disabled={busy} className="min-h-8 bg-[#089981] px-2 text-white disabled:opacity-40" onClick={() => run(() => buySpotCircuit(account ?? "", row.id, row.price), zh ? "电路已买下。" : "The circuit is yours.")}>{zh ? "买入" : "Buy"}</button>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {owned.map((row) => (
+                    <tr key={`o-${row.id}`} className={`border-t border-gold/20 ${circuitId === row.id ? "bg-gold/10" : ""}`}>
+                      <td className="px-2 py-2 font-mono">#{row.id}</td>
+                      <td className="px-2 py-2 font-mono">{row.nIn}</td>
+                      <td className="px-2 py-2 font-mono">{row.nOut}</td>
+                      <td className="px-2 py-2 font-mono">{Number(row.gates).toLocaleString("en-US")}</td>
+                      <td className="px-2 py-2 text-ink/45">—</td>
+                      <td className="px-2 py-2">{zh ? "在钱包" : "Wallet"}</td>
+                      <td className="px-2 py-2 text-right">
+                        <button type="button" className="min-h-8 border border-gold px-2" onClick={() => setCircuitId(row.id)}>{zh ? "挂出" : "List"}</button>
+                      </td>
+                    </tr>
+                  ))}
+                  {locked.map((row) => {
+                    const due = row.unlock * 1000 <= Date.now();
+                    return (
+                      <tr key={`k-${row.id}`} className="border-t border-gold/20 text-ink/60">
+                        <td className="px-2 py-2 font-mono">#{row.circuitId}</td>
+                        <td className="px-2 py-2">—</td>
+                        <td className="px-2 py-2">—</td>
+                        <td className="px-2 py-2 font-mono">{row.gates.toLocaleString("en-US")}</td>
+                        <td className="px-2 py-2">—</td>
+                        <td className="px-2 py-2">{due ? (zh ? "到期可领" : "Claim") : (zh ? "锁着" : "Locked")}</td>
+                        <td className="px-2 py-2 text-right">
+                          {due ? <button type="button" disabled={busy} className="min-h-8 border border-gold px-2" onClick={() => run(() => claimFreshCircuit(account ?? "", BigInt(row.id)), zh ? "电路已领回钱包。" : "The circuit is back in the wallet.")}>{zh ? "领回" : "Claim"}</button> : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-          </div>
-        </article>
+          </article>
+          <aside className="border border-gold bg-card px-3 py-3">
+            <p className="text-[11px] tracking-[0.16em] text-gold">{zh ? "挂出一张" : "List one"}</p>
+            <p className="mt-2 font-mono text-lg">{circuitId ? `#${circuitId}` : (zh ? "先在表里点挂出" : "Pick a row")}</p>
+            {(() => {
+              const row = owned.find((item) => item.id === circuitId);
+              return row ? <p className="mt-1 font-mono text-sm text-ink/70">{zh ? "输入" : "In"} {row.nIn} → {zh ? "输出" : "Out"} {row.nOut} · {Number(row.gates).toLocaleString("en-US")} {zh ? "门" : "gates"}</p> : null;
+            })()}
+            <label className="mt-3 grid gap-1 text-xs text-ink/55">
+              {zh ? "这一张的价格 USDT0" : "Price for this one, USDT0"}
+              <input value={price} onChange={(event) => setPrice(event.target.value)} inputMode="decimal" className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono text-base text-ink" />
+            </label>
+            <p className="mt-2 text-xs leading-5 text-ink/55">{zh ? "电路按张卖，不能拆。买方付这个价，卖方实收 99.8%。锁着的要先领回钱包。" : "A circuit sells whole. The buyer pays this price. The seller receives 99.8 percent. Claim a locked one before listing it."}</p>
+            <button type="button" disabled={busy || !circuitId} className="mt-3 min-h-12 w-full bg-ink text-sm text-paper disabled:opacity-40" onClick={() => run(() => listSpotCircuit(account ?? "", BigInt(circuitId), spotPrice(price)), zh ? "电路已挂上。" : "The circuit is listed.")}>{circuitId ? (zh ? `挂出 #${circuitId}` : `List #${circuitId}`) : (zh ? "先选电路" : "Pick one")}</button>
+          </aside>
+        </div>
       ) : (
         <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-3">
           <div className="min-w-0 pb-16 lg:pb-0">
@@ -366,18 +419,18 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
                 {zh ? "价差" : "Spread"} {spread > 0n ? usdtText(spread, 4) : "—"}
               </p>
             </div>
-            <div className="grid grid-cols-[1.2fr_1fr_1fr_2rem] px-2 pb-1 font-mono text-[11px] text-ink/45">
-              <span>{zh ? "价格" : "Price"}</span><span>{zh ? "数量" : "Size"}</span><span>{zh ? "总额" : "Total"}</span><span className="text-right">{zh ? "笔" : "Lots"}</span>
+            <div className="grid grid-cols-[1.1fr_0.8fr_0.9fr_auto] px-2 pb-1 font-mono text-[11px] text-ink/45">
+              <span>{zh ? "价格" : "Price"}</span><span>{zh ? "数量" : "Size"}</span><span>{zh ? "总额" : "Total"}</span><span className="text-right">{zh ? "指定成交" : "Take"}</span>
             </div>
-            <div className="border-t border-gold/30">
-              {askView.length === 0 ? <p className="px-2 py-4 text-xs leading-5 text-ink/55">{zh ? "卖盘还没有单。在右边填价格和数量，这一档就会出现在这里。" : "No asks yet. Enter a price and a size on the right and the level appears here."}</p> : askView.map((level) => (
-                <Row key={`a-${level.price}`} level={level} max={maxAsk} bid={false} market={market} tag={orders.some((row) => row.market === market && !row.bid && row.price === level.price) ? (zh ? "我的" : "mine") : undefined} onPick={() => { pick(level, false); setTicketOpen(true); }} />
+            <div className="max-h-[min(22rem,42vh)] overflow-y-auto border-t border-gold/30">
+              {askView.length === 0 ? <p className="px-2 py-2 text-xs text-ink/55">{zh ? "卖盘空着。" : "No asks."}</p> : askView.map((level) => (
+                <Row key={`a-${level.price}`} level={level} max={maxAsk} bid={false} market={market} tag={orders.some((row) => row.market === market && !row.bid && row.price === level.price) ? (zh ? "我的" : "mine") : undefined} act={zh ? "买入" : "Buy"} onPick={() => { pick(level, false); setTicketOpen(true); }} onAct={() => { pick(level, false); setAmount(market === 0 ? formatUnits(level.size, 8) : level.size.toString()); setTicketOpen(true); }} />
               ))}
             </div>
             <p className="border-y border-gold/40 px-2 py-1 text-center font-mono text-[11px] text-ink/55">{spread > 0n ? `${zh ? "价差" : "Spread"} ${usdtText(spread, 4)}` : (zh ? "还没有对敲的两档" : "No two-sided market")}</p>
             <div>
-              {bids.length === 0 ? <p className="px-2 py-4 text-xs leading-5 text-ink/55">{zh ? "买盘还没有单。买入挂在价差下面，同价的后来者排在后面。" : "No bids yet. A buy rests under the spread. A later order at the same price waits behind."}</p> : bids.map((level) => (
-                <Row key={`b-${level.price}`} level={level} max={maxBid} bid market={market} tag={orders.some((row) => row.market === market && row.bid && row.price === level.price) ? (zh ? "我的" : "mine") : undefined} onPick={() => { pick(level, true); setTicketOpen(true); }} />
+              {bids.length === 0 ? <p className="px-2 py-2 text-xs text-ink/55">{zh ? "买盘空着。" : "No bids."}</p> : bids.map((level) => (
+                <Row key={`b-${level.price}`} level={level} max={maxBid} bid market={market} tag={orders.some((row) => row.market === market && row.bid && row.price === level.price) ? (zh ? "我的" : "mine") : undefined} act={zh ? "卖出" : "Sell"} onPick={() => { pick(level, true); setTicketOpen(true); }} onAct={() => { pick(level, true); setAmount(market === 0 ? formatUnits(level.size, 8) : level.size.toString()); setTicketOpen(true); }} />
               ))}
             </div>
             {miss ? <p className="px-2 py-2 text-xs text-ink/55">{zh ? "这一次没读到。不写成 0。" : "This read missed. It is not shown as zero."}</p> : null}
@@ -387,7 +440,40 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
               <Stat k={zh ? "已读成交" : "Prints read"} v={`${traded.n}${zh ? " 笔" : ""}`} s={`${usdtText(traded.quote, 2)} USDT0`} />
               <Stat k={zh ? "已收手续费" : "Fees read"} v={`${usdtText(traded.fee, 4)} USDT0`} s={zh ? "只算读到的成交" : "Of the prints read"} />
             </div>
-            <p className="px-3 py-2 text-[11px] leading-5 text-ink/50">{zh ? "同一价格并成一档。点一档，价格和数量填进下单。" : "One price is one level. Tap a level to fill the ticket."}</p>
+            <p className="px-3 py-2 text-[11px] leading-5 text-ink/50">{zh ? "同一价格并成一档。点价格填右边，点右边的按钮按这一档的数量成交，数量仍可改少。" : "One price is one level. Tap the price to fill the ticket. The button takes that size, and you can still type less."}</p>
+          </article>
+          <article className="mt-3 border border-gold bg-card">
+            <div className="grid grid-cols-2 border-b border-gold">
+              <button type="button" onClick={() => setTab("tape")} className={`min-h-10 text-sm ${tab === "tape" ? "bg-ink text-paper" : ""}`}>{zh ? "成交" : "Prints"}</button>
+              <button type="button" onClick={() => setTab("mine")} className={`min-h-10 text-sm ${tab === "mine" ? "bg-ink text-paper" : ""}`}>{zh ? "我的挂单" : "My orders"}</button>
+            </div>
+            <div className="max-h-52 overflow-y-auto">
+            {tab === "tape" ? (
+              <ul>
+                {prints.length === 0 ? <li className="px-3 py-3 text-sm text-ink/60">{zh ? "这本账还没有成交。" : "No prints on this book."}</li> : null}
+                {prints.map((row) => (
+                  <li key={`${row.tx}-${row.base}`} className="grid grid-cols-4 gap-2 border-t border-gold/30 px-3 py-2 font-mono text-xs">
+                    <span>{usdtText(row.price, 4)}</span>
+                    <span>{baseText(market, row.base)} {NAMES[row.market] ?? name}</span>
+                    <span>{usdtText(row.quote, 2)}</span>
+                    <a className="text-right underline" href={`${XLAYER.explorer}/tx/${row.tx}`} target="_blank" rel="noreferrer">{zh ? "链上" : "Tx"}</a>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <ul>
+                {orders.length === 0 ? <li className="px-3 py-3 text-sm text-ink/60">{zh ? "这本账上没有你的挂单。" : "You have no resting order on this book."}</li> : null}
+                {orders.map((row) => (
+                  <li key={row.id.toString()} className="grid items-center gap-2 border-t border-gold/30 px-3 py-2 text-xs sm:grid-cols-[4rem_1fr_1fr_auto]">
+                    <span>{row.bid ? (zh ? "买" : "Bid") : (zh ? "卖" : "Ask")}</span>
+                    <span className="font-mono">{usdtText(row.price, 4)}</span>
+                    <span className="font-mono">{baseText(row.market, row.left)}</span>
+                    <button type="button" disabled={busy} className="min-h-9 border border-gold px-2 disabled:opacity-40" onClick={() => run(() => cancelSpot(account ?? "", row.id), zh ? "已撤单。没吃掉的退回钱包。" : "Cancelled. The rest is back in the wallet.")}>{zh ? "撤单" : "Cancel"}</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            </div>
           </article>
           </div>
           <div className={`${ticketOpen ? "fixed inset-x-0 bottom-0 z-40 max-h-[78dvh] overflow-y-auto border-t border-gold bg-paper px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-plate lg:static lg:z-auto lg:max-h-none lg:overflow-visible lg:border lg:bg-card lg:p-3 lg:shadow-none" : "fixed inset-x-0 bottom-0 z-40 border-t border-gold bg-paper px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:static lg:z-auto lg:border lg:bg-card lg:p-3"}`}>
@@ -448,38 +534,6 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
           </div>
         </div>
       )}
-      {lane !== "circuit" ? (
-        <article className="border border-gold bg-card">
-          <div className="grid grid-cols-2 border-b border-gold">
-            <button type="button" onClick={() => setTab("tape")} className={`min-h-10 text-sm ${tab === "tape" ? "bg-ink text-paper" : ""}`}>{zh ? "成交" : "Prints"}</button>
-            <button type="button" onClick={() => setTab("mine")} className={`min-h-10 text-sm ${tab === "mine" ? "bg-ink text-paper" : ""}`}>{zh ? "我的挂单" : "My orders"}</button>
-          </div>
-          {tab === "tape" ? (
-            <ul>
-              {prints.length === 0 ? <li className="px-3 py-3 text-sm text-ink/60">{zh ? "这本账还没有成交。" : "No prints on this book."}</li> : null}
-              {prints.map((row) => (
-                <li key={`${row.tx}-${row.base}`} className="grid grid-cols-3 gap-2 border-t border-gold/30 px-3 py-2 font-mono text-xs">
-                  <span>{usdtText(row.price, 4)}</span>
-                  <span>{baseText(market, row.base)}</span>
-                  <a className="text-right underline" href={`${XLAYER.explorer}/tx/${row.tx}`} target="_blank" rel="noreferrer">{usdtText(row.quote, 2)}</a>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <ul>
-              {orders.length === 0 ? <li className="px-3 py-3 text-sm text-ink/60">{zh ? "这本账上没有你的挂单。" : "You have no resting order on this book."}</li> : null}
-              {orders.map((row) => (
-                <li key={row.id.toString()} className="grid items-center gap-2 border-t border-gold/30 px-3 py-2 text-xs sm:grid-cols-[5rem_1fr_1fr_auto]">
-                  <span>{row.bid ? (zh ? "买" : "Bid") : (zh ? "卖" : "Ask")}</span>
-                  <span className="font-mono">{usdtText(row.price, 4)}</span>
-                  <span className="font-mono">{baseText(row.market, row.left)}</span>
-                  <button type="button" disabled={busy} className="min-h-9 border border-gold px-2 disabled:opacity-40" onClick={() => run(() => cancelSpot(account ?? "", row.id), zh ? "已撤单。没吃掉的退回钱包。" : "Cancelled. The rest is back in the wallet.")}>{zh ? "撤单" : "Cancel"}</button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </article>
-      ) : null}
       <p className="break-all text-[11px] text-ink/45">
         <a className="underline" href={`${XLAYER.explorer}/address/${spot}`} target="_blank" rel="noreferrer">{spot}</a>
       </p>

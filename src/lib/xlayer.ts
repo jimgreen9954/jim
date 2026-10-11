@@ -403,6 +403,23 @@ async function ownedCircuits(): Promise<{ at: number; last: number; owners: Map<
   return circuitFlight;
 }
 
+export async function circuitShapes(ids: bigint[]): Promise<Map<string, { nIn: string; nOut: string; state: string; gates: string }>> {
+  const out = new Map<string, { nIn: string; nOut: string; state: string; gates: string }>();
+  for (let i = 0; i < ids.length; i += 80) {
+    const slice = ids.slice(i, i + 80);
+    const rows = await client.multicall({
+      contracts: slice.map((id) => ({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "circuitInfo" as const, args: [id] as const })),
+      allowFailure: true,
+    });
+    rows.forEach((row, index) => {
+      if (row.status !== "success" || !Array.isArray(row.result)) return;
+      const info = row.result as readonly [bigint, bigint, bigint, bigint];
+      out.set(slice[index].toString(), { nIn: info[0].toString(), nOut: info[1].toString(), state: info[2].toString(), gates: info[3].toString() });
+    });
+  }
+  return out;
+}
+
 export async function myCircuits(owner: string): Promise<{ id: string; gates: string; nIn: string; nOut: string }[]> {
   const index = await ownedCircuits();
   const ids = index.owners.get(owner.toLowerCase()) ?? [];
