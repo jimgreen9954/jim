@@ -125,6 +125,29 @@ export async function readListings(): Promise<CircuitAsk[]> {
   return row[0].map((id, i) => ({ id, seller: row[1][i] ?? "", price: row[2][i] ?? 0n }));
 }
 
+const boughtEvent = parseAbiItem("event CircuitBought(uint256 indexed id, address indexed buyer, address indexed seller, uint128 price, uint128 fee)");
+
+export type CircuitPrint = { tx: string; id: string; buyer: string; seller: string; price: bigint; fee: bigint; ts: number };
+
+export async function readCircuitPrints(): Promise<CircuitPrint[]> {
+  const spot = spotAddress();
+  if (!spot) return [];
+  const tip = await client.getBlockNumber();
+  const from = tip > 80_000n ? tip - 80_000n : 0n;
+  const logs = await client.getLogs({ address: spot, event: boughtEvent, fromBlock: from, toBlock: tip });
+  const rows = logs.slice(-24);
+  const stamps = await Promise.all(rows.map((log) => (log.blockNumber == null ? 0 : client.getBlock({ blockNumber: log.blockNumber }).then((block) => Number(block.timestamp)).catch(() => 0))));
+  return rows.map((log, i) => ({
+    tx: log.transactionHash ?? "",
+    id: (log.args.id ?? 0n).toString(),
+    buyer: log.args.buyer ?? "",
+    seller: log.args.seller ?? "",
+    price: log.args.price ?? 0n,
+    fee: log.args.fee ?? 0n,
+    ts: stamps[i] ?? 0,
+  })).reverse();
+}
+
 export async function readSpotPrints(market: SpotMarket | null): Promise<SpotPrint[]> {
   const spot = spotAddress();
   if (!spot) return [];
