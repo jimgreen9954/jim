@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { formatUnits } from "viem";
 import { myCircuits, XLAYER } from "@/lib/xlayer";
+import { claimFreshCircuit, readCircuitLocks, type CircuitSeat } from "@/lib/tape-lock";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import {
   baseText,
@@ -127,6 +128,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   const [prints, setPrints] = useState<SpotPrint[]>([]);
   const [lists, setLists] = useState<CircuitAsk[]>([]);
   const [owned, setOwned] = useState<{ id: string; gates: string }[]>([]);
+  const [locked, setLocked] = useState<CircuitSeat[]>([]);
   const [circuitId, setCircuitId] = useState("");
   const [tab, setTab] = useState<"tape" | "mine">("tape");
   const [miss, setMiss] = useState(false);
@@ -184,10 +186,11 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
     if (!spot || !ready || lane !== "circuit") return;
     let dead = false;
     const pull = () => {
-      Promise.all([readListings(), account ? myCircuits(account) : Promise.resolve([])]).then(([rows, mine]) => {
+      Promise.all([readListings(), account ? myCircuits(account) : Promise.resolve([]), account ? readCircuitLocks(account) : Promise.resolve([])]).then(([rows, mine, seats]) => {
         if (dead) return;
         setLists(rows);
         setOwned(mine.map((row) => ({ id: row.id, gates: row.gates })));
+        setLocked(seats);
       }).catch(() => undefined);
     };
     pull();
@@ -295,13 +298,34 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
               </li>
             ))}
           </ul>
-          <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
-            <select value={circuitId} onChange={(event) => setCircuitId(event.target.value)} className="min-h-12 border border-gold bg-transparent px-2 text-sm">
-              <option value="">{zh ? "选一张在钱包里的电路" : "A circuit in the wallet"}</option>
-              {owned.map((row) => <option key={row.id} value={row.id}>#{row.id} · {Number(row.gates).toLocaleString("en-US")} {zh ? "门" : "gates"}</option>)}
-            </select>
-            <input value={price} onChange={(event) => setPrice(event.target.value)} inputMode="decimal" placeholder={zh ? "整张价格 USDT0" : "Price in USDT0"} className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono" />
-            <button type="button" disabled={busy || !circuitId} className="min-h-12 bg-ink px-4 text-sm text-paper disabled:opacity-40" onClick={() => run(() => listSpotCircuit(account ?? "", BigInt(circuitId), spotPrice(price)), zh ? "电路已挂上。" : "The circuit is listed.")}>{zh ? "挂出" : "List"}</button>
+          <div className="mt-3 grid gap-2">
+            <p className="text-xs text-ink/60">{!account ? (zh ? "先连接钱包，才能列出这个地址名下的电路。" : "Connect the wallet to list its circuits.") : zh ? `钱包里可挂 ${owned.length} 张。锁着的 ${locked.length} 张不能挂，到期领回后才能选。` : `${owned.length} in the wallet can be listed. ${locked.length} are locked and cannot be listed until claimed.`}</p>
+            <div className="max-h-52 overflow-auto border border-gold">
+              {owned.length === 0 ? <p className="px-2 py-3 text-sm text-ink/60">{zh ? "钱包里没有可挂的 TAPELIQUID 电路。" : "No TAPELIQUID circuit in the wallet can be listed."}</p> : null}
+              {owned.map((row) => (
+                <button key={row.id} type="button" onClick={() => setCircuitId(row.id)} className={`flex min-h-11 w-full items-center justify-between border-t border-gold/30 px-2 text-left text-sm first:border-t-0 ${circuitId === row.id ? "bg-ink text-paper" : ""}`}>
+                  <span className="font-mono">#{row.id}</span>
+                  <span>{Number(row.gates).toLocaleString("en-US")} {zh ? "门" : "gates"}</span>
+                </button>
+              ))}
+            </div>
+            {locked.length > 0 ? (
+              <ul className="border border-gold/40">
+                {locked.map((row) => {
+                  const due = row.unlock * 1000 <= Date.now();
+                  return (
+                    <li key={row.id} className="grid gap-2 border-t border-gold/30 px-2 py-2 text-sm first:border-t-0 sm:grid-cols-[1fr_auto] sm:items-center">
+                      <span className="font-mono">#{row.circuitId} · {row.gates.toLocaleString("en-US")} {zh ? "门" : "gates"} · {due ? (zh ? "已到期" : "Unlocked") : (zh ? "未到期" : "Locked")}</span>
+                      {due ? <button type="button" disabled={busy} className="min-h-10 border border-gold px-3 text-sm disabled:opacity-40" onClick={() => run(() => claimFreshCircuit(account ?? "", BigInt(row.id)), zh ? "电路已领回钱包。" : "The circuit is back in the wallet.")}>{zh ? "领回" : "Claim"}</button> : <span className="text-xs text-ink/50">{zh ? "锁着不能挂" : "Locked"}</span>}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+              <input value={price} onChange={(event) => setPrice(event.target.value)} inputMode="decimal" placeholder={zh ? "整张价格 USDT0" : "Price in USDT0"} className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono" />
+              <button type="button" disabled={busy || !circuitId} className="min-h-12 bg-ink px-4 text-sm text-paper disabled:opacity-40" onClick={() => run(() => listSpotCircuit(account ?? "", BigInt(circuitId), spotPrice(price)), zh ? "电路已挂上。" : "The circuit is listed.")}>{circuitId ? (zh ? `挂出 #${circuitId}` : `List #${circuitId}`) : (zh ? "先选电路" : "Pick one")}</button>
+            </div>
           </div>
         </article>
       ) : (

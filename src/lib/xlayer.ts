@@ -1,6 +1,7 @@
 import {
   createPublicClient,
   decodeEventLog,
+  defineChain,
   encodeFunctionData,
   formatEther,
   http,
@@ -71,7 +72,15 @@ function ethereum() {
   return getProvider();
 }
 
-const client = createPublicClient({ transport: http(XLAYER.rpc) });
+const xlayer = defineChain({
+  id: XLAYER.chainId,
+  name: XLAYER.name,
+  nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
+  rpcUrls: { default: { http: [XLAYER.rpc] } },
+  contracts: { multicall3: { address: "0xcA11bde05977b3631167028862bE2a173976CA11" } },
+});
+
+const client = createPublicClient({ chain: xlayer, transport: http(XLAYER.rpc) });
 
 export async function readDeployFee(): Promise<bigint> {
   return client.readContract({

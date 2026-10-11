@@ -16,6 +16,7 @@ import { TapeCanvas } from "@/components/exchange/tape-canvas";
 import { ConnectButton } from "@/components/exchange/wallet-bar";
 import { AccountCenter } from "@/components/exchange/account-center";
 import { TapeSpotDesk } from "@/components/exchange/tape-spot";
+import { WorkshopRisk } from "@/components/exchange/risk-calc";
 import { MineDesk } from "@/components/exchange/mine-desk";
 import { Whitepaper } from "@/components/exchange/whitepaper";
 import { bemPrice } from "@/lib/bsc";
@@ -398,6 +399,7 @@ function ShopFloor({ shop, setShop }: { shop: ShopTab; setShop: (shop: ShopTab) 
               ? "盘口跟随 tapeout。本站另收 0.20%，先付。tapeout 未成交时，该笔费用不退。"
               : "The book follows tapeout. This site charges an additional 0.20%, paid first. If tapeout does not fill, that fee is not returned."}
       </p>
+      <WorkshopRisk zh={zh} />
       {shop === "gate" ? <TransistorDesk /> : null}
       {shop === "chips" ? <OfficialDesk mode="chips" /> : null}
       {shop === "circuits" ? <OfficialDesk mode="circuits" /> : null}
