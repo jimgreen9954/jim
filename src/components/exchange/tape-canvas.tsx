@@ -426,7 +426,7 @@ export function TapeCanvas() {
             <button type="button" disabled={busy || !held || held.latch < 1n} onClick={() => void flood("latch")} className="min-h-11 border border-ink bg-ink px-3 text-sm text-paper disabled:opacity-40">
               {zh ? "连流 LATCH" : "Tape LATCH through"}
             </button>
-            {([[5000, 0], [10000, 0], [18000, 0], [0, 10000], [0, 30000]] as [number, number][]).map(([n, l]) => (
+            {([[1000, 0], [5000, 0], [10000, 0], [18000, 0], [0, 1000], [0, 10000], [0, 30000]] as [number, number][]).map(([n, l]) => (
               <button key={`${n}-${l}`} type="button" className="min-h-11 border border-gold px-3 font-mono text-sm" onClick={() => { setNodes([]); setWires([]); setRecipe([n, l]); }}>
                 {n > 0 ? `${n} NAND` : `${l} LATCH`}
               </button>
