@@ -32,6 +32,7 @@ export function MineDesk() {
   useEffect(() => {
     let dead = false;
     const pull = () => {
+      if (document.hidden) return;
       readPodStats().then((row) => { if (!dead) setStats(row); }).catch(() => undefined);
       if (sheet !== "claim") return;
       readTapeMine(account, (head) => {
@@ -45,8 +46,10 @@ export function MineDesk() {
       }).catch(() => { if (!dead) setTapeErr(zh ? "链上没读到。失败不会写成 0。" : "The chain did not answer. A miss is not written as zero."); });
     };
     pull();
-    const id = window.setInterval(pull, sheet === "claim" ? 30_000 : 60_000);
-    return () => { dead = true; window.clearInterval(id); };
+    const id = window.setInterval(pull, sheet === "claim" ? 45_000 : 90_000);
+    const onShow = () => { if (!document.hidden) pull(); };
+    document.addEventListener("visibilitychange", onShow);
+    return () => { dead = true; window.clearInterval(id); document.removeEventListener("visibilitychange", onShow); };
   }, [account, sheet]);
 
   useEffect(() => {
@@ -73,7 +76,8 @@ export function MineDesk() {
   const myShare = tape && tape.weight > 0n ? (tape.daily * myWeight) / tape.weight : 0n;
   const say = (text: string, failed = false) => { setBad(failed); setNote(text); };
 
-  const circulating = tape ? (tape.supply > tape.burned + tape.pooled + tape.locked ? tape.supply - tape.burned - tape.pooled - tape.locked : 0n) : 0n;
+  const parked = tape ? tape.burned + tape.pooled + tape.circuitHeld + tape.waferHeld + tape.termPrincipal + tape.termReward : 0n;
+  const circulating = tape ? (tape.supply > parked ? tape.supply - parked : 0n) : 0n;
   const unmined = tape && tape.scanOk ? (tape.cap > tape.supply + tape.pendingNet ? tape.cap - tape.supply - tape.pendingNet : 0n) : 0n;
   const freePending = tape && tape.scanOk && tape.pendingNet > tape.pendingStaked ? tape.pendingNet - tape.pendingStaked : 0n;
   const freeWeight = tape && tape.scanOk && tape.weight > tape.stakedWeight ? tape.weight - tape.stakedWeight : 0n;
@@ -100,6 +104,8 @@ export function MineDesk() {
               <Line k={zh ? "减 TAPE 池" : "Minus the pool"} v={amount(tape.pooled)} />
               <Line k={zh ? "减 电路锁仓里已领未提出" : "Minus circuit lock"} v={amount(tape.circuitHeld)} />
               <Line k={zh ? "减 晶圆锁仓里的 TAPE" : "Minus wafer lock"} v={amount(tape.waferHeld)} />
+              <Line k={zh ? "减 期限质押本金" : "Minus staked principal"} v={`${amount(tape.termPrincipal)} · ${zh ? "正在锁的，和到期还没取的" : "Still locked, and matured but not taken"}`} />
+              <Line k={zh ? "减 还没领走的 TAPE 奖励" : "Minus unclaimed TAPE rewards"} v={amount(tape.termReward)} />
               <Line k={zh ? "等于 实时流通" : "Equals circulating"} v={`${amount(circulating)} · ${share(circulating, tape.supply)} ${zh ? "已领出" : "of claimed"} · ${share(circulating, tape.cap)} ${zh ? "硬顶" : "of cap"}`} />
             </Book>
             <Book title={zh ? "还没进流通" : "Not circulating yet"}>
@@ -130,8 +136,8 @@ export function MineDesk() {
             </Book>
             <p className="mt-2 text-xs leading-5 text-ink/55">
               {zh
-                ? "已挖未领还没铸出，不算流通。矿机和未领大约 45 秒加总一次，没加完不写成 0。时间是新加坡时间。质押只认电路锁仓 0x06c877…013c。"
-                : "Unclaimed TAPE is not minted, so it is not circulating. Miner totals refresh about every 45 seconds and are not shown as zero early. Times are Singapore. Stake means the circuit lock."}
+                ? "已挖未领还没铸出，不算流通。正在质押的本金，和到期还没取的 TAPE 奖励，都还在期限合约里，也不算流通。矿机和未领没加完不写成 0。时间是新加坡时间。"
+                : "Unclaimed mined TAPE is not minted, so it is not circulating. Staked principal and matured TAPE rewards still in the term contract are not circulating either. An unfinished miner total is not shown as zero. Times are Singapore."}
             </p>
             <p className="mt-1 break-all text-xs text-ink/40">
               <a className="underline" href={`${XLAYER.explorer}/address/${TAPE}`} target="_blank" rel="noreferrer">TAPE</a>

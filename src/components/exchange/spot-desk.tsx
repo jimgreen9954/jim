@@ -86,6 +86,7 @@ export function SpotDesk() {
   useEffect(() => {
     let dead = false;
     const pull = () => {
+      if (document.hidden) return;
       const priceOf = pair === "bnb" ? bnbPrice : pair === "okb" ? okbPrice : pair === "bem" ? bemPrice : () => ercPrice(pair);
       priceOf().then((text) => {
         if (!dead) setPrice(text);
@@ -111,7 +112,7 @@ export function SpotDesk() {
       }
     };
     pull();
-    const timer = window.setInterval(pull, 4000);
+    const timer = window.setInterval(pull, 8000);
     return () => {
       dead = true;
       window.clearInterval(timer);

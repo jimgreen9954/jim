@@ -69,6 +69,8 @@ export type TapeBoard = {
   locked: bigint;
   circuitHeld: bigint;
   waferHeld: bigint;
+  termPrincipal: bigint;
+  termReward: bigint;
   pendingNet: bigint;
   pendingStaked: bigint;
   staked: number;
@@ -122,6 +124,8 @@ export type TapeWire = {
   locked: string;
   circuitHeld: string;
   waferHeld: string;
+  termPrincipal: string;
+  termReward: string;
   pendingNet: string;
   pendingStaked: string;
   staked: number;
@@ -167,6 +171,8 @@ function boardFrom(wire: TapeWire): TapeBoard {
     locked: BigInt(wire.locked ?? "0"),
     circuitHeld: BigInt(wire.circuitHeld ?? "0"),
     waferHeld: BigInt(wire.waferHeld ?? "0"),
+    termPrincipal: BigInt(wire.termPrincipal ?? "0"),
+    termReward: BigInt(wire.termReward ?? "0"),
     pendingNet: BigInt(wire.pendingNet ?? "0"),
     pendingStaked: BigInt(wire.pendingStaked ?? "0"),
     staked: wire.staked ?? 0,
@@ -206,12 +212,12 @@ async function readThroughSite(account: string | null, onHead?: (board: TapeBoar
     const head = boardFrom(await until(getTapeHead({ data: { account: account ?? "" } }), 8_000));
     onHead?.({ ...head, scanning: true, seats: [], scanOk: false });
     try {
-      return boardFrom(await until(getTapeSeats({ data: { account: account ?? "" } }), 20_000));
+      return boardFrom(await until(getTapeSeats({ data: { account: account ?? "" } }), 12_000));
     } catch {
-      return loadTapeMine(account, onHead);
+      return { ...head, scanning: false };
     }
   } catch {
-    return loadTapeMine(account, onHead);
+    return loadTapeMine(account, onHead, false);
   }
 }
 
@@ -228,7 +234,19 @@ async function readChunk(contracts: readonly unknown[]) {
   return out;
 }
 
-async function loadTapeMine(account: string | null, onHead?: (board: TapeBoard) => void): Promise<TapeBoard> {
+const termAbi = parseAbi([
+  "function tapeStakePot() view returns (uint256 staked, uint256 pot)",
+  "function bemStakePot() view returns (uint256 staked, uint256 pot)",
+]);
+const TAPE_TERM = "0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A" as const;
+
+function pair(value: unknown): readonly [bigint, bigint] {
+  if (Array.isArray(value)) return [typeof value[0] === "bigint" ? value[0] : 0n, typeof value[1] === "bigint" ? value[1] : 0n];
+  const row = value as { staked?: bigint; pot?: bigint };
+  return [row?.staked ?? 0n, row?.pot ?? 0n];
+}
+
+async function loadTapeMine(account: string | null, onHead?: (board: TapeBoard) => void, scan = true): Promise<TapeBoard> {
   const who = (account ?? "") as Hex;
   const headCalls = [
     { address: TAPE, abi: tokenAbi, functionName: "totalSupply" as const },
@@ -240,6 +258,8 @@ async function loadTapeMine(account: string | null, onHead?: (board: TapeBoard) 
     { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [POOL as Hex] as const },
     { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [LOCKS[0] as Hex] as const },
     { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [LOCKS[1] as Hex] as const },
+    { address: TAPE_TERM, abi: termAbi, functionName: "tapeStakePot" as const },
+    { address: TAPE_TERM, abi: termAbi, functionName: "bemStakePot" as const },
     ...(account ? [{ address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [who] as const }] : []),
   ];
   const head = await client.multicall({ contracts: headCalls, allowFailure: false });
@@ -252,8 +272,10 @@ async function loadTapeMine(account: string | null, onHead?: (board: TapeBoard) 
   const pooled = head[6] as bigint;
   const circuitHeld = head[7] as bigint;
   const waferHeld = head[8] as bigint;
-  const locked = circuitHeld + waferHeld;
-  const balance = account ? (head[9] as bigint) : 0n;
+  const termPrincipal = pair(head[9])[0];
+  const termReward = pair(head[10])[1];
+  const locked = circuitHeld + waferHeld + termPrincipal + termReward;
+  const balance = account ? (head[11] as bigint) : 0n;
   if (cap !== CAP) throw new Error("cap");
   const daily = dailyAt(start);
   const last = Number(next) - 1;
@@ -266,6 +288,8 @@ async function loadTapeMine(account: string | null, onHead?: (board: TapeBoard) 
     locked,
     circuitHeld,
     waferHeld,
+    termPrincipal,
+    termReward,
     pendingNet: 0n,
     pendingStaked: 0n,
     staked: 0,
@@ -276,6 +300,7 @@ async function loadTapeMine(account: string | null, onHead?: (board: TapeBoard) 
     scanning: true,
   };
   onHead?.(partial);
+  if (!scan) return { ...partial, scanning: false };
   const ids: number[] = [];
   for (let id = 1; id <= last && ids.length < 8000; id += 1) ids.push(id);
   const ownedCalls = ids.flatMap((id) => [
@@ -350,7 +375,7 @@ async function loadTapeMine(account: string | null, onHead?: (board: TapeBoard) 
     scanOk = false;
   }
   seats.sort((a, b) => Number(a.on) - Number(b.on) || Number(b.id) - Number(a.id));
-  return { supply, cap, weight, balance, start, daily, circuits: Math.max(0, last), open, burned, pooled, locked, circuitHeld, waferHeld, pendingNet, pendingStaked, staked, stakedLive, stakedWeight, seats, scanOk, scanning: false };
+  return { supply, cap, weight, balance, start, daily, circuits: Math.max(0, last), open, burned, pooled, locked, circuitHeld, waferHeld, termPrincipal, termReward, pendingNet, pendingStaked, staked, stakedLive, stakedWeight, seats, scanOk, scanning: false };
 }
 
 async function preflight(to: Hex, from: string, data: Hex) {

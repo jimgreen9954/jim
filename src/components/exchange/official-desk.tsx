@@ -31,6 +31,7 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
   useEffect(() => {
     let dead = false;
     const pull = () => {
+      if (document.hidden) return;
       getOfficialBooks()
         .then((row) => { if (!dead) setBooks(row); })
         .catch(() => { if (!dead) setBooks({ ok: false, error: "feed", asOf: null, block: null, bids: [], lists: [] }); });

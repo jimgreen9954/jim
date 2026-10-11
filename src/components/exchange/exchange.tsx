@@ -113,7 +113,7 @@ function SimClock() {
     let dead = false;
     let pending = false;
     const pull = () => {
-      if (pending) return;
+      if (pending || document.hidden) return;
       pending = true;
       bemPrice()
         .then((text) => {
@@ -214,7 +214,7 @@ function Header({ floor, desk, setFloor, setDesk, setGiftOpen }: { floor: Floor;
       : floor === "desk"
         ? lang === "zh" ? "现货在钱包里成交。台费另付 0.20%。" : "Spot settles in the wallet. The 0.20% desk fee is a separate payment."
         : floor === "shop"
-          ? lang === "zh" ? "tapeout 在一组。TAPELIQUID 是本站现货。铸造已经结束。" : "tapeout sits together. TAPELIQUID is this house. Minting is closed."
+          ? lang === "zh" ? "铸造已经结束。" : "Minting is closed."
         : floor === "canvas"
           ? lang === "zh" ? "先在页面上画。签名之后才流片。" : "Draw it here. It is taped only after you sign."
         : floor === "mine"
@@ -373,21 +373,18 @@ function ShopFloor({ shop, setShop }: { shop: ShopTab; setShop: (shop: ShopTab) 
   ] as const);
   return (
     <>
-      <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-        <button type="button" onClick={() => setShop("book")} className={`border px-3 py-3 text-left ${shop === "book" ? "border-ink bg-ink text-paper" : "border-gold bg-card"}`}>
-          <span className={`block text-[10px] tracking-[0.22em] ${shop === "book" ? "text-gold" : "text-gold"}`}>{zh ? "本站" : "This house"}</span>
-          <span className="font-display text-3xl italic leading-none">TAPELIQUID</span>
-          <span className={`mt-2 block text-xs ${shop === "book" ? "text-paper/70" : "text-ink/55"}`}>NAND · LATCH · TAPE · {zh ? "电路" : "circuits"}</span>
+      <div className="grid grid-cols-[minmax(0,1.15fr)_minmax(0,2fr)] border border-gold">
+        <button type="button" onClick={() => setShop("book")} className={`min-h-14 px-3 text-left ${shop === "book" ? "bg-ink text-paper" : ""}`}>
+          <span className={`block text-[10px] tracking-[0.18em] ${shop === "book" ? "text-gold" : "text-ink/45"}`}>{zh ? "本站" : "House"}</span>
+          <span className="font-display text-2xl italic leading-none">TAPELIQUID</span>
         </button>
-        <div className={`border ${shop === "book" ? "border-gold" : "border-ink"} bg-card`}>
-          <p className="px-3 pt-2 text-[10px] tracking-[0.22em] text-gold">tapeout</p>
-          <div className="grid grid-cols-3">
-            {tapeout.map(([id, label]) => (
-              <button key={id} type="button" onClick={() => setShop(id)} className={`min-h-14 px-1 text-sm ${shop === id ? "bg-ink text-paper" : ""}`}>
-                {label}
-              </button>
-            ))}
-          </div>
+        <div className="grid grid-cols-3 border-l border-gold">
+          {tapeout.map(([id, label]) => (
+            <button key={id} type="button" onClick={() => setShop(id)} className={`min-h-14 px-1 text-center ${shop === id ? "bg-ink text-paper" : ""}`}>
+              <span className={`block text-[10px] tracking-[0.16em] ${shop === id ? "text-gold" : "text-ink/45"}`}>tapeout</span>
+              <span className="text-sm">{label}</span>
+            </button>
+          ))}
         </div>
       </div>
       <p className="text-sm text-ink/80">

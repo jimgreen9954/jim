@@ -27,9 +27,20 @@ const ASH = "0x000000000000000000000000000000000000dEaD" as const;
 const POOL = "0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641" as const;
 const CIRCUIT_LOCK = "0x06c877cc158d9ca3547220f9fc156f39bce7013c" as const;
 const WAFER_LOCK = "0xA28390924607F08aaD8d03F512B41b6a1c012Ace" as const;
-const CAP = 21_000_000n * 10n ** 8n;
+const termAbi = parseAbi([
+  "function tapeStakePot() view returns (uint256 staked, uint256 pot)",
+  "function bemStakePot() view returns (uint256 staked, uint256 pot)",
+]);
+const TAPE_TERM = "0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A" as const;
+
+function pair(value: unknown): readonly [bigint, bigint] {
+  if (Array.isArray(value)) return [typeof value[0] === "bigint" ? value[0] : 0n, typeof value[1] === "bigint" ? value[1] : 0n];
+  const row = value as { staked?: bigint; pot?: bigint };
+  return [row?.staked ?? 0n, row?.pot ?? 0n];
+}
 const DAY = 7200n * 10n ** 8n;
 const HALVING = 210_000n * 600n;
+const CAP = 21_000_000n * 10n ** 8n;
 
 const xlayer = defineChain({
   id: 196,
@@ -61,6 +72,8 @@ export type TapeWire = {
   locked: string;
   circuitHeld: string;
   waferHeld: string;
+  termPrincipal: string;
+  termReward: string;
   pendingNet: string;
   pendingStaked: string;
   staked: number;
@@ -99,6 +112,8 @@ async function headOf(account: string | null) {
     { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [POOL] as const },
     { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [CIRCUIT_LOCK] as const },
     { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [WAFER_LOCK] as const },
+    { address: TAPE_TERM, abi: termAbi, functionName: "tapeStakePot" as const },
+    { address: TAPE_TERM, abi: termAbi, functionName: "bemStakePot" as const },
     ...(account ? [{ address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [who] as const }] : []),
   ];
   const head = await client.multicall({ contracts: calls, allowFailure: false });
@@ -110,7 +125,7 @@ async function headOf(account: string | null) {
     supply: head[0] as bigint,
     cap,
     weight: head[2] as bigint,
-    balance: account ? (head[9] as bigint) : 0n,
+    balance: account ? (head[11] as bigint) : 0n,
     start,
     daily: dailyAt(start),
     last: Number(next) - 1,
@@ -118,7 +133,9 @@ async function headOf(account: string | null) {
     pooled: head[6] as bigint,
     circuitHeld: head[7] as bigint,
     waferHeld: head[8] as bigint,
-    locked: (head[7] as bigint) + (head[8] as bigint),
+    termPrincipal: pair(head[9])[0],
+    termReward: pair(head[10])[1],
+    locked: (head[7] as bigint) + (head[8] as bigint) + pair(head[9])[0] + pair(head[10])[1],
   };
 }
 
@@ -144,6 +161,8 @@ function pack(
     locked: row.locked.toString(),
     circuitHeld: row.circuitHeld.toString(),
     waferHeld: row.waferHeld.toString(),
+    termPrincipal: row.termPrincipal.toString(),
+    termReward: row.termReward.toString(),
     pendingNet: net.pendingNet.toString(),
     pendingStaked: net.pendingStaked.toString(),
     staked: net.staked,
@@ -180,7 +199,7 @@ let census: Census | null = null;
 let censusFlight: Promise<Census> | null = null;
 
 async function ownerCensus(last: number): Promise<Census> {
-  if (census && census.last === last && Date.now() - census.at < 45_000) return census;
+  if (census && census.last === last && Date.now() - census.at < 90_000) return census;
   if (censusFlight) return censusFlight;
   censusFlight = (async () => {
     const ids: number[] = [];

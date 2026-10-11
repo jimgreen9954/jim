@@ -65,8 +65,8 @@ const zh: Section[] = [
   {
     h: "TAPE",
     ps: [
-      "TAPE 是 TAPELIQUID 的唯一平台币，只此一份，在 X Layer。没有第二枚。硬顶 21,000,000。无预挖，无团队份额，无私募。只发给已流片并且已开工的电路。未锁仓电路的领取进入该电路登记的矿工地址。实时流通等于已领出减去黑洞、TAPE 池、电路锁仓和晶圆锁仓里的余额。已挖还没领的还没有铸出来，不算进流通。销毁占比是黑洞余额除以已领出。",
-      "挖矿页的「全网 TAPE」默认收着。打开之后按账本列，不写成大字。流通一行一行减：已领出、黑洞、TAPE 池、电路锁仓、晶圆锁仓。已挖未领再拆成普通矿机和质押矿机。矿机张数、算力和未领大约 45 秒加总一次。没加完不写成 0。减半时间用新加坡时间。",
+      "TAPE 是 TAPELIQUID 的唯一平台币，只此一份，在 X Layer。没有第二枚。硬顶 21,000,000。无预挖，无团队份额，无私募。只发给已流片并且已开工的电路。未锁仓电路的领取进入该电路登记的矿工地址。实时流通等于已领出减去黑洞、TAPE 池、电路锁仓、晶圆锁仓、期限质押本金，以及还没领走的 TAPE 奖励。期限质押本金包括还在锁的，和到期还没取回的。这两样都还在期限合约里。已挖还没领的还没有铸出来，不算进流通。销毁占比是黑洞余额除以已领出。",
+      "挖矿页的「全网 TAPE」默认收着。打开之后按账本列，不写成大字。流通一行一行减：已领出、黑洞、TAPE 池、电路锁仓、晶圆锁仓、期限质押本金、还没领走的 TAPE 奖励。已挖未领再拆成普通矿机和质押矿机。矿机张数、算力和未领没加完不写成 0。减半时间用新加坡时间。",
       "排放不回溯。从第一笔已验证流片的那一天开始计日。晶圆不必铸完才开始。之后新的铸造和流片提高全网算力，已有电路的占比下降。",
       "日排放写在挖矿合约里，没有改率入口。现在这一份从部署时起每天排放 7,200。不是先 1,000 再改成 7,200。计划里的那一次调整没有函数，不能靠这一页改掉。减半周期按 210,000×600 秒写在规则里，约 4 年。销毁不改变当日排放，只减少已流通数量。各期累加不超过 21,000,000。",
     ],
@@ -244,7 +244,7 @@ const en: Section[] = [
   {
     h: "TAPE",
     ps: [
-      "TAPE is the only platform token of TAPELIQUID. There is one token, on X Layer, and there is not a second. The hard cap is 21,000,000. No premine, no team allocation, no private sale. It is paid only to a taped circuit that has been opened. A claim on an unlocked circuit goes to the miner address registered on that circuit. Circulating supply is claimed TAPE minus the dead address, the TAPE pool, the circuit lock, and the wafer lock. Mined TAPE that has not been claimed is not minted yet, so it is not circulating. The burn share is the dead balance divided by claimed supply.",
+      "TAPE is the only platform token of TAPELIQUID. There is one token, on X Layer, and there is not a second. The hard cap is 21,000,000. No premine, no team allocation, no private sale. It is paid only to a taped circuit that has been opened. A claim on an unlocked circuit goes to the miner address registered on that circuit. Circulating supply is claimed TAPE minus the dead address, the TAPE pool, the circuit lock, the wafer lock, timed-stake principal, and TAPE rewards that have not been claimed. Timed-stake principal includes coins still locked and coins that matured but were not withdrawn. Both are still in the term contract. Mined TAPE that has not been claimed is not minted yet, so it is not circulating. The burn share is the dead balance divided by claimed supply.",
       "The mine page keeps Network TAPE closed until it is opened. The opened ledger subtracts line by line: claimed, burned, the pool, the circuit lock, and the wafer lock. Unclaimed TAPE is split between ordinary miners and staked miners. Miner counts, weight, and unclaimed amounts are summed about every 45 seconds and are not shown as zero before the sum finishes. Halving times are Singapore time.",
       "Emission does not backfill. The day count starts on the day of the first verified tape-out. The wafers do not have to be fully minted first. Later mints and tape-outs raise network hashrate, so an existing circuit's share falls.",
       "The daily amount is in the mine contract, and there is no function to change it. This contract emits 7,200 a day from deployment. It does not start at 1,000 and then switch. The planned switch has no function, and this page cannot create one. The halving interval in the rules is 210,000 × 600 seconds, about four years. A burn does not change the day's emission. It only reduces what is circulating. The periods together do not exceed 21,000,000.",

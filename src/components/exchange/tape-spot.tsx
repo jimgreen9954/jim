@@ -97,24 +97,22 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
     if (!spot || lane === "circuit") return;
     let dead = false;
     const pull = () => {
-      Promise.all([
-        readSpotBook(market),
-        readSpotPurse(account),
-        account ? readMyOrders(account) : Promise.resolve([]),
-        readSpotPrints(market),
-      ]).then(([book, held, mine, tape]) => {
+      if (document.hidden) return;
+      readSpotBook(market).then((book) => {
         if (dead) return;
         setMiss(false);
         setBids(book?.bids ?? []);
         setAsks(book?.asks ?? []);
-        setPurse(held);
-        setOrders(mine.filter((row) => row.market === market && row.left > 0n));
-        setPrints(tape);
       }).catch(() => { if (!dead) setMiss(true); });
+      readSpotPurse(account).then((held) => { if (!dead) setPurse(held); }).catch(() => undefined);
+      if (account) readMyOrders(account).then((mine) => { if (!dead) setOrders(mine.filter((row) => row.market === market && row.left > 0n)); }).catch(() => undefined);
+      readSpotPrints(market).then((tape) => { if (!dead) setPrints(tape); }).catch(() => undefined);
     };
     pull();
-    const id = window.setInterval(pull, 12000);
-    return () => { dead = true; window.clearInterval(id); };
+    const id = window.setInterval(pull, 15000);
+    const onShow = () => { if (!document.hidden) pull(); };
+    document.addEventListener("visibilitychange", onShow);
+    return () => { dead = true; window.clearInterval(id); document.removeEventListener("visibilitychange", onShow); };
   }, [spot, market, account, lane]);
 
   useEffect(() => {
