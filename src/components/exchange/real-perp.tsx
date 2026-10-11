@@ -376,7 +376,7 @@ export function RealPerp() {
   }, [perp, account, hash, frame, chain]);
 
   useEffect(() => {
-    if (chain !== "xlayer" || !account || !xbem) return;
+    if (chain !== "xlayer" || !account) return;
     const id = window.setInterval(() => {
       pokeXBem(account).catch(() => undefined);
     }, 35000);
@@ -501,7 +501,7 @@ export function RealPerp() {
         {chain === "xlayer" && !/^0x[a-fA-F0-9]{40}$/.test(KNOWN_XPERP) ? (
           <p className="text-sm leading-relaxed xl:col-span-12">{c.xOpen}</p>
         ) : null}
-        {chain === "xlayer" && !xbem ? (
+        {chain === "xlayer" && !/^0x[a-fA-F0-9]{40}$/.test(KNOWN_XPERP) && !xbem ? (
           <div className="grid gap-2">
             <button
               type="button"
@@ -800,7 +800,7 @@ export function RealPerp() {
                 <ul className="flex flex-col gap-1 text-sm leading-6 text-ink/80">
                   <li>{lang === "zh" ? "保证金锁进本链这一份合约，平台不经手。" : "Margin stays in this chain's contract. The desk does not hold it."}</li>
                   <li>{lang === "zh" ? "亏到保证金大约一半即可强平。没有保险基金，也没有自动减仓。" : "About half the margin lost can liquidate. There is no insurance fund and no auto-deleveraging."}</li>
-                  <li>{lang === "zh" ? "标记价是池子约 10 分钟均价，不用最后一笔。" : "The mark is about a 10-minute pool average, not the last trade."}</li>
+                  <li>{chain === "xlayer" ? (lang === "zh" ? "标记读取 X Layer 的 OKB/BEM 与 USDT0/WOKB，约 10 分钟均价，不用最后一笔。" : "The mark reads the X Layer OKB/BEM and USDT0/WOKB pools, about a 10-minute average, not the last trade.") : (lang === "zh" ? "标记价是池子约 10 分钟均价，不用最后一笔。" : "The mark is about a 10-minute pool average, not the last trade.")}</li>
                   <li>{lang === "zh" ? "BSC 的 USDT 和 X Layer 的 USDT0 不能合成一笔。" : "BSC USDT and X Layer USDT0 do not net."}</li>
                 </ul>
                 <div className="grid grid-cols-2 gap-2">

@@ -50,8 +50,10 @@ function tokenUnit(): bigint {
 }
 export const KNOWN_PERP = "0xB98D14333a93D49a4E05478d002FC3944D88A3b7";
 export const BSC_REBATE = "0xce3511b6e909c9694826cfd5dbe434d457920eba";
-export const KNOWN_XPERP = "0xF771BECD373af1d062169E42AB7b3B1fadE2b11b";
-export const KNOWN_XMARK = "0xba5234cd46ec5eB0DFdf4ac329FF42EB3062B4eA";
+export const KNOWN_XPERP = "0xCAC69F02c06bfCa3bFDb1eaF1F4a60e17e718081";
+export const KNOWN_XMARK = "0xb4B2ee90D10ECfC7ed36A58e96e03074fA8731Eb";
+export const PREV_XPERP = "0xF771BECD373af1d062169E42AB7b3B1fadE2b11b";
+export const PREV_XMARK = "0xba5234cd46ec5eB0DFdf4ac329FF42EB3062B4eA";
 export const NEXT_XMARK = KNOWN_XMARK;
 export const BOARD = [KNOWN_PERP];
 
@@ -907,8 +909,8 @@ const pokeAbi = [
 ] as const;
 
 export async function pokeXBem(from: string): Promise<void> {
-  const mark = typeof window === "undefined" ? "" : window.localStorage.getItem(XBEM_MARK_KEY) ?? "";
-  if (!/^0x[a-fA-F0-9]{40}$/.test(mark)) return;
+  const saved = typeof window === "undefined" ? "" : window.localStorage.getItem(XBEM_MARK_KEY) ?? "";
+  const mark = /^0x[a-fA-F0-9]{40}$/.test(saved) ? saved : KNOWN_XMARK;
   const was = desk;
   desk = "xlayer";
   try {

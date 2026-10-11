@@ -1,4 +1,4 @@
-import { BSC_REBATE, KNOWN_XMARK, KNOWN_XPERP } from "@/lib/perp";
+import { BSC_REBATE, KNOWN_XMARK, KNOWN_XPERP, PREV_XMARK, PREV_XPERP } from "@/lib/perp";
 import { GATE } from "@/lib/gate-chain";
 import { BSC, FEE_TO } from "@/lib/bsc";
 import { NPM } from "@/lib/lp";
@@ -39,7 +39,7 @@ const zh: Section[] = [
     ps: [
       "现货在签名的钱包里成交。BSC 上的交易对走 PancakeSwap。OKB 走 X Layer 的 PotatoSwap。买到的币留在这个钱包。台费是付出金额的 0.20%，在池子手续费之外，单独付一笔，先付。后面的兑换拒签或回滚，这一笔不退。回执还没读到时，同一金额不会再收一次。",
       "永续有两本，不能并成一笔。BSC 的保证金是 USDT。X Layer 的保证金是 USDT0。保证金锁进你所选链上的那一份合约，平台不经手。没有保险基金，也没有自动减仓。亏到保证金大约一半，任何人都可以强平。没有资金费。",
-      "BSC 的 BEM 永续以 PancakeSwap 池约 10 分钟均价为标记，不以最后一笔成交强平。流动性不足时，该均价仍可能在短时间内被带动。新的 X Layer 永续读取 X Layer 上的 OKB/BEM 与 USDT0/WOKB，不再引用 BSC 价格。任何地址均可调用推进。连续推进时，单次不超过 0.5%，间隔不少于 30 秒。页面目前仍指向旧合约 0xF771BECD373af1d062169E42AB7b3B1fadE2b11b，该合约继续使用旧标记。收费地址部署新合约并写入页面后，新开仓位改用新合约。既有仓位留在旧合约。",
+      `BSC 的 BEM 永续以 PancakeSwap 池约 10 分钟均价为标记，不以最后一笔成交强平。流动性不足时，该均价仍可能在短时间内被带动。新的 X Layer 永续读取 X Layer 上的 OKB/BEM 与 USDT0/WOKB，不再引用 BSC 价格。任何地址均可调用推进。连续推进时，单次不超过 0.5%，间隔不少于 30 秒。页面现在使用 ${KNOWN_XPERP}，标记是 ${KNOWN_XMARK}。旧合约 ${PREV_XPERP} 仍保留既有仓位，标记仍是 ${PREV_XMARK}。`,
       "推荐只作用于永续。有推荐人时，交易者少付永续台费的 4%，推荐人记 6%，其余进入收费地址。现货和流动性不参与。",
     ],
   },
@@ -136,7 +136,7 @@ const zh: Section[] = [
   {
     h: "永续",
     ps: [
-      "现在交易的 X Layer 永续是 0xF771BECD373af1d062169E42AB7b3B1fadE2b11b，标记是 0xba5234cd46ec5eB0DFdf4ac329FF42EB3062B4eA。已经写入一次，结算价约 27.38。写过这一次之后，超过 30 分钟不再停。晶体管永续是 0x798637b6d18cE053D69CfC0B08Ead105de352c11。六个标的里，第一个已经写入，另外五个还要收费地址各写一次。写过一次就不再停。三份都没有管理员。写价地址和台费地址都是收费地址，写死。撮合和撤单各收保证金的 0.20%，打进收费地址。有推荐人时，交易者少付这笔的 4%，推荐人记 6%。",
+      `现在交易的 X Layer 永续是 ${KNOWN_XPERP}，标记是 ${KNOWN_XMARK}。标记读 X Layer 的 OKB/BEM 与 USDT0/WOKB，当前结算价约 36.09。连续推进单次不超过 0.5%，间隔不少于 30 秒。旧合约 ${PREV_XPERP} 的仓位还在，结算价仍约 27.38，不再接受新开仓。晶体管永续是 0x798637b6d18cE053D69CfC0B08Ead105de352c11。六个标的里，第一个已经写入，另外五个还要收费地址各写一次。写过一次就不再停。三份都没有管理员。写价地址和台费地址都是收费地址，写死。撮合和撤单各收保证金的 0.20%，打进收费地址。有推荐人时，交易者少付这笔的 4%，推荐人记 6%。`,
       "同一份标记只挂这一本 X Layer 永续。BSC 上的 BEM 永续读 Pancake 池子的均价，不读这份标记。浅池仍可能在短时间里影响那条均价。",
       "TAPE 是 TAPELIQUID 的唯一平台币。只有这一枚，没有第二枚。矿池没有管理员，也不能改排放。",
       "返佣合约有 clerk。clerk 可以提取返佣池里的余额。不是每一份合约都没有管理员。",
@@ -218,7 +218,7 @@ const en: Section[] = [
     ps: [
       "Spot settles in the wallet that signed. BSC pairs use PancakeSwap. OKB uses PotatoSwap on X Layer. The coins you buy stay in that wallet. The desk fee is 0.20% of what you pay, on top of the pool fee, and it is a separate payment made first. If the swap is rejected or reverts, that fee stays. If the receipt has not come back, the same amount is not charged again.",
       "There are two perpetual books. They do not net. BSC margin is USDT. X Layer margin is USDT0. Margin is locked in the one contract on the chain you picked. The platform does not hold it. There is no insurance fund and no auto-deleveraging. At about half the margin lost, anyone can liquidate. There is no funding fee.",
-      "The BSC BEM perpetual uses a roughly 10-minute PancakeSwap average as its mark. The last trade is not used for liquidation. Thin liquidity can still move that average for a short interval. The new X Layer perpetual reads the OKB/BEM and USDT0/WOKB pools on X Layer. It does not reference the BSC price. Any address may submit an update. Each consecutive update is at most 0.5 percent and at least 30 seconds apart. The page still points at the previous contract, 0xF771BECD373af1d062169E42AB7b3B1fadE2b11b, which keeps the previous mark. After the fee address deploys the new contract and the address is written into the page, new positions use the new contract. Existing positions remain on the previous one.",
+      `The BSC BEM perpetual uses a roughly 10-minute PancakeSwap average as its mark. The last trade is not used for liquidation. Thin liquidity can still move that average for a short interval. The new X Layer perpetual reads the OKB/BEM and USDT0/WOKB pools on X Layer. It does not reference the BSC price. Any address may submit an update. Each consecutive update is at most 0.5 percent and at least 30 seconds apart. The page now uses ${KNOWN_XPERP}. Its mark is ${KNOWN_XMARK}. The previous contract ${PREV_XPERP} keeps existing positions, and its mark remains ${PREV_XMARK}.`,
       "Referrals apply only to perpetuals. With a referrer, the trader pays 4% less of the perpetual desk fee, the referrer is credited 6%, and the rest goes to the fee address. Spot and liquidity are outside that split.",
     ],
   },
@@ -316,7 +316,7 @@ const en: Section[] = [
   {
     h: "Perpetuals",
     ps: [
-      "The live X Layer perpetual is 0xF771BECD373af1d062169E42AB7b3B1fadE2b11b. Its mark is 0xba5234cd46ec5eB0DFdf4ac329FF42EB3062B4eA. One post is in, and the settlement price is about 27.38. After that post, it does not stop at 30 minutes. The transistor perpetual is 0x798637b6d18cE053D69CfC0B08Ead105de352c11. The first of the six markets is posted. The other five still need one post each from the fee address. One post is enough, and it does not stop later. None of the three has an admin. The posting address and the fee address are the same, and both are fixed. A match and a cancel each take 0.20 percent of the margin and send it to the fee address. With a referrer, the trader pays 4 percent less of that fee and the referrer is credited 6 percent.",
+      `The live X Layer perpetual is ${KNOWN_XPERP}. Its mark is ${KNOWN_XMARK}. The mark reads the X Layer OKB/BEM and USDT0/WOKB pools. The settlement price is about 36.09. A consecutive update is at most 0.5 percent and at least 30 seconds apart. Positions on the previous contract ${PREV_XPERP} remain there, still near 27.38, and that book takes no new positions. The transistor perpetual is 0x798637b6d18cE053D69CfC0B08Ead105de352c11. The first of the six markets is posted. The other five still need one post each from the fee address. One post is enough, and it does not stop later. None of the three has an admin. The posting address and the fee address are the same, and both are fixed. A match and a cancel each take 0.20 percent of the margin and send it to the fee address. With a referrer, the trader pays 4 percent less of that fee and the referrer is credited 6 percent.`,
       "This mark has one X Layer perpetual. The BEM perpetual on BSC reads the Pancake pool average. It does not read this mark. A thin pool can still move that average for a short time.",
       "TAPE is the only platform token of TAPELIQUID. There is one token, not a second. The mine has no admin, and the emission cannot be changed.",
       "The rebate contract has a clerk. The clerk can withdraw the rebate pool. Not every contract is without an admin.",
