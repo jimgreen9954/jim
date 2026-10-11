@@ -276,6 +276,16 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
               {zh ? `数量 ${name}` : `Amount ${name}`}
               <input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono text-base text-ink" />
             </label>
+            <div className="mt-2 grid grid-cols-2 border border-gold/40">
+              <p className="px-2 py-2">
+                <span className="block text-[10px] tracking-wide text-ink/45">{zh ? "可买入" : "Can buy"}</span>
+                <span className="font-mono text-sm">{purse ? `${usdtText(purse.usdt, 2)} USDT0` : "—"}</span>
+              </p>
+              <p className="border-l border-gold/40 px-2 py-2">
+                <span className="block text-[10px] tracking-wide text-ink/45">{zh ? "可卖出" : "Can sell"}</span>
+                <span className="font-mono text-sm">{purse ? `${baseText(market, market === 0 ? purse.tape : market === 1 ? purse.nand : purse.latch)} ${name}` : "—"}</span>
+              </p>
+            </div>
             <div className="mt-2 grid grid-cols-4 gap-1">
               {[25, 50, 75, 100].map((pct) => (
                 <button key={pct} type="button" onClick={() => fillPct(pct)} className="min-h-9 border border-gold text-xs">{pct === 100 ? (zh ? "全部" : "All") : `${pct}%`}</button>
@@ -283,9 +293,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
             </div>
             <Quote zh={zh} market={market} side={side} price={price} amount={amount} />
             <p className="mt-2 text-xs leading-5 text-ink/60">
-              {zh ? "钱包" : "Wallet"} {purse ? (side === "buy" ? `${usdtText(purse.usdt, 2)} USDT0` : `${baseText(market, market === 0 ? purse.tape : market === 1 ? purse.nand : purse.latch)} ${name}`) : "—"}
-              <br />
-              {zh ? "买方按价格付。卖方实收 99.8%。千分之二进收费地址。能对上的马上吃，剩下的挂在这一档。" : "The buyer pays the price. The seller receives 99.8 percent. The 0.2 percent goes to the fee address. What crosses fills now. The rest rests."}
+              {zh ? "两边都按钱包余额。买入切 USDT0，卖出切这种币。买方按价格付，卖方实收 99.8%。" : "Both figures are the wallet. Buy cuts USDT0. Sell cuts this coin. The buyer pays the price. The seller receives 99.8 percent."}
             </p>
             <button type="button" disabled={busy} className="mt-3 min-h-12 w-full bg-ink text-sm text-paper disabled:opacity-40" onClick={() => run(() => placeSpot(account ?? "", market, side === "buy", spotPrice(price), spotBase(market, amount)), zh ? "已送进订单簿。" : "Sent to the book.")}>
               {side === "buy" ? (zh ? `买入 ${name}` : `Buy ${name}`) : (zh ? `卖出 ${name}` : `Sell ${name}`)}
