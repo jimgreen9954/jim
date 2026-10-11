@@ -575,30 +575,28 @@ export function RealPerp() {
             </div>
           </div>
         ) : null}
-        <p className="text-sm leading-6 text-ink/70">{chain === "xlayer" ? c.perpWarnX : c.perpWarn}</p>
+        <details className="text-sm text-ink/70">
+          <summary className="min-h-9 cursor-pointer">{lang === "zh" ? "风险" : "Risk"}</summary>
+          <p className="mt-1 leading-6">{chain === "xlayer" ? c.perpWarnX : c.perpWarn}</p>
+        </details>
         {link ? (
           <a href={link} target="_blank" rel="noreferrer" className="inline-flex min-h-12 items-center justify-center bg-ink px-3 text-paper xl:col-span-12">
             {c.signOkx}
           </a>
         ) : null}
-        <p className="border border-gold/40 px-3 py-2">
-          <span className="block text-xs tracking-widest text-gold">{c.yourEq}</span>
-          <span className="font-mono text-2xl tabular-nums">{view && account ? usdtText(view.equity) : "—"}</span>
-        </p>
         <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(17rem,22rem)]">
         <div className="min-w-0 border border-gold bg-card">
           <div className="flex flex-wrap items-end justify-between gap-3 border-b border-gold/30 px-3 py-3">
             <div>
               <p className="font-display text-2xl italic">BEM / USDT</p>
-              {chain === "xlayer" ? <p className="mt-1 max-w-xl text-xs leading-5 text-ink/60">{lang === "zh" ? "K 线是 X Layer 上 OKB/BEM 的成交，按美元计。这口池大约 500 美元，现价约 36 到 40。BSC 的 Pancake 池是另一口，大约 27。两口不互相同步。" : "Candles are fills on the X Layer OKB/BEM pool, in dollars. That pool holds about 500 dollars, so the price sits near 36 to 40. The BSC Pancake pool is a different book, near 27. They do not sync."}</p> : null}
-              <p className="mt-1 break-all font-mono text-xs text-ink/60">
-                {perp || "—"}
+              <p className="mt-1 text-xs leading-5 text-ink/55">
+                {chain === "xlayer"
+                  ? (lang === "zh" ? "标记是约 10 分钟均价。K 线是池子成交，不跟 BSC 同步。" : "The mark is about a 10-minute average. Candles are pool prints and do not follow BSC.")
+                  : (lang === "zh" ? "标记是约 10 分钟均价，不是 K 线最后一笔。" : "The mark is about a 10-minute average, not the last candle.")}
                 {/^0x[a-fA-F0-9]{40}$/.test(perp) ? (
                   <>
                     {" "}
-                    <a className="underline decoration-gold underline-offset-4" href={`${scan}/address/${perp}`} target="_blank" rel="noreferrer">
-                      {chain === "xlayer" ? "OKLink" : "BscScan"}
-                    </a>
+                    <a className="underline decoration-gold underline-offset-4" href={`${scan}/address/${perp}`} target="_blank" rel="noreferrer">{lang === "zh" ? "合约" : "Contract"}</a>
                   </>
                 ) : null}
               </p>
@@ -664,12 +662,10 @@ export function RealPerp() {
           {lock.status === "bad" ? <p className="px-3 pb-2 text-sm text-sell">{lang === "zh" ? "收费地址对不上，开仓停了。" : "The fee address does not match. Opening is stopped."}</p> : null}
         </div>
         <div className="flex min-w-0 flex-col gap-3 lg:sticky lg:top-3 lg:max-h-[calc(100dvh-1.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:pb-6 lg:pr-1">
+        {view?.liveDeals.length ? (
         <div className="border border-gold/40 p-3">
           <p className="text-xs tracking-widest text-gold">{c.pkTitle}</p>
-          {!view?.liveDeals.length ? (
-            <p className="mt-2 text-sm text-ink/60">{lang === "zh" ? "还没有成交。上面是未成交的挂单，开仓在下面。" : "No matched deal yet. Resting quotes are above. Open further down."}</p>
-          ) : (
-            <div className="mt-2 flex flex-col gap-2">
+          <div className="mt-2 flex flex-col gap-2">
               {view.liveDeals.map((deal) => {
                 const mineLong = Boolean(account && deal.long.toLowerCase() === account.toLowerCase());
                 const mineShort = Boolean(account && deal.short.toLowerCase() === account.toLowerCase());
@@ -692,8 +688,8 @@ export function RealPerp() {
                 );
               })}
             </div>
-          )}
         </div>
+        ) : null}
         {/^0x[a-fA-F0-9]{40}$/.test(perp) && (
           <div className="flex flex-col gap-3 border border-gold/40 p-3">
             {waiting ? (
@@ -734,8 +730,6 @@ export function RealPerp() {
                   <span className="font-mono">{pxText(view?.entry ?? 0n)}</span>
                 </p>
               </div>
-            ) : !waiting && !(view?.liveDeals.some((deal) => account && (deal.long.toLowerCase() === account.toLowerCase() || deal.short.toLowerCase() === account.toLowerCase()))) ? (
-              <p className="text-sm text-ink/70">{lang === "zh" ? "本地址在这条链上没有未平仓。" : "This address has no open position on this chain."}</p>
             ) : null}
             {view?.book ? (
               <>
@@ -797,12 +791,15 @@ export function RealPerp() {
             ) : null}
             {(view?.book ? sheet === "book" : !inDeal && !mine) ? (
               <>
-                <ul className="flex flex-col gap-1 text-sm leading-6 text-ink/80">
-                  <li>{lang === "zh" ? "保证金锁进本链这一份合约，平台不经手。" : "Margin stays in this chain's contract. The desk does not hold it."}</li>
-                  <li>{lang === "zh" ? "亏到保证金大约一半即可强平。没有保险基金，也没有自动减仓。" : "About half the margin lost can liquidate. There is no insurance fund and no auto-deleveraging."}</li>
-                  <li>{chain === "xlayer" ? (lang === "zh" ? "标记读取 X Layer 的 OKB/BEM 与 USDT0/WOKB，约 10 分钟均价，不用最后一笔。" : "The mark reads the X Layer OKB/BEM and USDT0/WOKB pools, about a 10-minute average, not the last trade.") : (lang === "zh" ? "标记价是池子约 10 分钟均价，不用最后一笔。" : "The mark is about a 10-minute pool average, not the last trade.")}</li>
-                  <li>{lang === "zh" ? "BSC 的 USDT 和 X Layer 的 USDT0 不能合成一笔。" : "BSC USDT and X Layer USDT0 do not net."}</li>
-                </ul>
+                <details className="text-sm text-ink/70">
+                  <summary className="min-h-9 cursor-pointer">{lang === "zh" ? "开仓前" : "Before you open"}</summary>
+                  <ul className="mt-1 flex flex-col gap-1 leading-6">
+                    <li>{lang === "zh" ? "保证金锁进本链这一份合约，平台不经手。" : "Margin stays in this chain's contract. The desk does not hold it."}</li>
+                    <li>{lang === "zh" ? "亏到保证金大约一半即可强平。没有保险基金，也没有自动减仓。" : "About half the margin lost can liquidate. There is no insurance fund and no auto-deleveraging."}</li>
+                    <li>{chain === "xlayer" ? (lang === "zh" ? "标记读取 X Layer 的 OKB/BEM 与 USDT0/WOKB，约 10 分钟均价，不用最后一笔。" : "The mark reads the X Layer OKB/BEM and USDT0/WOKB pools, about a 10-minute average, not the last trade.") : (lang === "zh" ? "标记价是池子约 10 分钟均价，不用最后一笔。" : "The mark is about a 10-minute pool average, not the last trade.")}</li>
+                    <li>{lang === "zh" ? "BSC 的 USDT 和 X Layer 的 USDT0 不能合成一笔。" : "BSC USDT and X Layer USDT0 do not net."}</li>
+                  </ul>
+                </details>
                 <div className="grid grid-cols-2 gap-2">
                   <button type="button" onClick={() => { setMode("easy"); if (lev > 20) { setLev(3); setLevText("3"); } }} className={`min-h-11 border border-gold ${mode === "easy" ? "bg-ink text-paper" : ""}`}>
                     {c.beginner}
