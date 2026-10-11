@@ -59,7 +59,7 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
         <BannerToast />
         <FuseFlash />
         <div className={`mx-auto flex max-w-7xl flex-col gap-3 px-3 pt-2 sm:px-4 lg:gap-4 lg:px-6 ${floor === "paper" ? "pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-10" : "pb-[max(1.5rem,env(safe-area-inset-bottom))]"}`}>
-          <Header floor={floor} desk={desk} setFloor={setFloor} setDesk={setDesk} setGiftOpen={setGiftOpen} />
+          <Header floor={floor} desk={desk} shop={shop} setFloor={setFloor} setDesk={setDesk} setShop={setShop} setGiftOpen={setGiftOpen} />
           <FeeStrip />
           {floor === "desk" && desk === "spot" ? <SpotDesk /> : null}
           {floor === "desk" && desk === "perp" ? <RealPerp /> : null}
@@ -175,11 +175,10 @@ function FuseFlash() {
   );
 }
 
-function Header({ floor, desk, setFloor, setDesk, setGiftOpen }: { floor: Floor; desk: DeskTab; setFloor: (floor: Floor) => void; setDesk: (desk: DeskTab) => void; setGiftOpen: (open: boolean) => void }) {
+function Header({ floor, desk, shop, setFloor, setDesk, setShop, setGiftOpen }: { floor: Floor; desk: DeskTab; shop: ShopTab; setFloor: (floor: Floor) => void; setDesk: (desk: DeskTab) => void; setShop: (shop: ShopTab) => void; setGiftOpen: (open: boolean) => void }) {
   const lang = useExchange((s) => s.lang);
   const setLang = useExchange((s) => s.setLang);
   const reset = useExchange((s) => s.reset);
-  const c = copy[lang];
   const [arm, setArm] = useState(false);
   const [night, setNight] = useState(false);
   const [nightReady, setNightReady] = useState(false);
@@ -202,128 +201,78 @@ function Header({ floor, desk, setFloor, setDesk, setGiftOpen }: { floor: Floor;
     const id = window.setTimeout(() => setArm(false), 2800);
     return () => window.clearTimeout(id);
   }, [arm]);
-  const floors = [
-    ["desk", lang === "zh" ? "交易台" : "Desk"],
-    ["paper", lang === "zh" ? "练习" : "Practice"],
-    ["shop", lang === "zh" ? "工房" : "Workshop"],
-    ["rules", lang === "zh" ? "规则" : "Rules"],
-  ] as const;
-  const line = floor === "paper"
-    ? lang === "zh" ? "练习只记录在本机，不进入实盘。" : "Practice is stored on this device. It does not reach the live book."
-    : floor === "desk" && desk === "perp"
-      ? lang === "zh" ? "保证金锁在所选链的合约中。BSC 与 X Layer 不能合并。" : "Margin is locked in the contract of the selected chain. BSC and X Layer do not net."
-      : floor === "desk"
-        ? lang === "zh" ? "现货在签名钱包中成交。台费另收 0.20%。" : "Spot settles in the signing wallet. The desk fee of 0.20% is charged separately."
-        : floor === "shop"
-          ? lang === "zh" ? "左侧为本站现货。右侧三项为 tapeout。" : "The house book is on the left. The three tapeout markets are on the right."
-        : floor === "canvas"
-          ? lang === "zh" ? "先在页面完成网表。签名之后才流片。" : "Complete the netlist here. Tape-out happens only after you sign."
-        : floor === "mine"
-          ? lang === "zh" ? "上方为两处交易。下方为已产出 TAPE 的领取。" : "Two markets are above. Claims of mined TAPE are below."
-        : floor === "me"
-          ? lang === "zh" ? "资产与转出。新手礼包为非公开活动，打开后显示规则。" : "Balances and transfers. The starter gift is a closed activity. Its rules appear when opened."
-          : lang === "zh" ? "以本页规则为准。" : "This page is the rulebook.";
-  const go = (next: Floor) => {
+  const go = (next: Floor, hash: string) => {
     if (window.location.pathname.startsWith("/whitepaper")) {
-      window.location.assign(next === "rules" ? "/whitepaper" : `/#${next === "desk" ? desk : next === "shop" ? "book" : next === "canvas" ? "canvas" : next === "mine" ? "mine" : next === "me" ? "me" : "paper"}`);
+      window.location.assign(next === "rules" ? "/whitepaper" : `/#${hash}`);
       return;
     }
-    if (next === "rules") {
-      setFloor("rules");
-      if (window.location.pathname.startsWith("/whitepaper")) return;
-      window.history.replaceState(null, "", "#rules");
-      return;
-    }
+    if (next === "rules") window.history.replaceState(null, "", "#rules");
     setFloor(next);
   };
+  const nav = [
+    [lang === "zh" ? "现货" : "Spot", floor === "desk" && desk === "spot", () => { setDesk("spot"); go("desk", "spot"); }],
+    [lang === "zh" ? "永续" : "Perp", floor === "desk" && desk === "perp", () => { setDesk("perp"); go("desk", "perp"); }],
+    ["TAPELIQUID", floor === "shop" && shop === "book", () => { setShop("book"); go("shop", "book"); }],
+    [lang === "zh" ? "晶体管合约" : "Contracts", floor === "shop" && shop === "gate", () => { setShop("gate"); go("shop", "gate"); }],
+    [lang === "zh" ? "晶体管" : "Transistors", floor === "shop" && shop === "chips", () => { setShop("chips"); go("shop", "chips"); }],
+    [lang === "zh" ? "电路" : "Circuits", floor === "shop" && shop === "circuits", () => { setShop("circuits"); go("shop", "circuits"); }],
+    [lang === "zh" ? "挖矿" : "Mine", floor === "mine", () => go("mine", "mine")],
+    [lang === "zh" ? "流片" : "Tape-out", floor === "canvas", () => go("canvas", "canvas")],
+    [lang === "zh" ? "规则" : "Rules", floor === "rules", () => go("rules", "rules")],
+    [lang === "zh" ? "练习" : "Practice", floor === "paper", () => go("paper", "paper")],
+  ] as const;
   return (
-    <header className="-mx-3 flex flex-col gap-2 px-3 sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6">
-      <div className="sticky top-0 z-20 -mx-3 flex flex-col gap-2 border-b border-gold/40 bg-paper/95 px-3 py-2 backdrop-blur-sm sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6 pt-[max(0.5rem,env(safe-area-inset-top))]">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <img src="/mark.jpg" alt="" className="size-9 shrink-0 border border-gold bg-foil object-cover sm:size-11" />
-            <div className="min-w-0">
-              <h1 className="truncate font-display text-lg italic tracking-wide sm:text-2xl">TAPELIQUID</h1>
-              <p className="hidden truncate text-[10px] tracking-widest text-gold sm:block sm:text-xs">{c.kicker}</p>
-            </div>
-          </div>
-          <div className="ml-auto flex max-w-full items-center gap-1 overflow-x-auto">
-            <ConnectButton />
-            <button type="button" className={`min-h-10 shrink-0 border px-2 text-xs sm:min-h-11 ${floor === "me" ? "border-ink bg-ink text-paper" : "border-gold"}`} onClick={() => { setGiftOpen(false); setFloor("me"); }}>
-              <span className="sm:hidden">{lang === "zh" ? "我的" : "Me"}</span>
-              <span className="hidden sm:inline">{lang === "zh" ? "个人中心" : "Account"}</span>
-            </button>
-            <button type="button" className="min-h-10 shrink-0 border border-gold px-2 text-xs sm:min-h-11" onClick={() => setNight((on) => !on)}>
-              {night ? (lang === "zh" ? "白天" : "Day") : lang === "zh" ? "黑夜" : "Night"}
-            </button>
-            <button type="button" className="min-h-10 shrink-0 border border-gold px-2 text-xs sm:min-h-11" onClick={() => setLang(lang === "zh" ? "en" : "zh")}>
-              {lang === "zh" ? "EN" : "中文"}
-            </button>
-            {floor === "paper" ? (
-              <button
-                type="button"
-                className={`min-h-10 shrink-0 border px-2 text-xs sm:min-h-11 ${arm ? "border-sell text-sell" : "border-gold"}`}
-                onClick={() => {
-                  if (!arm) setArm(true);
-                  else {
-                    reset();
-                    setArm(false);
-                  }
-                }}
-              >
-                {arm ? (lang === "zh" ? "再点一次" : "Tap again") : lang === "zh" ? "清除练习" : "Clear practice"}
-              </button>
-            ) : null}
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-1">
-          <button
-            type="button"
-            onClick={() => {
-              if (window.location.pathname.startsWith("/whitepaper")) {
-                window.location.assign("/#canvas");
-                return;
-              }
-              setFloor("canvas");
-            }}
-            className={`min-h-12 border px-2 text-left sm:min-h-14 sm:px-3 ${floor === "canvas" ? "border-ink bg-foil text-ink" : "border-gold bg-ink text-paper"}`}
-          >
-            <span className="block text-[10px] tracking-[0.2em] text-gold">{lang === "zh" ? "处理器" : "Processor"}</span>
-            <span className="font-display text-lg italic leading-none sm:text-2xl">{lang === "zh" ? "流片" : "Tape"}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (window.location.pathname.startsWith("/whitepaper")) {
-                window.location.assign("/#mine");
-                return;
-              }
-              setFloor("mine");
-            }}
-            className={`min-h-12 border px-2 text-left sm:min-h-14 sm:px-3 ${floor === "mine" ? "border-ink bg-foil text-ink" : "border-gold bg-ink text-paper"}`}
-          >
-            <span className="block text-[10px] tracking-[0.2em] text-gold">{lang === "zh" ? "交易在这里" : "Markets"}</span>
-            <span className="font-display text-lg italic leading-none sm:text-2xl">{lang === "zh" ? "挖矿" : "Mine"}</span>
-          </button>
-        </div>
-        <div className="grid grid-cols-4 border border-gold">
-          {floors.map(([id, label]) => (
-            <button key={id} type="button" onClick={() => go(id)} className={`min-h-10 px-1 text-xs sm:min-h-11 sm:text-sm ${floor === id ? "bg-ink text-paper" : "bg-card"}`}>
+    <header className="sticky top-0 z-20 -mx-3 border-b border-gold/40 bg-paper/95 px-3 py-2 backdrop-blur-sm sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6 pt-[max(0.35rem,env(safe-area-inset-top))]">
+      <div className="flex items-center gap-3">
+        <button type="button" onClick={() => go("desk", "spot")} className="flex shrink-0 items-center gap-2">
+          <img src="/mark.jpg" alt="" className="size-8 border border-gold bg-foil object-cover" />
+          <span className="font-display text-lg italic leading-none">TAPELIQUID</span>
+        </button>
+        <nav className="hidden min-w-0 flex-1 items-center gap-0.5 overflow-x-auto lg:flex">
+          {nav.map(([label, on, run]) => (
+            <button key={label} type="button" onClick={run} className={`shrink-0 border-b-2 px-2.5 py-2 text-sm ${on ? "border-ink font-medium text-ink" : "border-transparent text-ink/60"}`}>
               {label}
             </button>
           ))}
+        </nav>
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          <ConnectButton />
+          <button type="button" className={`hidden min-h-9 px-2 text-xs sm:inline ${floor === "me" ? "bg-ink text-paper" : ""}`} onClick={() => { setGiftOpen(false); go("me", "me"); }}>
+            {lang === "zh" ? "资产" : "Assets"}
+          </button>
+          <button type="button" className="min-h-9 px-1.5 text-xs text-ink/70 sm:hidden" onClick={() => { setGiftOpen(false); go("me", "me"); }}>
+            {lang === "zh" ? "资产" : "Assets"}
+          </button>
+          <button type="button" className="min-h-9 px-1.5 text-xs text-ink/70" onClick={() => setNight((on) => !on)}>
+            {night ? (lang === "zh" ? "白天" : "Day") : lang === "zh" ? "黑夜" : "Night"}
+          </button>
+          <button type="button" className="min-h-9 px-1.5 text-xs" onClick={() => setLang(lang === "zh" ? "en" : "zh")}>
+            {lang === "zh" ? "EN" : "中文"}
+          </button>
+          {floor === "paper" ? (
+            <button
+              type="button"
+              className={`min-h-9 px-1.5 text-xs ${arm ? "text-sell" : ""}`}
+              onClick={() => {
+                if (!arm) setArm(true);
+                else {
+                  reset();
+                  setArm(false);
+                }
+              }}
+            >
+              {arm ? (lang === "zh" ? "再点一次" : "Tap again") : lang === "zh" ? "清除" : "Clear"}
+            </button>
+          ) : null}
         </div>
-        {floor === "desk" ? (
-          <div className="grid grid-cols-2 border border-gold">
-            {(["spot", "perp"] as const).map((id) => (
-              <button key={id} type="button" onClick={() => setDesk(id)} className={`min-h-10 text-sm ${desk === id ? "bg-ink text-paper" : ""}`}>
-                {id === "spot" ? (lang === "zh" ? "现货" : "Spot") : lang === "zh" ? "永续" : "Perp"}
-              </button>
-            ))}
-          </div>
-        ) : null}
       </div>
-      {line ? <p className="text-sm text-ink/70">{line}</p> : null}
+      <nav className="mt-1 flex gap-0.5 overflow-x-auto lg:hidden">
+        {nav.map(([label, on, run]) => (
+          <button key={`m-${label}`} type="button" onClick={run} className={`shrink-0 border-b-2 px-2.5 py-2 text-sm ${on ? "border-ink font-medium text-ink" : "border-transparent text-ink/60"}`}>
+            {label}
+          </button>
+        ))}
+      </nav>
     </header>
   );
 }
@@ -364,41 +313,11 @@ function PaperFloor() {
   );
 }
 
-function ShopFloor({ shop, setShop }: { shop: ShopTab; setShop: (shop: ShopTab) => void }) {
+function ShopFloor({ shop }: { shop: ShopTab; setShop: (shop: ShopTab) => void }) {
   const lang = useExchange((s) => s.lang);
   const zh = lang === "zh";
-  const tapeout = ([
-    ["gate", zh ? "晶体管合约" : "Transistor contracts"],
-    ["chips", zh ? "晶体管" : "Transistors"],
-    ["circuits", zh ? "电路" : "Circuits"],
-  ] as const);
   return (
     <>
-      <div className="grid grid-cols-2 border border-gold lg:grid-cols-4">
-        <button type="button" onClick={() => setShop("book")} className={`min-h-14 px-2 text-sm leading-tight sm:min-h-11 ${shop === "book" ? "bg-ink text-paper" : ""}`}>
-          <span className="block text-[10px] tracking-[0.14em] text-gold">X Layer</span>
-          TAPELIQUID
-        </button>
-        {tapeout.map(([id, label]) => (
-          <button key={id} type="button" onClick={() => setShop(id)} className={`min-h-14 px-2 text-left text-sm leading-tight sm:min-h-11 sm:text-center ${shop === id ? "bg-ink text-paper" : ""}`}>
-            <span className={`block text-[10px] tracking-[0.14em] ${shop === id ? "text-gold" : "text-ink/45"}`}>tapeout</span>
-            {label}
-          </button>
-        ))}
-      </div>
-      <p className="text-sm text-ink/80">
-        {shop === "gate"
-          ? zh
-            ? "tapeout 晶体管合约。保证金为 BSC 的 USDT。结算采用 10 分钟均价。与 BEM 永续不是同一本账。"
-            : "tapeout transistor contracts. Margin is BSC USDT. Settlement uses a 10-minute average. This is not the BEM book."
-          : shop === "book"
-            ? zh
-              ? "TAPELIQUID。NAND、LATCH 与 TAPE 以 USDT0 报价，同一价格并为一档。电路按张定价。买方按价格支付，卖方实收 99.8%。"
-              : "TAPELIQUID. NAND, LATCH and TAPE are quoted in USDT0. One price is one level. Each circuit has its own price. The buyer pays the price. The seller receives 99.8 percent."
-            : zh
-              ? "盘口跟随 tapeout。本站另收 0.20%，先付。tapeout 未成交时，该笔费用不退。"
-              : "The book follows tapeout. This site charges an additional 0.20%, paid first. If tapeout does not fill, that fee is not returned."}
-      </p>
       <WorkshopRisk zh={zh} />
       {shop === "gate" ? <TransistorDesk /> : null}
       {shop === "chips" ? <OfficialDesk mode="chips" /> : null}

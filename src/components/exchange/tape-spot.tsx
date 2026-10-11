@@ -135,6 +135,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [bad, setBad] = useState(false);
+  const [ticketOpen, setTicketOpen] = useState(false);
   const market: SpotMarket = lane === "circuit" ? 0 : lane;
 
   useEffect(() => onAccount(setAccount), []);
@@ -290,9 +291,9 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   return (
     <section className="grid gap-3">
       {choices.length > 1 ? (
-        <div className="grid grid-cols-2 border border-gold sm:grid-cols-4">
+        <div className="flex gap-1 overflow-x-auto border-b border-gold/40">
           {choices.map((id) => (
-            <button key={String(id)} type="button" onClick={() => setLane(id)} className={`min-h-11 text-sm ${lane === id ? "bg-ink text-paper" : ""}`}>
+            <button key={String(id)} type="button" onClick={() => setLane(id)} className={`shrink-0 border-b-2 px-3 py-2 text-sm ${lane === id ? "border-ink font-medium" : "border-transparent text-ink/55"}`}>
               {id === "circuit" ? (zh ? "电路" : "Circuits") : NAMES[id]}
             </button>
           ))}
@@ -344,12 +345,12 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
           </div>
         </article>
       ) : (
-        <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.3fr)_minmax(18rem,0.7fr)]">
-          <article className="order-2 border border-gold bg-card lg:order-1">
+        <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-3">
+          <div className="min-w-0 pb-16 lg:pb-0">
+          <article className="border border-gold bg-card">
             <div className="flex items-end justify-between gap-3 px-3 py-3">
               <div>
                 <p className="text-[11px] tracking-[0.18em] text-gold">{name} / USDT0</p>
-                <p className="mt-1 break-all font-mono text-[11px] text-ink/45">{spot}</p>
                 <h3 className="font-display text-3xl italic leading-none">{bestAsk > 0n ? usdtText(bestAsk, 4) : bestBid > 0n ? usdtText(bestBid, 4) : "—"}</h3>
               </div>
               <p className="text-right text-xs leading-5 text-ink/60">
@@ -365,13 +366,13 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
             </div>
             <div className="border-t border-gold/30">
               {askView.length === 0 ? <p className="px-2 py-4 text-xs leading-5 text-ink/55">{zh ? "卖盘还没有单。在右边填价格和数量，这一档就会出现在这里。" : "No asks yet. Enter a price and a size on the right and the level appears here."}</p> : askView.map((level) => (
-                <Row key={`a-${level.price}`} level={level} max={maxAsk} bid={false} market={market} tag={orders.some((row) => row.market === market && !row.bid && row.price === level.price) ? (zh ? "我的" : "mine") : undefined} onPick={() => pick(level, false)} />
+                <Row key={`a-${level.price}`} level={level} max={maxAsk} bid={false} market={market} tag={orders.some((row) => row.market === market && !row.bid && row.price === level.price) ? (zh ? "我的" : "mine") : undefined} onPick={() => { pick(level, false); setTicketOpen(true); }} />
               ))}
             </div>
             <p className="border-y border-gold/40 px-2 py-1 text-center font-mono text-[11px] text-ink/55">{spread > 0n ? `${zh ? "价差" : "Spread"} ${usdtText(spread, 4)}` : (zh ? "还没有对敲的两档" : "No two-sided market")}</p>
             <div>
               {bids.length === 0 ? <p className="px-2 py-4 text-xs leading-5 text-ink/55">{zh ? "买盘还没有单。买入挂在价差下面，同价的后来者排在后面。" : "No bids yet. A buy rests under the spread. A later order at the same price waits behind."}</p> : bids.map((level) => (
-                <Row key={`b-${level.price}`} level={level} max={maxBid} bid market={market} tag={orders.some((row) => row.market === market && row.bid && row.price === level.price) ? (zh ? "我的" : "mine") : undefined} onPick={() => pick(level, true)} />
+                <Row key={`b-${level.price}`} level={level} max={maxBid} bid market={market} tag={orders.some((row) => row.market === market && row.bid && row.price === level.price) ? (zh ? "我的" : "mine") : undefined} onPick={() => { pick(level, true); setTicketOpen(true); }} />
               ))}
             </div>
             {miss ? <p className="px-2 py-2 text-xs text-ink/55">{zh ? "这一次没读到。不写成 0。" : "This read missed. It is not shown as zero."}</p> : null}
@@ -381,9 +382,21 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
               <Stat k={zh ? "已读成交" : "Prints read"} v={`${traded.n}${zh ? " 笔" : ""}`} s={`${usdtText(traded.quote, 2)} USDT0`} />
               <Stat k={zh ? "已收手续费" : "Fees read"} v={`${usdtText(traded.fee, 4)} USDT0`} s={zh ? "只算读到的成交" : "Of the prints read"} />
             </div>
-            <p className="px-3 py-2 text-[11px] leading-5 text-ink/50">{zh ? "同一价格并成一档。卖盘可买是挂着的全部卖单。买盘可卖是挂着的全部买单。点一档，价格和数量填进右边。" : "One price is one level. Tap a level to fill the ticket."} {spot}</p>
+            <p className="px-3 py-2 text-[11px] leading-5 text-ink/50">{zh ? "同一价格并成一档。点一档，价格和数量填进下单。" : "One price is one level. Tap a level to fill the ticket."}</p>
           </article>
-          <article className="order-1 border border-gold bg-card px-3 py-3 lg:order-2">
+          </div>
+          <div className={`${ticketOpen ? "fixed inset-x-0 bottom-0 z-40 max-h-[78dvh] overflow-y-auto border-t border-gold bg-paper px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-plate lg:static lg:z-auto lg:max-h-none lg:overflow-visible lg:border lg:bg-card lg:p-3 lg:shadow-none" : "fixed inset-x-0 bottom-0 z-40 border-t border-gold bg-paper px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:static lg:z-auto lg:border lg:bg-card lg:p-3"}`}>
+            <div className="grid grid-cols-2 gap-2 lg:hidden">
+              {ticketOpen ? (
+                <button type="button" className="col-span-2 min-h-9 text-xs text-ink/60" onClick={() => setTicketOpen(false)}>{zh ? "收起" : "Close"}</button>
+              ) : (
+                <>
+                  <button type="button" className="min-h-11 bg-ink text-sm text-paper" onClick={() => { setSide("buy"); setTicketOpen(true); }}>{zh ? "买入" : "Buy"}</button>
+                  <button type="button" className="min-h-11 border border-sell text-sm text-sell" onClick={() => { setSide("sell"); setTicketOpen(true); }}>{zh ? "卖出" : "Sell"}</button>
+                </>
+              )}
+            </div>
+            <div className={ticketOpen ? "mt-2 lg:mt-0" : "hidden lg:block"}>
             <div className="grid grid-cols-2 border border-gold">
               <button type="button" onClick={() => setSide("buy")} className={`min-h-11 text-sm ${side === "buy" ? "bg-ink text-paper" : ""}`}>{zh ? "买入" : "Buy"}</button>
               <button type="button" onClick={() => setSide("sell")} className={`min-h-11 text-sm ${side === "sell" ? "bg-ink text-paper" : ""}`}>{zh ? "卖出" : "Sell"}</button>
@@ -420,7 +433,8 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
             <button type="button" disabled={busy || Boolean(ownHit)} className="mt-3 min-h-12 w-full bg-ink text-sm text-paper disabled:opacity-40" onClick={() => run(() => placeSpot(account ?? "", market, side === "buy", spotPrice(price), spotBase(market, amount)), zh ? "已进订单簿。没有对手的部分继续挂着，不会消失。" : "It is on the book. Whatever did not meet another order stays there.")}>
               {side === "buy" ? (zh ? `买入 ${name}` : `Buy ${name}`) : (zh ? `卖出 ${name}` : `Sell ${name}`)}
             </button>
-          </article>
+            </div>
+          </div>
         </div>
       )}
       {lane !== "circuit" ? (
