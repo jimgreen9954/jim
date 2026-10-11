@@ -74,6 +74,7 @@ export type TapeWire = {
   waferHeld: string;
   termPrincipal: string;
   termReward: string;
+  termHeld: string;
   pendingNet: string;
   pendingStaked: string;
   staked: number;
@@ -114,6 +115,7 @@ async function headOf(account: string | null) {
     { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [WAFER_LOCK] as const },
     { address: TAPE_TERM, abi: termAbi, functionName: "tapeStakePot" as const },
     { address: TAPE_TERM, abi: termAbi, functionName: "bemStakePot" as const },
+    { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [TAPE_TERM] as const },
     ...(account ? [{ address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [who] as const }] : []),
   ];
   const head = await client.multicall({ contracts: calls, allowFailure: false });
@@ -125,7 +127,7 @@ async function headOf(account: string | null) {
     supply: head[0] as bigint,
     cap,
     weight: head[2] as bigint,
-    balance: account ? (head[11] as bigint) : 0n,
+    balance: account ? (head[12] as bigint) : 0n,
     start,
     daily: dailyAt(start),
     last: Number(next) - 1,
@@ -135,7 +137,8 @@ async function headOf(account: string | null) {
     waferHeld: head[8] as bigint,
     termPrincipal: pair(head[9])[0],
     termReward: pair(head[10])[1],
-    locked: (head[7] as bigint) + (head[8] as bigint) + pair(head[9])[0] + pair(head[10])[1],
+    termHeld: head[11] as bigint,
+    locked: (head[7] as bigint) + (head[8] as bigint) + ((head[11] as bigint) > 0n ? (head[11] as bigint) : pair(head[9])[0] + pair(head[10])[1]),
   };
 }
 
@@ -163,6 +166,7 @@ function pack(
     waferHeld: row.waferHeld.toString(),
     termPrincipal: row.termPrincipal.toString(),
     termReward: row.termReward.toString(),
+    termHeld: row.termHeld.toString(),
     pendingNet: net.pendingNet.toString(),
     pendingStaked: net.pendingStaked.toString(),
     staked: net.staked,
@@ -199,7 +203,7 @@ let census: Census | null = null;
 let censusFlight: Promise<Census> | null = null;
 
 async function ownerCensus(last: number): Promise<Census> {
-  if (census && census.last === last && Date.now() - census.at < 90_000) return census;
+  if (census && census.last === last && Date.now() - census.at < 300_000) return census;
   if (censusFlight) return censusFlight;
   censusFlight = (async () => {
     const ids: number[] = [];
@@ -210,7 +214,7 @@ async function ownerCensus(last: number): Promise<Census> {
     ]);
     const owned: { status: string; result?: unknown }[] = [];
     for (let i = 0; i < calls.length; i += 240) {
-      const part = await client.multicall({ contracts: calls.slice(i, i + 240) as never, allowFailure: true, batchSize: 240 });
+      const part = await client.multicall({ contracts: calls.slice(i, i + 240) as never, allowFailure: true, batchSize: 1024 });
       owned.push(...(part as { status: string; result?: unknown }[]));
     }
     const owners = new Map<string, number[]>();

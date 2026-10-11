@@ -103,7 +103,17 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
         setMiss(false);
         setBids(book?.bids ?? []);
         setAsks(book?.asks ?? []);
-      }).catch(() => { if (!dead) setMiss(true); });
+      }).catch(() => {
+        window.setTimeout(() => {
+          if (dead) return;
+          readSpotBook(market).then((book) => {
+            if (dead) return;
+            setMiss(false);
+            setBids(book?.bids ?? []);
+            setAsks(book?.asks ?? []);
+          }).catch(() => { if (!dead) setMiss(true); });
+        }, 1200);
+      });
       readSpotPurse(account).then((held) => { if (!dead) setPurse(held); }).catch(() => undefined);
       if (account) readMyOrders(account).then((mine) => { if (!dead) setOrders(mine.filter((row) => row.market === market && row.left > 0n)); }).catch(() => undefined);
       readSpotPrints(market).then((tape) => { if (!dead) setPrints(tape); }).catch(() => undefined);

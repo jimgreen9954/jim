@@ -46,7 +46,7 @@ export function MineDesk() {
       }).catch(() => { if (!dead) setTapeErr(zh ? "链上没读到。失败不会写成 0。" : "The chain did not answer. A miss is not written as zero."); });
     };
     pull();
-    const id = window.setInterval(pull, sheet === "claim" ? 45_000 : 90_000);
+    const id = window.setInterval(pull, sheet === "claim" ? 90_000 : 180_000);
     const onShow = () => { if (!document.hidden) pull(); };
     document.addEventListener("visibilitychange", onShow);
     return () => { dead = true; window.clearInterval(id); document.removeEventListener("visibilitychange", onShow); };
@@ -76,7 +76,9 @@ export function MineDesk() {
   const myShare = tape && tape.weight > 0n ? (tape.daily * myWeight) / tape.weight : 0n;
   const say = (text: string, failed = false) => { setBad(failed); setNote(text); };
 
-  const parked = tape ? tape.burned + tape.pooled + tape.circuitHeld + tape.waferHeld + tape.termPrincipal + tape.termReward : 0n;
+  const termParked = tape ? (tape.termHeld > 0n ? tape.termHeld : tape.termPrincipal + tape.termReward) : 0n;
+  const termClaimable = tape && termParked > tape.termPrincipal + tape.termReward ? termParked - tape.termPrincipal - tape.termReward : 0n;
+  const parked = tape ? tape.burned + tape.pooled + tape.circuitHeld + tape.waferHeld + termParked : 0n;
   const circulating = tape ? (tape.supply > parked ? tape.supply - parked : 0n) : 0n;
   const unmined = tape && tape.scanOk ? (tape.cap > tape.supply + tape.pendingNet ? tape.cap - tape.supply - tape.pendingNet : 0n) : 0n;
   const freePending = tape && tape.scanOk && tape.pendingNet > tape.pendingStaked ? tape.pendingNet - tape.pendingStaked : 0n;
@@ -104,8 +106,9 @@ export function MineDesk() {
               <Line k={zh ? "减 TAPE 池" : "Minus the pool"} v={amount(tape.pooled)} />
               <Line k={zh ? "减 电路锁仓里已领未提出" : "Minus circuit lock"} v={amount(tape.circuitHeld)} />
               <Line k={zh ? "减 晶圆锁仓里的 TAPE" : "Minus wafer lock"} v={amount(tape.waferHeld)} />
-              <Line k={zh ? "减 期限质押本金" : "Minus staked principal"} v={`${amount(tape.termPrincipal)} · ${zh ? "正在锁的，和到期还没取的" : "Still locked, and matured but not taken"}`} />
-              <Line k={zh ? "减 还没领走的 TAPE 奖励" : "Minus unclaimed TAPE rewards"} v={amount(tape.termReward)} />
+              <Line k={zh ? "减 期限本金" : "Minus stake principal"} v={`${amount(tape.termPrincipal)} · ${zh ? "正在锁的，和到期还没取回的" : "Still locked, and matured but not taken"}`} />
+              <Line k={zh ? "减 还没分完的奖励" : "Minus rewards not yet vested"} v={amount(tape.termReward)} />
+              <Line k={zh ? "减 已经可以领、还没领走" : "Minus vested, not claimed"} v={amount(termClaimable)} />
               <Line k={zh ? "等于 实时流通" : "Equals circulating"} v={`${amount(circulating)} · ${share(circulating, tape.supply)} ${zh ? "已领出" : "of claimed"} · ${share(circulating, tape.cap)} ${zh ? "硬顶" : "of cap"}`} />
             </Book>
             <Book title={zh ? "还没进流通" : "Not circulating yet"}>
@@ -136,7 +139,7 @@ export function MineDesk() {
             </Book>
             <p className="mt-2 text-xs leading-5 text-ink/55">
               {zh
-                ? "已挖未领还没铸出，不算流通。正在质押的本金，和到期还没取的 TAPE 奖励，都还在期限合约里，也不算流通。矿机和未领没加完不写成 0。时间是新加坡时间。"
+                ? "期限合约里的 TAPE 整笔都不在流通。本金一行同时包括还在锁的，和到期还没取回的，合约没有把这两笔分开记。奖励再拆成还没分完的，和已经可以领、还没领走的。已挖未领还没铸出。时间是新加坡时间。"
                 : "Unclaimed mined TAPE is not minted, so it is not circulating. Staked principal and matured TAPE rewards still in the term contract are not circulating either. An unfinished miner total is not shown as zero. Times are Singapore."}
             </p>
             <p className="mt-1 break-all text-xs text-ink/40">
@@ -153,27 +156,13 @@ export function MineDesk() {
           </div>
         ) : networkOpen ? <p className="border-t border-gold/40 px-3 py-3 text-xs text-ink/55">{zh ? "链上还没读到。失败不会写成 0。" : "The chain has not answered. A miss is not written as zero."}</p> : null}
       </article>
-      <div className="grid gap-2 sm:grid-cols-2">
-        <article className={`border ${trade === "bsc" ? "border-ink" : "border-gold"} bg-card`}>
-          <button type="button" onClick={() => setTrade((cur) => cur === "bsc" ? null : "bsc")} className="flex min-h-16 w-full items-center justify-between gap-3 px-3 text-left">
-            <span>
-              <span className="block text-[10px] tracking-[0.18em] text-gold">tapeout</span>
-              <span className="font-display text-2xl italic leading-none">{zh ? "晶体管合约" : "Transistor contracts"}</span>
-              <span className="mt-1 block text-xs text-ink/60">{zh ? "保证金是 BSC 的 USDT。点开才下单。" : "Margin is BSC USDT. Open it to trade."}</span>
-            </span>
-            <span className="shrink-0 text-xs text-ink/50">{trade === "bsc" ? (zh ? "收起" : "Hide") : (zh ? "打开" : "Open")}</span>
-          </button>
-        </article>
-        <article className={`border ${trade === "x" ? "border-ink" : "border-gold"} bg-card`}>
-          <button type="button" onClick={() => setTrade((cur) => cur === "x" ? null : "x")} className="flex min-h-16 w-full items-center justify-between gap-3 px-3 text-left">
-            <span>
-              <span className="block text-[10px] tracking-[0.18em] text-gold">TAPELIQUID</span>
-              <span className="font-display text-2xl italic leading-none">{zh ? "现货" : "Spot"}</span>
-              <span className="mt-1 block text-xs text-ink/60">{zh ? "NAND 和 LATCH。点开才买卖。" : "NAND and LATCH. Open it to trade."}</span>
-            </span>
-            <span className="shrink-0 text-xs text-ink/50">{trade === "x" ? (zh ? "收起" : "Hide") : (zh ? "打开" : "Open")}</span>
-          </button>
-        </article>
+      <div className="grid grid-cols-2 border border-gold">
+        <button type="button" onClick={() => setTrade((cur) => cur === "bsc" ? null : "bsc")} className={`min-h-11 px-2 text-left text-sm ${trade === "bsc" ? "bg-ink text-paper" : ""}`}>
+          <span className={trade === "bsc" ? "text-gold" : "text-ink/45"}>tapeout </span>{zh ? "晶体管合约" : "contracts"}
+        </button>
+        <button type="button" onClick={() => setTrade((cur) => cur === "x" ? null : "x")} className={`min-h-11 border-l border-gold px-2 text-left text-sm ${trade === "x" ? "bg-ink text-paper" : ""}`}>
+          TAPELIQUID
+        </button>
       </div>
       {trade === "bsc" ? <TransistorDesk /> : null}
       {trade === "x" ? <TapeSpotDesk zh={zh} lanes={[1, 2]} /> : null}

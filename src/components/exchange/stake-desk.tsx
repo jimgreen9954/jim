@@ -104,7 +104,7 @@ export function StakeDesk() {
       if (account) transistorHeld(account).then((row) => { if (!dead) { setNand(row.nand); setLatch(row.latch); } }).catch(() => undefined);
     };
     pull();
-    const id = window.setInterval(pull, 15000);
+    const id = window.setInterval(pull, 60000);
     return () => { dead = true; window.clearInterval(id); };
   }, [account]);
 

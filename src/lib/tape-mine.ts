@@ -71,6 +71,7 @@ export type TapeBoard = {
   waferHeld: bigint;
   termPrincipal: bigint;
   termReward: bigint;
+  termHeld: bigint;
   pendingNet: bigint;
   pendingStaked: bigint;
   staked: number;
@@ -126,6 +127,7 @@ export type TapeWire = {
   waferHeld: string;
   termPrincipal: string;
   termReward: string;
+  termHeld: string;
   pendingNet: string;
   pendingStaked: string;
   staked: number;
@@ -173,6 +175,7 @@ function boardFrom(wire: TapeWire): TapeBoard {
     waferHeld: BigInt(wire.waferHeld ?? "0"),
     termPrincipal: BigInt(wire.termPrincipal ?? "0"),
     termReward: BigInt(wire.termReward ?? "0"),
+    termHeld: BigInt(wire.termHeld ?? "0"),
     pendingNet: BigInt(wire.pendingNet ?? "0"),
     pendingStaked: BigInt(wire.pendingStaked ?? "0"),
     staked: wire.staked ?? 0,
@@ -260,6 +263,7 @@ async function loadTapeMine(account: string | null, onHead?: (board: TapeBoard) 
     { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [LOCKS[1] as Hex] as const },
     { address: TAPE_TERM, abi: termAbi, functionName: "tapeStakePot" as const },
     { address: TAPE_TERM, abi: termAbi, functionName: "bemStakePot" as const },
+    { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [TAPE_TERM] as const },
     ...(account ? [{ address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [who] as const }] : []),
   ];
   const head = await client.multicall({ contracts: headCalls, allowFailure: false });
@@ -274,8 +278,9 @@ async function loadTapeMine(account: string | null, onHead?: (board: TapeBoard) 
   const waferHeld = head[8] as bigint;
   const termPrincipal = pair(head[9])[0];
   const termReward = pair(head[10])[1];
-  const locked = circuitHeld + waferHeld + termPrincipal + termReward;
-  const balance = account ? (head[11] as bigint) : 0n;
+  const termHeld = head[11] as bigint;
+  const locked = circuitHeld + waferHeld + (termHeld > 0n ? termHeld : termPrincipal + termReward);
+  const balance = account ? (head[12] as bigint) : 0n;
   if (cap !== CAP) throw new Error("cap");
   const daily = dailyAt(start);
   const last = Number(next) - 1;
@@ -290,6 +295,7 @@ async function loadTapeMine(account: string | null, onHead?: (board: TapeBoard) 
     waferHeld,
     termPrincipal,
     termReward,
+    termHeld,
     pendingNet: 0n,
     pendingStaked: 0n,
     staked: 0,
@@ -375,7 +381,7 @@ async function loadTapeMine(account: string | null, onHead?: (board: TapeBoard) 
     scanOk = false;
   }
   seats.sort((a, b) => Number(a.on) - Number(b.on) || Number(b.id) - Number(a.id));
-  return { supply, cap, weight, balance, start, daily, circuits: Math.max(0, last), open, burned, pooled, locked, circuitHeld, waferHeld, termPrincipal, termReward, pendingNet, pendingStaked, staked, stakedLive, stakedWeight, seats, scanOk, scanning: false };
+  return { supply, cap, weight, balance, start, daily, circuits: Math.max(0, last), open, burned, pooled, locked, circuitHeld, waferHeld, termPrincipal, termReward, termHeld, pendingNet, pendingStaked, staked, stakedLive, stakedWeight, seats, scanOk, scanning: false };
 }
 
 async function preflight(to: Hex, from: string, data: Hex) {
