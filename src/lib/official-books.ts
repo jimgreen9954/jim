@@ -36,6 +36,20 @@ export type OfficialList = {
   gates: number;
   nIn: number;
   nOut: number;
+  nState: number;
+  width: number;
+  eligible: boolean;
+};
+
+export type OfficialTrade = {
+  id: string;
+  buyer: string;
+  seller: string;
+  circuits: string;
+  circuitId: string;
+  priceBnb: number;
+  ts: number;
+  tx: string;
 };
 
 export type OfficialBooks = {
@@ -45,6 +59,12 @@ export type OfficialBooks = {
   block: number | null;
   bids: OfficialBid[];
   lists: OfficialList[];
+  listed: number;
+  sellers: number;
+  maxId: number;
+  vol24h: number;
+  volTotal: number;
+  trades: OfficialTrade[];
 };
 
 export const getOfficialBooks = createServerFn({ method: "GET" }).handler(async (): Promise<OfficialBooks> => {
