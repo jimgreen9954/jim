@@ -492,7 +492,7 @@ export function RealPerp() {
                 setBusy(true);
                 setBad(false);
                 const steps = [c.deployX1, c.deployX2, c.deployX3];
-                setDeployNote(lang === "zh" ? "正在打开 X Layer 钱包。确认窗在钱包 App 里。" : "Opening the X Layer wallet. Confirm it in the wallet app.");
+                setDeployNote(lang === "zh" ? "正在连接 X Layer 钱包。请在钱包中确认，确认窗不在本页。" : "Connecting the X Layer wallet. Confirm the request in the wallet. It does not appear on this page.");
                 setNote(steps[0]);
                 void (async () => {
                   try {
@@ -501,7 +501,7 @@ export function RealPerp() {
                     setAccount(from);
                     if (from.toLowerCase() !== FEE_TO.toLowerCase()) {
                       setBad(true);
-                      setDeployNote(lang === "zh" ? `现在连的是 ${from.slice(0, 6)}…${from.slice(-4)}。部署要换成收费地址 ${FEE_TO.slice(0, 6)}…${FEE_TO.slice(-4)}。` : `Connected ${from.slice(0, 6)}…${from.slice(-4)}. Switch to the fee address.`);
+                      setDeployNote(lang === "zh" ? `当前钱包为 ${from.slice(0, 6)}…${from.slice(-4)}。部署须使用收费地址 ${FEE_TO.slice(0, 6)}…${FEE_TO.slice(-4)}。` : `Connected ${from.slice(0, 6)}…${from.slice(-4)}. Deployment requires the fee address.`);
                       return;
                     }
                     const addr = await deployXLayer(from, (step) => {
@@ -516,8 +516,8 @@ export function RealPerp() {
                     fail(err);
                     const message = err instanceof Error ? err.message : "";
                     setDeployNote(message === "oracle"
-                      ? (lang === "zh" ? "只有收费地址能部署这一份。" : "Only the fee address can deploy this book.")
-                      : (lang === "zh" ? `没有部署。${message.slice(0, 80) || "钱包没有弹出就切到 X Layer 再点。"}` : `Not deployed. ${message.slice(0, 80)}`));
+                      ? (lang === "zh" ? "只有收费地址可以部署本合约。" : "Only the fee address can deploy this contract.")
+                      : (lang === "zh" ? `部署未完成。${message.slice(0, 80) || "若钱包未弹出，请切换至 X Layer 后重试。"}` : `Deployment did not finish. ${message.slice(0, 80)}`));
                   } finally {
                     setBusy(false);
                   }
@@ -526,7 +526,7 @@ export function RealPerp() {
             >
               {busy ? (lang === "zh" ? "等待钱包确认" : "Waiting for the wallet") : (lang === "zh" ? "部署读 X Layer 池子的新永续" : "Deploy the book that reads the X Layer pools")}
             </button>
-            {deployNote ? <p className={`text-sm leading-6 ${bad ? "text-sell" : ""}`}>{deployNote}</p> : <p className="text-sm leading-6 text-ink/70">{lang === "zh" ? "点下去会弹出钱包。三笔签名：标记、写入池子价、永续。弹窗不在这个页面里。" : "A tap opens the wallet. Three signatures: mark, pool price, perpetual. The prompt is not on this page."}</p>}
+            {deployNote ? <p className={`text-sm leading-6 ${bad ? "text-sell" : ""}`}>{deployNote}</p> : <p className="text-sm leading-6 text-ink/70">{lang === "zh" ? "提交后由钱包确认。共三笔签名：标记合约、初始观察、永续合约。" : "The wallet confirms the request. Three signatures: the mark, the first observation, and the perpetual."}</p>}
           </div>
         ) : null}
         <p className="text-sm leading-6 text-ink/70">{chain === "xlayer" ? c.perpWarnX : c.perpWarn}</p>
@@ -1010,8 +1010,8 @@ export function RealPerp() {
                         v:
                           chain === "xlayer"
                             ? lang === "zh"
-                              ? "读 X Layer 的 OKB/BEM 和 USDT0/WOKB。每 30 秒最多挪 0.5%。不再用 BSC。没有资金费。没有保险基金，没有自动减仓。"
-                              : "Reads the X Layer OKB/BEM and USDT0/WOKB pools. At most 0.5% every 30 seconds. Not the BSC price. No funding. No insurance fund. No auto-deleveraging."
+                              ? "标记读取 X Layer 的 OKB/BEM 与 USDT0/WOKB。连续更新单次不超过 0.5%，间隔不少于 30 秒。不引用 BSC 价格。没有资金费。没有保险基金。没有自动减仓。"
+                              : "The mark reads the X Layer OKB/BEM and USDT0/WOKB pools. A consecutive update is at most 0.5% and at least 30 seconds apart. It does not reference BSC. No funding. No insurance fund. No auto-deleveraging."
                             : lang === "zh"
                               ? "Pancake 池大约 10 分钟均价。没有资金费。没有保险基金，没有自动减仓。"
                               : "About a 10-minute Pancake average. No funding. No insurance fund. No auto-deleveraging.",

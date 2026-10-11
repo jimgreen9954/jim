@@ -208,20 +208,20 @@ function Header({ floor, desk, setFloor, setDesk, setGiftOpen }: { floor: Floor;
     ["rules", lang === "zh" ? "规则" : "Rules"],
   ] as const;
   const line = floor === "paper"
-    ? lang === "zh" ? "练习只在这台浏览器里，不会进实盘。" : "Practice stays in this browser. It does not reach the live book."
+    ? lang === "zh" ? "练习只记录在本机，不进入实盘。" : "Practice is stored on this device. It does not reach the live book."
     : floor === "desk" && desk === "perp"
-      ? lang === "zh" ? "保证金锁在这一份合约里。BSC 和 X Layer 不能并成一笔。" : "Margin stays in this contract. BSC and X Layer do not net."
+      ? lang === "zh" ? "保证金锁在所选链的合约中。BSC 与 X Layer 不能合并。" : "Margin is locked in the contract of the selected chain. BSC and X Layer do not net."
       : floor === "desk"
-        ? lang === "zh" ? "现货在钱包里成交。台费另付 0.20%。" : "Spot settles in the wallet. The 0.20% desk fee is a separate payment."
+        ? lang === "zh" ? "现货在签名钱包中成交。台费另收 0.20%。" : "Spot settles in the signing wallet. The desk fee of 0.20% is charged separately."
         : floor === "shop"
-          ? lang === "zh" ? "左边是本站。右边三个是 tapeout。" : "This house is on the left. The three on the right are tapeout."
+          ? lang === "zh" ? "左侧为本站现货。右侧三项为 tapeout。" : "The house book is on the left. The three tapeout markets are on the right."
         : floor === "canvas"
-          ? lang === "zh" ? "先在页面上画。签名之后才流片。" : "Draw it here. It is taped only after you sign."
+          ? lang === "zh" ? "先在页面完成网表。签名之后才流片。" : "Complete the netlist here. Tape-out happens only after you sign."
         : floor === "mine"
-          ? lang === "zh" ? "上面两处是交易。下面才是领取已经挖出的币。" : "The two doors above are the markets. Claims are below them."
+          ? lang === "zh" ? "上方为两处交易。下方为已产出 TAPE 的领取。" : "Two markets are above. Claims of mined TAPE are below."
         : floor === "me"
-          ? lang === "zh" ? "看资产、转出。新手礼包是隐藏活动，打开才有规则。" : "Balances and transfers. The gift is a closed activity. The rules are inside."
-          : lang === "zh" ? "规则以这一页为准。" : "This page is the rulebook.";
+          ? lang === "zh" ? "资产与转出。新手礼包为非公开活动，打开后显示规则。" : "Balances and transfers. The starter gift is a closed activity. Its rules appear when opened."
+          : lang === "zh" ? "以本页规则为准。" : "This page is the rulebook.";
   const go = (next: Floor) => {
     if (window.location.pathname.startsWith("/whitepaper")) {
       window.location.assign(next === "rules" ? "/whitepaper" : `/#${next === "desk" ? desk : next === "shop" ? "book" : next === "canvas" ? "canvas" : next === "mine" ? "mine" : next === "me" ? "me" : "paper"}`);
@@ -388,15 +388,15 @@ function ShopFloor({ shop, setShop }: { shop: ShopTab; setShop: (shop: ShopTab) 
       <p className="text-sm text-ink/80">
         {shop === "gate"
           ? zh
-            ? "tapeout 晶体管合约。保证金是 BSC 的 USDT，结算用 10 分钟均价。和 BEM 永续不是同一本。"
+            ? "tapeout 晶体管合约。保证金为 BSC 的 USDT。结算采用 10 分钟均价。与 BEM 永续不是同一本账。"
             : "tapeout transistor contracts. Margin is BSC USDT. Settlement uses a 10-minute average. This is not the BEM book."
           : shop === "book"
             ? zh
-              ? "TAPELIQUID。NAND、LATCH、TAPE 用 USDT0 报价，同价并成一档。电路一张一个价。买方按价格付，卖方实收 99.8%。"
+              ? "TAPELIQUID。NAND、LATCH 与 TAPE 以 USDT0 报价，同一价格并为一档。电路按张定价。买方按价格支付，卖方实收 99.8%。"
               : "TAPELIQUID. NAND, LATCH and TAPE are quoted in USDT0. One price is one level. Each circuit has its own price. The buyer pays the price. The seller receives 99.8 percent."
             : zh
-              ? "跟 tapeout 的盘口。本站另收 0.20%，先付。tapeout 没有成交，这一笔也不退。"
-              : "The book follows tapeout. This site charges an extra 0.20%, paid first. If the tapeout fill fails, that fee is not returned."}
+              ? "盘口跟随 tapeout。本站另收 0.20%，先付。tapeout 未成交时，该笔费用不退。"
+              : "The book follows tapeout. This site charges an additional 0.20%, paid first. If tapeout does not fill, that fee is not returned."}
       </p>
       {shop === "gate" ? <TransistorDesk /> : null}
       {shop === "chips" ? <OfficialDesk mode="chips" /> : null}

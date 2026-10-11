@@ -17,21 +17,21 @@ const zh: Section[] = [
   {
     h: "产品",
     ps: [
-      "TAPELIQUID 是一所放在晶圆上的交易所。现货与永续在交易台。铸造、流片、晶体管合约在工房。TAPE 是 TAPELIQUID 的唯一平台币，只此一种，发行在 X Layer。BEM 属于 TapeOut，不是平台币。",
-      "练习只留在这台浏览器，不进入任何合约。个人中心只看这个钱包的资产和转出。新手礼包收在个人中心里，打开才看见规则。",
-      "没有合约的事，页面上不设按钮。先写已经能够签名的规则，再写尚未上链的安排。",
+      "TAPELIQUID 是以晶圆为记账单位的交易所。现货与永续在交易台。铸造、流片与晶体管合约在工房。TAPE 是唯一平台币，仅发行于 X Layer，没有第二枚。BEM 属于 tapeout，不是平台币。",
+      "练习记录只存在于本机浏览器，不进入任何合约。个人中心仅展示当前钱包的资产与转出。新手礼包收在个人中心内，打开后才显示规则。",
+      "没有对应合约的事项，页面不提供按钮。能够签名的规则写在前面。尚未上链的安排写在后面。",
     ],
   },
   {
     h: "风险",
     ps: [
-      "这一页是产品规则，不是审计报告，也不是收益承诺。下面的合约没有升级入口。已经锁进永续的保证金，不能靠改网页取回。",
+      "本页是产品规则，不是审计报告，也不是收益承诺。下列合约没有升级入口。已经锁入永续的保证金，不能通过修改网页取回。",
       "现货台费先付，是付出金额的 0.20%，在池子手续费之外。后面的兑换拒签或回滚，这一笔不退。回执还没读到时，同一金额不会再收一次。",
       "永续没有保险基金，也没有自动减仓。亏到保证金大约一半，任何人都可以强平。BSC 与 X Layer 不能并成一笔。",
-      "BSC 的标记是 Pancake 池大约 10 分钟的均价。浅池可以在短时间里带动它。新的 X Layer 永续不再由收费地址把 BSC 价格推进来。标记读 Uniswap v4 的 OKB/BEM 和 Uniswap v3 的 USDT0/WOKB，合成 BEM 的美元价。谁都可以推进。连续推进时每次最多 0.5%，至少隔 30 秒。停了 30 分钟，下一笔可以跳到池子现价。晶体管永续仍只接受收费地址写入的价格。",
-      "下单用的合约地址写死在页面里，不从这台浏览器的缓存里更换。保证金只进入地址一节列出的合约。",
-      "练习只存在这台浏览器，不会进入上面的合约。止盈和止损需要这一页开着，并且钱包完成签名。拒签之后不会自动再弹，需要再点一次。",
-      "仓库公开不等于已经通过独立审计。开仓之前以这一页和钱包里的合约地址为准。",
+      "BSC 标记价取 PancakeSwap 池约 10 分钟的时间加权均价。流动性不足时，该均价仍可能在短时间内被带动。新的 X Layer 永续不再采用收费地址写入的 BSC 价格。标记价由 Uniswap v4 的 OKB/BEM 与 Uniswap v3 的 USDT0/WOKB 合成。任何地址均可提交推进。连续推进时，单次变动不超过 0.5%，间隔不少于 30 秒。中断超过 30 分钟后，下一次推进可以采用池子即时价格。晶体管永续的标记仍仅接受收费地址写入。",
+      "下单所用合约地址写死在页面中，不随本机缓存更换。保证金只进入地址一节列出的合约。",
+      "练习只存在于本机浏览器，不进入上述合约。止盈与止损要求本页保持打开，并由钱包完成签名。拒签之后不会自动再次请求，需要再次提交。",
+      "代码仓库公开，不等于已经通过独立审计。开仓前应以本页与钱包中的合约地址核对。",
     ],
   },
   {
@@ -39,7 +39,7 @@ const zh: Section[] = [
     ps: [
       "现货在签名的钱包里成交。BSC 上的交易对走 PancakeSwap。OKB 走 X Layer 的 PotatoSwap。买到的币留在这个钱包。台费是付出金额的 0.20%，在池子手续费之外，单独付一笔，先付。后面的兑换拒签或回滚，这一笔不退。回执还没读到时，同一金额不会再收一次。",
       "永续有两本，不能并成一笔。BSC 的保证金是 USDT。X Layer 的保证金是 USDT0。保证金锁进你所选链上的那一份合约，平台不经手。没有保险基金，也没有自动减仓。亏到保证金大约一半，任何人都可以强平。没有资金费。",
-      "BSC 的 BEM 永续用 Pancake 池子大约 10 分钟的均价做标记，不用最后一笔成交去强平。浅池仍可能在短时间里带动这条均价。新的 X Layer 永续读 X Layer 上的 OKB/BEM 和 USDT0/WOKB，不再推进 BSC 价格。谁都可以调用推进。连续时每次最多 0.5%，至少隔 30 秒。现在页面上还挂着旧合约 0xF771BECD373af1d062169E42AB7b3B1fadE2b11b，那一份仍是旧标记。收费地址部署新的一份之后，地址写进页面，大家才换过去。旧仓留在旧合约里。",
+      "BSC 的 BEM 永续以 PancakeSwap 池约 10 分钟均价为标记，不以最后一笔成交强平。流动性不足时，该均价仍可能在短时间内被带动。新的 X Layer 永续读取 X Layer 上的 OKB/BEM 与 USDT0/WOKB，不再引用 BSC 价格。任何地址均可调用推进。连续推进时，单次不超过 0.5%，间隔不少于 30 秒。页面目前仍指向旧合约 0xF771BECD373af1d062169E42AB7b3B1fadE2b11b，该合约继续使用旧标记。收费地址部署新合约并写入页面后，新开仓位改用新合约。既有仓位留在旧合约。",
       "推荐只作用于永续。有推荐人时，交易者少付永续台费的 4%，推荐人记 6%，其余进入收费地址。现货和流动性不参与。",
     ],
   },
@@ -77,14 +77,14 @@ const zh: Section[] = [
       "库藏在挖矿页，不在交易台。这一格上面是回购，下面是期限质押。回收价为 1 枚整数 TAPE 结算 0.1 USDT0，写在合约中，不随现货变动。不足 1 枚不予接受。只有买方地址 0x585d2DF4B8fDDA783B074555e6F3787e3fCB39D7 可以充入 X Layer 的 USDT0，也只有这个地址可以取回还没花掉的 USDT0 和已经买到的 TAPE。其他地址不能在这里充 USDT0。用户只能卖出整数枚 TAPE，卖出当时收到 USDT0，不能把已卖出的 TAPE 取回。池子不够则整笔失败，不会先收 TAPE。这份合约不加池。旧回购 0x72e28d564A90eF3E76f599bC210454f5360E200C 不再使用。现在这一份是 0x53fa6A76ce9A3fE08698E04a4E9A674bd77a9DfF。",
       "分红不在这份回购合约里。回购合约里原先的质押没有期限，页面已经不再往那里存。期限质押是另一份 X Layer 合约，六档写死：90 天、180 天、270 天、365 天、730 天、1095 天，也就是三个月、六个月、九个月、一年、两年、三年。到期之前本金取不出。奖励可以先领。同一个池子，一个人最多同时有 16 笔没到期的。",
       "质押 TAPE，奖励是 X Layer 的 BEM。质押 X Layer 的 BEM，奖励是 TAPE。页面上「可质押」是这个钱包里还能锁的数量，「已质押」是这个地址已经锁上的本金，下面另写全池。每一笔锁仓写数量、期限和新加坡时间的到期日。没到期不能取本金。到期后同一行签一笔，本金回到钱包。领取只领奖励，不退本金。奖励谁都可以充。还没按 365 天分出去的，只有充入的地址能取回。已经分给质押的不能再取。年化用还没分完的奖励和池子现价来算。有人再质押，或取走还没分完的奖励，年化就变。价格读不到写成 —，不写成 0。这份期限合约没有管理员，不能升级。地址是 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A。直接把币转到合约、不走质押函数的，取不回来。",
-      "BSC 的 BEM 不进这份合约。一份合约读不到另一条链。X Layer 上的 BEM 是 0x60e62Efa9405d6873C5deaBD4E6CC91c25363952。BSC 上的 BEM 是另一份。要质押 BEM 领 TAPE，先在回购旁边打开收起的 tapeout 桥，转到 X Layer。点开之后调用的是 tapeout 的桥，本站不经手，不另收费。TAPE 不能走这座桥。新回购只允许买方地址充入和取回 USDT0，没有管理员，不能升级。0.1 USDT0 和两个代币写在合约里。直接把币转到合约、不走充入或卖出函数的，取不回来。",
+      "BSC 的 BEM 不进这份合约。一份合约读不到另一条链。X Layer 上的 BEM 是 0x60e62Efa9405d6873C5deaBD4E6CC91c25363952。BSC 上的 BEM 是另一份。要质押 BEM 领取 TAPE，先在库藏旁展开 tapeout 桥，转入 X Layer。该入口调用 tapeout 桥。本站不经手资产，不另收费。TAPE 不能走这座桥。新回购只允许买方地址充入和取回 USDT0，没有管理员，不能升级。0.1 USDT0 和两个代币写在合约里。直接把币转到合约、不走充入或卖出函数的，取不回来。",
     ],
   },
   {
     h: "现货",
     ps: [
-      "工房里的现货是 X Layer 上的订单簿，不在交易台。四本账写在同一份合约里：TAPE、NAND、LATCH 用 USDT0 报价，电路一张一个价。同一价格并成一档，先挂的排在前面。买方按那一档的价格支付。卖方实收 99.8%，千分之二进收费地址。吃得上的当场成交，剩下的挂着。页面写出卖盘可买、买盘可卖、已读成交和手续费，并按你填的价格写出能吃到多少、剩下多少挂出。费率、两个代币、晶体管、电路和收费地址写在合约里。没有管理员，不能改费率，不能升级。直接把币转到合约、不走挂单的，取不回来。合约已经部署的话，地址还没有写进这一页。写死之前，只有当时点部署的那台浏览器能下单。",
-      "挖矿页最上面是两处交易，点开才进。左边是 tapeout 晶体管合约，保证金是 BSC 的 USDT。右边是 TAPELIQUID，NAND 和 LATCH 用 USDT0 报价。下面才是领取。铸造已经结束，页面不再放铸造入口。已经在钱包里的 NAND 和 LATCH 可以流片，也可以在 TAPELIQUID 里卖。",
+      "工房现货是 X Layer 上的订单簿，不属于交易台。一份合约分四本账：TAPE、NAND、LATCH 以 USDT0 报价，电路按张定价。同一价格并为一档，先挂的订单在前。买方按该档价格支付。卖方实收 99.8%，千分之二进入收费地址。可成交部分即时成交，剩余部分继续挂单。页面列出卖盘可买、买盘可卖、已读成交与手续费，并按所填价格给出可成交数量与剩余挂出数量。费率、两个代币、晶体管、电路与收费地址均写在合约中。没有管理员，不能改费率，不能升级。未通过挂单函数直接转入的资产无法取回。若合约已经部署，其地址尚未写入本页。写入之前，只有完成部署的浏览器可以下单。",
+      "挖矿页上方为两处交易入口，展开后进入。左侧为 tapeout 晶体管合约，保证金为 BSC 的 USDT。右侧为 TAPELIQUID，NAND 与 LATCH 以 USDT0 报价。领取在下方。铸造已经结束，页面不再提供铸造入口。钱包中既有的 NAND 与 LATCH 仍可流片，也可在 TAPELIQUID 卖出。",
     ],
   },
   {
@@ -196,21 +196,21 @@ const en: Section[] = [
   {
     h: "Product",
     ps: [
-      "TAPELIQUID is an exchange set on a wafer. Spot and perpetuals sit on the desk. Minting, tape-out, and the transistor book sit in the workshop. TAPE is the only platform token, and it exists only on X Layer. BEM belongs to TapeOut. It is not the platform token.",
-      "Practice stays in this browser and never enters a contract. The account page shows only this wallet's balances and transfers. The starter gift stays inside the account page, and its rules appear only after it is opened.",
-      "What has no contract has no button. The rules that can be signed come first. What is not yet on chain comes after.",
+      "TAPELIQUID is an exchange that accounts in wafers. Spot and perpetuals are on the desk. Minting, tape-out and the transistor book are in the workshop. TAPE is the only platform token. It is issued only on X Layer. BEM belongs to tapeout and is not the platform token.",
+      "Practice records remain in this browser and never enter a contract. The account page shows only the connected wallet's balances and transfers. The starter gift is inside the account page. Its rules appear only after it is opened.",
+      "An action without a contract has no button. Rules that can be signed are stated first. Arrangements that are not yet on chain follow.",
     ],
   },
   {
     h: "Risk",
     ps: [
-      "This page is the product rulebook. It is not an audit report and not a promise of profit. The contracts below have no upgrade path. Margin already locked in a perpetual cannot be recovered by changing the website.",
+      "This page is the product rulebook. It is not an audit and it is not a statement of expected return. The contracts below have no upgrade path. Margin already locked in a perpetual cannot be recovered by editing the website.",
       "The spot desk fee is paid first. It is 0.20% of the amount paid, on top of the pool fee. If the later swap is rejected or reverts, that fee is not returned. While a receipt is still missing, the same amount is not charged again.",
       "Perpetuals have no insurance fund and no auto-deleveraging. Anyone can liquidate a position after about half the margin is lost. BSC and X Layer do not net into one trade.",
-      "The BSC mark is about a 10-minute Pancake average. A thin pool can move it for a short time. The new X Layer perpetual does not take a price pushed from BSC. Its mark reads the Uniswap v4 OKB/BEM pool and the Uniswap v3 USDT0/WOKB pool. Anyone can poke it. Each poke moves at most 0.5 percent, and at least 30 seconds must pass. After 30 quiet minutes the next poke may jump to the pools. The transistor perpetual still accepts a price only from the fee address.",
-      "The contracts used for orders are fixed in the page. They are not replaced from this browser's cache. Margin goes only to the contracts listed in the address section.",
-      "Practice stays in this browser and does not enter those contracts. A take-profit or stop-loss needs this page open and a wallet signature. After a rejection, the wallet does not pop again until you tap retry.",
-      "A public repository is not an independent audit. Before opening a position, match this page with the contract address in the wallet.",
+      "The BSC mark is a roughly 10-minute time-weighted average of the PancakeSwap pool. Thin liquidity can still move that average for a short interval. The new X Layer perpetual does not accept a BSC price posted by the fee address. Its mark is composed from the Uniswap v4 OKB/BEM pool and the Uniswap v3 USDT0/WOKB pool. Any address may submit an update. Consecutive updates move the mark by at most 0.5 percent and must be at least 30 seconds apart. After 30 minutes without an update, the next update may adopt the spot price of the pools. The transistor perpetual still accepts a mark only from the fee address.",
+      "Order contracts are fixed in the page. They are not replaced from this browser's cache. Margin is sent only to the contracts named in the address section.",
+      "Practice remains in this browser and does not enter those contracts. A take-profit or stop-loss requires this page to stay open and a wallet signature. After a rejection, the wallet is not prompted again until the order is submitted again.",
+      "A public repository is not an independent audit. Before opening a position, match this page with the contract address shown in the wallet.",
     ],
   },
   {
@@ -218,7 +218,7 @@ const en: Section[] = [
     ps: [
       "Spot settles in the wallet that signed. BSC pairs use PancakeSwap. OKB uses PotatoSwap on X Layer. The coins you buy stay in that wallet. The desk fee is 0.20% of what you pay, on top of the pool fee, and it is a separate payment made first. If the swap is rejected or reverts, that fee stays. If the receipt has not come back, the same amount is not charged again.",
       "There are two perpetual books. They do not net. BSC margin is USDT. X Layer margin is USDT0. Margin is locked in the one contract on the chain you picked. The platform does not hold it. There is no insurance fund and no auto-deleveraging. At about half the margin lost, anyone can liquidate. There is no funding fee.",
-      "The BSC BEM perpetual uses about a 10-minute Pancake average as the mark. The last trade is not used to liquidate. A thin pool can still move that average for a short time. The new X Layer perpetual reads the X Layer OKB/BEM and USDT0/WOKB pools. It does not use the BSC price. Anyone can poke it. Each step is at most 0.5 percent and at least 30 seconds apart. The page still points at the old book 0xF771BECD373af1d062169E42AB7b3B1fadE2b11b until the fee address deploys the new one and the address is pinned. Old positions stay on the old contract.",
+      "The BSC BEM perpetual uses a roughly 10-minute PancakeSwap average as its mark. The last trade is not used for liquidation. Thin liquidity can still move that average for a short interval. The new X Layer perpetual reads the OKB/BEM and USDT0/WOKB pools on X Layer. It does not reference the BSC price. Any address may submit an update. Each consecutive update is at most 0.5 percent and at least 30 seconds apart. The page still points at the previous contract, 0xF771BECD373af1d062169E42AB7b3B1fadE2b11b, which keeps the previous mark. After the fee address deploys the new contract and the address is written into the page, new positions use the new contract. Existing positions remain on the previous one.",
       "Referrals apply only to perpetuals. With a referrer, the trader pays 4% less of the perpetual desk fee, the referrer is credited 6%, and the rest goes to the fee address. Spot and liquidity are outside that split.",
     ],
   },
@@ -262,8 +262,8 @@ const en: Section[] = [
   {
     h: "Spot",
     ps: [
-      "Workshop spot is an X Layer order book, not the desk. One contract holds four books. TAPE, NAND and LATCH are quoted in USDT0. Each circuit has its own price. One price is one level, and the earlier order stands in front. The buyer pays that price. The seller receives 99.8 percent. The 0.2 percent goes to the fee address. What crosses fills immediately. The rest rests. The page shows how much the asks can sell, how much the bids can buy, the prints it has read, and the fees, and it shows how much of your order would fill at the price you typed. The fee, the two tokens, the transistors, the circuits and the fee address are written in the contract. There is no admin, and the fee cannot be changed. Tokens sent to the contract without an order cannot be taken back. If the contract has been deployed, its address is not yet written into this page. Until it is pinned, only the browser that deployed it can trade.",
-      "The mine page opens on two markets. The left one is the tapeout transistor contracts, margined in BSC USDT. The right one is TAPELIQUID, NAND and LATCH quoted in USDT0. Claims are below them. Minting is closed and the mint entry is gone. NAND and LATCH already in a wallet can still be taped, or sold on TAPELIQUID.",
+      "Workshop spot is an X Layer order book. It is not the desk. One contract holds four books. TAPE, NAND and LATCH are quoted in USDT0. Each circuit is priced on its own. One price is one level, and the earlier order stands in front. The buyer pays that level. The seller receives 99.8 percent. The 0.2 percent is paid to the fee address. Size that can cross fills at once. The remainder rests. The page states the size offered by asks, the size bid, the prints read, the fees collected, and, at the price entered, how much would fill and how much would rest. The fee, both tokens, the transistors, the circuits and the fee address are written in the contract. There is no administrator. The fee cannot be changed and the contract cannot be upgraded. Assets sent to the contract outside an order cannot be recovered. If the contract has been deployed, its address is not yet written into this page. Until it is, only the browser that deployed it can trade.",
+      "The mine page opens with two markets. The left market is the tapeout transistor contracts, margined in BSC USDT. The right market is TAPELIQUID. NAND and LATCH are quoted in USDT0. Claims are below. Minting has ended and the mint control is no longer shown. NAND and LATCH already held in a wallet may still be taped out, or sold on TAPELIQUID.",
     ],
   },
   {

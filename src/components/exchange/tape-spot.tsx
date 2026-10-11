@@ -199,7 +199,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   const run = (task: () => Promise<unknown>, ok: string) => {
     setBusy(true);
     setBad(false);
-    setNote(zh ? "正在打开 X Layer 钱包。确认窗在钱包 App 里，不在这个页面。" : "Opening the X Layer wallet. Confirm it in the wallet app, not on this page.");
+    setNote(zh ? "正在连接 X Layer 钱包。请在钱包中确认。" : "Connecting the X Layer wallet. Confirm the request there.");
     task().then((result) => {
       if (typeof result === "string" && /^0x[a-fA-F0-9]{40}$/.test(result)) setSpot(result);
       else setSpot(spotAddress());
@@ -246,13 +246,13 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
     return (
       <article className="border border-gold bg-card px-3 py-4">
         <p className="text-[11px] tracking-[0.22em] text-gold">{zh ? "现货" : "Spot"}</p>
-        <h3 className="mt-1 font-display text-2xl italic sm:text-3xl">{zh ? "这台设备还没有订单簿地址" : "This device has no book address"}</h3>
-        <p className="mt-2 text-sm leading-6">{zh ? "部署过的地址只留在当时那台浏览器。换手机或换浏览器会显示成没部署。把地址贴下面，或再签一笔。" : "A deployed address stays in the browser that signed it. Another phone looks undeployed. Paste the address, or sign again."}</p>
+        <h3 className="mt-1 font-display text-2xl italic sm:text-3xl">{zh ? "本机尚未保存订单簿地址" : "No order-book address is saved on this device"}</h3>
+        <p className="mt-2 text-sm leading-6">{zh ? "已部署的地址只保存在签署时的浏览器。更换设备会显示为尚未接入。请粘贴地址，或重新部署。" : "A deployed address is kept only in the browser that signed it. Another device is not connected until the address is entered. Paste it, or deploy again."}</p>
         <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
           <input value={pasted} onChange={(event) => setPasted(event.target.value)} placeholder="0x" className="min-h-12 border border-gold bg-transparent px-2 font-mono text-sm" />
-          <button type="button" disabled={busy} className="min-h-12 border border-gold px-4 text-sm disabled:opacity-40" onClick={() => run(() => rememberSpot(pasted), zh ? "地址已记下。这台设备可以交易了。" : "Address saved. This device can trade.")}>{zh ? "用这个地址" : "Use this address"}</button>
+          <button type="button" disabled={busy} className="min-h-12 border border-gold px-4 text-sm disabled:opacity-40" onClick={() => run(() => rememberSpot(pasted), zh ? "地址已保存。本机可以交易。" : "Address saved. This device can trade.")}>{zh ? "使用该地址" : "Use this address"}</button>
         </div>
-        <button type="button" disabled={busy} className="mt-2 min-h-12 w-full bg-ink px-4 text-sm text-paper disabled:opacity-40" onClick={() => run(() => deploySpot(account ?? ""), zh ? "现货合约已部署。把上面的地址发我写进页面。" : "Deployed. Send me the address above so I can pin it.")}>{busy ? (zh ? "等待钱包确认" : "Waiting for the wallet") : (zh ? "重新部署一笔" : "Deploy another")}</button>
+        <button type="button" disabled={busy} className="mt-2 min-h-12 w-full bg-ink px-4 text-sm text-paper disabled:opacity-40" onClick={() => run(() => deploySpot(account ?? ""), zh ? "现货合约已部署。请将地址交回，以便写入页面。" : "Deployed. Return the address so it can be written into the page.")}>{busy ? (zh ? "等待钱包确认" : "Waiting for the wallet") : (zh ? "重新部署" : "Deploy again")}</button>
         {note ? <p className={`mt-2 text-sm leading-6 ${bad ? "text-sell" : ""}`}>{note}</p> : null}
       </article>
     );
