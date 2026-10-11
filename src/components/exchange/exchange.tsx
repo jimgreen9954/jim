@@ -21,6 +21,9 @@ import { MineDesk } from "@/components/exchange/mine-desk";
 import { Whitepaper } from "@/components/exchange/whitepaper";
 import { bemPrice } from "@/lib/bsc";
 import { FeeLockProvider, useFeeLock } from "@/lib/fee-lock";
+import { currentAccount, onAccount } from "@/lib/wallet";
+import { CLAIM_STEPS, bindCode, claimRebate, codeText, readRebate, registerCode, type Desk } from "@/lib/perp";
+import { formatUnits } from "viem";
 
 type Floor = "desk" | "paper" | "shop" | "rules" | "canvas" | "me" | "mine";
 type DeskTab = "spot" | "perp";
@@ -175,6 +178,115 @@ function FuseFlash() {
   );
 }
 
+function inviteHref(code: string): string {
+  if (typeof window === "undefined") return `#ref=${encodeURIComponent(code)}`;
+  return `${window.location.origin}${window.location.pathname}#ref=${encodeURIComponent(code)}`;
+}
+
+function InviteDock() {
+  const lang = useExchange((s) => s.lang);
+  const zh = lang === "zh";
+  const [open, setOpen] = useState(false);
+  const [chain, setChain] = useState<Desk>("xlayer");
+  const [account, setAccount] = useState<string | null>(currentAccount());
+  const [code, setCode] = useState("");
+  const [mine, setMine] = useState("");
+  const [friend, setFriend] = useState("");
+  const [referrer, setReferrer] = useState("");
+  const [accrued, setAccrued] = useState(0);
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => onAccount(setAccount), []);
+  useEffect(() => {
+    const hash = window.location.hash.replace(/^#/, "");
+    const fromHash = hash.startsWith("ref=") ? decodeURIComponent(hash.slice(4)) : "";
+    const fromQuery = new URLSearchParams(window.location.search).get("ref") ?? "";
+    const ref = (fromHash || fromQuery).trim().slice(0, 16);
+    if (ref) {
+      setFriend(ref);
+      setOpen(true);
+    }
+  }, []);
+  useEffect(() => {
+    if (!account) return;
+    let dead = false;
+    const dec = chain === "xlayer" ? 6 : 18;
+    readRebate(chain, account)
+      .then((row) => {
+        if (dead) return;
+        setCode(codeText(row.code));
+        setReferrer(row.referrer);
+        setAccrued(Number(formatUnits(row.accrued, dec)));
+      })
+      .catch(() => undefined);
+    return () => {
+      dead = true;
+    };
+  }, [account, chain, open, note]);
+  const run = (job: (from: string) => Promise<unknown>, ok: string) => {
+    const from = account ?? currentAccount();
+    if (!from) {
+      setNote(zh ? "先连接钱包。" : "Connect a wallet first.");
+      return;
+    }
+    setBusy(true);
+    job(from)
+      .then(() => setNote(ok))
+      .catch((err: unknown) => {
+        const text = err instanceof Error ? err.message : "";
+        setNote(/taken/i.test(text) ? (zh ? "这个码已经有人用了。" : "That code is taken.") : /have/i.test(text) ? (zh ? "这个地址已经有码，不能改。" : "This address already has a code.") : zh ? "没有写上。" : "It was not written.");
+      })
+      .finally(() => setBusy(false));
+  };
+  const unit = chain === "xlayer" ? "USDT0" : "USDT";
+  return (
+    <div className="relative">
+      <button type="button" className={`min-h-9 px-2 text-xs ${open ? "bg-ink text-paper" : "text-ink/80"}`} onClick={() => setOpen((on) => !on)}>
+        {zh ? "邀请" : "Invite"}
+      </button>
+      {open ? (
+        <div className="absolute right-0 top-full z-50 mt-2 w-[min(22rem,calc(100vw-1.5rem))] border border-gold bg-paper p-3 text-sm shadow-plate">
+          <div className="grid grid-cols-2 border border-gold">
+            <button type="button" className={`min-h-9 ${chain === "xlayer" ? "bg-ink text-paper" : ""}`} onClick={() => setChain("xlayer")}>X Layer</button>
+            <button type="button" className={`min-h-9 ${chain === "bsc" ? "bg-ink text-paper" : ""}`} onClick={() => setChain("bsc")}>BSC</button>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-ink/60">{zh ? "确认自己的码之后不能改。朋友打开链接，核对，再点绑定。两条链各算各的。" : "A code cannot be changed. A friend opens the link, checks it, then binds. The two chains are separate."}</p>
+          {code ? (
+            <div className="mt-2">
+              <p className="font-mono">{code}</p>
+              <input readOnly value={inviteHref(code)} className="mt-2 w-full border border-gold bg-transparent px-2 py-2 font-mono text-xs" />
+              <button type="button" className="mt-2 min-h-9 border border-gold px-3 text-xs" onClick={() => {
+                const link = inviteHref(code);
+                navigator.clipboard.writeText(link).then(() => setNote(zh ? "链接已复制。" : "Link copied.")).catch(() => setNote(link));
+              }}>{zh ? "复制邀请链接" : "Copy invite link"}</button>
+            </div>
+          ) : (
+            <div className="mt-2 flex gap-2">
+              <input value={mine} onChange={(event) => setMine(event.target.value)} placeholder={zh ? "我的邀请码" : "My code"} className="min-h-10 min-w-0 flex-1 border border-gold bg-transparent px-2" />
+              <button type="button" disabled={busy} className="min-h-10 border border-gold px-3 text-xs disabled:opacity-40" onClick={() => run((from) => registerCode(from, chain, mine), zh ? "码已写上。链接在上面。" : "Code written. The link is above.")}>{zh ? "确认" : "Confirm"}</button>
+            </div>
+          )}
+          {referrer && referrer !== "0x0000000000000000000000000000000000000000" ? (
+            <p className="mt-2 font-mono text-xs">{referrer.slice(0, 6)}…{referrer.slice(-4)}</p>
+          ) : (
+            <div className="mt-2 flex gap-2">
+              <input value={friend} onChange={(event) => setFriend(event.target.value)} placeholder={zh ? "朋友的码" : "Their code"} className="min-h-10 min-w-0 flex-1 border border-gold bg-transparent px-2" />
+              <button type="button" disabled={busy} className="min-h-10 border border-gold px-3 text-xs disabled:opacity-40" onClick={() => run((from) => bindCode(from, chain, friend), zh ? "已绑定。" : "Bound.")}>{zh ? "绑定" : "Bind"}</button>
+            </div>
+          )}
+          <p className="mt-2 font-mono text-xs">{zh ? "可提" : "Claimable"} {accrued.toFixed(2)} {unit}</p>
+          <div className="mt-2 grid grid-cols-4 gap-1">
+            {CLAIM_STEPS.map((step) => (
+              <button key={step} type="button" disabled={busy || accrued + 1e-9 < step} className="min-h-8 border border-gold font-mono text-xs disabled:opacity-40" onClick={() => run((from) => claimRebate(from, chain, step), zh ? `已提 ${step}。` : `Claimed ${step}.`)}>{step}</button>
+            ))}
+          </div>
+          {note ? <p className="mt-2 text-xs leading-5">{note}</p> : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function Header({ floor, desk, shop, setFloor, setDesk, setShop, setGiftOpen }: { floor: Floor; desk: DeskTab; shop: ShopTab; setFloor: (floor: Floor) => void; setDesk: (desk: DeskTab) => void; setShop: (shop: ShopTab) => void; setGiftOpen: (open: boolean) => void }) {
   const lang = useExchange((s) => s.lang);
   const setLang = useExchange((s) => s.setLang);
@@ -213,9 +325,7 @@ function Header({ floor, desk, shop, setFloor, setDesk, setShop, setGiftOpen }: 
     [lang === "zh" ? "现货" : "Spot", floor === "desk" && desk === "spot", () => { setDesk("spot"); go("desk", "spot"); }],
     [lang === "zh" ? "永续" : "Perp", floor === "desk" && desk === "perp", () => { setDesk("perp"); go("desk", "perp"); }],
     ["TAPELIQUID", floor === "shop" && shop === "book", () => { setShop("book"); go("shop", "book"); }],
-    [lang === "zh" ? "晶体管合约" : "Contracts", floor === "shop" && shop === "gate", () => { setShop("gate"); go("shop", "gate"); }],
-    [lang === "zh" ? "晶体管" : "Transistors", floor === "shop" && shop === "chips", () => { setShop("chips"); go("shop", "chips"); }],
-    [lang === "zh" ? "电路" : "Circuits", floor === "shop" && shop === "circuits", () => { setShop("circuits"); go("shop", "circuits"); }],
+    ["tapeout", floor === "shop" && shop !== "book", () => { setShop(shop === "book" ? "gate" : shop); go("shop", shop === "chips" ? "chips" : shop === "circuits" ? "circuits" : "gate"); }],
     [lang === "zh" ? "挖矿" : "Mine", floor === "mine", () => go("mine", "mine")],
     [lang === "zh" ? "流片" : "Tape-out", floor === "canvas", () => go("canvas", "canvas")],
     [lang === "zh" ? "规则" : "Rules", floor === "rules", () => go("rules", "rules")],
@@ -225,7 +335,7 @@ function Header({ floor, desk, shop, setFloor, setDesk, setShop, setGiftOpen }: 
     <header className="sticky top-0 z-20 -mx-3 border-b border-gold/40 bg-paper/95 px-3 py-2 backdrop-blur-sm sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6 pt-[max(0.35rem,env(safe-area-inset-top))]">
       <div className="flex items-center gap-3">
         <button type="button" onClick={() => go("desk", "spot")} className="flex shrink-0 items-center gap-2">
-          <img src="/mark.jpg" alt="" className="size-8 border border-gold bg-foil object-cover" />
+          <img src="/mark.jpg" alt="" className="size-7 border border-gold bg-foil object-cover" />
           <span className="font-display text-lg italic leading-none">TAPELIQUID</span>
         </button>
         <nav className="hidden min-w-0 flex-1 items-center gap-0.5 overflow-x-auto lg:flex">
@@ -237,6 +347,7 @@ function Header({ floor, desk, shop, setFloor, setDesk, setShop, setGiftOpen }: 
         </nav>
         <div className="ml-auto flex shrink-0 items-center gap-1">
           <ConnectButton />
+          <InviteDock />
           <button type="button" className={`hidden min-h-9 px-2 text-xs sm:inline ${floor === "me" ? "bg-ink text-paper" : ""}`} onClick={() => { setGiftOpen(false); go("me", "me"); }}>
             {lang === "zh" ? "资产" : "Assets"}
           </button>
@@ -273,6 +384,20 @@ function Header({ floor, desk, shop, setFloor, setDesk, setShop, setGiftOpen }: 
           </button>
         ))}
       </nav>
+      {floor === "shop" && shop !== "book" ? (
+        <div className="mt-1 flex items-center gap-1 overflow-x-auto border-t border-gold/30 pt-1">
+          <span className="shrink-0 px-1 text-[11px] tracking-[0.16em] text-gold">tapeout</span>
+          {([
+            ["gate", lang === "zh" ? "晶体管合约" : "Contracts"],
+            ["chips", lang === "zh" ? "晶体管" : "Transistors"],
+            ["circuits", lang === "zh" ? "电路" : "Circuits"],
+          ] as const).map(([id, label]) => (
+            <button key={id} type="button" onClick={() => { setShop(id); go("shop", id); }} className={`shrink-0 border-b-2 px-2.5 py-1.5 text-sm ${shop === id ? "border-ink font-medium" : "border-transparent text-ink/55"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </header>
   );
 }

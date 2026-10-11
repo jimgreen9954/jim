@@ -102,9 +102,12 @@ function Quote({ zh, market, side, price, amount }: { zh: boolean; market: SpotM
 function Row({ level, max, bid, market, tag, onPick }: { level: Level; max: bigint; bid: boolean; market: number; tag?: string; onPick: () => void }) {
   const width = max > 0n ? Number((level.size * 100n) / max) : 0;
   return (
-    <button type="button" onClick={onPick} className="relative grid min-h-9 grid-cols-[1.1fr_1fr_1.1fr_2.2rem] items-center px-2 text-left font-mono text-xs">
+    <button type="button" onClick={onPick} className="relative grid min-h-8 grid-cols-[1.2fr_1fr_1fr_2rem] items-center px-2 text-left font-mono text-[13px] tabular-nums">
       <span className={`absolute inset-y-0 right-0 ${bid ? "bg-gold/25" : "bg-sell/15"}`} style={{ width: `${Math.max(width, 2)}%` }} />
-      <span className={`relative ${bid ? "text-ink" : "text-sell"}`}>{usdtText(level.price, 6)}{tag ? ` ${tag}` : ""}</span>
+      <span className={`relative flex items-baseline gap-1 ${bid ? "text-ink" : "text-sell"}`}>
+        {usdtText(level.price, 4)}
+        {tag ? <span className="rounded-sm bg-gold/30 px-1 text-[10px] leading-4 text-ink/70">{tag}</span> : null}
+      </span>
       <span className="relative">{baseText(market, level.size)}</span>
       <span className="relative text-ink/70">{usdtText(cost(market, level.size, level.price), 2)}</span>
       <span className="relative text-right text-ink/45">{level.lots}</span>
@@ -136,6 +139,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   const [note, setNote] = useState<string | null>(null);
   const [bad, setBad] = useState(false);
   const [ticketOpen, setTicketOpen] = useState(false);
+  const [levelCap, setLevelCap] = useState<bigint | null>(null);
   const market: SpotMarket = lane === "circuit" ? 0 : lane;
 
   useEffect(() => onAccount(setAccount), []);
@@ -256,7 +260,8 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   const pick = (level: Level, bid: boolean) => {
     setSide(bid ? "sell" : "buy");
     setPrice(formatUnits(level.price, 6));
-    setAmount(market === 0 ? formatUnits(level.size, 8) : level.size.toString());
+    setAmount("");
+    setLevelCap(level.size);
   };
 
   const fillPct = (pct: number) => {
@@ -351,7 +356,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
             <div className="flex items-end justify-between gap-3 px-3 py-3">
               <div>
                 <p className="text-[11px] tracking-[0.18em] text-gold">{name} / USDT0</p>
-                <h3 className="font-display text-3xl italic leading-none">{bestAsk > 0n ? usdtText(bestAsk, 4) : bestBid > 0n ? usdtText(bestBid, 4) : "—"}</h3>
+                <h3 className="font-mono text-[1.75rem] leading-none tabular-nums">{bestAsk > 0n ? usdtText(bestAsk, 4) : bestBid > 0n ? usdtText(bestBid, 4) : "—"}</h3>
               </div>
               <p className="text-right text-xs leading-5 text-ink/60">
                 {zh ? "买一" : "Bid"} {bestBid > 0n ? usdtText(bestBid, 4) : "—"}
@@ -361,7 +366,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
                 {zh ? "价差" : "Spread"} {spread > 0n ? usdtText(spread, 4) : "—"}
               </p>
             </div>
-            <div className="grid grid-cols-[1.1fr_1fr_1.1fr_2.2rem] px-2 pb-1 text-[10px] tracking-wide text-ink/45">
+            <div className="grid grid-cols-[1.2fr_1fr_1fr_2rem] px-2 pb-1 font-mono text-[11px] text-ink/45">
               <span>{zh ? "价格" : "Price"}</span><span>{zh ? "数量" : "Size"}</span><span>{zh ? "总额" : "Total"}</span><span className="text-right">{zh ? "笔" : "Lots"}</span>
             </div>
             <div className="border-t border-gold/30">
@@ -408,6 +413,12 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
             <label className="mt-2 grid gap-1 text-xs text-ink/55">
               {zh ? `数量 ${name}` : `Amount ${name}`}
               <input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono text-base text-ink" />
+              {levelCap != null ? (
+                <span className="flex items-center justify-between gap-2 text-[11px] text-ink/55">
+                  <span>{zh ? `这一档共 ${baseText(market, levelCap)} ${name}。数量可以少填，不会强制全吃。` : `This level has ${baseText(market, levelCap)} ${name}. Enter less if you do not want all of it.`}</span>
+                  <button type="button" className="shrink-0 underline" onClick={() => setAmount(market === 0 ? formatUnits(levelCap, 8) : levelCap.toString())}>{zh ? "填满这一档" : "Fill the level"}</button>
+                </span>
+              ) : null}
             </label>
             <div className="mt-2 grid grid-cols-2 border border-gold/40">
               <p className="px-2 py-2">

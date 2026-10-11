@@ -10,7 +10,9 @@ type Grip = "move" | "a" | "b" | "ab" | "ba";
 type Stroke = { kind: "line" | "zone"; a: Pt; b: Pt; color: string };
 type Drag = { i: number; mode: Grip; origin: Pt; a: Pt; b: Pt };
 
-const PAINTS = ["#2f2a26", "#b5a48e", "#efe6d8", "#9e1b12", "#1f6b45", "#1d4e89"];
+const PAINTS = ["#2f2a26", "#b5a48e", "#efe6d8", "#f23645", "#089981", "#2962ff"];
+const UP = "#089981";
+const DOWN = "#f23645";
 
 const VB_W = 860;
 const PAD = { l: 8, r: 76, t: 10, b: 22 };
@@ -409,24 +411,31 @@ export function Kline({
       <div>
       <div className="flex flex-col gap-2 border-b border-gold/30 px-3 py-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex border border-gold">
+          <div className="flex border border-gold/60">
             {(
               [
-                ["look", zh ? "看" : "Look"],
-                ["line", zh ? "线" : "Line"],
-                ["zone", zh ? "块" : "Zone"],
+                ["look", zh ? "十字" : "Cross"],
+                ["line", zh ? "趋势" : "Trend"],
+                ["zone", zh ? "区间" : "Range"],
               ] as const
             ).map(([id, label]) => (
               <button
                 key={id}
                 type="button"
+                title={label}
                 onClick={() => {
                   setTool(id);
                   setDraft(null);
                 }}
-                className={`min-h-9 px-3 text-xs ${tool === id ? "bg-ink text-paper" : ""}`}
+                className={`grid size-8 place-items-center ${tool === id ? "bg-ink text-paper" : "text-ink/70"}`}
               >
-                {label}
+                {id === "look" ? (
+                  <svg viewBox="0 0 16 16" className="size-4" aria-hidden><path d="M8 1v14M1 8h14" stroke="currentColor" strokeWidth="1.4" /></svg>
+                ) : id === "line" ? (
+                  <svg viewBox="0 0 16 16" className="size-4" aria-hidden><path d="M2 13 L14 3" stroke="currentColor" strokeWidth="1.4" /><circle cx="3" cy="12" r="1.3" fill="currentColor" /><circle cx="13" cy="4" r="1.3" fill="currentColor" /></svg>
+                ) : (
+                  <svg viewBox="0 0 16 16" className="size-4" aria-hidden><rect x="2.5" y="3.5" width="11" height="9" fill="none" stroke="currentColor" strokeWidth="1.4" /></svg>
+                )}
               </button>
             ))}
           </div>
@@ -455,14 +464,10 @@ export function Kline({
             >
               {biasOn ? (zh ? "收起倾向" : "Hide") : zh ? "倾向" : "Lean"}
             </button>
-            <button type="button" onClick={() => setZoom((value) => Math.max(8, Math.round(value * 0.7)))} className="min-h-9 border border-gold px-3 text-xs">
-              {zh ? "放大" : "In"}
-            </button>
-            <button type="button" onClick={() => setZoom((value) => Math.min(Math.max(8, all.length), Math.round(value * 1.4)))} className="min-h-9 border border-gold px-3 text-xs">
-              {zh ? "缩小" : "Out"}
-            </button>
-            <button type="button" onClick={() => { setZoom(48); setEdge(0); }} className="min-h-9 border border-gold px-3 text-xs">
-              {zh ? "最新" : "Now"}
+            <button type="button" title={zh ? "放大" : "In"} onClick={() => setZoom((value) => Math.max(8, Math.round(value * 0.7)))} className="grid size-8 place-items-center border border-gold/60 text-sm">+</button>
+            <button type="button" title={zh ? "缩小" : "Out"} onClick={() => setZoom((value) => Math.min(Math.max(8, all.length), Math.round(value * 1.4)))} className="grid size-8 place-items-center border border-gold/60 text-sm">−</button>
+            <button type="button" title={zh ? "最新" : "Now"} onClick={() => { setZoom(48); setEdge(0); }} className="grid size-8 place-items-center border border-gold/60">
+              <svg viewBox="0 0 16 16" className="size-4" aria-hidden><path d="M3 8h8M8 4l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.4" /></svg>
             </button>
           </div>
         </div>
@@ -477,7 +482,7 @@ export function Kline({
                 if (picked == null) return;
                 setInk((list) => list.map((stroke, i) => (i === picked ? { ...stroke, color } : stroke)));
               }}
-              className={`size-5 ${paint === color ? "ring-2 ring-ink ring-offset-2 ring-offset-card" : ""}`}
+              className={`size-4 ${paint === color ? "ring-2 ring-ink ring-offset-1 ring-offset-card" : ""}`}
               style={{ background: color }}
             />
           ))}
@@ -493,16 +498,12 @@ export function Kline({
         </div>
       </div>
       <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-3 pt-2 font-mono text-xs tabular-nums">
-        <span className={chg >= 0 ? "text-gold" : "text-sell"}>
+        <span className={chg >= 0 ? "text-[#089981]" : "text-[#f23645]"}>
           {chg >= 0 ? "+" : ""}
           {fmtPx(chg)} {fmtPct(prev ? chg / prev : 0)}
         </span>
         {mark > 0 ? <span>{zh ? "标记" : "Mark"} {fmtPx(mark)}</span> : null}
-        <span>{zh ? "这根收盘" : "Close"} {fmtPx(focus.c)}</span>
-        <span>O {fmtPx(focus.o)}</span>
-        <span>H {fmtPx(focus.h)}</span>
-        <span>L {fmtPx(focus.l)}</span>
-        <span>C {fmtPx(focus.c)}</span>
+        <span style={{ color: focus.c >= focus.o ? UP : DOWN }}>O {fmtPx(focus.o)} H {fmtPx(focus.h)} L {fmtPx(focus.l)} C {fmtPx(focus.c)}</span>
         {focus.v != null ? (
           <span>
             V {fmtSz(focus.v)}
@@ -635,8 +636,8 @@ export function Kline({
         {rows.map((bar, i) => {
           if (!bar || !Number.isFinite(bar.c) || !Number.isFinite(bar.o)) return null;
           const up = bar.c >= bar.o;
-          const color = up ? "var(--color-gold)" : "var(--color-sell)";
-          const bodyW = Math.max(1.4, slot * 0.68);
+          const color = up ? UP : DOWN;
+          const bodyW = Math.max(2.2, slot * 0.72);
           const left = x(i) - bodyW / 2;
           const top = y(Math.max(bar.o, bar.c));
           const body = Math.max(1, Math.abs(y(bar.o) - y(bar.c)));
@@ -647,7 +648,7 @@ export function Kline({
           return (
             <g key={`${bar.t ?? i}-${i}`}>
               <line x1={x(i)} x2={x(i)} y1={y(bar.h)} y2={y(bar.l)} stroke={color} strokeWidth="1" />
-              <rect x={left} y={top} width={bodyW} height={body} fill={up ? "var(--color-card)" : color} stroke={color} />
+              <rect x={left} y={top} width={bodyW} height={body} fill={color} />
               {bar.v != null ? (
                 <rect
                   x={left}
@@ -724,7 +725,7 @@ export function Kline({
             </text>
           </g>
         ) : null}
-        <rect x={VB_W - PAD.r + 2} y={y(mark > 0 ? mark : last.c) - 8} width={PAD.r - 4} height={16} fill={upLast ? "var(--color-gold)" : "var(--color-sell)"} />
+        <rect x={VB_W - PAD.r + 2} y={y(mark > 0 ? mark : last.c) - 8} width={PAD.r - 4} height={16} fill={upLast ? UP : DOWN} />
         <text x={VB_W - 6} y={y(mark > 0 ? mark : last.c) + 4} textAnchor="end" fill="var(--color-paper)" fontSize="11" fontFamily="IBM Plex Mono, monospace">
           {fmtPx(mark > 0 ? mark : last.c)}
         </text>
