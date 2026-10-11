@@ -302,7 +302,7 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
                     <div className="mt-2 flex justify-end">
                       {mine
                         ? <button type="button" disabled={busy} className="min-h-9 px-3 text-sm text-ink/70 disabled:opacity-40" onClick={(event) => { event.stopPropagation(); run((from) => cancelSpotCircuit(from, row.id), zh ? "已撤下。" : "Cancelled."); }}>{zh ? "撤下" : "Cancel"}</button>
-                        : <button type="button" disabled={busy} className="min-h-9 bg-[#f23645] px-4 text-sm text-white disabled:opacity-40" onClick={(event) => { event.stopPropagation(); run((from) => buySpotCircuit(from, row.id, row.price), zh ? "已买下。" : "Bought."); }}>{zh ? "买入" : "Buy"}</button>}
+                        : <button type="button" disabled={busy} className="min-h-9 bg-[#089981] px-4 text-sm text-white disabled:opacity-40" onClick={(event) => { event.stopPropagation(); run((from) => buySpotCircuit(from, row.id, row.price), zh ? "已买下。" : "Bought."); }}>{zh ? "买入" : "Buy"}</button>}
                     </div>
                   </li>
                 );
@@ -346,7 +346,7 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
                       <td className={`sticky right-0 px-3 py-2 text-right ${on ? "bg-foil/70" : "bg-card"}`}>
                         {mine
                           ? <button type="button" disabled={busy} className="min-h-8 border border-gold/80 px-3 text-[12px] disabled:opacity-40" onClick={(event) => { event.stopPropagation(); run((from) => cancelSpotCircuit(from, row.id), zh ? "已撤下。" : "Cancelled."); }}>{zh ? "撤下" : "Cancel"}</button>
-                          : <button type="button" disabled={busy} className="min-h-8 bg-[#f23645] px-3 text-[12px] text-white disabled:opacity-40" onClick={(event) => { event.stopPropagation(); setPick(row.id.toString()); run((from) => buySpotCircuit(from, row.id, row.price), zh ? "已买下。" : "Bought."); }}>{zh ? "买入" : "Buy"}</button>}
+                          : <button type="button" disabled={busy} className="min-h-8 bg-[#089981] px-3 text-[12px] text-white disabled:opacity-40" onClick={(event) => { event.stopPropagation(); setPick(row.id.toString()); run((from) => buySpotCircuit(from, row.id, row.price), zh ? "已买下。" : "Bought."); }}>{zh ? "买入" : "Buy"}</button>}
                       </td>
                     </tr>
                   );
@@ -373,7 +373,7 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
         </dl>
         <p className="mt-4 text-[12px] leading-6 text-ink/45">{zh ? "买方付报价。卖方拿 99.8%。日产能价只用来比较。" : "The buyer pays the quote. The seller receives 99.8 percent."}</p>
         {pickedList && account?.toLowerCase() !== pickedList.seller.toLowerCase() ? (
-          <button type="button" disabled={busy} className="mt-5 min-h-12 w-full bg-[#f23645] text-sm text-white disabled:opacity-40" onClick={() => run((from) => buySpotCircuit(from, pickedList.id, pickedList.price), zh ? "已买下。" : "Bought.")}>{zh ? `买入  ${usdtText(pickedList.price, 2)}` : `Buy ${usdtText(pickedList.price, 2)}`}</button>
+          <button type="button" disabled={busy} className="mt-5 min-h-12 w-full bg-[#089981] text-sm text-white disabled:opacity-40" onClick={() => run((from) => buySpotCircuit(from, pickedList.id, pickedList.price), zh ? "已买下。" : "Bought.")}>{zh ? `买入  ${usdtText(pickedList.price, 2)}` : `Buy ${usdtText(pickedList.price, 2)}`}</button>
         ) : null}
         {pickedOwn ? (
           <>
@@ -381,7 +381,7 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
               {zh ? "挂出价" : "Ask"}
               <input value={price} onChange={(event) => setPrice(event.target.value)} inputMode="decimal" placeholder="USDT0" className="h-12 border-b border-gold bg-transparent font-mono text-lg text-ink outline-none" />
             </label>
-            <button type="button" disabled={busy || typed == null} className="mt-4 min-h-12 w-full bg-ink text-sm text-paper disabled:opacity-40" onClick={() => typed != null && run((from) => listSpotCircuit(from, BigInt(pick), typed), zh ? "已挂上。" : "Listed.")}>{zh ? "挂出这一张" : "List this one"}</button>
+            <button type="button" disabled={busy || typed == null} className="mt-4 min-h-12 w-full bg-[#f23645] text-sm text-white disabled:opacity-40" onClick={() => typed != null && run((from) => listSpotCircuit(from, BigInt(pick), typed), zh ? "已挂上。" : "Listed.")}>{zh ? "挂出这一张" : "List this one"}</button>
           </>
         ) : null}
         {!pick ? <p className="mt-5 text-[13px] leading-6 text-ink/45">{zh ? "在售里点一行就能买。要挂的话，先去「我的」。" : "Pick a listed row to buy. To list, open Mine."}</p> : null}
@@ -430,7 +430,7 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
               </div>
               <p className="mt-2 text-[12px] leading-5 text-ink/45">{zh ? `1 张，不能拆。需支付 ${quote != null ? usdtText(quote, 4) : "—"}。千分之二 ${fee != null ? usdtText(fee, 4) : "—"}，卖方实收 ${net != null ? usdtText(net, 4) : "—"}。` : `One piece. Pay ${quote != null ? usdtText(quote, 4) : "—"}. Fee ${fee != null ? usdtText(fee, 4) : "—"}.`}</p>
               {pickedList && account?.toLowerCase() !== pickedList.seller.toLowerCase() ? (
-                <button type="button" disabled={busy} className="mt-3 min-h-12 w-full bg-[#f23645] text-sm text-white disabled:opacity-40" onClick={() => run((from) => buySpotCircuit(from, pickedList.id, pickedList.price), zh ? "已买下。" : "Bought.")}>{zh ? `买入 ${usdtText(pickedList.price, 2)}` : `Buy ${usdtText(pickedList.price, 2)}`}</button>
+                <button type="button" disabled={busy} className="mt-3 min-h-12 w-full bg-[#089981] text-sm text-white disabled:opacity-40" onClick={() => run((from) => buySpotCircuit(from, pickedList.id, pickedList.price), zh ? "已买下。" : "Bought.")}>{zh ? `买入 ${usdtText(pickedList.price, 2)}` : `Buy ${usdtText(pickedList.price, 2)}`}</button>
               ) : null}
               {pickedList && account?.toLowerCase() === pickedList.seller.toLowerCase() ? (
                 <button type="button" disabled={busy} className="mt-3 min-h-12 w-full border border-gold text-sm disabled:opacity-40" onClick={() => run((from) => cancelSpotCircuit(from, pickedList.id), zh ? "已撤下。" : "Cancelled.")}>{zh ? "撤下" : "Cancel"}</button>
@@ -441,7 +441,7 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
                     {zh ? "挂出价" : "Ask"}
                     <input value={price} onChange={(event) => setPrice(event.target.value)} inputMode="decimal" placeholder="USDT0" className="h-12 border-b border-gold bg-transparent font-mono text-lg text-ink outline-none" />
                   </label>
-                  <button type="button" disabled={busy || typed == null} className="min-h-12 shrink-0 bg-ink px-4 text-sm text-paper disabled:opacity-40" onClick={() => typed != null && run((from) => listSpotCircuit(from, BigInt(pick), typed), zh ? "已挂上。" : "Listed.")}>{zh ? "挂出" : "List"}</button>
+                  <button type="button" disabled={busy || typed == null} className="min-h-12 shrink-0 bg-[#f23645] px-4 text-sm text-white disabled:opacity-40" onClick={() => typed != null && run((from) => listSpotCircuit(from, BigInt(pick), typed), zh ? "已挂上。" : "Listed.")}>{zh ? "挂出" : "List"}</button>
                 </div>
               ) : null}
               {pickedLock ? <p className="mt-3 text-[13px] leading-6 text-ink/55">{pickedLock.unlock * 1000 <= Date.now() ? (zh ? "已经到期。先领回钱包，才能挂出。" : "It is due. Claim it before listing.") : (zh ? "还锁着。到期前不能买，也不能挂。" : "Still locked.")}</p> : null}
