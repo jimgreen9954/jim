@@ -173,6 +173,14 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   }, [spot]);
 
   useEffect(() => {
+    setBids([]);
+    setAsks([]);
+    setPrints([]);
+    setOrders([]);
+    setMiss(false);
+  }, [lane]);
+
+  useEffect(() => {
     if (!spot || !ready || lane === "circuit") return;
     let dead = false;
     const pull = () => {
@@ -190,7 +198,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
             setMiss(false);
             setBids(book?.bids ?? []);
             setAsks(book?.asks ?? []);
-          }).catch(() => { if (!dead) setMiss(true); });
+          }).catch(() => { if (!dead) { setMiss(true); setBids([]); setAsks([]); } });
         }, 1200);
       });
       readSpotPurse(account).then((held) => { if (!dead) setPurse(held); }).catch(() => undefined);
@@ -461,12 +469,14 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
               ))}
             </div>
             {miss ? <p className="px-2 py-2 text-xs text-ink/55">{zh ? "这一次没读到。不写成 0。" : "This read missed. It is not shown as zero."}</p> : null}
+            {asks.length + bids.length + traded.n > 0 ? (
             <div className="grid grid-cols-2 border-t border-gold/40 text-xs sm:grid-cols-4">
               <Stat k={<Hint label={zh ? "卖盘可买" : "Asks can buy"} text={zh ? "所有卖单加起来，现在还能买多少。折合是按各档价格算的 USDT0。" : "Size still offered by asks, and its USDT0 value."} />} v={`${baseText(market, askBook.base)} ${name}`} s={zh ? `折合 ${usdtText(askBook.quote, 2)} · ${askBook.lots} 笔` : `${usdtText(askBook.quote, 2)} · ${askBook.lots}`} />
               <Stat k={<Hint label={zh ? "买盘可卖" : "Bids can sell"} text={zh ? "所有买单加起来，现在还能卖多少。" : "Size still bid, and its USDT0 value."} />} v={`${baseText(market, bidBook.base)} ${name}`} s={zh ? `折合 ${usdtText(bidBook.quote, 2)} · ${bidBook.lots} 笔` : `${usdtText(bidBook.quote, 2)} · ${bidBook.lots}`} />
               <Stat k={<Hint label={zh ? "已读成交" : "Prints read"} text={zh ? "这段区块里读到的成交笔数和金额。更早的不在这行里。" : "Prints read in this block window. Older ones are not included."} />} v={`${traded.n}${zh ? " 笔" : ""}`} s={`${usdtText(traded.quote, 2)} USDT0`} />
               <Stat k={<Hint label={zh ? "已收手续费" : "Fees read"} text={zh ? "这些成交里已经扣下的千分之二，进收费地址。卖方实收 99.8%。" : "The 0.2 percent already taken on these prints. Sellers receive 99.8 percent."} />} v={`${usdtText(traded.fee, 4)} USDT0`} s={zh ? "只算读到的成交" : "Of the prints read"} />
             </div>
+            ) : <p className="border-t border-gold/40 px-3 py-3 text-sm text-ink/55">{zh ? "这个市场没有挂单，也没有读到成交。" : "No orders on this market, and no prints in the window."}</p>}
             <p className="px-3 py-2 text-[11px] leading-5 text-ink/50">{zh ? "同一价格并成一档。点价格填右边，点右边的按钮按这一档的数量成交，数量仍可改少。" : "One price is one level. Tap the price to fill the ticket. The button takes that size, and you can still type less."}</p>
           </article>
           <article className="mt-3 border border-gold bg-card">

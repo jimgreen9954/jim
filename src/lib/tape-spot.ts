@@ -83,7 +83,13 @@ function levels(row: unknown): Level[] {
   const size = (tuple ? tuple[2] : named.size) as readonly bigint[] | undefined;
   const lots = (tuple ? tuple[3] : named.lots) as readonly number[] | undefined;
   const out: Level[] = [];
-  for (let i = 0; i < count; i += 1) out.push({ price: price?.[i] ?? 0n, size: size?.[i] ?? 0n, lots: Number(lots?.[i] ?? 0) });
+  const n = Number.isFinite(count) ? Math.min(count, 24) : 0;
+  for (let i = 0; i < n; i += 1) {
+    const px = price?.[i] ?? 0n;
+    const sz = size?.[i] ?? 0n;
+    if (px <= 0n || sz <= 0n) continue;
+    out.push({ price: px, size: sz, lots: Number(lots?.[i] ?? 0) });
+  }
   return out;
 }
 
