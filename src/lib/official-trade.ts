@@ -1,6 +1,7 @@
 import { createPublicClient, encodeFunctionData, http, parseAbi, type Hex } from "viem";
 import { BSC, DESK_FEE_BPS, FEE_TO, TxPending, connectBsc, waitOk, waitReceipt } from "@/lib/bsc";
 import { OFFICIAL } from "@/lib/official-books";
+import type { CircuitSigned } from "@/lib/circuit-board";
 import { getProvider } from "@/lib/wallet";
 
 const client = createPublicClient({ transport: http(BSC.rpc) });
@@ -14,6 +15,12 @@ const bidAbi = parseAbi([
 ]);
 
 const listAbi = parseAbi(["function buy(uint256 id, uint96 expectedPrice) payable"]);
+const signedAbi = parseAbi([
+  "function fillSignedAsk((address maker, address collection, uint256 tokenId, uint256 nonce, uint128 price, uint64 expiry, address payoutRecipient, uint16 feeBps, uint16 schemaVersion) ask, bytes signature, address nftRecipient) payable",
+]);
+const signedAbiEpoch = parseAbi([
+  "function fillSignedAsk((address maker, address collection, uint256 tokenId, uint256 nonce, uint128 price, uint64 expiry, address payoutRecipient, uint16 feeBps, uint256 feeEpoch, uint16 schemaVersion) ask, bytes signature, address nftRecipient) payable",
+]);
 
 const moveAbi = parseAbi([
   "function balanceOf(address,uint256) view returns (uint256)",
@@ -132,6 +139,35 @@ export async function buyOfficialCircuit(from: string, id: bigint, priceWei: big
   await payFee(from, priceWei);
   try {
     return await finishPaid(await send(from, OFFICIAL.circuitMarket, data, priceWei));
+  } catch (err) {
+    if (err instanceof TxPending || (err instanceof Error && err.message === "fee-kept")) throw err;
+    throw new Error("fee-kept");
+  }
+}
+
+/** Fill one signed circuit ask. The exchange price includes its own fee. Ours is another 0.2%, paid first. */
+export async function fillSignedCircuit(from: string, ask: CircuitSigned): Promise<Hex> {
+  const price = BigInt(ask.price);
+  const value = BigInt(ask.buyerCost || ask.price);
+  if (price <= 0n || value < price) throw new Error("amount");
+  const common = {
+    maker: ask.maker,
+    collection: ask.collection,
+    tokenId: BigInt(ask.tokenId),
+    nonce: BigInt(ask.nonce),
+    price,
+    expiry: BigInt(ask.expiry),
+    payoutRecipient: ask.payout,
+    feeBps: ask.feeBps,
+    schemaVersion: ask.schemaVersion,
+  };
+  const data = ask.feeEpoch
+    ? encodeFunctionData({ abi: signedAbiEpoch, functionName: "fillSignedAsk", args: [{ ...common, feeEpoch: BigInt(ask.feeEpoch) }, ask.signature, from as Hex] })
+    : encodeFunctionData({ abi: signedAbi, functionName: "fillSignedAsk", args: [common, ask.signature, from as Hex] });
+  await client.call({ account: from as Hex, to: ask.exchange, data, value });
+  await payFee(from, price);
+  try {
+    return await finishPaid(await send(from, ask.exchange, data, value));
   } catch (err) {
     if (err instanceof TxPending || (err instanceof Error && err.message === "fee-kept")) throw err;
     throw new Error("fee-kept");

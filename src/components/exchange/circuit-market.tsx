@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { getCircuitBoard, type CircuitBoard, type CircuitPrint, type CircuitRow } from "@/lib/circuit-board";
-import { buyOfficialCircuit } from "@/lib/official-trade";
+import { buyOfficialCircuit, fillSignedCircuit } from "@/lib/official-trade";
 import { BSC, TxPending, txUrl } from "@/lib/bsc";
 import { connectBsc } from "@/lib/bsc";
 import { currentAccount, onAccount } from "@/lib/wallet";
@@ -40,7 +40,6 @@ export function CircuitMarket({ zh, lang }: { zh: boolean; lang: "zh" | "en" }) 
   const [maxHash, setMaxHash] = useState("");
   const [maxDay, setMaxDay] = useState("");
   const [picked, setPicked] = useState<CircuitRow | null>(null);
-  const [ack, setAck] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [bad, setBad] = useState(false);
@@ -78,19 +77,28 @@ export function CircuitMarket({ zh, lang }: { zh: boolean; lang: "zh" | "en" }) 
   }, [board, tab, query, minHash, maxHash, maxDay, sort]);
 
   const buy = async (row: CircuitRow) => {
-    if (row.officialId == null || !row.askWei) return;
+    if (!row.askWei || (row.officialId == null && !row.signed)) return;
+    setPicked(row);
     setBusy(true);
     setBad(false);
-    setNote(zh ? "先付千分之二，再签 tapeout 官方那一笔。没成交，服务费不退。" : "The 0.2% is paid first. If the official trade fails, the fee stays.");
+    setNote(zh ? "先付千分之二，再签这一张。后面那笔没成交，服务费不退。" : "The 0.2% is paid first. If the fill fails, the fee stays.");
     try {
       const from = currentAccount() ?? (await connectBsc());
-      const hash = await buyOfficialCircuit(from, BigInt(row.officialId), BigInt(row.askWei));
-      setNote(zh ? "官方盘买入已发出。" : "The official buy was sent.");
+      const hash = row.officialId != null
+        ? await buyOfficialCircuit(from, BigInt(row.officialId), BigInt(row.askWei))
+        : await fillSignedCircuit(from, row.signed!);
+      setNote(zh ? "买入已发出。" : "The buy was sent.");
       window.open(txUrl(hash), "_blank", "noopener,noreferrer");
     } catch (error) {
       setBad(true);
       const message = error instanceof Error ? error.message : "";
-      setNote(message === "pending" || error instanceof TxPending ? (zh ? "已经提交，回执还没读到。" : "Submitted. The receipt is not back.") : zh ? "没有成交。" : "No fill.");
+      setNote(
+        message === "pending" || error instanceof TxPending
+          ? zh ? "已经提交，回执还没读到。不要再签同一张。" : "Submitted. The receipt is not back."
+          : message === "fee-kept"
+            ? zh ? "服务费已经付了，买入没有完成。服务费不退。" : "The fee was paid. The buy did not finish."
+            : zh ? "这张现在买不进。价格可能变了，刷新后再点。" : "This one cannot be bought now. The price may have moved.",
+      );
     } finally {
       setBusy(false);
     }
@@ -138,11 +146,11 @@ export function CircuitMarket({ zh, lang }: { zh: boolean; lang: "zh" | "en" }) 
         <p className="mt-2 text-[11px] text-ink/45">
           {board?.ok
             ? zh
-              ? `快照 ${board.asOf ?? ""}。表里是当前排序的前 50 张。日产能价 = 卖价 ÷ 预计 24 小时 BEM。晶体均价 = 卖价 ÷ 本层晶体管。算力均价 = 卖价 ÷ H。本站只代买 tapeout 官方盘，签名单只展示。`
+              ? `快照 ${board.asOf ?? ""}。表里是当前排序的前 50 张。点一行右边的买入就签。官方盘和签名单都能买。另付千分之二，先付，后面没成交不退。`
               : `Snapshot ${board.asOf ?? ""}. Fifty rows. Day price is ask divided by estimated 24h BEM. This site only buys the official tapeout book.`
             : zh ? "电路快照没读到。" : "The circuit snapshot did not load."}
         </p>
-        {tab === "tape" ? <Prints zh={zh} rows={board?.prints ?? []} /> : <Book zh={zh} rows={rows} picked={picked} onPick={setPicked} />}
+        {tab === "tape" ? <Prints zh={zh} rows={board?.prints ?? []} /> : <Book zh={zh} rows={rows} picked={picked} busy={busy} onPick={setPicked} onBuy={(row) => void buy(row)} />}
       </div>
       <aside className="border border-gold bg-card px-3 py-3 lg:sticky lg:top-16">
         <p className="text-[11px] tracking-[0.16em] text-gold">{zh ? "这一张" : "This circuit"}</p>
@@ -153,13 +161,10 @@ export function CircuitMarket({ zh, lang }: { zh: boolean; lang: "zh" | "en" }) 
           <label className="text-[11px] text-ink/55">{zh ? "最高算力" : "Max H"}<input value={maxHash} onChange={(event) => setMaxHash(event.target.value.replace(/[^\d.]/g, ""))} className="mt-1 w-full border border-gold/50 bg-transparent px-2 py-1 font-mono text-xs outline-none" /></label>
           <label className="col-span-2 text-[11px] text-ink/55">{zh ? "日产能价不高于" : "Day price at most"}<input value={maxDay} onChange={(event) => setMaxDay(event.target.value.replace(/[^\d.]/g, ""))} placeholder="BNB" className="mt-1 w-full border border-gold/50 bg-transparent px-2 py-1 font-mono text-xs outline-none" /></label>
         </div>
-        <p className="mt-2 text-[11px] leading-5 text-ink/50">{zh ? "筛选只改左边的表。电路整张成交，不能拆。官方盘另付千分之二，先付，不退。" : "Filters only change the table. A circuit sells whole. The official book adds 0.2%, paid first."}</p>
-        {picked?.officialId != null ? (
-          <>
-            <label className="mt-2 flex items-start gap-2 text-xs"><input type="checkbox" className="mt-0.5" checked={ack} onChange={(event) => setAck(event.target.checked)} /><span>{zh ? "我按这个卖价买这一张官方盘电路。" : "I buy this official listing at the ask."}</span></label>
-            <button type="button" disabled={!ack || busy} className="mt-2 min-h-11 w-full bg-ink text-sm text-paper disabled:opacity-40" onClick={() => void buy(picked)}>{zh ? "买官方盘这一张" : "Buy official"}</button>
-          </>
-        ) : picked ? <p className="mt-2 text-xs leading-5 text-ink/60">{zh ? "这张不在 tapeout 官方盘上。本站不代签别人的签名单，只把价格和算力摊开。" : "This ask is not on the official tapeout book. It is shown, not signed here."}</p> : null}
+        <p className="mt-2 text-[11px] leading-5 text-ink/50">{zh ? "筛选只改左边的表。电路整张成交，不能拆。买入另付千分之二，先付，不退。" : "Filters only change the table. A circuit sells whole. Buying adds 0.2%, paid first."}</p>
+        {picked && (picked.officialId != null || picked.signed) ? (
+          <button type="button" disabled={busy} className="mt-3 min-h-11 w-full bg-[#f23645] text-sm text-white disabled:opacity-40" onClick={() => void buy(picked)}>{zh ? "买入这一张" : "Buy this one"}</button>
+        ) : picked ? <p className="mt-2 text-xs leading-5 text-ink/60">{zh ? "这张现在没有卖价。" : "This one has no ask."}</p> : null}
         {note ? <p className={`mt-2 text-xs leading-5 ${bad ? "text-sell" : ""}`}>{note}</p> : null}
       </aside>
     </section>
@@ -194,7 +199,7 @@ function Ticket({ zh, row }: { zh: boolean; row: CircuitRow }) {
   );
 }
 
-function Book({ zh, rows, picked, onPick }: { zh: boolean; rows: CircuitRow[]; picked: CircuitRow | null; onPick: (row: CircuitRow) => void }) {
+function Book({ zh, rows, picked, busy, onPick, onBuy }: { zh: boolean; rows: CircuitRow[]; picked: CircuitRow | null; busy: boolean; onPick: (row: CircuitRow) => void; onBuy: (row: CircuitRow) => void }) {
   return (
     <div className="mt-2 max-h-[32rem] overflow-auto border border-gold/40">
       <table className="w-full min-w-[68rem] text-left text-xs">
@@ -203,10 +208,11 @@ function Book({ zh, rows, picked, onPick }: { zh: boolean; rows: CircuitRow[]; p
             {[zh ? "时间" : "Age", zh ? "电路" : "Circuit", zh ? "结构" : "Shape", zh ? "状态" : "Status", "H", zh ? "晶体均价" : "Crystal", zh ? "算力均价" : "Per H", zh ? "预计24h" : "24h", zh ? "日产能价" : "Day px", zh ? "卖价" : "Ask", zh ? "最高出价" : "Bid"].map((head) => (
               <th key={head} className="px-2 py-2 font-normal">{head}</th>
             ))}
+            <th className="sticky right-0 bg-paper px-2 py-2 text-right font-normal">{zh ? "买入" : "Buy"}</th>
           </tr>
         </thead>
         <tbody>
-          {rows.length === 0 ? <tr><td colSpan={11} className="px-2 py-4 text-ink/50">{zh ? "这一档没有电路。" : "Nothing in this view."}</td></tr> : null}
+          {rows.length === 0 ? <tr><td colSpan={12} className="px-2 py-4 text-ink/50">{zh ? "这一档没有电路。" : "Nothing in this view."}</td></tr> : null}
           {rows.map((row) => (
             <tr key={row.key} className={`cursor-pointer border-t border-gold/20 ${picked?.key === row.key ? "bg-gold/10" : ""}`} onClick={() => onPick(row)}>
               <td className="px-2 py-1.5 font-mono">{age(row.listedAt)}</td>
@@ -220,6 +226,11 @@ function Book({ zh, rows, picked, onPick }: { zh: boolean; rows: CircuitRow[]; p
               <td className="px-2 py-1.5 font-mono">{row.dayPx != null ? `${num(row.dayPx, 2)}` : "—"}</td>
               <td className="px-2 py-1.5 font-mono text-sell">{row.ask != null ? `${num(row.ask, 4)}` : "—"}</td>
               <td className="px-2 py-1.5 font-mono">{row.bid != null ? num(row.bid, 4) : "—"}</td>
+              <td className="sticky right-0 bg-paper px-2 py-1.5 text-right">
+                {row.ask != null && (row.officialId != null || row.signed) ? (
+                  <button type="button" disabled={busy} className="min-h-7 bg-[#f23645] px-2 text-white disabled:opacity-40" onClick={(event) => { event.stopPropagation(); onBuy(row); }}>{zh ? "买入" : "Buy"}</button>
+                ) : "—"}
+              </td>
             </tr>
           ))}
         </tbody>

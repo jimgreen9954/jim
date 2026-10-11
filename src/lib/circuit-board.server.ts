@@ -1,4 +1,4 @@
-import type { CircuitBar, CircuitBoard, CircuitPrint, CircuitRow } from "./circuit-board";
+import type { CircuitBar, CircuitBoard, CircuitPrint, CircuitRow, CircuitSigned } from "./circuit-board";
 
 const API = "https://api-tapeout.firsto.ai";
 const EMPTY: CircuitBoard = {
@@ -37,6 +37,42 @@ function bem(atomic: unknown, decimals = 8): number | null {
 
 function text(value: unknown): string {
   return typeof value === "string" ? value : value == null ? "" : String(value);
+}
+
+function addr(value: unknown): `0x${string}` | null {
+  const row = text(value);
+  return /^0x[a-fA-F0-9]{40}$/.test(row) ? (row as `0x${string}`) : null;
+}
+
+function signedOf(ask: Raw | null, price: string): CircuitSigned | null {
+  const exec = (ask?.execution ?? null) as Raw | null;
+  if (!exec || text(exec.kind) !== "signed_ask") return null;
+  const exchange = addr(exec.exchange);
+  const maker = addr(exec.maker);
+  const collection = addr(exec.collection);
+  const payout = addr(exec.payoutRecipient);
+  const signature = text(exec.signature);
+  const nonce = text(exec.nonce);
+  const expiry = text(exec.expiry);
+  const schema = num(exec.schemaVersion);
+  const feeBps = num(exec.feeBps);
+  if (!exchange || !maker || !collection || !payout || !/^0x[a-fA-F0-9]+$/.test(signature) || !nonce || !expiry || schema == null || feeBps == null) return null;
+  const buyerCost = text(ask?.buyerCostWei) || price;
+  return {
+    exchange,
+    maker,
+    collection,
+    tokenId: text(exec.tokenId),
+    nonce,
+    price,
+    expiry,
+    payout,
+    feeBps,
+    feeEpoch: text(exec.feeEpoch) || null,
+    schemaVersion: schema,
+    signature: signature as `0x${string}`,
+    buyerCost,
+  };
 }
 
 type Raw = Record<string, unknown>;
@@ -78,6 +114,7 @@ function rowOf(raw: Raw): CircuitRow | null {
     askWei: askWei || null,
     bid: bnb(raw.maxBidSellerNetWei),
     officialId: official ? Number(official[1]) : null,
+    signed: signedOf(ask, askWei),
     seller: text(ask?.account) || text(raw.owner),
     listedAt: num(raw.createdTimestamp) ?? 0,
     paybackDays: payback != null ? payback / 86400 : null,

@@ -1,5 +1,21 @@
 import { createServerFn } from "@tanstack/react-start";
 
+export type CircuitSigned = {
+  exchange: `0x${string}`;
+  maker: `0x${string}`;
+  collection: `0x${string}`;
+  tokenId: string;
+  nonce: string;
+  price: string;
+  expiry: string;
+  payout: `0x${string}`;
+  feeBps: number;
+  feeEpoch: string | null;
+  schemaVersion: number;
+  signature: `0x${string}`;
+  buyerCost: string;
+};
+
 export type CircuitRow = {
   key: string;
   name: string;
@@ -20,6 +36,7 @@ export type CircuitRow = {
   askWei: string | null;
   bid: number | null;
   officialId: number | null;
+  signed: CircuitSigned | null;
   seller: string;
   listedAt: number;
   paybackDays: number | null;
