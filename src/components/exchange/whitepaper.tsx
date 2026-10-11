@@ -84,7 +84,7 @@ const zh: Section[] = [
     h: "现货",
     ps: [
       "工房里的现货是 X Layer 上的订单簿，不在交易台。四本账写在同一份合约里：TAPE、NAND、LATCH 用 USDT0 报价，电路一张一个价。同一价格并成一档，先挂的排在前面。买方按那一档的价格支付。卖方实收 99.8%，千分之二进收费地址。吃得上的当场成交，剩下的挂着。没有管理员，不能改费率，不能升级。直接把币转到合约、不走挂单的，取不回来。合约从工房或挖矿页部署，地址写死后大家用同一份。",
-      "挖矿页先是两扇关上的门。BSC 的 BEM 点开才是 BEM 现货。X Layer 的 TAPE 点开才是这本 TAPE 订单簿。不点开，进不去交易。",
+      "挖矿页最上面是两处交易，点开才进。左边是 BSC 晶体管合约，保证金是 BSC 的 USDT。右边是 X Layer 现货晶体管，NAND 和 LATCH 用 USDT0 报价。下面才是领取。铸造已经结束，页面不再放铸造入口。已经在钱包里的 NAND 和 LATCH 可以流片，也可以在这本现货里卖。",
     ],
   },
   {
@@ -263,7 +263,7 @@ const en: Section[] = [
     h: "Spot",
     ps: [
       "Workshop spot is an X Layer order book, not the desk. One contract holds four books. TAPE, NAND and LATCH are quoted in USDT0. Each circuit has its own price. One price is one level, and the earlier order stands in front. The buyer pays that price. The seller receives 99.8 percent. The 0.2 percent goes to the fee address. What crosses fills immediately. The rest rests. There is no admin, and the fee cannot be changed. Tokens sent to the contract without an order cannot be taken back. The contract is deployed from the workshop or the mine page, and the address is pinned so everyone uses the same one.",
-      "The mine page opens on two closed doors. BSC BEM opens the BEM spot book. X Layer TAPE opens this TAPE book. Neither trade is visible until its door is opened.",
+      "The mine page opens on two markets. The left one is the BSC transistor contracts, margined in BSC USDT. The right one is X Layer spot transistors, NAND and LATCH quoted in USDT0. Claims are below them. Minting is closed and the mint entry is gone. NAND and LATCH already in a wallet can still be taped, or sold on this book.",
     ],
   },
   {

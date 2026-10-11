@@ -8,14 +8,13 @@ import { Book } from "@/components/exchange/book";
 import { TraceChart } from "@/components/exchange/chart";
 import { DiePanel } from "@/components/exchange/die";
 import { Ticket } from "@/components/exchange/ticket";
-import { LiveBoard } from "@/components/exchange/live-board";
+import { OfficialDesk } from "@/components/exchange/official-desk";
 import { RealPerp } from "@/components/exchange/real-perp";
 import { SpotDesk } from "@/components/exchange/spot-desk";
 import { TransistorDesk } from "@/components/exchange/transistor-desk";
 import { TapeCanvas } from "@/components/exchange/tape-canvas";
-import { WalletBar, ConnectButton } from "@/components/exchange/wallet-bar";
+import { ConnectButton } from "@/components/exchange/wallet-bar";
 import { AccountCenter } from "@/components/exchange/account-center";
-import { OfficialDesk } from "@/components/exchange/official-desk";
 import { TapeSpotDesk } from "@/components/exchange/tape-spot";
 import { MineDesk } from "@/components/exchange/mine-desk";
 import { Whitepaper } from "@/components/exchange/whitepaper";
@@ -24,12 +23,12 @@ import { FeeLockProvider, useFeeLock } from "@/lib/fee-lock";
 
 type Floor = "desk" | "paper" | "shop" | "rules" | "canvas" | "me" | "mine";
 type DeskTab = "spot" | "perp";
-type ShopTab = "gate" | "wafer" | "chips" | "circuits" | "book";
+type ShopTab = "gate" | "chips" | "circuits" | "book";
 
 export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp" | "gate" | "wafer" | "brief" }) {
   const [floor, setFloor] = useState<Floor>(start === "paper" ? "paper" : start === "gate" || start === "wafer" ? "shop" : start === "brief" ? "rules" : "desk");
   const [desk, setDesk] = useState<DeskTab>(start === "perp" ? "perp" : "spot");
-  const [shop, setShop] = useState<ShopTab>(start === "wafer" ? "wafer" : "gate");
+  const [shop, setShop] = useState<ShopTab>(start === "wafer" ? "book" : "gate");
   const [giftOpen, setGiftOpen] = useState(false);
   useEffect(() => {
     const apply = () => {
@@ -38,10 +37,9 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
       if (named === "perp") { setFloor("desk"); setDesk("perp"); }
       if (named === "paper") setFloor("paper");
       if (named === "gate" || named.startsWith("gate=")) { setFloor("shop"); setShop("gate"); }
-      if (named === "wafer") { setFloor("shop"); setShop("wafer"); }
+      if (named === "wafer" || named === "book" || named === "nand") { setFloor("shop"); setShop("book"); }
       if (named === "chips") { setFloor("shop"); setShop("chips"); }
       if (named === "circuits") { setFloor("shop"); setShop("circuits"); }
-      if (named === "book") { setFloor("shop"); setShop("book"); }
       if (named === "canvas") setFloor("canvas");
       if (named === "mine") setFloor("mine");
       if (named === "me" || named === "gift") setFloor("me");
@@ -60,7 +58,7 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
         <BannerToast />
         <FuseFlash />
         <div className={`mx-auto flex max-w-7xl flex-col gap-3 px-3 pt-2 sm:px-4 lg:gap-4 lg:px-6 ${floor === "paper" ? "pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-10" : "pb-[max(1.5rem,env(safe-area-inset-bottom))]"}`}>
-          <Header floor={floor} desk={desk} shop={shop} setFloor={setFloor} setDesk={setDesk} setShop={setShop} setGiftOpen={setGiftOpen} />
+          <Header floor={floor} desk={desk} setFloor={setFloor} setDesk={setDesk} setGiftOpen={setGiftOpen} />
           <FeeStrip />
           {floor === "desk" && desk === "spot" ? <SpotDesk /> : null}
           {floor === "desk" && desk === "perp" ? <RealPerp /> : null}
@@ -176,7 +174,7 @@ function FuseFlash() {
   );
 }
 
-function Header({ floor, desk, shop, setFloor, setDesk, setShop, setGiftOpen }: { floor: Floor; desk: DeskTab; shop: ShopTab; setFloor: (floor: Floor) => void; setDesk: (desk: DeskTab) => void; setShop: (shop: ShopTab) => void; setGiftOpen: (open: boolean) => void }) {
+function Header({ floor, desk, setFloor, setDesk, setGiftOpen }: { floor: Floor; desk: DeskTab; setFloor: (floor: Floor) => void; setDesk: (desk: DeskTab) => void; setGiftOpen: (open: boolean) => void }) {
   const lang = useExchange((s) => s.lang);
   const setLang = useExchange((s) => s.setLang);
   const reset = useExchange((s) => s.reset);
@@ -216,11 +214,11 @@ function Header({ floor, desk, shop, setFloor, setDesk, setShop, setGiftOpen }: 
       : floor === "desk"
         ? lang === "zh" ? "现货在钱包里成交。台费另付 0.20%。" : "Spot settles in the wallet. The 0.20% desk fee is a separate payment."
         : floor === "shop"
-          ? lang === "zh" ? "铸造、流片、晶体管合约和官网现货。" : "Mint, tape-out, transistor perps, and official spot."
+          ? lang === "zh" ? "BSC 晶体管合约、X Layer 现货、流片。铸造已经结束。" : "BSC transistor contracts, X Layer spot, and tape-out. Minting is closed."
         : floor === "canvas"
           ? lang === "zh" ? "先在页面上画。签名之后才流片。" : "Draw it here. It is taped only after you sign."
         : floor === "mine"
-          ? lang === "zh" ? "领取已经挖出的币。BEM 和 TAPE 分开签名。" : "Claim coins already mined. BEM and TAPE are separate signatures."
+          ? lang === "zh" ? "上面两处是交易。下面才是领取已经挖出的币。" : "The two doors above are the markets. Claims are below them."
         : floor === "me"
           ? lang === "zh" ? "看资产、转出。新手礼包是隐藏活动，打开才有规则。" : "Balances and transfers. The gift is a closed activity. The rules are inside."
           : lang === "zh" ? "规则以这一页为准。" : "This page is the rulebook.";
@@ -277,22 +275,7 @@ function Header({ floor, desk, shop, setFloor, setDesk, setShop, setGiftOpen }: 
             ) : null}
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-1">
-          <button
-            type="button"
-            onClick={() => {
-              if (window.location.pathname.startsWith("/whitepaper")) {
-                window.location.assign("/#wafer");
-                return;
-              }
-              setFloor("shop");
-              setShop("wafer");
-            }}
-            className={`min-h-12 border px-2 text-left sm:min-h-14 sm:px-3 ${floor === "shop" && shop === "wafer" ? "border-ink bg-foil text-ink" : "border-gold bg-ink text-paper"}`}
-          >
-            <span className="block text-[10px] tracking-[0.2em] text-gold">{lang === "zh" ? "铸造" : "Mint"}</span>
-            <span className="font-display text-lg italic leading-none sm:text-2xl">{lang === "zh" ? "晶圆" : "Wafer"}</span>
-          </button>
+        <div className="grid grid-cols-2 gap-1">
           <button
             type="button"
             onClick={() => {
@@ -318,7 +301,7 @@ function Header({ floor, desk, shop, setFloor, setDesk, setShop, setGiftOpen }: 
             }}
             className={`min-h-12 border px-2 text-left sm:min-h-14 sm:px-3 ${floor === "mine" ? "border-ink bg-foil text-ink" : "border-gold bg-ink text-paper"}`}
           >
-            <span className="block text-[10px] tracking-[0.2em] text-gold">BEM · TAPE</span>
+            <span className="block text-[10px] tracking-[0.2em] text-gold">{lang === "zh" ? "交易在这里" : "Markets"}</span>
             <span className="font-display text-lg italic leading-none sm:text-2xl">{lang === "zh" ? "挖矿" : "Mine"}</span>
           </button>
         </div>
@@ -387,27 +370,22 @@ function ShopFloor({ shop, setShop }: { shop: ShopTab; setShop: (shop: ShopTab) 
       <p className="text-sm text-ink/80">
         {shop === "gate"
           ? lang === "zh"
-            ? "晶体管合约。保证金是 BSC 的 USDT，结算用 10 分钟均价。和 BEM 永续不是同一本。"
-            : "Transistor perps. Margin is BSC USDT. Settlement uses a 10-minute average. This is not the BEM book."
-          : shop === "wafer"
+            ? "BSC 晶体管合约。保证金是 BSC 的 USDT，结算用 10 分钟均价。和 BEM 永续不是同一本。"
+            : "BSC transistor contracts. Margin is BSC USDT. Settlement uses a 10-minute average. This is not the BEM book."
+          : shop === "book"
             ? lang === "zh"
-              ? "先铸造 NAND 或 LATCH，再流片。流片成功只得到电路。要挖 TAPE，还要到挖矿页再签一笔开工。"
-              : "Mint NAND or LATCH, then tape out. Tape-out only creates the circuit. Mining TAPE takes a second signature on the mine page."
-            : shop === "book"
-              ? lang === "zh"
-                ? "X Layer 的订单簿。TAPE、NAND、LATCH 用 USDT0 报价。同价并成一档。电路一张一个价。买方按价格付，卖方实收 99.8%。"
-                : "The X Layer book. TAPE, NAND and LATCH are quoted in USDT0. One price is one level. Each circuit has its own price. The buyer pays the price. The seller receives 99.8 percent."
-              : lang === "zh"
-              ? "跟 tapeout.net 的盘口。本站另收 0.20%，先付。官网没有成交，这一笔也不退。"
-              : "The book follows tapeout.net. This site charges an extra 0.20%, paid first. If the official fill fails, that fee is not returned."}
+              ? "X Layer 现货。NAND、LATCH、TAPE 用 USDT0 报价，同价并成一档。电路一张一个价。买方按价格付，卖方实收 99.8%。"
+              : "X Layer spot. NAND, LATCH and TAPE are quoted in USDT0. One price is one level. Each circuit has its own price. The buyer pays the price. The seller receives 99.8 percent."
+            : lang === "zh"
+              ? "跟 tapeout.net 的盘口。本站另收 0.20%，先付。官网没有成交，这一笔也不退。铸造已经结束，页面不再放。"
+              : "The book follows tapeout.net. This site charges an extra 0.20%, paid first. If the official fill fails, that fee is not returned. Minting is closed and is no longer on the page."}
       </p>
-      <div className="grid grid-cols-2 border border-gold sm:grid-cols-5">
+      <div className="grid grid-cols-2 border border-gold sm:grid-cols-4">
         {([
-          ["gate", lang === "zh" ? "晶体管合约" : "Transistor perps"],
-          ["wafer", lang === "zh" ? "晶圆" : "Wafer"],
-          ["chips", lang === "zh" ? "晶体管现货" : "Transistor spot"],
-          ["circuits", lang === "zh" ? "电路现货" : "Circuit spot"],
-          ["book", lang === "zh" ? "现货" : "Book"],
+          ["gate", lang === "zh" ? "BSC 合约" : "BSC contracts"],
+          ["book", lang === "zh" ? "X Layer 现货" : "X Layer spot"],
+          ["chips", lang === "zh" ? "官网晶体管" : "Official chips"],
+          ["circuits", lang === "zh" ? "官网电路" : "Official circuits"],
         ] as const).map(([id, label]) => (
           <button key={id} type="button" onClick={() => setShop(id)} className={`min-h-11 px-1 text-xs leading-tight sm:text-sm ${shop === id ? "bg-ink text-paper" : ""}`}>
             {label}
@@ -415,12 +393,6 @@ function ShopFloor({ shop, setShop }: { shop: ShopTab; setShop: (shop: ShopTab) 
         ))}
       </div>
       {shop === "gate" ? <TransistorDesk /> : null}
-      {shop === "wafer" ? (
-        <>
-          <WalletBar />
-          <LiveBoard />
-        </>
-      ) : null}
       {shop === "chips" ? <OfficialDesk mode="chips" /> : null}
       {shop === "circuits" ? <OfficialDesk mode="circuits" /> : null}
       {shop === "book" ? <TapeSpotDesk zh={lang === "zh"} /> : null}

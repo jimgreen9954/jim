@@ -34,6 +34,27 @@ function cost(market: number, size: bigint, price: bigint): bigint {
   return market === 0 ? size * price / UNIT : size * price;
 }
 
+function Quote({ zh, market, side, price, amount }: { zh: boolean; market: SpotMarket; side: "buy" | "sell"; price: string; amount: string }) {
+  let pay = 0n;
+  let fee = 0n;
+  try {
+    const px = spotPrice(price);
+    const qty = spotBase(market, amount);
+    pay = cost(market, qty, px);
+    fee = pay * 20n / 10000n;
+  } catch {
+    return <p className="mt-2 text-xs text-ink/45">{zh ? "先填价格。比例按钮按这个价格，从钱包里切。" : "Enter a price first. The percent buttons cut the wallet at that price."}</p>;
+  }
+  if (pay === 0n || fee === 0n) return <p className="mt-2 text-xs text-sell">{zh ? "这一笔太小，手续费舍成 0，合约不会收。" : "This order is too small. The fee rounds to zero and the contract will not take it."}</p>;
+  return (
+    <div className="mt-2 grid grid-cols-3 border border-gold/40 text-center">
+      <p className="px-1 py-2"><span className="block text-[10px] text-ink/45">{side === "buy" ? (zh ? "你支付" : "You pay") : (zh ? "买方支付" : "Buyer pays")}</span><span className="font-mono text-sm">{usdtText(pay, 4)}</span></p>
+      <p className="border-x border-gold/40 px-1 py-2"><span className="block text-[10px] text-ink/45">{zh ? "千分之二" : "0.20%"}</span><span className="font-mono text-sm">{usdtText(fee, 4)}</span></p>
+      <p className="px-1 py-2"><span className="block text-[10px] text-ink/45">{side === "sell" ? (zh ? "你实收" : "You receive") : (zh ? "卖方实收" : "Seller receives")}</span><span className="font-mono text-sm">{usdtText(pay - fee, 4)}</span></p>
+    </div>
+  );
+}
+
 function Row({ level, max, bid, market, onPick }: { level: Level; max: bigint; bid: boolean; market: number; onPick: () => void }) {
   const width = max > 0n ? Number((level.size * 100n) / max) : 0;
   return (
@@ -47,9 +68,10 @@ function Row({ level, max, bid, market, onPick }: { level: Level; max: bigint; b
   );
 }
 
-export function TapeSpotDesk({ zh, only }: { zh: boolean; only?: SpotMarket | "circuit" }) {
+export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (SpotMarket | "circuit")[] }) {
+  const choices = lanes ?? ([0, 1, 2, "circuit"] as const);
   const [account, setAccount] = useState<string | null>(currentAccount());
-  const [lane, setLane] = useState<SpotMarket | "circuit">(only ?? 0);
+  const [lane, setLane] = useState<SpotMarket | "circuit">(choices[0] ?? 0);
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [price, setPrice] = useState("");
   const [amount, setAmount] = useState("");
@@ -175,9 +197,9 @@ export function TapeSpotDesk({ zh, only }: { zh: boolean; only?: SpotMarket | "c
 
   return (
     <section className="grid gap-3">
-      {only == null ? (
-        <div className="grid grid-cols-4 border border-gold">
-          {([0, 1, 2, "circuit"] as const).map((id) => (
+      {choices.length > 1 ? (
+        <div className="grid border border-gold" style={{ gridTemplateColumns: `repeat(${choices.length}, minmax(0, 1fr))` }}>
+          {choices.map((id) => (
             <button key={String(id)} type="button" onClick={() => setLane(id)} className={`min-h-11 text-sm ${lane === id ? "bg-ink text-paper" : ""}`}>
               {id === "circuit" ? (zh ? "电路" : "Circuits") : NAMES[id]}
             </button>
@@ -228,13 +250,13 @@ export function TapeSpotDesk({ zh, only }: { zh: boolean; only?: SpotMarket | "c
               <span>{zh ? "价格" : "Price"}</span><span>{zh ? "数量" : "Size"}</span><span>{zh ? "总额" : "Total"}</span><span className="text-right">{zh ? "笔" : "Lots"}</span>
             </div>
             <div className="border-t border-gold/30">
-              {askView.length === 0 ? <p className="px-2 py-3 text-xs text-ink/50">{zh ? "卖盘是空的。" : "No asks."}</p> : askView.map((level) => (
+              {askView.length === 0 ? <p className="px-2 py-4 text-xs leading-5 text-ink/55">{zh ? "卖盘还没有单。在右边填价格和数量，这一档就会出现在这里。" : "No asks yet. Enter a price and a size on the right and the level appears here."}</p> : askView.map((level) => (
                 <Row key={`a-${level.price}`} level={level} max={maxAsk} bid={false} market={market} onPick={() => pick(level, false)} />
               ))}
             </div>
             <p className="border-y border-gold/40 px-2 py-1 text-center font-mono text-[11px] text-ink/55">{spread > 0n ? `${zh ? "价差" : "Spread"} ${usdtText(spread, 4)}` : (zh ? "还没有对敲的两档" : "No two-sided market")}</p>
             <div>
-              {bids.length === 0 ? <p className="px-2 py-3 text-xs text-ink/50">{zh ? "买盘是空的。" : "No bids."}</p> : bids.map((level) => (
+              {bids.length === 0 ? <p className="px-2 py-4 text-xs leading-5 text-ink/55">{zh ? "买盘还没有单。买入挂在价差下面，同价的后来者排在后面。" : "No bids yet. A buy rests under the spread. A later order at the same price waits behind."}</p> : bids.map((level) => (
                 <Row key={`b-${level.price}`} level={level} max={maxBid} bid market={market} onPick={() => pick(level, true)} />
               ))}
             </div>
@@ -259,6 +281,7 @@ export function TapeSpotDesk({ zh, only }: { zh: boolean; only?: SpotMarket | "c
                 <button key={pct} type="button" onClick={() => fillPct(pct)} className="min-h-9 border border-gold text-xs">{pct === 100 ? (zh ? "全部" : "All") : `${pct}%`}</button>
               ))}
             </div>
+            <Quote zh={zh} market={market} side={side} price={price} amount={amount} />
             <p className="mt-2 text-xs leading-5 text-ink/60">
               {zh ? "钱包" : "Wallet"} {purse ? (side === "buy" ? `${usdtText(purse.usdt, 2)} USDT0` : `${baseText(market, market === 0 ? purse.tape : market === 1 ? purse.nand : purse.latch)} ${name}`) : "—"}
               <br />
