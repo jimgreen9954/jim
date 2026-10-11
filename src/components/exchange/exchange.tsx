@@ -374,12 +374,14 @@ function ShopFloor({ shop, setShop }: { shop: ShopTab; setShop: (shop: ShopTab) 
   return (
     <>
       <div className="grid grid-cols-2 border border-gold sm:grid-cols-4">
-        <button type="button" onClick={() => setShop("book")} className={`min-h-11 px-2 text-sm ${shop === "book" ? "bg-ink text-paper" : ""}`}>
+        <button type="button" onClick={() => setShop("book")} className={`min-h-14 px-2 text-sm leading-tight sm:min-h-11 ${shop === "book" ? "bg-ink text-paper" : ""}`}>
+          <span className="block text-[10px] tracking-[0.14em] text-gold">X Layer</span>
           TAPELIQUID
         </button>
         {tapeout.map(([id, label]) => (
-          <button key={id} type="button" onClick={() => setShop(id)} className={`min-h-11 px-1 text-sm ${shop === id ? "bg-ink text-paper" : ""}`}>
-            <span className={shop === id ? "text-gold" : "text-ink/45"}>tapeout </span>{label}
+          <button key={id} type="button" onClick={() => setShop(id)} className={`min-h-14 px-2 text-left text-sm leading-tight sm:min-h-11 sm:text-center ${shop === id ? "bg-ink text-paper" : ""}`}>
+            <span className={`block text-[10px] tracking-[0.14em] ${shop === id ? "text-gold" : "text-ink/45"}`}>tapeout</span>
+            {label}
           </button>
         ))}
       </div>

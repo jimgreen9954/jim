@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { formatUnits } from "viem";
 import { copy } from "@/lib/copy";
-import { BSC, connectBsc, pretty, units, type Balances } from "@/lib/bsc";
+import { BSC, FEE_TO, connectBsc, pretty, units, type Balances } from "@/lib/bsc";
 import { getCandles, type Candle, type CandleFrame } from "@/lib/candles";
 import { currentAccount, onAccount, onOpenLink } from "@/lib/wallet";
 import { useExchange } from "@/lib/exchange-store";
@@ -191,6 +191,7 @@ export function RealPerp() {
   const [chain, setChain] = useState<Desk>(savedDesk());
   const [perp, setPerp] = useState(() => bookOf(savedDesk()));
   const [xbem, setXbem] = useState(savedXBemPerp);
+  const [deployNote, setDeployNote] = useState<string | null>(null);
   const [account, setAccount] = useState<string | null>(currentAccount());
   const [view, setView] = useState<PerpView | null>(null);
   const [margin, setMargin] = useState("1");
@@ -452,8 +453,7 @@ export function RealPerp() {
   return (
     <section className="border border-gold bg-card shadow-plate">
       <div className="flex flex-col gap-3 p-3">
-        <p className="text-sm leading-relaxed text-ink/80 xl:col-span-12">{chain === "xlayer" ? c.perpWarnX : c.perpWarn}</p>
-        <div className="grid grid-cols-2 gap-2 xl:col-span-12">
+        <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
             className={`min-h-12 border border-gold ${chain === "bsc" ? "bg-ink text-paper" : ""}`}
@@ -483,35 +483,53 @@ export function RealPerp() {
           <p className="text-sm leading-relaxed xl:col-span-12">{c.xOpen}</p>
         ) : null}
         {chain === "xlayer" && !xbem ? (
-          <button
-            type="button"
-            className="min-h-12 bg-ink text-paper xl:col-span-12"
-            disabled={busy}
-            onClick={() => {
-              setBusy(true);
-              setBad(false);
-              const steps = [c.deployX1, c.deployX2, c.deployX3];
-              setNote(steps[0]);
-              void (async () => {
-                try {
-                  selectDesk("xlayer");
-                  const from = account ?? (await connectXLayer());
-                  setAccount(from);
-                  const addr = await deployXLayer(from, (step) => setNote(steps[step - 1]));
-                  setPerp(addr);
-                  setXbem(addr);
-                  setNote(addr);
-                } catch (err) {
-                  fail(err);
-                } finally {
-                  setBusy(false);
-                }
-              })();
-            }}
-          >
-            {lang === "zh" ? "部署读 X Layer 池子的新永续" : "Deploy the book that reads the X Layer pools"}
-          </button>
+          <div className="grid gap-2">
+            <button
+              type="button"
+              className="min-h-12 bg-ink px-3 text-sm text-paper disabled:opacity-40"
+              disabled={busy}
+              onClick={() => {
+                setBusy(true);
+                setBad(false);
+                const steps = [c.deployX1, c.deployX2, c.deployX3];
+                setDeployNote(lang === "zh" ? "正在打开 X Layer 钱包。确认窗在钱包 App 里。" : "Opening the X Layer wallet. Confirm it in the wallet app.");
+                setNote(steps[0]);
+                void (async () => {
+                  try {
+                    selectDesk("xlayer");
+                    const from = account ?? (await connectXLayer());
+                    setAccount(from);
+                    if (from.toLowerCase() !== FEE_TO.toLowerCase()) {
+                      setBad(true);
+                      setDeployNote(lang === "zh" ? `现在连的是 ${from.slice(0, 6)}…${from.slice(-4)}。部署要换成收费地址 ${FEE_TO.slice(0, 6)}…${FEE_TO.slice(-4)}。` : `Connected ${from.slice(0, 6)}…${from.slice(-4)}. Switch to the fee address.`);
+                      return;
+                    }
+                    const addr = await deployXLayer(from, (step) => {
+                      setNote(steps[step - 1]);
+                      setDeployNote(steps[step - 1]);
+                    });
+                    setPerp(addr);
+                    setXbem(addr);
+                    setDeployNote(addr);
+                    setNote(addr);
+                  } catch (err) {
+                    fail(err);
+                    const message = err instanceof Error ? err.message : "";
+                    setDeployNote(message === "oracle"
+                      ? (lang === "zh" ? "只有收费地址能部署这一份。" : "Only the fee address can deploy this book.")
+                      : (lang === "zh" ? `没有部署。${message.slice(0, 80) || "钱包没有弹出就切到 X Layer 再点。"}` : `Not deployed. ${message.slice(0, 80)}`));
+                  } finally {
+                    setBusy(false);
+                  }
+                })();
+              }}
+            >
+              {busy ? (lang === "zh" ? "等待钱包确认" : "Waiting for the wallet") : (lang === "zh" ? "部署读 X Layer 池子的新永续" : "Deploy the book that reads the X Layer pools")}
+            </button>
+            {deployNote ? <p className={`text-sm leading-6 ${bad ? "text-sell" : ""}`}>{deployNote}</p> : <p className="text-sm leading-6 text-ink/70">{lang === "zh" ? "点下去会弹出钱包。三笔签名：标记、写入池子价、永续。弹窗不在这个页面里。" : "A tap opens the wallet. Three signatures: mark, pool price, perpetual. The prompt is not on this page."}</p>}
+          </div>
         ) : null}
+        <p className="text-sm leading-6 text-ink/70">{chain === "xlayer" ? c.perpWarnX : c.perpWarn}</p>
         {link ? (
           <a href={link} target="_blank" rel="noreferrer" className="inline-flex min-h-12 items-center justify-center bg-ink px-3 text-paper xl:col-span-12">
             {c.signOkx}

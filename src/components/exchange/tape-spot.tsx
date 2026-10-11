@@ -15,6 +15,7 @@ import {
   readSpotBook,
   readSpotPrints,
   readSpotPurse,
+  rememberSpot,
   spotAddress,
   spotBase,
   spotPrice,
@@ -112,6 +113,8 @@ function Row({ level, max, bid, market, onPick }: { level: Level; max: bigint; b
 
 export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (SpotMarket | "circuit")[] }) {
   const choices = lanes ?? ([0, 1, 2, "circuit"] as const);
+  const [spot, setSpot] = useState<string | null>(null);
+  const [pasted, setPasted] = useState("");
   const [account, setAccount] = useState<string | null>(currentAccount());
   const [lane, setLane] = useState<SpotMarket | "circuit">(choices[0] ?? 0);
   const [side, setSide] = useState<"buy" | "sell">("buy");
@@ -130,10 +133,10 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [bad, setBad] = useState(false);
-  const spot = spotAddress();
   const market: SpotMarket = lane === "circuit" ? 0 : lane;
 
   useEffect(() => onAccount(setAccount), []);
+  useEffect(() => setSpot(spotAddress()), []);
 
   useEffect(() => {
     if (!spot || lane === "circuit") return;
@@ -194,19 +197,23 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   const name = NAMES[market];
 
   const run = (task: () => Promise<unknown>, ok: string) => {
-    if (!account) {
-      setBad(true);
-      setNote(zh ? "先在右上角登入 X Layer。" : "Sign in to X Layer at the top right.");
-      return;
-    }
     setBusy(true);
-    task().then(() => { setBad(false); setNote(ok); }).catch((err: unknown) => {
+    setBad(false);
+    setNote(zh ? "正在打开 X Layer 钱包。确认窗在钱包 App 里，不在这个页面。" : "Opening the X Layer wallet. Confirm it in the wallet app, not on this page.");
+    task().then((result) => {
+      if (typeof result === "string" && /^0x[a-fA-F0-9]{40}$/.test(result)) setSpot(result);
+      else setSpot(spotAddress());
+      setBad(false);
+      setNote(ok);
+    }).catch((err: unknown) => {
       const text = err instanceof Error ? err.message : "";
       setBad(true);
       if ((err as { code?: number }).code === 4001) setNote(zh ? "签名取消了。币还在钱包。" : "Cancelled. The coins stayed in the wallet.");
       else if (text === "amount" || text === "price") setNote(zh ? "价格和数量都要填。NAND 和 LATCH 只收整数。" : "Enter a price and an amount. NAND and LATCH are whole numbers.");
       else if (/self/i.test(text)) setNote(zh ? "这一档是你自己挂的。先撤掉，再吃。" : "That level is your own. Cancel it before taking it.");
-      else if (text === "spot") setNote(zh ? "现货地址还没写进页面。部署过的浏览器才能看到盘口，别的地址下不了单。把合约地址发我。" : "The spot address is not in the page. Only the browser that deployed it can see the book.");
+      else if (text === "chain") setNote(zh ? "钱包还停在别的链。切到 X Layer 再签。" : "The wallet is on another chain. Switch to X Layer, then sign.");
+      else if (text === "address") setNote(zh ? "地址格式不对。" : "That address is not valid.");
+      else if (text === "empty") setNote(zh ? "这个地址上没有合约。" : "There is no contract at that address.");
       else if (text === "fee") setNote(zh ? "这一笔太小，千分之二舍成 0。合约不收这种单。" : "This order is too small. The 0.2 percent rounds to zero.");
       else if (/nowallet/i.test(text)) setNote(zh ? "没有检测到 X Layer 钱包。" : "No X Layer wallet was found.");
       else setNote(zh ? `没有成交。${text ? text.slice(0, 80) : "先授权，再挂单。"}` : `It did not fill. ${text ? text.slice(0, 80) : "Approve, then place."}`);
@@ -239,14 +246,14 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
     return (
       <article className="border border-gold bg-card px-3 py-4">
         <p className="text-[11px] tracking-[0.22em] text-gold">{zh ? "现货" : "Spot"}</p>
-        <h3 className="mt-1 font-display text-3xl italic">{zh ? "订单簿还没部署" : "The book is not deployed"}</h3>
-        <p className="mt-2 text-sm leading-6">
-          {zh
-            ? "一份合约，四本账：TAPE、NAND、LATCH，外加电路。报价是 X Layer 的 USDT0。同价并成一档，先挂的排前面。买方按档位价格付。卖方实收 99.8%，千分之二进收费地址。没有管理员，不能改费率。Gas Limit 填 5000000。部署完把地址发我写进页面。"
-            : "One contract, four books: TAPE, NAND, LATCH, and circuits. The quote is X Layer USDT0. One price is one level, earlier orders first. The buyer pays that price. The seller receives 99.8 percent. The 0.2 percent goes to the fee address. No admin. Set Gas Limit to 5000000, then send me the address."}
-        </p>
-        <button type="button" disabled={busy} className="mt-3 min-h-12 bg-ink px-4 text-sm text-paper disabled:opacity-40" onClick={() => run(() => deploySpot(account ?? ""), zh ? "现货合约已部署。把地址发我写进页面。" : "Deployed. Send me the address to pin.")}>{zh ? "部署现货订单簿" : "Deploy the book"}</button>
-        {note ? <p className={`mt-2 text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
+        <h3 className="mt-1 font-display text-2xl italic sm:text-3xl">{zh ? "这台设备还没有订单簿地址" : "This device has no book address"}</h3>
+        <p className="mt-2 text-sm leading-6">{zh ? "部署过的地址只留在当时那台浏览器。换手机或换浏览器会显示成没部署。把地址贴下面，或再签一笔。" : "A deployed address stays in the browser that signed it. Another phone looks undeployed. Paste the address, or sign again."}</p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+          <input value={pasted} onChange={(event) => setPasted(event.target.value)} placeholder="0x" className="min-h-12 border border-gold bg-transparent px-2 font-mono text-sm" />
+          <button type="button" disabled={busy} className="min-h-12 border border-gold px-4 text-sm disabled:opacity-40" onClick={() => run(() => rememberSpot(pasted), zh ? "地址已记下。这台设备可以交易了。" : "Address saved. This device can trade.")}>{zh ? "用这个地址" : "Use this address"}</button>
+        </div>
+        <button type="button" disabled={busy} className="mt-2 min-h-12 w-full bg-ink px-4 text-sm text-paper disabled:opacity-40" onClick={() => run(() => deploySpot(account ?? ""), zh ? "现货合约已部署。把上面的地址发我写进页面。" : "Deployed. Send me the address above so I can pin it.")}>{busy ? (zh ? "等待钱包确认" : "Waiting for the wallet") : (zh ? "重新部署一笔" : "Deploy another")}</button>
+        {note ? <p className={`mt-2 text-sm leading-6 ${bad ? "text-sell" : ""}`}>{note}</p> : null}
       </article>
     );
   }
@@ -254,7 +261,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   return (
     <section className="grid gap-3">
       {choices.length > 1 ? (
-        <div className="grid border border-gold" style={{ gridTemplateColumns: `repeat(${choices.length}, minmax(0, 1fr))` }}>
+        <div className="grid grid-cols-2 border border-gold sm:grid-cols-4">
           {choices.map((id) => (
             <button key={String(id)} type="button" onClick={() => setLane(id)} className={`min-h-11 text-sm ${lane === id ? "bg-ink text-paper" : ""}`}>
               {id === "circuit" ? (zh ? "电路" : "Circuits") : NAMES[id]}
@@ -288,10 +295,11 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
         </article>
       ) : (
         <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.3fr)_minmax(18rem,0.7fr)]">
-          <article className="border border-gold bg-card">
+          <article className="order-2 border border-gold bg-card lg:order-1">
             <div className="flex items-end justify-between gap-3 px-3 py-3">
               <div>
                 <p className="text-[11px] tracking-[0.18em] text-gold">{name} / USDT0</p>
+                <p className="mt-1 break-all font-mono text-[11px] text-ink/45">{spot}</p>
                 <h3 className="font-display text-3xl italic leading-none">{bestAsk > 0n ? usdtText(bestAsk, 4) : bestBid > 0n ? usdtText(bestBid, 4) : "—"}</h3>
               </div>
               <p className="text-right text-xs leading-5 text-ink/60">
@@ -325,7 +333,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
             </div>
             <p className="px-3 py-2 text-[11px] leading-5 text-ink/50">{zh ? "同一价格并成一档。卖盘可买是挂着的全部卖单。买盘可卖是挂着的全部买单。点一档，价格和数量填进右边。" : "One price is one level. Tap a level to fill the ticket."} {spot}</p>
           </article>
-          <article className="border border-gold bg-card px-3 py-3">
+          <article className="order-1 border border-gold bg-card px-3 py-3 lg:order-2">
             <div className="grid grid-cols-2 border border-gold">
               <button type="button" onClick={() => setSide("buy")} className={`min-h-11 text-sm ${side === "buy" ? "bg-ink text-paper" : ""}`}>{zh ? "买入" : "Buy"}</button>
               <button type="button" onClick={() => setSide("sell")} className={`min-h-11 text-sm ${side === "sell" ? "bg-ink text-paper" : ""}`}>{zh ? "卖出" : "Sell"}</button>

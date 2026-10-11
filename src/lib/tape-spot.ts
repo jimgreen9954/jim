@@ -52,6 +52,16 @@ export function spotAddress(): Hex | null {
   return /^0x[a-fA-F0-9]{40}$/.test(saved) ? saved as Hex : null;
 }
 
+export async function rememberSpot(address: string): Promise<Hex> {
+  const spot = address.trim() as Hex;
+  if (!/^0x[a-fA-F0-9]{40}$/.test(spot)) throw new Error("address");
+  const code = await client.getBytecode({ address: spot });
+  if (!code || code === "0x") throw new Error("empty");
+  await client.readContract({ address: spot, abi, functionName: "book", args: [0, true, 1n] });
+  window.localStorage.setItem(KEY, spot);
+  return spot;
+}
+
 export type Level = { price: bigint; size: bigint; lots: number };
 export type OpenOrder = { id: bigint; market: number; bid: boolean; price: bigint; left: bigint };
 export type CircuitAsk = { id: bigint; seller: string; price: bigint };
