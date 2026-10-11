@@ -245,7 +245,9 @@ function InviteDock() {
         {zh ? "邀请" : "Invite"}
       </button>
       {open ? (
-        <div className="absolute right-0 top-full z-50 mt-2 w-[min(22rem,calc(100vw-1.5rem))] border border-gold bg-paper p-3 text-sm shadow-plate">
+        <>
+          <button type="button" aria-label={zh ? "关闭邀请" : "Close invite"} className="fixed inset-0 z-40 cursor-default bg-transparent" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full z-50 mt-2 w-[min(22rem,calc(100vw-1.5rem))] border border-gold bg-paper p-3 text-sm shadow-plate">
           <div className="grid grid-cols-2 border border-gold">
             <button type="button" className={`min-h-9 ${chain === "xlayer" ? "bg-ink text-paper" : ""}`} onClick={() => setChain("xlayer")}>X Layer</button>
             <button type="button" className={`min-h-9 ${chain === "bsc" ? "bg-ink text-paper" : ""}`} onClick={() => setChain("bsc")}>BSC</button>
@@ -281,7 +283,8 @@ function InviteDock() {
             ))}
           </div>
           {note ? <p className="mt-2 text-xs leading-5">{note}</p> : null}
-        </div>
+          </div>
+        </>
       ) : null}
     </div>
   );
