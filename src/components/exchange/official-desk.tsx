@@ -1,203 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { parseEther } from "viem";
 import { useExchange } from "@/lib/exchange-store";
-import { getOfficialBooks, OFFICIAL, type OfficialBid, type OfficialBooks, type OfficialList, type OfficialTrade } from "@/lib/official-books";
+import { getOfficialBooks, OFFICIAL, type OfficialBid, type OfficialBooks, type OfficialList } from "@/lib/official-books";
 import { buyOfficialCircuit, fillOfficialBid, placeOfficialBid } from "@/lib/official-trade";
 import { BSC, TxPending, txUrl } from "@/lib/bsc";
 import { connectBsc } from "@/lib/bsc";
-import { currentAccount, onAccount } from "@/lib/wallet";
-import { Kline, type Bar } from "@/components/exchange/kline";
+import { currentAccount } from "@/lib/wallet";
+import { CircuitMarket } from "@/components/exchange/circuit-market";
 
 function px(n: number): string {
   if (!(n > 0)) return "—";
   return n.toLocaleString("en-US", { maximumFractionDigits: 8 });
 }
 
-function short(addr: string): string {
-  return addr && addr.length > 10 ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : "—";
-}
-
-function age(ts: number): string {
-  if (!ts) return "—";
-  const sec = Math.max(0, Math.floor(Date.now() / 1000) - ts);
-  if (sec < 3600) return `${Math.max(1, Math.floor(sec / 60))}m`;
-  if (sec < 86400) return `${Math.floor(sec / 3600)}h`;
-  return `${Math.floor(sec / 86400)}d`;
-}
-
-function hourBars(trades: OfficialTrade[]): Bar[] {
-  const rows = trades.filter((row) => row.ts > 0 && row.priceBnb > 0).sort((a, b) => a.ts - b.ts);
-  const map = new Map<number, Bar>();
-  for (const row of rows) {
-    const bucket = Math.floor(row.ts / 3600) * 3600;
-    const cur = map.get(bucket);
-    if (!cur) map.set(bucket, { t: bucket, o: row.priceBnb, h: row.priceBnb, l: row.priceBnb, c: row.priceBnb, v: row.priceBnb });
-    else {
-      cur.h = Math.max(cur.h, row.priceBnb);
-      cur.l = Math.min(cur.l, row.priceBnb);
-      cur.c = row.priceBnb;
-      cur.v = (cur.v ?? 0) + row.priceBnb;
-    }
-  }
-  return [...map.values()];
-}
-
-function CircuitMarket({
-  zh,
-  lang,
-  books,
-  busy,
-  note,
-  bad,
-  run,
-}: {
-  zh: boolean;
-  lang: "zh" | "en";
-  books: OfficialBooks | null;
-  busy: boolean;
-  note: string | null;
-  bad: boolean;
-  run: (act: () => Promise<string>) => Promise<void>;
-}) {
-  const [tab, setTab] = useState<"book" | "tape" | "mine">("book");
-  const [chart, setChart] = useState(true);
-  const [sort, setSort] = useState<"price" | "gates">("price");
-  const [list, setList] = useState<OfficialList | null>(null);
-  const [ack, setAck] = useState(false);
-  const [account, setAccount] = useState<string | null>(currentAccount());
-  const [query, setQuery] = useState("");
-  useEffect(() => onAccount(setAccount), []);
-  const trades = books?.trades ?? [];
-  const bars = useMemo(() => hourBars(trades), [trades]);
-  const last = trades[0];
-  const day = Math.floor(Date.now() / 1000) - 86400;
-  const dayTrades = trades.filter((row) => row.ts >= day);
-  const q = query.trim().toLowerCase();
-  const rows = useMemo(() => {
-    const mine = account?.toLowerCase();
-    return (books?.lists ?? [])
-      .filter((row) => !q || row.name.toLowerCase().includes(q) || row.circuitId.includes(q))
-      .filter((row) => tab !== "mine" || (mine && row.seller.toLowerCase() === mine))
-      .sort((a, b) => (sort === "gates" ? b.gates - a.gates : a.priceBnb - b.priceBnb));
-  }, [books, q, sort, tab, account]);
-  const mineTrades = trades.filter((row) => account && (row.buyer.toLowerCase() === account.toLowerCase() || row.seller.toLowerCase() === account.toLowerCase()));
-  const shownTrades = tab === "mine" ? mineTrades : trades;
-  const fee = list ? list.priceBnb * 0.002 : 0;
-  return (
-    <section className="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]">
-      <div className="min-w-0">
-        <div className="grid grid-cols-2 border border-gold/50 text-xs sm:grid-cols-4 lg:grid-cols-7">
-          {[
-            [zh ? "最新成交" : "Last", last ? `${px(last.priceBnb)} BNB` : "—"],
-            [zh ? "24h 成交额" : "24h volume", books ? `${px(books.vol24h)} BNB` : "—"],
-            [zh ? "24h 笔数" : "24h prints", String(dayTrades.length)],
-            [zh ? "有效挂单" : "Open", books ? books.listed.toLocaleString("en-US") : "—"],
-            [zh ? "卖家" : "Sellers", books ? books.sellers.toLocaleString("en-US") : "—"],
-            [zh ? "电路编号" : "Max id", books?.maxId ? books.maxId.toLocaleString("en-US") : "—"],
-            [zh ? "累计成交" : "All volume", books ? `${px(books.volTotal)} BNB` : "—"],
-          ].map(([k, v]) => (
-            <p key={k} className="border-gold/30 px-2 py-2 [&:not(:last-child)]:border-r">
-              <span className="block text-[10px] text-ink/45">{k}</span>
-              <span className="font-mono text-sm">{v}</span>
-            </p>
-          ))}
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          {(["book", "tape", "mine"] as const).map((id) => (
-            <button key={id} type="button" onClick={() => setTab(id)} className={`border-b-2 px-2 py-1 text-sm ${tab === id ? "border-ink font-medium" : "border-transparent text-ink/55"}`}>
-              {id === "book" ? (zh ? "挂单" : "Book") : id === "tape" ? (zh ? "成交" : "Prints") : zh ? "我的" : "Mine"}
-            </button>
-          ))}
-          <button type="button" onClick={() => setChart((on) => !on)} className={`ml-auto border px-2 py-1 text-xs ${chart ? "border-ink bg-ink text-paper" : "border-gold"}`}>{zh ? "K 线" : "Chart"}</button>
-          <button type="button" onClick={() => setSort((cur) => (cur === "price" ? "gates" : "price"))} className="border border-gold px-2 py-1 text-xs">{sort === "price" ? (zh ? "按价格" : "Price") : zh ? "按门数" : "Gates"}</button>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={zh ? "搜处理器或编号" : "Search"} className="min-h-8 w-36 border border-gold/50 bg-transparent px-2 text-xs outline-none" />
-        </div>
-        {chart && bars.length > 1 ? (
-          <div className="mt-2 border border-gold/40 bg-card">
-            <Kline bars={bars} mark={last?.priceBnb ?? 0} lang={lang} desk="circuit" />
-          </div>
-        ) : chart ? <p className="mt-2 text-xs text-ink/50">{zh ? "成交还不够画 K 线。" : "Not enough prints for a chart."}</p> : null}
-        <p className="mt-2 text-[11px] text-ink/45">{books?.ok ? (zh ? `快照 ${books.asOf ?? ""} · 区块 ${books.block ?? "—"} · 表里最多 80 张，按当前排序。日产能和算力不是这份快照里的字段，这里不编。` : `Snapshot ${books.asOf ?? ""}. At most 80 rows. Daily output is not in this feed, so it is not invented.`) : zh ? "快照没读到。" : "The snapshot did not load."}</p>
-        {tab === "tape" || tab === "mine" ? (
-          <div className="mt-2 max-h-[28rem] overflow-auto border border-gold/40">
-            <table className="w-full min-w-[40rem] text-left text-xs">
-              <thead className="sticky top-0 bg-paper text-ink/45">
-                <tr>
-                  <th className="px-2 py-2 font-normal">{zh ? "时间" : "Time"}</th>
-                  <th className="px-2 py-2 font-normal">{zh ? "电路" : "Circuit"}</th>
-                  <th className="px-2 py-2 font-normal">{zh ? "成交价" : "Price"}</th>
-                  <th className="px-2 py-2 font-normal">{zh ? "买方" : "Buyer"}</th>
-                  <th className="px-2 py-2 font-normal">{zh ? "卖方" : "Seller"}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {shownTrades.length === 0 ? <tr><td colSpan={5} className="px-2 py-4 text-ink/50">{zh ? "没有成交。" : "No prints."}</td></tr> : null}
-                {shownTrades.slice(0, 40).map((row) => (
-                  <tr key={`${row.tx}-${row.id}`} className="border-t border-gold/20">
-                    <td className="px-2 py-1.5 font-mono">{age(row.ts)}</td>
-                    <td className="px-2 py-1.5 font-mono">#{row.circuitId}</td>
-                    <td className="px-2 py-1.5 font-mono">{px(row.priceBnb)} BNB</td>
-                    <td className="px-2 py-1.5 font-mono">{short(row.buyer)}</td>
-                    <td className="px-2 py-1.5 font-mono"><a className="underline" href={`${BSC.explorer}/tx/${row.tx}`} target="_blank" rel="noreferrer">{short(row.seller)}</a></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="mt-2 max-h-[28rem] overflow-auto border border-gold/40">
-            <table className="w-full min-w-[46rem] text-left text-xs">
-              <thead className="sticky top-0 bg-paper text-ink/45">
-                <tr>
-                  <th className="px-2 py-2 font-normal">{zh ? "电路" : "Circuit"}</th>
-                  <th className="px-2 py-2 font-normal">{zh ? "结构" : "Shape"}</th>
-                  <th className="px-2 py-2 font-normal">{zh ? "门" : "Gates"}</th>
-                  <th className="px-2 py-2 font-normal">{zh ? "卖价" : "Ask"}</th>
-                  <th className="px-2 py-2 font-normal">{zh ? "状态" : "State"}</th>
-                  <th className="px-2 py-2 text-right font-normal">{zh ? "操作" : "Act"}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.length === 0 ? <tr><td colSpan={6} className="px-2 py-4 text-ink/50">{zh ? "没有挂单。" : "No listing."}</td></tr> : null}
-                {rows.map((row) => (
-                  <tr key={row.id} className={`border-t border-gold/20 ${list?.id === row.id ? "bg-gold/10" : ""}`}>
-                    <td className="px-2 py-1.5"><span className="block">{row.name}</span><span className="font-mono text-[11px] text-ink/45">#{row.circuitId}</span></td>
-                    <td className="px-2 py-1.5 font-mono">{zh ? "入" : "In"} {row.nIn} → {zh ? "出" : "Out"} {row.nOut}<br />{zh ? "态" : "St"} {row.nState} · {zh ? "宽" : "W"} {row.width}</td>
-                    <td className="px-2 py-1.5 font-mono">{row.gates.toLocaleString("en-US")}</td>
-                    <td className="px-2 py-1.5 font-mono">{px(row.priceBnb)} BNB</td>
-                    <td className="px-2 py-1.5">{row.eligible ? (zh ? "可接" : "Open") : (zh ? "未标" : "Unmarked")}</td>
-                    <td className="px-2 py-1.5 text-right"><button type="button" className="min-h-7 bg-[#f23645] px-2 text-white" onClick={() => setList(row)}>{zh ? "买入" : "Buy"}</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-      <aside className="border border-gold bg-card px-3 py-3 lg:sticky lg:top-16">
-        <p className="text-[11px] tracking-[0.16em] text-gold">{zh ? "买这一张" : "Buy this one"}</p>
-        <p className="mt-2 text-sm">{list ? `${list.name} #${list.circuitId}` : zh ? "先在表里点买入" : "Pick a row"}</p>
-        {list ? (
-          <p className="mt-1 font-mono text-xs text-ink/60">{zh ? "入" : "In"} {list.nIn} → {zh ? "出" : "Out"} {list.nOut} · {list.gates.toLocaleString("en-US")} {zh ? "门" : "gates"}</p>
-        ) : null}
-        <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-          <p><span className="block text-ink/45">{zh ? "卖价" : "Ask"}</span><span className="font-mono">{list ? `${px(list.priceBnb)} BNB` : "—"}</span></p>
-          <p><span className="block text-ink/45">{zh ? "另付千分之二" : "Extra 0.2%"}</span><span className="font-mono">{list ? `${px(fee)} BNB` : "—"}</span></p>
-        </div>
-        <p className="mt-2 text-xs leading-5 text-ink/55">{zh ? "电路整张成交，不能拆。卖价进 tapeout。千分之二先付到收费地址，tapeout 没成交也不退。" : "A circuit sells whole. The ask is paid to tapeout. The extra 0.2% is paid first and is not returned."}</p>
-        <label className="mt-2 flex items-start gap-2 text-xs">
-          <input type="checkbox" className="mt-0.5" checked={ack} onChange={(event) => setAck(event.target.checked)} />
-          <span>{zh ? "我按这个价格买这一张。" : "I buy this one at this price."}</span>
-        </label>
-        <button type="button" disabled={!ack || !list || busy} className="mt-3 min-h-11 w-full bg-ink text-sm text-paper disabled:opacity-40" onClick={() => list && void run(async () => {
-          const from = currentAccount() ?? (await connectBsc());
-          return buyOfficialCircuit(from, BigInt(list.id), BigInt(list.priceWei));
-        })}>{zh ? "确认买入" : "Buy"}</button>
-        {note ? <p className={`mt-2 text-xs leading-5 ${bad ? "text-sell" : ""}`}>{note}</p> : null}
-      </aside>
-    </section>
-  );
-}
 
 export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
   const lang = useExchange((s) => s.lang);
@@ -269,7 +84,7 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
   };
 
   if (mode === "circuits") {
-    return <CircuitMarket zh={zh} lang={lang} books={books} busy={busy} note={note} bad={bad} run={run} />;
+    return <CircuitMarket zh={zh} lang={lang} />;
   }
 
   return (
