@@ -99,12 +99,12 @@ function Quote({ zh, market, side, price, amount }: { zh: boolean; market: SpotM
   );
 }
 
-function Row({ level, max, bid, market, onPick }: { level: Level; max: bigint; bid: boolean; market: number; onPick: () => void }) {
+function Row({ level, max, bid, market, tag, onPick }: { level: Level; max: bigint; bid: boolean; market: number; tag?: string; onPick: () => void }) {
   const width = max > 0n ? Number((level.size * 100n) / max) : 0;
   return (
     <button type="button" onClick={onPick} className="relative grid min-h-9 grid-cols-[1.1fr_1fr_1.1fr_2.2rem] items-center px-2 text-left font-mono text-xs">
       <span className={`absolute inset-y-0 right-0 ${bid ? "bg-gold/25" : "bg-sell/15"}`} style={{ width: `${Math.max(width, 2)}%` }} />
-      <span className={`relative ${bid ? "text-ink" : "text-sell"}`}>{usdtText(level.price, 6)}</span>
+      <span className={`relative ${bid ? "text-ink" : "text-sell"}`}>{usdtText(level.price, 6)}{tag ? ` ${tag}` : ""}</span>
       <span className="relative">{baseText(market, level.size)}</span>
       <span className="relative text-ink/70">{usdtText(cost(market, level.size, level.price), 2)}</span>
       <span className="relative text-right text-ink/45">{level.lots}</span>
@@ -208,6 +208,11 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   const bestBid = bids[0]?.price ?? 0n;
   const spread = bestAsk > bestBid && bestBid > 0n ? bestAsk - bestBid : 0n;
   const name = NAMES[market];
+  const ownHit = (() => {
+    let px = 0n;
+    try { px = price.trim() ? spotPrice(price) : 0n; } catch { return null; }
+    return orders.find((row) => row.market === market && row.left > 0n && (side === "sell" ? row.bid && px > 0n && px <= row.price : !row.bid && px > 0n && px >= row.price)) ?? null;
+  })();
 
   const run = (task: () => Promise<unknown>, ok: string) => {
     setBusy(true);
@@ -221,13 +226,23 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
       setBad(false);
       setNote(ok);
     }).catch((err: unknown) => {
-      const text = err instanceof Error ? err.message : "";
+      const parts: string[] = [];
+      let cur: unknown = err;
+      for (let i = 0; cur && i < 4; i += 1) {
+        if (!(cur instanceof Error)) break;
+        parts.push(cur.message);
+        const extra = cur as { shortMessage?: string; cause?: unknown };
+        if (extra.shortMessage) parts.push(extra.shortMessage);
+        cur = extra.cause;
+      }
+      const text = parts.join(" ");
       setBad(true);
       if ((err as { code?: number }).code === 4001) setNote(zh ? "签名取消了。币还在钱包。" : "Cancelled. The coins stayed in the wallet.");
       else if (text === "onlyfee") setNote(zh ? "只有收费地址能签这一次。" : "Only the fee address can sign this.");
       else if (text === "nonce") setNote(zh ? "收费地址在这之前又发过别的交易，地址对不上。把新地址发过来，我改页面。" : "The fee address sent another transaction first, so the address no longer matches. Send the new one and the page will be updated.");
       else if (text === "amount" || text === "price") setNote(zh ? "价格和数量都要填。NAND 和 LATCH 只收整数。" : "Enter a price and an amount. NAND and LATCH are whole numbers.");
-      else if (/self/i.test(text)) setNote(zh ? "这一档是你自己挂的。先撤掉，再吃。" : "That level is your own. Cancel it before taking it.");
+      else if (/self/i.test(text)) setNote(zh ? "会碰到你自己的挂单。合约整笔拒绝，不会先成交别人的。先在下面撤掉自己的单，或把价格放在碰不到的一侧。" : "This would trade against your own order. The contract rejects the whole thing. Cancel yours below, or use a price that does not reach it.");
+      else if (/token/i.test(text)) setNote(zh ? "币没划过来。看余额够不够，以及上一笔授权有没有成功。" : "The token did not move. Check the balance, and that the approval before this one succeeded.");
       else if (text === "chain") setNote(zh ? "钱包还停在别的链。切到 X Layer 再签。" : "The wallet is on another chain. Switch to X Layer, then sign.");
       else if (text === "address") setNote(zh ? "地址格式不对。" : "That address is not valid.");
       else if (text === "empty") setNote(zh ? "这个地址上没有合约。" : "There is no contract at that address.");
@@ -350,13 +365,13 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
             </div>
             <div className="border-t border-gold/30">
               {askView.length === 0 ? <p className="px-2 py-4 text-xs leading-5 text-ink/55">{zh ? "卖盘还没有单。在右边填价格和数量，这一档就会出现在这里。" : "No asks yet. Enter a price and a size on the right and the level appears here."}</p> : askView.map((level) => (
-                <Row key={`a-${level.price}`} level={level} max={maxAsk} bid={false} market={market} onPick={() => pick(level, false)} />
+                <Row key={`a-${level.price}`} level={level} max={maxAsk} bid={false} market={market} tag={orders.some((row) => row.market === market && !row.bid && row.price === level.price) ? (zh ? "我的" : "mine") : undefined} onPick={() => pick(level, false)} />
               ))}
             </div>
             <p className="border-y border-gold/40 px-2 py-1 text-center font-mono text-[11px] text-ink/55">{spread > 0n ? `${zh ? "价差" : "Spread"} ${usdtText(spread, 4)}` : (zh ? "还没有对敲的两档" : "No two-sided market")}</p>
             <div>
               {bids.length === 0 ? <p className="px-2 py-4 text-xs leading-5 text-ink/55">{zh ? "买盘还没有单。买入挂在价差下面，同价的后来者排在后面。" : "No bids yet. A buy rests under the spread. A later order at the same price waits behind."}</p> : bids.map((level) => (
-                <Row key={`b-${level.price}`} level={level} max={maxBid} bid market={market} onPick={() => pick(level, true)} />
+                <Row key={`b-${level.price}`} level={level} max={maxBid} bid market={market} tag={orders.some((row) => row.market === market && row.bid && row.price === level.price) ? (zh ? "我的" : "mine") : undefined} onPick={() => pick(level, true)} />
               ))}
             </div>
             {miss ? <p className="px-2 py-2 text-xs text-ink/55">{zh ? "这一次没读到。不写成 0。" : "This read missed. It is not shown as zero."}</p> : null}
@@ -401,7 +416,8 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
             <p className="mt-2 text-xs leading-5 text-ink/60">
               {zh ? "两边都按钱包余额。买入切 USDT0，卖出切这种币。买方按价格付，卖方实收 99.8%。" : "Both figures are the wallet. Buy cuts USDT0. Sell cuts this coin. The buyer pays the price. The seller receives 99.8 percent."}
             </p>
-            <button type="button" disabled={busy} className="mt-3 min-h-12 w-full bg-ink text-sm text-paper disabled:opacity-40" onClick={() => run(() => placeSpot(account ?? "", market, side === "buy", spotPrice(price), spotBase(market, amount)), zh ? "已送进订单簿。" : "Sent to the book.")}>
+            {ownHit ? <p className="mt-2 text-sm leading-6 text-sell">{zh ? `这个价会碰到你自己的${ownHit.bid ? "买单" : "卖单"} ${usdtText(ownHit.price, 4)}。同一个钱包不能互吃，点下去会被整笔拒绝。先撤掉，或改一个碰不到的价格。` : `This price reaches your own ${ownHit.bid ? "bid" : "ask"} at ${usdtText(ownHit.price, 4)}. The same wallet cannot take it. Cancel it, or move the price.`}</p> : null}
+            <button type="button" disabled={busy || Boolean(ownHit)} className="mt-3 min-h-12 w-full bg-ink text-sm text-paper disabled:opacity-40" onClick={() => run(() => placeSpot(account ?? "", market, side === "buy", spotPrice(price), spotBase(market, amount)), zh ? "已进订单簿。没有对手的部分继续挂着，不会消失。" : "It is on the book. Whatever did not meet another order stays there.")}>
               {side === "buy" ? (zh ? `买入 ${name}` : `Buy ${name}`) : (zh ? `卖出 ${name}` : `Sell ${name}`)}
             </button>
           </article>
