@@ -347,7 +347,7 @@ function Header({ floor, desk, shop, setFloor, setDesk, setShop, setGiftOpen }: 
       <div className="flex items-center gap-3">
         <button type="button" onClick={() => go("desk", "spot")} className="flex shrink-0 items-center gap-2">
           <img src="/mark.jpg" alt="" className="size-7 border border-gold bg-foil object-cover" />
-          <span className="font-display text-lg italic leading-none">TAPELIQUID</span>
+          <span className="hidden font-display text-lg italic leading-none sm:inline">TAPELIQUID</span>
         </button>
         <nav className="hidden min-w-0 flex-1 items-center gap-0.5 overflow-x-auto lg:flex">
           {nav.map(([label, on, run]) => (

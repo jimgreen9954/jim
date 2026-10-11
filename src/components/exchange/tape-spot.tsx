@@ -282,7 +282,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   return (
     <section className="grid gap-3">
       {choices.length > 1 ? (
-        <div className="flex gap-6 overflow-x-auto border-b border-gold/30">
+        <div className="flex gap-4 overflow-x-auto border-b border-gold/30 sm:gap-6">
           {choices.map((id) => (
             <button key={String(id)} type="button" onClick={() => setLane(id)} className={`shrink-0 border-b-2 px-0.5 py-3 text-[13px] tracking-[0.12em] ${lane === id ? "border-ink text-ink" : "border-transparent text-ink/40"}`}>
               {id === "circuit" ? (zh ? "电路" : "CIRCUITS") : NAMES[id]}
@@ -292,7 +292,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
       ) : null}
       {lane === "circuit" ? <TapeCircuits zh={zh} /> : (
         <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-3">
-          <div className="min-w-0 pb-36 lg:pb-0">
+          <div className="min-w-0 pb-24 lg:pb-0">
           <article className="border border-gold bg-card">
             <div className="flex items-end justify-between gap-3 px-3 py-3">
               <div>
@@ -369,7 +369,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
             </div>
           </article>
           </div>
-          <div className={`${ticketOpen ? "fixed inset-x-0 z-40 max-h-[70dvh] overflow-y-auto border-t border-gold bg-paper px-3 pt-2 pb-2 shadow-plate lg:static lg:z-auto lg:max-h-none lg:overflow-visible lg:border lg:bg-card lg:p-3 lg:shadow-none" : "fixed inset-x-0 z-40 border-t border-gold bg-paper px-3 py-2 lg:static lg:z-auto lg:border lg:bg-card lg:p-3"} max-lg:bottom-[calc(3rem+env(safe-area-inset-bottom))]`}>
+          <div className={`${ticketOpen ? "fixed inset-x-0 bottom-0 z-40 max-h-[78dvh] overflow-y-auto border-t border-gold bg-paper px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-plate lg:static lg:z-auto lg:max-h-none lg:overflow-visible lg:border lg:bg-card lg:p-3 lg:shadow-none" : "fixed inset-x-0 bottom-0 z-40 border-t border-gold bg-paper px-3 py-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:static lg:z-auto lg:border lg:bg-card lg:p-3"}`}>
             <div className="grid grid-cols-2 gap-2 lg:hidden">
               {ticketOpen ? (
                 <button type="button" className="col-span-2 min-h-9 text-xs text-ink/60" onClick={() => setTicketOpen(false)}>{zh ? "收起" : "Close"}</button>

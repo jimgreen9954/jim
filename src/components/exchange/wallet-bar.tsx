@@ -45,13 +45,13 @@ export function ConnectButton() {
   if (account) {
     return (
       <span className="flex max-w-[18rem] flex-wrap items-center gap-1 sm:max-w-none sm:gap-2">
-        <span className="inline-flex min-h-10 max-w-28 items-center truncate border border-gold bg-card px-2 font-mono text-xs sm:min-h-11 sm:max-w-40 sm:px-3 sm:text-sm">{short(account)}</span>
+        <span className="inline-flex min-h-8 max-w-24 items-center truncate font-mono text-xs text-ink/80 sm:min-h-11 sm:max-w-40 sm:border sm:border-gold sm:bg-card sm:px-3 sm:text-sm">{short(account)}</span>
         {link ? (
           <a href={link} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center border border-gold bg-ink px-2 text-xs text-paper sm:min-h-11 sm:text-sm">
             {lang === "zh" ? "去 OKX 确认" : "Confirm in OKX"}
           </a>
         ) : null}
-        <button type="button" className="min-h-10 shrink-0 border border-gold px-2 text-xs sm:min-h-11 sm:px-3 sm:text-sm" onClick={() => void disconnectWallet()}>
+        <button type="button" className="min-h-8 shrink-0 px-1 text-xs text-ink/50 sm:min-h-11 sm:border sm:border-gold sm:px-3 sm:text-ink" onClick={() => void disconnectWallet()}>
           {lang === "zh" ? "退出" : "Out"}
         </button>
       </span>
