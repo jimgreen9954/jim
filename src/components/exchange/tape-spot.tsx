@@ -11,7 +11,7 @@ import {
   placeSpot,
   readMyOrders,
   readSpotBook,
-  readSpotPrints,
+  peekSpotPrints,
   readSpotPurse,
   spotAddress,
   spotReady,
@@ -128,6 +128,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   const [orders, setOrders] = useState<OpenOrder[]>([]);
   const [prints, setPrints] = useState<SpotPrint[]>([]);
   const [reading, setReading] = useState(false);
+  const [readMin, setReadMin] = useState(0);
   const [tab, setTab] = useState<"tape" | "mine">("tape");
   const [miss, setMiss] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -162,6 +163,21 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   useEffect(() => {
     if (!spot || !ready || lane === "circuit") return;
     let dead = false;
+    const look = () => {
+      const snap = peekSpotPrints(market);
+      if (dead) return;
+      setPrints(snap.rows);
+      setReading(snap.pending);
+      setReadMin(snap.minutes);
+    };
+    look();
+    const id = window.setInterval(look, 2000);
+    return () => { dead = true; window.clearInterval(id); };
+  }, [spot, ready, market, lane]);
+
+  useEffect(() => {
+    if (!spot || !ready || lane === "circuit") return;
+    let dead = false;
     const pull = () => {
       if (document.hidden) return;
       readSpotBook(market).then((book) => {
@@ -182,7 +198,6 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
       });
       readSpotPurse(account).then((held) => { if (!dead) setPurse(held); }).catch(() => undefined);
       if (account) readMyOrders(account).then((mine) => { if (!dead) setOrders(mine.filter((row) => row.market === market && row.left > 0n)); }).catch(() => undefined);
-      readSpotPrints(market).then((tape) => { if (!dead) { setPrints(tape); setReading(false); } }).catch(() => { if (!dead) setReading(false); });
     };
     pull();
     const id = window.setInterval(pull, 15000);
@@ -330,7 +345,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
             <div className="grid grid-cols-2 border-t border-gold/40 text-xs sm:grid-cols-4">
               <Stat k={<Hint label={zh ? "卖盘可买" : "Asks can buy"} text={zh ? "所有卖单加起来，现在还能买多少。折合是按各档价格算的 USDT0。" : "Size still offered by asks, and its USDT0 value."} />} v={`${baseText(market, askBook.base)} ${name}`} s={zh ? `折合 ${usdtText(askBook.quote, 2)} · ${askBook.lots} 笔` : `${usdtText(askBook.quote, 2)} · ${askBook.lots}`} />
               <Stat k={<Hint label={zh ? "买盘可卖" : "Bids can sell"} text={zh ? "所有买单加起来，现在还能卖多少。" : "Size still bid, and its USDT0 value."} />} v={`${baseText(market, bidBook.base)} ${name}`} s={zh ? `折合 ${usdtText(bidBook.quote, 2)} · ${bidBook.lots} 笔` : `${usdtText(bidBook.quote, 2)} · ${bidBook.lots}`} />
-              <Stat k={<Hint label={zh ? "成交" : "Prints"} text={zh ? "从这份合约放上链起，NAND、LATCH 和 TAPE 各自加自己的笔数和金额。节点一次只给 100 个区块，第一次要顺着读回来，读完就留在这页上。" : "Counts and volume since this contract was deployed. Each market is counted on its own. The node returns 100 blocks at a time, so the first read walks back. After that it stays on the page."} />} v={reading && traded.n === 0 ? (zh ? "正在读" : "Reading") : `${traded.n}${zh ? " 笔" : ""}`} s={reading && traded.n === 0 ? (zh ? "从合约上线起" : "Since deployment") : `${baseText(market, traded.base)} ${name} · ${usdtText(traded.quote, 2)} USDT0`} />
+              <Stat k={<Hint label={zh ? "成交" : "Prints"} text={zh ? "从最新的区块往回读。NAND、LATCH、TAPE 分开算。读到的笔数和金额先显示，更早的还在补。" : "Reads backward from the newest block. NAND, LATCH and TAPE are counted apart. Counts already found stay on screen while older blocks are still being read."} />} v={reading && traded.n === 0 ? (zh ? "正在读" : "Reading") : `${traded.n}${zh ? " 笔" : ""}`} s={reading && traded.n === 0 ? (zh ? `已回读 ${readMin} 分钟` : `${readMin} min read`) : `${baseText(market, traded.base)} ${name} · ${usdtText(traded.quote, 2)} USDT0`} />
               <Stat k={<Hint label={zh ? "已收手续费" : "Fees read"} text={zh ? "这些成交里已经扣下的千分之二，进收费地址。卖方实收 99.8%。" : "The 0.2 percent already taken on these prints. Sellers receive 99.8 percent."} />} v={`${usdtText(traded.fee, 4)} USDT0`} s={zh ? "只算已经读到的成交" : "Of the prints read"} />
             </div>
             <p className="px-3 py-2 text-[11px] leading-5 text-ink/50">{zh ? "同一价格并成一档。点价格填右边，点右边的按钮按这一档的数量成交，数量仍可改少。" : "One price is one level. Tap the price to fill the ticket. The button takes that size, and you can still type less."}</p>
