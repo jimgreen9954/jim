@@ -127,6 +127,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   const [purse, setPurse] = useState<SpotPurse | null>(null);
   const [orders, setOrders] = useState<OpenOrder[]>([]);
   const [prints, setPrints] = useState<SpotPrint[]>([]);
+  const [reading, setReading] = useState(false);
   const [tab, setTab] = useState<"tape" | "mine">("tape");
   const [miss, setMiss] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -153,6 +154,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
     setBids([]);
     setAsks([]);
     setPrints([]);
+    setReading(true);
     setOrders([]);
     setMiss(false);
   }, [lane]);
@@ -180,7 +182,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
       });
       readSpotPurse(account).then((held) => { if (!dead) setPurse(held); }).catch(() => undefined);
       if (account) readMyOrders(account).then((mine) => { if (!dead) setOrders(mine.filter((row) => row.market === market && row.left > 0n)); }).catch(() => undefined);
-      readSpotPrints(market).then((tape) => { if (!dead) setPrints(tape); }).catch(() => undefined);
+      readSpotPrints(market).then((tape) => { if (!dead) { setPrints(tape); setReading(false); } }).catch(() => { if (!dead) setReading(false); });
     };
     pull();
     const id = window.setInterval(pull, 15000);
@@ -191,7 +193,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
 
   const askBook = useMemo(() => sumSide(asks, market), [asks, market]);
   const bidBook = useMemo(() => sumSide(bids, market), [bids, market]);
-  const traded = useMemo(() => prints.reduce((sum, row) => ({ n: sum.n + 1, quote: sum.quote + row.quote, fee: sum.fee + row.fee }), { n: 0, quote: 0n, fee: 0n }), [prints]);
+  const traded = useMemo(() => prints.reduce((sum, row) => ({ n: sum.n + 1, base: sum.base + row.base, quote: sum.quote + row.quote, fee: sum.fee + row.fee }), { n: 0, base: 0n, quote: 0n, fee: 0n }), [prints]);
   const askView = useMemo(() => [...asks].reverse(), [asks]);
   const maxAsk = asks.reduce((m, row) => row.size > m ? row.size : m, 0n);
   const maxBid = bids.reduce((m, row) => row.size > m ? row.size : m, 0n);
@@ -325,14 +327,12 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
               ))}
             </div>
             {miss ? <p className="px-2 py-2 text-xs text-ink/55">{zh ? "这一次没读到。不写成 0。" : "This read missed. It is not shown as zero."}</p> : null}
-            {asks.length + bids.length + traded.n > 0 ? (
             <div className="grid grid-cols-2 border-t border-gold/40 text-xs sm:grid-cols-4">
               <Stat k={<Hint label={zh ? "卖盘可买" : "Asks can buy"} text={zh ? "所有卖单加起来，现在还能买多少。折合是按各档价格算的 USDT0。" : "Size still offered by asks, and its USDT0 value."} />} v={`${baseText(market, askBook.base)} ${name}`} s={zh ? `折合 ${usdtText(askBook.quote, 2)} · ${askBook.lots} 笔` : `${usdtText(askBook.quote, 2)} · ${askBook.lots}`} />
               <Stat k={<Hint label={zh ? "买盘可卖" : "Bids can sell"} text={zh ? "所有买单加起来，现在还能卖多少。" : "Size still bid, and its USDT0 value."} />} v={`${baseText(market, bidBook.base)} ${name}`} s={zh ? `折合 ${usdtText(bidBook.quote, 2)} · ${bidBook.lots} 笔` : `${usdtText(bidBook.quote, 2)} · ${bidBook.lots}`} />
-              <Stat k={<Hint label={zh ? "已读成交" : "Prints read"} text={zh ? "这段区块里读到的成交笔数和金额。更早的不在这行里。" : "Prints read in this block window. Older ones are not included."} />} v={`${traded.n}${zh ? " 笔" : ""}`} s={`${usdtText(traded.quote, 2)} USDT0`} />
-              <Stat k={<Hint label={zh ? "已收手续费" : "Fees read"} text={zh ? "这些成交里已经扣下的千分之二，进收费地址。卖方实收 99.8%。" : "The 0.2 percent already taken on these prints. Sellers receive 99.8 percent."} />} v={`${usdtText(traded.fee, 4)} USDT0`} s={zh ? "只算读到的成交" : "Of the prints read"} />
+              <Stat k={<Hint label={zh ? "成交" : "Prints"} text={zh ? "从这份合约放上链起，NAND、LATCH 和 TAPE 各自加自己的笔数和金额。节点一次只给 100 个区块，第一次要顺着读回来，读完就留在这页上。" : "Counts and volume since this contract was deployed. Each market is counted on its own. The node returns 100 blocks at a time, so the first read walks back. After that it stays on the page."} />} v={reading && traded.n === 0 ? (zh ? "正在读" : "Reading") : `${traded.n}${zh ? " 笔" : ""}`} s={reading && traded.n === 0 ? (zh ? "从合约上线起" : "Since deployment") : `${baseText(market, traded.base)} ${name} · ${usdtText(traded.quote, 2)} USDT0`} />
+              <Stat k={<Hint label={zh ? "已收手续费" : "Fees read"} text={zh ? "这些成交里已经扣下的千分之二，进收费地址。卖方实收 99.8%。" : "The 0.2 percent already taken on these prints. Sellers receive 99.8 percent."} />} v={`${usdtText(traded.fee, 4)} USDT0`} s={zh ? "只算已经读到的成交" : "Of the prints read"} />
             </div>
-            ) : <p className="border-t border-gold/40 px-3 py-3 text-sm text-ink/55">{zh ? "这个市场没有挂单，也没有读到成交。" : "No orders on this market, and no prints in the window."}</p>}
             <p className="px-3 py-2 text-[11px] leading-5 text-ink/50">{zh ? "同一价格并成一档。点价格填右边，点右边的按钮按这一档的数量成交，数量仍可改少。" : "One price is one level. Tap the price to fill the ticket. The button takes that size, and you can still type less."}</p>
           </article>
           <article className="mt-3 border border-gold bg-card">
@@ -343,8 +343,8 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
             <div className="max-h-52 overflow-y-auto">
             {tab === "tape" ? (
               <ul>
-                {prints.length === 0 ? <li className="px-3 py-3 text-sm text-ink/60">{zh ? "这本账还没有成交。" : "No prints on this book."}</li> : null}
-                {prints.map((row) => (
+                {prints.length === 0 ? <li className="px-3 py-3 text-sm text-ink/60">{reading ? (zh ? "正在把成交从链上读回来。" : "Reading prints from the chain.") : (zh ? "这本账还没有成交。" : "No prints on this book.")}</li> : null}
+                {prints.slice(0, 24).map((row) => (
                   <li key={`${row.tx}-${row.base}`} className="grid grid-cols-4 gap-2 border-t border-gold/30 px-3 py-2 font-mono text-xs">
                     <span>{usdtText(row.price, 4)}</span>
                     <span>{baseText(market, row.base)} {NAMES[row.market] ?? name}</span>
@@ -352,6 +352,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
                     <a className="text-right underline" href={`${XLAYER.explorer}/tx/${row.tx}`} target="_blank" rel="noreferrer">{zh ? "链上" : "Tx"}</a>
                   </li>
                 ))}
+                {prints.length > 24 ? <li className="px-3 py-2 text-[11px] text-ink/50">{zh ? `还有 ${prints.length - 24} 笔更早的，已经算进上面的笔数和交易量。` : `${prints.length - 24} older prints are already in the count and volume above.`}</li> : null}
               </ul>
             ) : (
               <ul>

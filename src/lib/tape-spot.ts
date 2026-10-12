@@ -152,27 +152,136 @@ export async function readCircuitPrints(): Promise<CircuitPrint[]> {
   }
 }
 
-export async function readSpotPrints(market: SpotMarket | null): Promise<SpotPrint[]> {
+const PRINT_KEY = "tapeliquid-spot-prints-v2";
+const LOG_SPAN = 100n;
+
+type PrintWire = { tx: string; market: number; price: string; base: string; quote: string; fee: string; taker: string; maker: string };
+type PrintCache = { born: string; tip: string; rows: PrintWire[] };
+
+let printMemory: { born: bigint; tip: bigint; rows: SpotPrint[] } | null = null;
+let printFlight: Promise<void> | null = null;
+
+function packPrint(row: SpotPrint): PrintWire {
+  return { tx: row.tx, market: row.market, price: row.price.toString(), base: row.base.toString(), quote: row.quote.toString(), fee: row.fee.toString(), taker: row.taker, maker: row.maker };
+}
+
+function unpackPrint(row: PrintWire): SpotPrint {
+  return { tx: row.tx, market: row.market, price: BigInt(row.price), base: BigInt(row.base), quote: BigInt(row.quote), fee: BigInt(row.fee), taker: row.taker, maker: row.maker };
+}
+
+function printKey(row: SpotPrint): string {
+  return `${row.tx}:${row.market}:${row.price}:${row.base}:${row.quote}`;
+}
+
+function readPrintCache(): { born: bigint; tip: bigint; rows: SpotPrint[] } | null {
+  if (printMemory) return printMemory;
+  if (typeof window === "undefined") return null;
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(PRINT_KEY) ?? "") as PrintCache;
+    if (!saved || !Array.isArray(saved.rows)) return null;
+    printMemory = { born: BigInt(saved.born), tip: BigInt(saved.tip), rows: saved.rows.map(unpackPrint) };
+    return printMemory;
+  } catch {
+    return null;
+  }
+}
+
+function writePrintCache(born: bigint, tip: bigint, rows: SpotPrint[]) {
+  printMemory = { born, tip, rows };
+  if (typeof window === "undefined") return;
+  try {
+    const body: PrintCache = { born: born.toString(), tip: tip.toString(), rows: rows.map(packPrint) };
+    window.localStorage.setItem(PRINT_KEY, JSON.stringify(body));
+  } catch {
+    /* The tape viewer has no storage. The list still stays for this open. */
+  }
+}
+
+async function findSpotBirth(spot: Hex, tip: bigint): Promise<bigint> {
+  let lo = 1n;
+  let hi = tip;
+  while (lo < hi) {
+    const mid = (lo + hi) / 2n;
+    const code = await client.getBytecode({ address: spot, blockNumber: mid });
+    if (code && code !== "0x") hi = mid;
+    else lo = mid + 1n;
+  }
+  return lo;
+}
+
+async function logsBetween(spot: Hex, from: bigint, to: bigint) {
+  const jobs: [bigint, bigint][] = [];
+  for (let start = from; start <= to; start += LOG_SPAN) {
+    const end = start + LOG_SPAN - 1n > to ? to : start + LOG_SPAN - 1n;
+    jobs.push([start, end]);
+  }
+  const out: SpotPrint[] = [];
+  for (let i = 0; i < jobs.length; i += 2) {
+    const batch = jobs.slice(i, i + 2);
+    const parts = await Promise.all(batch.map(async ([start, end]) => {
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        try {
+          return await client.getLogs({ address: spot, event: takeEvent, fromBlock: start, toBlock: end });
+        } catch {
+          await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+        }
+      }
+      return null;
+    }));
+    for (let j = 0; j < parts.length; j += 1) {
+      const logs = parts[j];
+      if (!logs) return { rows: out, tip: batch[j][0] - 1n };
+      for (const log of logs) {
+        out.push({
+          tx: log.transactionHash ?? "",
+          market: Number(log.args.market ?? 0),
+          price: log.args.price ?? 0n,
+          base: log.args.base ?? 0n,
+          quote: log.args.quote ?? 0n,
+          fee: log.args.fee ?? 0n,
+          taker: log.args.taker ?? "",
+          maker: log.args.maker ?? "",
+        });
+      }
+    }
+  }
+  return { rows: out, tip: to };
+}
+
+async function fillPrints() {
   const spot = spotAddress();
-  if (!spot) return [];
+  if (!spot) return;
   const tip = await client.getBlockNumber();
-  const saved = typeof window === "undefined" ? 0n : BigInt(window.localStorage.getItem(BLOCK_KEY) || "0");
-  const from = saved > 0n && tip - saved < 200_000n ? saved : tip > 20_000n ? tip - 20_000n : 0n;
-  const logs = await client.getLogs({ address: spot, event: takeEvent, fromBlock: from, toBlock: tip });
-  return logs
-    .map((log) => ({
-      tx: log.transactionHash ?? "",
-      market: Number(log.args.market ?? 0),
-      price: log.args.price ?? 0n,
-      base: log.args.base ?? 0n,
-      quote: log.args.quote ?? 0n,
-      fee: log.args.fee ?? 0n,
-      taker: log.args.taker ?? "",
-      maker: log.args.maker ?? "",
-    }))
-    .filter((row) => market == null || row.market === market)
-    .reverse()
-    .slice(0, 24);
+  const cached = readPrintCache();
+  let born = cached?.born ?? 0n;
+  let rows = cached?.rows ?? [];
+  let from = cached && cached.tip > 0n ? cached.tip + 1n : 0n;
+  if (born === 0n || from === 0n) {
+    born = await findSpotBirth(spot, tip);
+    from = born;
+    rows = [];
+  }
+  if (from > tip) return;
+  const found = await logsBetween(spot, from, tip);
+  const seen = new Set(rows.map(printKey));
+  for (const row of found.rows) {
+    const key = printKey(row);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push(row);
+  }
+  writePrintCache(born, found.tip > 0n ? found.tip : from - 1n, rows);
+}
+
+export async function readSpotPrints(market: SpotMarket | null): Promise<SpotPrint[]> {
+  if (!printFlight) {
+    printFlight = fillPrints().finally(() => {
+      printFlight = null;
+    });
+  }
+  await printFlight;
+  const rows = readPrintCache()?.rows ?? [];
+  return rows.filter((row) => market == null || row.market === market).reverse();
 }
 
 export async function readSpotPurse(account: string | null): Promise<SpotPurse | null> {
