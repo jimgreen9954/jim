@@ -372,8 +372,12 @@ function Header({ floor, desk, shop, setFloor, setDesk, setShop, setGiftOpen }: 
           <button type="button" className="min-h-9 px-1.5 text-xs text-ink/70 sm:hidden" onClick={() => { setGiftOpen(false); go("me", "me"); }}>
             {lang === "zh" ? "资产" : "Assets"}
           </button>
-          <button type="button" className="hidden min-h-9 px-1.5 text-xs text-ink/70 sm:inline" onClick={() => setNight((on) => !on)}>
-            {night ? (lang === "zh" ? "白天" : "Day") : lang === "zh" ? "黑夜" : "Night"}
+          <button type="button" aria-label={night ? (lang === "zh" ? "白天" : "Day") : lang === "zh" ? "黑夜" : "Night"} className="inline-flex size-9 items-center justify-center text-ink" onClick={() => setNight((on) => !on)}>
+            {night ? (
+              <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="12" cy="12" r="3.5" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4" /></svg>
+            ) : (
+              <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M20 14.5A7.5 7.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5Z" /></svg>
+            )}
           </button>
           <button type="button" className="hidden min-h-9 px-1.5 text-xs sm:inline" onClick={() => setLang(lang === "zh" ? "en" : "zh")}>
             {lang === "zh" ? "EN" : "中文"}
@@ -401,7 +405,6 @@ function Header({ floor, desk, shop, setFloor, setDesk, setShop, setGiftOpen }: 
             {label}
           </button>
         ))}
-        <button type="button" className="ml-auto shrink-0 px-2 py-2 text-xs text-ink/60 sm:hidden" onClick={() => setNight((on) => !on)}>{night ? (lang === "zh" ? "白天" : "Day") : lang === "zh" ? "黑夜" : "Night"}</button>
         <button type="button" className="shrink-0 px-2 py-2 text-xs sm:hidden" onClick={() => setLang(lang === "zh" ? "en" : "zh")}>{lang === "zh" ? "EN" : "中文"}</button>
       </nav>
     </header>
