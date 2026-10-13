@@ -361,8 +361,10 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
                 <Hint label={zh ? "价差" : "Spread"} text={zh ? "卖一减去买一。价差越小，买卖两边越靠近。" : "Best ask minus best bid. A smaller spread means the two sides are closer."} /> {spread > 0n ? moneyText(spread, quoteUnit, okbRate) : "—"}
               </p>
             </div>
-            <p className="px-3 pt-3 text-sm">{zh ? "指定成交" : "Take a level"}</p>
-            <p className="px-3 pb-1 text-[11px] leading-5 text-ink/50">{zh ? "格子里是这一档最多能吃的数量，可以改少。点按钮按这一档的价格直接成交。" : "The box is the most this level can fill. Type less if you want. The button trades at that level's price."}</p>
+            <div className="border-y border-gold bg-gold/20 px-3 py-2">
+              <p className="text-[11px] tracking-[0.22em] text-gold">{zh ? "指定成交" : "TAKE A LEVEL"}</p>
+              <p className="mt-1 text-sm">{zh ? "上面买入别人的卖单，下面卖出到别人的买单。格子里的数量可以改少，不能超过这一档。" : "Buy the asks above. Sell into the bids below. Type less in the box. You cannot take more than that level."}</p>
+            </div>
             <div className="max-h-[min(22rem,42vh)] overflow-y-auto">
               {askView.length === 0 ? <p className="px-3 py-2 text-xs text-ink/55">{zh ? "卖盘空着。" : "No asks."}</p> : askView.map((level) => {
                 const key = `a-${level.price}`;

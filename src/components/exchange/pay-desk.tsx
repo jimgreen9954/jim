@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPublicClient, encodeFunctionData, formatUnits, http, parseAbi, parseUnits, type Hex } from "viem";
 import QRCode from "qrcode";
 import jsQR from "jsqr";
-import { BSC, connectBsc } from "@/lib/bsc";
+import { BSC, BNB_GAS_RESERVE, connectBsc } from "@/lib/bsc";
 import { OKB } from "@/lib/okb";
 import { TAPE_BEM, TAPE_TOKEN } from "@/lib/tape-pool";
 import { currentAccount, getProvider, onAccount } from "@/lib/wallet";
@@ -12,13 +12,14 @@ const erc20 = parseAbi(["function balanceOf(address) view returns (uint256)", "f
 const xClient = createPublicClient({ transport: http(XLAYER.rpc, { timeout: 12_000 }) });
 const bscClient = createPublicClient({ transport: http(BSC.rpc, { timeout: 12_000 }) });
 
-type AssetId = "TAPE" | "XBEM" | "BBEM" | "OKB";
+type AssetId = "TAPE" | "XBEM" | "BBEM" | "OKB" | "BNB";
 
 const ASSETS: { id: AssetId; name: string; chain: "xlayer" | "bsc"; chainName: string; chainId: number; hex: string; decimals: number; token: Hex | null; explorer: string }[] = [
   { id: "TAPE", name: "TAPE", chain: "xlayer", chainName: "X Layer", chainId: XLAYER.chainId, hex: XLAYER.hex, decimals: 8, token: TAPE_TOKEN, explorer: XLAYER.explorer },
   { id: "XBEM", name: "BEM", chain: "xlayer", chainName: "X Layer", chainId: XLAYER.chainId, hex: XLAYER.hex, decimals: 8, token: TAPE_BEM, explorer: XLAYER.explorer },
   { id: "BBEM", name: "BEM", chain: "bsc", chainName: "BSC", chainId: BSC.chainId, hex: BSC.hex, decimals: 8, token: BSC.bem, explorer: BSC.explorer },
   { id: "OKB", name: "OKB", chain: "xlayer", chainName: "X Layer", chainId: XLAYER.chainId, hex: XLAYER.hex, decimals: 18, token: null, explorer: XLAYER.explorer },
+  { id: "BNB", name: "BNB", chain: "bsc", chainName: "BSC", chainId: BSC.chainId, hex: BSC.hex, decimals: 18, token: null, explorer: BSC.explorer },
 ];
 
 type Bill = { asset: AssetId; to: string; amount: string; open: boolean };
@@ -39,7 +40,7 @@ function parseBill(raw: string): Bill | { error: string } {
   if (parts[0] !== "TAPELIQUID" || parts.length < 6) return { error: "这不是本站的收款码。可以贴地址，或贴 TAPELIQUID 开头的那一行。" };
   if (parts[1] !== "1") return { error: "这张码的版本本页还不认识。" };
   const asset = ASSETS.find((row) => row.id === parts[3] && String(row.chainId) === parts[2]);
-  if (!asset) return { error: "码里的币或链对不上。TAPE、BEM、OKB 不能混链。" };
+  if (!asset) return { error: "码里的币或链对不上。TAPE、BEM、OKB、BNB 不能混链。" };
   if (!/^0x[a-fA-F0-9]{40}$/.test(parts[4] ?? "")) return { error: "码里的收款地址不对。" };
   const amount = (parts[5] ?? "").trim();
   if (amount && !/^\d+(\.\d+)?$/.test(amount)) return { error: "码里的数量不是数字。" };
@@ -98,8 +99,9 @@ export function PayDesk({ zh, account }: { zh: boolean; account: string | null }
         xClient.readContract({ address: TAPE_BEM, abi: erc20, functionName: "balanceOf", args: [who as Hex] }),
         bscClient.readContract({ address: BSC.bem, abi: erc20, functionName: "balanceOf", args: [who as Hex] }),
         xClient.getBalance({ address: who as Hex }),
-      ]).then(([tape, xbem, bbem, okb]) => {
-        if (!dead) setBalances({ TAPE: tape, XBEM: xbem, BBEM: bbem, OKB: okb });
+        bscClient.getBalance({ address: who as Hex }),
+      ]).then(([tape, xbem, bbem, okb, bnb]) => {
+        if (!dead) setBalances({ TAPE: tape, XBEM: xbem, BBEM: bbem, OKB: okb, BNB: bnb });
       }).catch(() => undefined);
     };
     pull();
@@ -235,10 +237,10 @@ export function PayDesk({ zh, account }: { zh: boolean; account: string | null }
       setNote(zh ? "数量要大于 0。" : "The amount has to be more than zero.");
       return;
     }
-    const reserve = row.id === "OKB" ? OKB.gasReserve : 0n;
+    const reserve = row.id === "OKB" ? OKB.gasReserve : row.id === "BNB" ? BNB_GAS_RESERVE : 0n;
     if (held != null && value + reserve > held) {
       setBad(true);
-      setNote(row.id === "OKB" ? (zh ? "余额不够，还要留一点 OKB 当 gas。" : "Not enough OKB. Leave some for gas.") : (zh ? "余额不够。" : "The balance is not enough."));
+      setNote(reserve > 0n ? (zh ? `余额不够，还要留一点 ${row.name} 当 gas。` : `Not enough ${row.name}. Leave some for gas.`) : (zh ? "余额不够。" : "The balance is not enough."));
       return;
     }
     setBusy(true);
@@ -282,7 +284,7 @@ export function PayDesk({ zh, account }: { zh: boolean; account: string | null }
       <div className="border-b border-gold/40 px-3 py-3">
         <p className="text-[11px] tracking-[0.18em] text-gold">{zh ? "收付款" : "Pay"}</p>
         <h3 className="mt-1 text-lg leading-6">{zh ? "扫码付，或生成收款码" : "Scan to pay, or make a code"}</h3>
-        <p className="mt-1 text-xs leading-5 text-ink/55">{zh ? "只收 TAPE、BEM、OKB。X Layer 的 BEM 和 BSC 的 BEM 是两份币，码里写死了链，不能混。" : "TAPE, BEM and OKB only. X Layer BEM and BSC BEM are different coins. The code locks the chain."}</p>
+        <p className="mt-1 text-xs leading-5 text-ink/55">{zh ? "TAPE、BEM、OKB、BNB。X Layer 的 BEM 和 BSC 的 BEM 是两份币。BNB 是 BSC 的原生币，OKB 是 X Layer 的原生币，不能混。" : "TAPE, BEM, OKB and BNB. X Layer BEM and BSC BEM are different coins. BNB is native on BSC. OKB is native on X Layer."}</p>
       </div>
       <div className="grid grid-cols-2 border-b border-gold text-sm">
         <button type="button" className={`min-h-11 ${mode === "receive" ? "bg-ink text-paper" : ""}`} onClick={() => { setMode("receive"); setAck(false); setScanOn(false); }}>{zh ? "收款" : "Receive"}</button>
