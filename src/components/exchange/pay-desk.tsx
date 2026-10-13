@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPublicClient, encodeFunctionData, formatUnits, http, parseAbi, parseUnits, type Hex } from "viem";
 import QRCode from "qrcode";
+import jsQR from "jsqr";
 import { BSC, connectBsc } from "@/lib/bsc";
 import { OKB } from "@/lib/okb";
 import { TAPE_BEM, TAPE_TOKEN } from "@/lib/tape-pool";
@@ -49,6 +50,20 @@ function trimAmount(value: string): string {
   return value.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
 }
 
+function readQr(source: CanvasImageSource, sw: number, sh: number, canvas: HTMLCanvasElement): string | null {
+  if (sw < 8 || sh < 8) return null;
+  const scale = Math.min(1, 720 / Math.max(sw, sh));
+  const width = Math.max(1, Math.round(sw * scale));
+  const height = Math.max(1, Math.round(sh * scale));
+  if (canvas.width !== width) canvas.width = width;
+  if (canvas.height !== height) canvas.height = height;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.drawImage(source, 0, 0, width, height);
+  const image = ctx.getImageData(0, 0, width, height);
+  return jsQR(image.data, width, height, { inversionAttempts: "attemptBoth" })?.data ?? null;
+}
+
 export function PayDesk({ zh, account }: { zh: boolean; account: string | null }) {
   const [mode, setMode] = useState<"receive" | "pay">("receive");
   const [asset, setAsset] = useState<AssetId>("TAPE");
@@ -66,6 +81,8 @@ export function PayDesk({ zh, account }: { zh: boolean; account: string | null }
   const [hash, setHash] = useState("");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const onCode = useRef<(raw: string) => void>(() => undefined);
   const who = account ?? currentAccount();
   const row = assetOf(asset);
   const held = balances[asset];
@@ -103,37 +120,52 @@ export function PayDesk({ zh, account }: { zh: boolean; account: string | null }
 
   useEffect(() => {
     if (!scanOn) return;
+    const video = videoRef.current;
+    if (!video) return;
     let dead = false;
     let stream: MediaStream | null = null;
-    let timer = 0;
-    const video = videoRef.current;
-    const Detector = (window as unknown as { BarcodeDetector?: new (opts: { formats: string[] }) => { detect: (source: CanvasImageSource) => Promise<{ rawValue?: string }[]> } }).BarcodeDetector;
-    navigator.mediaDevices?.getUserMedia({ video: { facingMode: "environment" } }).then(async (next) => {
+    let frame = 0;
+    const scratch = document.createElement("canvas");
+    const openCamera = async () => {
+      const tries: MediaStreamConstraints[] = [
+        { video: { facingMode: { ideal: "environment" } }, audio: false },
+        { video: true, audio: false },
+      ];
+      let last: unknown;
+      for (const constraints of tries) {
+        try { return await navigator.mediaDevices.getUserMedia(constraints); } catch (error) { last = error; }
+      }
+      throw last;
+    };
+    openCamera().then(async (next) => {
       stream = next;
-      if (dead || !video) {
+      if (dead) {
         next.getTracks().forEach((track) => track.stop());
         return;
       }
       video.srcObject = next;
+      video.muted = true;
       await video.play();
-      if (!Detector) {
-        setScanNote(zh ? "这个浏览器不能直接识码。把码里的字贴到下面，或换手机自带浏览器。" : "This browser cannot read a code from the camera. Paste the text, or use the phone browser.");
-        return;
-      }
-      const detector = new Detector({ formats: ["qr_code"] });
-      timer = window.setInterval(() => {
-        detector.detect(video).then((found) => {
-          const raw = found[0]?.rawValue;
-          if (!raw || dead) return;
-          applyCode(raw);
-          setScanOn(false);
-        }).catch(() => undefined);
-      }, 500);
-    }).catch(() => setScanNote(zh ? "没有打开摄像头。可以改贴收款码里的字。" : "The camera did not open. Paste the text from the code."));
+      setScanNote(zh ? "把二维码放进画面，保持稳定。" : "Hold the code steady in the frame.");
+      const look = () => {
+        if (dead) return;
+        frame = window.requestAnimationFrame(look);
+        if (video.readyState < 2 || video.videoWidth === 0) return;
+        const raw = readQr(video, video.videoWidth, video.videoHeight, scratch);
+        if (!raw) return;
+        dead = true;
+        window.cancelAnimationFrame(frame);
+        next.getTracks().forEach((track) => track.stop());
+        onCode.current(raw);
+        setScanOn(false);
+      };
+      frame = window.requestAnimationFrame(look);
+    }).catch(() => setScanNote(zh ? "摄像头没打开。用相册里的照片，或把码里的字贴上。" : "The camera did not open. Use a photo, or paste the text."));
     return () => {
       dead = true;
-      window.clearInterval(timer);
+      window.cancelAnimationFrame(frame);
       stream?.getTracks().forEach((track) => track.stop());
+      video.srcObject = null;
     };
   }, [scanOn, zh]);
 
@@ -144,7 +176,7 @@ export function PayDesk({ zh, account }: { zh: boolean; account: string | null }
     setHash("");
     if ("error" in parsed) {
       setBad(true);
-      setNote(zh ? parsed.error : "That code is not a TAPELIQUID bill.");
+      setNote(zh ? `${parsed.error} 读到：${raw.trim().slice(0, 72)}` : `Not a TAPELIQUID code. Read: ${raw.trim().slice(0, 72)}`);
       return;
     }
     setMode("pay");
@@ -154,6 +186,24 @@ export function PayDesk({ zh, account }: { zh: boolean; account: string | null }
     setOpenAmount(parsed.open);
     setBad(false);
     setNote(parsed.open ? (zh ? "这张码没有写死数量。币和地址已经填上，数量你自己定。" : "This code leaves the amount open. The asset and address are filled. You set the amount.") : (zh ? "币、地址和数量都按码填上了。数量还可以改，地址以码为准。" : "Asset, address and amount came from the code. You can still change the amount."));
+  };
+  onCode.current = applyCode;
+
+  const onPhoto = (file: File | undefined) => {
+    if (!file) return;
+    createImageBitmap(file).then((bitmap) => {
+      const raw = readQr(bitmap, bitmap.width, bitmap.height, document.createElement("canvas"));
+      bitmap.close();
+      if (!raw) {
+        setBad(true);
+        setNote(zh ? "这张图里没有认出二维码。离近一点，让码占满画面。" : "No code in that photo. Move closer so the code fills the picture.");
+        return;
+      }
+      onCode.current(raw);
+    }).catch(() => {
+      setBad(true);
+      setNote(zh ? "这张图读不了。" : "That image could not be read.");
+    });
   };
 
   const pay = () => {
@@ -275,14 +325,16 @@ export function PayDesk({ zh, account }: { zh: boolean; account: string | null }
         ) : (
           <>
             <div className="flex gap-2">
-              <button type="button" className="min-h-11 flex-1 bg-ink text-sm text-paper" onClick={() => { setScanOn(true); setScanNote(""); }}>{zh ? "打开摄像头扫码" : "Scan"}</button>
+              <button type="button" className="min-h-11 flex-1 bg-ink text-sm text-paper" onClick={() => { setScanOn(true); setScanNote(zh ? "正在打开摄像头。" : "Opening the camera."); }}>{zh ? "打开摄像头" : "Camera"}</button>
+              <button type="button" className="min-h-11 border border-gold px-3 text-xs" onClick={() => fileRef.current?.click()}>{zh ? "相册" : "Photo"}</button>
               <button type="button" className="min-h-11 border border-gold px-3 text-xs" onClick={() => { setPayTo(""); setAmount(""); setScanned(""); setAck(false); setNote(zh ? "已清空，可以手填。" : "Cleared."); setBad(false); }}>{zh ? "清空" : "Clear"}</button>
             </div>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; onPhoto(file); }} />
             {scanOn ? (
               <div className="grid gap-2 border border-gold/40 p-2">
-                <video ref={videoRef} className="aspect-square w-full bg-ink object-cover" muted playsInline />
+                <video ref={videoRef} className="aspect-square w-full bg-ink object-cover" muted autoPlay playsInline />
+                <p className="text-center text-xs text-ink/60">{scanNote || (zh ? "正在找二维码。" : "Looking for a code.")}</p>
                 <button type="button" className="min-h-9 text-xs" onClick={() => setScanOn(false)}>{zh ? "关闭摄像头" : "Close camera"}</button>
-                {scanNote ? <p className="text-xs leading-5">{scanNote}</p> : null}
               </div>
             ) : null}
             <label className="grid gap-1 text-xs text-ink/55">
