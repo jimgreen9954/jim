@@ -68,7 +68,8 @@ export function CircuitMarket({ zh, lang }: { zh: boolean; lang: "zh" | "en" }) 
   const [board, setBoard] = useState<CircuitBoard | null>(null);
   const [account, setAccount] = useState<string | null>(currentAccount());
   const [tab, setTab] = useState<"official" | "other" | "mine">("official");
-  const [chart, setChart] = useState(true);
+  const [sheet, setSheet] = useState<"book" | "prints">("book");
+  const [chart, setChart] = useState(false);
   const [sort, setSort] = useState<"day" | "ask" | "hash">("day");
   const [query, setQuery] = useState("");
   const [minHash, setMinHash] = useState("");
@@ -141,20 +142,20 @@ export function CircuitMarket({ zh, lang }: { zh: boolean; lang: "zh" | "en" }) 
   };
 
   return (
-    <section className="grid items-start gap-3 lg:grid-cols-[7rem_minmax(0,1fr)_18rem]">
-      <nav className="flex gap-1 overflow-x-auto border-b border-gold/30 lg:flex lg:flex-col lg:gap-0 lg:overflow-visible lg:border-b-0 lg:border-r lg:border-gold/30">
-        {([
-          ["official", zh ? "TAPELIQUID矿机" : "TAPELIQUID"],
-          ["other", zh ? "其他电路" : "Other"],
-          ["mine", zh ? "我的电路" : "Mine"],
-        ] as const).map(([id, label]) => (
-          <button key={id} type="button" onClick={() => setTab(id)} className={`shrink-0 border-b-2 px-3 py-2 text-left text-sm lg:border-b-0 lg:border-l-2 ${tab === id ? "border-ink font-medium" : "border-transparent text-ink/55"}`}>{label}</button>
-        ))}
-      </nav>
+    <section className="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_17rem]">
       <div className="min-w-0">
-        <div className="grid grid-cols-2 border border-gold/50 text-xs sm:grid-cols-4 xl:grid-cols-7">
+        <nav className="flex gap-5 overflow-x-auto border-b border-gold/40">
+          {([
+            ["official", zh ? "TapeOut矿机" : "TapeOut"],
+            ["other", zh ? "其他电路" : "Other"],
+            ["mine", zh ? "我的电路" : "Mine"],
+          ] as const).map(([id, label]) => (
+            <button key={id} type="button" onClick={() => setTab(id)} className={`shrink-0 border-b-2 py-2 text-sm ${tab === id ? "border-ink font-medium" : "border-transparent text-ink/45"}`}>{label}</button>
+          ))}
+        </nav>
+        <div className="mt-2 flex gap-4 overflow-x-auto text-xs">
           {[
-            [zh ? "TAPELIQUID矿机" : "TAPELIQUID", zh ? "电路" : "Circuits"],
+            [zh ? "TapeOut矿机" : "TapeOut", zh ? "电路" : "Circuits"],
             [zh ? "日产能参考价" : "Day-output ref", board?.refDayPx != null ? `${num(board.refDayPx, 2)} BNB` : "—"],
             [zh ? "24h 成交额" : "24h volume", board?.vol24h != null ? `${num(board.vol24h, 2)} BNB` : "—"],
             [zh ? "24h 成交电路" : "24h circuits", board?.trades24h != null ? String(board.trades24h) : "—"],
@@ -168,17 +169,16 @@ export function CircuitMarket({ zh, lang }: { zh: boolean; lang: "zh" | "en" }) 
             </p>
           ))}
         </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1">
-            <Label zh={zh} text={zh ? "日产能 K 线" : "Day chart"} />
-            <button type="button" onClick={() => setChart((on) => !on)} className={`border px-2 py-1 text-xs ${chart ? "border-ink bg-ink text-paper" : "border-gold"}`}>{chart ? (zh ? "收起" : "Hide") : (zh ? "展开" : "Show")}</button>
-          </span>
+        <div className="mt-2 flex gap-4 overflow-x-auto border-b border-gold/30 text-sm">
+          <button type="button" onClick={() => setSheet("book")} className={`shrink-0 border-b-2 py-1.5 ${sheet === "book" ? "border-ink" : "border-transparent text-ink/45"}`}>{zh ? "挂单" : "Book"}</button>
+          <button type="button" onClick={() => setSheet("prints")} className={`shrink-0 border-b-2 py-1.5 ${sheet === "prints" ? "border-ink" : "border-transparent text-ink/45"}`}>{zh ? "成交" : "Prints"}</button>
+          <button type="button" onClick={() => setChart((on) => !on)} className={`shrink-0 border-b-2 py-1.5 ${chart ? "border-ink" : "border-transparent text-ink/45"}`}>{zh ? "日产能" : "Day"}</button>
           {(["day", "ask", "hash"] as const).map((id) => (
-            <button key={id} type="button" onClick={() => setSort(id)} className={`border px-2 py-1 text-xs ${sort === id ? "border-ink" : "border-gold"}`}>
-              {id === "day" ? <Label zh={zh} text={zh ? "日产能价" : "Day px"} /> : id === "ask" ? <Label zh={zh} text={zh ? "卖价" : "Ask"} /> : <Label zh={zh} text={zh ? "算力" : "Hash"} />}
+            <button key={id} type="button" onClick={() => setSort(id)} className={`shrink-0 border-b-2 py-1.5 ${sort === id ? "border-ink" : "border-transparent text-ink/45"}`}>
+              {id === "day" ? (zh ? "按日产能" : "By day") : id === "ask" ? (zh ? "按卖价" : "By ask") : (zh ? "按算力" : "By hash")}
             </button>
           ))}
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={zh ? "搜处理器或编号" : "Search"} className="min-h-8 w-36 border border-gold/50 bg-transparent px-2 text-xs outline-none" />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={zh ? "搜索" : "Search"} className="ml-auto w-24 shrink-0 bg-transparent py-1 text-xs outline-none" />
         </div>
         {chart && (board?.bars.length ?? 0) > 1 ? (
           <div className="mt-2 border border-gold/40 bg-card">
@@ -186,16 +186,8 @@ export function CircuitMarket({ zh, lang }: { zh: boolean; lang: "zh" | "en" }) 
             <Kline bars={board?.bars ?? []} mark={board?.refDayPx ?? 0} lang={lang} desk="circuit" />
           </div>
         ) : null}
-        <p className="mt-2 text-[11px] text-ink/45">
-          {board?.ok
-            ? zh
-              ? `快照 ${board.asOf ?? ""}。左边只换这一张表，同一张电路不会出现两次。点一行，右边看指标。另付千分之二，先付，后面没成交不退。`
-              : `Snapshot ${board.asOf ?? ""}. The left switch changes this one table. A circuit is not listed twice.`
-            : zh ? "电路快照没读到。" : "The circuit snapshot did not load."}
-        </p>
-        <Book zh={zh} rows={rows} picked={picked} busy={busy} onPick={setPicked} onBuy={(row) => void buy(row)} />
-        <p className="mt-3 text-sm">{zh ? "成交" : "Prints"}</p>
-        <Prints zh={zh} rows={board?.prints ?? []} />
+        <p className="mt-2 text-[11px] text-ink/45">{zh ? "点一行，右边看这张。买入另付千分之二，先付，没成交不退。" : "Pick a row. Buying adds 0.2%, paid first."}</p>
+        {sheet === "prints" ? <Prints zh={zh} rows={board?.prints ?? []} /> : <Book zh={zh} rows={rows} picked={picked} busy={busy} onPick={setPicked} onBuy={(row) => void buy(row)} />}
       </div>
       <aside className="border border-gold bg-card px-3 py-3 lg:sticky lg:top-16">
         <p className="text-[11px] tracking-[0.16em] text-gold">{zh ? "这一张" : "This circuit"}</p>

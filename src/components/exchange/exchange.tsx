@@ -63,7 +63,7 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
         <SimClock />
         <BannerToast />
         <FuseFlash />
-        <div className={`mx-auto flex max-w-7xl flex-col gap-3 px-3 pt-2 sm:px-4 lg:gap-4 lg:px-6 ${floor === "paper" ? "pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-10" : "pb-[max(1.5rem,env(safe-area-inset-bottom))]"}`}>
+        <div className={`mx-auto flex w-full flex-col gap-3 px-2 pt-2 sm:px-3 lg:gap-3 lg:px-4 ${floor === "paper" ? "pb-6 lg:pb-8" : "pb-[max(1rem,env(safe-area-inset-bottom))]"}`}>
           <Header floor={floor} desk={desk} shop={shop} setFloor={setFloor} setDesk={setDesk} setShop={setShop} setGiftOpen={setGiftOpen} />
           <FeeStrip />
           {floor === "desk" && desk === "spot" ? <SpotDesk /> : null}
@@ -75,7 +75,7 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
           {floor === "me" ? <AccountCenter giftOpen={giftOpen} /> : null}
           {floor === "rules" ? <Whitepaper /> : null}
         </div>
-        <footer className="mx-auto flex w-full max-w-7xl items-center gap-4 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-xs text-ink/55 sm:px-4 lg:px-6">
+        <footer className="mx-auto flex w-full items-center gap-4 px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-xs text-ink/55 sm:px-3 lg:px-4">
           <a href="https://t.me/+RWVnnxXf1LY1MWVh" target="_blank" rel="noreferrer" className="underline">Telegram</a>
           <a href="https://x.com/Icp_chinese" target="_blank" rel="noreferrer" className="underline">X</a>
         </footer>
@@ -350,7 +350,7 @@ function Header({ floor, desk, shop, setFloor, setDesk, setShop, setGiftOpen }: 
     [lang === "zh" ? "练习" : "Practice", floor === "paper", () => go("paper", "paper")],
   ] as const;
   return (
-    <header className="sticky top-0 z-20 -mx-3 border-b border-gold/40 bg-paper/95 px-3 py-2 backdrop-blur-sm sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6 pt-[max(0.35rem,env(safe-area-inset-top))]">
+    <header className="sticky top-0 z-20 -mx-2 border-b border-gold/40 bg-paper/95 px-2 py-2 backdrop-blur-sm sm:-mx-3 sm:px-3 lg:-mx-4 lg:px-4 pt-[max(0.35rem,env(safe-area-inset-top))]">
       <div className="flex items-center gap-3">
         <button type="button" onClick={() => go("desk", "spot")} className="flex shrink-0 items-center gap-2">
           <img src="/mark.jpg" alt="" className="size-7 border border-gold bg-foil object-cover" />
