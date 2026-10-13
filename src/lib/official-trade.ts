@@ -3,6 +3,7 @@ import { BSC, DESK_FEE_BPS, FEE_TO, TxPending, connectBsc, waitOk, waitReceipt }
 import { OFFICIAL } from "@/lib/official-books";
 import type { CircuitSigned } from "@/lib/circuit-board";
 import { getProvider } from "@/lib/wallet";
+import { deskParts } from "@/lib/invite-cut";
 
 const client = createPublicClient({ transport: http(BSC.rpc) });
 
@@ -44,15 +45,19 @@ async function send(from: string, to: Hex, data: Hex, value = 0n): Promise<Hex> 
 }
 
 async function payFee(from: string, notional: bigint): Promise<void> {
-  const fee = feeOf(notional);
-  if (fee <= 0n) return;
-  const hash = await send(from, FEE_TO, "0x", fee);
-  try {
-    await waitOk(hash);
-  } catch (err) {
-    if (err instanceof TxPending) throw err;
-    throw new Error("reverted");
-  }
+  const parts = await deskParts("bsc", from, notional);
+  const pay = async (to: Hex, value: bigint) => {
+    if (value <= 0n) return;
+    const hash = await send(from, to, "0x", value);
+    try {
+      await waitOk(hash);
+    } catch (err) {
+      if (err instanceof TxPending) throw err;
+      throw new Error("reverted");
+    }
+  };
+  if (parts.reward > 0n && parts.referrer) await pay(parts.referrer, parts.reward);
+  if (parts.desk > 0n) await pay(FEE_TO, parts.desk);
 }
 
 async function finishPaid(hash: Hex): Promise<Hex> {

@@ -8,6 +8,7 @@ import {
   parseUnits,
   type Hex,
 } from "viem";
+import { deskParts, type DeskParts } from "@/lib/invite-cut";
 
 export const BSC = {
   chainId: 56,
@@ -428,17 +429,38 @@ function boundMin(quoted: bigint, floor?: bigint): bigint {
   return floor ?? fresh;
 }
 
+async function payDeskToken(from: string, token: Hex, parts: DeskParts, feeKey: string): Promise<boolean> {
+  if (parts.reward <= 0n && parts.desk <= 0n) return false;
+  if (parts.reward > 0n && parts.referrer) {
+    const data = encodeFunctionData({ abi: erc20, functionName: "transfer", args: [parts.referrer, parts.reward] });
+    await step(`${feeKey}:ref`, () => send(from, token, data));
+  }
+  if (parts.desk > 0n) {
+    const data = encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, parts.desk] });
+    await step(feeKey, () => send(from, token, data));
+  }
+  return true;
+}
+
+async function payDeskNative(from: string, parts: DeskParts, feeKey: string): Promise<boolean> {
+  if (parts.reward <= 0n && parts.desk <= 0n) return false;
+  if (parts.reward > 0n && parts.referrer) await step(`${feeKey}:ref`, () => send(from, parts.referrer as Hex, "0x", parts.reward));
+  if (parts.desk > 0n) await step(feeKey, () => send(from, FEE_TO, "0x", parts.desk));
+  return true;
+}
+
 export async function swapBem(from: string, side: "buy" | "sell", amount: string, floor?: bigint): Promise<Hex> {
   const tokenIn = side === "buy" ? BSC.usdt : BSC.bem;
   const tokenOut = side === "buy" ? BSC.bem : BSC.usdt;
   const decimalsIn = side === "buy" ? BSC.usdtDecimals : BSC.bemDecimals;
   const amountIn = units(amount, decimalsIn);
   if (amountIn <= 0n) throw new Error("amount");
-  const { fee, swapIn } = splitDeskFee(amountIn);
+  const parts = await deskParts("bsc", from, amountIn);
+  const swapIn = parts.swapIn;
   if (swapIn <= 0n) throw new Error("amount");
   const who = from.toLowerCase();
   const swapKey = `tl-swap:${who}:${tokenIn}:${amountIn}`;
-  const feeKey = `tl-fee:${who}:${tokenIn}:${fee}`;
+  const feeKey = `tl-fee:${who}:${tokenIn}:${amountIn}`;
   const already = await resumeSwap(swapKey);
   if (already) {
     forget(feeKey);
@@ -448,12 +470,7 @@ export async function swapBem(from: string, side: "buy" | "sell", amount: string
   const minOut = boundMin(quoted, floor);
   const owner = from as Hex;
   await approveIfNeeded(from, tokenIn, swapIn);
-  let paid = false;
-  if (fee > 0n) {
-    const feeData = encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, fee] });
-    await step(feeKey, () => send(from, tokenIn, feeData));
-    paid = true;
-  }
+  const paid = await payDeskToken(from, tokenIn, parts, feeKey);
   const data = encodeFunctionData({
     abi: routerAbi,
     functionName: "exactInputSingle",
@@ -483,11 +500,12 @@ export async function swapListed(from: string, key: ErcKey, side: "buy" | "sell"
   const decimalsIn = side === "buy" ? BSC.usdtDecimals : decimals;
   const amountIn = units(amount, decimalsIn);
   if (amountIn <= 0n) throw new Error("amount");
-  const { fee, swapIn } = splitDeskFee(amountIn);
+  const parts = await deskParts("bsc", from, amountIn);
+  const swapIn = parts.swapIn;
   if (swapIn <= 0n) throw new Error("amount");
   const who = from.toLowerCase();
   const swapKey = `tl-swap:${who}:${tokenIn}:${amountIn}`;
-  const feeKey = `tl-fee:${who}:${tokenIn}:${fee}`;
+  const feeKey = `tl-fee:${who}:${tokenIn}:${amountIn}`;
   const already = await resumeSwap(swapKey);
   if (already) {
     forget(feeKey);
@@ -497,12 +515,7 @@ export async function swapListed(from: string, key: ErcKey, side: "buy" | "sell"
   const minOut = boundMin(quoted, floor);
   const owner = from as Hex;
   await approveIfNeeded(from, tokenIn, swapIn);
-  let paid = false;
-  if (fee > 0n) {
-    const feeData = encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, fee] });
-    await step(feeKey, () => send(from, tokenIn, feeData));
-    paid = true;
-  }
+  const paid = await payDeskToken(from, tokenIn, parts, feeKey);
   const data = encodeFunctionData({
     abi: routerAbi,
     functionName: "exactInputSingle",
@@ -528,11 +541,12 @@ export async function swapBnb(from: string, side: "buy" | "sell", amount: string
   if (side === "buy") {
     const amountIn = units(amount, BSC.usdtDecimals);
     if (amountIn <= 0n) throw new Error("amount");
-    const { fee, swapIn } = splitDeskFee(amountIn);
+    const parts = await deskParts("bsc", from, amountIn);
+    const swapIn = parts.swapIn;
     if (swapIn <= 0n) throw new Error("amount");
     const who = from.toLowerCase();
     const swapKey = `tl-swap:${who}:${BSC.usdt}:${amountIn}:bnb`;
-    const feeKey = `tl-fee:${who}:${BSC.usdt}:${fee}:bnb`;
+    const feeKey = `tl-fee:${who}:${BSC.usdt}:${amountIn}:bnb`;
     const already = await resumeSwap(swapKey);
     if (already) {
       forget(feeKey);
@@ -541,12 +555,7 @@ export async function swapBnb(from: string, side: "buy" | "sell", amount: string
     const quoted = await quoteExact(BSC.usdt, BSC.wbnb, swapIn, BSC.bnbFee);
     const minOut = boundMin(quoted, floor);
     await approveIfNeeded(from, BSC.usdt, swapIn);
-    let paid = false;
-    if (fee > 0n) {
-      const feeData = encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, fee] });
-      await step(feeKey, () => send(from, BSC.usdt, feeData));
-      paid = true;
-    }
+    const paid = await payDeskToken(from, BSC.usdt, parts, feeKey);
     const swapData = encodeFunctionData({
       abi: routerAbi,
       functionName: "exactInputSingle",
@@ -576,11 +585,12 @@ export async function swapBnb(from: string, side: "buy" | "sell", amount: string
   let amountIn = units(amount, 18);
   if (amountIn > maxSpend) amountIn = maxSpend;
   if (amountIn <= 0n) throw new Error("amount");
-  const { fee, swapIn } = splitDeskFee(amountIn);
+  const parts = await deskParts("bsc", from, amountIn);
+  const swapIn = parts.swapIn;
   if (swapIn <= 0n) throw new Error("amount");
   const who = from.toLowerCase();
   const swapKey = `tl-swap:${who}:bnb:${amountIn}`;
-  const feeKey = `tl-fee:${who}:bnb:${fee}`;
+  const feeKey = `tl-fee:${who}:bnb:${amountIn}`;
   const already = await resumeSwap(swapKey);
   if (already) {
     forget(feeKey);
@@ -588,11 +598,7 @@ export async function swapBnb(from: string, side: "buy" | "sell", amount: string
   }
   const quoted = await quoteExact(BSC.wbnb, BSC.usdt, swapIn, BSC.bnbFee);
   const minOut = boundMin(quoted, floor);
-  let paid = false;
-  if (fee > 0n) {
-    await step(feeKey, () => send(from, FEE_TO, "0x", fee));
-    paid = true;
-  }
+  const paid = await payDeskNative(from, parts, feeKey);
   try {
     const deposit = encodeFunctionData({ abi: wbnbAbi, functionName: "deposit" });
     const wrapKey = `tl-wrap:${who}:${swapIn}`;

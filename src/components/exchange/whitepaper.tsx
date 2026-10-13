@@ -132,8 +132,7 @@ const zhBody: Section[] = [
     ps: [
       "现货买卖、永续撮合、撤单、添加流动性、撤回流动性，台费都是付出金额的 0.20%。此费用在池子手续费之外。平仓不再另收。添加流动性时两边各扣 0.20%，撤回时拿回的两边再各扣 0.20%。已转出的台费不退。现货的台费是单独一笔，先付。后面的兑换拒签或回滚，这一笔不退。回执还没读到时，页面留下哈希，同一金额不会再收一次。",
       "现货买到的币留在签名钱包。永续保证金进入用户所选链上的那一份合约。BSC 与 X Layer 不能并成一笔。",
-      `台费进入收费地址 ${FEE_TO}。`,
-      "推荐只作用于永续。有推荐人时，交易者少付永续台费的 4%，推荐人记 6%，其余进入收费地址。现货和流动性不参与。印鉴不自动减费。登记后，已撮合的永续成交可按新加坡周领回一半，周一 0 点至下周一 0 点，过点作废，同一笔只进一次。领取只认现在的 BSC 永续、X Layer 永续和晶体管永续，从领取合约出。池子要另充。取出只许部署这笔的钱包。",
+      `没绑邀请人时，台费整笔进入收费地址 ${FEE_TO}。绑了邀请人之后，这笔台费的 6% 付给邀请人，4% 少收交易的人，90% 进入收费地址。永续把 6% 记在合约里，按档领取。现货台费、官方晶体管和官方电路的本站 0.20%，付款时按同一比例拆开转。两条链各认各的邀请人。工房订单簿和 TAPE 池的 0.20% 写在已经部署的合约里，整笔进入收费地址，这两份没有邀请人。印鉴不自动减费。登记后，已撮合的永续成交仍可按新加坡周另领一半，周一 0 点至下周一 0 点，过点作废，同一笔只进一次。`,
       "池子自身的手续费留给流动性提供者。Gas 付给链。",
     ],
   },
@@ -223,7 +222,7 @@ const en: Section[] = [
       "Spot settles in the wallet that signed. BSC pairs use PancakeSwap. OKB uses PotatoSwap on X Layer. The coins you buy stay in that wallet. The desk fee is 0.20% of what you pay, on top of the pool fee, and it is a separate payment made first. If the swap is rejected or reverts, that fee stays. If the receipt has not come back, the same amount is not charged again.",
       "There are two perpetual books. They do not net. BSC margin is USDT. X Layer margin is USDT0. Margin is locked in the one contract on the chain you picked. The platform does not hold it. There is no insurance fund and no auto-deleveraging. At about half the margin lost, anyone can liquidate. There is no funding fee.",
       `The BSC BEM perpetual uses a roughly 10-minute PancakeSwap average as its mark. The last trade is not used for liquidation. Thin liquidity can still move that average for a short interval. The new X Layer perpetual reads the OKB/BEM and USDT0/WOKB pools on X Layer. It does not reference the BSC price. Any address may submit an update. Each consecutive update is at most 0.5 percent and at least 30 seconds apart. The page now uses ${KNOWN_XPERP}. Its mark is ${KNOWN_XMARK}. The previous contract ${PREV_XPERP} keeps existing positions, and its mark remains ${PREV_XMARK}.`,
-      "Referrals apply only to perpetuals. With a referrer, the trader pays 4% less of the perpetual desk fee, the referrer is credited 6%, and the rest goes to the fee address. Spot and liquidity are outside that split.",
+      "Referrals apply to every site fee this page sends, not only perpetuals. The site fee is 0.20% of the amount paid. With a referrer, 6% of that fee goes to the referrer, the trader pays 4% less, and 90% goes to the fee address. Perpetuals record the 6% on the contract. Spot desk fees and the site fee on official transistors and circuits are split in the same proportion when paid. The workshop book and the TAPE pools send their 0.20% entirely to the fee address. Those deployed contracts have no referrer field.",
     ],
   },
   {
@@ -315,7 +314,7 @@ const en: Section[] = [
       "Spot, a perpetual match, a cancel, adding liquidity, and removing liquidity all pay 0.20 percent of what is paid. That is on top of the pool fee. Closing adds nothing. Adding takes 0.20 percent from each side. Removing takes 0.20 percent from both sides that come back. A fee already sent is not returned. The spot fee is its own transaction and is paid first. If the swap is rejected or reverts, that fee stays. If the receipt has not come back, the page keeps the hash and does not charge the same amount again.",
       "A spot fill stays in the wallet that signed. Perpetual margin enters the one contract on the chain the user picked. BSC and X Layer do not net.",
       `The desk fee goes to ${FEE_TO}.`,
-      "Referrals apply only to perpetuals. With a referrer, the trader pays 4 percent less of the perpetual desk fee, the referrer is credited 6 percent, and the rest goes to the fee address. Spot and liquidity are outside that split. A seal does not cut a fee by itself. After registration, half the fee on a matched perpetual fill can be claimed once per Singapore week, Monday 00:00 to the next Monday 00:00. A missed week is gone. One fill is counted once. The claim contract reads only the current BSC perpetual, the current X Layer perpetual, and the transistor perpetual. The pool is funded separately. Only the wallet that deployed it can withdraw.",
+      "With a referrer, 6 percent of the site fee goes to the referrer, the trader pays 4 percent less, and 90 percent goes to the fee address. This split covers perpetuals, spot desk fees, and the site fee on official transistors and circuits. The workshop book and the TAPE pools still send their whole 0.20 percent to the fee address. A seal does not cut a fee by itself. After registration, half the fee on a matched perpetual fill can be claimed once per Singapore week, Monday 00:00 to the next Monday 00:00. A missed week is gone. One fill is counted once. The claim contract reads only the current BSC perpetual, the current X Layer perpetual, and the transistor perpetual. The pool is funded separately. Only the wallet that deployed it can withdraw.",
       "The pool's own fee stays with liquidity providers. Gas is paid to the chain.",
     ],
   },

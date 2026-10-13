@@ -1,5 +1,6 @@
 import { createPublicClient, encodeFunctionData, formatUnits, http, parseAbi, parseAbiItem, type Hex } from "viem";
-import { FEE_TO, splitDeskFee, TxPending, type PoolPrint, units, pretty } from "@/lib/bsc";
+import { FEE_TO, TxPending, type PoolPrint, units, pretty } from "@/lib/bsc";
+import { deskParts } from "@/lib/invite-cut";
 import { ensureProvider, rememberAccount } from "@/lib/wallet";
 import { XLAYER } from "@/lib/xlayer";
 
@@ -207,11 +208,12 @@ export async function swapOkb(from: string, side: "buy" | "sell", amount: string
   if (side === "buy") {
     const amountIn = units(amount, OKB.usdtDecimals);
     if (amountIn <= 0n) throw new Error("amount");
-    const { fee, swapIn } = splitDeskFee(amountIn);
+    const parts = await deskParts("xlayer", from, amountIn);
+    const swapIn = parts.swapIn;
     if (swapIn <= 0n) throw new Error("amount");
     const who = from.toLowerCase();
     const swapKey = `tl-swap:${who}:okb-buy:${amountIn}`;
-    const feeKey = `tl-fee:${who}:okb-buy:${fee}`;
+    const feeKey = `tl-fee:${who}:okb-buy:${amountIn}`;
     const already = await resumeX(swapKey);
     if (already) {
       forget(feeKey);
@@ -220,8 +222,13 @@ export async function swapOkb(from: string, side: "buy" | "sell", amount: string
     const minOut = slip(await quoteOkb("buy", swapIn));
     await approveUsdt(from, swapIn);
     let paid = false;
-    if (fee > 0n) {
-      await stepX(feeKey, () => send(from, OKB.usdt, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, fee] })));
+    const ref = parts.referrer;
+    if (parts.reward > 0n && ref) {
+      await stepX(`${feeKey}:ref`, () => send(from, OKB.usdt, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [ref, parts.reward] })));
+      paid = true;
+    }
+    if (parts.desk > 0n) {
+      await stepX(feeKey, () => send(from, OKB.usdt, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, parts.desk] })));
       paid = true;
     }
     const data = encodeFunctionData({
@@ -260,11 +267,12 @@ export async function swapOkb(from: string, side: "buy" | "sell", amount: string
   let amountIn = units(amount, 18);
   if (amountIn > maxSpend) amountIn = maxSpend;
   if (amountIn <= 0n) throw new Error("amount");
-  const { fee, swapIn } = splitDeskFee(amountIn);
+  const parts = await deskParts("xlayer", from, amountIn);
+  const swapIn = parts.swapIn;
   if (swapIn <= 0n) throw new Error("amount");
   const who = from.toLowerCase();
   const swapKey = `tl-swap:${who}:okb-sell:${amountIn}`;
-  const feeKey = `tl-fee:${who}:okb-sell:${fee}`;
+  const feeKey = `tl-fee:${who}:okb-sell:${amountIn}`;
   const already = await resumeX(swapKey);
   if (already) {
     forget(feeKey);
@@ -272,8 +280,13 @@ export async function swapOkb(from: string, side: "buy" | "sell", amount: string
   }
   const minOut = slip(await quoteOkb("sell", swapIn));
   let paid = false;
-  if (fee > 0n) {
-    await stepX(feeKey, () => send(from, FEE_TO, "0x", fee));
+  const ref = parts.referrer;
+  if (parts.reward > 0n && ref) {
+    await stepX(`${feeKey}:ref`, () => send(from, ref, "0x", parts.reward));
+    paid = true;
+  }
+  if (parts.desk > 0n) {
+    await stepX(feeKey, () => send(from, FEE_TO, "0x", parts.desk));
     paid = true;
   }
   const data = encodeFunctionData({

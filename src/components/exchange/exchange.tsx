@@ -267,7 +267,7 @@ function InviteDock() {
             <button type="button" className={`min-h-9 ${chain === "xlayer" ? "bg-ink text-paper" : ""}`} onClick={() => setChain("xlayer")}>X Layer</button>
             <button type="button" className={`min-h-9 ${chain === "bsc" ? "bg-ink text-paper" : ""}`} onClick={() => setChain("bsc")}>BSC</button>
           </div>
-          <p className="mt-2 text-xs leading-5 text-ink/60">{zh ? "确认自己的码之后不能改。朋友打开链接，核对，再点绑定。两条链各算各的。" : "A code cannot be changed. A friend opens the link, checks it, then binds. The two chains are separate."}</p>
+          <p className="mt-2 text-xs leading-5 text-ink/70">{zh ? "本站手续费是付出金额的千分之二。没绑邀请人，整笔进收费地址。绑了之后，这笔手续费的 6% 付给邀请人，4% 少收交易的人，90% 进收费地址。永续写在合约里，记到下面的可提。现货、官方晶体管和电路的本站手续费，付款时按这个比例拆开转。工房订单簿和 TAPE 池的千分之二在已经部署的合约里，整笔进收费地址，这两份没有邀请人。" : "The site fee is 0.2% of the amount paid. With no referrer, all of it goes to the fee address. With one, 6% of that fee is paid to the referrer, the trader pays 4% less, and 90% goes to the fee address. Perpetuals record the 6% as claimable below. Spot, official transistors, and official circuits split the site fee the same way when it is paid. The workshop book and the TAPE pools send their 0.2% entirely to the fee address. Those two deployed contracts have no referrer."}</p>
           {code ? (
             <div className="mt-2">
               <p className="font-mono">{code}</p>
@@ -379,7 +379,7 @@ function Header({ floor, desk, shop, setFloor, setDesk, setShop, setGiftOpen }: 
               <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M20 14.5A7.5 7.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5Z" /></svg>
             )}
           </button>
-          <button type="button" className="hidden min-h-9 px-1.5 text-xs sm:inline" onClick={() => setLang(lang === "zh" ? "en" : "zh")}>
+          <button type="button" className="min-h-9 px-1.5 text-xs" onClick={() => setLang(lang === "zh" ? "en" : "zh")}>
             {lang === "zh" ? "EN" : "中文"}
           </button>
           {floor === "paper" ? (
@@ -405,7 +405,6 @@ function Header({ floor, desk, shop, setFloor, setDesk, setShop, setGiftOpen }: 
             {label}
           </button>
         ))}
-        <button type="button" className="shrink-0 px-2 py-2 text-xs sm:hidden" onClick={() => setLang(lang === "zh" ? "en" : "zh")}>{lang === "zh" ? "EN" : "中文"}</button>
       </nav>
     </header>
   );

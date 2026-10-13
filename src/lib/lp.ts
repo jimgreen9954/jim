@@ -2,6 +2,7 @@ import { createPublicClient, encodeFunctionData, http, parseAbi, parseAbiItem, t
 import { BSC, DESK_FEE_BPS, ERC_BOOKS, FEE_TO, pretty, quoteExact, readAsset, splitDeskFee, units, waitOk, waitReceipt, type ErcKey } from "@/lib/bsc";
 import { STOCKS, STOCK_KEYS, type StockKey } from "@/lib/stocks";
 import { ensureProvider } from "@/lib/wallet";
+import { inviteCut, referrerOf } from "@/lib/invite-cut";
 
 export const NPM = "0x46A15B0b27311cedF172AB29E4f4766fbE7F4364" as Hex;
 
@@ -395,6 +396,19 @@ async function ensurePool(from: string, book: LpBook): Promise<void> {
   book.pool = pool;
 }
 
+async function payCut(from: string, token: Hex | null, amount: bigint) {
+  if (amount <= 0n) return;
+  const ref = await referrerOf("bsc", from);
+  const cut = inviteCut(amount, ref != null);
+  const once = async (to: Hex, value: bigint) => {
+    if (value <= 0n) return;
+    if (token == null) await waitOk(await send(from, to, "0x", value));
+    else await waitOk(await send(from, token, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [to, value] })));
+  };
+  if (cut.reward > 0n && ref) await once(ref, cut.reward);
+  if (cut.desk > 0n) await once(FEE_TO, cut.desk);
+}
+
 export async function quoteLp(key: LpKey, amountText: string): Promise<LpQuote> {
   const book = lpBook(key);
   const quoteIn = units(amountText, book.quoteDecimals);
@@ -432,14 +446,12 @@ export async function addLp(from: string, key: LpKey, amountText: string): Promi
     const assetBal = await readAsset(from, book.token);
     if (assetBal < quote.asset) throw new Error("asset");
   }
-  if (quote.feeQuote > 0n) {
-    await waitOk(await send(from, book.quoteToken, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, quote.feeQuote] })));
-  }
+  if (quote.feeQuote > 0n) await payCut(from, book.quoteToken, quote.feeQuote);
   if (book.native) {
-    if (quote.feeAsset > 0n) await waitOk(await send(from, FEE_TO, "0x", quote.feeAsset));
+    if (quote.feeAsset > 0n) await payCut(from, null, quote.feeAsset);
     await waitOk(await send(from, BSC.wbnb, encodeFunctionData({ abi: wbnbAbi, functionName: "deposit" }), quote.poolAsset));
   } else if (quote.feeAsset > 0n) {
-    await waitOk(await send(from, book.token, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, quote.feeAsset] })));
+    await payCut(from, book.token, quote.feeAsset);
   }
   await approve(from, book.quoteToken, NPM, quote.poolQuote);
   await approve(from, book.token, NPM, quote.poolAsset);
@@ -571,11 +583,11 @@ export async function removeLp(from: string, id: bigint): Promise<Hex> {
     const feeOther = wbnbIs0 ? fee1 : fee0;
     const feeBnb = wbnbIs0 ? fee0 : fee1;
     const other = wbnbIs0 ? token1 : token0;
-    if (feeOther > 0n) await waitOk(await send(from, other, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, feeOther] })));
-    if (feeBnb > 0n) await waitOk(await send(from, FEE_TO, "0x", feeBnb));
+    if (feeOther > 0n) await payCut(from, other, feeOther);
+    if (feeBnb > 0n) await payCut(from, null, feeBnb);
   } else {
-    if (fee0 > 0n) await waitOk(await send(from, token0, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, fee0] })));
-    if (fee1 > 0n) await waitOk(await send(from, token1, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, fee1] })));
+    if (fee0 > 0n) await payCut(from, token0, fee0);
+    if (fee1 > 0n) await payCut(from, token1, fee1);
   }
   return hash;
 }
