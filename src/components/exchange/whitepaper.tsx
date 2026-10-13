@@ -132,7 +132,7 @@ const zhBody: Section[] = [
     ps: [
       "现货买卖、永续撮合、撤单、添加流动性、撤回流动性，台费都是付出金额的 0.20%。此费用在池子手续费之外。平仓不再另收。添加流动性时两边各扣 0.20%，撤回时拿回的两边再各扣 0.20%。已转出的台费不退。现货的台费是单独一笔，先付。后面的兑换拒签或回滚，这一笔不退。回执还没读到时，页面留下哈希，同一金额不会再收一次。",
       "现货买到的币留在签名钱包。永续保证金进入用户所选链上的那一份合约。BSC 与 X Layer 不能并成一笔。",
-      `没绑邀请人时，台费整笔进入收费地址 ${FEE_TO}。绑了邀请人之后，这笔台费的 6% 付给邀请人，4% 少收交易的人，90% 进入收费地址。永续把 6% 记在合约里，按档领取。现货台费、官方晶体管和官方电路的本站 0.20%，付款时按同一比例拆开转。两条链各认各的邀请人。工房订单簿和 TAPE 池的 0.20% 写在已经部署的合约里，整笔进入收费地址，这两份没有邀请人。印鉴不自动减费。登记后，已撮合的永续成交仍可按新加坡周另领一半，周一 0 点至下周一 0 点，过点作废，同一笔只进一次。`,
+      `没绑邀请人时，台费整笔进入收费地址 ${FEE_TO}。绑了邀请人之后，这笔台费的 6% 付给邀请人，4% 少收交易的人，90% 进入收费地址。永续把 6% 记在合约里，按档领取。现货台费（含 BSC 的比特币、ETH、ZEC）、加池、官方晶体管和官方电路，付款时按同一比例拆开转。两条链各认各的邀请人。工房订单簿和 TAPE 池的 0.20% 写在已经部署的合约里，整笔进入收费地址，没有邀请人。电路容器的开通费是协议的 BNB，不走这笔台费。BSC 永续保证金合约是 BEM / USDT。比特币、ETH、ZEC 在永续页和 BEM 是同一类保证金合约，不是现货买入。K 线和下单和 BEM 同一套，周期从 15 秒到一年。结算本还没接上时，开仓不会发出，也不会走现货兑换，价格也不会写进 BEM 那一本。印鉴不自动减费。登记后，已撮合的永续成交仍可按新加坡周另领一半，周一 0 点至下周一 0 点，过点作废，同一笔只进一次。`,
       "池子自身的手续费留给流动性提供者。Gas 付给链。",
     ],
   },
@@ -141,6 +141,7 @@ const zhBody: Section[] = [
     ps: [
       `现在交易的 X Layer 永续是 ${KNOWN_XPERP}，标记是 ${KNOWN_XMARK}。标记读 X Layer 的 OKB/BEM 与 USDT0/WOKB，当前结算价约 36.09。连续推进单次不超过 0.5%，间隔不少于 30 秒。旧合约 ${PREV_XPERP} 的仓位还在，结算价仍约 27.38，不再接受新开仓。晶体管永续是 0x798637b6d18cE053D69CfC0B08Ead105de352c11。六个标的里，第一个已经写入，另外五个还要收费地址各写一次。写过一次就不再停。三份都没有管理员。写价地址和台费地址都是收费地址，写死。撮合和撤单各收保证金的 0.20%，打进收费地址。有推荐人时，交易者少付这笔的 4%，推荐人记 6%。`,
       "同一份标记只挂这一本 X Layer 永续。BSC 上的 BEM 永续读 Pancake 池子的均价，不读这份标记。浅池仍可能在短时间里影响那条均价。",
+      "BSC 永续页上，BEM、比特币、ETH、ZEC 是同一张合约台，四张都标 BSC · 永续，不是现货买入。K 线同一套：15 秒、1 分、5 分、15 分、1 小时、4 小时、1 日、1 周、1 月、3 月、一年，带成交量和 RSI。下单也同一张：开多、开空、保证金、杠杆、止盈止损。标记各读自己那口 Pancake 池大约 10 分钟均价，不是最后一笔。比特币、ETH、ZEC 的结算本还没接上。确认不会签名，USDT 不会扣，也不会去买现货，更不会把这三口的价格写进 BEM 那一本。",
       "TAPE 是 TAPELIQUID 的唯一平台币。只有这一枚，没有第二枚。矿池没有管理员，也不能改排放。",
       "返佣合约有 clerk。clerk 可以提取返佣池里的余额。不是每一份合约都没有管理员。",
     ],
@@ -176,7 +177,7 @@ const zhBody: Section[] = [
     h: "现在链上有的",
     ps: [
       `TAPE 代币 ${TAPE}。挖矿合约 ${TAPE_MINE}。都在 X Layer。硬顶 21,000,000，8 位小数，没有管理员，也没有改率入口。只有挖矿合约能铸。总供应只随领取增加。`,
-      "这份挖矿合约现在的日排放是 7,200，从部署时开始，不是先 1,000 再切换。它也没有「收费地址签一次改成 7,200」的入口。权重按电路门数，也就是 b*，处理器倍率按 1。q 还没有题目验证，页面不能显示大于 1。",
+      "这份挖矿合约现在的日排放是 7,200，从部署时开始，不是先 1,000 再切换。它也没有「收费地址签一次改成 7,200」的入口。权重按电路门数，也就是 b*，处理器倍率按 1。q 还没有题目验证，页面不能显示大于 1。挖矿页和电路页的「一键验证」只读电路合约的 eval，不签名，不花 OKB。显示已核对只说明这张电路的门能跑完给出的输入。它不把权重移进 TapeOut 已验证的 99% 池。矿合约没有 verify 入口，页面改不了这个位。",
       "挖矿、TAPE 池、晶圆和电路锁仓，三份都没有管理员，不能升级，不能改期限，不能改费率，也没有救援入口。误转到合约、又没有对应仓位的资产，谁都取不回，页面不会这么转。加池时和池子比例对不上的部分退回给签名的人，不会进别人的份额。",
       "开盘池的 100,000 枚没有另铸。TAPE 池没有管理员，加池即质押，90 天到 3 年，到期才能撤。加池没有九个月这一档。晶圆锁仓没有管理员，期限是 180 天、365 天、3 年、4 年、5 年。锁着的晶圆不能流片，不算算力。电路锁仓是 0x06c877cc158d9ca3547220f9fc156f39bce7013c。同一片电路不能锁两次。回购合约旧地址 0x72e28d564A90eF3E76f599bC210454f5360E200C 不再使用。现在的回购是 0x53fa6A76ce9A3fE08698E04a4E9A674bd77a9DfF，买方写死。期限质押是 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A。两份都没有管理员。TAPE 跨链还没有合约。",
       "个人中心的持仓可以转出这个钱包还拿着的币、NAND 和 LATCH。一对一是一个地址。一对多每一行一个地址，这一行的数量只进这个地址，按行签名，不经过锁仓合约。先勾确认才能签。页面不跳走。电路在名单里上下滑动勾选，每一片填一个地址，勾几片签几笔。TapeOut 合约如果不提供逐个编号，这一页不能代填。",
@@ -222,7 +223,7 @@ const en: Section[] = [
       "Spot settles in the wallet that signed. BSC pairs use PancakeSwap. OKB uses PotatoSwap on X Layer. The coins you buy stay in that wallet. The desk fee is 0.20% of what you pay, on top of the pool fee, and it is a separate payment made first. If the swap is rejected or reverts, that fee stays. If the receipt has not come back, the same amount is not charged again.",
       "There are two perpetual books. They do not net. BSC margin is USDT. X Layer margin is USDT0. Margin is locked in the one contract on the chain you picked. The platform does not hold it. There is no insurance fund and no auto-deleveraging. At about half the margin lost, anyone can liquidate. There is no funding fee.",
       `The BSC BEM perpetual uses a roughly 10-minute PancakeSwap average as its mark. The last trade is not used for liquidation. Thin liquidity can still move that average for a short interval. The new X Layer perpetual reads the OKB/BEM and USDT0/WOKB pools on X Layer. It does not reference the BSC price. Any address may submit an update. Each consecutive update is at most 0.5 percent and at least 30 seconds apart. The page now uses ${KNOWN_XPERP}. Its mark is ${KNOWN_XMARK}. The previous contract ${PREV_XPERP} keeps existing positions, and its mark remains ${PREV_XMARK}.`,
-      "Referrals apply to every site fee this page sends, not only perpetuals. The site fee is 0.20% of the amount paid. With a referrer, 6% of that fee goes to the referrer, the trader pays 4% less, and 90% goes to the fee address. Perpetuals record the 6% on the contract. Spot desk fees and the site fee on official transistors and circuits are split in the same proportion when paid. The workshop book and the TAPE pools send their 0.20% entirely to the fee address. Those deployed contracts have no referrer field.",
+      "Referrals apply to every site fee this page sends, not only perpetuals. The site fee is 0.20% of the amount paid. With a referrer, 6% of that fee goes to the referrer, the trader pays 4% less, and 90% goes to the fee address. Perpetuals record the 6% on the contract. Spot, including BSC bitcoin, ETH and ZEC, liquidity, official transistors, and official circuits split the same way when paid. The workshop book and the TAPE pools send their 0.20% entirely to the fee address. Those deployed contracts have no referrer field. A circuit container's open fee is protocol BNB, not this site fee. The BSC perpetual is BEM / USDT. Bitcoin, ETH and ZEC on the perpetual page are the same kind of margin contract as BEM, not a spot buy. Their desk and chart are the same as BEM: the same timeframes from 15 seconds through one year, volume and RSI, and the same ticket for long, short, margin, leverage and stops. Until that pair's settlement book is attached, confirm does not sign, does not take USDT, and does not buy spot. Their prices are not written into the BEM book.",
     ],
   },
   {
@@ -358,7 +359,7 @@ const en: Section[] = [
     h: "What is on chain now",
     ps: [
       `TAPE is ${TAPE}. The mine is ${TAPE_MINE}. Both are on X Layer. The cap is 21,000,000 with 8 decimals. There is no admin and no way to change the rate. Only the mine can mint. Supply grows only when someone claims.`,
-      "That mine contract emits 7,200 a day from the moment it was deployed. It does not start at 1,000, and it has no one-time switch to 7,200. Weight is the gate count, which is b*, and the processor multiplier is 1. There is no task score yet, so q is not shown above 1.",
+      "That mine contract emits 7,200 a day from the moment it was deployed. It does not start at 1,000, and it has no one-time switch to 7,200. Weight is the gate count, which is b*, and the processor multiplier is 1. There is no task score yet, so q is not shown above 1. One-click check on the mine page and the circuit page only reads eval on the circuit contract. It does not sign and it does not spend OKB. A passed check means the gates ran the inputs that were given. It does not move weight into TapeOut's verified 99 percent pool. The mine contract has no verify entry, and this page cannot set that bit.",
       "The mine, the TAPE pool, and the wafer and circuit lock have no admin. They cannot be upgraded, and the terms and the fee cannot be changed. There is no rescue function. Assets sent to a contract without a matching position cannot be taken back by anyone, and the page does not send them that way. Liquidity that does not match the pool ratio is returned to the signer. It is not added to anyone else's share.",
       "The 100,000 opening allocation was not minted. The TAPE pool has no admin. Adding liquidity stakes it for 90 days to 3 years. That pool has no 9-month term. The wafer lock has no admin. Terms are 180 days, 365 days, 3 years, 4 years, or 5 years. Locked wafers cannot be taped and do not count as weight. The circuit lock is 0x06c877cc158d9ca3547220f9fc156f39bce7013c. The same circuit cannot be locked twice. The old buyback 0x72e28d564A90eF3E76f599bC210454f5360E200C is no longer used. The current one is 0x53fa6A76ce9A3fE08698E04a4E9A674bd77a9DfF, with the buyer fixed. Timed stake is 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A. Neither has an admin. TAPE still has no bridge contract.",
       "TapeOut BEM is still claimed from the TapeOut mine. It is not the same signature as TAPE. A large tape-out does not mint TapeOut BEM.",
@@ -445,19 +446,19 @@ export function Whitepaper() {
   return (
     <div className="lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] lg:items-start">
       <aside className="border-b border-gold/40 bg-paper lg:sticky lg:top-14 lg:max-h-[calc(100dvh-4rem)] lg:overflow-y-auto lg:border-b-0 lg:border-r">
-        <p className="px-4 pt-4 text-sm font-medium">{zh ? "TAPELIQUID 说明" : "TAPELIQUID guide"}</p>
-        <nav className="mt-2 flex gap-1 overflow-x-auto px-2 pb-3 lg:flex-col lg:overflow-visible lg:px-0 lg:pb-6" aria-label={zh ? "目录" : "Contents"}>
+        <p className="px-3 pt-3 text-sm font-medium sm:px-4 sm:pt-4">{zh ? "TAPELIQUID 说明" : "TAPELIQUID guide"}</p>
+        <nav className="mt-2 flex gap-1 overflow-x-auto px-2 pb-2 lg:flex-col lg:overflow-visible lg:px-0 lg:pb-6" aria-label={zh ? "目录" : "Contents"}>
           {sections.map((section, i) => (
-            <button key={section.h} type="button" onClick={() => jump(i)} className={`shrink-0 border-l-2 px-4 py-2 text-left text-sm ${on === i ? "border-ink bg-card font-medium" : "border-transparent text-ink/60"}`}>
-              <span className="mr-2 font-mono text-[11px] text-ink/40">{String(i + 1).padStart(2, "0")}</span>
+            <button key={section.h} type="button" onClick={() => jump(i)} className={`shrink-0 border-b-2 px-2 py-2 text-left text-[13px] lg:border-b-0 lg:border-l-2 lg:px-4 ${on === i ? "border-ink bg-card font-medium" : "border-transparent text-ink/60"}`}>
+              <span className="mr-1 font-mono text-[11px] text-ink/40">{String(i + 1).padStart(2, "0")}</span>
               {section.h}
             </button>
           ))}
         </nav>
       </aside>
-      <article className="min-w-0 px-1 py-6 sm:px-6 lg:px-10">
+      <article className="min-w-0 overflow-x-hidden px-3 py-5 sm:px-6 lg:px-10">
         <p className="text-[11px] tracking-[0.22em] text-gold">TAPELIQUID</p>
-        <h2 className="mt-2 max-w-3xl font-display text-4xl leading-tight sm:text-5xl">{zh ? "从这里开始使用 TAPELIQUID" : "Start here with TAPELIQUID"}</h2>
+        <h2 className="mt-2 max-w-3xl font-display text-3xl leading-tight sm:text-5xl">{zh ? "从这里开始使用 TAPELIQUID" : "Start here with TAPELIQUID"}</h2>
         <p className="mt-4 max-w-2xl text-sm leading-7 text-ink/75">
           {zh
             ? "先看清平台币、晶体管和电路，再做第一笔。说明只写已经能签名的规则。页面和合约不一致时，以这一页和链上合约为准。"
@@ -481,29 +482,33 @@ export function Whitepaper() {
             ? "TAPE 是唯一平台币，只在 X Layer。NAND 与 LATCH 是晶体管。电路按张交易，写明输入、输出和门数。BEM 属于 TapeOut 协议官方代表。"
             : "TAPE is the only platform coin, and only on X Layer. NAND and LATCH are the transistors. A circuit trades as one piece, with its inputs, outputs, and gates. BEM is the official representative of the TapeOut protocol."}
         </p>
-        <div id="paper-now" className="mt-8 grid scroll-mt-24 gap-px bg-gold/30 sm:grid-cols-2">
-          <table className="bg-paper text-left text-sm">
-            <caption className="px-4 py-3 text-left text-xs tracking-widest text-gold">{zh ? "参数" : "Parameters"}</caption>
+        <div id="paper-now" className="mt-8 grid scroll-mt-24 gap-4">
+          <div className="overflow-x-auto border border-gold/30">
+          <table className="w-full text-left text-sm">
+            <caption className="px-3 py-3 text-left text-xs tracking-widest text-gold">{zh ? "参数" : "Parameters"}</caption>
             <tbody>
               {(zh ? specZh : specEn).map(([k, v]) => (
                 <tr key={k} className="border-t border-gold/20">
-                  <th className="w-36 px-4 py-2 align-top font-normal text-ink/55">{k}</th>
-                  <td className="px-4 py-2">{v}</td>
+                  <th className="w-28 min-w-24 px-3 py-2 align-top font-normal text-ink/55 sm:w-36">{k}</th>
+                  <td className="break-words px-3 py-2">{v}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <table className="bg-paper text-left text-sm">
-            <caption className="px-4 py-3 text-left text-xs tracking-widest text-gold">{zh ? "现在链上" : "On chain now"}</caption>
+          </div>
+          <div className="overflow-x-auto border border-gold/30">
+          <table className="w-full text-left text-sm">
+            <caption className="px-3 py-3 text-left text-xs tracking-widest text-gold">{zh ? "现在链上" : "On chain now"}</caption>
             <tbody>
               {(zh ? nowZh : nowEn).map(([k, v]) => (
                 <tr key={k} className="border-t border-gold/20">
-                  <th className="w-36 px-4 py-2 align-top font-normal text-ink/55">{k}</th>
-                  <td className="break-all px-4 py-2 font-mono text-xs sm:text-sm">{v}</td>
+                  <th className="w-28 min-w-24 px-3 py-2 align-top font-normal text-ink/55 sm:w-36">{k}</th>
+                  <td className="break-all px-3 py-2 font-mono text-[12px] leading-5 sm:text-sm">{v}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
         </div>
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
           <a className="border border-gold/40 px-3 py-3" href={`${BSC.explorer}/address/${FEE_TO}`} target="_blank" rel="noreferrer">
@@ -523,7 +528,7 @@ export function Whitepaper() {
           {sections.map((section, i) => (
             <section key={section.h} id={`paper-${i}`} className="scroll-mt-24">
               <p className="font-mono text-[11px] text-gold">{String(i + 1).padStart(2, "0")} / {section.h}</p>
-              <h3 className="mt-2 font-display text-3xl leading-none">{section.h}</h3>
+              <h3 className="mt-2 font-display text-2xl leading-none sm:text-3xl">{section.h}</h3>
               {section.ps.map((p) => (
                 <p key={p.slice(0, 48)} className="mt-3 max-w-3xl text-sm leading-7 text-ink/85">{p}</p>
               ))}

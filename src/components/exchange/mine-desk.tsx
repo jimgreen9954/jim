@@ -4,10 +4,11 @@ import { useExchange } from "@/lib/exchange-store";
 import { bemText, claimPod, getPodMiners, POD, readPodPending, readPodStats, type PodStats } from "@/lib/pod";
 import { claimTape, openTape, readTapeMine, TAPE, TAPE_BOOK, TAPE_MINE, tapeEra, tapeText, type TapeBoard } from "@/lib/tape-mine";
 import { currentAccount, onAccount } from "@/lib/wallet";
-import { connectXLayer, XLAYER } from "@/lib/xlayer";
+import { checkCircuits, connectXLayer, XLAYER, type CircuitCheck } from "@/lib/xlayer";
 import { StakeDesk } from "@/components/exchange/stake-desk";
 import { BurnDesk } from "@/components/exchange/burn-desk";
 import { TapeDesk } from "@/components/exchange/tape-desk";
+import { Hint, verifyCopy } from "@/components/exchange/hint";
 import { SideRail } from "@/components/exchange/side-rail";
 
 export function MineDesk() {
@@ -24,6 +25,7 @@ export function MineDesk() {
   const [busy, setBusy] = useState(false);
   const [sheet, setSheet] = useState<"claim" | "stake" | "ash" | "bid">("claim");
   const [networkOpen, setNetworkOpen] = useState(false);
+  const [checks, setChecks] = useState<Record<string, CircuitCheck>>({});
 
   useEffect(() => onAccount((next) => setAccount(next)), []);
 
@@ -232,39 +234,68 @@ export function MineDesk() {
           <Cell k={zh ? "这地址约占今日" : "About today"} v={account && tape ? `${amount(myShare)} TAPE` : "—"} />
         </dl>
         <p className="mt-3 text-sm">{zh ? "这个地址待领" : "Pending here"} <span className="font-mono">{account && tape ? `${amount(pendingTape)} TAPE` : "—"}</span></p>
-        <p className="mt-1 text-xs text-ink/50">{tapeErr ? tapeErr : tape?.scanning ? (zh ? "排放已经读到。正在对这个地址名下的全部电路。" : "Emission is in. Matching every circuit held by this address.") : !tape?.scanOk ? (zh ? "排放读到了，电路名单这次没扫全。刷新再试，不要把空名单当成没有电路。" : "Emission is in. The circuit list did not finish. Refresh before treating an empty list as none.") : account && tape ? (zh ? `钱包 ${amount(tape.balance)} TAPE · 日排放写死 7,200` : `Wallet ${amount(tape.balance)} TAPE · 7,200 a day, fixed`) : (zh ? "连上 X Layer 后读这个地址的电路" : "Connect on X Layer to read this address")}</p>
-        <div className="mt-2 grid grid-cols-[3.5rem_4.5rem_4rem_1fr_5rem] gap-2 px-2 text-xs text-ink/50">
-          <span>{zh ? "编号" : "Id"}</span>
-          <span>{zh ? "门数" : "Gates"}</span>
-          <span>{zh ? "状态" : "State"}</span>
-          <span className="text-right">{zh ? "待领" : "Pending"}</span>
-          <span className="text-right">{zh ? "约占今日" : "Today"}</span>
+        <p className="mt-1 font-mono text-xs text-ink/70">
+          {account && tape
+            ? (zh
+              ? `名下 ${tape.seats.length} · 开工 ${tape.seats.filter((row) => row.on).length} · 未开工 ${tape.seats.filter((row) => !row.on).length} · 已核对 ${tape.seats.filter((row) => checks[row.id] === "ok").length}`
+              : `Held ${tape.seats.length} · live ${tape.seats.filter((row) => row.on).length} · idle ${tape.seats.filter((row) => !row.on).length} · checked ${tape.seats.filter((row) => checks[row.id] === "ok").length}`)
+            : "—"}
+        </p>
+        <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+          <button
+            type="button"
+            disabled={busy || !tape?.seats.length}
+            className="min-h-11 border border-ink bg-ink px-3 text-sm text-paper disabled:opacity-40"
+            onClick={() => {
+              if (!tape?.seats.length) return;
+              setBusy(true);
+              setBad(false);
+              checkCircuits(tape.seats.map((row) => row.id))
+                .then((next) => {
+                  setChecks((prev) => ({ ...prev, ...next }));
+                  const ok = Object.values(next).filter((row) => row === "ok").length;
+                  say(zh ? `已核对 ${ok} / ${Object.keys(next).length}。不签名，权重仍按门数。` : `Checked ${ok} / ${Object.keys(next).length}. No signature. Weight stays the gate count.`);
+                })
+                .catch(() => say(zh ? "这一次没跑完。电路还在，可以再点一次。" : "The check did not finish. The circuits are still there.", true))
+                .finally(() => setBusy(false));
+            }}
+          >
+            {zh ? "一键验证" : "Verify"}
+          </button>
+          <p className="text-xs leading-5 text-ink/50">{zh ? "用每张电路自己的 eval 在链上跑输入。不签名，不扣 OKB。矿机没有验证位，核对不改权重。" : "Each circuit's own eval, on chain. No signature and no OKB. The mine has no verify bit, so weight does not change."}</p>
         </div>
-        <ul className="max-h-72 overflow-auto border border-gold/40">
+        <p className="mt-1 text-xs text-ink/50">{tapeErr ? tapeErr : tape?.scanning ? (zh ? "排放已经读到。正在对这个地址名下的全部电路。" : "Emission is in. Matching every circuit held by this address.") : !tape?.scanOk ? (zh ? "排放读到了，电路名单这次没扫全。刷新再试，不要把空名单当成没有电路。" : "Emission is in. The circuit list did not finish. Refresh before treating an empty list as none.") : account && tape ? (zh ? `钱包 ${amount(tape.balance)} TAPE · 日排放写死 7,200` : `Wallet ${amount(tape.balance)} TAPE · 7,200 a day, fixed`) : (zh ? "连上 X Layer 后读这个地址的电路" : "Connect on X Layer to read this address")}</p>
+        <ul className="mt-2 max-h-72 overflow-auto border border-gold/40">
           {(tape?.seats ?? []).map((row) => (
-            <li key={row.id} className="grid grid-cols-[3.5rem_4.5rem_4rem_1fr_auto] items-center gap-2 border-t border-gold/30 px-2 py-2 font-mono text-xs">
-              <span>#{row.id}</span>
-              <span>{Number(row.gates).toLocaleString("en-US")}</span>
-              <span>{row.on ? (zh ? "挖矿" : "Live") : (zh ? "还没开工" : "Not open")}</span>
-              <span className="text-right">{amount(row.pending)}</span>
-              {row.on ? <span className="text-right">{row.share}</span> : (
-                <button
-                  type="button"
-                  disabled={busy}
-                  className="min-h-8 border border-gold px-2 disabled:opacity-40"
-                  onClick={() => {
-                    if (!account) return;
-                    setBusy(true);
-                    openTape(account, BigInt(row.id))
-                      .then(() => readTapeMine(account).then(setTape))
-                      .then(() => say(zh ? `#${row.id} 已开工。权重按门数。` : `#${row.id} is open. Weight is the gate count.`))
-                      .catch(() => say(zh ? "开工没有完成。电路还在。" : "Open did not finish. The circuit is still there.", true))
-                      .finally(() => setBusy(false));
-                  }}
-                >
-                  {zh ? "开工" : "Open"}
-                </button>
-              )}
+            <li key={row.id} className="flex items-center justify-between gap-3 border-t border-gold/30 px-2 py-2">
+              <div className="min-w-0">
+                <p className="font-mono text-sm">#{row.id} · {Number(row.gates).toLocaleString("en-US")} H</p>
+                <p className="mt-1 flex flex-wrap gap-1 text-[11px]">
+                  <Hint label={<span className={`border px-1 no-underline ${checks[row.id] === "ok" ? "border-[#089981] text-[#089981]" : "border-ink/20 text-ink/55"}`}>{checks[row.id] === "ok" ? (zh ? "已核对" : "Checked") : checks[row.id] === "bad" ? (zh ? "未通过" : "Failed") : (zh ? "未核对" : "Unchecked")}</span>} text={verifyCopy(zh)} />
+                  <span className={row.on ? "text-[#089981]" : "text-ink/45"}>{row.on ? (zh ? "开工" : "Live") : (zh ? "未开工" : "Idle")}</span>
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="font-mono text-xs">{amount(row.pending)} TAPE</p>
+                {row.on ? <p className="font-mono text-[11px] text-ink/50">{row.share}</p> : (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="mt-1 min-h-8 border border-gold px-2 text-xs disabled:opacity-40"
+                    onClick={() => {
+                      if (!account) return;
+                      setBusy(true);
+                      openTape(account, BigInt(row.id))
+                        .then(() => readTapeMine(account).then(setTape))
+                        .then(() => say(zh ? `#${row.id} 已开工。权重按门数。` : `#${row.id} is open. Weight is the gate count.`))
+                        .catch(() => say(zh ? "开工没有完成。电路还在。" : "Open did not finish. The circuit is still there.", true))
+                        .finally(() => setBusy(false));
+                    }}
+                  >
+                    {zh ? "开工" : "Open"}
+                  </button>
+                )}
+              </div>
             </li>
           ))}
           {account && tape?.scanOk && tape.seats.length === 0 ? <li className="px-2 py-3 text-sm text-ink/60">{zh ? "这个地址名下没有电路。锁进质押的电路不在这张表，去质押页看。" : "This address holds no circuit. A staked circuit is not on this list. See Stake."}</li> : null}

@@ -392,15 +392,17 @@ export async function buySpotCircuit(from: string, id: bigint, price: bigint) {
   return call(from, encodeFunctionData({ abi, functionName: "buyCircuit", args: [id] }));
 }
 
-export function usdtText(amount: bigint, digits = 4): string {
+export function usdtText(amount: bigint, digits = 2): string {
   const [whole, frac = ""] = formatUnits(amount, 6).split(".");
-  const cut = frac.slice(0, digits).replace(/0+$/, "");
+  const cap = Number(whole) >= 1 || amount === 0n ? Math.min(digits, 2) : Math.min(Math.max(digits, 2), 4);
+  const cut = frac.slice(0, cap).replace(/0+$/, "");
   return `${Number(whole).toLocaleString("en-US")}${cut ? `.${cut}` : ""}`;
 }
 
 export function baseText(market: number, amount: bigint): string {
   if (market !== 0) return amount.toLocaleString("en-US");
   const [whole, frac = ""] = formatUnits(amount, 8).split(".");
-  const cut = frac.slice(0, 4).replace(/0+$/, "");
+  const cap = Number(whole) >= 1 ? 2 : 4;
+  const cut = frac.slice(0, cap).replace(/0+$/, "");
   return `${Number(whole).toLocaleString("en-US")}${cut ? `.${cut}` : ""}`;
 }

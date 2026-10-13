@@ -273,7 +273,7 @@ export function SpotDesk() {
   const reserve = pair === "okb" ? OKB.gasReserve : BNB_GAS_RESERVE;
   const spendCap = (pair === "bnb" || pair === "okb") && side === "sell" ? (payRaw > reserve ? payRaw - reserve : 0n) : undefined;
   const spendable = spendCap ?? payRaw;
-  const base = pair === "okb" ? "OKB" : pair === "bnb" ? "BNB" : pair === "btc" ? "BTC" : pair === "xau" ? "XAU" : pair === "bem" ? "BEM" : STOCKS[pair].en;
+  const base = pair === "okb" ? "OKB" : pair === "bnb" ? "BNB" : pair === "bem" ? "BEM" : pair === "btc" ? "BTC" : pair === "eth" ? "ETH" : pair === "zec" ? "ZEC" : pair === "xau" ? "XAU" : pair in STOCKS ? STOCKS[pair].en : pair;
   const stock = pair in STOCKS ? STOCKS[pair as StockKey] : null;
   const payUnit = side === "buy" ? "USDT" : base;
   const recvUnit = side === "buy" ? base : "USDT";
@@ -319,8 +319,8 @@ export function SpotDesk() {
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs tracking-widest text-gold">{base} / USDT</p>
           </div>
-          <div className={`mt-2 grid gap-0 ${book === "crypto" ? "grid-cols-3 sm:grid-cols-5" : "grid-cols-3"}`}>
-            {(book === "crypto" ? (["bem", "bnb", "okb", "btc", "xau"] as const) : STOCK_KEYS).map((key) => (
+          <div className="mt-2 flex gap-1 overflow-x-auto">
+            {(book === "crypto" ? (["bem", "bnb", "okb", "btc", "eth", "zec", "xau"] as const) : STOCK_KEYS).map((key) => (
               <button
                 key={key}
                 type="button"
@@ -333,9 +333,9 @@ export function SpotDesk() {
                   setAssetBal(null);
                   setPrints([]);
                 }}
-                className={`min-h-8 border border-gold px-2 font-mono text-xs ${pair === key ? "bg-ink text-paper" : ""}`}
+                className={`min-h-8 shrink-0 border border-gold px-3 font-mono text-xs ${pair === key ? "bg-ink text-paper" : ""}`}
               >
-                {key in STOCKS ? (lang === "zh" ? STOCKS[key as StockKey].zh : STOCKS[key as StockKey].en) : key === "bem" ? "BEM" : key === "bnb" ? "BNB" : key === "okb" ? "OKB" : key === "btc" ? "BTC" : "XAU"}
+                {key in STOCKS ? (lang === "zh" ? STOCKS[key as StockKey].zh : STOCKS[key as StockKey].en) : key === "bem" ? "BEM" : key === "bnb" ? "BNB" : key === "okb" ? "OKB" : key === "btc" ? "BTC" : key === "eth" ? "ETH" : key === "zec" ? "ZEC" : "XAU"}
               </button>
             ))}
           </div>
@@ -354,8 +354,16 @@ export function SpotDesk() {
                 : "Pancake XAUt / USDT · Tether Gold · pool fee 0.05% · one token, one troy ounce"
               : pair === "btc"
                 ? lang === "zh"
-                  ? "Pancake BTCB / USDT · 池费率 0.01% · 买到的是钱包里的 BTCB"
-                  : "Pancake BTCB / USDT · pool fee 0.01% · a buy lands as BTCB"
+                  ? "Pancake BTCB / USDT · BSC · 池费率 0.01% · 买到的是钱包里的 BTCB"
+                  : "Pancake BTCB / USDT · BSC · pool fee 0.01% · a buy lands as BTCB"
+                : pair === "eth"
+                  ? lang === "zh"
+                    ? "Pancake ETH / USDT · BSC · 池费率 0.05% · 买到的是钱包里的 ETH"
+                    : "Pancake ETH / USDT · BSC · pool fee 0.05% · a buy lands as ETH"
+                  : pair === "zec"
+                    ? lang === "zh"
+                      ? "Pancake ZEC / USDT · BSC · 池费率 0.05% · 买到的是钱包里的 ZEC"
+                      : "Pancake ZEC / USDT · BSC · pool fee 0.05% · a buy lands as ZEC"
                 : pair === "okb"
                   ? lang === "zh"
                     ? "X Layer PotatoSwap · OKB / USDT · 买到的是钱包里的 OKB · 成交地址从池子日志读"
@@ -495,6 +503,7 @@ export function SpotDesk() {
           </p>
           <p className="font-mono text-xs tabular-nums text-ink/70">
             {lang === "zh" ? "本单台费" : "Fee"} {deskFee ? pretty(deskFee.fee, payDecimals, 4) : "—"} {payUnit}
+            {lang === "zh" ? " · 绑了邀请人则这笔的 6% 给邀请人，少付 4%，90% 进收费地址" : " · with a referrer, 6% of this fee, 4% off, 90% to the fee address"}
             {" · "}
             {lang === "zh" ? "最少到账" : "Min. received"} {minOut ?? "—"} {recvUnit}
           </p>

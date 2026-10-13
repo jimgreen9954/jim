@@ -28,6 +28,12 @@ export const BSC = {
   btcb: "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c" as const,
   btcPool: "0x247f51881d1E3aE0f759afB801413a6C948Ef442" as const,
   btcFee: 100,
+  eth: "0x2170Ed0880ac9A755fd29B2688956BD959F933F8" as const,
+  ethPool: "0xBe141893E4c6AD9272e8C04BAB7E6a10604501a5" as const,
+  ethFee: 500,
+  zec: "0x1Ba42e5193dfA8B03D15dd1B86a3113bbBEF8Eeb" as const,
+  zecPool: "0x6701B287c8170D6c290C6f4Ef426782bD61Ae310" as const,
+  zecFee: 500,
   xaut: "0x21cAef8A43163Eea865baeE23b9C2E327696A3bf" as const,
   xauPool: "0x83a0a8a723262651AE9C54bbba929f167443bc59" as const,
   xauFee: 500,
@@ -207,7 +213,9 @@ export async function bnbPrice(): Promise<string> {
 }
 
 export const ERC_BOOKS = {
-  btc: { token: BSC.btcb, pool: BSC.btcPool, fee: BSC.btcFee, decimals: 18, assetIsToken0: false, digits: 6 },
+  btc: { token: BSC.btcb, pool: BSC.btcPool, fee: BSC.btcFee, decimals: 18, assetIsToken0: false, digits: 2 },
+  eth: { token: BSC.eth, pool: BSC.ethPool, fee: BSC.ethFee, decimals: 18, assetIsToken0: true, digits: 2 },
+  zec: { token: BSC.zec, pool: BSC.zecPool, fee: BSC.zecFee, decimals: 18, assetIsToken0: true, digits: 2 },
   xau: { token: BSC.xaut, pool: BSC.xauPool, fee: BSC.xauFee, decimals: BSC.xauDecimals, assetIsToken0: true, digits: 4 },
   spy: { ...STOCKS.spy, decimals: 18, digits: 4 },
   qqq: { ...STOCKS.qqq, decimals: 18, digits: 4 },

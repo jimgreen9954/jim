@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { formatUnits } from "viem";
+import { formatUnits, parseUnits } from "viem";
 import { copy } from "@/lib/copy";
-import { BSC, FEE_TO, connectBsc, pretty, tokenCap, units, type Balances } from "@/lib/bsc";
-import { getCandles, getXCandles, type Candle, type CandleFrame } from "@/lib/candles";
+import { BSC, FEE_TO, connectBsc, ercPrice, pretty, tokenCap, units, type Balances } from "@/lib/bsc";
+import { getCandles, getCoinCandles, getXCandles, type Candle, type CandleFrame } from "@/lib/candles";
 import { currentAccount, onAccount, onOpenLink } from "@/lib/wallet";
 import { useExchange } from "@/lib/exchange-store";
 import { SignCard } from "@/components/exchange/sign-card";
@@ -50,6 +50,38 @@ function named(addr: string): string {
 
 const zero = "0x0000000000000000000000000000000000000000";
 
+function coinBook(px: number): PerpView {
+  const mark = parseUnits(px.toFixed(8), 18);
+  return {
+    book: true,
+    priced: true,
+    mark,
+    min: 10n ** 18n,
+    quotes: [],
+    liveDeals: [],
+    pendingUser: zero,
+    pendingLong: false,
+    pendingMargin: 0n,
+    pendingLev: 0,
+    kind: 0,
+    long: true,
+    margin: 0n,
+    base: 0n,
+    entry: 0n,
+    equity: 0n,
+    underwater: false,
+    other: zero,
+    dealOpen: false,
+    longAddr: zero,
+    shortAddr: zero,
+    marginL: 0n,
+    marginS: 0n,
+    dealBase: 0n,
+    dealEntry: 0n,
+    myDeal: 0n,
+  };
+}
+
 const presets = [
   { id: "try", margin: "10", lev: 1 },
   { id: "daily", margin: "25", lev: 2 },
@@ -73,6 +105,7 @@ function DeskLadder({
   scan,
   named,
   lang,
+  unit,
   onTake,
   onCancel,
 }: {
@@ -84,6 +117,7 @@ function DeskLadder({
   scan: string;
   named: (addr: string) => string;
   lang: "zh" | "en";
+  unit: string;
   onTake: (book: string, quote: BookQuote) => void;
   onCancel: (book: string, quote: BookQuote) => void;
 }) {
@@ -121,7 +155,7 @@ function DeskLadder({
           <span className={takeLong ? "text-sell" : "text-[#1b6b45]"}>{row.limit > 0 ? row.px.toFixed(4) : zh ? "随标记" : "At mark"}</span>
           {pct != null ? <span className="ml-2 text-xs text-ink/45">{pct > 0 ? "+" : ""}{pct.toFixed(1)}%</span> : null}
           <span className="mt-0.5 block truncate text-xs text-ink/60">
-            {row.margin.toFixed(2)} USDT · {row.quote.lev}× · {row.size.toFixed(2)} BEM
+            {row.margin.toFixed(2)} USDT · {row.quote.lev}× · {row.size.toFixed(2)} {unit}
             {away(row) ? (zh ? " · 偏离" : " · far") : ""}
           </span>
         </span>
@@ -187,6 +221,7 @@ export function RealPerp() {
   const live = useExchange((s) => s.chainBem);
   const c = copy[lang];
   const [chain, setChain] = useState<Desk>(savedDesk());
+  const [coin, setCoin] = useState<"bem" | "btc" | "eth" | "zec">("bem");
   const [perp, setPerp] = useState(() => bookOf(savedDesk()));
   const [xbem, setXbem] = useState("");
   const [pasted, setPasted] = useState("");
@@ -206,6 +241,7 @@ export function RealPerp() {
   const [link, setLink] = useState<string | null>(null);
   const [bal, setBal] = useState<Balances | null>(null);
   const [prices, setPrices] = useState<Candle[]>([]);
+  const [coinPx, setCoinPx] = useState(0);
   const [supply, setSupply] = useState<number | null>(null);
   const [frame, setFrame] = useState<CandleFrame>("1m");
   const [limit, setLimit] = useState("");
@@ -310,7 +346,35 @@ export function RealPerp() {
   }, [account, hash, chain]);
 
   useEffect(() => {
+    if (!(chain === "bsc" && coin !== "bem")) return;
+    let dead = false;
+    setView(null);
+    setBoard([]);
+    setPrices([]);
+    const load = () => {
+      getCoinCandles({ data: { coin, frame } })
+        .then((next) => { if (!dead && next.length) setPrices(next); })
+        .catch(() => undefined);
+      ercPrice(coin)
+        .then((text) => {
+          const n = Number(String(text).replace(/,/g, ""));
+          if (dead || !(n > 0)) return;
+          setCoinPx(n);
+          setView(coinBook(n));
+        })
+        .catch(() => undefined);
+    };
+    load();
+    const timer = window.setInterval(load, 12000);
+    return () => {
+      dead = true;
+      window.clearInterval(timer);
+    };
+  }, [chain, coin, frame]);
+
+  useEffect(() => {
     if (!/^0x[a-fA-F0-9]{40}$/.test(perp)) return;
+    if (chain === "bsc" && coin !== "bem") return;
     let dead = false;
     const load = () => {
       selectDesk(chain);
@@ -342,7 +406,7 @@ export function RealPerp() {
       dead = true;
       window.clearInterval(timer);
     };
-  }, [perp, account, hash, frame, chain]);
+  }, [perp, account, hash, frame, chain, coin]);
 
   useEffect(() => {
     if (chain !== "xlayer" || !account) return;
@@ -412,7 +476,14 @@ export function RealPerp() {
       return view?.mark ?? 0n;
     }
   })();
-  const priceOk = ticketPx >= 10n ** 16n && ticketPx <= 100_000n * 10n ** 18n;
+  const alt = chain === "bsc" && coin !== "bem";
+  const base = chain === "xlayer" || coin === "bem" ? "BEM" : coin.toUpperCase();
+  const markN = alt
+    ? coinPx
+    : chain === "xlayer"
+    ? (view && view.mark > 0n ? Number(formatUnits(view.mark, 18)) : 0)
+    : (live && live > 0 ? live : view && view.mark > 0n ? Number(formatUnits(view.mark, 18)) : 0);
+  const priceOk = alt ? markN > 0 || Boolean(limit.trim()) : ticketPx >= 10n ** 16n && ticketPx <= 100_000n * 10n ** 18n;
   const ticket = plan(margin, levOk ? lev : 1, ticketPx);
   const liqMove = levOk ? (Math.max(0.05, Math.round(5000 / lev) / 100)).toFixed(2) : null;
   let need = 0n;
@@ -428,9 +499,6 @@ export function RealPerp() {
         { id: "push", margin: "10", lev: 10 },
       ]
     : presets;
-  const markN = chain === "xlayer"
-    ? (view && view.mark > 0n ? Number(formatUnits(view.mark, 18)) : 0)
-    : (live && live > 0 ? live : view && view.mark > 0n ? Number(formatUnits(view.mark, 18)) : 0);
   const entryN = view && view.dealEntry > 0n ? Number(formatUnits(view.dealEntry, 18)) : 0;
   const pick = (nextMargin: string, nextLev: number) => {
     setMargin(nextMargin);
@@ -443,6 +511,21 @@ export function RealPerp() {
       { key: "bsc", label: "BSC · USDT", on: chain === "bsc", run: () => { selectDesk("bsc"); setChain("bsc"); setPerp(bookOf("bsc")); connectBsc().catch(() => undefined); } },
       { key: "xlayer", label: "X Layer · USDT", on: chain === "xlayer", run: () => { selectDesk("xlayer"); setChain("xlayer"); setPerp(bookOf("xlayer")); connectXLayer().catch(() => undefined); } },
     ]}>
+    {chain === "bsc" ? (
+      <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+        {(["bem", "btc", "eth", "zec"] as const).map((id) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setCoin(id)}
+            className={`flex min-h-16 flex-col justify-center border px-3 py-2 text-left ${coin === id ? "border-ink bg-foil ring-1 ring-ink" : "border-gold/80 bg-card"}`}
+          >
+            <span className="font-mono text-sm tracking-wide sm:text-[15px]">{id.toUpperCase()} / USDT</span>
+            <span className="mt-0.5 text-[11px] text-ink/55">{lang === "zh" ? "BSC · 永续" : "BSC · Perp"}</span>
+          </button>
+        ))}
+      </div>
+    ) : null}
     <section className="border border-gold bg-card shadow-plate">
       <div className="flex flex-col gap-3 p-3">
         {chain === "xlayer" && !/^0x[a-fA-F0-9]{40}$/.test(KNOWN_XPERP) ? (
@@ -534,15 +617,18 @@ export function RealPerp() {
           </a>
         ) : null}
         <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(17rem,22rem)]">
-        <div className="min-w-0 border border-gold bg-card">
+        <div className="order-2 min-w-0 border border-gold bg-card lg:order-1">
           <div className="flex flex-wrap items-end justify-between gap-3 border-b border-gold/30 px-3 py-3">
             <div>
-              <p className="font-display text-2xl italic">BEM / USDT</p>
+              <p className="font-display text-2xl italic">{chain === "xlayer" ? "BEM / USDT0 · X Layer" : `${base} / USDT · BSC`}</p>
+              <p className="mt-1 font-mono text-xs text-ink/70">{chain === "xlayer" ? (lang === "zh" ? "币 BEM · 链 X Layer · 保证金 USDT0 · 永续" : "Coin BEM · chain X Layer · margin USDT0 · perp") : (lang === "zh" ? `币 ${base} · 链 BSC · 保证金 USDT · 永续` : `Coin ${base} · chain BSC · margin USDT · perp`)}</p>
               <p className="mt-1 text-xs leading-5 text-ink/55">
                 {chain === "xlayer"
                   ? (lang === "zh" ? "标记是约 10 分钟均价。K 线是池子成交，不跟 BSC 同步。" : "The mark is about a 10-minute average. Candles are pool prints and do not follow BSC.")
-                  : (lang === "zh" ? "标记是约 10 分钟均价，不是 K 线最后一笔。" : "The mark is about a 10-minute average, not the last candle.")}
-                {/^0x[a-fA-F0-9]{40}$/.test(perp) ? (
+                  : alt
+                    ? (lang === "zh" ? "和 BEM 同一套 K 线，周期从 15 秒到一年。标记读这口 Pancake 池大约 10 分钟均价，不是最后一笔。" : "The same chart as BEM, from 15 seconds to a year. The mark is about a 10-minute average of this Pancake pool, not the last print.")
+                    : (lang === "zh" ? "标记是约 10 分钟均价，不是 K 线最后一笔。" : "The mark is about a 10-minute average, not the last candle.")}
+                {!alt && /^0x[a-fA-F0-9]{40}$/.test(perp) ? (
                   <>
                     {" "}
                     <a className="underline decoration-gold underline-offset-4" href={`${scan}/address/${perp}`} target="_blank" rel="noreferrer">{lang === "zh" ? "合约" : "Contract"}</a>
@@ -579,6 +665,7 @@ export function RealPerp() {
               ))}
             </div>
           </div>
+          <div className="max-h-64 overflow-hidden lg:max-h-none">
           <Kline
             bars={
               prices.length
@@ -593,6 +680,7 @@ export function RealPerp() {
             lang={lang}
             desk="perp"
           />
+          </div>
           <DeskLadder
             rows={board}
             mark={markN}
@@ -602,6 +690,7 @@ export function RealPerp() {
             scan={scan}
             named={named}
             lang={lang}
+            unit={base}
             onTake={(book, quote) => {
               void run((from) => takePerp(from, book, quote.id, formatUnits(quote.margin, dec), quote.lev, quote.price > 0n));
             }}
@@ -610,7 +699,7 @@ export function RealPerp() {
           {!view ? <p className="px-3 py-2 text-sm text-ink/60">{lang === "zh" ? "正在读合约，读完才能开仓。" : "Reading the contract. Open waits until that finishes."}</p> : null}
           {lock.status === "bad" ? <p className="px-3 pb-2 text-sm text-sell">{lang === "zh" ? "收费地址对不上，开仓停了。" : "The fee address does not match. Opening is stopped."}</p> : null}
         </div>
-        <div className="flex min-w-0 flex-col gap-3 lg:sticky lg:top-3 lg:max-h-[calc(100dvh-1.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:pb-6 lg:pr-1">
+        <div className="order-1 flex min-w-0 flex-col gap-3 lg:sticky lg:top-3 lg:order-2 lg:max-h-[calc(100dvh-1.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:pb-6 lg:pr-1">
         {view?.liveDeals.length ? (
         <div className="border border-gold/40 p-3">
           <p className="text-xs tracking-widest text-gold">{c.pkTitle}</p>
@@ -907,7 +996,7 @@ export function RealPerp() {
                   {" · "}
                   {lang === "zh" ? "本单手续费" : "Fee"} {marginOk ? (Number(margin) * 0.002).toFixed(4) : "—"} USDT
                   {" · "}
-                  {ticket ? `${ticket.size.toFixed(4)} BEM` : "—"}
+                  {ticket ? `${ticket.size.toFixed(4)} ${base}` : "—"}
                 </p>
                 {levOk && lev >= 100 && liqMove ? (
                   <p className="text-sm text-sell">
@@ -953,7 +1042,11 @@ export function RealPerp() {
                     yes={lang === "zh" ? "确认并签名" : "Confirm and sign"}
                     no={lang === "zh" ? "取消" : "Cancel"}
                     warn={
-                      board.length === 0
+                      alt
+                        ? lang === "zh"
+                          ? "这一张单和 BEM 相同。这条交易对的结算合约还没接上，确认不会签名，USDT 也不会扣，也不会去买现货。"
+                          : "This ticket matches BEM. This pair's settlement contract is not attached, so confirm does not sign, does not take USDT, and does not buy spot."
+                        : board.length === 0
                         ? lang === "zh"
                           ? "簿上没有别人的单。签下去只是把保证金挂进合约，不会马上成交。想先看盈亏，去模拟。"
                           : "Nobody else is on the book. Signing only posts margin into the contract. It does not fill. Use the paper book if you want to see PnL first."
@@ -965,6 +1058,11 @@ export function RealPerp() {
                     onYes={() => {
                       const long = card === "long";
                       setCard(null);
+                      if (alt) {
+                        setBad(false);
+                        setNote(lang === "zh" ? `${base} 和 BEM 是同一张合约单。结算本还没接上，没有签名，USDT 没动。` : `${base} uses the same ticket as BEM. The settlement book is not attached, so nothing was signed and no USDT moved.`);
+                        return;
+                      }
                       void run(async (from) => {
                         const before = view?.myDeal && view.myDeal > 0n ? view.myDeal.toString() : "0";
                         const tx = await openPerp(from, perp, long, margin, lev, limit.trim() || (markN > 0 ? markN.toFixed(4) : ""));
@@ -982,7 +1080,7 @@ export function RealPerp() {
                     }}
                     lines={[
                       { k: lang === "zh" ? "链" : "Chain", v: chain === "xlayer" ? "X Layer · 196" : "BNB Smart Chain · 56" },
-                      { k: lang === "zh" ? "合约" : "Contract", v: perp, href: `${scan}/address/${perp}` },
+                      { k: lang === "zh" ? "合约" : "Contract", v: alt ? (lang === "zh" ? "与 BEM 同一类永续，结算本未接入" : "Same perpetual as BEM. Settlement book not attached.") : perp, href: alt ? undefined : `${scan}/address/${perp}` },
                       {
                         k: lang === "zh" ? "钱去哪" : "Where funds go",
                         v:

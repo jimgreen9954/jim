@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { formatEther, parseEther } from "viem";
 import { compile, simulate, type CNode, type CWire, type Kind } from "@/lib/canvas-net";
 import { useExchange } from "@/lib/exchange-store";
@@ -138,6 +138,8 @@ export function TapeCanvas() {
   const [okb, setOkb] = useState<bigint | null>(null);
   const [ack, setAck] = useState(false);
   const [copied, setCopied] = useState(false);
+  const boardRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
 
   useEffect(() => {
     let dead = false;
@@ -160,6 +162,19 @@ export function TapeCanvas() {
   }, [target]);
 
   useEffect(() => onAccount((next) => setAccount(next)), []);
+  useEffect(() => {
+    const el = boardRef.current;
+    if (!el) return;
+    const fit = () => {
+      const width = el.clientWidth;
+      if (width < 40) return;
+      setScale(Math.min(1, width / 760));
+    };
+    fit();
+    const watch = new ResizeObserver(fit);
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, []);
 
   useEffect(() => {
     let dead = false;
@@ -332,13 +347,13 @@ export function TapeCanvas() {
   useEffect(() => { setAck(false); }, [needN, needL, target]);
 
   return (
-    <section className="grid items-start gap-4 lg:grid-cols-[12rem_minmax(0,1fr)_18rem]">
-      <aside className="border border-gold/60 bg-card lg:sticky lg:top-16">
+    <section className="grid min-w-0 items-start gap-4 lg:grid-cols-[12rem_minmax(0,1fr)_18rem]">
+      <aside className="min-w-0 border border-gold/60 bg-card lg:sticky lg:top-16">
         <p className="px-3 pt-3 text-xs text-ink/45">{zh ? "处理器" : "Processor"}</p>
         <input value={find} onChange={(event) => setFind(event.target.value)} placeholder={zh ? "搜索" : "Search"} className="m-2 w-[calc(100%-1rem)] border border-gold/40 bg-paper px-2 py-1.5 text-sm outline-none" />
         <div className="flex gap-2 overflow-x-auto px-2 pb-2 lg:block lg:overflow-visible">
           {shownTargets.map((row) => (
-            <button key={row.circuits} type="button" onClick={() => setTarget(row)} className={`mb-1 block w-full shrink-0 border-l-2 px-2 py-1.5 text-left text-sm ${target.circuits.toLowerCase() === row.circuits.toLowerCase() ? "border-ink font-medium" : "border-transparent text-ink/55"}`}>
+            <button key={row.circuits} type="button" onClick={() => setTarget(row)} className={`mb-1 w-36 shrink-0 border-l-2 px-2 py-1.5 text-left text-sm lg:w-full ${target.circuits.toLowerCase() === row.circuits.toLowerCase() ? "border-ink font-medium" : "border-transparent text-ink/55"}`}>
               {row.ours ? "TAPELIQUID" : row.name}
               <span className="block text-[11px] font-normal text-ink/40">{row.chain === "bsc" ? "BSC" : "X Layer"}</span>
             </button>
@@ -433,13 +448,16 @@ export function TapeCanvas() {
             ))}
           </div>
         </div>
-        <div className="overflow-x-auto border border-gold bg-paper">
+        <div ref={boardRef} className="w-full overflow-hidden border border-gold bg-paper">
+          <div className="relative w-full" style={{ height: Math.max(220, 460 * scale) }}>
           <div
-            className="relative h-[320px] w-[640px] sm:h-[460px] sm:w-[760px]"
+            className="absolute top-0 left-0 h-[460px] w-[760px] origin-top-left"
+            style={{ transform: `scale(${scale})` }}
             onClick={(event) => {
               if (tool === "wire" || tool === "del") return;
               const rect = event.currentTarget.getBoundingClientRect();
-              place(tool, event.clientX - rect.left, event.clientY - rect.top);
+              const next = scale > 0 ? scale : 1;
+              place(tool, (event.clientX - rect.left) / next, (event.clientY - rect.top) / next);
             }}
           >
             <svg className="absolute inset-0 h-full w-full">
@@ -471,7 +489,8 @@ export function TapeCanvas() {
                   const ox = n.x;
                   const oy = n.y;
                   const move = (ev: PointerEvent) => {
-                    setNodes((list) => list.map((item) => (item.id === n.id ? { ...item, x: ox + ev.clientX - startX, y: oy + ev.clientY - startY } : item)));
+                    const next = scale > 0 ? scale : 1;
+                    setNodes((list) => list.map((item) => (item.id === n.id ? { ...item, x: ox + (ev.clientX - startX) / next, y: oy + (ev.clientY - startY) / next } : item)));
                   };
                   const up = () => {
                     window.removeEventListener("pointermove", move);
@@ -505,6 +524,7 @@ export function TapeCanvas() {
                 ))}
               </div>
             ))}
+          </div>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3 border border-gold px-3 py-2">
@@ -552,7 +572,7 @@ export function TapeCanvas() {
           </div>
         ) : null}
       </div>
-      <aside className="flex flex-col gap-3 lg:sticky lg:top-24">
+      <aside className="flex min-w-0 flex-col gap-3 lg:sticky lg:top-24">
         <div className="border border-gold bg-card px-3 py-3">
           <div className="flex items-baseline justify-between gap-2">
             <h3 className="font-display text-2xl italic">{zh ? "可流片" : "Ready to tape"}</h3>

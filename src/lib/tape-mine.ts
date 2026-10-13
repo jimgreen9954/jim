@@ -126,6 +126,28 @@ export async function readTapePace(): Promise<{ daily: bigint; weight: bigint } 
   }
 }
 
+export async function readSeatFlags(ids: string[]): Promise<Record<string, boolean>> {
+  const unique = [...new Set(ids.filter((id) => /^\d+$/.test(id)))].slice(0, 48);
+  if (!unique.length) return {};
+  const rows = await client.multicall({
+    contracts: unique.map((id) => ({
+      address: TAPE_MINE,
+      abi: mineAbi,
+      functionName: "seat" as const,
+      args: [BigInt(id)] as const,
+    })),
+    allowFailure: true,
+  });
+  const out: Record<string, boolean> = {};
+  unique.forEach((id, index) => {
+    const row = rows[index];
+    if (!row || row.status !== "success") return;
+    const result = row.result as readonly [string, bigint, bigint, boolean];
+    out[id] = Boolean(result[3]);
+  });
+  return out;
+}
+
 export type TapeWire = {
   supply: string;
   cap: string;

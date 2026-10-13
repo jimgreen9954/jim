@@ -36,6 +36,7 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
   const [desk, setDesk] = useState<DeskTab>(start === "perp" ? "perp" : "spot");
   const [shop, setShop] = useState<ShopTab>(start === "gate" ? "gate" : "book");
   const [giftOpen, setGiftOpen] = useState(false);
+  const { night, setNight } = useNight();
   useEffect(() => {
     const apply = () => {
       const named = window.location.hash.replace(/^#/, "");
@@ -63,8 +64,8 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
         <SimClock />
         <BannerToast />
         <FuseFlash />
-        <div className={`mx-auto flex w-full flex-col gap-3 px-2 pt-2 sm:px-3 lg:gap-3 lg:px-4 ${floor === "paper" ? "pb-6 lg:pb-8" : "pb-[max(1rem,env(safe-area-inset-bottom))]"}`}>
-          <Header floor={floor} desk={desk} shop={shop} setFloor={setFloor} setDesk={setDesk} setShop={setShop} setGiftOpen={setGiftOpen} />
+        <div className={`mx-auto flex w-full flex-col gap-3 px-2 pt-2 sm:px-3 lg:gap-3 lg:px-4 ${floor === "paper" ? "pb-16 lg:pb-16" : "pb-16"}`}>
+          <Header floor={floor} desk={desk} shop={shop} night={night} setNight={setNight} setFloor={setFloor} setDesk={setDesk} setShop={setShop} setGiftOpen={setGiftOpen} />
           <FeeStrip />
           {floor === "desk" && desk === "spot" ? <SpotDesk /> : null}
           {floor === "desk" && desk === "perp" ? <RealPerp /> : null}
@@ -75,12 +76,51 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
           {floor === "me" ? <AccountCenter giftOpen={giftOpen} /> : null}
           {floor === "rules" ? <Whitepaper /> : null}
         </div>
-        <footer className="mx-auto flex w-full items-center gap-4 px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-xs text-ink/55 sm:px-3 lg:px-4">
-          <a href="https://t.me/+RWVnnxXf1LY1MWVh" target="_blank" rel="noreferrer" className="underline">Telegram</a>
-          <a href="https://x.com/Icp_chinese" target="_blank" rel="noreferrer" className="underline">X</a>
-        </footer>
+        <TerminalBar night={night} setNight={setNight} />
       </div>
     </FeeLockProvider>
+  );
+}
+
+function useNight() {
+  const [night, setNight] = useState(false);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const on = window.localStorage.getItem("tapeliquid-night") === "1";
+    setNight(on);
+    document.documentElement.classList.toggle("night", on);
+    setReady(true);
+  }, []);
+  useEffect(() => {
+    if (!ready) return;
+    document.documentElement.classList.toggle("night", night);
+    window.localStorage.setItem("tapeliquid-night", night ? "1" : "0");
+  }, [night, ready]);
+  return { night, setNight };
+}
+
+function TerminalBar({ night, setNight }: { night: boolean; setNight: (next: boolean | ((on: boolean) => boolean)) => void }) {
+  const lang = useExchange((s) => s.lang);
+  const setLang = useExchange((s) => s.setLang);
+  const zh = lang === "zh";
+  return (
+    <footer className="fixed inset-x-0 bottom-0 z-30 flex h-11 items-center gap-3 overflow-x-auto border-t border-gold/60 bg-paper/95 px-3 text-[12px] text-ink/80 backdrop-blur-sm">
+      <a href="#rules" className="shrink-0 underline decoration-gold underline-offset-4">{zh ? "使用指南" : "Guide"}</a>
+      <a href="https://x.com/Icp_chinese" target="_blank" rel="noreferrer" className="shrink-0 underline decoration-gold underline-offset-4">X</a>
+      <a href="https://t.me/+RWVnnxXf1LY1MWVh" target="_blank" rel="noreferrer" className="shrink-0 underline decoration-gold underline-offset-4">Telegram</a>
+      <a href="https://github.com/jimgreen9954/jim" target="_blank" rel="noreferrer" className="shrink-0 underline decoration-gold underline-offset-4">GitHub</a>
+      <a href="#rules" className="shrink-0 underline decoration-gold underline-offset-4">{zh ? "白皮书" : "Paper"}</a>
+      <span className="ml-auto flex shrink-0 items-center gap-1">
+        <button type="button" aria-label={night ? (zh ? "白天" : "Day") : zh ? "黑夜" : "Night"} className="inline-flex size-8 items-center justify-center" onClick={() => setNight((on) => !on)}>
+          {night ? (
+            <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="12" cy="12" r="3.5" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4" /></svg>
+          ) : (
+            <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M20 14.5A7.5 7.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5Z" /></svg>
+          )}
+        </button>
+        <button type="button" className="min-h-8 px-1.5" onClick={() => setLang(lang === "zh" ? "en" : "zh")}>{zh ? "EN" : "中文"}</button>
+      </span>
+    </footer>
   );
 }
 
@@ -267,7 +307,7 @@ function InviteDock() {
             <button type="button" className={`min-h-9 ${chain === "xlayer" ? "bg-ink text-paper" : ""}`} onClick={() => setChain("xlayer")}>X Layer</button>
             <button type="button" className={`min-h-9 ${chain === "bsc" ? "bg-ink text-paper" : ""}`} onClick={() => setChain("bsc")}>BSC</button>
           </div>
-          <p className="mt-2 text-xs leading-5 text-ink/70">{zh ? "本站手续费是付出金额的千分之二。没绑邀请人，整笔进收费地址。绑了之后，这笔手续费的 6% 付给邀请人，4% 少收交易的人，90% 进收费地址。永续写在合约里，记到下面的可提。现货、官方晶体管和电路的本站手续费，付款时按这个比例拆开转。工房订单簿和 TAPE 池的千分之二在已经部署的合约里，整笔进收费地址，这两份没有邀请人。" : "The site fee is 0.2% of the amount paid. With no referrer, all of it goes to the fee address. With one, 6% of that fee is paid to the referrer, the trader pays 4% less, and 90% goes to the fee address. Perpetuals record the 6% as claimable below. Spot, official transistors, and official circuits split the site fee the same way when it is paid. The workshop book and the TAPE pools send their 0.2% entirely to the fee address. Those two deployed contracts have no referrer."}</p>
+          <p className="mt-2 text-xs leading-5 text-ink/70">{zh ? "本站手续费是付出金额的千分之二。没绑邀请人，整笔进收费地址。绑了之后，这笔手续费的 6% 付给邀请人，4% 少收交易的人，90% 进收费地址。永续、现货（含 BSC 的比特币、ETH、ZEC）、加池、官方晶体管和官方电路都按这个比例。永续的 6% 记在合约里。其余是付款时拆开转。工房订单簿和 TAPE 池，千分之二整笔进收费地址，这两份已经部署的合约没有邀请人字段。电路容器的开通费是协议的 BNB，不走这笔台费。" : "The site fee is 0.2% of the amount paid. With no referrer, all of it goes to the fee address. With one, 6% of that fee is paid to the referrer, the trader pays 4% less, and 90% goes to the fee address. That split covers perpetuals, spot including BSC bitcoin, ETH and ZEC, liquidity, official transistors, and official circuits. Perpetuals record the 6% on the contract. The workshop book and the TAPE pools send their 0.2% entirely to the fee address. Those deployed contracts have no referrer. A circuit container's open fee is protocol BNB, not this fee."}</p>
           {code ? (
             <div className="mt-2">
               <p className="font-mono">{code}</p>
@@ -305,24 +345,12 @@ function InviteDock() {
   );
 }
 
-function Header({ floor, desk, shop, setFloor, setDesk, setShop, setGiftOpen }: { floor: Floor; desk: DeskTab; shop: ShopTab; setFloor: (floor: Floor) => void; setDesk: (desk: DeskTab) => void; setShop: (shop: ShopTab) => void; setGiftOpen: (open: boolean) => void }) {
+function Header({ floor, desk, shop, night, setNight, setFloor, setDesk, setShop, setGiftOpen }: { floor: Floor; desk: DeskTab; shop: ShopTab; night: boolean; setNight: (next: boolean | ((on: boolean) => boolean)) => void; setFloor: (floor: Floor) => void; setDesk: (desk: DeskTab) => void; setShop: (shop: ShopTab) => void; setGiftOpen: (open: boolean) => void }) {
   const lang = useExchange((s) => s.lang);
   const setLang = useExchange((s) => s.setLang);
+  const bem = useExchange((s) => s.chainBem);
   const reset = useExchange((s) => s.reset);
   const [arm, setArm] = useState(false);
-  const [night, setNight] = useState(false);
-  const [nightReady, setNightReady] = useState(false);
-  useEffect(() => {
-    const on = window.localStorage.getItem("tapeliquid-night") === "1";
-    setNight(on);
-    document.documentElement.classList.toggle("night", on);
-    setNightReady(true);
-  }, []);
-  useEffect(() => {
-    if (!nightReady) return;
-    document.documentElement.classList.toggle("night", night);
-    window.localStorage.setItem("tapeliquid-night", night ? "1" : "0");
-  }, [night, nightReady]);
   useEffect(() => {
     document.documentElement.lang = lang === "zh" ? "zh" : "en";
   }, [lang]);
@@ -351,7 +379,14 @@ function Header({ floor, desk, shop, setFloor, setDesk, setShop, setGiftOpen }: 
   ] as const;
   return (
     <header className="sticky top-0 z-20 -mx-2 border-b border-gold/40 bg-paper/95 px-2 py-2 backdrop-blur-sm sm:-mx-3 sm:px-3 lg:-mx-4 lg:px-4 pt-[max(0.35rem,env(safe-area-inset-top))]">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 overflow-x-auto border-b border-gold/30 pb-1 text-[11px] text-ink/65">
+        <span className="shrink-0 font-mono">BEM {bem != null && bem > 0 ? bem.toLocaleString("en-US", { maximumFractionDigits: 6 }) : "—"}</span>
+        <span className="shrink-0">BSC · USDT</span>
+        <span className="shrink-0">X Layer · USDT0</span>
+        <span className="shrink-0">{lang === "zh" ? "台费 0.20%" : "Fee 0.20%"}</span>
+        <span className="shrink-0 font-mono">0x823b…054D</span>
+      </div>
+      <div className="mt-1 flex items-center gap-3">
         <button type="button" onClick={() => go("desk", "spot")} className="flex shrink-0 items-center gap-2">
           <img src="/mark.jpg" alt="" className="size-7 border border-gold bg-foil object-cover" />
           <span className="hidden font-display text-lg italic leading-none sm:inline">TAPELIQUID</span>

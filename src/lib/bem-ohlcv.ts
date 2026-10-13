@@ -144,3 +144,43 @@ export async function pullBem(frame: CandleFrame): Promise<Candle[]> {
     return hit?.rows ?? [];
   }
 }
+
+const COIN_POOL = {
+  btc: "https://api.geckoterminal.com/api/v2/networks/bsc/pools/0x247f51881d1e3ae0f759afb801413a6c948ef442/ohlcv",
+  eth: "https://api.geckoterminal.com/api/v2/networks/bsc/pools/0xbe141893e4c6ad9272e8c04bab7e6a10604501a5/ohlcv",
+  zec: "https://api.geckoterminal.com/api/v2/networks/bsc/pools/0x6701b287c8170d6c290c6f4ef426782bd61ae310/ohlcv",
+} as const;
+
+async function loadPool(base: string, frame: CandleFrame): Promise<Candle[]> {
+  if (frame === "1w" || frame === "1M" || frame === "3M" || frame === "1y") {
+    const days = await fetchBook(base, "day", 1, 1000, "");
+    if (frame === "1w") return fold(days, weekKey);
+    if (frame === "1M") return fold(days, (t) => {
+      const { y, m } = sgtDate(t);
+      return `${y}-${String(m).padStart(2, "0")}`;
+    });
+    if (frame === "3M") return fold(days, (t) => {
+      const { y, m } = sgtDate(t);
+      return `${y}-Q${Math.floor((m - 1) / 3) + 1}`;
+    });
+    return fold(days, (t) => String(sgtDate(t).y));
+  }
+  const spec = direct[frame];
+  return fetchBook(base, spec.path, spec.aggregate, spec.limit, "");
+}
+
+/** Same frames as the BEM book: 15s through 1y, from that coin's Pancake pool. */
+export async function pullCoin(coin: keyof typeof COIN_POOL, frame: CandleFrame): Promise<Candle[]> {
+  const safe = frame in direct || frame === "1w" || frame === "1M" || frame === "3M" || frame === "1y" ? frame : "1m";
+  const key = `${coin}:${safe}`;
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < 45_000 && hit.rows.length > 0) return hit.rows;
+  try {
+    const rows = await loadPool(COIN_POOL[coin], safe);
+    if (rows.length === 0) return hit?.rows ?? [];
+    cache.set(key, { at: Date.now(), rows });
+    return rows;
+  } catch {
+    return hit?.rows ?? [];
+  }
+}

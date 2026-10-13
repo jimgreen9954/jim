@@ -10,7 +10,7 @@ import { CircuitMarket } from "@/components/exchange/circuit-market";
 
 function px(n: number): string {
   if (!(n > 0)) return "—";
-  return n.toLocaleString("en-US", { maximumFractionDigits: 8 });
+  return n.toLocaleString("en-US", { maximumFractionDigits: 6 });
 }
 
 
@@ -117,20 +117,24 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
           </div>
           <p className="font-mono text-sm">{bids[0] ? `${px(bids[0].priceBnb)} BNB` : "—"}</p>
         </div>
-        <div className="grid grid-cols-[4.2rem_minmax(0,1fr)_4.5rem_auto] px-2 py-1 text-[11px] text-ink/45">
-                  <span>{zh ? "价格" : "Price"}</span>
-                  <span>{zh ? "剩余" : "Left"}</span>
-                  <span className="text-right">{zh ? "总额" : "Total"}</span>
-                  <span className="text-right">{zh ? "指定成交" : "Take"}</span>
-                </div>
-                {bids.length === 0 ? <p className="px-3 py-4 text-sm text-ink/55">{zh ? "这只标的现在没有买单。右边可以自己挂。" : "No bid on this one. Place one from the ticket."}</p> : bids.map((row) => (
-                  <div key={row.id} className={`grid grid-cols-[4.2rem_minmax(0,1fr)_4.5rem_auto] items-center px-2 py-1 font-mono text-[12px] ${bid?.id === row.id ? "bg-[#089981]/10" : ""}`}>
-                    <span className="text-[#089981]">{px(row.priceBnb)}</span>
-                    <span>{row.remaining.toLocaleString("en-US")}</span>
-                    <span className="text-right">{px(row.priceBnb * row.remaining)}</span>
-                    <button type="button" className="ml-2 h-6 border border-[#f23645] px-2 text-[11px] text-[#f23645]" onClick={() => { setBid(row); setQty(String(row.remaining)); }}>{zh ? "卖出" : "Sell"}</button>
-                  </div>
-                ))}
+        <div className="overflow-x-auto">
+          <div className="min-w-[32rem]">
+            <div className="grid grid-cols-[8.5rem_7.5rem_8.5rem_auto] gap-x-6 px-3 py-1.5 text-[11px] text-ink/45">
+              <span>{zh ? "价格" : "Price"}</span>
+              <span>{zh ? "剩余" : "Left"}</span>
+              <span className="text-right">{zh ? "总额" : "Total"}</span>
+              <span className="text-right">{zh ? "指定成交" : "Take"}</span>
+            </div>
+            {bids.length === 0 ? <p className="px-3 py-4 text-sm text-ink/55">{zh ? "这只标的现在没有买单。右边可以自己挂。" : "No bid on this one. Place one from the ticket."}</p> : bids.map((row) => (
+              <div key={row.id} className={`grid grid-cols-[8.5rem_7.5rem_8.5rem_auto] items-center gap-x-6 px-3 py-1.5 font-mono text-[12px] tabular-nums ${bid?.id === row.id ? "bg-[#089981]/10" : ""}`}>
+                <span className="whitespace-nowrap text-[#089981]">{px(row.priceBnb)}</span>
+                <span className="whitespace-nowrap">{row.remaining.toLocaleString("en-US")}</span>
+                <span className="whitespace-nowrap text-right">{px(row.priceBnb * row.remaining)}</span>
+                <button type="button" className="ml-2 h-6 justify-self-end border border-[#f23645] px-2 text-[11px] text-[#f23645]" onClick={() => { setBid(row); setQty(String(row.remaining)); }}>{zh ? "卖出" : "Sell"}</button>
+              </div>
+            ))}
+          </div>
+        </div>
         <p className="px-3 py-2 text-[11px] leading-5 text-ink/45">{zh ? "这里只有买单。卖出是把 NAND 或 LATCH 卖进这一档。" : "Bids only. Selling fills one of them."}</p>
       </div>
       <aside className="min-w-0 border border-gold bg-card px-3 py-3 lg:sticky lg:top-16">

@@ -5,6 +5,7 @@ import { XLAYER } from "@/lib/xlayer";
 import { quoteOkb } from "@/lib/okb";
 import { Hint } from "@/components/exchange/hint";
 import { TapeCircuits } from "@/components/exchange/tape-circuits";
+import { ContainerDesk } from "@/components/exchange/capacitor-desk";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import {
   baseText,
@@ -115,7 +116,11 @@ function Quote({ zh, market, side, price, amount, unit, rate }: { zh: boolean; m
 
 function plainBase(market: number, amount: bigint): string {
   if (market !== 0) return amount.toString();
-  return formatUnits(amount, 8).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+  const text = formatUnits(amount, 8);
+  const [whole, frac = ""] = text.split(".");
+  const cap = Number(whole) >= 1 ? 2 : 4;
+  const cut = frac.slice(0, cap).replace(/0+$/, "");
+  return cut ? `${whole}.${cut}` : whole;
 }
 
 function BookRow({ priceLabel, sizeLabel, totalLabel, cap, value, onChange, onPick, onTake, bid, best, mine, on, busy, depth, zh }: { priceLabel: string; sizeLabel: string; totalLabel: string; cap: string; value: string; onChange: (value: string) => void; onPick: () => void; onTake: () => void; bid: boolean; best: boolean; mine: boolean; on: boolean; busy: boolean; depth: number; zh: boolean }) {
@@ -134,12 +139,12 @@ function BookRow({ priceLabel, sizeLabel, totalLabel, cap, value, onChange, onPi
   );
 }
 
-export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (SpotMarket | "circuit")[] }) {
-  const choices = lanes ?? ([0, 1, 2, "circuit"] as const);
+export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (SpotMarket | "circuit" | "cap")[] }) {
+  const choices = lanes ?? ([0, 1, 2, "circuit", "cap"] as const);
   const [spot, setSpot] = useState<string | null>(() => spotAddress());
   const [ready, setReady] = useState(true);
   const [account, setAccount] = useState<string | null>(currentAccount());
-  const [lane, setLane] = useState<SpotMarket | "circuit">(choices[0] ?? 0);
+  const [lane, setLane] = useState<SpotMarket | "circuit" | "cap">(choices[0] ?? 0);
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [price, setPrice] = useState("");
   const [amount, setAmount] = useState("");
@@ -161,7 +166,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   const [takes, setTakes] = useState<Record<string, string>>({});
   const [picked, setPicked] = useState<string | null>(null);
   const askBox = useRef<HTMLDivElement>(null);
-  const market: SpotMarket = lane === "circuit" ? 0 : lane;
+  const market: SpotMarket = lane === "circuit" || lane === "cap" ? 0 : lane;
 
   useEffect(() => onAccount(setAccount), []);
   useEffect(() => setSpot(spotAddress()), []);
@@ -186,7 +191,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   }, [lane]);
 
   useEffect(() => {
-    if (!spot || !ready || lane === "circuit") return;
+    if (!spot || !ready || lane === "circuit" || lane === "cap") return;
     let dead = false;
     const look = () => {
       const snap = peekSpotPrints(market);
@@ -201,7 +206,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   }, [spot, ready, market, lane]);
 
   useEffect(() => {
-    if (!spot || !ready || lane === "circuit") return;
+    if (!spot || !ready || lane === "circuit" || lane === "cap") return;
     let dead = false;
     const pull = () => {
       if (document.hidden) return;
@@ -250,7 +255,11 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   }, [askView, market]);
   const showPrice = (usdt: bigint, next: MoneyUnit = quoteUnit) => {
     const raw = next === "okb" && okbRate > 0n ? usdt * 1_000_000n / okbRate : usdt;
-    return formatUnits(raw, 6).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+    const text = formatUnits(raw, 6);
+    const [whole, frac = ""] = text.split(".");
+    const cap = Number(whole) >= 1 ? 2 : 4;
+    const cut = frac.slice(0, cap).replace(/0+$/, "");
+    return cut ? `${whole}.${cut}` : whole;
   };
   const ownHit = (() => {
     let px = 0n;
@@ -349,12 +358,12 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   return (
     <SideRail items={choices.map((id) => ({
       key: String(id),
-      label: id === "circuit" ? (zh ? "电路" : "Circuits") : NAMES[id],
+      label: id === "circuit" ? (zh ? "电路" : "Circuits") : id === "cap" ? (zh ? "容器" : "Container") : NAMES[id],
       on: lane === id,
       run: () => setLane(id),
     }))}>
     <section className="grid gap-3">
-      {lane === "circuit" ? <TapeCircuits zh={zh} /> : (
+      {lane === "circuit" ? <TapeCircuits zh={zh} /> : lane === "cap" ? <ContainerDesk zh={zh} /> : (
         <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-3">
           <div className="min-w-0 pb-24 lg:pb-0">
           <article className="border border-gold bg-card">
@@ -443,7 +452,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
             </div>
           </article>
           </div>
-          <div className={`${ticketOpen ? "fixed inset-x-0 bottom-0 z-40 max-h-[78dvh] overflow-y-auto border-t border-gold bg-paper px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-plate lg:static lg:z-auto lg:max-h-none lg:overflow-visible lg:border lg:bg-card lg:p-3 lg:shadow-none" : "fixed inset-x-0 bottom-0 z-40 border-t border-gold bg-paper px-3 py-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:static lg:z-auto lg:border lg:bg-card lg:p-3"}`}>
+          <div className={`${ticketOpen ? "fixed inset-x-0 bottom-12 z-40 max-h-[78dvh] overflow-y-auto border-t border-gold bg-paper px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-plate lg:static lg:z-auto lg:max-h-none lg:overflow-visible lg:border lg:bg-card lg:p-3 lg:shadow-none" : "fixed inset-x-0 bottom-12 z-40 border-t border-gold bg-paper px-3 py-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:static lg:z-auto lg:border lg:bg-card lg:p-3"}`}>
             <div className="grid grid-cols-2 gap-2 lg:hidden">
               {ticketOpen ? (
                 <button type="button" className="col-span-2 min-h-9 text-xs text-ink/60" onClick={() => setTicketOpen(false)}>{zh ? "收起" : "Close"}</button>
@@ -486,7 +495,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
             <Plan zh={zh} market={market} side={side} price={price} amount={amount} asks={asks} bids={bids} purse={purse} name={name} unit={quoteUnit} rate={okbRate} />
             {quoteUnit === "okb" ? <p className="mt-2 text-xs leading-5 text-ink/70">{(() => { try { return zh ? `钱包要签的是 ${usdtText(typedUsdt(price, "okb", okbRate), 4)} USDT0。OKB 只是池子折算，池子一动这个数就变。` : `The wallet signs ${usdtText(typedUsdt(price, "okb", okbRate), 4)} USDT0. OKB is only a pool conversion.`; } catch { return zh ? "还没读到 OKB 池子价，这一笔不会按 OKB 签。" : "No OKB pool price yet. This order will not be signed in OKB."; } })()}</p> : null}
             <p className="mt-2 text-xs leading-5 text-ink/60">
-              {zh ? "两边都按钱包余额。买入切 USDT0，卖出切这种币。买方按价格付，卖方实收 99.8%。" : "Both figures are the wallet. Buy cuts USDT0. Sell cuts this coin. The buyer pays the price. The seller receives 99.8 percent."}
+              {zh ? "两边都按钱包余额。买入切 USDT0，卖出切这种币。买方按价格付，卖方实收 99.8%。这一本订单簿的千分之二整笔进收费地址，合约里没有邀请人。永续、现货、加池、官方晶体管和官方电路，按邀请人 6%、少付 4%、收费地址 90% 拆。电路容器的开通费是协议的 BNB，不走这笔台费。" : "Both figures are the wallet. The buyer pays the price. The seller receives 99.8 percent. This book's 0.2 percent goes entirely to the fee address. Perps, spot, pools you add, official transistors, and official circuits split a referrer at 6%, 4% off, and 90%. A circuit container's open fee is protocol BNB, not this site fee."}
             </p>
             {ownHit ? <p className="mt-2 text-sm leading-6 text-sell">{zh ? `这个价会碰到你自己的${ownHit.bid ? "买单" : "卖单"} ${usdtText(ownHit.price, 4)}。同一个钱包不能互吃，点下去会被整笔拒绝。先撤掉，或改一个碰不到的价格。` : `This price reaches your own ${ownHit.bid ? "bid" : "ask"} at ${usdtText(ownHit.price, 4)}. The same wallet cannot take it. Cancel it, or move the price.`}</p> : null}
             <button type="button" disabled={busy || Boolean(ownHit)} className={`mt-3 min-h-12 w-full text-sm text-white disabled:opacity-40 ${side === "buy" ? "bg-[#089981]" : "bg-[#f23645]"}`} onClick={() => {

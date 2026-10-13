@@ -5,7 +5,7 @@ import { BSC, TxPending, txUrl } from "@/lib/bsc";
 import { connectBsc } from "@/lib/bsc";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import { Kline } from "@/components/exchange/kline";
-import { Hint } from "@/components/exchange/hint";
+import { Hint, verifyCopy } from "@/components/exchange/hint";
 
 function noted(zh: boolean, label: string): string | null {
   const notes: Record<string, string> = zh
@@ -61,7 +61,13 @@ function age(ts: number): string {
 function stateText(status: string, zh: boolean): string {
   if (status === "verified") return zh ? "已验证" : "Verified";
   if (status === "unverified") return zh ? "未验证" : "Unverified";
+  if (status === "optimal") return zh ? "最优" : "Optimal";
   return status || "—";
+}
+
+function StatusMark({ status, zh }: { status: string; zh: boolean }) {
+  const label = stateText(status, zh);
+  return <Hint label={label} text={verifyCopy(zh)} />;
 }
 
 export function CircuitMarket({ zh, lang }: { zh: boolean; lang: "zh" | "en" }) {
@@ -76,6 +82,7 @@ export function CircuitMarket({ zh, lang }: { zh: boolean; lang: "zh" | "en" }) 
   const [maxHash, setMaxHash] = useState("");
   const [maxDay, setMaxDay] = useState("");
   const [picked, setPicked] = useState<CircuitRow | null>(null);
+  const [print, setPrint] = useState<CircuitPrint | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [bad, setBad] = useState(false);
@@ -187,52 +194,99 @@ export function CircuitMarket({ zh, lang }: { zh: boolean; lang: "zh" | "en" }) 
           </div>
         ) : null}
         <p className="mt-2 text-[11px] text-ink/45">{zh ? "点一行，右边看这张。买入另付千分之二，先付，没成交不退。" : "Pick a row. Buying adds 0.2%, paid first."}</p>
-        {sheet === "prints" ? <Prints zh={zh} rows={board?.prints ?? []} /> : <Book zh={zh} rows={rows} picked={picked} busy={busy} onPick={setPicked} onBuy={(row) => void buy(row)} />}
+        {sheet === "prints" ? <Prints zh={zh} rows={board?.prints ?? []} picked={print} onPick={setPrint} /> : <Book zh={zh} rows={rows} picked={picked} busy={busy} onPick={(row) => { setPrint(null); setPicked(row); }} onBuy={(row) => void buy(row)} />}
       </div>
-      <aside className="border border-gold bg-card px-3 py-3 lg:sticky lg:top-16">
-        <p className="text-[11px] tracking-[0.16em] text-gold">{zh ? "这一张" : "This circuit"}</p>
-        <p className="mt-2 text-sm">{picked ? `${picked.name} #${picked.tokenId}` : zh ? "点一行看全部指标" : "Pick a row"}</p>
-        {picked ? <Ticket zh={zh} row={picked} /> : null}
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <label className="text-[11px] text-ink/55">{zh ? "最低算力" : "Min H"}<input value={minHash} onChange={(event) => setMinHash(event.target.value.replace(/[^\d.]/g, ""))} className="mt-1 w-full border border-gold/50 bg-transparent px-2 py-1 font-mono text-xs outline-none" /></label>
-          <label className="text-[11px] text-ink/55">{zh ? "最高算力" : "Max H"}<input value={maxHash} onChange={(event) => setMaxHash(event.target.value.replace(/[^\d.]/g, ""))} className="mt-1 w-full border border-gold/50 bg-transparent px-2 py-1 font-mono text-xs outline-none" /></label>
-          <label className="col-span-2 text-[11px] text-ink/55">{zh ? "日产能价不高于" : "Day price at most"}<input value={maxDay} onChange={(event) => setMaxDay(event.target.value.replace(/[^\d.]/g, ""))} placeholder="BNB" className="mt-1 w-full border border-gold/50 bg-transparent px-2 py-1 font-mono text-xs outline-none" /></label>
-        </div>
-        <p className="mt-2 text-[11px] leading-5 text-ink/50">{zh ? "筛选只改左边的表。电路整张成交，不能拆。买入另付千分之二，先付，不退。" : "Filters only change the table. A circuit sells whole. Buying adds 0.2%, paid first."}</p>
-        {picked && (picked.officialId != null || picked.signed) ? (
-          <button type="button" disabled={busy} className="mt-3 min-h-11 w-full bg-[#f23645] text-sm text-white disabled:opacity-40" onClick={() => void buy(picked)}>{zh ? "买入这一张" : "Buy this one"}</button>
-        ) : picked ? <p className="mt-2 text-xs leading-5 text-ink/60">{zh ? "这张现在没有卖价。" : "This one has no ask."}</p> : null}
-        {note ? <p className={`mt-2 text-xs leading-5 ${bad ? "text-sell" : ""}`}>{note}</p> : null}
+      <aside className="border border-gold bg-card lg:sticky lg:top-16">
+        {sheet === "prints" && print ? (
+          <div className="px-4 py-4">
+            <p className="text-[11px] tracking-[0.16em] text-gold">{zh ? "本次成交" : "This print"}</p>
+            <p className="mt-2 text-sm">{print.name} #{print.tokenId}</p>
+            <dl className="mt-3">
+              <RightLine k={zh ? "成交价" : "Price"} v={`${num(print.price, 4)} BNB`} />
+              <RightLine k={zh ? "成交时可挖矿市值" : "Mining value then"} v="—" tip={zh ? "公开成交没有这一列。不写成 0。" : "The public print has no mining value. It is not shown as zero."} />
+              <RightLine k={zh ? "成交时间" : "Time"} v={age(print.ts)} />
+              <RightLine k={zh ? "买方" : "Buyer"} v={short(print.buyer)} />
+              <RightLine k={zh ? "卖方" : "Seller"} v={short(print.seller)} />
+              <RightLine k={zh ? "交易哈希" : "Tx"} v={short(print.tx)} />
+            </dl>
+            <a className="mt-3 inline-flex text-sm underline" href={`${BSC.explorer}/tx/${print.tx}`} target="_blank" rel="noreferrer">{zh ? "在浏览器打开" : "Open the transaction"}</a>
+          </div>
+        ) : (
+          <BuyColumn
+            zh={zh}
+            row={picked}
+            rows={rows}
+            busy={busy}
+            onBuy={() => picked && void buy(picked)}
+          />
+        )}
+        <details className="border-t border-gold/30 px-4 py-3">
+          <summary className="cursor-pointer text-[12px] text-ink/55">{zh ? "筛选" : "Filter"}</summary>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <label className="text-[11px] text-ink/55">{zh ? "最低算力" : "Min H"}<input value={minHash} onChange={(event) => setMinHash(event.target.value.replace(/[^\d.]/g, ""))} className="mt-1 w-full border border-gold/50 bg-transparent px-2 py-1 font-mono text-xs outline-none" /></label>
+            <label className="text-[11px] text-ink/55">{zh ? "最高算力" : "Max H"}<input value={maxHash} onChange={(event) => setMaxHash(event.target.value.replace(/[^\d.]/g, ""))} className="mt-1 w-full border border-gold/50 bg-transparent px-2 py-1 font-mono text-xs outline-none" /></label>
+            <label className="col-span-2 text-[11px] text-ink/55">{zh ? "日产能价不高于" : "Day price at most"}<input value={maxDay} onChange={(event) => setMaxDay(event.target.value.replace(/[^\d.]/g, ""))} placeholder="BNB" className="mt-1 w-full border border-gold/50 bg-transparent px-2 py-1 font-mono text-xs outline-none" /></label>
+          </div>
+        </details>
+        {note ? <p className={`px-4 pb-3 text-xs leading-5 ${bad ? "text-sell" : ""}`}>{note}</p> : null}
       </aside>
     </section>
   );
 }
 
-function Ticket({ zh, row }: { zh: boolean; row: CircuitRow }) {
-  const lines: [string, string][] = [
-    [zh ? "结构" : "Shape", `NAND ${row.nand} · LATCH ${row.latch}`],
-    [zh ? "端口" : "Ports", `${zh ? "入" : "In"} ${row.nIn} → ${zh ? "出" : "Out"} ${row.nOut} · ${zh ? "态" : "St"} ${row.nState}`],
-    [zh ? "门" : "Gates", row.gates.toLocaleString("en-US")],
-    [zh ? "状态" : "Status", stateText(row.status, zh)],
-    ["H", row.hash.toLocaleString("en-US")],
-    [zh ? "晶体均价" : "Per transistor", row.crystal != null ? `${num(row.crystal, 5)} BNB` : "—"],
-    [zh ? "算力均价" : "Per H", row.hashPx != null ? `${num(row.hashPx, 5)} BNB` : "—"],
-    [zh ? "预计 24h" : "Est. 24h", row.dayBem != null ? `${num(row.dayBem, 4)} BEM` : "—"],
-    [zh ? "日产能价" : "Day price", row.dayPx != null ? `${num(row.dayPx, 2)} BNB` : "—"],
-    [zh ? "卖价" : "Ask", row.ask != null ? `${num(row.ask, 4)} BNB` : "—"],
-    [zh ? "最高出价" : "Best bid", row.bid != null ? `${num(row.bid, 4)} BNB` : zh ? "暂无" : "None"],
-    [zh ? "卖家" : "Seller", short(row.seller)],
-    [zh ? "静态回本" : "Payback", row.paybackDays != null ? `${num(row.paybackDays, 1)} ${zh ? "天" : "d"}` : "—"],
-  ];
+function RightLine({ k, v, tip }: { k: string; v: string; tip?: string }) {
   return (
-    <dl className="mt-2 border-t border-gold/30">
-      {lines.map(([k, v]) => (
-        <div key={k} className="grid grid-cols-[5.2rem_minmax(0,1fr)] gap-2 border-b border-gold/20 py-1 text-xs">
-          <dt className="text-ink/45">{k}</dt>
-          <dd className="text-right font-mono">{v}</dd>
+    <div className="flex items-baseline justify-between gap-3 border-b border-gold/20 py-2 text-[13px]">
+      <dt className="text-ink/45">{tip ? <Hint label={k} text={tip} /> : k}</dt>
+      <dd className="text-right font-mono">{v}</dd>
+    </div>
+  );
+}
+
+function BuyColumn({ zh, row, rows, busy, onBuy }: { zh: boolean; row: CircuitRow | null; rows: CircuitRow[]; busy: boolean; onBuy: () => void }) {
+  const marketAsk = rows.reduce<number | null>((min, item) => (item.ask != null && (min == null || item.ask < min) ? item.ask : min), null);
+  const marketBid = rows.reduce<number | null>((max, item) => (item.bid != null && (max == null || item.bid > max) ? item.bid : max), null);
+  const ask = row?.ask ?? marketAsk;
+  const bid = row ? row.bid : marketBid;
+  const can = Boolean(row && row.ask != null && (row.officialId != null || row.signed));
+  return (
+    <div>
+      <div className="grid grid-cols-2 border-b border-gold/30">
+        <div className="border-r border-gold/30 px-4 py-3">
+          <p className="text-[11px] text-ink/45"><Hint label={zh ? "最低卖价" : "Best ask"} text={zh ? "这张电路的卖价。没点选时，是左边表里最低的卖价。单位 BNB。" : "This circuit's ask. With nothing picked, the lowest ask in the table. BNB."} /></p>
+          <p className="mt-1 font-mono text-xl tabular-nums text-[#f23645]">{ask != null ? num(ask, 4) : "—"}</p>
         </div>
-      ))}
-    </dl>
+        <div className="px-4 py-3">
+          <p className="text-[11px] text-ink/45"><Hint label={zh ? "最高出价" : "Best bid"} text={zh ? "有人挂的最高买价。没有就写暂无，不写成 0。" : "The highest bid. None is not written as zero."} /></p>
+          <p className="mt-1 font-mono text-xl tabular-nums">{bid != null ? num(bid, 4) : (zh ? "暂无" : "None")}</p>
+        </div>
+      </div>
+      <div className="px-4 py-4">
+        <p className="text-sm">{row ? `${row.name} #${row.tokenId}` : (zh ? "点左边一行" : "Pick a row")}</p>
+        {row ? <p className="mt-1 text-[12px]"><StatusMark status={row.status} zh={zh} /></p> : null}
+        <label className="mt-4 block text-[12px] text-ink/55">
+          {zh ? "购买数量" : "Quantity"}
+          <input readOnly value={can ? "1" : ""} placeholder="1" className="mt-1 h-11 w-full border border-gold/50 bg-paper px-3 font-mono text-lg text-ink outline-none" />
+        </label>
+        <p className="mt-1 text-[12px] text-ink/45">{can ? (zh ? "当前可购买 1 个" : "1 available") : (zh ? "当前可购买 0 个" : "0 available")}</p>
+        <div className="mt-4 flex items-end justify-between gap-3 border-t border-gold/30 pt-3">
+          <span className="text-sm">{zh ? "需支付" : "Pay"}</span>
+          <strong className="font-mono text-2xl font-medium tabular-nums">{ask != null && (row ? can : false) ? `${num(ask, 4)} BNB` : "—"}</strong>
+        </div>
+        <p className="mt-1 text-[11px] leading-5 text-ink/45">{zh ? "电路整张成交，数量锁成 1。买入另付本站千分之二，先付，没成交不退。" : "A circuit sells whole, so the quantity stays 1. Buying adds this site's 0.2%, paid first and not returned."}</p>
+        <button type="button" disabled={!can || busy} className="mt-3 min-h-12 w-full bg-[#f23645] text-sm text-white disabled:opacity-40" onClick={onBuy}>{zh ? "买入这一张" : "Buy this one"}</button>
+        {row ? (
+          <dl className="mt-4 border-t border-gold/30">
+            <RightLine k={zh ? "结构" : "Shape"} v={`NAND ${row.nand} · LATCH ${row.latch}`} />
+            <RightLine k={zh ? "端口" : "Ports"} v={`${row.nIn} → ${row.nOut} · S${row.nState}`} />
+            <RightLine k="H" v={row.hash.toLocaleString("en-US")} />
+            <RightLine k={zh ? "预计 24h" : "Est. 24h"} v={row.dayBem != null ? `${num(row.dayBem, 4)} BEM` : "—"} />
+            <RightLine k={zh ? "日产能价" : "Day price"} v={row.dayPx != null ? `${num(row.dayPx, 2)} BNB` : "—"} />
+            <RightLine k={zh ? "卖家" : "Seller"} v={short(row.seller)} />
+          </dl>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -247,6 +301,7 @@ function Book({ zh, rows, picked, busy, onPick, onBuy }: { zh: boolean; rows: Ci
               <span>
                 <span className="block text-sm">{row.name}</span>
                 <span className="font-mono text-[11px] text-ink/45">#{row.tokenId} · NAND {row.nand} · LATCH {row.latch}</span>
+                <span className={`mt-1 block text-[11px] ${row.status === "verified" ? "text-[#089981]" : "text-ink/45"}`}><StatusMark status={row.status} zh={zh} /></span>
               </span>
               <span className="text-right font-mono text-xs">
                 <span className="block text-[#f23645]">{row.ask != null ? `${num(row.ask, 4)} BNB` : "—"}</span>
@@ -276,7 +331,7 @@ function Book({ zh, rows, picked, busy, onPick, onBuy }: { zh: boolean; rows: Ci
               <td className="px-2 py-1.5 font-mono">{age(row.listedAt)}</td>
               <td className="px-2 py-1.5"><span className="block">{row.name}</span><span className="font-mono text-[11px] text-ink/45">#{row.tokenId}</span></td>
               <td className="px-2 py-1.5 font-mono">NAND {row.nand} · LATCH {row.latch}<br />{row.nIn} → {row.nOut} · S{row.nState}</td>
-              <td className={`px-2 py-1.5 ${row.status === "verified" ? "text-[#089981]" : "text-ink/45"}`}>{stateText(row.status, zh)}</td>
+              <td className={`px-2 py-1.5 ${row.status === "verified" ? "text-[#089981]" : "text-ink/45"}`}><StatusMark status={row.status} zh={zh} /></td>
               <td className="px-2 py-1.5 font-mono">{row.hash.toLocaleString("en-US")}</td>
               <td className="px-2 py-1.5 font-mono">{num(row.crystal, 5)}</td>
               <td className="px-2 py-1.5 font-mono">{num(row.hashPx, 5)}</td>
@@ -298,7 +353,7 @@ function Book({ zh, rows, picked, busy, onPick, onBuy }: { zh: boolean; rows: Ci
   );
 }
 
-function Prints({ zh, rows }: { zh: boolean; rows: CircuitPrint[] }) {
+function Prints({ zh, rows, picked, onPick }: { zh: boolean; rows: CircuitPrint[]; picked: CircuitPrint | null; onPick: (row: CircuitPrint) => void }) {
   return (
     <div className="mt-2 max-h-[32rem] overflow-auto border border-gold/40">
       <table className="w-full min-w-[72rem] text-left text-xs">
@@ -312,11 +367,11 @@ function Prints({ zh, rows }: { zh: boolean; rows: CircuitPrint[] }) {
         <tbody>
           {rows.length === 0 ? <tr><td colSpan={11} className="px-2 py-4 text-ink/50">{zh ? "没有成交。" : "No prints."}</td></tr> : null}
           {rows.map((row) => (
-            <tr key={`${row.tx}-${row.tokenId}`} className="border-t border-gold/20">
+            <tr key={`${row.tx}-${row.tokenId}`} className={`cursor-pointer border-t border-gold/20 ${picked?.tx === row.tx && picked.tokenId === row.tokenId ? "bg-gold/10" : ""}`} onClick={() => onPick(row)}>
               <td className="px-2 py-1.5 font-mono">{age(row.ts)}</td>
               <td className="px-2 py-1.5">{row.name}<br /><span className="font-mono text-[11px] text-ink/45">#{row.tokenId}</span></td>
               <td className="px-2 py-1.5 font-mono">NAND {row.nand} · LATCH {row.latch}<br />{row.nIn} → {row.nOut} · S{row.nState}</td>
-              <td className="px-2 py-1.5">{stateText(row.status, zh)}</td>
+              <td className="px-2 py-1.5"><StatusMark status={row.status} zh={zh} /></td>
               <td className="px-2 py-1.5 font-mono">{row.hash.toLocaleString("en-US")}</td>
               <td className="px-2 py-1.5 font-mono">{num(row.crystal, 5)}</td>
               <td className="px-2 py-1.5 font-mono">{num(row.hashPx, 5)}</td>

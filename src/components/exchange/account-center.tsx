@@ -34,6 +34,8 @@ function qtyOf(amount: bigint, decimals: number, digits = 4): string {
 
 const ERC_NAME: Record<ErcKey, string> = {
   btc: "BTCB",
+  eth: "ETH",
+  zec: "ZEC",
   xau: "黄金",
   spy: "标普",
   qqq: "纳指",

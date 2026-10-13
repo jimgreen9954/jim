@@ -1,3 +1,4 @@
+// @ts-nocheck
 export class AsyncLocalStorage {
   constructor() {
     this.store = undefined;

@@ -296,6 +296,16 @@ const circuitAbi = [
     ],
     outputs: [{ name: "id", type: "uint256" }],
   },
+  {
+    name: "eval",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "id", type: "uint256" },
+      { name: "inputs", type: "bytes" },
+    ],
+    outputs: [{ name: "", type: "bytes" }],
+  },
 ] as const;
 
 /** NAND(NAND(A,B), NAND(C,D)). Three NAND gates, no canvas buffers. */
@@ -730,6 +740,96 @@ export type ChainCircuit = {
   gates: string;
   owner: string;
 };
+
+export type CircuitCheck = "ok" | "bad";
+
+function inputWord(nIn: number, mask: number): Hex {
+  const bits = Math.max(nIn, 1);
+  const bytes = new Uint8Array(Math.ceil(bits / 8));
+  for (let i = 0; i < nIn && i < 24; i++) {
+    if ((mask >> i) & 1) bytes[i >> 3] |= 1 << (i & 7);
+  }
+  return toHex(bytes);
+}
+
+function masksFor(nIn: number): number[] {
+  if (nIn <= 0) return [0];
+  if (nIn <= 5) return Array.from({ length: 2 ** nIn }, (_, i) => i);
+  const width = Math.min(nIn, 12);
+  const out = new Set<number>([0, (1 << width) - 1]);
+  for (let i = 0; i < width; i++) out.add(1 << i);
+  return [...out];
+}
+
+/** Run each circuit's own eval on chain. No wallet and no OKB. */
+export async function checkCircuits(ids: string[]): Promise<Record<string, CircuitCheck>> {
+  const unique = [...new Set(ids.filter((id) => /^\d+$/.test(id)))].slice(0, 16);
+  const result: Record<string, CircuitCheck> = {};
+  if (!unique.length) return result;
+  let infos: { status: string; result?: readonly [bigint, bigint, bigint, bigint] }[];
+  try {
+    infos = await client.multicall({
+      contracts: unique.map((id) => ({
+        address: DEPLOYED.circuits,
+        abi: circuitAbi,
+        functionName: "circuitInfo" as const,
+        args: [BigInt(id)] as const,
+      })),
+      allowFailure: true,
+    }) as { status: string; result?: readonly [bigint, bigint, bigint, bigint] }[];
+  } catch {
+    unique.forEach((id) => { result[id] = "bad"; });
+    return result;
+  }
+  const jobs: { id: string; data: Hex; minBytes: number }[] = [];
+  unique.forEach((id, index) => {
+    const row = infos[index];
+    if (!row || row.status !== "success" || !row.result) {
+      result[id] = "bad";
+      return;
+    }
+    const nIn = Number(row.result[0]);
+    const nOut = Number(row.result[1]);
+    if (!Number.isFinite(nIn) || !Number.isFinite(nOut) || nIn > 64 || nOut > 256) {
+      result[id] = "bad";
+      return;
+    }
+    const minBytes = nOut <= 0 ? 0 : Math.ceil(nOut / 8);
+    for (const mask of masksFor(nIn)) jobs.push({ id, data: inputWord(nIn, mask), minBytes });
+  });
+  const failed = new Set<string>();
+  for (let cursor = 0; cursor < jobs.length; cursor += 48) {
+    const slice = jobs.slice(cursor, cursor + 48);
+    try {
+      const calls = await client.multicall({
+        contracts: slice.map((job) => ({
+          address: DEPLOYED.circuits,
+          abi: circuitAbi,
+          functionName: "eval" as const,
+          args: [BigInt(job.id), job.data] as const,
+        })),
+        allowFailure: true,
+      });
+      slice.forEach((job, index) => {
+        const row = calls[index];
+        if (!row || row.status !== "success") {
+          failed.add(job.id);
+          return;
+        }
+        const hex = row.result as Hex;
+        const bytes = hex.startsWith("0x") ? (hex.length - 2) / 2 : 0;
+        if (bytes < job.minBytes) failed.add(job.id);
+      });
+    } catch {
+      slice.forEach((job) => failed.add(job.id));
+    }
+  }
+  for (const id of unique) {
+    if (result[id] === "bad") continue;
+    result[id] = failed.has(id) ? "bad" : "ok";
+  }
+  return result;
+}
 
 /** Latest taped circuits on this processor. The official project page reads the same contract. */
 export async function readCircuits(limit = 12): Promise<{ total: number; rows: ChainCircuit[] }> {
