@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { copy } from "@/lib/copy";
 import { startPersistence, useExchange } from "@/lib/exchange-store";
 import { fmtPct, fmtPx, fmtUsd } from "@/lib/format";
@@ -197,12 +198,13 @@ function InviteDock() {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const dock = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
   useEffect(() => onAccount(setAccount), []);
   useEffect(() => {
     if (!open) return;
     const close = (event: PointerEvent) => {
       const node = event.target;
-      if (node instanceof Node && dock.current?.contains(node)) return;
+      if (node instanceof Node && (dock.current?.contains(node) || panel.current?.contains(node))) return;
       setOpen(false);
     };
     document.addEventListener("pointerdown", close);
@@ -255,8 +257,8 @@ function InviteDock() {
       <button type="button" className={`min-h-9 px-2 text-xs ${open ? "bg-ink text-paper" : "text-ink/80"}`} onClick={() => setOpen((on) => !on)}>
         {zh ? "邀请" : "Invite"}
       </button>
-      {open ? (
-          <div className="absolute right-0 top-full z-50 mt-2 w-[min(22rem,calc(100vw-1.5rem))] border border-gold bg-paper p-3 text-sm shadow-plate">
+      {open ? createPortal(
+          <div ref={panel} className="fixed inset-x-3 top-[calc(env(safe-area-inset-top)+3.5rem)] z-[80] max-h-[min(32rem,calc(100dvh-5rem))] overflow-y-auto border border-gold bg-paper p-3 text-sm shadow-plate sm:inset-x-auto sm:right-3 sm:w-[22rem]">
           <div className="grid grid-cols-2 border border-gold">
             <button type="button" className={`min-h-9 ${chain === "xlayer" ? "bg-ink text-paper" : ""}`} onClick={() => setChain("xlayer")}>X Layer</button>
             <button type="button" className={`min-h-9 ${chain === "bsc" ? "bg-ink text-paper" : ""}`} onClick={() => setChain("bsc")}>BSC</button>
@@ -292,7 +294,8 @@ function InviteDock() {
             ))}
           </div>
           {note ? <p className="mt-2 text-xs leading-5">{note}</p> : null}
-          </div>
+          </div>,
+          document.body,
       ) : null}
     </div>
   );
