@@ -7,7 +7,6 @@ import { BSC, TxPending, txUrl } from "@/lib/bsc";
 import { connectBsc } from "@/lib/bsc";
 import { currentAccount } from "@/lib/wallet";
 import { CircuitMarket } from "@/components/exchange/circuit-market";
-import { Hint } from "@/components/exchange/hint";
 
 function px(n: number): string {
   if (!(n > 0)) return "—";
@@ -98,47 +97,49 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
         </p>
         {mode === "chips" ? (
           <>
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={zh ? "搜处理器，例如 Blonskr、Genesis、TapeOut" : "Search a processor"} className="border border-gold bg-paper px-3 py-2 outline-none" />
-            <div className="flex gap-2 overflow-x-auto">
-              {[...new Set((books?.bids ?? []).map((row) => row.name))]
-                .filter((row) => row.toLowerCase().includes(query.trim().toLowerCase()))
-                .slice(0, 8)
-                .map((row) => (
-                  <button key={row} type="button" onClick={() => { setName(row); setBid(null); }} className={`min-h-10 shrink-0 border px-3 text-sm ${name === row ? "border-ink bg-ink text-paper" : "border-gold"}`}>{row}</button>
+            <div className="grid gap-3 lg:grid-cols-[11rem_minmax(0,1fr)]">
+              <div className="border border-gold/50">
+                {["TapeOut", "Behemoth", "Genesis"].map((family) => {
+                  const rows = (books?.bids ?? []).filter((row) => row.name.toLowerCase().includes(family.toLowerCase()) && row.name.toLowerCase().includes(query.trim().toLowerCase()));
+                  const kinds = [0, 1] as const;
+                  return (
+                    <div key={family} className="border-b border-gold/30">
+                      <p className="px-2 pt-2 text-sm">{family === "Genesis" ? "Genesis CPU" : family}</p>
+                      {kinds.map((id) => {
+                        const sample = rows.find((row) => row.tokenId === id);
+                        const on = name.toLowerCase().includes(family.toLowerCase()) && kind === id;
+                        return (
+                          <button key={id} type="button" onClick={() => { setName(sample?.name ?? (family === "Genesis" ? "Genesis CPU" : family)); setKind(id); setBid(null); }} className={`flex w-full items-center justify-between px-2 py-1.5 text-left text-[13px] ${on ? "bg-gold/15" : ""}`}>
+                            <span>{id === 0 ? "NAND" : "LATCH"}</span>
+                            <span className="font-mono text-[12px]">{sample ? `${px(sample.priceBnb)}` : "—"}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="min-w-0 border border-gold/50">
+                <div className="flex items-end justify-between px-3 py-3">
+                  <h3 className="font-display text-2xl italic">{name} / {kind === 0 ? "NAND" : "LATCH"}</h3>
+                  <p className="font-mono text-sm">{bids[0] ? `${px(bids[0].priceBnb)} BNB` : "—"}</p>
+                </div>
+                <div className="grid grid-cols-[4.2rem_minmax(0,1fr)_4.5rem_auto] px-2 py-1 text-[11px] text-ink/45">
+                  <span>{zh ? "价格" : "Price"}</span>
+                  <span>{zh ? "剩余" : "Left"}</span>
+                  <span className="text-right">{zh ? "总额" : "Total"}</span>
+                  <span className="text-right">{zh ? "指定成交" : "Take"}</span>
+                </div>
+                {bids.length === 0 ? <p className="px-3 py-4 text-sm text-ink/55">{zh ? "这只标的现在没有买单。右边可以自己挂。" : "No bid on this one. Place one from the ticket."}</p> : bids.map((row) => (
+                  <div key={row.id} className={`grid grid-cols-[4.2rem_minmax(0,1fr)_4.5rem_auto] items-center px-2 py-1 font-mono text-[12px] ${bid?.id === row.id ? "bg-[#089981]/10" : ""}`}>
+                    <span className="text-[#089981]">{px(row.priceBnb)}</span>
+                    <span>{row.remaining.toLocaleString("en-US")}</span>
+                    <span className="text-right">{px(row.priceBnb * row.remaining)}</span>
+                    <button type="button" className="ml-2 h-6 border border-[#f23645] px-2 text-[11px] text-[#f23645]" onClick={() => { setBid(row); setQty(String(row.remaining)); }}>{zh ? "卖出" : "Sell"}</button>
+                  </div>
                 ))}
-            </div>
-            <div className="grid grid-cols-2 border border-gold">
-              {([0, 1] as const).map((id) => (
-                <button key={id} type="button" onClick={() => { setKind(id); setBid(null); }} className={`min-h-10 ${kind === id ? "bg-ink text-paper" : ""}`}>{id === 0 ? "NAND" : "LATCH"}</button>
-              ))}
-            </div>
-            <p className="text-sm">{zh ? "TapeOut 卖单合约没有开放。这里是买单。卖出就是把你的 NAND 或 LATCH 卖进下面某一档。" : "The TapeOut ask market is not open. These are bids. Selling fills one of them."}</p>
-            <div className="max-h-[28rem] overflow-auto border border-gold">
-              <table className="w-full min-w-[36rem] text-left text-xs">
-                <thead className="sticky top-0 bg-paper text-ink/45">
-                  <tr>
-                    <th className="px-2 py-2 font-normal">{zh ? "处理器" : "Processor"}</th>
-                    <th className="px-2 py-2 font-normal"><Hint label={zh ? "种类" : "Kind"} text={zh ? "NAND 或 LATCH。卖出时钱包里要有同一种。" : "NAND or LATCH. The wallet must hold the same kind."} /></th>
-                    <th className="px-2 py-2 font-normal"><Hint label={zh ? "买价" : "Bid"} text={zh ? "这张买单愿意付的单价，单位 BNB。卖出按这个价成交。" : "BNB this bid pays per transistor."} /></th>
-                    <th className="px-2 py-2 font-normal"><Hint label={zh ? "剩余" : "Left"} text={zh ? "这张买单还愿意收多少颗。吃超了会失败。" : "How many this bid will still take."} /></th>
-                    <th className="px-2 py-2 font-normal"><Hint label={zh ? "总额" : "Total"} text={zh ? "买价乘剩余。本站另收千分之二，先付，TapeOut 没成交也不退。" : "Bid times the size left. This site adds 0.2 percent, paid first."} /></th>
-                    <th className="px-2 py-2 text-right font-normal">{zh ? "卖出" : "Sell"}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bids.length === 0 ? <tr><td colSpan={6} className="px-3 py-3 text-ink/60">{zh ? "这只标的现在没有 TapeOut 买单。" : "No TapeOut bid on this one."}</td></tr> : null}
-                  {bids.map((row) => (
-                    <tr key={row.id} className={`border-t border-gold/20 ${bid?.id === row.id ? "bg-gold/10" : ""}`}>
-                      <td className="px-2 py-2">{row.name}<br /><span className="font-mono text-[11px] text-ink/45">#{row.id}</span></td>
-                      <td className="px-2 py-2">{row.kind}</td>
-                      <td className="px-2 py-2 font-mono">{px(row.priceBnb)} BNB</td>
-                      <td className="px-2 py-2 font-mono">{row.remaining.toLocaleString("en-US")}</td>
-                      <td className="px-2 py-2 font-mono">{px(row.priceBnb * row.remaining)} BNB</td>
-                      <td className="px-2 py-2 text-right"><button type="button" className="min-h-7 bg-[#f23645] px-2 text-white" onClick={() => setBid(row)}>{zh ? "卖出" : "Sell"}</button></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                <p className="px-3 py-2 text-[11px] leading-5 text-ink/45">{zh ? "TapeOut 这里只有买单。卖出是把 NAND 或 LATCH 卖进这一档。另付千分之二，先付，后面没成交不退。" : "TapeOut lists bids only. Selling fills one of them. The extra 0.2% is paid first."}</p>
+              </div>
             </div>
           </>
         ) : (

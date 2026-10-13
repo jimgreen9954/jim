@@ -20,6 +20,7 @@ import { TapeSpotDesk } from "@/components/exchange/tape-spot";
 import { WorkshopRisk } from "@/components/exchange/risk-calc";
 import { MineDesk } from "@/components/exchange/mine-desk";
 import { Whitepaper } from "@/components/exchange/whitepaper";
+import { SideRail } from "@/components/exchange/side-rail";
 import { bemPrice } from "@/lib/bsc";
 import { FeeLockProvider, useFeeLock } from "@/lib/fee-lock";
 import { currentAccount, onAccount } from "@/lib/wallet";
@@ -78,7 +79,6 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
           <a href="https://t.me/+RWVnnxXf1LY1MWVh" target="_blank" rel="noreferrer" className="underline">Telegram</a>
           <a href="https://x.com/Icp_chinese" target="_blank" rel="noreferrer" className="underline">X</a>
         </footer>
-        {floor === "paper" ? <MobileNav /> : null}
       </div>
     </FeeLockProvider>
   );
@@ -411,11 +411,20 @@ function Header({ floor, desk, shop, setFloor, setDesk, setShop, setGiftOpen }: 
 function PaperFloor() {
   const lang = useExchange((s) => s.lang);
   const pane = useExchange((s) => s.pane);
+  const setPane = useExchange((s) => s.setPane);
+  const c = copy[lang];
   const showChart = pane === "trade";
   return (
+    <SideRail items={[
+      ["trade", c.trade],
+      ["book", c.book],
+      ["holds", c.holds],
+      ["die", c.die],
+    ].map(([id, label]) => ({ key: id, label, on: pane === id, run: () => setPane(id as typeof pane) }))}>
     <div className="relative">
       <p className="pointer-events-none absolute top-16 right-4 z-10 hidden font-display text-3xl italic text-ink/15 lg:block">{lang === "zh" ? "练习 · 本地" : "Practice · local"}</p>
       <p className="text-sm text-ink/70">{lang === "zh" ? "余额是练习金。清除只动这台浏览器，不动合约。" : "The balance is practice cash. Clear only wipes this browser, not a contract."}</p>
+      {pane === "trade" ? (
       <div className="grid items-start gap-4 lg:grid-cols-12">
         <aside className="hidden lg:col-span-4 lg:block">
           <div className="lg:sticky lg:top-4">
@@ -440,7 +449,9 @@ function PaperFloor() {
           </div>
         </div>
       </div>
+      ) : <MobilePane />}
     </div>
+    </SideRail>
   );
 }
 
@@ -552,33 +563,4 @@ function MobilePane() {
   if (pane === "holds") return <Blotter />;
   if (pane === "die") return <DiePanel />;
   return <Ticket />;
-}
-
-function MobileNav() {
-  const pane = useExchange((s) => s.pane);
-  const setPane = useExchange((s) => s.setPane);
-  const lang = useExchange((s) => s.lang);
-  const pos = useExchange((s) => s.engine.position);
-  const c = copy[lang];
-  const items = [
-    ["trade", c.trade],
-    ["book", c.book],
-    ["holds", c.holds],
-    ["die", c.die],
-  ] as const;
-  return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-gold bg-paper pb-[env(safe-area-inset-bottom)] lg:hidden">
-      {items.map(([id, label]) => (
-        <button
-          key={id}
-          type="button"
-          onClick={() => setPane(id)}
-          className={`relative min-h-12 text-sm ${pane === id ? "bg-foil text-ink" : "text-ink"}`}
-        >
-          {label}
-          {id === "holds" && pos && pos.size !== 0 ? <span className="absolute top-2 right-5 size-2 bg-sell" /> : null}
-        </button>
-      ))}
-    </nav>
-  );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { SideRail } from "@/components/exchange/side-rail";
 import { formatUnits } from "viem";
 import { XLAYER } from "@/lib/xlayer";
 import { quoteOkb } from "@/lib/okb";
@@ -346,16 +347,13 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   }
 
   return (
+    <SideRail items={choices.map((id) => ({
+      key: String(id),
+      label: id === "circuit" ? (zh ? "电路" : "Circuits") : NAMES[id],
+      on: lane === id,
+      run: () => setLane(id),
+    }))}>
     <section className="grid gap-3">
-      {choices.length > 1 ? (
-        <div className="flex gap-4 overflow-x-auto border-b border-gold/30 sm:gap-6">
-          {choices.map((id) => (
-            <button key={String(id)} type="button" onClick={() => setLane(id)} className={`shrink-0 border-b-2 px-0.5 py-3 text-[13px] tracking-[0.12em] ${lane === id ? "border-ink text-ink" : "border-transparent text-ink/40"}`}>
-              {id === "circuit" ? (zh ? "电路" : "CIRCUITS") : NAMES[id]}
-            </button>
-          ))}
-        </div>
-      ) : null}
       {lane === "circuit" ? <TapeCircuits zh={zh} /> : (
         <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-3">
           <div className="min-w-0 pb-24 lg:pb-0">
@@ -507,5 +505,6 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
       </p>
       {note ? <p className={`text-sm leading-6 ${bad ? "text-sell" : ""}`}>{note}</p> : null}
     </section>
+    </SideRail>
   );
 }

@@ -332,20 +332,20 @@ export function TapeCanvas() {
   useEffect(() => { setAck(false); }, [needN, needL, target]);
 
   return (
-    <section className="grid items-start gap-4 lg:grid-cols-12">
-      <div className="flex min-w-0 flex-col gap-3 lg:col-span-8">
-        <div className="border border-gold bg-card px-3 py-3">
-          <p className="text-xs tracking-widest text-gold">{zh ? "选一台再画" : "Pick a processor, then draw"}</p>
-          <input value={find} onChange={(event) => setFind(event.target.value)} placeholder={zh ? "搜 TapeOut 处理器，例如 Genesis、Blonskr" : "Search a TapeOut processor"} className="mt-2 w-full border border-gold bg-paper px-3 py-2 outline-none" />
-          <div className="mt-2 flex gap-2 overflow-x-auto">
-            {shownTargets.map((row) => (
-              <button key={row.circuits} type="button" onClick={() => setTarget(row)} className={`min-h-10 shrink-0 border px-3 text-sm ${target.circuits.toLowerCase() === row.circuits.toLowerCase() ? "border-ink bg-ink text-paper" : "border-gold"}`}>
-                {row.ours ? "TAPELIQUID" : row.name} · {row.chain === "bsc" ? "BSC" : "X Layer"}
-              </button>
-            ))}
-          </div>
-          <p className="mt-2 text-sm text-ink/70">{zh ? `当前是 ${target.name}。烧掉的是这台的 NAND 和 LATCH。${!find.trim() ? " 其他 TapeOut 处理器输入名字再选。" : ""}` : `Taping ${target.name}. This burns that processor's NAND and LATCH.`}</p>
+    <section className="grid items-start gap-4 lg:grid-cols-[12rem_minmax(0,1fr)_18rem]">
+      <aside className="border border-gold/60 bg-card lg:sticky lg:top-16">
+        <p className="px-3 pt-3 text-xs text-ink/45">{zh ? "处理器" : "Processor"}</p>
+        <input value={find} onChange={(event) => setFind(event.target.value)} placeholder={zh ? "搜索" : "Search"} className="m-2 w-[calc(100%-1rem)] border border-gold/40 bg-paper px-2 py-1.5 text-sm outline-none" />
+        <div className="flex gap-2 overflow-x-auto px-2 pb-2 lg:block lg:overflow-visible">
+          {shownTargets.map((row) => (
+            <button key={row.circuits} type="button" onClick={() => setTarget(row)} className={`mb-1 block w-full shrink-0 border-l-2 px-2 py-1.5 text-left text-sm ${target.circuits.toLowerCase() === row.circuits.toLowerCase() ? "border-ink font-medium" : "border-transparent text-ink/55"}`}>
+              {row.ours ? "TAPELIQUID" : row.name}
+              <span className="block text-[11px] font-normal text-ink/40">{row.chain === "bsc" ? "BSC" : "X Layer"}</span>
+            </button>
+          ))}
         </div>
+      </aside>
+      <div className="flex min-w-0 flex-col gap-3">
         <div className="border border-gold bg-card px-3 py-3">
           <p className="text-xs tracking-widest text-gold">{zh ? "画布 · 先在浏览器里跑" : "Canvas · runs in the browser first"}</p>
           <h2 className="font-display text-3xl italic">{zh ? `流片 ${target.name}` : `Tape ${target.name}`}</h2>
@@ -552,7 +552,7 @@ export function TapeCanvas() {
           </div>
         ) : null}
       </div>
-      <aside className="flex flex-col gap-3 lg:col-span-4 lg:sticky lg:top-24">
+      <aside className="flex flex-col gap-3 lg:sticky lg:top-24">
         <div className="border border-gold bg-card px-3 py-3">
           <div className="flex items-baseline justify-between gap-2">
             <h3 className="font-display text-2xl italic">{zh ? "可流片" : "Ready to tape"}</h3>

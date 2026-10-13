@@ -42,6 +42,7 @@ import { Kline } from "@/components/exchange/kline";
 import { SignCard } from "@/components/exchange/sign-card";
 import { LpPanel } from "@/components/exchange/lp-desk";
 import { useFeeLock } from "@/lib/fee-lock";
+import { SideRail } from "@/components/exchange/side-rail";
 
 function sized(raw: bigint, decimals: number, pct: number, cap?: bigint): string {
   let cut = (raw * BigInt(pct)) / 100n;
@@ -287,41 +288,32 @@ export function SpotDesk() {
   const pcts = [25, 50, 75, 100];
 
   return (
+    <SideRail items={([
+      ["crypto", lang === "zh" ? "加密货币" : "Crypto"],
+      ["stock", lang === "zh" ? "美股" : "Stocks"],
+      ["tape", "TAPE"],
+      ["lp", lang === "zh" ? "流动性" : "Liquidity"],
+    ] as const).map(([key, label]) => ({
+      key,
+      label,
+      on: key === "lp" ? lane === "lp" : lane === "trade" && book === key,
+      run: () => {
+        if (key === "lp") { setLane("lp"); return; }
+        setLane("trade");
+        setBook(key);
+        if (key === "tape") return;
+        const next = key === "crypto" ? "bem" : "spy";
+        setPair(next);
+        setAmount("");
+        setOut(null);
+        setMinOut(null);
+        setPrice(null);
+        setAssetBal(null);
+        setPrints([]);
+      },
+    }))}>
     <section className="border border-gold bg-card shadow-plate">
-      <div className="grid grid-cols-2 border-b border-gold">
-        <button type="button" onClick={() => setLane("trade")} className={`min-h-11 text-sm ${lane === "trade" ? "bg-ink text-paper" : ""}`}>
-          {lang === "zh" ? "买卖" : "Trade"}
-        </button>
-        <button type="button" onClick={() => setLane("lp")} className={`min-h-11 text-sm ${lane === "lp" ? "bg-ink text-paper" : ""}`}>
-          {lang === "zh" ? "流动性" : "Liquidity"}
-        </button>
-      </div>
-      {lane === "lp" ? <LpPanel /> : (
-      <>
-      <div className="grid grid-cols-3 border-b border-gold">
-        {(["crypto", "stock", "tape"] as const).map((key) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => {
-              setBook(key);
-              if (key === "tape") return;
-              const next = key === "crypto" ? "bem" : "spy";
-              setPair(next);
-              setAmount("");
-              setOut(null);
-              setMinOut(null);
-              setPrice(null);
-              setAssetBal(null);
-              setPrints([]);
-            }}
-            className={`min-h-11 text-sm ${book === key ? "bg-ink text-paper" : ""}`}
-          >
-            {key === "crypto" ? (lang === "zh" ? "加密货币" : "Crypto") : key === "stock" ? (lang === "zh" ? "美股" : "US stocks") : "TAPE"}
-          </button>
-        ))}
-      </div>
-      {book === "tape" ? <TapePoolDesk /> : (
+      {book === "tape" && lane === "trade" ? <TapePoolDesk /> : lane === "lp" ? <LpPanel /> : (
       <div className="grid gap-0 lg:grid-cols-12">
         <div className="border-b border-gold/40 p-3 lg:col-span-7 lg:border-r lg:border-b-0">
           <div className="flex items-center justify-between gap-3">
@@ -580,8 +572,7 @@ export function SpotDesk() {
         </form>
       </div>
       )}
-      </>
-      )}
     </section>
+    </SideRail>
   );
 }

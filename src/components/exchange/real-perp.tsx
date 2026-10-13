@@ -37,6 +37,7 @@ import {
 import { connectXLayer, XLAYER } from "@/lib/xlayer";
 import { TAPE_BEM } from "@/lib/tape-pool";
 import { xCap } from "@/lib/okb";
+import { SideRail } from "@/components/exchange/side-rail";
 
 function short(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
@@ -438,34 +439,12 @@ export function RealPerp() {
   };
 
   return (
+    <SideRail items={[
+      { key: "bsc", label: "BSC · USDT", on: chain === "bsc", run: () => { selectDesk("bsc"); setChain("bsc"); setPerp(bookOf("bsc")); connectBsc().catch(() => undefined); } },
+      { key: "xlayer", label: "X Layer · USDT", on: chain === "xlayer", run: () => { selectDesk("xlayer"); setChain("xlayer"); setPerp(bookOf("xlayer")); connectXLayer().catch(() => undefined); } },
+    ]}>
     <section className="border border-gold bg-card shadow-plate">
       <div className="flex flex-col gap-3 p-3">
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            className={`min-h-12 border border-gold ${chain === "bsc" ? "bg-ink text-paper" : ""}`}
-            onClick={() => {
-              selectDesk("bsc");
-              setChain("bsc");
-              setPerp(bookOf("bsc"));
-              connectBsc().catch(() => undefined);
-            }}
-          >
-            BSC · USDT
-          </button>
-          <button
-            type="button"
-            className={`min-h-12 border border-gold ${chain === "xlayer" ? "bg-ink text-paper" : ""}`}
-            onClick={() => {
-              selectDesk("xlayer");
-              setChain("xlayer");
-              setPerp(bookOf("xlayer"));
-              connectXLayer().catch(() => undefined);
-            }}
-          >
-            X Layer · USDT
-          </button>
-        </div>
         {chain === "xlayer" && !/^0x[a-fA-F0-9]{40}$/.test(KNOWN_XPERP) ? (
           <p className="text-sm leading-relaxed xl:col-span-12">{c.xOpen}</p>
         ) : null}
@@ -1084,6 +1063,7 @@ export function RealPerp() {
         ) : null}
       </div>
     </section>
+    </SideRail>
   );
 }
 
