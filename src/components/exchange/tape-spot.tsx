@@ -112,21 +112,20 @@ function Quote({ zh, market, side, price, amount, unit, rate }: { zh: boolean; m
   );
 }
 
-function Row({ level, max, bid, market, tag, act, onPick, onAct, unit, rate }: { level: Level; max: bigint; bid: boolean; market: number; tag?: string; act: string; onPick: () => void; onAct: () => void; unit: MoneyUnit; rate: bigint }) {
-  const width = max > 0n ? Number((level.size * 100n) / max) : 0;
-  const digits = market === 0 ? "usdt" : unit;
+function plainBase(market: number, amount: bigint): string {
+  if (market !== 0) return amount.toString();
+  return formatUnits(amount, 8).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+}
+
+function TakeRow({ priceLabel, cap, value, onChange, bid, mine, busy, zh, onTake }: { priceLabel: string; cap: string; value: string; onChange: (value: string) => void; bid: boolean; mine: boolean; busy: boolean; zh: boolean; onTake: () => void }) {
   return (
-    <div role="button" tabIndex={0} onClick={onPick} onKeyDown={(event) => { if (event.key === "Enter") onPick(); }} className="relative grid min-h-8 w-full cursor-pointer grid-cols-[minmax(0,1.15fr)_minmax(0,0.7fr)_auto] items-center gap-1 px-2 text-left font-mono text-[12px] tabular-nums sm:grid-cols-[1.1fr_0.8fr_0.9fr_auto] sm:text-[13px]">
-      <span className={`absolute inset-y-0 right-0 ${bid ? "bg-[#089981]/10" : "bg-[#f23645]/10"}`} style={{ width: `${Math.max(width, 2)}%` }} />
-      <span className={`relative min-w-0 truncate ${bid ? "text-[#089981]" : "text-[#f23645]"}`}>
-        {moneyText(level.price, digits, rate)}
-        {tag ? <span className="ml-1 rounded-sm bg-gold/30 px-1 text-[10px] leading-4 text-ink/70">{tag}</span> : null}
-      </span>
-      <span className="relative min-w-0 truncate">{baseText(market, level.size)}</span>
-      <span className="relative hidden min-w-0 truncate text-ink/70 sm:block">{moneyText(cost(market, level.size, level.price), digits, rate)}</span>
-      <span className="relative">
-        <button type="button" onClick={(event) => { event.stopPropagation(); onAct(); }} className={`inline-flex min-h-7 items-center px-2 text-[11px] text-white ${bid ? "bg-[#f23645]" : "bg-[#089981]"}`}>{act}</button>
-      </span>
+    <div className={`grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-2 px-2 py-1.5 ${mine ? (bid ? "bg-[#089981]/10" : "bg-[#f23645]/10") : ""}`}>
+      <span className={`truncate font-mono text-[12px] tabular-nums ${bid ? "text-[#089981]" : "text-[#f23645]"}`}>{priceLabel}</span>
+      <label className="flex min-h-10 items-center rounded-md border border-ink/15 bg-paper px-2">
+        <span className="text-ink/40">≤</span>
+        <input value={value} placeholder={cap} inputMode="decimal" onChange={(event) => onChange(event.target.value)} className="w-full bg-transparent text-center font-mono text-sm text-ink outline-none" />
+      </label>
+      <button type="button" disabled={busy} onClick={onTake} className={`min-h-10 rounded-md px-3 text-sm text-white disabled:opacity-40 ${bid ? "bg-[#f23645]" : "bg-[#089981]"}`}>{bid ? (zh ? "卖出" : "Sell") : (zh ? "买入" : "Buy")}</button>
     </div>
   );
 }
@@ -155,7 +154,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   const [note, setNote] = useState<string | null>(null);
   const [bad, setBad] = useState(false);
   const [ticketOpen, setTicketOpen] = useState(false);
-  const [levelCap, setLevelCap] = useState<bigint | null>(null);
+  const [takes, setTakes] = useState<Record<string, string>>({});
   const market: SpotMarket = lane === "circuit" ? 0 : lane;
 
   useEffect(() => onAccount(setAccount), []);
@@ -231,8 +230,6 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   const bidBook = useMemo(() => sumSide(bids, market), [bids, market]);
   const traded = useMemo(() => prints.reduce((sum, row) => ({ n: sum.n + 1, base: sum.base + row.base, quote: sum.quote + row.quote, fee: sum.fee + row.fee }), { n: 0, base: 0n, quote: 0n, fee: 0n }), [prints]);
   const askView = useMemo(() => [...asks].reverse(), [asks]);
-  const maxAsk = asks.reduce((m, row) => row.size > m ? row.size : m, 0n);
-  const maxBid = bids.reduce((m, row) => row.size > m ? row.size : m, 0n);
   const bestAsk = asks[0]?.price ?? 0n;
   const bestBid = bids[0]?.price ?? 0n;
   const spread = bestAsk > bestBid && bestBid > 0n ? bestAsk - bestBid : 0n;
@@ -287,11 +284,15 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
     }).finally(() => setBusy(false));
   };
 
-  const pick = (level: Level, bid: boolean) => {
-    setSide(bid ? "sell" : "buy");
-    setPrice(showPrice(level.price));
-    setAmount("");
-    setLevelCap(level.size);
+  const takeLevel = (level: Level, bookBid: boolean) => {
+    const key = `${bookBid ? "b" : "a"}-${level.price}`;
+    const typed = (takes[key] ?? plainBase(market, level.size)).trim();
+    let qty = 0n;
+    try { qty = spotBase(market, typed); } catch { setBad(true); setNote(zh ? "数量不对。NAND 和 LATCH 只收整数。" : "The amount is not valid. NAND and LATCH are whole numbers."); return; }
+    if (qty <= 0n || qty > level.size) { setBad(true); setNote(zh ? `不能超过这一档的 ${plainBase(market, level.size)}。` : `It cannot be more than this level, ${plainBase(market, level.size)}.`); return; }
+    const mine = orders.some((row) => row.market === market && row.bid === bookBid && (bookBid ? row.price >= level.price : row.price <= level.price));
+    if (mine) { setBad(true); setNote(zh ? "这一档或更优的价格上有你自己的单。合约会整笔拒绝。先撤掉。" : "You have an order at this price or a better one. The contract rejects the whole trade. Cancel it first."); return; }
+    run(() => placeSpot(account ?? "", market, !bookBid, level.price, qty), zh ? "已按这一档提交。数量不超过这一档，多出来的不会再挂成新单。" : "Submitted at this level. The amount does not exceed it, so nothing extra is left on the book.");
   };
 
   const fillPct = (pct: number) => {
@@ -360,22 +361,20 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
                 <Hint label={zh ? "价差" : "Spread"} text={zh ? "卖一减去买一。价差越小，买卖两边越靠近。" : "Best ask minus best bid. A smaller spread means the two sides are closer."} /> {spread > 0n ? moneyText(spread, quoteUnit, okbRate) : "—"}
               </p>
             </div>
-            <div className="grid grid-cols-[minmax(0,1.15fr)_minmax(0,0.7fr)_auto] px-2 pb-1 font-mono text-[11px] text-ink/45 sm:grid-cols-[1.1fr_0.8fr_0.9fr_auto]">
-              <Hint label={zh ? "价格" : "Price"} text={zh ? `这一档的单价，按 ${unitName} 显示。同一价格的单子已经并成一档。链上仍按 USDT0 记账。` : `This level's price, shown in ${unitName}. Same prices are already merged. The contract still settles in USDT0.`} />
-              <Hint label={zh ? "数量" : "Size"} text={zh ? `这一档还没成交的 ${name}。NAND 和 LATCH 只收整数。` : `${name} still open at this price. NAND and LATCH are whole numbers.`} />
-              <span className="hidden sm:block"><Hint label={zh ? "总额" : "Total"} text={zh ? "这一档的价格乘数量，还没扣千分之二。" : "Price times size at this level, before the 0.2 percent."} /></span>
-              <span className="text-right"><Hint label={zh ? "成交" : "Take"} text={zh ? "按这一档的数量填进下单。数量还可以改少。" : "Fills the ticket with this level. You can still type less."} /></span>
-            </div>
-            <div className="max-h-[min(22rem,42vh)] overflow-y-auto border-t border-gold/30">
-              {askView.length === 0 ? <p className="px-2 py-2 text-xs text-ink/55">{zh ? "卖盘空着。" : "No asks."}</p> : askView.map((level) => (
-                <Row key={`a-${level.price}`} level={level} max={maxAsk} bid={false} market={market} unit={quoteUnit} rate={okbRate} tag={orders.some((row) => row.market === market && !row.bid && row.price === level.price) ? (zh ? "我的" : "mine") : undefined} act={zh ? "买" : "Buy"} onPick={() => { pick(level, false); setTicketOpen(true); }} onAct={() => { pick(level, false); setAmount(market === 0 ? formatUnits(level.size, 8) : level.size.toString()); setTicketOpen(true); }} />
-              ))}
+            <p className="px-3 pt-3 text-sm">{zh ? "指定成交" : "Take a level"}</p>
+            <p className="px-3 pb-1 text-[11px] leading-5 text-ink/50">{zh ? "格子里是这一档最多能吃的数量，可以改少。点按钮按这一档的价格直接成交。" : "The box is the most this level can fill. Type less if you want. The button trades at that level's price."}</p>
+            <div className="max-h-[min(22rem,42vh)] overflow-y-auto">
+              {askView.length === 0 ? <p className="px-3 py-2 text-xs text-ink/55">{zh ? "卖盘空着。" : "No asks."}</p> : askView.map((level) => {
+                const key = `a-${level.price}`;
+                return <TakeRow key={key} zh={zh} bid={false} busy={busy} mine={orders.some((row) => row.market === market && !row.bid && row.price === level.price)} priceLabel={moneyText(level.price, quoteUnit, okbRate)} cap={plainBase(market, level.size)} value={takes[key] ?? plainBase(market, level.size)} onChange={(value) => setTakes((cur) => ({ ...cur, [key]: value }))} onTake={() => takeLevel(level, false)} />;
+              })}
             </div>
             <p className="border-y border-gold/40 px-2 py-1 text-center font-mono text-[11px] text-ink/55">{spread > 0n ? `${zh ? "价差" : "Spread"} ${moneyText(spread, quoteUnit, okbRate)} ${unitName}` : (zh ? "还没有对敲的两档" : "No two-sided market")}</p>
             <div>
-              {bids.length === 0 ? <p className="px-2 py-2 text-xs text-ink/55">{zh ? "买盘空着。" : "No bids."}</p> : bids.map((level) => (
-                <Row key={`b-${level.price}`} level={level} max={maxBid} bid market={market} unit={quoteUnit} rate={okbRate} tag={orders.some((row) => row.market === market && row.bid && row.price === level.price) ? (zh ? "我的" : "mine") : undefined} act={zh ? "卖" : "Sell"} onPick={() => { pick(level, true); setTicketOpen(true); }} onAct={() => { pick(level, true); setAmount(market === 0 ? formatUnits(level.size, 8) : level.size.toString()); setTicketOpen(true); }} />
-              ))}
+              {bids.length === 0 ? <p className="px-3 py-2 text-xs text-ink/55">{zh ? "买盘空着。" : "No bids."}</p> : bids.map((level) => {
+                const key = `b-${level.price}`;
+                return <TakeRow key={key} zh={zh} bid busy={busy} mine={orders.some((row) => row.market === market && row.bid && row.price === level.price)} priceLabel={moneyText(level.price, quoteUnit, okbRate)} cap={plainBase(market, level.size)} value={takes[key] ?? plainBase(market, level.size)} onChange={(value) => setTakes((cur) => ({ ...cur, [key]: value }))} onTake={() => takeLevel(level, true)} />;
+              })}
             </div>
             {miss ? <p className="px-2 py-2 text-xs text-ink/55">{zh ? "这一次没读到。不写成 0。" : "This read missed. It is not shown as zero."}</p> : null}
             <div className="grid grid-cols-2 border-t border-gold/40 text-xs sm:grid-cols-4">
@@ -384,7 +383,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
               <Stat k={<Hint label={zh ? "成交" : "Prints"} text={zh ? "从最新的区块往回读。NAND、LATCH、TAPE 分开算。读到的笔数和金额先显示，更早的还在补。" : "Reads backward from the newest block. NAND, LATCH and TAPE are counted apart. Counts already found stay on screen while older blocks are still being read."} />} v={reading && traded.n === 0 ? (zh ? "正在读" : "Reading") : `${traded.n}${zh ? " 笔" : ""}`} s={reading && traded.n === 0 ? (zh ? `已回读 ${readMin} 分钟` : `${readMin} min read`) : `${baseText(market, traded.base)} ${name} · ${moneyText(traded.quote, quoteUnit, okbRate)} ${unitName}`} />
               <Stat k={<Hint label={zh ? "已收手续费" : "Fees read"} text={zh ? "这些成交里已经扣下的千分之二，进收费地址。卖方实收 99.8%。" : "The 0.2 percent already taken on these prints. Sellers receive 99.8 percent."} />} v={`${moneyText(traded.fee, quoteUnit, okbRate)} ${unitName}`} s={zh ? "只算已经读到的成交" : "Of the prints read"} />
             </div>
-            <p className="px-3 py-2 text-[11px] leading-5 text-ink/50">{zh ? "同一价格并成一档。点价格填右边，点右边的按钮按这一档的数量成交，数量仍可改少。" : "One price is one level. Tap the price to fill the ticket. The button takes that size, and you can still type less."}</p>
+            <p className="px-3 py-2 text-[11px] leading-5 text-ink/50">{zh ? "上面是别人的卖单，点买入吃掉。下面是别人的买单，点卖出吃掉。数量可以改少，不能改多。更好的价格会先成交。有你自己单的那一档是浅色，先撤再点。" : "Asks are on top: Buy takes them. Bids are below: Sell takes them. Type less, not more. A better price fills first. Your own level is shaded. Cancel it before taking it."}</p>
           </article>
           <article className="mt-3 border border-gold bg-card">
             <div className="grid grid-cols-2 border-b border-gold">
@@ -444,12 +443,6 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
             <label className="mt-2 grid gap-1 text-xs text-ink/55">
               {zh ? `数量 ${name}` : `Amount ${name}`}
               <input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono text-base text-ink" />
-              {levelCap != null ? (
-                <span className="flex items-center justify-between gap-2 text-[11px] text-ink/55">
-                  <span>{zh ? `这一档共 ${baseText(market, levelCap)} ${name}。数量可以少填，不会强制全吃。` : `This level has ${baseText(market, levelCap)} ${name}. Enter less if you do not want all of it.`}</span>
-                  <button type="button" className="shrink-0 underline" onClick={() => setAmount(market === 0 ? formatUnits(levelCap, 8) : levelCap.toString())}>{zh ? "填满这一档" : "Fill the level"}</button>
-                </span>
-              ) : null}
             </label>
             <div className="mt-2 grid grid-cols-2 border border-gold/40">
               <p className="px-2 py-2">
@@ -468,6 +461,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
             </div>
             <Quote zh={zh} market={market} side={side} price={price} amount={amount} unit={quoteUnit} rate={okbRate} />
             <Plan zh={zh} market={market} side={side} price={price} amount={amount} asks={asks} bids={bids} purse={purse} name={name} unit={quoteUnit} rate={okbRate} />
+            {quoteUnit === "okb" ? <p className="mt-2 text-xs leading-5 text-ink/70">{(() => { try { return zh ? `钱包要签的是 ${usdtText(typedUsdt(price, "okb", okbRate), 4)} USDT0。OKB 只是池子折算，池子一动这个数就变。` : `The wallet signs ${usdtText(typedUsdt(price, "okb", okbRate), 4)} USDT0. OKB is only a pool conversion.`; } catch { return zh ? "还没读到 OKB 池子价，这一笔不会按 OKB 签。" : "No OKB pool price yet. This order will not be signed in OKB."; } })()}</p> : null}
             <p className="mt-2 text-xs leading-5 text-ink/60">
               {zh ? "两边都按钱包余额。买入切 USDT0，卖出切这种币。买方按价格付，卖方实收 99.8%。" : "Both figures are the wallet. Buy cuts USDT0. Sell cuts this coin. The buyer pays the price. The seller receives 99.8 percent."}
             </p>
