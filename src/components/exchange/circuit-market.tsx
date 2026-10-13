@@ -246,7 +246,28 @@ function Ticket({ zh, row }: { zh: boolean; row: CircuitRow }) {
 
 function Book({ zh, rows, picked, busy, onPick, onBuy }: { zh: boolean; rows: CircuitRow[]; picked: CircuitRow | null; busy: boolean; onPick: (row: CircuitRow) => void; onBuy: (row: CircuitRow) => void }) {
   return (
-    <div className="mt-2 max-h-[32rem] overflow-auto border border-gold/40">
+    <>
+      <ul className="mt-2 border border-gold/40 md:hidden">
+        {rows.length === 0 ? <li className="px-3 py-4 text-sm text-ink/50">{zh ? "这一档没有电路。" : "Nothing in this view."}</li> : null}
+        {rows.map((row) => (
+          <li key={row.key} className={`border-t border-gold/20 px-3 py-2 ${picked?.key === row.key ? "bg-gold/10" : ""}`}>
+            <button type="button" className="flex w-full items-start justify-between gap-2 text-left" onClick={() => onPick(row)}>
+              <span>
+                <span className="block text-sm">{row.name}</span>
+                <span className="font-mono text-[11px] text-ink/45">#{row.tokenId} · NAND {row.nand} · LATCH {row.latch}</span>
+              </span>
+              <span className="text-right font-mono text-xs">
+                <span className="block text-[#f23645]">{row.ask != null ? `${num(row.ask, 4)} BNB` : "—"}</span>
+                <span className="text-ink/45">{row.dayPx != null ? `${num(row.dayPx, 2)}` : "—"}</span>
+              </span>
+            </button>
+            {row.ask != null && (row.officialId != null || row.signed) ? (
+              <button type="button" disabled={busy} className="mt-2 h-8 w-full bg-[#f23645] text-xs text-white disabled:opacity-40" onClick={() => onBuy(row)}>{zh ? "买入" : "Buy"}</button>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      <div className="mt-2 hidden max-h-[32rem] overflow-auto border border-gold/40 md:block">
       <table className="w-full min-w-[68rem] text-left text-xs">
         <thead className="sticky top-0 bg-paper text-ink/45">
           <tr>
@@ -280,7 +301,8 @@ function Book({ zh, rows, picked, busy, onPick, onBuy }: { zh: boolean; rows: Ci
           ))}
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
   );
 }
 

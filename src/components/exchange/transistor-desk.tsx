@@ -231,10 +231,10 @@ export function TransistorDesk() {
               <p className="font-mono text-[11px] text-ink/45">{zh ? "结算" : "Settle"} {chainMark > 0 ? `${px(chainMark)} BNB` : "—"}</p>
             </div>
           </div>
-          <div className="grid grid-cols-[4.2rem_minmax(0,1fr)_4.2rem_4.6rem] items-center px-2 py-1 text-[11px] text-ink/45">
+          <div className="grid grid-cols-[3.6rem_minmax(0,1fr)_auto] items-center px-2 py-1 text-[11px] text-ink/45 sm:grid-cols-[4.2rem_minmax(0,1fr)_4.2rem_4.6rem]">
             <span>{zh ? "价格" : "Price"}</span>
             <span>{zh ? "保证金" : "Margin"}</span>
-            <span className="text-right">{zh ? "名义" : "Notional"}</span>
+            <span className="hidden text-right sm:block">{zh ? "名义" : "Notional"}</span>
             <span className="text-right">{zh ? "指定成交" : "Take"}</span>
           </div>
           <div className="max-h-[22rem] overflow-y-auto">
@@ -374,11 +374,11 @@ function OrderRow({ row, mine, zh, max, onCancel, onTake }: { row: ChainOrder; m
   const own = row.user.toLowerCase() === mine;
   const depth = Math.max(8, Math.min(100, (row.margin / max) * 100));
   return (
-    <div className="relative grid grid-cols-[4.2rem_minmax(0,1fr)_4.2rem_4.6rem] items-center px-2 py-1 font-mono text-[12px] tabular-nums">
+    <div className="relative grid grid-cols-[3.6rem_minmax(0,1fr)_auto] items-center px-2 py-1 font-mono text-[12px] tabular-nums sm:grid-cols-[4.2rem_minmax(0,1fr)_4.2rem_4.6rem]">
       <span className={`pointer-events-none absolute inset-y-1 ${row.long ? "right-[28%] bg-[#089981]/15" : "left-[18%] bg-[#f23645]/15"}`} style={{ width: `${depth * 0.35}%` }} />
       <span className={`relative font-semibold ${row.long ? "text-[#089981]" : "text-[#f23645]"}`}>{px(row.price)}</span>
       <span className="relative">{row.margin} USDT · {row.lev}×</span>
-      <span className="relative text-right">{(row.margin * row.lev).toFixed(2)}</span>
+      <span className="relative hidden text-right sm:block">{(row.margin * row.lev).toFixed(2)}</span>
       <button type="button" onClick={own ? onCancel : onTake} className={`relative ml-auto h-6 border bg-transparent px-1.5 text-[11px] ${own ? "border-ink/30 text-ink/70" : row.long ? "border-[#f23645] text-[#f23645]" : "border-[#089981] text-[#089981]"}`}>{own ? (zh ? "撤单" : "Cancel") : row.long ? (zh ? "开空" : "Short") : zh ? "开多" : "Long"}</button>
     </div>
   );

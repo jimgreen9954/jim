@@ -120,12 +120,12 @@ function plainBase(market: number, amount: bigint): string {
 function BookRow({ priceLabel, sizeLabel, totalLabel, cap, value, onChange, onPick, onTake, bid, best, mine, on, busy, depth, zh }: { priceLabel: string; sizeLabel: string; totalLabel: string; cap: string; value: string; onChange: (value: string) => void; onPick: () => void; onTake: () => void; bid: boolean; best: boolean; mine: boolean; on: boolean; busy: boolean; depth: number; zh: boolean }) {
   const typed = value.trim().length > 0;
   return (
-    <form className={`relative grid min-h-[30px] grid-cols-[4.4rem_minmax(0,1fr)_auto] items-center gap-1 px-2 text-[12px] tabular-nums sm:grid-cols-[minmax(0,0.9fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_auto] ${on ? "bg-ink/5" : best ? (bid ? "bg-[#089981]/10" : "bg-[#f23645]/10") : ""}`} onSubmit={(event) => { event.preventDefault(); onTake(); }}>
+    <form className={`relative grid min-h-[30px] grid-cols-[3.2rem_minmax(0,1fr)_auto] items-center gap-1 px-1.5 text-[12px] tabular-nums sm:grid-cols-[minmax(0,0.9fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_auto] sm:px-2 ${on ? "bg-ink/5" : best ? (bid ? "bg-[#089981]/10" : "bg-[#f23645]/10") : ""}`} onSubmit={(event) => { event.preventDefault(); onTake(); }}>
       <span className={`pointer-events-none absolute inset-y-1 left-[11%] max-w-[31%] ${bid ? "bg-[#089981]/25" : "bg-[#f23645]/20"}`} style={{ width: `${Math.max(depth, 4)}%` }} />
       <button type="button" onClick={onPick} className={`relative truncate text-left font-mono font-semibold ${bid ? "text-[#089981]" : "text-[#f23645]"}`}>{priceLabel}{mine ? <span className="ml-1 text-[10px] font-normal text-ink/45">{zh ? "我的" : "mine"}</span> : null}</button>
       <span className="relative truncate text-right font-mono text-ink/80 sm:text-left">{sizeLabel}</span>
       <span className="relative hidden truncate font-mono text-ink/45 sm:block">{totalLabel}</span>
-      <span className="relative grid grid-cols-[4.6rem_3.4rem] justify-end gap-1">
+      <span className="relative grid grid-cols-[3.4rem_2.6rem] justify-end gap-1 sm:grid-cols-[4.6rem_3.4rem]">
         <input value={value} placeholder={`≤${cap}`} inputMode="decimal" onChange={(event) => onChange(event.target.value)} aria-label={zh ? `这一档最多 ${cap}` : `At most ${cap}`} className="h-6 w-full border border-ink/25 bg-paper px-1 text-right font-mono text-[11px] text-ink outline-none focus:border-ink" />
         <button type="submit" disabled={busy || !typed} className={`h-6 border bg-transparent text-[11px] font-semibold disabled:opacity-40 ${bid ? "border-[#f23645] text-[#f23645]" : "border-[#089981] text-[#089981]"}`}>{bid ? (zh ? "卖出" : "Sell") : (zh ? "买入" : "Buy")}</button>
       </span>
@@ -382,7 +382,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
                 <Hint label={zh ? "价差" : "Spread"} text={zh ? "卖一减去买一。价差越小，买卖两边越靠近。" : "Best ask minus best bid. A smaller spread means the two sides are closer."} /> {spread > 0n ? moneyText(spread, quoteUnit, okbRate) : "—"}
               </p>
             </div>
-            <div className="grid grid-cols-[4.4rem_minmax(0,1fr)_auto] items-center px-2 py-1 text-[11px] text-ink/45 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_auto]">
+            <div className="grid grid-cols-[3.2rem_minmax(0,1fr)_auto] items-center px-1.5 py-1 text-[11px] text-ink/45 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_auto] sm:px-2">
               <span>{zh ? "价格" : "Price"}</span>
               <span className="text-right sm:text-left">{zh ? "数量" : "Size"}</span>
               <span className="hidden sm:block">{zh ? "总额" : "Total"}</span>

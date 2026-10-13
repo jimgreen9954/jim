@@ -372,10 +372,10 @@ function Header({ floor, desk, shop, setFloor, setDesk, setShop, setGiftOpen }: 
           <button type="button" className="min-h-9 px-1.5 text-xs text-ink/70 sm:hidden" onClick={() => { setGiftOpen(false); go("me", "me"); }}>
             {lang === "zh" ? "资产" : "Assets"}
           </button>
-          <button type="button" className="min-h-9 px-1.5 text-xs text-ink/70" onClick={() => setNight((on) => !on)}>
+          <button type="button" className="hidden min-h-9 px-1.5 text-xs text-ink/70 sm:inline" onClick={() => setNight((on) => !on)}>
             {night ? (lang === "zh" ? "白天" : "Day") : lang === "zh" ? "黑夜" : "Night"}
           </button>
-          <button type="button" className="min-h-9 px-1.5 text-xs" onClick={() => setLang(lang === "zh" ? "en" : "zh")}>
+          <button type="button" className="hidden min-h-9 px-1.5 text-xs sm:inline" onClick={() => setLang(lang === "zh" ? "en" : "zh")}>
             {lang === "zh" ? "EN" : "中文"}
           </button>
           {floor === "paper" ? (
@@ -395,12 +395,14 @@ function Header({ floor, desk, shop, setFloor, setDesk, setShop, setGiftOpen }: 
           ) : null}
         </div>
       </div>
-      <nav className="mt-1 flex gap-0.5 overflow-x-auto lg:hidden">
+      <nav className="mt-1 flex items-center gap-0.5 overflow-x-auto lg:hidden">
         {nav.map(([label, on, run]) => (
           <button key={`m-${label}`} type="button" onClick={run} className={`shrink-0 border-b-2 px-2.5 py-2 text-sm ${on ? "border-ink font-medium text-ink" : "border-transparent text-ink/60"}`}>
             {label}
           </button>
         ))}
+        <button type="button" className="ml-auto shrink-0 px-2 py-2 text-xs text-ink/60 sm:hidden" onClick={() => setNight((on) => !on)}>{night ? (lang === "zh" ? "白天" : "Day") : lang === "zh" ? "黑夜" : "Night"}</button>
+        <button type="button" className="shrink-0 px-2 py-2 text-xs sm:hidden" onClick={() => setLang(lang === "zh" ? "en" : "zh")}>{lang === "zh" ? "EN" : "中文"}</button>
       </nav>
     </header>
   );
