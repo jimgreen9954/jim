@@ -1,11 +1,9 @@
 import { useEffect, useState } from "react";
-import { Hint } from "@/components/exchange/hint";
 import { bindGate, cancelGateChain, claimGate, closeGateChain, gateAddress, gateMark, gateReady, openGate, pushMark, readGateChain, readGateRebate, registerGate, takeGateChain, type ChainDeal, type ChainOrder } from "@/lib/gate-chain";
 import { connectBsc } from "@/lib/bsc";
 import { getTransistorDesk, type TransistorDesk } from "@/lib/transistor-market";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import { useExchange } from "@/lib/exchange-store";
-import { useFeeLock } from "@/lib/fee-lock";
 
 const GATES = [
   ["0xcc42ba5de07f01b472a5b14cf45abcca79eb8087", 0],
@@ -63,9 +61,10 @@ export function TransistorDesk() {
   const [margin, setMargin] = useState("1");
   const [limit, setLimit] = useState("");
   const [lev, setLev] = useState(10);
+  const [longSide, setLongSide] = useState(true);
+  const [pane, setPane] = useState<"live" | "pos" | "orders">("live");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const lock = useFeeLock();
   const [chainMark, setChainMark] = useState(0);
   const [ready, setReady] = useState(true);
   const [mineCode, setMineCode] = useState("");
@@ -196,144 +195,165 @@ export function TransistorDesk() {
 
   return (
     <div className="flex flex-col gap-3">
-      <section className="grid gap-3 lg:grid-cols-[15rem_1fr_17rem]">
-        <div className="border border-gold bg-card">
-          {(desk?.gates ?? []).map((row) => {
-            const on = row.transistors.toLowerCase() === pick.token.toLowerCase() && row.tokenId === pick.id;
+      <section className="grid items-start gap-3 lg:grid-cols-[14rem_minmax(0,1fr)_16.5rem]">
+        <div className="border border-gold/70 bg-card">
+          {["TapeOut", "Behemoth", "Genesis"].map((family) => {
+            const rows = (desk?.gates ?? []).filter((row) => row.name.toLowerCase().includes(family.toLowerCase()));
+            if (!rows.length) return null;
             return (
-              <button key={row.id} type="button" onClick={() => { setPick({ token: row.transistors, id: row.tokenId }); setLimit(""); }} className={`flex w-full items-center justify-between gap-2 border-b border-gold/30 px-3 py-2 text-left ${on ? "bg-foil" : ""}`}>
-                <span>
-                  <span className="block text-sm">{row.name}</span>
-                  <span className="font-mono text-xs text-ink/60">{row.kind}</span>
-                </span>
-                <span className="text-right font-mono text-xs tabular-nums">
-                  <span className="block">{px(row.price)}</span>
-                  <span className={row.changePct >= 0 ? "text-[#1b6b45]" : "text-sell"}>{row.changePct.toFixed(2)}%</span>
-                </span>
-              </button>
+              <div key={family} className="border-b border-gold/30">
+                <p className="px-3 pt-2 text-sm font-medium">{family === "Genesis" ? "Genesis CPU" : family}</p>
+                {rows.map((row) => {
+                  const on = row.transistors.toLowerCase() === pick.token.toLowerCase() && row.tokenId === pick.id;
+                  return (
+                    <button key={row.id} type="button" onClick={() => { setPick({ token: row.transistors, id: row.tokenId }); setLimit(""); }} className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left ${on ? "bg-gold/15" : ""}`}>
+                      <span className="text-[13px]">{row.kind}</span>
+                      <span className="text-right font-mono text-[12px] tabular-nums">
+                        <span className="block">{px(row.price)} BNB</span>
+                        <span className={row.changePct >= 0 ? "text-[#089981]" : "text-[#f23645]"}>{row.changePct >= 0 ? "+" : ""}{row.changePct.toFixed(2)}%</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             );
           })}
         </div>
-        <div className="border border-gold bg-card">
-          <div className="flex flex-wrap items-end justify-between gap-2 border-b border-gold/30 px-3 py-3">
+        <div className="min-w-0 border border-gold/70 bg-card">
+          <div className="flex flex-wrap items-end justify-between gap-3 border-b border-gold/30 px-3 py-3">
             <div>
-              <p className="text-xs tracking-widest text-gold">{zh ? "我们的盘口" : "Our book"}</p>
-              <p className="font-display text-2xl italic">{gate ? `${gate.name} / ${gate.kind}` : "NAND"}</p>
+              <h3 className="font-display text-[1.65rem] italic leading-none">{gate ? `${gate.name} / ${gate.kind}` : "TapeOut / NAND"}</h3>
+              <p className="mt-1 font-mono text-xs text-ink/45">{zh ? "合约" : "Contract"} {perp ? `${perp.slice(0, 6)}…${perp.slice(-4)}` : "—"}</p>
             </div>
             <div className="text-right">
-              <p className="text-xs tracking-widest text-gold"><Hint label={zh ? "TapeOut 最新成交" : "Latest TapeOut trade"} text={zh ? "TapeOut 上这一档 NAND 或 LATCH 的最新成交价。合约结算跟着它走，不是你填的限价。连续推进一次最多 0.5%。" : "The latest TapeOut trade for this NAND or LATCH. Settlement follows it, not your limit. Each push moves at most 0.5 percent."} /></p>
-              <p className="font-mono text-2xl tabular-nums">{px(mark)} BNB</p>
-              <p className={`font-mono text-xs ${chainMark > 0 && mark > 0 && (chainMark / mark < 0.97 || chainMark / mark > 1.03) ? "text-sell" : "text-ink/50"}`}>{zh ? "合约结算" : "Contract"} {chainMark > 0 ? `${px(chainMark)} BNB` : "—"}{chainMark > 0 && mark > 0 && (chainMark / mark < 0.97 || chainMark / mark > 1.03) ? (zh ? " · 跟最新成交有差，每 30 秒最多挪 0.5%" : " · lags the latest trade, 0.5% every 30s") : ""}</p>
+              <p className="text-[11px] text-ink/45">{zh ? "参考价" : "Mark"}</p>
+              <p className="font-mono text-lg tabular-nums text-[#089981]">{px(mark)} BNB</p>
+              <p className="font-mono text-[11px] text-ink/45">{zh ? "结算" : "Settle"} {chainMark > 0 ? `${px(chainMark)} BNB` : "—"}</p>
             </div>
           </div>
-          <div className="grid grid-cols-[5rem_1fr_4.5rem_auto] gap-2 px-2 py-1 text-xs text-ink/50">
-            <Hint label={zh ? "价格" : "Price"} text={zh ? "这张挂单的限价，单位 BNB。成交和盈亏仍按推进后的结算价，不按这口限价分钱。" : "The order's limit in BNB. PnL still uses the pushed settlement price."} />
-            <span>{zh ? "地址" : "Address"}</span>
-            <Hint label={zh ? "保证金" : "Margin"} text={zh ? "锁进这份合约的 BSC USDT。亏到大约一半，任何人都可以强平。" : "BSC USDT locked in this contract. Around half down, anyone can liquidate."} />
-            <span />
+          <div className="grid grid-cols-[4.2rem_minmax(0,1fr)_4.2rem_4.6rem] items-center px-2 py-1 text-[11px] text-ink/45">
+            <span>{zh ? "价格" : "Price"}</span>
+            <span>{zh ? "保证金" : "Margin"}</span>
+            <span className="text-right">{zh ? "名义" : "Notional"}</span>
+            <span className="text-right">{zh ? "指定成交" : "Take"}</span>
           </div>
-          {asks.map((row) => (
-            <OrderRow key={row.id} row={row} mine={mine} zh={zh} onCancel={() => cancel(row)} onTake={() => take(row)} />
-          ))}
-          <p className="my-1 flex items-center gap-3 px-2 font-mono text-sm">
-            <span className="h-px flex-1 bg-gold/40" />
-            <span>{px(mark)}</span>
-            <span className="h-px flex-1 bg-gold/40" />
-          </p>
-          {bids.map((row) => (
-            <OrderRow key={row.id} row={row} mine={mine} zh={zh} onCancel={() => cancel(row)} onTake={() => take(row)} />
-          ))}
-          {resting.length === 0 ? <p className="px-3 py-6 text-sm text-ink/60">{zh ? "这个标还没有人挂单。右边开多或开空，就会出现在这里。" : "No orders on this market yet. A long or a short from the ticket shows up here."}</p> : null}
+          <div className="max-h-[22rem] overflow-y-auto">
+            {asks.map((row) => <OrderRow key={row.id} row={row} mine={mine} zh={zh} max={Math.max(...resting.map((item) => item.margin), 1)} onCancel={() => cancel(row)} onTake={() => take(row)} />)}
+            <p className="my-1 flex items-center gap-3 px-2 font-mono text-[13px]">
+              <span className="h-px flex-1 bg-gold/40" />
+              <span>{px(mark)} BNB</span>
+              <span className="h-px flex-1 bg-gold/40" />
+            </p>
+            {bids.map((row) => <OrderRow key={row.id} row={row} mine={mine} zh={zh} max={Math.max(...resting.map((item) => item.margin), 1)} onCancel={() => cancel(row)} onTake={() => take(row)} />)}
+            {resting.length === 0 ? <p className="px-3 py-6 text-sm text-ink/55">{zh ? "这个标还没有挂单。右边开多或开空，会出现在这里。" : "No orders yet. A long or a short from the ticket shows up here."}</p> : null}
+          </div>
+          <div className="flex gap-4 border-t border-gold/30 px-3">
+            {(["live", "pos", "orders"] as const).map((id) => (
+              <button key={id} type="button" onClick={() => setPane(id)} className={`border-b-2 py-2 text-sm ${pane === id ? "border-ink" : "border-transparent text-ink/45"}`}>
+                {id === "live" ? (zh ? "活动" : "Live") : id === "pos" ? (zh ? "持仓" : "Positions") : zh ? "我的挂单" : "My orders"}
+              </button>
+            ))}
+          </div>
+          <div className="max-h-56 overflow-auto px-3 py-2 text-sm">
+            {pane === "orders" ? (mineOrders.length === 0 ? <p className="text-ink/55">{zh ? "没有未成交的单。" : "No resting orders."}</p> : mineOrders.map((row) => (
+              <div key={row.id} className="flex items-center justify-between gap-2 border-t border-gold/20 py-2">
+                <p className="font-mono text-xs">{NAMES[row.market]} · {row.long ? (zh ? "多" : "Long") : zh ? "空" : "Short"} · {px(row.price)} · {row.margin} USDT · {row.lev}×</p>
+                <button type="button" className="h-7 border border-gold px-2 text-xs" onClick={() => cancel(row)}>{zh ? "撤单" : "Cancel"}</button>
+              </div>
+            ))) : null}
+            {pane === "pos" ? (mineDeals.length === 0 ? <p className="text-ink/55">{zh ? "没有持仓。成交后多单和空单在这里，盈亏跟着参考价。" : "No position. After a fill, PnL follows the mark."}</p> : mineDeals.map((row) => {
+              const live = markFor(row.market);
+              const pnl = pnlOf(row, mine, live);
+              const long = row.longUser.toLowerCase() === mine;
+              return (
+                <div key={row.id} className="border-t border-gold/20 py-2">
+                  <p className="font-mono text-xs">{NAMES[row.market]} · {long ? (zh ? "多" : "Long") : zh ? "空" : "Short"} · {zh ? "开仓" : "Entry"} {px(row.entry)} · {zh ? "现价" : "Mark"} {px(live)}</p>
+                  <p className={`font-mono text-xs ${pnl >= 0 ? "text-[#089981]" : "text-[#f23645]"}`}>{pnl >= 0 ? "+" : ""}{pnl.toFixed(4)} USDT</p>
+                  <button type="button" className="mt-1 h-7 border border-gold px-2 text-xs" onClick={() => close(row)}>{zh ? "平仓" : "Close"}</button>
+                </div>
+              );
+            })) : null}
+            {pane === "live" ? (deals.filter((row) => row.market === market).length === 0 ? <p className="text-ink/55">{zh ? "这个标还没有成交。" : "No fills on this market."}</p> : deals.filter((row) => row.market === market).map((row) => (
+              <div key={row.id} className="grid grid-cols-3 gap-2 border-t border-gold/20 py-2 font-mono text-xs">
+                <span>{zh ? "多" : "Long"} {short(row.longUser)}</span>
+                <span className="text-right">{px(row.entry)} BNB</span>
+                <span className="text-right text-ink/55">{row.marginL} / {row.marginS} USDT</span>
+              </div>
+            ))) : null}
+          </div>
         </div>
-        <div className="flex flex-col gap-2 border border-gold bg-card p-3">
-          {!ready ? (
-            <div className="border border-sell px-2 py-2 text-sm">
-              <p>{zh ? "这个标的还没有结算价。收费地址写一次就能开。写上之后按最后一笔继续，超过 30 分钟也不停。" : "This market has no settlement price yet. The fee address posts once and it can open. After that it keeps the last price. It does not stop after 30 minutes."}</p>
-              <button type="button" className="mt-2 min-h-11 w-full bg-ink text-paper disabled:opacity-40" disabled={busy} onClick={async () => {
-                setBusy(true);
-                setNote("");
-                try {
-                  const from = account ?? (await connectBsc());
-                  setAccount(from);
-                  if (!(mark > 0)) {
-                    setNote(zh ? "参考价还没读到。等数字出来再点。" : "The reference price is not in yet. Click again when it is.");
-                    return;
-                  }
-                  await pushMark(from, perp, market, mark);
-                  setReady(true);
-                  setNote(zh ? "这个标的已写入，可以开仓。之后不再按 30 分钟停。" : "This market is posted. It can open. It does not stop after 30 minutes.");
-                } catch (err) {
-                  const message = err instanceof Error ? err.message : "";
-                  setNote(message === "oracle"
-                    ? (zh ? "只有收费地址能写这一笔。" : "Only the fee address can post this.")
-                    : (zh ? "没写上。可能还没到 30 秒，或这一笔挪过了 0.5%。" : "It was not posted. Wait 30 seconds, or the move was over 0.5%."));
-                } finally {
-                  setBusy(false);
-                }
-              }}>{zh ? "再写一次这个标的" : "Post this market again"}</button>
-            </div>
-          ) : null}
-          <p className="text-xs tracking-widest text-gold">{zh ? "下单" : "Open"}</p>
-          <label className="text-sm">
-            {zh ? "限价 BNB，空着就用参考价" : "Limit in BNB. Blank uses the mark."}
-            <input value={limit} onChange={(event) => setLimit(event.target.value)} inputMode="decimal" placeholder={px(mark)} className="mt-1 w-full border border-gold bg-transparent px-2 py-2 font-mono outline-none" />
+        <div className="flex flex-col gap-2 border border-gold/70 bg-card p-3">
+          <div className="grid grid-cols-2 border border-gold/50 text-sm">
+            <button type="button" onClick={() => setLongSide(true)} className={`min-h-10 ${longSide ? "bg-[#089981] text-white" : ""}`}>{zh ? "开多" : "Long"}</button>
+            <button type="button" onClick={() => setLongSide(false)} className={`min-h-10 ${!longSide ? "bg-[#f23645] text-white" : ""}`}>{zh ? "开空" : "Short"}</button>
+          </div>
+          <label className="text-xs text-ink/55">
+            {zh ? "限价 BNB，空着用参考价" : "Limit in BNB. Blank uses the mark."}
+            <input value={limit} onChange={(event) => setLimit(event.target.value)} inputMode="decimal" placeholder={px(mark)} className="mt-1 w-full border border-gold/50 bg-transparent px-2 py-2 font-mono text-sm text-ink outline-none" />
           </label>
-          <label className="text-sm">
-            <Hint label={zh ? "保证金 USDT" : "Margin USDT"} text={zh ? "开仓锁进合约的 BSC USDT。名义大约是保证金乘杠杆。平台不经手。" : "BSC USDT locked when you open. Notional is about margin times leverage."} />
-            <input value={margin} onChange={(event) => setMargin(event.target.value)} inputMode="decimal" className="mt-1 w-full border border-gold bg-transparent px-2 py-2 font-mono outline-none" />
+          <label className="text-xs text-ink/55">
+            {zh ? "保证金 USDT" : "Margin USDT"}
+            <input value={margin} onChange={(event) => setMargin(event.target.value)} inputMode="decimal" className="mt-1 w-full border border-gold/50 bg-transparent px-2 py-2 font-mono text-sm text-ink outline-none" />
           </label>
           <div className="grid grid-cols-3 gap-1">
             {LEVS.map((item) => (
-              <button key={item} type="button" onClick={() => setLev(item)} className={`min-h-10 border border-gold font-mono text-xs ${lev === item ? "bg-ink text-paper" : ""}`}>{item}×</button>
+              <button key={item} type="button" onClick={() => setLev(item)} className={`min-h-9 border font-mono text-xs ${lev === item ? "border-ink bg-ink text-paper" : "border-gold/50"}`}>{item}×</button>
             ))}
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" disabled={busy} className="min-h-11 bg-ink text-paper disabled:opacity-50" onClick={() => place(true)}>{zh ? "开多" : "Long"}</button>
-            <button type="button" disabled={busy} className="min-h-11 border border-gold disabled:opacity-50" onClick={() => place(false)}>{zh ? "开空" : "Short"}</button>
-          </div>
-          <p className="text-xs leading-relaxed text-ink/60"><Hint label={zh ? "结算" : "Settlement"} text={zh ? "盈亏按推进后的 TapeOut 价，不按你填的限价。没有保险基金。BSC 和 X Layer 不能并成一笔。" : "PnL uses the pushed TapeOut price, not your limit. There is no insurance fund."} /></p>
-          {perp ? <p className="break-all font-mono text-xs">{perp}</p> : null}
-          <p className="text-xs tracking-widest text-gold">{zh ? "这份合约上的推荐" : "Referral on this contract"}</p>
+          <button type="button" disabled={busy || !ready} onClick={() => place(longSide)} className={`min-h-11 text-sm text-white disabled:opacity-40 ${longSide ? "bg-[#089981]" : "bg-[#f23645]"}`}>
+            {longSide ? (zh ? "开多" : "Open long") : zh ? "开空" : "Open short"}
+          </button>
+          {!ready ? (
+            <button type="button" className="min-h-10 border border-gold text-xs disabled:opacity-40" disabled={busy} onClick={async () => {
+              setBusy(true);
+              setNote("");
+              try {
+                const from = account ?? (await connectBsc());
+                setAccount(from);
+                if (!(mark > 0)) { setNote(zh ? "参考价还没读到。" : "The mark is not in yet."); return; }
+                await pushMark(from, perp, market, mark);
+                setReady(true);
+                setNote(zh ? "这个标的已写入，可以开仓。" : "This market is posted.");
+              } catch (err) {
+                const message = err instanceof Error ? err.message : "";
+                setNote(message === "oracle" ? (zh ? "只有收费地址能写这一笔。" : "Only the fee address can post this.") : (zh ? "没写上。可能还没到 30 秒，或这一笔挪过了 0.5%。" : "It was not posted."));
+              } finally { setBusy(false); }
+            }}>{zh ? "写入结算价" : "Post the mark"}</button>
+          ) : null}
+          <p className="text-[11px] leading-5 text-ink/50">{zh ? "盈亏按推进后的参考价，不按限价。保证金是 BSC 的 USDT。指定成交吃的是左边这一张真实挂单。" : "PnL uses the pushed mark, not the limit. Margin is BSC USDT. Take fills one real order."}</p>
+          <p className="text-[11px] tracking-[0.14em] text-gold">{zh ? "推荐" : "Referral"}</p>
           {rebate.code ? (
-            <div>
-              <p className="font-mono text-sm">{rebate.code}</p>
-              <p className="mt-2 text-xs tracking-widest text-gold">{zh ? "邀请链接" : "Invite link"}</p>
-              <input readOnly value={inviteLink(rebate.code)} className="mt-1 w-full border border-gold bg-transparent px-2 py-2 font-mono text-xs outline-none" />
-              <button type="button" className="mt-2 min-h-10 border border-gold px-3 text-sm" onClick={() => {
-                const link = inviteLink(rebate.code);
-                navigator.clipboard.writeText(link).then(() => setNote(zh ? "链接已复制。朋友打开后核对，再点绑定。" : "Link copied. Your friend opens it, checks, then binds.")).catch(() => setNote(link));
-              }}>{zh ? "复制链接" : "Copy link"}</button>
-            </div>
+            <button type="button" className="h-8 border border-gold text-xs" onClick={() => navigator.clipboard.writeText(inviteLink(rebate.code)).then(() => setNote(zh ? "链接已复制。" : "Link copied.")).catch(() => setNote(inviteLink(rebate.code)))}>{zh ? "复制邀请链接" : "Copy invite"}</button>
           ) : (
-            <div className="flex gap-2">
-              <input value={mineCode} onChange={(event) => setMineCode(event.target.value)} className="min-h-10 flex-1 border border-gold bg-transparent px-2 outline-none" placeholder={zh ? "我的码" : "My code"} />
-              <button type="button" disabled={busy} className="min-h-10 border border-gold px-2 text-sm" onClick={async () => {
+            <div className="flex gap-1">
+              <input value={mineCode} onChange={(event) => setMineCode(event.target.value)} className="h-8 min-w-0 flex-1 border border-gold/50 bg-transparent px-2 text-xs outline-none" placeholder={zh ? "我的码" : "My code"} />
+              <button type="button" disabled={busy} className="h-8 border border-gold px-2 text-xs" onClick={async () => {
                 const user = account ?? currentAccount();
                 if (!user) return;
                 setBusy(true);
-                try { await registerGate(user, mineCode); setNote(zh ? "推荐码已写上这份合约。确认后不能改。" : "Code written on this contract. It cannot be changed."); }
-                catch { setNote(zh ? "推荐码没写上。可能已被占用，或这个地址已经有码。" : "The code was not written. It may be taken, or this address already has one."); }
+                try { await registerGate(user, mineCode); setNote(zh ? "推荐码已写上。确认后不能改。" : "Code written. It cannot be changed."); }
+                catch { setNote(zh ? "推荐码没写上。" : "The code was not written."); }
                 finally { setBusy(false); }
-              }}>{zh ? "确认" : "Confirm"}</button>
+              }}>{zh ? "确认" : "Set"}</button>
             </div>
           )}
-          {rebate.referrer && rebate.referrer !== "0x0000000000000000000000000000000000000000" ? <p className="font-mono text-xs">{short(rebate.referrer)}</p> : (
-            <div className="flex gap-2">
-              <input value={friend} onChange={(event) => setFriend(event.target.value)} className="min-h-10 flex-1 border border-gold bg-transparent px-2 outline-none" placeholder={zh ? "对方的码" : "Their code"} />
-              <button type="button" disabled={busy} className="min-h-10 border border-gold px-2 text-sm" onClick={async () => {
+          {rebate.referrer && rebate.referrer !== "0x0000000000000000000000000000000000000000" ? <p className="font-mono text-[11px]">{short(rebate.referrer)}</p> : (
+            <div className="flex gap-1">
+              <input value={friend} onChange={(event) => setFriend(event.target.value)} className="h-8 min-w-0 flex-1 border border-gold/50 bg-transparent px-2 text-xs outline-none" placeholder={zh ? "对方的码" : "Their code"} />
+              <button type="button" disabled={busy} className="h-8 border border-gold px-2 text-xs" onClick={async () => {
                 const user = account ?? currentAccount();
                 if (!user) return;
                 setBusy(true);
-                try { await bindGate(user, friend); setNote(zh ? "已绑定。不能再改。" : "Bound. It cannot be changed."); }
-                catch { setNote(zh ? "绑定失败。对方要先在这份合约上确认过自己的码。" : "Bind failed. They must confirm their code on this contract first."); }
+                try { await bindGate(user, friend); setNote(zh ? "已绑定。" : "Bound."); }
+                catch { setNote(zh ? "绑定失败。对方要先确认过自己的码。" : "Bind failed."); }
                 finally { setBusy(false); }
               }}>{zh ? "绑定" : "Bind"}</button>
             </div>
           )}
-          <p className="font-mono text-sm">{zh ? "可提" : "Claimable"} {rebate.accrued.toFixed(2)} USDT</p>
+          <p className="font-mono text-xs">{zh ? "可提" : "Claimable"} {rebate.accrued.toFixed(2)} USDT</p>
           <div className="grid grid-cols-4 gap-1">
             {[1, 10, 20, 50, 100, 300, 500].map((step) => (
-              <button key={step} type="button" disabled={busy || rebate.accrued + 1e-9 < step} className="min-h-9 border border-gold font-mono text-xs disabled:opacity-40" onClick={async () => {
+              <button key={step} type="button" disabled={busy || rebate.accrued + 1e-9 < step} className="h-8 border border-gold/50 font-mono text-[11px] disabled:opacity-40" onClick={async () => {
                 const user = account ?? currentAccount();
                 if (!user) return;
                 setBusy(true);
@@ -343,54 +363,23 @@ export function TransistorDesk() {
               }}>{step}</button>
             ))}
           </div>
-          {note ? <p className="text-sm">{note}</p> : null}
-        </div>
-      </section>
-      <section className="grid gap-3 lg:grid-cols-2">
-        <div className="border border-gold bg-card p-3">
-          <p className="text-xs tracking-widest text-gold">{zh ? "我的挂单" : "My orders"}</p>
-          {mineOrders.length === 0 ? <p className="mt-2 text-sm text-ink/60">{zh ? "还没有未成交的单。" : "No resting orders."}</p> : null}
-          {mineOrders.map((row) => (
-            <div key={row.id} className="mt-2 flex items-center justify-between gap-2 border-t border-gold/30 pt-2 text-sm">
-              <p className="font-mono">{NAMES[row.market]} · {row.long ? (zh ? "多" : "Long") : zh ? "空" : "Short"} · {px(row.price)} · {row.margin} USDT · {row.lev}×</p>
-              <button type="button" className="min-h-9 border border-gold px-2" onClick={() => cancel(row)}>{zh ? "撤单" : "Cancel"}</button>
-            </div>
-          ))}
-        </div>
-        <div className="border border-gold bg-card p-3">
-          <p className="text-xs tracking-widest text-gold">{zh ? "我的持仓" : "My positions"}</p>
-          {mineDeals.length === 0 ? <p className="mt-2 text-sm text-ink/60">{zh ? "成交之后，多单和空单在这里，盈亏跟着 TapeOut 参考价变。" : "After a fill, longs and shorts stay here. PnL follows the TapeOut mark."}</p> : null}
-          {mineDeals.map((row) => {
-            const live = markFor(row.market);
-            const pnl = pnlOf(row, mine, live);
-            const long = row.longUser.toLowerCase() === mine;
-            return (
-              <div key={row.id} className="mt-2 border-t border-gold/30 pt-2 text-sm">
-                <p className="font-mono">{NAMES[row.market]} · {long ? (zh ? "多" : "Long") : zh ? "空" : "Short"} · {zh ? "开仓" : "Entry"} {px(row.entry)} · {zh ? "现价" : "Mark"} {px(live)}</p>
-                <p className="font-mono text-xs text-ink/50">{zh ? "对手" : "Against"} {short(long ? row.shortUser : row.longUser)}</p>
-                <p className={`font-mono ${pnl >= 0 ? "text-gold" : "text-sell"}`}>{pnl >= 0 ? "+" : ""}{pnl.toFixed(4)} USDT</p>
-                <button type="button" className="mt-1 min-h-9 border border-gold px-2" onClick={() => close(row)}>{zh ? "平仓" : "Close"}</button>
-              </div>
-            );
-          })}
+          {note ? <p className="text-xs leading-5">{note}</p> : null}
         </div>
       </section>
     </div>
   );
 }
 
-function OrderRow({ row, mine, zh, onCancel, onTake }: { row: ChainOrder; mine: string; zh: boolean; onCancel: () => void; onTake: () => void }) {
+function OrderRow({ row, mine, zh, max, onCancel, onTake }: { row: ChainOrder; mine: string; zh: boolean; max: number; onCancel: () => void; onTake: () => void }) {
   const own = row.user.toLowerCase() === mine;
+  const depth = Math.max(8, Math.min(100, (row.margin / max) * 100));
   return (
-    <div className="grid grid-cols-[5rem_1fr_4.5rem_auto] items-center gap-2 px-2 py-1 font-mono text-sm tabular-nums">
-      <span className={row.long ? "text-[#1b6b45]" : "text-sell"}>{px(row.price)}</span>
-      <span className="truncate">{own ? (zh ? "我" : "Me") : short(row.user)}</span>
-      <span>{row.margin}</span>
-      {own ? (
-        <button type="button" className="min-h-8 border border-gold px-2 text-xs" onClick={onCancel}>{zh ? "撤单" : "Cancel"}</button>
-      ) : (
-        <button type="button" className="min-h-8 border border-gold px-2 text-xs" onClick={onTake}>{zh ? "吃单" : "Take"}</button>
-      )}
+    <div className="relative grid grid-cols-[4.2rem_minmax(0,1fr)_4.2rem_4.6rem] items-center px-2 py-1 font-mono text-[12px] tabular-nums">
+      <span className={`pointer-events-none absolute inset-y-1 ${row.long ? "right-[28%] bg-[#089981]/15" : "left-[18%] bg-[#f23645]/15"}`} style={{ width: `${depth * 0.35}%` }} />
+      <span className={`relative font-semibold ${row.long ? "text-[#089981]" : "text-[#f23645]"}`}>{px(row.price)}</span>
+      <span className="relative">{row.margin} USDT · {row.lev}×</span>
+      <span className="relative text-right">{(row.margin * row.lev).toFixed(2)}</span>
+      <button type="button" onClick={own ? onCancel : onTake} className={`relative ml-auto h-6 border bg-transparent px-1.5 text-[11px] ${own ? "border-ink/30 text-ink/70" : row.long ? "border-[#f23645] text-[#f23645]" : "border-[#089981] text-[#089981]"}`}>{own ? (zh ? "撤单" : "Cancel") : row.long ? (zh ? "开空" : "Short") : zh ? "开多" : "Long"}</button>
     </div>
   );
 }

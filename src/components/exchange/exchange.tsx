@@ -74,6 +74,10 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
           {floor === "me" ? <AccountCenter giftOpen={giftOpen} /> : null}
           {floor === "rules" ? <Whitepaper /> : null}
         </div>
+        <footer className="mx-auto flex w-full max-w-7xl items-center gap-4 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-xs text-ink/55 sm:px-4 lg:px-6">
+          <a href="https://t.me/+RWVnnxXf1LY1MWVh" target="_blank" rel="noreferrer" className="underline">Telegram</a>
+          <a href="https://x.com/Icp_chinese" target="_blank" rel="noreferrer" className="underline">X</a>
+        </footer>
         {floor === "paper" ? <MobileNav /> : null}
       </div>
     </FeeLockProvider>
@@ -456,9 +460,9 @@ function ShopFloor({ shop, setShop }: { shop: ShopTab; setShop: (shop: ShopTab) 
   ] as const;
   return (
     <div className="lg:grid lg:grid-cols-[7.25rem_minmax(0,1fr)] lg:items-start lg:gap-3">
-      <nav className="mb-3 flex gap-1 overflow-x-auto border-b border-gold/30 lg:sticky lg:top-16 lg:mb-0 lg:flex lg:flex-col lg:gap-0 lg:overflow-visible lg:border-b-0 lg:border-r lg:border-gold/30">
+      <nav className="mb-3 flex gap-4 overflow-x-auto lg:sticky lg:top-16 lg:mb-0 lg:flex lg:flex-col lg:gap-1">
         {lanes.map(([id, label]) => (
-          <button key={id} type="button" onClick={() => setShop(id)} className={`shrink-0 border-b-2 px-3 py-2 text-left text-sm lg:border-b-0 lg:border-l-2 ${shop === id ? "border-ink font-medium" : "border-transparent text-ink/55"}`}>
+          <button key={id} type="button" onClick={() => setShop(id)} className={`shrink-0 border-l-2 py-1.5 pl-2 text-left text-sm ${shop === id ? "border-ink font-medium" : "border-transparent text-ink/45"}`}>
             {label}
           </button>
         ))}
