@@ -13,6 +13,7 @@ import { connectXLayer, transferCircuit, transferTransistor, XLAYER } from "@/li
 import { LOCK_TERMS, readLocks, type LockSeat } from "@/lib/tape-lock";
 import { readTapePool, showQuote, showTape, TAPE_BEM, TAPE_TERMS, TAPE_TOKEN, TAPE_USDT, type TapePosition } from "@/lib/tape-pool";
 import { GiftDeploy, NewbieGift } from "@/components/exchange/newbie-gift";
+import { PayDesk } from "@/components/exchange/pay-desk";
 import { tapeText } from "@/lib/tape-mine";
 
 function money(n: number): string {
@@ -527,7 +528,8 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
   };
 
   return (
-    <section className="flex flex-col gap-3">
+    <section className="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_24rem]">
+      <div className="order-2 flex min-w-0 flex-col gap-3 lg:order-1">
       <div className="border border-gold px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -792,6 +794,10 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
         </div>
       ) : null}
       {note ? <p className={`text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
+      </div>
+      <div className="order-1 lg:sticky lg:top-16 lg:order-2">
+        <PayDesk zh={zh} account={account} />
+      </div>
     </section>
   );
 }

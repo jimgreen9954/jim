@@ -237,7 +237,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   const bestBid = bids[0]?.price ?? 0n;
   const spread = bestAsk > bestBid && bestBid > 0n ? bestAsk - bestBid : 0n;
   const name = NAMES[market];
-  const quoteUnit: MoneyUnit = market === 0 ? "usdt" : unit;
+  const quoteUnit: MoneyUnit = unit;
   const unitName = quoteUnit === "okb" ? "OKB" : "USDT0";
   const showPrice = (usdt: bigint, next: MoneyUnit = quoteUnit) => {
     const raw = next === "okb" && okbRate > 0n ? usdt * 1_000_000n / okbRate : usdt;
@@ -342,8 +342,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
               <div className="min-w-0">
                 <p className="text-[11px] tracking-[0.18em] text-gold">{name} / {unitName}</p>
                 <h3 className="font-mono text-[1.75rem] leading-none tabular-nums">{bestAsk > 0n ? moneyText(bestAsk, quoteUnit, okbRate) : bestBid > 0n ? moneyText(bestBid, quoteUnit, okbRate) : "—"}</h3>
-                {market !== 0 ? (
-                  <div className="mt-2 flex gap-1">
+                <div className="mt-2 flex gap-1">
                     {(["usdt", "okb"] as const).map((next) => (
                       <button key={next} type="button" className={`min-h-7 px-2 text-[11px] ${quoteUnit === next ? "bg-ink text-paper" : "border border-gold text-ink/70"}`} onClick={() => {
                         if (next === unit) return;
@@ -352,7 +351,6 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
                       }}>{next === "okb" ? "OKB" : "USDT0"}</button>
                     ))}
                   </div>
-                ) : null}
               </div>
               <p className="text-right text-xs leading-5 text-ink/60">
                 {zh ? "买一" : "Bid"} {bestBid > 0n ? moneyText(bestBid, quoteUnit, okbRate) : "—"}
