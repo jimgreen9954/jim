@@ -668,8 +668,8 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
         <p className="text-xs text-ink/50">
           {book?.ok
             ? zh
-              ? `tapeout ${book.scanned} 台，加本站。约一分钟重读。`
-              : `${book.scanned} tapeout processors, plus this site. About once a minute.`
+              ? `TapeOut ${book.scanned} 台，加本站。约一分钟重读。`
+              : `${book.scanned} TapeOut processors, plus this site. About once a minute.`
             : zh ? (book ? `正在读链上${book.error ? `（${book.error}）` : ""}` : "正在读这个地址的晶体管和电路。") : (book ? "Reading the chain." : "Reading this address.")}
         </p>
       </div>
@@ -694,7 +694,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm">{row.name}</p>
-                    <p className="text-xs text-ink/50">{row.chain === "xlayer" ? "X Layer" : "BSC"} · {row.ours ? "TAPELIQUID" : "tapeout"}</p>
+                    <p className="text-xs text-ink/50">{row.chain === "xlayer" ? "X Layer" : "BSC"} · {row.ours ? "TAPELIQUID" : "TapeOut"}</p>
                     <p className="mt-1 font-mono text-sm">NAND {row.nand} · LATCH {row.latch}</p>
                   </div>
                   <button type="button" className="min-h-9 shrink-0 border border-gold px-3 text-xs" onClick={() => { setSendKey(open ? null : key); setAck(false); }}>{open ? (zh ? "收起" : "Close") : (zh ? "转出" : "Send")}</button>

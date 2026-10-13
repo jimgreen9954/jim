@@ -181,7 +181,7 @@ export function TransistorDesk() {
       setNote(zh ? "已平仓。USDT 按合约里的参考价退回钱包。" : "Closed. USDT was returned at the mark stored in the contract.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "";
-      setNote(message === "mark" ? (zh ? "结算价离 tapeout 价太远，先不平，避免按错价分钱。" : "The mark is too far from the tapeout price. Not closing, so the split is not wrong.") : zh ? "平仓没有完成。" : "The close did not finish.");
+      setNote(message === "mark" ? (zh ? "结算价离 TapeOut 价太远，先不平，避免按错价分钱。" : "The mark is too far from the TapeOut price. Not closing, so the split is not wrong.") : zh ? "平仓没有完成。" : "The close did not finish.");
     } finally {
       setBusy(false);
     }
@@ -221,7 +221,7 @@ export function TransistorDesk() {
               <p className="font-display text-2xl italic">{gate ? `${gate.name} / ${gate.kind}` : "NAND"}</p>
             </div>
             <div className="text-right">
-              <p className="text-xs tracking-widest text-gold"><Hint label={zh ? "tapeout 最新成交" : "Latest tapeout trade"} text={zh ? "tapeout 上这一档 NAND 或 LATCH 的最新成交价。合约结算跟着它走，不是你填的限价。连续推进一次最多 0.5%。" : "The latest tapeout trade for this NAND or LATCH. Settlement follows it, not your limit. Each push moves at most 0.5 percent."} /></p>
+              <p className="text-xs tracking-widest text-gold"><Hint label={zh ? "TapeOut 最新成交" : "Latest TapeOut trade"} text={zh ? "TapeOut 上这一档 NAND 或 LATCH 的最新成交价。合约结算跟着它走，不是你填的限价。连续推进一次最多 0.5%。" : "The latest TapeOut trade for this NAND or LATCH. Settlement follows it, not your limit. Each push moves at most 0.5 percent."} /></p>
               <p className="font-mono text-2xl tabular-nums">{px(mark)} BNB</p>
               <p className={`font-mono text-xs ${chainMark > 0 && mark > 0 && (chainMark / mark < 0.97 || chainMark / mark > 1.03) ? "text-sell" : "text-ink/50"}`}>{zh ? "合约结算" : "Contract"} {chainMark > 0 ? `${px(chainMark)} BNB` : "—"}{chainMark > 0 && mark > 0 && (chainMark / mark < 0.97 || chainMark / mark > 1.03) ? (zh ? " · 跟最新成交有差，每 30 秒最多挪 0.5%" : " · lags the latest trade, 0.5% every 30s") : ""}</p>
             </div>
@@ -291,7 +291,7 @@ export function TransistorDesk() {
             <button type="button" disabled={busy} className="min-h-11 bg-ink text-paper disabled:opacity-50" onClick={() => place(true)}>{zh ? "开多" : "Long"}</button>
             <button type="button" disabled={busy} className="min-h-11 border border-gold disabled:opacity-50" onClick={() => place(false)}>{zh ? "开空" : "Short"}</button>
           </div>
-          <p className="text-xs leading-relaxed text-ink/60"><Hint label={zh ? "结算" : "Settlement"} text={zh ? "盈亏按推进后的 tapeout 价，不按你填的限价。没有保险基金。BSC 和 X Layer 不能并成一笔。" : "PnL uses the pushed tapeout price, not your limit. There is no insurance fund."} /></p>
+          <p className="text-xs leading-relaxed text-ink/60"><Hint label={zh ? "结算" : "Settlement"} text={zh ? "盈亏按推进后的 TapeOut 价，不按你填的限价。没有保险基金。BSC 和 X Layer 不能并成一笔。" : "PnL uses the pushed TapeOut price, not your limit. There is no insurance fund."} /></p>
           {perp ? <p className="break-all font-mono text-xs">{perp}</p> : null}
           <p className="text-xs tracking-widest text-gold">{zh ? "这份合约上的推荐" : "Referral on this contract"}</p>
           {rebate.code ? (
@@ -359,7 +359,7 @@ export function TransistorDesk() {
         </div>
         <div className="border border-gold bg-card p-3">
           <p className="text-xs tracking-widest text-gold">{zh ? "我的持仓" : "My positions"}</p>
-          {mineDeals.length === 0 ? <p className="mt-2 text-sm text-ink/60">{zh ? "成交之后，多单和空单在这里，盈亏跟着 tapeout 参考价变。" : "After a fill, longs and shorts stay here. PnL follows the tapeout mark."}</p> : null}
+          {mineDeals.length === 0 ? <p className="mt-2 text-sm text-ink/60">{zh ? "成交之后，多单和空单在这里，盈亏跟着 TapeOut 参考价变。" : "After a fill, longs and shorts stay here. PnL follows the TapeOut mark."}</p> : null}
           {mineDeals.map((row) => {
             const live = markFor(row.market);
             const pnl = pnlOf(row, mine, live);

@@ -339,7 +339,7 @@ function Header({ floor, desk, shop, setFloor, setDesk, setShop, setGiftOpen }: 
     [lang === "zh" ? "现货" : "Spot", floor === "desk" && desk === "spot", () => { setDesk("spot"); go("desk", "spot"); }],
     [lang === "zh" ? "永续" : "Perp", floor === "desk" && desk === "perp", () => { setDesk("perp"); go("desk", "perp"); }],
     ["TAPELIQUID", floor === "shop" && shop === "book", () => { setShop("book"); go("shop", "book"); }],
-    ["tapeout", floor === "shop" && shop !== "book", () => { setShop(shop === "book" ? "gate" : shop); go("shop", shop === "chips" ? "chips" : shop === "circuits" ? "circuits" : "gate"); }],
+    ["TapeOut", floor === "shop" && shop !== "book", () => { setShop(shop === "book" ? "gate" : shop); go("shop", shop === "chips" ? "chips" : shop === "circuits" ? "circuits" : "gate"); }],
     [lang === "zh" ? "挖矿" : "Mine", floor === "mine", () => go("mine", "mine")],
     [lang === "zh" ? "流片" : "Tape-out", floor === "canvas", () => go("canvas", "canvas")],
     [lang === "zh" ? "规则" : "Rules", floor === "rules", () => go("rules", "rules")],
@@ -398,20 +398,6 @@ function Header({ floor, desk, shop, setFloor, setDesk, setShop, setGiftOpen }: 
           </button>
         ))}
       </nav>
-      {floor === "shop" && shop !== "book" ? (
-        <div className="mt-1 flex items-center gap-1 overflow-x-auto border-t border-gold/30 pt-1">
-          <span className="shrink-0 px-1 text-[11px] tracking-[0.16em] text-gold">tapeout</span>
-          {([
-            ["gate", lang === "zh" ? "晶体管合约" : "Contracts"],
-            ["chips", lang === "zh" ? "晶体管" : "Transistors"],
-            ["circuits", lang === "zh" ? "电路" : "Circuits"],
-          ] as const).map(([id, label]) => (
-            <button key={id} type="button" onClick={() => { setShop(id); go("shop", id); }} className={`shrink-0 border-b-2 px-2.5 py-1.5 text-sm ${shop === id ? "border-ink font-medium" : "border-transparent text-ink/55"}`}>
-              {label}
-            </button>
-          ))}
-        </div>
-      ) : null}
     </header>
   );
 }
@@ -452,17 +438,38 @@ function PaperFloor() {
   );
 }
 
-function ShopFloor({ shop }: { shop: ShopTab; setShop: (shop: ShopTab) => void }) {
+function ShopFloor({ shop, setShop }: { shop: ShopTab; setShop: (shop: ShopTab) => void }) {
   const lang = useExchange((s) => s.lang);
   const zh = lang === "zh";
+  if (shop === "book") {
+    return (
+      <>
+        <WorkshopRisk zh={zh} />
+        <TapeSpotDesk zh={zh} />
+      </>
+    );
+  }
+  const lanes = [
+    ["gate", zh ? "晶体管合约" : "Contracts"],
+    ["chips", zh ? "晶体管" : "Transistors"],
+    ["circuits", zh ? "电路" : "Circuits"],
+  ] as const;
   return (
-    <>
-      <WorkshopRisk zh={zh} />
-      {shop === "gate" ? <TransistorDesk /> : null}
-      {shop === "chips" ? <OfficialDesk mode="chips" /> : null}
-      {shop === "circuits" ? <OfficialDesk mode="circuits" /> : null}
-      {shop === "book" ? <TapeSpotDesk zh={zh} /> : null}
-    </>
+    <div className="lg:grid lg:grid-cols-[7.25rem_minmax(0,1fr)] lg:items-start lg:gap-3">
+      <nav className="mb-3 flex gap-1 overflow-x-auto border-b border-gold/30 lg:sticky lg:top-16 lg:mb-0 lg:flex lg:flex-col lg:gap-0 lg:overflow-visible lg:border-b-0 lg:border-r lg:border-gold/30">
+        {lanes.map(([id, label]) => (
+          <button key={id} type="button" onClick={() => setShop(id)} className={`shrink-0 border-b-2 px-3 py-2 text-left text-sm lg:border-b-0 lg:border-l-2 ${shop === id ? "border-ink font-medium" : "border-transparent text-ink/55"}`}>
+            {label}
+          </button>
+        ))}
+      </nav>
+      <div className="min-w-0">
+        <WorkshopRisk zh={zh} />
+        {shop === "gate" ? <TransistorDesk /> : null}
+        {shop === "chips" ? <OfficialDesk mode="chips" /> : null}
+        {shop === "circuits" ? <OfficialDesk mode="circuits" /> : null}
+      </div>
+    </div>
   );
 }
 

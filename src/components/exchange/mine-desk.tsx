@@ -164,11 +164,11 @@ export function MineDesk() {
     <section className="grid items-start gap-4 lg:grid-cols-2">
       <article className="border border-gold bg-card px-3 py-3">
         <p className="text-xs tracking-widest text-gold">BSC · tapeout.net</p>
-        <h2 className="font-display text-3xl italic">{zh ? "领 tapeout BEM" : "Claim tapeout BEM"}</h2>
+        <h2 className="font-display text-3xl italic">{zh ? "领 TapeOut BEM" : "Claim TapeOut BEM"}</h2>
         <p className="mt-2 text-sm leading-relaxed">
           {zh
-            ? "数字每 15 秒从挖矿合约重读。矿机名单用 tapeout 快照，大约一分钟。只有 Behemoth 和 TapeOut 上已经开挖的电路才有 BEM。这一页不替你做题，也不托管。"
-            : "Figures are read from the mining contract every 15 seconds. The miner list is the tapeout snapshot. Only circuits already mining on Behemoth or TapeOut earn BEM."}
+            ? "数字每 15 秒从挖矿合约重读。矿机名单用 TapeOut 快照，大约一分钟。只有 Behemoth 和 TapeOut 上已经开挖的电路才有 BEM。这一页不替你做题，也不托管。"
+            : "Figures are read from the mining contract every 15 seconds. The miner list is the TapeOut snapshot. Only circuits already mining on Behemoth or TapeOut earn BEM."}
         </p>
         <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
           <Cell k={zh ? "今天排放" : "Daily emission"} v={stats ? `${Number(stats.daily).toLocaleString("en-US", { maximumFractionDigits: 2 })} BEM` : "—"} />
@@ -188,7 +188,7 @@ export function MineDesk() {
               <span className="text-right">{bemText(row.pending)} BEM</span>
             </li>
           ))}
-          {account && miners.length === 0 ? <li className="px-2 py-3 text-sm text-ink/60">{zh ? "tapeout 快照里没有这个地址的矿机。" : "The tapeout snapshot has no miner for this address."}</li> : null}
+          {account && miners.length === 0 ? <li className="px-2 py-3 text-sm text-ink/60">{zh ? "TapeOut 快照里没有这个地址的矿机。" : "The TapeOut snapshot has no miner for this address."}</li> : null}
         </ul>
         <button
           type="button"
@@ -205,9 +205,9 @@ export function MineDesk() {
         >
           {zh ? "签名领取 BEM" : "Sign and claim BEM"}
         </button>
-        {account && pendingBem === 0n ? <p className="mt-2 text-xs text-ink/60">{zh ? "没有待领。tapeout 快照里没有这地址的矿机，或者矿机还没挖出可领的 BEM。这一页不能替你开工 tapeout 电路。" : "Nothing is pending. The tapeout snapshot has no miner here, or it has not earned claimable BEM. This page cannot open a tapeout circuit for you."}</p> : null}
+        {account && pendingBem === 0n ? <p className="mt-2 text-xs text-ink/60">{zh ? "没有待领。TapeOut 快照里没有这地址的矿机，或者矿机还没挖出可领的 BEM。这一页不能替你开工 TapeOut 电路。" : "Nothing is pending. The TapeOut snapshot has no miner here, or it has not earned claimable BEM. This page cannot open a TapeOut circuit for you."}</p> : null}
         <p className="mt-2 break-all text-xs text-ink/50">
-          <a className="underline" href="https://tapeout.net/bridge" target="_blank" rel="noreferrer">{zh ? "tapeout BEM 跨链" : "tapeout BEM bridge"}</a>
+          <a className="underline" href="https://tapeout.net/bridge" target="_blank" rel="noreferrer">{zh ? "TapeOut BEM 跨链" : "TapeOut BEM bridge"}</a>
           {" · "}
           <a className="underline" href={`${BSC.explorer}/address/0xa84B8D3893De6e9922f2B29bE1e1b115845F5E72`} target="_blank" rel="noreferrer">BSC</a>
           {" · "}

@@ -56,10 +56,10 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
   const run = async (act: () => Promise<string>) => {
     setBusy(true);
     setBad(false);
-    setNote(zh ? "先付千分之二，再签 tapeout 那一笔。tapeout 失败的话，服务费不退。" : "The 0.2% is paid first. If the tapeout trade fails, the fee stays.");
+    setNote(zh ? "先付千分之二，再签 TapeOut 那一笔。TapeOut 失败的话，服务费不退。" : "The 0.2% is paid first. If the TapeOut trade fails, the fee stays.");
     try {
       const hash = await act();
-      setNote(zh ? "tapeout 成交已发出。" : "The tapeout trade was sent.");
+      setNote(zh ? "TapeOut 成交已发出。" : "The TapeOut trade was sent.");
       window.open(txUrl(hash), "_blank", "noopener,noreferrer");
     } catch (error) {
       setBad(true);
@@ -70,7 +70,7 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
             ? `已经提交，回执还没读到。先核对 ${(error as TxPending).hash ?? ""}，不要再签同一笔。`
             : `Submitted. The receipt is not back. Check ${(error as TxPending).hash ?? ""} before signing again.`
           : message === "fee-kept"
-          ? zh ? "服务费已经付了，tapeout 那一笔没有完成。服务费不退。" : "The fee was paid. The tapeout trade did not finish. The fee is not returned."
+          ? zh ? "服务费已经付了，TapeOut 那一笔没有完成。服务费不退。" : "The fee was paid. The TapeOut trade did not finish. The fee is not returned."
           : message === "gone"
             ? zh ? "这张买单数量不够了。刷新后再看。" : "That bid no longer has this size."
             : message === "locked"
@@ -93,8 +93,8 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
       <div className="order-2 flex min-w-0 flex-col gap-3 lg:order-1 lg:col-span-7">
         <p className="text-sm text-ink/80">
           {books?.ok
-            ? zh ? `tapeout 快照 ${books.asOf ?? ""} · 区块 ${books.block ?? "—"} · 约 15 秒` : `tapeout snapshot ${books.asOf ?? ""} · block ${books.block ?? "—"}`
-            : zh ? `tapeout 快照没读到${books?.error ? `（${books.error}）` : ""}` : "The tapeout snapshot did not load."}
+            ? zh ? `TapeOut 快照 ${books.asOf ?? ""} · 区块 ${books.block ?? "—"} · 约 15 秒` : `TapeOut snapshot ${books.asOf ?? ""} · block ${books.block ?? "—"}`
+            : zh ? `TapeOut 快照没读到${books?.error ? `（${books.error}）` : ""}` : "The TapeOut snapshot did not load."}
         </p>
         {mode === "chips" ? (
           <>
@@ -112,7 +112,7 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
                 <button key={id} type="button" onClick={() => { setKind(id); setBid(null); }} className={`min-h-10 ${kind === id ? "bg-ink text-paper" : ""}`}>{id === 0 ? "NAND" : "LATCH"}</button>
               ))}
             </div>
-            <p className="text-sm">{zh ? "tapeout 卖单合约没有开放。这里是买单。卖出就是把你的 NAND 或 LATCH 卖进下面某一档。" : "The tapeout ask market is not open. These are bids. Selling fills one of them."}</p>
+            <p className="text-sm">{zh ? "TapeOut 卖单合约没有开放。这里是买单。卖出就是把你的 NAND 或 LATCH 卖进下面某一档。" : "The TapeOut ask market is not open. These are bids. Selling fills one of them."}</p>
             <div className="max-h-[28rem] overflow-auto border border-gold">
               <table className="w-full min-w-[36rem] text-left text-xs">
                 <thead className="sticky top-0 bg-paper text-ink/45">
@@ -121,12 +121,12 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
                     <th className="px-2 py-2 font-normal"><Hint label={zh ? "种类" : "Kind"} text={zh ? "NAND 或 LATCH。卖出时钱包里要有同一种。" : "NAND or LATCH. The wallet must hold the same kind."} /></th>
                     <th className="px-2 py-2 font-normal"><Hint label={zh ? "买价" : "Bid"} text={zh ? "这张买单愿意付的单价，单位 BNB。卖出按这个价成交。" : "BNB this bid pays per transistor."} /></th>
                     <th className="px-2 py-2 font-normal"><Hint label={zh ? "剩余" : "Left"} text={zh ? "这张买单还愿意收多少颗。吃超了会失败。" : "How many this bid will still take."} /></th>
-                    <th className="px-2 py-2 font-normal"><Hint label={zh ? "总额" : "Total"} text={zh ? "买价乘剩余。本站另收千分之二，先付，tapeout 没成交也不退。" : "Bid times the size left. This site adds 0.2 percent, paid first."} /></th>
+                    <th className="px-2 py-2 font-normal"><Hint label={zh ? "总额" : "Total"} text={zh ? "买价乘剩余。本站另收千分之二，先付，TapeOut 没成交也不退。" : "Bid times the size left. This site adds 0.2 percent, paid first."} /></th>
                     <th className="px-2 py-2 text-right font-normal">{zh ? "卖出" : "Sell"}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {bids.length === 0 ? <tr><td colSpan={6} className="px-3 py-3 text-ink/60">{zh ? "这只标的现在没有 tapeout 买单。" : "No tapeout bid on this one."}</td></tr> : null}
+                  {bids.length === 0 ? <tr><td colSpan={6} className="px-3 py-3 text-ink/60">{zh ? "这只标的现在没有 TapeOut 买单。" : "No TapeOut bid on this one."}</td></tr> : null}
                   {bids.map((row) => (
                     <tr key={row.id} className={`border-t border-gold/20 ${bid?.id === row.id ? "bg-gold/10" : ""}`}>
                       <td className="px-2 py-2">{row.name}<br /><span className="font-mono text-[11px] text-ink/45">#{row.id}</span></td>
@@ -161,9 +161,9 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
         <h3 className="font-display text-2xl italic">{zh ? "成交票" : "Trade ticket"}</h3>
         <dl className="mt-3 flex flex-col gap-2 text-sm">
           <div className="flex justify-between gap-3"><dt className="text-ink/60">{zh ? "链" : "Chain"}</dt><dd>BSC</dd></div>
-          <div className="grid gap-1 sm:grid-cols-[5rem_1fr]"><dt className="text-ink/60">{zh ? "tapeout 合约" : "tapeout"}</dt><dd className="break-all font-mono text-xs">{mode === "chips" ? OFFICIAL.transistorMarket : OFFICIAL.circuitMarket}</dd></div>
+          <div className="grid gap-1 sm:grid-cols-[5rem_1fr]"><dt className="text-ink/60">{zh ? "TapeOut 合约" : "TapeOut"}</dt><dd className="break-all font-mono text-xs">{mode === "chips" ? OFFICIAL.transistorMarket : OFFICIAL.circuitMarket}</dd></div>
           <div className="flex justify-between gap-3"><dt className="shrink-0 text-ink/60">{zh ? "本站服务费" : "Our fee"}</dt><dd className="text-right">0.20% → {OFFICIAL.feeTo.slice(0, 6)}…{OFFICIAL.feeTo.slice(-4)}</dd></div>
-          <p className="text-xs leading-5 text-ink/70">{zh ? "tapeout 费在他们合约里。我们另收千分之二，先付，不退。" : "The tapeout fee stays in their contract. Ours is an extra 0.2%, paid first, not returned."}</p>
+          <p className="text-xs leading-5 text-ink/70">{zh ? "TapeOut 费在他们合约里。我们另收千分之二，先付，不退。" : "The TapeOut fee stays in their contract. Ours is an extra 0.2%, paid first, not returned."}</p>
         </dl>
         {mode === "chips" ? (
           <div className="mt-3 flex flex-col gap-2">
@@ -171,13 +171,13 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
             <input value={qty} onChange={(event) => setQty(event.target.value.replace(/[^\d]/g, ""))} className="border border-gold bg-paper px-3 py-2 font-mono outline-none" />
             <label className="flex items-start gap-2 text-sm">
               <input type="checkbox" className="mt-1" checked={ack} onChange={(event) => setAck(event.target.checked)} />
-              <span>{zh ? "我知道服务费先打进写死地址，tapeout 没成交也不退。" : "I know the fee is paid to the locked address first and is not returned."}</span>
+              <span>{zh ? "我知道服务费先打进写死地址，TapeOut 没成交也不退。" : "I know the fee is paid to the locked address first and is not returned."}</span>
             </label>
             <button type="button" disabled={!ack || !bid || busy} onClick={() => bid && void run(async () => {
               const from = currentAccount() ?? (await connectBsc());
               return fillOfficialBid(from, BigInt(bid.id), BigInt(qty || "0"), bid.transistors, BigInt(bid.priceWei));
             })} className="min-h-12 bg-ink font-display text-xl italic text-paper disabled:opacity-40">
-              {zh ? "吃 tapeout 买单" : "Fill tapeout bid"}
+              {zh ? "吃 TapeOut 买单" : "Fill TapeOut bid"}
             </button>
             <p className="text-xs tracking-widest text-gold">{zh ? "或自己挂买单" : "Or place a bid"}</p>
             <input value={price} onChange={(event) => setPrice(event.target.value.replace(/[^\d.]/g, ""))} placeholder={zh ? "单价 BNB" : "Price in BNB"} className="border border-gold bg-paper px-3 py-2 font-mono outline-none" />
@@ -194,7 +194,7 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
               }}
               className="min-h-12 border border-gold font-display text-xl italic disabled:opacity-40"
             >
-              {zh ? "挂 tapeout 买单" : "Place tapeout bid"}
+              {zh ? "挂 TapeOut 买单" : "Place TapeOut bid"}
             </button>
           </div>
         ) : (
@@ -213,11 +213,11 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
               })}
               className="min-h-12 bg-ink font-display text-xl italic text-paper disabled:opacity-40"
             >
-              {zh ? "买这张 tapeout 电路" : "Buy this tapeout circuit"}
+              {zh ? "买这张 TapeOut 电路" : "Buy this TapeOut circuit"}
             </button>
           </div>
         )}
-        <a className="mt-3 inline-flex text-sm underline decoration-gold underline-offset-4" href="https://tapeout.net/" target="_blank" rel="noreferrer">{zh ? "打开 tapeout 核对" : "Check tapeout.net"}</a>
+        <a className="mt-3 inline-flex text-sm underline decoration-gold underline-offset-4" href="https://tapeout.net/" target="_blank" rel="noreferrer">{zh ? "打开 TapeOut 核对" : "Check tapeout.net"}</a>
         <a className="mt-1 block text-xs text-ink/60" href={`${BSC.explorer}/address/${mode === "chips" ? OFFICIAL.transistorMarket : OFFICIAL.circuitMarket}`} target="_blank" rel="noreferrer">{zh ? "浏览器里的合约" : "Contract on the explorer"}</a>
         {note ? <p className={`mt-2 text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
       </aside>
