@@ -14,6 +14,7 @@ import {
   ercPrice,
   FEE_TO,
   isErcKey,
+  poolMark,
   pretty,
   quoteExact,
   readAsset,
@@ -43,6 +44,7 @@ import { SignCard } from "@/components/exchange/sign-card";
 import { LpPanel } from "@/components/exchange/lp-desk";
 import { useFeeLock } from "@/lib/fee-lock";
 import { SideRail } from "@/components/exchange/side-rail";
+import { SymbolMenu } from "@/components/exchange/symbol-menu";
 
 function sized(raw: bigint, decimals: number, pct: number, cap?: bigint): string {
   let cut = (raw * BigInt(pct)) / 100n;
@@ -90,7 +92,7 @@ export function SpotDesk() {
     let dead = false;
     const pull = () => {
       if (document.hidden) return;
-      const priceOf = pair === "bnb" ? bnbPrice : pair === "okb" ? okbPrice : pair === "bem" ? bemPrice : () => ercPrice(pair);
+      const priceOf = pair === "okb" ? okbPrice : () => poolMark(pair).catch(() => (pair === "bnb" ? bnbPrice() : pair === "bem" ? bemPrice() : ercPrice(pair)));
       priceOf().then((text) => {
         if (!dead) setPrice(text);
       }).catch(() => undefined);
@@ -319,12 +321,17 @@ export function SpotDesk() {
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs tracking-widest text-gold">{base} / USDT</p>
           </div>
-          <div className="mt-2 flex gap-1 overflow-x-auto">
-            {(book === "crypto" ? (["bem", "bnb", "okb", "btc", "eth", "zec", "xau"] as const) : STOCK_KEYS).map((key) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => {
+          <div className="mt-2">
+            <SymbolMenu
+              zh={lang === "zh"}
+              label={`${base} / USDT`}
+              note={pair === "okb" ? "X Layer" : "BSC"}
+              items={(book === "crypto" ? (["bem", "bnb", "okb", "btc", "eth", "zec", "xau"] as const) : STOCK_KEYS).map((key) => ({
+                id: key,
+                title: key in STOCKS ? (lang === "zh" ? STOCKS[key as StockKey].zh : STOCKS[key as StockKey].en) : key === "bem" ? "BEM" : key === "bnb" ? "BNB" : key === "okb" ? "OKB" : key === "btc" ? "BTC" : key === "eth" ? "ETH" : key === "zec" ? "ZEC" : "XAU",
+                note: key === "okb" ? "X Layer" : "BSC",
+                on: pair === key,
+                run: () => {
                   setPair(key);
                   setAmount("");
                   setOut(null);
@@ -332,12 +339,9 @@ export function SpotDesk() {
                   setPrice(null);
                   setAssetBal(null);
                   setPrints([]);
-                }}
-                className={`min-h-8 shrink-0 border border-gold px-3 font-mono text-xs ${pair === key ? "bg-ink text-paper" : ""}`}
-              >
-                {key in STOCKS ? (lang === "zh" ? STOCKS[key as StockKey].zh : STOCKS[key as StockKey].en) : key === "bem" ? "BEM" : key === "bnb" ? "BNB" : key === "okb" ? "OKB" : key === "btc" ? "BTC" : key === "eth" ? "ETH" : key === "zec" ? "ZEC" : "XAU"}
-              </button>
-            ))}
+                },
+              }))}
+            />
           </div>
           <p className="mt-3 flex items-baseline gap-2 leading-none">
             <span className="font-mono text-4xl tabular-nums tracking-tight sm:text-5xl">{shown ?? "—"}</span>

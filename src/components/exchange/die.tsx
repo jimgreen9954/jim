@@ -89,7 +89,7 @@ export function SealStamp() {
       );
       let hash = "";
       for (let i = 0; i < need; i += 1) {
-        hash = await tapeSeal(from);
+        hash = (await tapeSeal(from)).hash;
         setSealCount(have + i + 1);
       }
       setNote(lang === "zh" ? "三张印鉴已在处理器上。再点下面的登记。" : "Three seals are on the processor. Register below.");

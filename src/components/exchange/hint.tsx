@@ -35,19 +35,3 @@ export function Hint({ label, text }: { label: ReactNode; text: ReactNode }) {
     </span>
   );
 }
-
-export function verifyCopy(zh: boolean): ReactNode {
-  return zh ? (
-    <>
-      点「一键验证」会用这张电路自己的 eval，在链上把输入跑一遍。不签名，不扣 OKB。跑通就标成已核对。TAPELIQUID 的矿机合约只记开工和门数，没有验证位，所以核对不会把权重改进 TapeOut 的 99% 池，仍按门数占今天的排放。TapeOut 的题目验证在{" "}
-      <a className="underline" href="https://tapeout.net/pod/" target="_blank" rel="noreferrer">tapeout.net/pod</a>
-      。
-    </>
-  ) : (
-    <>
-      Verify runs this circuit's own eval on chain. No signature and no OKB. A pass is marked checked. The TAPELIQUID mine stores open and gates only, so a check does not move weight into TapeOut's 99% pool. TapeOut's task check is at{" "}
-      <a className="underline" href="https://tapeout.net/pod/" target="_blank" rel="noreferrer">tapeout.net/pod</a>
-      .
-    </>
-  );
-}

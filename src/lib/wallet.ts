@@ -13,6 +13,10 @@ let kind: WalletKind = "okx";
 let dropped = false;
 const listeners = new Set<(next: string | null) => void>();
 
+export function walletKind(): WalletKind {
+  return kind;
+}
+
 export function currentAccount(): string | null {
   return account;
 }
@@ -46,8 +50,8 @@ export function rememberAccount(next: string) {
 
 type Host = Window & {
   okxwallet?: Eth;
-  binancew3w?: { ethereum?: Eth };
-  ethereum?: Eth & { isOkxWallet?: boolean; isBinance?: boolean };
+  binancew3w?: Eth & { ethereum?: Eth };
+  ethereum?: Eth & { isOkxWallet?: boolean; isBinance?: boolean; providers?: Array<Eth & { isBinance?: boolean; isOkxWallet?: boolean }> };
 };
 
 function host(): Host {
@@ -61,11 +65,34 @@ export function okxInjected(): Eth | null {
   return null;
 }
 
+const binanceWrap = new WeakMap<Eth, Eth>();
+
+function wrapBinance(eth: Eth): Eth {
+  const hit = binanceWrap.get(eth);
+  if (hit) return hit;
+  const next: Eth = {
+    request: (args) => {
+      if (args.method === "eth_sendTransaction" && Array.isArray(args.params) && args.params[0] && typeof args.params[0] === "object") {
+        const row = { ...(args.params[0] as Record<string, unknown>) };
+        delete row.chainId;
+        if (row.value == null) row.value = "0x0";
+        return eth.request({ method: "eth_sendTransaction", params: [row] });
+      }
+      return eth.request(args);
+    },
+    on: eth.on?.bind(eth),
+  };
+  binanceWrap.set(eth, next);
+  return next;
+}
+
 export function binanceInjected(): Eth | null {
   const w = host();
-  if (w.binancew3w?.ethereum) return w.binancew3w.ethereum;
-  if (w.ethereum?.isBinance) return w.ethereum;
-  return null;
+  const listed = w.ethereum?.providers?.find((row) => row.isBinance);
+  const nested = w.binancew3w?.ethereum ?? (w.binancew3w && "request" in w.binancew3w ? w.binancew3w : null);
+  const marked = w.ethereum?.isBinance ? w.ethereum : null;
+  const found = listed ?? nested ?? marked;
+  return found ? wrapBinance(found) : null;
 }
 
 function holdNavigation(url: string): boolean {
@@ -200,7 +227,6 @@ async function connectOkxRemote(): Promise<string> {
             ? (args.params as { chainId?: string }[] | undefined)?.[0]?.chainId
             : (args.params as { chainId?: string }[] | undefined)?.[0]?.chainId;
         if (hex) okx.setDefaultChain(String(Number.parseInt(hex, 16)));
-        else if (args.method === "eth_sendTransaction") okx.setDefaultChain("56");
       }
       try {
         return await okx.request(args);
@@ -224,7 +250,7 @@ export async function connectKind(which: WalletKind): Promise<string> {
   if (plugged) return useInjected(plugged);
   const eth = host().ethereum;
   if (which === "binance") {
-    if (eth?.isBinance) return useInjected(eth);
+    if (eth && !eth.isOkxWallet) return useInjected(wrapBinance(eth));
     publishLink(`https://app.binance.com/cedefi/dapp?url=${encodeURIComponent(window.location.href)}`);
     throw new Error("binanceapp");
   }
@@ -257,7 +283,15 @@ export async function ensureProvider(): Promise<Eth> {
     current = plugged;
     return plugged;
   }
-  if (kind === "binance") throw new Error("binanceapp");
+  if (kind === "binance") {
+    const eth = host().ethereum;
+    if (eth && !eth.isOkxWallet) {
+      const next = wrapBinance(eth);
+      current = next;
+      return next;
+    }
+    throw new Error("binanceapp");
+  }
   await connectOkxRemote();
   if (!current) throw new Error("nowallet");
   return current;

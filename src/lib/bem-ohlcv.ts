@@ -36,7 +36,10 @@ async function fetchXOhlcv(path: string, aggregate: number, limit: number): Prom
 }
 
 async function fetchBook(base: string, path: string, aggregate: number, limit: number, extra: string): Promise<Candle[]> {
-  const res = await fetch(`${base}/${path}?aggregate=${aggregate}&limit=${limit}&currency=usd${extra}`, { headers: { accept: "application/json" } });
+  const res = await fetch(`${base}/${path}?aggregate=${aggregate}&limit=${limit}&currency=usd${extra}`, {
+    headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(2_500),
+  });
   if (!res.ok) {
     if (limit > 300) return fetchBook(base, path, aggregate, 300, extra);
     return [];
@@ -99,18 +102,9 @@ async function load(frame: CandleFrame): Promise<Candle[]> {
   return fetchOhlcv(spec.path, spec.aggregate, spec.limit);
 }
 
-export async function pullXBem(frame: CandleFrame): Promise<Candle[]> {
+export function pullXBem(frame: CandleFrame): Promise<Candle[]> {
   const key = `x:${frame in direct || frame === "1w" || frame === "1M" || frame === "3M" || frame === "1y" ? frame : "1m"}`;
-  const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < 45_000 && hit.rows.length > 0) return hit.rows;
-  try {
-    const rows = await loadX(key.slice(2) as CandleFrame);
-    if (rows.length === 0) return hit?.rows ?? [];
-    cache.set(key, { at: Date.now(), rows });
-    return rows;
-  } catch {
-    return hit?.rows ?? [];
-  }
+  return remembered(key, () => loadX(key.slice(2) as CandleFrame));
 }
 
 async function loadX(frame: CandleFrame): Promise<Candle[]> {
@@ -131,18 +125,9 @@ async function loadX(frame: CandleFrame): Promise<Candle[]> {
   return fetchXOhlcv(spec.path, spec.aggregate, spec.limit);
 }
 
-export async function pullBem(frame: CandleFrame): Promise<Candle[]> {
+export function pullBem(frame: CandleFrame): Promise<Candle[]> {
   const key = frame in direct || frame === "1w" || frame === "1M" || frame === "3M" || frame === "1y" ? frame : "1m";
-  const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < 45_000 && hit.rows.length > 0) return hit.rows;
-  try {
-    const rows = await load(key);
-    if (rows.length === 0) return hit?.rows ?? [];
-    cache.set(key, { at: Date.now(), rows });
-    return rows;
-  } catch {
-    return hit?.rows ?? [];
-  }
+  return remembered(key, () => load(key));
 }
 
 const COIN_POOL = {
@@ -169,18 +154,90 @@ async function loadPool(base: string, frame: CandleFrame): Promise<Candle[]> {
   return fetchBook(base, spec.path, spec.aggregate, spec.limit, "");
 }
 
-/** Same frames as the BEM book: 15s through 1y, from that coin's Pancake pool. */
-export async function pullCoin(coin: keyof typeof COIN_POOL, frame: CandleFrame): Promise<Candle[]> {
+/** Pool candles and the exchange print race. The first one with bars wins. */
+export function pullCoin(coin: keyof typeof COIN_POOL, frame: CandleFrame): Promise<Candle[]> {
   const safe = frame in direct || frame === "1w" || frame === "1M" || frame === "3M" || frame === "1y" ? frame : "1m";
   const key = `${coin}:${safe}`;
+  return remembered(key, () => firstRows([loadPool(COIN_POOL[coin], safe), loadOkx(coin, safe)]));
+}
+
+const flights = new Map<string, Promise<Candle[]>>();
+
+function remembered(key: string, loadRows: () => Promise<Candle[]>): Promise<Candle[]> {
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < 45_000 && hit.rows.length > 0) return hit.rows;
-  try {
-    const rows = await loadPool(COIN_POOL[coin], safe);
-    if (rows.length === 0) return hit?.rows ?? [];
-    cache.set(key, { at: Date.now(), rows });
-    return rows;
-  } catch {
-    return hit?.rows ?? [];
+  if (hit && Date.now() - hit.at < 20_000 && hit.rows.length > 0) return Promise.resolve(hit.rows);
+  let job = flights.get(key);
+  if (!job) {
+    job = loadRows()
+      .then((rows) => {
+        if (rows.length > 0) cache.set(key, { at: Date.now(), rows });
+        return rows.length > 0 ? rows : hit?.rows ?? [];
+      })
+      .catch(() => hit?.rows ?? [])
+      .finally(() => {
+        flights.delete(key);
+      });
+    flights.set(key, job);
   }
+  if (hit?.rows.length) return Promise.resolve(hit.rows);
+  return job;
+}
+
+function firstRows(tasks: Promise<Candle[]>[]): Promise<Candle[]> {
+  return new Promise((resolve) => {
+    let pending = tasks.length;
+    let best: Candle[] = [];
+    let done = false;
+    const finish = (rows: Candle[]) => {
+      if (done) return;
+      done = true;
+      resolve(rows);
+    };
+    if (pending === 0) finish([]);
+    for (const task of tasks) {
+      task
+        .then((rows) => {
+          if (rows.length > best.length) best = rows;
+          if (rows.length > 0) finish(rows);
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          pending -= 1;
+          if (pending === 0) finish(best);
+        });
+    }
+  });
+}
+
+const OKX_INST = { btc: "BTC-USDT", eth: "ETH-USDT", zec: "ZEC-USDT" } as const;
+const OKX_BAR: Record<CandleFrame, string> = {
+  "15s": "1m",
+  "1m": "1m",
+  "5m": "5m",
+  "15m": "15m",
+  "1h": "1H",
+  "4h": "4H",
+  "1d": "1D",
+  "1w": "1W",
+  "1M": "1M",
+  "3M": "3M",
+  "1y": "1D",
+};
+
+async function fetchOkx(inst: string, bar: string): Promise<Candle[]> {
+  const res = await fetch(`https://www.okx.com/api/v5/market/candles?instId=${inst}&bar=${bar}&limit=300`, {
+    headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(2_500),
+  });
+  if (!res.ok) return [];
+  const body = (await res.json()) as { data?: string[][] };
+  return (body.data ?? []).slice().reverse().flatMap((row) => {
+    const candle = { t: Math.floor(Number(row[0]) / 1000), o: Number(row[1]), h: Number(row[2]), l: Number(row[3]), c: Number(row[4]), v: Number(row[5] ?? 0) };
+    return candle.o > 0 && candle.h > 0 && candle.l > 0 && candle.c > 0 ? [candle] : [];
+  });
+}
+
+async function loadOkx(coin: keyof typeof OKX_INST, frame: CandleFrame): Promise<Candle[]> {
+  const rows = await fetchOkx(OKX_INST[coin], OKX_BAR[frame]);
+  return frame === "1y" ? fold(rows, (t) => String(sgtDate(t).y)) : rows;
 }

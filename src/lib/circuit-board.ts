@@ -38,6 +38,7 @@ export type CircuitRow = {
   officialId: number | null;
   signed: CircuitSigned | null;
   seller: string;
+  collection: string;
   listedAt: number;
   paybackDays: number | null;
 };
@@ -82,6 +83,30 @@ export type CircuitBoard = {
   prints: CircuitPrint[];
   bars: CircuitBar[];
 };
+
+export type CapacityBid = {
+  orderId: string;
+  maker: string;
+  dailyCapacityPriceWei: string;
+  remainingBudgetWei: string;
+  minCircuitH: string;
+  maxCircuitH: string;
+  feeBps: number;
+};
+
+export type CapacityBook = {
+  ok: boolean;
+  exchange: string;
+  rateAtomic: string;
+  verifiedWeight: string;
+  unverifiedBps: number;
+  bids: CapacityBid[];
+};
+
+export const getCapacityBook = createServerFn({ method: "GET" }).handler(async (): Promise<CapacityBook> => {
+  const { loadCapacityBook } = await import("./circuit-board.server");
+  return loadCapacityBook();
+});
 
 export const getCircuitBoard = createServerFn({ method: "GET" })
   .validator((input: { account?: string } | undefined) => ({

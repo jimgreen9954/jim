@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
-import { createPublicClient, defineChain, encodeFunctionData, fallback, formatUnits, http, parseAbi, type Hex } from "viem";
-import { connectXLayer, DEPLOYED, XLAYER } from "@/lib/xlayer";
+import { createPublicClient, defineChain, encodeFunctionData, fallback, formatUnits, http, parseAbi, parseAbiItem, type Hex } from "viem";
+import { connectXLayer, DEPLOYED, myCircuits, XLAYER } from "@/lib/xlayer";
 import { getProvider } from "@/lib/wallet";
 
 export const TAPE_MINE = "0x60b1b7cae1bbd0e84ac3e1e43f933712f3ab67e8" as const;
@@ -42,6 +42,76 @@ const client = createPublicClient({
   chain: xlayer,
   transport: fallback(RPCS.map((url) => http(url, { timeout: 8_000, retryCount: 0 })), { rank: false }),
 });
+
+export type TapeClaim = { tx: string; amount: bigint; ts: number };
+
+const transferEvent = parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)");
+
+type ClaimIndex = { tip: number; covered: number; rows: { tx: string; to: string; amount: string; ts: number }[] };
+
+async function pullMints(from: bigint, to: bigint, account: string): Promise<{ tx: string; amount: bigint; block: bigint }[]> {
+  const logs = await client.getLogs({
+    address: TAPE,
+    event: transferEvent,
+    args: { from: "0x0000000000000000000000000000000000000000", to: account as Hex },
+    fromBlock: from,
+    toBlock: to,
+  }).catch(() => null);
+  if (!logs) return [];
+  return logs.map((log) => ({ tx: log.transactionHash ?? "", amount: log.args.value ?? 0n, block: log.blockNumber ?? 0n }));
+}
+
+export async function readTapeClaims(account: string): Promise<TapeClaim[]> {
+  const who = account.toLowerCase();
+  const byTx = new Map<string, TapeClaim>();
+  try {
+    const index = await loadClaimIndex();
+    for (const row of index?.rows ?? []) {
+      if (row.to.toLowerCase() !== who) continue;
+      const prev = byTx.get(row.tx);
+      const amount = BigInt(row.amount);
+      if (prev) prev.amount += amount;
+      else byTx.set(row.tx, { tx: row.tx, amount, ts: row.ts });
+    }
+  } catch { /* Cached claims still show. */ }
+  try {
+    const tip = await client.getBlockNumber();
+    const start = tip > 240n ? tip - 240n : 0n;
+    const cuts = [start, start + 80n, start + 160n].filter((from) => from <= tip);
+    const parts = await Promise.all(cuts.map((from, i) => {
+      const to = i === cuts.length - 1 ? tip : cuts[i + 1] - 1n;
+      return pullMints(from, to > tip ? tip : to, account);
+    }));
+    const fresh = parts.flat().filter((row) => row.tx && !byTx.has(row.tx));
+    if (fresh.length) {
+      const anchor = await client.getBlock({ blockNumber: tip }).then((block) => ({ tip: Number(tip), ts: Number(block.timestamp) })).catch(() => null);
+      for (const row of fresh) {
+        const prev = byTx.get(row.tx);
+        const ts = anchor ? anchor.ts - (anchor.tip - Number(row.block)) : 0;
+        if (prev) prev.amount += row.amount;
+        else byTx.set(row.tx, { tx: row.tx, amount: row.amount, ts });
+      }
+    }
+  } catch { /* The saved list is already on screen. */ }
+  return [...byTx.values()].sort((a, b) => b.ts - a.ts);
+}
+
+let claimIndex: ClaimIndex | null = null;
+let claimIndexFlight: Promise<ClaimIndex | null> | null = null;
+
+function loadClaimIndex(): Promise<ClaimIndex | null> {
+  if (claimIndex) return Promise.resolve(claimIndex);
+  if (!claimIndexFlight) {
+    claimIndexFlight = fetch("/tape-claims.json")
+      .then((res) => (res.ok ? res.json() as Promise<ClaimIndex> : null))
+      .catch(() => null)
+      .then((row) => {
+        claimIndex = row;
+        return row;
+      });
+  }
+  return claimIndexFlight;
+}
 
 export function tapeText(amount: bigint): string {
   return formatUnits(amount, 8);
@@ -89,6 +159,7 @@ const LOCKS = [
 const POOL = "0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641";
 const ASH = "0x000000000000000000000000000000000000dEaD";
 const CIRCUIT_LOCK = LOCKS[0].toLowerCase();
+const CIRCUIT_BOOK = "0x154e82c6a2ac121906d29af0ee81131e93b57860";
 const HALVING = 210_000n * 600n;
 const CAP = 21_000_000n * 10n ** 8n;
 const DAY = 7200n * 10n ** 8n;
@@ -226,12 +297,45 @@ function boardFrom(wire: TapeWire): TapeBoard {
 
 let mineFlight: Promise<TapeBoard> | null = null;
 let mineKey = "";
+const MINE_KEY = "tapeliquid-mine-board-v1";
+
+export function peekTapeMine(account: string | null): TapeBoard | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(MINE_KEY) ?? "") as { account?: string; board?: TapeWire };
+    if (!saved?.board || (saved.account ?? "") !== (account ?? "").toLowerCase()) return null;
+    return boardFrom(saved.board);
+  } catch {
+    return null;
+  }
+}
+
+function rememberTapeMine(account: string | null, board: TapeBoard) {
+  if (typeof window === "undefined" || !board.scanOk) return;
+  const wire: TapeWire = {
+    supply: board.supply.toString(), cap: board.cap.toString(), weight: board.weight.toString(), balance: board.balance.toString(),
+    start: board.start.toString(), daily: board.daily.toString(), circuits: board.circuits, open: board.open,
+    burned: board.burned.toString(), pooled: board.pooled.toString(), locked: board.locked.toString(),
+    circuitHeld: board.circuitHeld.toString(), waferHeld: board.waferHeld.toString(),
+    termPrincipal: board.termPrincipal.toString(), termReward: board.termReward.toString(), termHeld: board.termHeld.toString(),
+    pendingNet: board.pendingNet.toString(), pendingStaked: board.pendingStaked.toString(),
+    staked: board.staked, stakedLive: board.stakedLive, stakedWeight: board.stakedWeight.toString(),
+    seats: board.seats.map((row) => ({ ...row, pending: row.pending.toString() })),
+    scanOk: true, scanning: false,
+  };
+  try { window.localStorage.setItem(MINE_KEY, JSON.stringify({ account: (account ?? "").toLowerCase(), board: wire })); } catch { /* The next read still hits the chain. */ }
+}
 
 export function readTapeMine(account: string | null, onHead?: (board: TapeBoard) => void): Promise<TapeBoard> {
   const key = (account ?? "").toLowerCase();
+  const cached = peekTapeMine(account);
+  if (cached) onHead?.({ ...cached, scanning: true });
   if (mineFlight && mineKey === key) return mineFlight;
   mineKey = key;
-  mineFlight = readThroughSite(account, onHead).finally(() => {
+  mineFlight = readThroughSite(account, onHead).then((board) => {
+    rememberTapeMine(account, board);
+    return board;
+  }).finally(() => {
     mineFlight = null;
   });
   return mineFlight;
@@ -247,32 +351,45 @@ function until<T>(work: Promise<T>, ms: number): Promise<T> {
   });
 }
 
+async function withHeld(account: string | null, board: TapeBoard): Promise<TapeBoard> {
+  if (!account) return board;
+  try {
+    const held = await myCircuits(account);
+    const seen = new Set(board.seats.map((row) => row.id));
+    const extra = held.filter((row) => !seen.has(row.id)).map((row) => ({ id: row.id, gates: row.gates, on: false, pending: 0n, share: "0" }));
+    if (!extra.length) return board;
+    const seats = [...extra, ...board.seats].sort((a, b) => Number(a.on) - Number(b.on) || Number(b.id) - Number(a.id));
+    return { ...board, seats, scanOk: true, scanning: false };
+  } catch {
+    return board;
+  }
+}
+
 async function readThroughSite(account: string | null, onHead?: (board: TapeBoard) => void): Promise<TapeBoard> {
-  if (import.meta.env.VITE_TAPE_STATIC === "1") return loadTapeMine(account, onHead, true);
+  if (import.meta.env.VITE_TAPE_STATIC === "1") return withHeld(account, await loadTapeMine(account, onHead, true));
   try {
     const head = boardFrom(await until(getTapeHead({ data: { account: account ?? "" } }), 8_000));
     onHead?.({ ...head, scanning: true, seats: [], scanOk: false });
     try {
-      return boardFrom(await until(getTapeSeats({ data: { account: account ?? "" } }), 12_000));
+      const full = boardFrom(await until(getTapeSeats({ data: { account: account ?? "" } }), 20_000));
+      return full.scanOk ? full : withHeld(account, full);
     } catch {
-      return { ...head, scanning: false };
+      return withHeld(account, { ...head, scanning: false });
     }
   } catch {
-    return loadTapeMine(account, onHead, false);
+    return withHeld(account, await loadTapeMine(account, onHead, false));
   }
 }
 
 async function readChunk(contracts: readonly unknown[]) {
-  const out: { status: string; result?: unknown }[] = [];
-  for (let i = 0; i < contracts.length; i += 180) {
-    const part = await client.multicall({
-      contracts: contracts.slice(i, i + 180) as never,
-      allowFailure: true,
-      batchSize: 180,
-    });
-    out.push(...(part as { status: string; result?: unknown }[]));
+  const size = 400;
+  const jobs = [];
+  for (let i = 0; i < contracts.length; i += size) {
+    const slice = contracts.slice(i, i + size);
+    jobs.push(client.multicall({ contracts: slice as never, allowFailure: true }));
   }
-  return out;
+  const parts = await Promise.all(jobs);
+  return parts.flat() as { status: string; result?: unknown }[];
 }
 
 const termAbi = parseAbi([
@@ -384,7 +501,9 @@ async function loadTapeMine(account: string | null, onHead?: (board: TapeBoard) 
           stakedOn.add(ids[i]);
         }
       }
-      if (mine && ((ownerAddr && ownerAddr.toLowerCase() === mine) || seatOwner === mine)) mineIds.push(ids[i]);
+      const holds = Boolean(ownerAddr && mine && ownerAddr.toLowerCase() === mine);
+      const mining = Boolean(seatRow && seatRow[3] && seatOwner === mine);
+      if (holds || mining) mineIds.push(ids[i]);
     }
     if (missed > Math.max(8, Math.floor(ids.length / 20))) throw new Error("scan");
     const pendingCalls = openIds.map((id) => ({ address: TAPE_MINE, abi: mineAbi, functionName: "pendingOf" as const, args: [BigInt(id)] as const }));
@@ -432,33 +551,55 @@ async function preflight(to: Hex, from: string, data: Hex) {
     await Promise.race([call, slow]);
   } catch (err) {
     const message = err instanceof Error ? err.message : "";
-    if (/revert|execution reverted/i.test(message)) throw err;
+    if (/revert|execution reverted/i.test(message)) throw new Error("revert");
   } finally {
     if (timer) clearTimeout(timer);
   }
 }
 
 async function send(from: string, data: Hex): Promise<Hex> {
-  await preflight(TAPE_MINE, from, data);
-  await connectXLayer();
+  const signer = await connectXLayer();
+  if (signer.toLowerCase() !== from.toLowerCase()) throw new Error("account");
+  await preflight(TAPE_MINE, signer, data);
   const eth = getProvider();
   if (!eth) throw new Error("nowallet");
-  const hash = (await eth.request({
-    method: "eth_sendTransaction",
-    params: [{ from, to: TAPE_MINE, data }],
-  })) as Hex;
+  const reported = await eth.request({ method: "eth_chainId" }).catch(() => "");
+  const text = typeof reported === "string" ? reported : String(reported ?? "");
+  if (Number.parseInt(text, text.startsWith("0x") ? 16 : 10) !== 196) throw new Error("chain");
+  let hash: Hex;
   try {
-    const receipt = await client.waitForTransactionReceipt({ hash, timeout: 90_000 });
-    if (receipt.status !== "success") throw new Error("revert");
+    hash = (await eth.request({
+      method: "eth_sendTransaction",
+      params: [{ from: signer, to: TAPE_MINE, data }],
+    })) as Hex;
   } catch (err) {
-    const message = err instanceof Error ? err.message : "";
-    if (/revert|execution reverted/i.test(message)) throw err;
+    const message = err instanceof Error ? err.message : String(err ?? "");
+    const code = typeof err === "object" && err && "code" in err ? Number((err as { code?: number }).code) : NaN;
+    if (code === 4001 || /rejected|denied|cancel|取消/i.test(message)) throw new Error("rejected");
+    if (/insufficient|funds|余额/i.test(message)) throw new Error("gas");
+    if (/chain|网络/i.test(message)) throw new Error("chain");
+    throw new Error("revert");
   }
+  const receipt = await client.waitForTransactionReceipt({ hash, timeout: 90_000 });
+  if (receipt.status !== "success") throw new Error("revert");
   return hash;
 }
 
-export function openTape(from: string, id: bigint): Promise<Hex> {
-  return send(from, encodeFunctionData({ abi: mineAbi, functionName: "open", args: [id] }));
+export async function openTape(from: string, id: bigint): Promise<Hex> {
+  const signer = await connectXLayer();
+  void from;
+  const owner = (await client.readContract({
+    address: DEPLOYED.circuits,
+    abi: circuitAbi,
+    functionName: "ownerOf",
+    args: [id],
+  })).toLowerCase();
+  if (owner === CIRCUIT_BOOK) throw new Error("listed");
+  if (owner === CIRCUIT_LOCK) throw new Error("locked");
+  if (owner !== signer.toLowerCase()) throw new Error("owner");
+  const seat = await client.readContract({ address: TAPE_MINE, abi: mineAbi, functionName: "seat", args: [id] });
+  if (seat[3]) throw new Error("open");
+  return send(signer, encodeFunctionData({ abi: mineAbi, functionName: "open", args: [id] }));
 }
 
 export function claimTape(from: string, ids: bigint[]): Promise<Hex> {

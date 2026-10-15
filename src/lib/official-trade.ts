@@ -179,6 +179,84 @@ export async function fillSignedCircuit(from: string, ask: CircuitSigned): Promi
   }
 }
 
+export const CAPACITY_EXCHANGE = "0x9273d46b77B67Ba9B24177C25EC25fcbADf27040" as Hex;
+
+const capacityAbi = parseAbi([
+  "function placeCapacityBid(uint256 dailyCapacityPriceWei, uint256 minCircuitH, uint256 maxCircuitH, address nftRecipient, address refundRecipient, uint16 expectedFeeBps) payable returns (uint256)",
+  "function cancelCapacityBid(uint256 orderId)",
+  "function acceptCapacityBid(uint256 orderId, address collection, uint256 tokenId, bytes32 minerKey, address proceedsRecipient, uint256 expectedDailyCapacityPriceWei, uint16 expectedFeeBps, uint256 minNetProceedsWei)",
+  "function quoteCapacityBidFill(uint256 orderId, address collection, uint256 tokenId, bytes32 minerKey) view returns ((uint256 circuitH, uint256 estimated24hAtomic, uint256 grossPriceWei, uint256 takerFeeWei, uint256 netProceedsWei))",
+]);
+
+const circuitReadAbi = parseAbi([
+  "function ownerOf(uint256) view returns (address)",
+  "function isApprovedForAll(address account, address operator) view returns (bool)",
+  "function setApprovalForAll(address operator, bool approved)",
+  "function eval(uint256 id, bytes inputs) view returns (bytes)",
+]);
+
+const podKeyAbi = parseAbi(["function minerKey(address,uint256) pure returns (bytes32)"]);
+
+export async function placeCapacityBid(from: string, priceWei: bigint, budgetWei: bigint, minH: bigint, maxH: bigint, feeBps: number): Promise<Hex> {
+  if (priceWei <= 0n || budgetWei <= 0n) throw new Error("amount");
+  if (maxH > 0n && minH > maxH) throw new Error("range");
+  const data = encodeFunctionData({
+    abi: capacityAbi,
+    functionName: "placeCapacityBid",
+    args: [priceWei, minH, maxH, from as Hex, from as Hex, feeBps],
+  });
+  await client.call({ account: from as Hex, to: CAPACITY_EXCHANGE, data, value: budgetWei });
+  const hash = await send(from, CAPACITY_EXCHANGE, data, budgetWei);
+  await waitOk(hash);
+  return hash;
+}
+
+export async function cancelCapacityBid(from: string, orderId: bigint): Promise<Hex> {
+  const data = encodeFunctionData({ abi: capacityAbi, functionName: "cancelCapacityBid", args: [orderId] });
+  await client.call({ account: from as Hex, to: CAPACITY_EXCHANGE, data });
+  const hash = await send(from, CAPACITY_EXCHANGE, data);
+  await waitOk(hash);
+  return hash;
+}
+
+export async function acceptCapacityBid(from: string, orderId: bigint, collection: Hex, tokenId: bigint, priceWei: bigint, feeBps: number): Promise<Hex> {
+  const owner = await client.readContract({ address: collection, abi: circuitReadAbi, functionName: "ownerOf", args: [tokenId] });
+  if (owner.toLowerCase() !== from.toLowerCase()) throw new Error("owner");
+  const approved = await client.readContract({ address: collection, abi: circuitReadAbi, functionName: "isApprovedForAll", args: [from as Hex, CAPACITY_EXCHANGE] });
+  if (!approved) {
+    const allow = encodeFunctionData({ abi: circuitReadAbi, functionName: "setApprovalForAll", args: [CAPACITY_EXCHANGE, true] });
+    await waitOk(await send(from, collection, allow));
+  }
+  const key = await client.readContract({ address: "0x7E2E0DC66a3bD9103E69b766afA62d9f7b697b46", abi: podKeyAbi, functionName: "minerKey", args: [collection, tokenId] });
+  const quote = await client.readContract({
+    address: CAPACITY_EXCHANGE,
+    abi: capacityAbi,
+    functionName: "quoteCapacityBidFill",
+    args: [orderId, collection, tokenId, key],
+  });
+  if (quote.netProceedsWei <= 0n) throw new Error("quote");
+  const data = encodeFunctionData({
+    abi: capacityAbi,
+    functionName: "acceptCapacityBid",
+    args: [orderId, collection, tokenId, key, from as Hex, priceWei, feeBps, quote.netProceedsWei],
+  });
+  await client.call({ account: from as Hex, to: CAPACITY_EXCHANGE, data });
+  const hash = await send(from, CAPACITY_EXCHANGE, data);
+  await waitOk(hash);
+  return hash;
+}
+
+export async function evalOwnedCircuit(from: string, collection: Hex, tokenId: bigint, input: Hex): Promise<"ok" | "bad"> {
+  const owner = await client.readContract({ address: collection, abi: circuitReadAbi, functionName: "ownerOf", args: [tokenId] });
+  if (owner.toLowerCase() !== from.toLowerCase()) throw new Error("owner");
+  try {
+    const out = await client.readContract({ address: collection, abi: circuitReadAbi, functionName: "eval", args: [tokenId, input] });
+    return typeof out === "string" && out.startsWith("0x") ? "ok" : "bad";
+  } catch {
+    return "bad";
+  }
+}
+
 function destOf(from: string, to: string): Hex {
   if (!/^0x[a-fA-F0-9]{40}$/.test(to)) throw new Error("address");
   if (to.toLowerCase() === from.toLowerCase()) throw new Error("self");

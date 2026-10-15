@@ -3,7 +3,7 @@ import { bsc } from "viem/chains";
 import { BSC, connectBsc, waitReceipt } from "@/lib/bsc";
 import type { TapeTarget } from "@/lib/tape-targets";
 import { getProvider } from "@/lib/wallet";
-import { connectXLayer, XLAYER } from "@/lib/xlayer";
+import { connectXLayer, DEPLOYED, rememberCircuit, XLAYER } from "@/lib/xlayer";
 
 const abi = parseAbi([
   "function tapeout(bytes netlist, uint32 nIn, uint32 nOut) payable returns (uint256)",
@@ -74,8 +74,17 @@ export async function readTapeRows(target: TapeTarget, limit = 8): Promise<{ id:
   }));
 }
 
+export type TapedOn = { hash: Hex; id: string; nIn: string; nOut: string; gates: string };
+
+function mintedId(logs: readonly { address: string; topics: readonly `0x${string}`[] }[], circuits: string): string {
+  const topic = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+  const log = [...logs].reverse().find((row) => row.address.toLowerCase() === circuits.toLowerCase() && row.topics[0]?.toLowerCase() === topic && row.topics.length > 3);
+  const id = log?.topics[3];
+  return id ? BigInt(id).toString() : "";
+}
+
 /** Tape the selected processor. The circuit contract must point at the transistor contract from the official list. */
-export async function tapeOn(target: TapeTarget, from: string, netlist: Hex, nIn: number, nOut: number): Promise<Hex> {
+export async function tapeOn(target: TapeTarget, from: string, netlist: Hex, nIn: number, nOut: number): Promise<TapedOn> {
   if (nIn < 1 || nOut < 1) throw new Error("gates");
   const client = reader(target.chain);
   await linked(target);
@@ -96,8 +105,21 @@ export async function tapeOn(target: TapeTarget, from: string, netlist: Hex, nIn
   } else {
     const receipt = await xClient.waitForTransactionReceipt({ hash, timeout: 180_000 });
     if (receipt.status !== "success") throw new Error("revert");
+    const id = mintedId(receipt.logs, target.circuits);
+    const info = id
+      ? await xClient.readContract({ address: target.circuits as Hex, abi, functionName: "circuitInfo", args: [BigInt(id)] })
+      : null;
+    const sheet = {
+      hash,
+      id,
+      nIn: info ? info[0].toString() : String(nIn),
+      nOut: info ? info[1].toString() : String(nOut),
+      gates: info ? info[3].toString() : "",
+    };
+    if (id && target.circuits.toLowerCase() === DEPLOYED.circuits.toLowerCase()) rememberCircuit(from, sheet);
+    return sheet;
   }
-  return hash;
+  return { hash, id: "", nIn: String(nIn), nOut: String(nOut), gates: "" };
 }
 
 export function tapeTxUrl(target: TapeTarget, hash: string): string {

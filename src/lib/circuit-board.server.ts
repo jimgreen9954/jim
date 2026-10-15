@@ -1,4 +1,4 @@
-import type { CircuitBar, CircuitBoard, CircuitPrint, CircuitRow, CircuitSigned } from "./circuit-board";
+import type { CapacityBook, CircuitBar, CircuitBoard, CircuitPrint, CircuitRow, CircuitSigned } from "./circuit-board";
 
 const API = "https://api-tapeout.firsto.ai";
 const EMPTY: CircuitBoard = {
@@ -116,6 +116,7 @@ function rowOf(raw: Raw): CircuitRow | null {
     officialId: official ? Number(official[1]) : null,
     signed: signedOf(ask, askWei),
     seller: text(ask?.account) || text(raw.owner),
+    collection: text(raw.collection),
     listedAt: num(raw.createdTimestamp) ?? 0,
     paybackDays: payback != null ? payback / 86400 : null,
   };
@@ -184,6 +185,37 @@ function printsOf(body: Raw | null): CircuitPrint[] {
       tx: text(row.transactionHash),
     };
   });
+}
+
+export async function loadCapacityBook(): Promise<CapacityBook> {
+  const empty: CapacityBook = { ok: false, exchange: "", rateAtomic: "0", verifiedWeight: "0", unverifiedBps: 100, bids: [] };
+  try {
+    const body = await pull("/v1/circuit/capacity-bids");
+    if (!body || text(body.status) !== "live" || !Array.isArray(body.bids)) return empty;
+    const pool = (body.miningPool ?? {}) as Raw;
+    const bids = (body.bids as Raw[])
+      .filter((row) => text(row.state) === "active")
+      .map((row) => ({
+        orderId: text(row.orderId),
+        maker: text(row.maker),
+        dailyCapacityPriceWei: text(row.dailyCapacityPriceWei),
+        remainingBudgetWei: text(row.remainingBudgetWei),
+        minCircuitH: text(row.minCircuitH) || "0",
+        maxCircuitH: text(row.maxCircuitH) || "0",
+        feeBps: num(row.feeBps) ?? 100,
+      }))
+      .filter((row) => /^\d+$/.test(row.orderId) && /^0x[a-fA-F0-9]{40}$/.test(row.maker));
+    return {
+      ok: true,
+      exchange: text(body.exchange),
+      rateAtomic: text(pool.currentRateAtomic) || "0",
+      verifiedWeight: text(pool.totalVerifiedWeight) || "0",
+      unverifiedBps: num(pool.unverifiedBps) ?? 100,
+      bids,
+    };
+  } catch {
+    return empty;
+  }
 }
 
 export async function loadCircuitBoard(account: string): Promise<CircuitBoard> {

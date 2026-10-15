@@ -80,7 +80,7 @@ const xlayer = defineChain({
   contracts: { multicall3: { address: "0xcA11bde05977b3631167028862bE2a173976CA11" } },
 });
 
-const client = createPublicClient({ chain: xlayer, transport: http(XLAYER.rpc) });
+const client = createPublicClient({ chain: xlayer, transport: http(XLAYER.rpc, { batch: { batchSize: 40, wait: 16 }, timeout: 8_000 }) });
 
 export async function readDeployFee(): Promise<bigint> {
   return client.readContract({
@@ -90,20 +90,53 @@ export async function readDeployFee(): Promise<bigint> {
   });
 }
 
-export function formatOkb(wei: bigint): string {
-  return formatEther(wei);
+export async function quoteGas(from: string, to: Hex, data: Hex): Promise<Hex | null> {
+  try {
+    const gas = await client.estimateGas({ account: from as Hex, to, data });
+    return toHex((gas * 3n) / 2n);
+  } catch {
+    return null;
+  }
+}
+
+function chainNumber(id: unknown): number {
+  if (typeof id === "number" && Number.isFinite(id)) return id;
+  if (typeof id === "bigint") return Number(id);
+  if (id && typeof id === "object") {
+    const row = id as { chainId?: unknown; result?: unknown };
+    if (row.chainId != null) return chainNumber(row.chainId);
+    if (row.result != null) return chainNumber(row.result);
+  }
+  const text = String(id ?? "").trim().toLowerCase();
+  const body = text.startsWith("eip155:") ? text.slice(7) : text;
+  if (!body) return 0;
+  const parsed = Number.parseInt(body, body.startsWith("0x") ? 16 : 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+async function walletChain(): Promise<number> {
+  const eth = ethereum();
+  if (!eth) return 0;
+  const id = await eth.request({ method: "eth_chainId" }).catch(() => null);
+  const parsed = chainNumber(id);
+  if (parsed) return parsed;
+  const net = await eth.request({ method: "net_version" }).catch(() => null);
+  return chainNumber(net);
 }
 
 async function onXLayer(): Promise<boolean> {
-  const eth = ethereum();
-  if (!eth) return false;
-  try {
-    const id = await eth.request({ method: "eth_chainId" });
-    const text = typeof id === "string" ? id : String(id ?? "");
-    return Number.parseInt(text, text.startsWith("0x") ? 16 : 10) === XLAYER.chainId;
-  } catch {
-    return false;
-  }
+  return (await walletChain()) === XLAYER.chainId;
+}
+
+function chainError(seen: number): Error {
+  return Object.assign(new Error("chain"), { chainId: seen || "" });
+}
+
+export function chainNote(zh: boolean, seen: string): string {
+  const id = seen || (zh ? "未知" : "unknown");
+  return zh
+    ? `这个网页读到的链是 ${id}。电路在 X Layer，编号 196。币安里的 OKC / OKT 是 66，BSC 是 56，首页写成 OK 链也不算。要在打开本站的窗口里选 X Layer。`
+    : `This page reads chain ${id}. Circuits are on X Layer, 196. OKC is 66 and BSC is 56. Choose X Layer in the window that has this site open.`;
 }
 
 async function ensureXLayer(): Promise<void> {
@@ -128,10 +161,18 @@ async function ensureXLayer(): Promise<void> {
       if ((addErr as { code?: number }).code === 4001) throw addErr;
     }
     if (!(await onXLayer())) {
-      await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: XLAYER.hex }] });
+      try {
+        await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: XLAYER.hex }] });
+      } catch (again) {
+        if ((again as { code?: number }).code === 4001) throw again;
+      }
     }
   }
-  if (!(await onXLayer())) throw new Error("chain");
+  for (let i = 0; i < 8; i += 1) {
+    if (await onXLayer()) return;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw chainError(await walletChain());
 }
 
 export async function connectXLayer(): Promise<string> {
@@ -379,31 +420,37 @@ let circuitIndex: { at: number; last: number; owners: Map<string, bigint[]> } | 
 let circuitFlight: Promise<{ at: number; last: number; owners: Map<string, bigint[]> }> | null = null;
 
 async function ownedCircuits(): Promise<{ at: number; last: number; owners: Map<string, bigint[]> }> {
-  if (circuitIndex && Date.now() - circuitIndex.at < 180_000) return circuitIndex;
+  const next = await client.readContract({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "nextId" });
+  const last = Number(next) - 1;
+  if (circuitIndex && circuitIndex.last >= last && Date.now() - circuitIndex.at < 180_000) return circuitIndex;
   if (circuitFlight) return circuitFlight;
+  const prior = circuitIndex && circuitIndex.last < last && Date.now() - circuitIndex.at < 180_000 ? circuitIndex : null;
   circuitFlight = (async () => {
-    const next = await client.readContract({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "nextId" });
-    const last = Number(next) - 1;
     const owners = new Map<string, bigint[]>();
-    if (last < 1) {
-      circuitIndex = { at: Date.now(), last, owners };
-      return circuitIndex;
+    if (prior) {
+      for (const [who, ids] of prior.owners) owners.set(who, ids.slice());
     }
-    const ids = Array.from({ length: Math.min(last, 4000) }, (_, i) => BigInt(i + 1));
-    for (let i = 0; i < ids.length; i += 400) {
-      const slice = ids.slice(i, i + 400);
-      const rows = await client.multicall({
-        contracts: slice.map((id) => ({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "ownerOf" as const, args: [id] as const })),
-        allowFailure: true,
-        batchSize: 1024,
-      });
-      rows.forEach((row, index) => {
-        if (row.status !== "success" || typeof row.result !== "string") return;
-        const who = row.result.toLowerCase();
-        const list = owners.get(who) ?? [];
-        list.push(slice[index]);
-        owners.set(who, list);
-      });
+    const from = prior ? prior.last + 1 : 1;
+    if (last >= from) {
+      const ids = Array.from({ length: Math.min(last, 4000) - from + 1 }, (_, i) => BigInt(from + i));
+      const jobs = [];
+      for (let i = 0; i < ids.length; i += 400) {
+        const slice = ids.slice(i, i + 400);
+        jobs.push(client.multicall({
+          contracts: slice.map((id) => ({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "ownerOf" as const, args: [id] as const })),
+          allowFailure: true,
+        }).then((rows) => ({ slice, rows })));
+      }
+      const parts = await Promise.all(jobs);
+      for (const { slice, rows } of parts) {
+        rows.forEach((row, index) => {
+          if (row.status !== "success" || typeof row.result !== "string") return;
+          const who = row.result.toLowerCase();
+          const list = owners.get(who) ?? [];
+          list.push(slice[index]);
+          owners.set(who, list);
+        });
+      }
     }
     circuitIndex = { at: Date.now(), last, owners };
     return circuitIndex;
@@ -430,10 +477,56 @@ export async function circuitShapes(ids: bigint[]): Promise<Map<string, { nIn: s
   return out;
 }
 
+const OWN_KEY = "tapeliquid-own-circuits";
+const TASK_KEY = "tapeliquid-circuit-tasks";
+
+function readOwn(): Record<string, { id: string; nIn: string; nOut: string; gates: string }[]> {
+  if (typeof localStorage === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(OWN_KEY);
+    const parsed = raw ? JSON.parse(raw) as Record<string, { id: string; nIn: string; nOut: string; gates: string }[]> : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function rememberedCircuits(owner: string): { id: string; nIn: string; nOut: string; gates: string }[] {
+  return readOwn()[owner.toLowerCase()] ?? [];
+}
+
+export function rememberCircuit(owner: string, row: { id: string; nIn: string; nOut: string; gates: string }) {
+  if (!row.id || typeof localStorage === "undefined") return;
+  const all = readOwn();
+  const key = owner.toLowerCase();
+  const list = all[key] ?? [];
+  if (!list.some((item) => item.id === row.id)) list.unshift(row);
+  all[key] = list.slice(0, 40);
+  localStorage.setItem(OWN_KEY, JSON.stringify(all));
+}
+
+export type TapedSheet = { hash: Hex; id: string; nIn: string; nOut: string; gates: string };
+
+function idFromLogs(logs: readonly { address: string; topics: readonly `0x${string}`[] }[]): string {
+  const topic = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+  const log = [...logs].reverse().find((row) => row.address.toLowerCase() === DEPLOYED.circuits.toLowerCase() && row.topics[0]?.toLowerCase() === topic && row.topics.length > 3);
+  const id = log?.topics[3];
+  return id ? BigInt(id).toString() : "";
+}
+
+async function sheetFromReceipt(from: string, hash: Hex, logs: readonly { address: string; topics: readonly `0x${string}`[] }[]): Promise<TapedSheet> {
+  const id = idFromLogs(logs);
+  if (!id) return { hash, id: "", nIn: "", nOut: "", gates: "" };
+  const info = await client.readContract({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "circuitInfo", args: [BigInt(id)] });
+  const row = { hash, id, nIn: info[0].toString(), nOut: info[1].toString(), gates: info[3].toString() };
+  rememberCircuit(from, row);
+  return row;
+}
+
 export async function myCircuits(owner: string): Promise<{ id: string; gates: string; nIn: string; nOut: string }[]> {
+  const known = rememberedCircuits(owner);
   const index = await ownedCircuits();
   const ids = index.owners.get(owner.toLowerCase()) ?? [];
-  if (ids.length === 0) return [];
   const found: { id: string; gates: string; nIn: string; nOut: string }[] = [];
   for (let i = 0; i < ids.length; i += 80) {
     const slice = ids.slice(i, i + 80);
@@ -447,7 +540,8 @@ export async function myCircuits(owner: string): Promise<{ id: string; gates: st
       found.push({ id: slice[index].toString(), nIn: info[0].toString(), nOut: info[1].toString(), gates: info[3].toString() });
     });
   }
-  return found;
+  const seen = new Set(found.map((row) => row.id));
+  return [...known.filter((row) => !seen.has(row.id)), ...found];
 }
 
 const transferAbi = [
@@ -694,7 +788,7 @@ export function recipeNetlist(nand: number, latch: number): Hex {
 }
 
 /** Tape a NAND/LATCH recipe on this processor. Burns those transistors. It does not mine BEM. */
-export async function tapeRecipe(from: string, nand: number, latch: number): Promise<Hex> {
+export async function tapeRecipe(from: string, nand: number, latch: number): Promise<TapedSheet> {
   const netlist = recipeNetlist(nand, latch);
   const fee = await client.readContract({
     address: DEPLOYED.circuits,
@@ -716,7 +810,7 @@ export async function tapeRecipe(from: string, nand: number, latch: number): Pro
   })) as Hex;
   const receipt = await client.waitForTransactionReceipt({ hash, timeout: 180_000 });
   if (receipt.status !== "success") throw new Error("revert");
-  return hash;
+  return sheetFromReceipt(from, hash, receipt.logs);
 }
 
 export async function readOkb(account: string): Promise<bigint> {
@@ -831,6 +925,82 @@ export async function checkCircuits(ids: string[]): Promise<Record<string, Circu
   return result;
 }
 
+const TASKS: { name: string; nIn: number; nOut: number; out: (mask: number) => number }[] = [
+  { name: "AND", nIn: 2, nOut: 1, out: (mask) => ((mask & 1) && (mask & 2) ? 1 : 0) },
+  { name: "NAND", nIn: 2, nOut: 1, out: (mask) => ((mask & 1) && (mask & 2) ? 0 : 1) },
+  { name: "XOR", nIn: 2, nOut: 1, out: (mask) => (mask & 1) ^ ((mask >> 1) & 1) },
+  { name: "XNOR", nIn: 2, nOut: 1, out: (mask) => ((mask & 1) ^ ((mask >> 1) & 1)) ^ 1 },
+  { name: "XOR3", nIn: 3, nOut: 1, out: (mask) => (mask & 1) ^ ((mask >> 1) & 1) ^ ((mask >> 2) & 1) },
+  {
+    name: "Adder",
+    nIn: 3,
+    nOut: 2,
+    out: (mask) => {
+      const a = mask & 1;
+      const b = (mask >> 1) & 1;
+      const c = (mask >> 2) & 1;
+      const sum = a ^ b ^ c;
+      const carry = (a & b) | (a & c) | (b & c);
+      return sum | (carry << 1);
+    },
+  },
+];
+
+function packedBits(hex: Hex, n: number): number {
+  const raw = hex.startsWith("0x") ? hex.slice(2) : hex;
+  let mask = 0;
+  for (let i = 0; i < n; i += 1) {
+    const byte = Number.parseInt(raw.slice((i >> 3) * 2, (i >> 3) * 2 + 2) || "0", 16);
+    if ((byte >> (i & 7)) & 1) mask |= 1 << i;
+  }
+  return mask;
+}
+
+export function rememberedTasks(): Record<string, string> {
+  if (typeof localStorage === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(TASK_KEY);
+    const parsed = raw ? JSON.parse(raw) as Record<string, string> : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function rememberTask(id: string, name: string) {
+  if (typeof localStorage === "undefined") return;
+  const all = rememberedTasks();
+  all[id] = name;
+  localStorage.setItem(TASK_KEY, JSON.stringify(all));
+}
+
+/** Compare one circuit with the public combinational tasks. A match is only a name in this browser. */
+export async function matchCircuitTask(id: string): Promise<{ name: string } | null> {
+  const info = await client.readContract({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "circuitInfo", args: [BigInt(id)] });
+  const nIn = Number(info[0]);
+  const nOut = Number(info[1]);
+  const state = Number(info[2]);
+  if (state !== 0) return null;
+  const task = TASKS.find((row) => row.nIn === nIn && row.nOut === nOut);
+  if (!task) return null;
+  const masks = Array.from({ length: 2 ** nIn }, (_, i) => i);
+  const calls = await client.multicall({
+    contracts: masks.map((mask) => ({
+      address: DEPLOYED.circuits,
+      abi: circuitAbi,
+      functionName: "eval" as const,
+      args: [BigInt(id), inputWord(nIn, mask)] as const,
+    })),
+    allowFailure: true,
+  });
+  for (let i = 0; i < masks.length; i += 1) {
+    const row = calls[i];
+    if (!row || row.status !== "success" || typeof row.result !== "string") return null;
+    if (packedBits(row.result, nOut) !== task.out(masks[i])) return null;
+  }
+  return { name: task.name };
+}
+
 /** Latest taped circuits on this processor. The official project page reads the same contract. */
 export async function readCircuits(limit = 12): Promise<{ total: number; rows: ChainCircuit[] }> {
   const next = await client.readContract({
@@ -863,7 +1033,7 @@ export async function readCircuits(limit = 12): Promise<{ total: number; rows: C
 }
 
 /** Tape whatever netlist the canvas compiled. Burns this processor's transistors. */
-export async function tapeNetlist(from: string, netlist: Hex, nIn: number, nOut: number): Promise<Hex> {
+export async function tapeNetlist(from: string, netlist: Hex, nIn: number, nOut: number): Promise<TapedSheet> {
   const fee = await client.readContract({
     address: DEPLOYED.circuits,
     abi: circuitAbi,
@@ -884,10 +1054,10 @@ export async function tapeNetlist(from: string, netlist: Hex, nIn: number, nOut:
   })) as Hex;
   const receipt = await client.waitForTransactionReceipt({ hash, timeout: 180_000 });
   if (receipt.status !== "success") throw new Error("revert");
-  return hash;
+  return sheetFromReceipt(from, hash, receipt.logs);
 }
 
-export async function tapeSeal(from: string): Promise<Hex> {
+export async function tapeSeal(from: string): Promise<TapedSheet> {
   const fee = await client.readContract({
     address: DEPLOYED.circuits,
     abi: circuitAbi,
@@ -907,6 +1077,6 @@ export async function tapeSeal(from: string): Promise<Hex> {
   })) as Hex;
   const receipt = await client.waitForTransactionReceipt({ hash, timeout: 120_000 });
   if (receipt.status !== "success") throw new Error("revert");
-  return hash;
+  return sheetFromReceipt(from, hash, receipt.logs);
 }
 

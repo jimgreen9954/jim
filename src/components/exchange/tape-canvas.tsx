@@ -246,10 +246,15 @@ export function TapeCanvas() {
       if (heldNow.nand < BigInt(nand) || heldNow.latch < BigInt(latchN)) throw new Error("short");
       const unit = target.chain === "bsc" ? "BNB" : "OKB";
       setNote(zh ? `正在 ${target.name} 上流片。签名之后还要等节点交出回执，大网表会更久。回执成功，电路就已经在链上。` : `Taping on ${target.name}. After you sign, the page waits for the node to return the receipt. A large sheet takes longer. When the receipt succeeds, the circuit is already on chain.`);
-      const hash = await tapeOn(target, from, netlist, nIn, nOut);
+      const sheet = await tapeOn(target, from, netlist, nIn, nOut);
       setHeld(await readTapeDesk(target, from).then((row) => ({ nand: row.nand, latch: row.latch })));
-      setNote(zh ? `已流在 ${target.name} 上。电路已经有编号，但这笔不是开工。到挖矿页点「开工」再签一笔，才会进矿机、才有待领。不用再付流片费。` : `Taped on ${target.name}. The circuit has an id. This transaction did not start mining. Open it on the mine page with a second signature before it shows as a miner or earns a claim. The tape fee is not charged again.`);
-      window.open(tapeTxUrl(target, hash), "_blank", "noopener,noreferrer");
+      if (sheet.id) {
+        setRows((list) => [{ id: sheet.id, nIn: sheet.nIn, nOut: sheet.nOut, gates: sheet.gates, owner: from }, ...list.filter((row) => row.id !== sheet.id)].slice(0, 8));
+      }
+      setNote(zh
+        ? `已流片${sheet.id ? ` #${sheet.id}` : ""}。${sheet.gates ? `${sheet.gates} 门。` : ""}这一页和「我的」、挖矿页现在就能看到。还没开工，到挖矿页再签一笔。`
+        : `Taped${sheet.id ? ` #${sheet.id}` : ""}.${sheet.gates ? ` ${sheet.gates} gates.` : ""} It is on this page, under Mine, and on the mine page. It is not mining until you open it.`);
+      window.open(tapeTxUrl(target, sheet.hash), "_blank", "noopener,noreferrer");
     } catch (error) {
       setBad(true);
       const message = error instanceof Error ? `${error.message} ${"shortMessage" in error ? String((error as { shortMessage?: string }).shortMessage ?? "") : ""}` : "";
@@ -276,6 +281,7 @@ export function TapeCanvas() {
     setBusy(true);
     setBad(false);
     let done = 0;
+    const ids: string[] = [];
     try {
       const from = currentAccount() ?? (target.chain === "bsc" ? await connectBsc() : await connectXLayer());
       setAccount(from);
@@ -287,12 +293,13 @@ export function TapeCanvas() {
         const nand = kind === "nand" ? n : 0;
         const latchN = kind === "latch" ? n : 0;
         setNote(zh ? `第 ${i + 1} 笔。这张烧掉 ${nand} NAND、${latchN} LATCH。确认后才会下一笔。` : `Sheet ${i + 1}. Burns ${nand} NAND and ${latchN} LATCH. The next one waits for this signature.`);
-        await tapeOn(target, from, recipeNetlist(nand, latchN), 2, 1);
+        const sheet = await tapeOn(target, from, recipeNetlist(nand, latchN), 2, 1);
         done += 1;
+        if (sheet.id) ids.push(`#${sheet.id}`);
       }
       const left = await readTapeDesk(target, from);
       setHeld({ nand: left.nand, latch: left.latch });
-      setNote(zh ? `这一轮签成 ${done} 笔。电路已经有编号，还没开工。到挖矿页逐张点「开工」。NAND 还剩 ${left.nand.toString()}，LATCH 还剩 ${left.latch.toString()}。` : `${done} sheets landed. They have ids and are not mining yet. Open each one on the mine page. NAND left ${left.nand.toString()}, LATCH left ${left.latch.toString()}.`);
+      setNote(zh ? `这一轮签成 ${done} 笔${ids.length ? `：${ids.join("、")}` : ""}。电路已经在「我的」和挖矿页。还没开工。NAND 还剩 ${left.nand.toString()}，LATCH 还剩 ${left.latch.toString()}。` : `${done} sheets landed${ids.length ? `: ${ids.join(", ")}` : ""}. They are under Mine and on the mine page. They are not mining yet. NAND left ${left.nand.toString()}, LATCH left ${left.latch.toString()}.`);
     } catch (error) {
       setBad(true);
       const message = error instanceof Error ? `${error.message} ${"shortMessage" in error ? String((error as { shortMessage?: string }).shortMessage ?? "") : ""}` : "";

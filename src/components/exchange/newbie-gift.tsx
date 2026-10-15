@@ -50,8 +50,8 @@ export function GiftDeploy({ account, zh }: { account: string | null; zh: boolea
     <div className="border-t border-gold bg-card px-4 py-3">
       <p className="text-sm leading-6">
         {zh
-          ? "刚签的两枚礼包还认上一本。交易已经切到不会停的这一本，池子也是空的。再点下面一次，新成交才能选编号领取。签完把地址发我。"
-          : "The two gifts just signed still read the previous books. Trading is now on the books that do not stop, and both pools are empty. Deploy once more so a new fill can be selected. Send me the addresses."}
+          ? "刚部署的两份礼包仍读取上一本合约。交易已切到当前永续，奖池为空。再部署一次后，新成交才可领取。地址写入页面后生效。"
+          : "The two gifts just signed still read the previous books. Trading is on the current books, and both pools are empty. Deploy once more so a new fill can be claimed. It applies after the addresses are written in."}
       </p>
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
         {moved.nand ? null : (
@@ -223,8 +223,8 @@ export function NewbieGift({ account, zh, pulse = 0 }: { account: string; zh: bo
         </ul>
         {books && (!books.nandLive || !books.gateLive) ? (
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            {!books.nandLive ? <button type="button" disabled={busy} className="min-h-10 border border-gold text-sm disabled:opacity-40" onClick={() => run(() => deployNandGift(account), zh ? "新的 NAND 礼包已部署。把地址发我，我写进网页。旧池子请先取回再放入新的。" : "The new NAND gift is deployed. Send me the address. Withdraw the old pool before adding to the new one.")}>{zh ? "部署认新永续的 NAND 礼包" : "Deploy the NAND gift on the live book"}</button> : null}
-            {!books.gateLive ? <button type="button" disabled={busy} className="min-h-10 border border-gold text-sm disabled:opacity-40" onClick={() => run(() => deployBemGift(account), zh ? "新的 BEM 礼包已部署。把地址发我。旧池子请先取回。" : "The new BEM gift is deployed. Send me the address. Withdraw the old pool first.")}>{zh ? "部署认新晶体管的 BEM 礼包" : "Deploy the BEM gift on the live transistor book"}</button> : null}
+            {!books.nandLive ? <button type="button" disabled={busy} className="min-h-10 border border-gold text-sm disabled:opacity-40" onClick={() => run(() => deployNandGift(account), zh ? "NAND 礼包已部署。地址写入页面后生效。旧池余额请先取回。" : "The NAND gift is deployed. It applies after the address is written in. Withdraw the old pool first.")}>{zh ? "部署认新永续的 NAND 礼包" : "Deploy the NAND gift on the live book"}</button> : null}
+            {!books.gateLive ? <button type="button" disabled={busy} className="min-h-10 border border-gold text-sm disabled:opacity-40" onClick={() => run(() => deployBemGift(account), zh ? "BEM 礼包已部署。地址写入页面后生效。旧池余额请先取回。" : "The BEM gift is deployed. It applies after the address is written in. Withdraw the old pool first.")}>{zh ? "部署认新晶体管的 BEM 礼包" : "Deploy the BEM gift on the live transistor book"}</button> : null}
           </div>
         ) : null}
       </div>

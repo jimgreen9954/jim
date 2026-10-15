@@ -34,23 +34,64 @@ const cache = new Map<string, { at: number; rows: Candle[] }>();
 export async function pullSpot(pair: SpotPair, frame: SpotFrame): Promise<Candle[]> {
   const key = `${pair}:${frame}`;
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < 45_000 && hit.rows.length > 0) return hit.rows;
+  if (hit && Date.now() - hit.at < 20_000 && hit.rows.length > 0) return hit.rows;
   const pool = POOLS[pair];
   const spec = SPEC[frame];
-  try {
+  const okxInst = pair === "btc" ? "BTC-USDT" : pair === "bnb" ? "BNB-USDT" : "";
+  const okxBar = frame === "1m" ? "1m" : frame === "5m" ? "5m" : frame === "15m" ? "15m" : frame === "1h" ? "1H" : "1D";
+  const fromPool = (async () => {
     const res = await fetch(
       `https://api.geckoterminal.com/api/v2/networks/${pool.network}/pools/${pool.pool}/ohlcv/${spec.path}?aggregate=${spec.aggregate}&limit=120&currency=usd`,
-      { headers: { accept: "application/json" }, signal: AbortSignal.timeout(8000) },
+      { headers: { accept: "application/json" }, signal: AbortSignal.timeout(2_500) },
     );
-    if (!res.ok) return hit?.rows ?? [];
+    if (!res.ok) return [];
     const body = (await res.json()) as { data?: { attributes?: { ohlcv_list?: number[][] } } };
-    const rows = (body.data?.attributes?.ohlcv_list ?? [])
+    return (body.data?.attributes?.ohlcv_list ?? [])
       .slice(0, 120)
       .reverse()
       .flatMap((row) => {
         const candle = { t: Number(row[0]), o: Number(row[1]), h: Number(row[2]), l: Number(row[3]), c: Number(row[4]), v: Number(row[5] ?? 0) };
         return candle.c > 0 ? [candle] : [];
       });
+  })();
+  const fromOkx = okxInst
+    ? fetch(`https://www.okx.com/api/v5/market/candles?instId=${okxInst}&bar=${okxBar}&limit=120`, {
+        headers: { accept: "application/json" },
+        signal: AbortSignal.timeout(2_500),
+      })
+        .then(async (res) => {
+          if (!res.ok) return [] as Candle[];
+          const body = (await res.json()) as { data?: string[][] };
+          return (body.data ?? []).slice().reverse().flatMap((row) => {
+            const candle = { t: Math.floor(Number(row[0]) / 1000), o: Number(row[1]), h: Number(row[2]), l: Number(row[3]), c: Number(row[4]), v: Number(row[5] ?? 0) };
+            return candle.c > 0 ? [candle] : [];
+          });
+        })
+        .catch(() => [] as Candle[])
+    : Promise.resolve([] as Candle[]);
+  try {
+    const rows = await new Promise<Candle[]>((resolve) => {
+      const tasks = [fromPool.catch(() => [] as Candle[]), fromOkx];
+      let pending = tasks.length;
+      let best: Candle[] = [];
+      let done = false;
+      const finish = (next: Candle[]) => {
+        if (done) return;
+        done = true;
+        resolve(next);
+      };
+      for (const task of tasks) {
+        task
+          .then((next) => {
+            if (next.length > best.length) best = next;
+            if (next.length > 0) finish(next);
+          })
+          .finally(() => {
+            pending -= 1;
+            if (pending === 0) finish(best);
+          });
+      }
+    });
     if (rows.length === 0) return hit?.rows ?? [];
     cache.set(key, { at: Date.now(), rows });
     return rows;

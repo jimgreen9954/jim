@@ -275,7 +275,7 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
     deployDesk(account).then((addr) => {
       setDesk(addr);
       setBad(false);
-      setNote(zh ? `已部署 ${addr}。把这行地址发我，写进页面之后别人用的才是这一份。` : `Deployed ${addr}. Send me this address so everyone else uses this one.`);
+      setNote(zh ? `已部署 ${addr}。地址写入页面后，全站使用这一份。` : `Deployed ${addr}. The site uses this address after it is written into the page.`);
     }).catch(() => {
       setBad(true);
       setNote(zh ? "没有部署。留在这一页。Gas Limit 填 5000000。" : "It did not deploy. Stay on this page. Set Gas Limit to 5000000.");
@@ -292,7 +292,7 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
     deployTerm(account).then((addr) => {
       setTerm(addr);
       setBad(false);
-      setNote(zh ? `期限质押已部署 ${addr}。把这行地址发我写进页面。现在只有你这个浏览器看得到这一份。` : `Timed stake deployed at ${addr}. Send me this address to hardcode it. Only this browser can see it until then.`);
+      setNote(zh ? `期限质押已部署 ${addr}。地址写入页面前，仅本机可见。` : `Timed stake deployed at ${addr}. Only this browser can see it until the address is written into the page.`);
     }).catch(() => {
       setBad(true);
       setNote(zh ? "期限质押没有部署。留在这一页。Gas Limit 填 5000000。" : "Timed stake did not deploy. Stay on this page. Set Gas Limit to 5000000.");
@@ -399,8 +399,8 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
           <h3 className="font-display text-2xl italic">{zh ? "期限质押还没部署" : "Timed stake is not deployed"}</h3>
           <p className="mt-2 text-sm leading-6">
             {zh
-              ? "六档写死：三个月、六个月、九个月、一年、两年、三年。到期才能取本金，奖励可以先领。和上面的回购不是同一份合约。上面那份旧质押没有期限，页面不再往那里存。点一次部署。Gas Limit 填 5000000。部署完把地址发我写进页面。"
-              : "Six terms are fixed: 3, 6 and 9 months, then 1, 2 and 3 years. Principal waits until expiry. Rewards can be claimed earlier. This is not the buyback contract. The old stake had no lock, and this page no longer deposits there. Deploy once. Set Gas Limit to 5000000, then send me the address to hardcode."}
+              ? "期限为三个月、六个月、九个月、一年、两年、三年。到期前不可取回本金，奖励可提前领取。与回购合约分开。旧质押不再接受存入。部署时 Gas Limit 填 5000000。地址写入页面后全站可用。"
+              : "Terms are 3, 6 and 9 months, then 1, 2 and 3 years. Principal stays until expiry. Rewards can be claimed earlier. This is separate from the buyback. The old stake no longer takes deposits. Set Gas Limit to 5000000. The site uses it after the address is written in."}
           </p>
           <button type="button" disabled={busy} className="mt-3 min-h-12 w-full bg-ink text-sm text-paper disabled:opacity-40 sm:w-auto sm:px-6" onClick={deployLocks}>{zh ? "部署期限质押" : "Deploy timed stake"}</button>
         </article>

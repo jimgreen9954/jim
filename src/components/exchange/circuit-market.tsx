@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { getCircuitBoard, type CircuitBoard, type CircuitPrint, type CircuitRow } from "@/lib/circuit-board";
-import { buyOfficialCircuit, fillSignedCircuit } from "@/lib/official-trade";
+import { getCapacityBook, getCircuitBoard, type CapacityBid, type CapacityBook, type CircuitBoard, type CircuitPrint, type CircuitRow } from "@/lib/circuit-board";
+import { acceptCapacityBid, buyOfficialCircuit, cancelCapacityBid, fillSignedCircuit, placeCapacityBid } from "@/lib/official-trade";
 import { BSC, TxPending, txUrl } from "@/lib/bsc";
 import { connectBsc } from "@/lib/bsc";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import { Kline } from "@/components/exchange/kline";
-import { Hint, verifyCopy } from "@/components/exchange/hint";
+import { Hint } from "@/components/exchange/hint";
+import { parseEther, type Hex } from "viem";
 
 function noted(zh: boolean, label: string): string | null {
   const notes: Record<string, string> = zh
@@ -67,7 +68,7 @@ function stateText(status: string, zh: boolean): string {
 
 function StatusMark({ status, zh }: { status: string; zh: boolean }) {
   const label = stateText(status, zh);
-  return <Hint label={label} text={verifyCopy(zh)} />;
+  return <span className={status === "verified" ? "text-[#089981]" : "text-ink/55"}>{label}</span>;
 }
 
 export function CircuitMarket({ zh, lang }: { zh: boolean; lang: "zh" | "en" }) {
@@ -86,6 +87,7 @@ export function CircuitMarket({ zh, lang }: { zh: boolean; lang: "zh" | "en" }) 
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [bad, setBad] = useState(false);
+  const [bids, setBids] = useState<CapacityBook | null>(null);
 
   useEffect(() => onAccount(setAccount), []);
   useEffect(() => {
@@ -100,6 +102,18 @@ export function CircuitMarket({ zh, lang }: { zh: boolean; lang: "zh" | "en" }) 
     const id = window.setInterval(pull, 20000);
     return () => { dead = true; window.clearInterval(id); };
   }, [account]);
+
+  useEffect(() => {
+    let dead = false;
+    const pull = () => {
+      getCapacityBook()
+        .then((row) => { if (!dead) setBids(row); })
+        .catch(() => { if (!dead) setBids(null); });
+    };
+    pull();
+    const id = window.setInterval(pull, 20000);
+    return () => { dead = true; window.clearInterval(id); };
+  }, []);
 
   const rows = useMemo(() => {
     const officialKeys = new Set((board?.official ?? []).map((row) => row.key));
@@ -212,12 +226,16 @@ export function CircuitMarket({ zh, lang }: { zh: boolean; lang: "zh" | "en" }) 
             <a className="mt-3 inline-flex text-sm underline" href={`${BSC.explorer}/tx/${print.tx}`} target="_blank" rel="noreferrer">{zh ? "在浏览器打开" : "Open the transaction"}</a>
           </div>
         ) : (
-          <BuyColumn
+          <CapacityColumn
             zh={zh}
-            row={picked}
-            rows={rows}
+            account={account}
+            book={bids}
+            mine={board?.mine ?? []}
+            refDay={board?.refDayPx ?? null}
             busy={busy}
-            onBuy={() => picked && void buy(picked)}
+            onBusy={setBusy}
+            onNote={(text, failed) => { setNote(text); setBad(failed); }}
+            reload={() => { getCapacityBook().then(setBids).catch(() => undefined); }}
           />
         )}
         <details className="border-t border-gold/30 px-4 py-3">
@@ -243,48 +261,216 @@ function RightLine({ k, v, tip }: { k: string; v: string; tip?: string }) {
   );
 }
 
-function BuyColumn({ zh, row, rows, busy, onBuy }: { zh: boolean; row: CircuitRow | null; rows: CircuitRow[]; busy: boolean; onBuy: () => void }) {
-  const marketAsk = rows.reduce<number | null>((min, item) => (item.ask != null && (min == null || item.ask < min) ? item.ask : min), null);
-  const marketBid = rows.reduce<number | null>((max, item) => (item.bid != null && (max == null || item.bid > max) ? item.bid : max), null);
-  const ask = row?.ask ?? marketAsk;
-  const bid = row ? row.bid : marketBid;
-  const can = Boolean(row && row.ask != null && (row.officialId != null || row.signed));
+function fits(hash: number, bid: CapacityBid): boolean {
+  const lo = Number(bid.minCircuitH);
+  const hi = Number(bid.maxCircuitH);
+  return hash >= lo && (hi === 0 || hash <= hi);
+}
+
+function hashLabel(bid: CapacityBid, zh: boolean): string {
+  const lo = Number(bid.minCircuitH);
+  const hi = Number(bid.maxCircuitH);
+  if (lo === 0 && hi === 0) return zh ? "不限" : "Any";
+  if (hi === 0) return `≥${lo}`;
+  if (lo === 0) return `≤${hi}`;
+  return `${lo}–${hi}`;
+}
+
+function estCount(bid: CapacityBid, book: CapacityBook): number | null {
+  try {
+    const price = BigInt(bid.dailyCapacityPriceWei);
+    const budget = BigInt(bid.remainingBudgetWei);
+    const minH = BigInt(bid.minCircuitH);
+    const h = minH > 5n ? minH : 5n;
+    const rate = BigInt(book.rateAtomic);
+    const weight = BigInt(book.verifiedWeight);
+    const cut = rate * BigInt(book.unverifiedBps) / 10000n;
+    if (price === 0n || weight === 0n || rate <= cut) return null;
+    const day = (rate - cut) * h / weight * 86400n;
+    const need = price * day / 100000000n;
+    if (need === 0n) return null;
+    return Number(budget / need);
+  } catch {
+    return null;
+  }
+}
+
+function weiBnb(wei: string, digits = 4): string {
+  try {
+    const n = Number(BigInt(wei)) / 1e18;
+    if (!Number.isFinite(n)) return "—";
+    return n.toLocaleString("en-US", { maximumFractionDigits: digits });
+  } catch {
+    return "—";
+  }
+}
+
+function CapacityColumn({
+  zh, account, book, mine, refDay, busy, onBusy, onNote, reload,
+}: {
+  zh: boolean;
+  account: string | null;
+  book: CapacityBook | null;
+  mine: CircuitRow[];
+  refDay: number | null;
+  busy: boolean;
+  onBusy: (on: boolean) => void;
+  onNote: (text: string, failed: boolean) => void;
+  reload: () => void;
+}) {
+  const [lane, setLane] = useState<"book" | "mine">("book");
+  const [price, setPrice] = useState("");
+  const [budget, setBudget] = useState("");
+  const [minH, setMinH] = useState("");
+  const [maxH, setMaxH] = useState("");
+  const [sellId, setSellId] = useState<string | null>(null);
+  const [sellKey, setSellKey] = useState("");
+  const mineAddr = account?.toLowerCase() ?? "";
+  const mineBids = (book?.bids ?? []).filter((bid) => bid.maker.toLowerCase() === mineAddr);
+  const shown = lane === "mine" ? mineBids : book?.bids ?? [];
+  const owned = mine.filter((row) => mineAddr && row.seller.toLowerCase() === mineAddr && /^0x[a-fA-F0-9]{40}$/.test(row.collection));
+  const selling = shown.find((bid) => bid.orderId === sellId) ?? null;
+  const choices = selling ? owned.filter((row) => fits(row.hash, selling)) : [];
+  const dayFor = (h: number) => {
+    if (!book) return null;
+    try {
+      const rate = BigInt(book.rateAtomic);
+      const weight = BigInt(book.verifiedWeight);
+      const cut = rate * BigInt(book.unverifiedBps) / 10000n;
+      if (weight === 0n || rate <= cut) return null;
+      const use = BigInt(Math.max(h, 5));
+      return Number((rate - cut) * use / weight * 86400n) / 1e8;
+    } catch {
+      return null;
+    }
+  };
+  const typedH = Number(minH) > 0 ? Number(minH) : 5;
+  const typedDay = dayFor(typedH);
+  const typedBudget = Number(budget);
+  const typedPrice = Number(price);
+  const canBuy = typedDay != null && typedPrice > 0 ? Math.floor(typedBudget / (typedPrice * typedDay)) : null;
+
+  const place = () => {
+    if (!account) { onNote(zh ? "先连接 BSC 钱包。" : "Connect a BSC wallet.", true); return; }
+    onBusy(true);
+    void (async () => {
+      try {
+        const from = account ?? await connectBsc();
+        await placeCapacityBid(from, parseEther(price), parseEther(budget), BigInt(minH || "0"), BigInt(maxH || "0"), book?.bids[0]?.feeBps ?? 100);
+        onNote(zh ? "买单已挂出。资金锁在容量买单合约里。" : "Bid posted. The budget is locked in the capacity-bid contract.", false);
+        setBudget("");
+        reload();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "";
+        onNote(/rejected|denied|4001/i.test(message) ? (zh ? "已取消。" : "Cancelled.") : (zh ? "没有挂上。核对价格、资金和算力区间。" : "The bid was not posted. Check the price, budget, and hash range."), true);
+      } finally {
+        onBusy(false);
+      }
+    })();
+  };
+
+  const sell = (bid: CapacityBid, row: CircuitRow) => {
+    if (!account || !/^0x[a-fA-F0-9]{40}$/.test(row.collection)) return;
+    onBusy(true);
+    void (async () => {
+      try {
+        const from = account ?? await connectBsc();
+        await acceptCapacityBid(from, BigInt(bid.orderId), row.collection as Hex, BigInt(row.tokenId), BigInt(bid.dailyCapacityPriceWei), bid.feeBps);
+        onNote(zh ? `已卖给买单 #${bid.orderId}。协议费 ${bid.feeBps / 100}%。` : `Sold into bid #${bid.orderId}. Protocol fee ${bid.feeBps / 100}%.`, false);
+        setSellId(null);
+        reload();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "";
+        onNote(message === "owner" ? (zh ? "这张电路不在当前钱包。" : "This circuit is not in the connected wallet.") : /rejected|denied|4001/i.test(message) ? (zh ? "已取消。" : "Cancelled.") : (zh ? "没有成交。算力要落在买单区间内，并且你持有这张电路。" : "It did not fill. Hash must fit the bid, and you must hold the circuit."), true);
+      } finally {
+        onBusy(false);
+      }
+    })();
+  };
+
   return (
     <div>
-      <div className="grid grid-cols-2 border-b border-gold/30">
-        <div className="border-r border-gold/30 px-4 py-3">
-          <p className="text-[11px] text-ink/45"><Hint label={zh ? "最低卖价" : "Best ask"} text={zh ? "这张电路的卖价。没点选时，是左边表里最低的卖价。单位 BNB。" : "This circuit's ask. With nothing picked, the lowest ask in the table. BNB."} /></p>
-          <p className="mt-1 font-mono text-xl tabular-nums text-[#f23645]">{ask != null ? num(ask, 4) : "—"}</p>
-        </div>
-        <div className="px-4 py-3">
-          <p className="text-[11px] text-ink/45"><Hint label={zh ? "最高出价" : "Best bid"} text={zh ? "有人挂的最高买价。没有就写暂无，不写成 0。" : "The highest bid. None is not written as zero."} /></p>
-          <p className="mt-1 font-mono text-xl tabular-nums">{bid != null ? num(bid, 4) : (zh ? "暂无" : "None")}</p>
-        </div>
+      <div className="grid grid-cols-2 border-b border-gold/30 text-sm">
+        <button type="button" className={`min-h-10 ${lane === "book" ? "border-b-2 border-ink" : "text-ink/45"}`} onClick={() => setLane("book")}>{zh ? "统一买单" : "Bids"}</button>
+        <button type="button" className={`min-h-10 ${lane === "mine" ? "border-b-2 border-ink" : "text-ink/45"}`} onClick={() => setLane("mine")}>{zh ? "我的买单" : "Mine"}</button>
       </div>
-      <div className="px-4 py-4">
-        <p className="text-sm">{row ? `${row.name} #${row.tokenId}` : (zh ? "点左边一行" : "Pick a row")}</p>
-        {row ? <p className="mt-1 text-[12px]"><StatusMark status={row.status} zh={zh} /></p> : null}
-        <label className="mt-4 block text-[12px] text-ink/55">
-          {zh ? "购买数量" : "Quantity"}
-          <input readOnly value={can ? "1" : ""} placeholder="1" className="mt-1 h-11 w-full border border-gold/50 bg-paper px-3 font-mono text-lg text-ink outline-none" />
-        </label>
-        <p className="mt-1 text-[12px] text-ink/45">{can ? (zh ? "当前可购买 1 个" : "1 available") : (zh ? "当前可购买 0 个" : "0 available")}</p>
-        <div className="mt-4 flex items-end justify-between gap-3 border-t border-gold/30 pt-3">
-          <span className="text-sm">{zh ? "需支付" : "Pay"}</span>
-          <strong className="font-mono text-2xl font-medium tabular-nums">{ask != null && (row ? can : false) ? `${num(ask, 4)} BNB` : "—"}</strong>
+      <div className="max-h-64 overflow-auto">
+        <table className="w-full text-left text-[12px]">
+          <thead className="sticky top-0 bg-paper text-ink/45">
+            <tr>
+              <th className="px-3 py-2 font-normal">{zh ? "日产能价" : "Day px"}</th>
+              <th className="px-2 py-2 font-normal">H</th>
+              <th className="px-2 py-2 font-normal">{zh ? "可用资金" : "Budget"}</th>
+              <th className="px-2 py-2 font-normal">{zh ? "约可买" : "About"}</th>
+              <th className="px-2 py-2 text-right font-normal">{lane === "mine" ? (zh ? "撤销" : "Cancel") : (zh ? "卖出" : "Sell")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.length === 0 ? <tr><td colSpan={5} className="px-3 py-4 text-ink/45">{book?.ok === false ? (zh ? "买单簿没读到。" : "The bid book did not load.") : (zh ? "没有买单。" : "No bids.")}</td></tr> : null}
+            {shown.map((bid) => (
+              <tr key={bid.orderId} className="border-t border-gold/20">
+                <td className="px-3 py-2 font-mono text-[#089981]">{weiBnb(bid.dailyCapacityPriceWei, 2)}</td>
+                <td className="px-2 py-2 font-mono">{hashLabel(bid, zh)}</td>
+                <td className="px-2 py-2 font-mono">{weiBnb(bid.remainingBudgetWei, 3)}</td>
+                <td className="px-2 py-2 font-mono">{book ? estCount(bid, book) ?? "—" : "—"}</td>
+                <td className="px-2 py-2 text-right">
+                  {lane === "mine" ? (
+                    <button type="button" disabled={busy} className="text-ink/70 disabled:opacity-40" onClick={() => {
+                      if (!account) return;
+                      onBusy(true);
+                      cancelCapacityBid(account, BigInt(bid.orderId))
+                        .then(() => { onNote(zh ? "买单已撤销，剩余资金退回。" : "Bid cancelled. The remainder returns.", false); reload(); })
+                        .catch(() => onNote(zh ? "没有撤销。" : "Cancel did not finish.", true))
+                        .finally(() => onBusy(false));
+                    }}>{zh ? "撤销" : "Cancel"}</button>
+                  ) : (
+                    <button type="button" disabled={busy} className="text-[#089981] disabled:opacity-40" onClick={() => { setSellId(bid.orderId); setSellKey(""); }}>{zh ? "卖出" : "Sell"}</button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {selling ? (
+        <div className="border-t border-gold/30 px-3 py-3">
+          <p className="text-[12px]">{zh ? `卖给 #${selling.orderId}，日产能价 ${weiBnb(selling.dailyCapacityPriceWei, 2)} BNB` : `Sell into #${selling.orderId}`}</p>
+          <select value={sellKey} onChange={(event) => setSellKey(event.target.value)} className="mt-2 h-10 w-full border border-gold/50 bg-paper px-2 text-sm">
+            <option value="">{choices.length ? (zh ? "选择自己的电路" : "Your circuit") : (zh ? "没有落在这个算力区间的电路" : "No circuit in this hash range")}</option>
+            {choices.map((row) => <option key={row.key} value={row.key}>{row.name} #{row.tokenId} · {row.hash} H</option>)}
+          </select>
+          <button type="button" disabled={busy || !sellKey} className="mt-2 min-h-10 w-full bg-[#089981] text-sm text-white disabled:opacity-40" onClick={() => {
+            const row = choices.find((item) => item.key === sellKey);
+            if (row) sell(selling, row);
+          }}>{zh ? "确认卖出" : "Confirm"}</button>
         </div>
-        <p className="mt-1 text-[11px] leading-5 text-ink/45">{zh ? "电路整张成交，数量锁成 1。买入另付本站千分之二，先付，没成交不退。" : "A circuit sells whole, so the quantity stays 1. Buying adds this site's 0.2%, paid first and not returned."}</p>
-        <button type="button" disabled={!can || busy} className="mt-3 min-h-12 w-full bg-[#f23645] text-sm text-white disabled:opacity-40" onClick={onBuy}>{zh ? "买入这一张" : "Buy this one"}</button>
-        {row ? (
-          <dl className="mt-4 border-t border-gold/30">
-            <RightLine k={zh ? "结构" : "Shape"} v={`NAND ${row.nand} · LATCH ${row.latch}`} />
-            <RightLine k={zh ? "端口" : "Ports"} v={`${row.nIn} → ${row.nOut} · S${row.nState}`} />
-            <RightLine k="H" v={row.hash.toLocaleString("en-US")} />
-            <RightLine k={zh ? "预计 24h" : "Est. 24h"} v={row.dayBem != null ? `${num(row.dayBem, 4)} BEM` : "—"} />
-            <RightLine k={zh ? "日产能价" : "Day price"} v={row.dayPx != null ? `${num(row.dayPx, 2)} BNB` : "—"} />
-            <RightLine k={zh ? "卖家" : "Seller"} v={short(row.seller)} />
-          </dl>
-        ) : null}
+      ) : null}
+      <div className="border-t border-gold/30 px-3 py-3">
+        <p className="text-sm">{zh ? "挂统一买单" : "Post a bid"} <span className="text-[11px] text-ink/45">{zh ? "按成交时预计 24h 产出计价" : "Priced on estimated 24h output"}</span></p>
+        <label className="mt-2 block text-[11px] text-ink/45">
+          {zh ? "日产能价" : "Day price"} {refDay != null ? <span className="text-ink/35">{zh ? `参考 ${num(refDay, 2)}` : `Ref ${num(refDay, 2)}`}</span> : null}
+          <span className="mt-1 flex items-center gap-2 border border-gold/50 px-2">
+            <input value={price} onChange={(event) => setPrice(event.target.value.replace(/[^\d.]/g, ""))} placeholder={zh ? "价格" : "Price"} className="h-10 min-w-0 flex-1 bg-transparent font-mono outline-none" />
+            <span>BNB</span>
+          </span>
+        </label>
+        <label className="mt-2 block text-[11px] text-ink/45">
+          {zh ? "投入资金" : "Budget"}
+          <span className="mt-1 flex items-center gap-2 border border-gold/50 px-2">
+            <input value={budget} onChange={(event) => setBudget(event.target.value.replace(/[^\d.]/g, ""))} placeholder={zh ? "金额" : "Amount"} className="h-10 min-w-0 flex-1 bg-transparent font-mono outline-none" />
+            <span>BNB</span>
+          </span>
+        </label>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <label className="text-[11px] text-ink/45">{zh ? "最低算力" : "Min H"}<input value={minH} onChange={(event) => setMinH(event.target.value.replace(/[^\d]/g, ""))} placeholder={zh ? "不限" : "Any"} className="mt-1 h-10 w-full border border-gold/50 bg-transparent px-2 font-mono outline-none" /></label>
+          <label className="text-[11px] text-ink/45">{zh ? "最高算力" : "Max H"}<input value={maxH} onChange={(event) => setMaxH(event.target.value.replace(/[^\d]/g, ""))} placeholder={zh ? "不限" : "Any"} className="mt-1 h-10 w-full border border-gold/50 bg-transparent px-2 font-mono outline-none" /></label>
+        </div>
+        <div className="mt-2 grid grid-cols-2 bg-foil/60 text-[12px]">
+          <p className="px-2 py-2">{zh ? "预计可购日产能" : "Est. daily"} <span className="mt-1 block font-mono">{typedDay != null && canBuy != null ? num(typedDay * Math.max(canBuy, 0), 4) : "—"}</span></p>
+          <p className="px-2 py-2">{zh ? "预计可购算力" : "Est. hash"} <span className="mt-1 block font-mono">{canBuy != null ? (typedH * Math.max(canBuy, 0)).toLocaleString("en-US") : "—"}</span></p>
+        </div>
+        <p className="mt-2 text-[11px] leading-5 text-ink/45">{zh ? "资金锁入容量买单合约。协议费 1%，成交时从卖方所得扣除。空的算力表示不限。只接受你持有、且算力落在区间内的电路。" : "Budget locks in the capacity-bid contract. The protocol fee is 1%, taken from the seller. Blank hash means any. A fill accepts only a circuit you hold, inside the hash range."}</p>
+        <button type="button" disabled={busy || !(typedPrice > 0) || !(typedBudget > 0)} className="mt-2 min-h-11 w-full bg-ink text-sm text-paper disabled:opacity-40" onClick={place}>{zh ? "挂出买单" : "Post bid"}</button>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { encodeFunctionData, formatEther, formatUnits, parseAbi, parseUnits, type Hex } from "viem";
-import { bemPrice, bnbPrice, BNB_GAS_RESERVE, BSC, connectBsc, ERC_BOOKS, ercPrice, readAsset, readBalances, type ErcKey } from "@/lib/bsc";
+import { bemPrice, bnbPrice, BNB_GAS_RESERVE, BSC, connectBsc, ERC_BOOKS, ercPrice, poolMark, readAsset, readBalances, type ErcKey } from "@/lib/bsc";
 import { useExchange } from "@/lib/exchange-store";
 import { getHoldings, type ChipRow, type CircuitRow, type Holdings } from "@/lib/holdings";
 import { readGateChain } from "@/lib/gate-chain";
@@ -252,7 +252,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
       setWorth(place(lines));
       setWorthAt(new Date().toLocaleTimeString("en-GB", { hour12: false, timeZone: "Asia/Singapore" }));
       const [priced, bids, perpView, gate] = await Promise.all([
-        Promise.all(keys.map((key, index) => (ercBal[index] > 0n ? ercPrice(key).catch(() => "") : Promise.resolve("")))),
+        Promise.all(keys.map((key, index) => (ercBal[index] > 0n ? poolMark(key).catch(() => ercPrice(key)).catch(() => "") : Promise.resolve("")))),
         book?.ok ? getOfficialBooks().catch(() => null) : Promise.resolve(null),
         readPerp(BSC_REBATE, account).catch(() => null),
         readGateChain(KNOWN_XPERP).catch(() => null),

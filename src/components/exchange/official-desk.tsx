@@ -39,7 +39,7 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
         .catch(() => { if (!dead) setBooks({ ok: false, error: "feed", asOf: null, block: null, bids: [], lists: [], listed: 0, sellers: 0, maxId: 0, vol24h: 0, volTotal: 0, trades: [] }); });
     };
     pull();
-    const id = window.setInterval(pull, 15000);
+    const id = window.setInterval(pull, 8000);
     return () => { dead = true; window.clearInterval(id); };
   }, []);
 
@@ -100,7 +100,7 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
                 const on = name.toLowerCase().includes(family.toLowerCase()) && kind === id;
                 return (
                   <button key={id} type="button" onClick={() => { setName(sample?.name ?? (family === "Genesis" ? "Genesis CPU" : family)); setKind(id); setBid(null); }} className={`flex w-full items-center justify-between px-2 py-1.5 text-left text-[13px] ${on ? "bg-gold/15" : ""}`}>
-                    <span>{id === 0 ? "NAND" : "LATCH"}</span>
+                    <span>{id === 0 ? "NAND" : "LATCH"} · TapeOut</span>
                     <span className="font-mono text-[12px]">{sample ? px(sample.priceBnb) : "—"}</span>
                   </button>
                 );
@@ -112,7 +112,7 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
       <div className="min-w-0 border border-gold/50">
         <div className="flex items-end justify-between gap-3 px-3 py-3">
           <div>
-            <h3 className="font-display text-2xl italic leading-none">{name} / {kind === 0 ? "NAND" : "LATCH"}</h3>
+            <h3 className="font-display text-2xl italic leading-none">TapeOut · {kind === 0 ? "NAND" : "LATCH"}</h3>
             <p className="mt-1 text-[11px] text-ink/45">{books?.ok ? (zh ? `快照 ${books.asOf ?? ""} · 约 15 秒` : `Snapshot ${books.asOf ?? ""}`) : (zh ? "快照没读到" : "Snapshot missed")}</p>
           </div>
           <p className="font-mono text-sm">{bids[0] ? `${px(bids[0].priceBnb)} BNB` : "—"}</p>
@@ -147,7 +147,7 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
         </dl>
         {mode === "chips" ? (
           <div className="mt-3 flex flex-col gap-2">
-            <p className="font-mono text-sm">{bid ? `#${bid.id} · ${px(bid.priceBnb)} BNB · ${zh ? "剩" : "left"} ${bid.remaining}` : zh ? "先选一张买单" : "Pick a bid"}</p>
+            <p className="font-mono text-sm">{bid ? `#${bid.id} · ${px(bid.priceBnb)} BNB · ${zh ? "剩" : "left"} ${bid.remaining}` : zh ? "选择买单" : "Select a bid"}</p>
             <input value={qty} onChange={(event) => setQty(event.target.value.replace(/[^\d]/g, ""))} className="border border-gold bg-paper px-3 py-2 font-mono outline-none" />
             <label className="flex items-start gap-2 text-sm">
               <input type="checkbox" className="mt-1" checked={ack} onChange={(event) => setAck(event.target.checked)} />
@@ -179,7 +179,7 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
           </div>
         ) : (
           <div className="mt-3 flex flex-col gap-2">
-            <p className="font-mono text-sm">{list ? `${list.name} #${list.circuitId} · ${px(list.priceBnb)} BNB` : zh ? "先选一张挂单" : "Pick a listing"}</p>
+            <p className="font-mono text-sm">{list ? `${list.name} #${list.circuitId} · ${px(list.priceBnb)} BNB` : zh ? "选择挂单" : "Select a listing"}</p>
             <label className="flex items-start gap-2 text-sm">
               <input type="checkbox" className="mt-1" checked={ack} onChange={(event) => setAck(event.target.checked)} />
               <span>{zh ? "我按这个 BNB 价格买。服务费另付千分之二，先付不退。电路进我的 BSC 钱包。" : "I buy at this BNB price. The extra 0.2% is paid first and not returned. The circuit arrives in my BSC wallet."}</span>

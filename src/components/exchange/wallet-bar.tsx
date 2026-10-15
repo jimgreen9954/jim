@@ -388,11 +388,11 @@ function RecipeGrid({
         throw new Error("short");
       }
       setNote(lang === "zh" ? `正在流片 ${short(n, l)}。签名之后还要等回执。回执成功，电路就在链上。` : `Taping ${short(n, l)}. After you sign, this waits for the receipt. The circuit is on chain when that receipt succeeds.`);
-      const hash = await tapeRecipe(from, n, l);
-      setNote(lang === "zh" ? `流片完成 ${short(n, l)}。电路已经在这笔交易里，但还没开工。到挖矿页对这张点「开工」，再签一笔，才会进矿机。不用再付 0.0013 OKB。` : `Taped ${short(n, l)}. The circuit is in this transaction, but it is not mining yet. Open it on the mine page with a second signature. That one does not pay another 0.0013 OKB.`);
+      const sheet = await tapeRecipe(from, n, l);
+      setNote(lang === "zh" ? `流片完成${sheet.id ? ` #${sheet.id}` : ""}。${short(n, l)}。挖矿页现在能看到这张，还没开工。再点「开工」签一笔，才进矿机。不用再付 0.0013 OKB。` : `Taped${sheet.id ? ` #${sheet.id}` : ""}. ${short(n, l)}. It is on the mine page and is not mining yet. Open it with a second signature. That one does not pay another 0.0013 OKB.`);
       setPick(null);
-      onDone(hash);
-      window.open(txUrl(hash), "_blank", "noopener,noreferrer");
+      onDone(sheet.hash);
+      window.open(txUrl(sheet.hash), "_blank", "noopener,noreferrer");
     } catch (error) {
       setBad(true);
       const message = error instanceof Error ? error.message : "";

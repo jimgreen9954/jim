@@ -86,7 +86,7 @@ function ethereum() {
   return getProvider();
 }
 
-const client = createPublicClient({ transport: http(BSC.rpc) });
+const client = createPublicClient({ transport: http(BSC.rpc, { timeout: 8_000, batch: { batchSize: 24, wait: 12 } }) });
 
 const receiptRpcs = [
   BSC.rpc,
@@ -240,6 +240,40 @@ export async function ercPrice(key: ErcKey): Promise<string> {
   return pretty(out, BSC.usdtDecimals, 2);
 }
 
+const slotAbi = parseAbi([
+  "function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)",
+]);
+
+function priceFromSqrt(sqrt: bigint, assetDecimals: number, assetIsToken0: boolean): number {
+  if (sqrt <= 0n) return 0;
+  const scale = 1_000_000_000_000n;
+  const exp = BigInt(assetDecimals - 18);
+  let scaled = assetIsToken0 ? (sqrt * sqrt * scale) / (1n << 192n) : ((1n << 192n) * scale) / (sqrt * sqrt);
+  if (exp > 0n) scaled *= 10n ** exp;
+  else if (exp < 0n) scaled /= 10n ** -exp;
+  return Number(scaled) / 1e12;
+}
+
+const midCache = new Map<string, { at: number; text: string }>();
+
+/** Display price from the pool's current tick. One read, no swap simulation. */
+export async function poolMark(key: "bem" | "bnb" | ErcKey): Promise<string> {
+  const hit = midCache.get(key);
+  if (hit && Date.now() - hit.at < 6_000) return hit.text;
+  const book = key === "bem"
+    ? { pool: BSC.pool, decimals: BSC.bemDecimals, assetIsToken0: false, digits: 2 }
+    : key === "bnb"
+      ? { pool: BSC.bnbPool, decimals: 18, assetIsToken0: false, digits: 2 }
+      : { pool: ERC_BOOKS[key].pool, decimals: ERC_BOOKS[key].decimals, assetIsToken0: ERC_BOOKS[key].assetIsToken0, digits: ERC_BOOKS[key].digits };
+  const row = await client.readContract({ address: book.pool, abi: slotAbi, functionName: "slot0" });
+  const px = priceFromSqrt(row[0], book.decimals, book.assetIsToken0);
+  if (!(px > 0)) throw new Error("price");
+  const digits = px >= 1000 ? 0 : book.digits;
+  const text = px.toLocaleString("en-US", { minimumFractionDigits: digits === 0 ? 0 : 2, maximumFractionDigits: digits });
+  midCache.set(key, { at: Date.now(), text });
+  return text;
+}
+
 export async function tokenCap(token: Hex): Promise<number> {
   const abi = parseAbi(["function totalSupply() view returns (uint256)", "function decimals() view returns (uint8)"]);
   const [raw, decimals] = await Promise.all([
@@ -290,7 +324,7 @@ export async function recentPrints(market: "bem" | "bnb" | ErcKey = "bem"): Prom
   const assetDecimals = listed ? listed.decimals : market === "bnb" ? 18 : BSC.bemDecimals;
   const assetIsToken0 = listed ? listed.assetIsToken0 : false;
   const digits = listed ? listed.digits : market === "bnb" ? 5 : 4;
-  const spans = market === "bnb" || market === "btc" ? [40n, 12n, 4n] : market === "bem" ? [400n, 120n, 40n] : [180n, 60n, 20n];
+  const spans = market === "bnb" || market === "btc" ? [12n, 40n] : market === "bem" ? [40n, 120n] : [20n, 80n];
   const head = await client.getBlockNumber();
   let logs: Awaited<ReturnType<typeof client.getLogs<typeof swapEvent>>> = [];
   for (const span of spans) {

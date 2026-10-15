@@ -13,7 +13,9 @@ export const OKB = {
   gasReserve: 2_000_000_000_000_000n,
 };
 
-const xClient = createPublicClient({ transport: http(XLAYER.rpc, { timeout: 12_000 }) });
+const xClient = createPublicClient({ transport: http(XLAYER.rpc, { batch: { batchSize: 20, wait: 16 }, timeout: 8_000 }) });
+
+let okbOut: { at: number; out: bigint } | null = null;
 
 export async function xCap(token: Hex): Promise<number> {
   const abi = parseAbi(["function totalSupply() view returns (uint256)", "function decimals() view returns (uint8)"]);
@@ -164,6 +166,8 @@ async function approveUsdt(from: string, need: bigint) {
 }
 
 export async function quoteOkb(side: "buy" | "sell", amountIn: bigint): Promise<bigint> {
+  const cached = side === "sell" && amountIn === 10n ** 18n ? okbOut : null;
+  if (cached && Date.now() - cached.at < 20_000) return cached.out;
   const path = side === "buy" ? [OKB.usdt, OKB.wokb] : [OKB.wokb, OKB.usdt];
   const amounts = await xClient.readContract({
     address: OKB.router,
@@ -171,7 +175,9 @@ export async function quoteOkb(side: "buy" | "sell", amountIn: bigint): Promise<
     functionName: "getAmountsOut",
     args: [amountIn, path],
   });
-  return amounts[amounts.length - 1] ?? 0n;
+  const out = amounts[amounts.length - 1] ?? 0n;
+  if (side === "sell" && amountIn === 10n ** 18n && out > 0n) okbOut = { at: Date.now(), out };
+  return out;
 }
 
 export async function okbPrice(): Promise<string> {

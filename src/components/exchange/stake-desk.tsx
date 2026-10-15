@@ -256,7 +256,7 @@ export function StakeDesk() {
                     return;
                   }
                   const addr = await deployCircuitLock(from);
-                  say(zh ? `已部署 ${addr}。还没写进网页。把这串地址发我，我写上之后大家才能锁。` : `Deployed ${addr}. It is not written into the site yet. Send me this address and I will pin it.`);
+                  say(zh ? `已部署 ${addr}。地址写入页面前，其他地址不能锁入这一份。` : `Deployed ${addr}. Other addresses cannot stake here until it is written into the site.`);
                 } catch {
                   say(zh ? "没有部署成。签名时把 Gas Limit 改成 3000000。" : "It did not deploy. Set Gas Limit to 3000000.", true);
                 } finally {

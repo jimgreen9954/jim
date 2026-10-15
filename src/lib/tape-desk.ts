@@ -2,7 +2,7 @@ import { createPublicClient, encodeFunctionData, formatUnits, http, parseAbi, pa
 import { TAPE_DESK_BYTECODE } from "@/lib/tape-desk-artifact";
 import { TAPE_BEM, TAPE_TOKEN, TAPE_USDT } from "@/lib/tape-pool";
 import { getProvider } from "@/lib/wallet";
-import { connectXLayer, XLAYER } from "@/lib/xlayer";
+import { connectXLayer, quoteGas, XLAYER } from "@/lib/xlayer";
 
 /** Buyback bytecode matches contracts/TapeBid.sol. The old desk is not used. */
 export const TAPE_DESK = "0x53fa6A76ce9A3fE08698E04a4E9A674bd77a9DfF" as const;
@@ -69,9 +69,12 @@ async function send(from: string, to: Hex | undefined, data: Hex): Promise<Hex> 
   await connectXLayer();
   const eth = getProvider();
   if (!eth) throw new Error("nowallet");
-  const tx: { from: string; to?: Hex; data: Hex; chainId: string; gas?: Hex } = { from, data, chainId: XLAYER.hex };
-  if (to) tx.to = to;
-  else tx.gas = "0x4c4b40";
+  const tx: { from: string; to?: Hex; data: Hex; chainId: string; gas?: Hex; value?: Hex } = { from, data, chainId: XLAYER.hex, value: "0x0" };
+  if (to) {
+    tx.to = to;
+    const gas = await quoteGas(from, to, data);
+    if (gas) tx.gas = gas;
+  } else tx.gas = "0x4c4b40";
   const hash = (await eth.request({ method: "eth_sendTransaction", params: [tx] })) as Hex;
   const receipt = await client.waitForTransactionReceipt({ hash, timeout: 180_000 });
   if (receipt.status !== "success") throw new Error("revert");

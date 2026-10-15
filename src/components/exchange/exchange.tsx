@@ -17,24 +17,28 @@ import { TapeCanvas } from "@/components/exchange/tape-canvas";
 import { ConnectButton } from "@/components/exchange/wallet-bar";
 import { AccountCenter } from "@/components/exchange/account-center";
 import { TapeSpotDesk } from "@/components/exchange/tape-spot";
-import { WorkshopRisk } from "@/components/exchange/risk-calc";
 import { MineDesk } from "@/components/exchange/mine-desk";
 import { Whitepaper } from "@/components/exchange/whitepaper";
 import { SideRail } from "@/components/exchange/side-rail";
-import { bemPrice } from "@/lib/bsc";
+import { poolMark } from "@/lib/bsc";
+import { getDeskQuotes, type DeskQuote } from "@/lib/candles";
 import { FeeLockProvider, useFeeLock } from "@/lib/fee-lock";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import { CLAIM_STEPS, bindCode, claimRebate, codeText, readRebate, registerCode, type Desk } from "@/lib/perp";
 import { formatUnits } from "viem";
 
-type Floor = "desk" | "paper" | "shop" | "rules" | "canvas" | "me" | "mine";
+type Floor = "desk" | "paper" | "asset" | "tape" | "mine" | "rules" | "canvas" | "me";
 type DeskTab = "spot" | "perp";
-type ShopTab = "gate" | "chips" | "circuits" | "book";
+type Chain = "bsc" | "x";
+type AssetKind = "chip" | "circuit" | "box" | "perp" | "bem";
+type TapeTab = "trade" | "stake" | "ash" | "bid";
 
 export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp" | "gate" | "wafer" | "brief" }) {
-  const [floor, setFloor] = useState<Floor>(start === "paper" ? "paper" : start === "gate" || start === "wafer" ? "shop" : start === "brief" ? "rules" : "desk");
+  const [floor, setFloor] = useState<Floor>(start === "paper" ? "paper" : start === "gate" ? "asset" : start === "brief" ? "rules" : start === "perp" ? "desk" : "tape");
   const [desk, setDesk] = useState<DeskTab>(start === "perp" ? "perp" : "spot");
-  const [shop, setShop] = useState<ShopTab>(start === "gate" ? "gate" : "book");
+  const [chain, setChain] = useState<Chain>(start === "gate" ? "bsc" : "x");
+  const [kind, setKind] = useState<AssetKind>(start === "gate" ? "perp" : "chip");
+  const [tapeTab, setTapeTab] = useState<TapeTab>("trade");
   const [giftOpen, setGiftOpen] = useState(false);
   const { night, setNight } = useNight();
   useEffect(() => {
@@ -43,12 +47,14 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
       if (named === "spot") { setFloor("desk"); setDesk("spot"); }
       if (named === "perp") { setFloor("desk"); setDesk("perp"); }
       if (named === "paper") setFloor("paper");
-      if (named === "gate" || named.startsWith("gate=")) { setFloor("shop"); setShop("gate"); }
-      if (named === "wafer" || named === "book" || named === "nand") { setFloor("shop"); setShop("book"); }
-      if (named === "chips") { setFloor("shop"); setShop("chips"); }
-      if (named === "circuits") { setFloor("shop"); setShop("circuits"); }
+      if (named === "tape" || named === "book" || named === "wafer") { setFloor("tape"); setTapeTab("trade"); }
+      if (named === "mine" || named === "claim") setFloor("mine");
+      if (named === "stake") { setFloor("tape"); setTapeTab("stake"); }
+      if (named === "nand") { setFloor("asset"); setChain("x"); setKind("chip"); }
+      if (named === "gate" || named.startsWith("gate=")) { setFloor("asset"); setChain("bsc"); setKind("perp"); }
+      if (named === "chips") { setFloor("asset"); setChain("bsc"); setKind("chip"); }
+      if (named === "circuits") { setFloor("asset"); setChain("bsc"); setKind("circuit"); }
       if (named === "canvas") setFloor("canvas");
-      if (named === "mine") setFloor("mine");
       if (named === "me" || named === "gift") setFloor("me");
       if (named === "gift") setGiftOpen(true);
       if (named === "brief" || named === "rules") setFloor("rules");
@@ -57,6 +63,7 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
     window.addEventListener("hashchange", apply);
     return () => window.removeEventListener("hashchange", apply);
   }, []);
+  const fit = (floor === "tape" && tapeTab === "trade") || (floor === "asset" && chain === "x" && kind === "chip");
   return (
     <FeeLockProvider>
       <div className="min-h-screen overflow-x-hidden bg-paper text-ink">
@@ -64,17 +71,20 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
         <SimClock />
         <BannerToast />
         <FuseFlash />
-        <div className={`mx-auto flex w-full flex-col gap-3 px-2 pt-2 sm:px-3 lg:gap-3 lg:px-4 ${floor === "paper" ? "pb-16 lg:pb-16" : "pb-16"}`}>
-          <Header floor={floor} desk={desk} shop={shop} night={night} setNight={setNight} setFloor={setFloor} setDesk={setDesk} setShop={setShop} setGiftOpen={setGiftOpen} />
+        <div className={`mx-auto flex w-full flex-col gap-2 px-2 pt-2 sm:px-3 lg:px-4 ${fit ? "min-h-screen pb-16 lg:h-dvh lg:overflow-hidden lg:pb-11" : `min-h-screen ${floor === "paper" ? "pb-16" : "pb-12"}`}`}>
+          <Header floor={floor} desk={desk} night={night} setNight={setNight} setFloor={setFloor} setDesk={setDesk} setTapeTab={setTapeTab} setGiftOpen={setGiftOpen} />
           <FeeStrip />
+          <div className={`flex min-h-0 flex-col lg:flex-1 ${fit ? "lg:overflow-hidden" : ""}`}>
           {floor === "desk" && desk === "spot" ? <SpotDesk /> : null}
           {floor === "desk" && desk === "perp" ? <RealPerp /> : null}
           {floor === "paper" ? <PaperFloor /> : null}
-          {floor === "shop" ? <ShopFloor shop={shop} setShop={setShop} /> : null}
+          {floor === "tape" ? <TapeFloor tab={tapeTab} setTab={setTapeTab} /> : null}
+          {floor === "mine" ? <MineDesk lock="claim" /> : null}
+          {floor === "asset" ? <AssetFloor chain={chain} kind={kind} setChain={setChain} setKind={setKind} /> : null}
           {floor === "canvas" ? <TapeCanvas /> : null}
-          {floor === "mine" ? <MineDesk /> : null}
           {floor === "me" ? <AccountCenter giftOpen={giftOpen} /> : null}
           {floor === "rules" ? <Whitepaper /> : null}
+          </div>
         </div>
         <TerminalBar night={night} setNight={setNight} />
       </div>
@@ -164,7 +174,7 @@ function SimClock() {
     const pull = () => {
       if (pending || document.hidden) return;
       pending = true;
-      bemPrice()
+      poolMark("bem")
         .then((text) => {
           const n = Number(text.replace(/,/g, ""));
           if (!dead && n > 0) follow(n);
@@ -307,7 +317,7 @@ function InviteDock() {
             <button type="button" className={`min-h-9 ${chain === "xlayer" ? "bg-ink text-paper" : ""}`} onClick={() => setChain("xlayer")}>X Layer</button>
             <button type="button" className={`min-h-9 ${chain === "bsc" ? "bg-ink text-paper" : ""}`} onClick={() => setChain("bsc")}>BSC</button>
           </div>
-          <p className="mt-2 text-xs leading-5 text-ink/70">{zh ? "本站手续费是付出金额的千分之二。没绑邀请人，整笔进收费地址。绑了之后，这笔手续费的 6% 付给邀请人，4% 少收交易的人，90% 进收费地址。永续、现货（含 BSC 的比特币、ETH、ZEC）、加池、官方晶体管和官方电路都按这个比例。永续的 6% 记在合约里。其余是付款时拆开转。工房订单簿和 TAPE 池，千分之二整笔进收费地址，这两份已经部署的合约没有邀请人字段。电路容器的开通费是协议的 BNB，不走这笔台费。" : "The site fee is 0.2% of the amount paid. With no referrer, all of it goes to the fee address. With one, 6% of that fee is paid to the referrer, the trader pays 4% less, and 90% goes to the fee address. That split covers perpetuals, spot including BSC bitcoin, ETH and ZEC, liquidity, official transistors, and official circuits. Perpetuals record the 6% on the contract. The workshop book and the TAPE pools send their 0.2% entirely to the fee address. Those deployed contracts have no referrer. A circuit container's open fee is protocol BNB, not this fee."}</p>
+          <p className="mt-2 text-xs leading-5 text-ink/70">{zh ? "本站手续费是付出金额的千分之二。没绑邀请人，整笔进收费地址。绑了之后，这笔手续费的 6% 付给邀请人，4% 少收交易的人，90% 进收费地址。永续、现货（含 BSC 的比特币、ETH、ZEC）、加池、官方晶体管和官方电路都按这个比例。永续的 6% 记在合约里。其余是付款时拆开转。工房订单簿和 TAPE 池，千分之二整笔进收费地址，这两份已经部署的合约没有邀请人字段。电路容器的开通费是协议自己的：BSC 付 BNB，X Layer 付 0.08 OKB，不走这笔台费。" : "The site fee is 0.2% of the amount paid. With no referrer, all of it goes to the fee address. With one, 6% of that fee is paid to the referrer, the trader pays 4% less, and 90% goes to the fee address. That split covers perpetuals, spot including BSC bitcoin, ETH and ZEC, liquidity, official transistors, and official circuits. Perpetuals record the 6% on the contract. The workshop book and the TAPE pools send their 0.2% entirely to the fee address. Those deployed contracts have no referrer. A circuit container's open fee belongs to the protocol: BSC pays BNB, X Layer pays 0.08 OKB, and it is not this fee."}</p>
           {code ? (
             <div className="mt-2">
               <p className="font-mono">{code}</p>
@@ -345,10 +355,50 @@ function InviteDock() {
   );
 }
 
-function Header({ floor, desk, shop, night, setNight, setFloor, setDesk, setShop, setGiftOpen }: { floor: Floor; desk: DeskTab; shop: ShopTab; night: boolean; setNight: (next: boolean | ((on: boolean) => boolean)) => void; setFloor: (floor: Floor) => void; setDesk: (desk: DeskTab) => void; setShop: (shop: ShopTab) => void; setGiftOpen: (open: boolean) => void }) {
+function LiveQuotes() {
+  const setChainBem = useExchange((s) => s.setChainBem);
+  const chainBem = useExchange((s) => s.chainBem);
+  const [rows, setRows] = useState<DeskQuote[]>([]);
+  useEffect(() => {
+    let dead = false;
+    const pull = () => {
+      getDeskQuotes()
+        .then((next) => {
+          if (dead) return;
+          setRows(next);
+          const bem = next.find((row) => row.id === "bem");
+          if (bem && bem.px > 0) setChainBem(bem.px);
+        })
+        .catch(() => undefined);
+    };
+    pull();
+    const id = window.setInterval(pull, 15_000);
+    return () => {
+      dead = true;
+      window.clearInterval(id);
+    };
+  }, [setChainBem]);
+  const name = { bem: "BEM", btc: "BTC", eth: "ETH", zec: "ZEC", bnb: "BNB" } as const;
+  const shown = rows.length > 0 ? rows : chainBem && chainBem > 0 ? [{ id: "bem" as const, px: chainBem, chg: null }] : [];
+  return (
+    <>
+      {shown.map((row) => {
+        const digits = row.px >= 1000 ? 0 : 2;
+        const text = row.px.toLocaleString("en-US", { minimumFractionDigits: digits === 0 ? 0 : 2, maximumFractionDigits: digits });
+        return (
+          <span key={row.id} className="shrink-0 font-mono tabular-nums">
+            {name[row.id]} {text}
+            {row.chg == null ? null : <span className={row.chg >= 0 ? " text-gold" : " text-sell"}>{row.chg >= 0 ? " +" : " "}{row.chg.toFixed(2)}%</span>}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+function Header({ floor, desk, night, setNight, setFloor, setDesk, setTapeTab, setGiftOpen }: { floor: Floor; desk: DeskTab; night: boolean; setNight: (next: boolean | ((on: boolean) => boolean)) => void; setFloor: (floor: Floor) => void; setDesk: (desk: DeskTab) => void; setTapeTab: (tab: TapeTab) => void; setGiftOpen: (open: boolean) => void }) {
   const lang = useExchange((s) => s.lang);
   const setLang = useExchange((s) => s.setLang);
-  const bem = useExchange((s) => s.chainBem);
   const reset = useExchange((s) => s.reset);
   const [arm, setArm] = useState(false);
   useEffect(() => {
@@ -368,19 +418,19 @@ function Header({ floor, desk, shop, night, setNight, setFloor, setDesk, setShop
     setFloor(next);
   };
   const nav = [
+    ["TAPE", floor === "tape", () => { setTapeTab("trade"); go("tape", "tape"); }],
+    [lang === "zh" ? "挖矿" : "Mine", floor === "mine", () => go("mine", "mine")],
     [lang === "zh" ? "现货" : "Spot", floor === "desk" && desk === "spot", () => { setDesk("spot"); go("desk", "spot"); }],
     [lang === "zh" ? "永续" : "Perp", floor === "desk" && desk === "perp", () => { setDesk("perp"); go("desk", "perp"); }],
-    ["TAPELIQUID", floor === "shop" && shop === "book", () => { setShop("book"); go("shop", "book"); }],
-    ["TapeOut", floor === "shop" && shop !== "book", () => { setShop(shop === "book" ? "gate" : shop); go("shop", shop === "chips" ? "chips" : shop === "circuits" ? "circuits" : "gate"); }],
-    [lang === "zh" ? "挖矿" : "Mine", floor === "mine", () => go("mine", "mine")],
+    [lang === "zh" ? "晶体管" : "Chips", floor === "asset", () => go("asset", "chips")],
     [lang === "zh" ? "流片" : "Tape-out", floor === "canvas", () => go("canvas", "canvas")],
     [lang === "zh" ? "规则" : "Rules", floor === "rules", () => go("rules", "rules")],
     [lang === "zh" ? "练习" : "Practice", floor === "paper", () => go("paper", "paper")],
   ] as const;
   return (
-    <header className="sticky top-0 z-20 -mx-2 border-b border-gold/40 bg-paper/95 px-2 py-2 backdrop-blur-sm sm:-mx-3 sm:px-3 lg:-mx-4 lg:px-4 pt-[max(0.35rem,env(safe-area-inset-top))]">
+    <header className="sticky top-0 z-20 -mx-2 shrink-0 border-b border-gold/40 bg-paper/95 px-2 py-2 backdrop-blur-sm sm:-mx-3 sm:px-3 lg:-mx-4 lg:px-4 pt-[max(0.35rem,env(safe-area-inset-top))]">
       <div className="flex items-center gap-3 overflow-x-auto border-b border-gold/30 pb-1 text-[11px] text-ink/65">
-        <span className="shrink-0 font-mono">BEM {bem != null && bem > 0 ? bem.toLocaleString("en-US", { maximumFractionDigits: 6 }) : "—"}</span>
+        <LiveQuotes />
         <span className="shrink-0">BSC · USDT</span>
         <span className="shrink-0">X Layer · USDT0</span>
         <span className="shrink-0">{lang === "zh" ? "台费 0.20%" : "Fee 0.20%"}</span>
@@ -492,38 +542,69 @@ function PaperFloor() {
   );
 }
 
-function ShopFloor({ shop, setShop }: { shop: ShopTab; setShop: (shop: ShopTab) => void }) {
+function TapeFloor({ tab, setTab }: { tab: TapeTab; setTab: (tab: TapeTab) => void }) {
   const lang = useExchange((s) => s.lang);
   const zh = lang === "zh";
-  if (shop === "book") {
-    return (
-      <>
-        <WorkshopRisk zh={zh} />
-        <TapeSpotDesk zh={zh} />
-      </>
-    );
-  }
-  const lanes = [
-    ["gate", zh ? "晶体管合约" : "Contracts"],
-    ["chips", zh ? "晶体管" : "Transistors"],
-    ["circuits", zh ? "电路" : "Circuits"],
+  const tabs = [
+    ["trade", zh ? "交易" : "Trade"],
+    ["stake", zh ? "质押" : "Stake"],
+    ["ash", zh ? "销毁" : "Burn"],
+    ["bid", zh ? "库藏" : "Reserve"],
   ] as const;
   return (
-    <div className="lg:grid lg:grid-cols-[7.25rem_minmax(0,1fr)] lg:items-start lg:gap-3">
-      <nav className="mb-3 flex gap-4 overflow-x-auto lg:sticky lg:top-16 lg:mb-0 lg:flex lg:flex-col lg:gap-1">
-        {lanes.map(([id, label]) => (
-          <button key={id} type="button" onClick={() => setShop(id)} className={`shrink-0 border-l-2 py-1.5 pl-2 text-left text-sm ${shop === id ? "border-ink font-medium" : "border-transparent text-ink/45"}`}>
-            {label}
-          </button>
-        ))}
-      </nav>
-      <div className="min-w-0">
-        <WorkshopRisk zh={zh} />
-        {shop === "gate" ? <TransistorDesk /> : null}
-        {shop === "chips" ? <OfficialDesk mode="chips" /> : null}
-        {shop === "circuits" ? <OfficialDesk mode="circuits" /> : null}
+    <section className="flex min-h-0 flex-col gap-2 lg:flex-1">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2">
+        <div>
+          <h1 className="font-display text-2xl italic leading-none text-ink">TAPE</h1>
+          <p className="text-sm text-ink">{zh ? "平台币" : "Platform token"}</p>
+        </div>
+        <div className="flex gap-1 overflow-x-auto">
+          {tabs.map(([id, label]) => (
+            <button key={id} type="button" onClick={() => setTab(id)} className={`min-h-9 shrink-0 px-3 text-sm ${tab === id ? "bg-ink text-paper" : "text-ink"}`}>{label}</button>
+          ))}
+        </div>
       </div>
-    </div>
+      {tab === "trade" ? <div className="lg:min-h-0 lg:flex-1"><TapeSpotDesk zh={zh} lanes={[0]} /></div> : null}
+      {tab === "stake" ? <MineDesk lock="stake" /> : null}
+      {tab === "ash" ? <MineDesk lock="ash" /> : null}
+      {tab === "bid" ? <MineDesk lock="bid" /> : null}
+    </section>
+  );
+}
+
+function AssetFloor({ chain, kind, setChain, setKind }: { chain: Chain; kind: AssetKind; setChain: (chain: Chain) => void; setKind: (kind: AssetKind) => void }) {
+  const lang = useExchange((s) => s.lang);
+  const zh = lang === "zh";
+  const pickChain = (next: Chain) => {
+    setChain(next);
+    if (next === "bsc" && (kind === "box")) setKind("chip");
+    if (next === "x" && (kind === "perp" || kind === "bem")) setKind("chip");
+  };
+  const tabs = chain === "bsc"
+    ? ([["chip", "NAND / LATCH · TapeOut"], ["circuit", zh ? "电路 · TapeOut" : "Circuits · TapeOut"], ["perp", zh ? "合约" : "Perp"], ["bem", "BEM"]] as const)
+    : ([["chip", "NAND / LATCH · TAPELIQUID"], ["circuit", zh ? "电路 · TAPELIQUID" : "Circuits"], ["box", zh ? "容器 · TAPELIQUID" : "Box"]] as const);
+  return (
+    <section className="flex min-h-0 flex-col gap-2 lg:flex-1">
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
+          {tabs.map(([id, label]) => (
+            <button key={id} type="button" onClick={() => setKind(id)} className={`min-h-9 max-w-[11rem] shrink-0 truncate px-3 text-sm sm:max-w-none ${kind === id ? "border-b-2 border-ink font-medium" : "text-ink/50"}`}>{label}</button>
+          ))}
+        </div>
+        <div className="ml-auto flex shrink-0 border border-gold">
+          {(["bsc", "x"] as const).map((id) => (
+            <button key={id} type="button" onClick={() => pickChain(id)} className={`min-h-9 px-3 text-xs ${chain === id ? "bg-ink text-paper" : "text-ink/60"}`}>{id === "bsc" ? "BSC" : "X Layer"}</button>
+          ))}
+        </div>
+      </div>
+      {chain === "bsc" && kind === "chip" ? <OfficialDesk mode="chips" /> : null}
+      {chain === "bsc" && kind === "circuit" ? <OfficialDesk mode="circuits" /> : null}
+      {chain === "bsc" && kind === "perp" ? <TransistorDesk /> : null}
+      {chain === "bsc" && kind === "bem" ? <MineDesk lock="bem" /> : null}
+      {chain === "x" && kind === "chip" ? <div className="lg:min-h-0 lg:flex-1"><TapeSpotDesk zh={zh} lanes={[1, 2]} /></div> : null}
+      {chain === "x" && kind === "circuit" ? <div className="lg:min-h-0 lg:flex-1"><TapeSpotDesk zh={zh} lanes={["circuit"]} /></div> : null}
+      {chain === "x" && kind === "box" ? <div className="lg:min-h-0 lg:flex-1"><TapeSpotDesk zh={zh} lanes={["cap"]} /></div> : null}
+    </section>
   );
 }
 

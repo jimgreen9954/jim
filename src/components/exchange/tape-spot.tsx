@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { SideRail } from "@/components/exchange/side-rail";
 import { formatUnits } from "viem";
-import { XLAYER } from "@/lib/xlayer";
+import { chainNote, XLAYER } from "@/lib/xlayer";
 import { quoteOkb } from "@/lib/okb";
-import { Hint } from "@/components/exchange/hint";
 import { TapeCircuits } from "@/components/exchange/tape-circuits";
 import { ContainerDesk } from "@/components/exchange/capacitor-desk";
 import { currentAccount, onAccount } from "@/lib/wallet";
@@ -12,10 +11,9 @@ import {
   cancelSpot,
   deploySpot,
   placeSpot,
-  readMyOrders,
-  readSpotBook,
+  readSpotView,
   peekSpotPrints,
-  readSpotPurse,
+  blockStamp,
   spotAddress,
   spotReady,
   spotBase,
@@ -52,10 +50,6 @@ function cost(market: number, size: bigint, price: bigint): bigint {
 
 function sumSide(rows: Level[], market: number) {
   return rows.reduce((sum, row) => ({ base: sum.base + row.size, quote: sum.quote + cost(market, row.size, row.price), lots: sum.lots + row.lots }), { base: 0n, quote: 0n, lots: 0 });
-}
-
-function Stat({ k, v, s }: { k: ReactNode; v: string; s: string }) {
-  return <p className="border-gold/30 px-2 py-2 sm:border-l sm:first:border-l-0"><span className="block text-[10px] text-ink/45">{k}</span><span className="font-mono">{v}</span><span className="mt-0.5 block text-[10px] text-ink/45">{s}</span></p>;
 }
 
 function Plan({ zh, market, side, price, amount, asks, bids, purse, name, unit, rate }: { zh: boolean; market: SpotMarket; side: "buy" | "sell"; price: string; amount: string; asks: Level[]; bids: Level[]; purse: SpotPurse | null; name: string; unit: MoneyUnit; rate: bigint }) {
@@ -101,7 +95,7 @@ function Quote({ zh, market, side, price, amount, unit, rate }: { zh: boolean; m
     pay = cost(market, qty, px);
     fee = pay * 20n / 10000n;
   } catch {
-    return <p className="mt-2 text-xs text-ink/45">{zh ? "先填价格。比例按钮按这个价格，从钱包里切。" : "Enter a price first. The percent buttons cut the wallet at that price."}</p>;
+    return null;
   }
   if (pay === 0n || fee === 0n) return <p className="mt-2 text-xs text-sell">{zh ? "这一笔太小，手续费舍成 0，合约不会收。" : "This order is too small. The fee rounds to zero and the contract will not take it."}</p>;
   const label = unit === "okb" ? "OKB" : "USDT0";
@@ -123,19 +117,36 @@ function plainBase(market: number, amount: bigint): string {
   return cut ? `${whole}.${cut}` : whole;
 }
 
-function BookRow({ priceLabel, sizeLabel, totalLabel, cap, value, onChange, onPick, onTake, bid, best, mine, on, busy, depth, zh }: { priceLabel: string; sizeLabel: string; totalLabel: string; cap: string; value: string; onChange: (value: string) => void; onPick: () => void; onTake: () => void; bid: boolean; best: boolean; mine: boolean; on: boolean; busy: boolean; depth: number; zh: boolean }) {
-  const typed = value.trim().length > 0;
+const bookGrid = "grid grid-cols-[minmax(0,1.15fr)_minmax(0,.85fr)_minmax(0,1fr)] items-center text-[13px] tabular-nums lg:grid-cols-[minmax(0,1.15fr)_minmax(0,.9fr)_minmax(0,1.15fr)_6.5rem_4.25rem]";
+
+function BookRow({ priceLabel, sizeLabel, totalLabel, cap, value, onChange, onPick, onTake, bid, mine, on, busy, depth, zh }: { priceLabel: string; sizeLabel: string; totalLabel: string; cap: string; value: string; onChange: (value: string) => void; onPick: () => void; onTake: () => void; bid: boolean; mine: boolean; on: boolean; busy: boolean; depth: number; zh: boolean }) {
+  const fill = Math.min(100, Math.max(depth, 6));
+  const wash = bid ? "rgba(137, 196, 168, 0.55)" : "rgba(240, 170, 170, 0.62)";
   return (
-    <form className={`relative grid min-h-[30px] grid-cols-[3.2rem_minmax(0,1fr)_auto] items-center gap-1 px-1.5 text-[12px] tabular-nums sm:grid-cols-[minmax(0,0.9fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_auto] sm:px-2 ${on ? "bg-ink/5" : best ? (bid ? "bg-[#089981]/10" : "bg-[#f23645]/10") : ""}`} onSubmit={(event) => { event.preventDefault(); onTake(); }}>
-      <span className={`pointer-events-none absolute inset-y-1 left-[11%] max-w-[31%] ${bid ? "bg-[#089981]/25" : "bg-[#f23645]/20"}`} style={{ width: `${Math.max(depth, 4)}%` }} />
-      <button type="button" onClick={onPick} className={`relative truncate text-left font-mono font-semibold ${bid ? "text-[#089981]" : "text-[#f23645]"}`}>{priceLabel}{mine ? <span className="ml-1 text-[10px] font-normal text-ink/45">{zh ? "我的" : "mine"}</span> : null}</button>
-      <span className="relative truncate text-right font-mono text-ink/80 sm:text-left">{sizeLabel}</span>
-      <span className="relative hidden truncate font-mono text-ink/45 sm:block">{totalLabel}</span>
-      <span className="relative grid grid-cols-[3.4rem_2.6rem] justify-end gap-1 sm:grid-cols-[4.6rem_3.4rem]">
-        <input value={value} placeholder={`≤${cap}`} inputMode="decimal" onChange={(event) => onChange(event.target.value)} aria-label={zh ? `这一档最多 ${cap}` : `At most ${cap}`} className="h-6 w-full border border-ink/25 bg-paper px-1 text-right font-mono text-[11px] text-ink outline-none focus:border-ink" />
-        <button type="submit" disabled={busy || !typed} className={`h-6 border bg-transparent text-[11px] font-semibold disabled:opacity-40 ${bid ? "border-[#f23645] text-[#f23645]" : "border-[#089981] text-[#089981]"}`}>{bid ? (zh ? "卖出" : "Sell") : (zh ? "买入" : "Buy")}</button>
-      </span>
-    </form>
+    <div className={on ? "bg-ink/[0.03]" : ""}>
+      <div className={`${bookGrid} relative`}>
+      <button type="button" onClick={onPick} className={`relative truncate px-2 py-2 text-left font-mono font-semibold lg:px-3 lg:py-1.5 ${bid ? "text-[#089981]" : "text-[#f23645]"}`}>
+        {priceLabel}{mine ? <span className="ml-1 text-[11px] font-normal text-ink/40">{zh ? "我的" : "mine"}</span> : null}
+      </button>
+      <button type="button" onClick={onPick} className="relative px-2 py-2 text-right font-mono text-ink lg:px-3 lg:py-1.5">
+        <span className="pointer-events-none absolute inset-y-1 left-1 lg:left-2" style={{ width: `${fill}%`, background: wash }} />
+        <span className="relative">{sizeLabel}</span>
+      </button>
+      <button type="button" onClick={onPick} className="relative truncate px-2 py-2 text-right font-mono text-ink/80 lg:px-3 lg:py-1.5">{totalLabel}</button>
+      <div className="relative hidden bg-card px-1 py-1 lg:block">
+        <input value={value} placeholder={`≤${cap}`} inputMode="decimal" onChange={(event) => onChange(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); if (!busy) onTake(); } }} aria-label={zh ? `填数量，最多 ${cap}。不填就是这一档` : `Size, at most ${cap}. Blank takes the level.`} className="box-border h-7 w-full min-w-0 border border-ink/20 bg-paper px-1.5 text-right font-mono text-xs text-ink outline-none placeholder:text-ink/35 focus:border-ink" />
+      </div>
+      <div className="relative hidden bg-card py-1 pr-2 lg:block">
+        <button type="button" disabled={busy} onClick={() => { if (!busy) onTake(); }} className={`h-7 w-full border bg-paper text-xs disabled:opacity-40 ${bid ? "border-[#f23645] text-[#f23645]" : "border-[#089981] text-[#089981]"}`}>{bid ? (zh ? "卖出" : "Sell") : (zh ? "买入" : "Buy")}</button>
+      </div>
+      </div>
+      {on ? (
+        <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-2 px-2 pb-2 lg:hidden">
+          <input value={value} placeholder={`≤${cap}`} inputMode="decimal" onChange={(event) => onChange(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); if (!busy) onTake(); } }} aria-label={zh ? `填数量，最多 ${cap}。不填就是这一档` : `Size, at most ${cap}. Blank takes the level.`} className="box-border h-10 w-full min-w-0 border border-ink/20 bg-paper px-2 text-right font-mono text-sm text-ink outline-none placeholder:text-ink/35 focus:border-ink" />
+          <button type="button" disabled={busy} onClick={() => { if (!busy) onTake(); }} className={`h-10 border bg-paper text-sm disabled:opacity-40 ${bid ? "border-[#f23645] text-[#f23645]" : "border-[#089981] text-[#089981]"}`}>{bid ? (zh ? "卖出" : "Sell") : (zh ? "买入" : "Buy")}</button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -155,17 +166,15 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   const [purse, setPurse] = useState<SpotPurse | null>(null);
   const [orders, setOrders] = useState<OpenOrder[]>([]);
   const [prints, setPrints] = useState<SpotPrint[]>([]);
+  const [clock, setClock] = useState(0);
   const [reading, setReading] = useState(false);
-  const [readMin, setReadMin] = useState(0);
   const [tab, setTab] = useState<"tape" | "mine">("tape");
   const [miss, setMiss] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [bad, setBad] = useState(false);
-  const [ticketOpen, setTicketOpen] = useState(false);
   const [takes, setTakes] = useState<Record<string, string>>({});
   const [picked, setPicked] = useState<string | null>(null);
-  const askBox = useRef<HTMLDivElement>(null);
   const market: SpotMarket = lane === "circuit" || lane === "cap" ? 0 : lane;
 
   useEffect(() => onAccount(setAccount), []);
@@ -198,7 +207,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
       if (dead) return;
       setPrints(snap.rows);
       setReading(snap.pending);
-      setReadMin(snap.minutes);
+      setClock(blockStamp(snap.rows[0]?.block ?? 1) || Date.now());
     };
     look();
     const id = window.setInterval(look, 2000);
@@ -210,28 +219,30 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
     let dead = false;
     const pull = () => {
       if (document.hidden) return;
-      readSpotBook(market).then((book) => {
-        if (dead) return;
+      readSpotView(market, account).then((view) => {
+        if (dead || !view.book) return;
         setMiss(false);
-        setBids(book?.bids ?? []);
-        setAsks(book?.asks ?? []);
+        setBids(view.book.bids);
+        setAsks(view.book.asks);
+        if (view.purse) setPurse(view.purse);
+        if (view.orders) setOrders(view.orders.filter((row) => row.market === market && row.left > 0n));
       }).catch(() => {
         window.setTimeout(() => {
           if (dead) return;
-          readSpotBook(market).then((book) => {
-            if (dead) return;
+          readSpotView(market, account).then((view) => {
+            if (dead || !view.book) return;
             setMiss(false);
-            setBids(book?.bids ?? []);
-            setAsks(book?.asks ?? []);
-          }).catch(() => { if (!dead) { setMiss(true); setBids([]); setAsks([]); } });
-        }, 1200);
+            setBids(view.book.bids);
+            setAsks(view.book.asks);
+            if (view.purse) setPurse(view.purse);
+            if (view.orders) setOrders(view.orders.filter((row) => row.market === market && row.left > 0n));
+          }).catch(() => { if (!dead) setMiss(true); });
+        }, 800);
       });
-      readSpotPurse(account).then((held) => { if (!dead) setPurse(held); }).catch(() => undefined);
-      if (account) readMyOrders(account).then((mine) => { if (!dead) setOrders(mine.filter((row) => row.market === market && row.left > 0n)); }).catch(() => undefined);
       quoteOkb("sell", 10n ** 18n).then((rate) => { if (!dead && rate > 0n) setOkbRate(rate); }).catch(() => undefined);
     };
     pull();
-    const id = window.setInterval(pull, 15000);
+    const id = window.setInterval(pull, 6000);
     const onShow = () => { if (!document.hidden) pull(); };
     document.addEventListener("visibilitychange", onShow);
     return () => { dead = true; window.clearInterval(id); document.removeEventListener("visibilitychange", onShow); };
@@ -241,6 +252,32 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   const bidBook = useMemo(() => sumSide(bids, market), [bids, market]);
   const traded = useMemo(() => prints.reduce((sum, row) => ({ n: sum.n + 1, base: sum.base + row.base, quote: sum.quote + row.quote, fee: sum.fee + row.fee }), { n: 0, base: 0n, quote: 0n, fee: 0n }), [prints]);
   const askView = useMemo(() => [...asks].reverse(), [asks]);
+  const askBox = useRef<HTMLDivElement>(null);
+  const bidBox = useRef<HTMLDivElement>(null);
+  const bookBox = useRef<HTMLElement>(null);
+  const stickAsk = useRef(true);
+  useLayoutEffect(() => {
+    const box = askBox.current;
+    if (box && stickAsk.current) box.scrollTop = box.scrollHeight;
+  }, [askView, market]);
+  useEffect(() => {
+    const node = bookBox.current;
+    if (!node) return;
+    const onWheel = (event: WheelEvent) => {
+      const ask = askBox.current;
+      const bid = bidBox.current;
+      if (!ask || !bid) return;
+      const target = event.target;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
+      if (!(target instanceof Node)) return;
+      const box = ask.contains(target) ? ask : bid.contains(target) ? bid : null;
+      if (!box) return;
+      event.preventDefault();
+      box.scrollTop += event.deltaY;
+    };
+    node.addEventListener("wheel", onWheel, { passive: false });
+    return () => node.removeEventListener("wheel", onWheel);
+  }, []);
   const maxAsk = asks.reduce((m, row) => row.size > m ? row.size : m, 0n);
   const maxBid = bids.reduce((m, row) => row.size > m ? row.size : m, 0n);
   const bestAsk = asks[0]?.price ?? 0n;
@@ -249,10 +286,6 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   const name = NAMES[market];
   const quoteUnit: MoneyUnit = unit;
   const unitName = quoteUnit === "okb" ? "OKB" : "USDT0";
-  useEffect(() => {
-    const node = askBox.current;
-    if (node) node.scrollTop = node.scrollHeight;
-  }, [askView, market]);
   const showPrice = (usdt: bigint, next: MoneyUnit = quoteUnit) => {
     const raw = next === "okb" && okbRate > 0n ? usdt * 1_000_000n / okbRate : usdt;
     const text = formatUnits(raw, 6);
@@ -296,7 +329,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
       else if (text === "amount" || text === "price") setNote(zh ? "价格和数量都要填。NAND 和 LATCH 只收整数。" : "Enter a price and an amount. NAND and LATCH are whole numbers.");
       else if (/self/i.test(text)) setNote(zh ? "会碰到你自己的挂单。合约整笔拒绝，不会先成交别人的。先在下面撤掉自己的单，或把价格放在碰不到的一侧。" : "This would trade against your own order. The contract rejects the whole thing. Cancel yours below, or use a price that does not reach it.");
       else if (/token/i.test(text)) setNote(zh ? "币没划过来。看余额够不够，以及上一笔授权有没有成功。" : "The token did not move. Check the balance, and that the approval before this one succeeded.");
-      else if (text === "chain") setNote(zh ? "钱包还停在别的链。切到 X Layer 再签。" : "The wallet is on another chain. Switch to X Layer, then sign.");
+      else if (text === "chain") setNote(chainNote(zh, err && typeof err === "object" && "chainId" in err ? String((err as { chainId?: unknown }).chainId ?? "") : ""));
       else if (text === "address") setNote(zh ? "地址格式不对。" : "That address is not valid.");
       else if (text === "empty") setNote(zh ? "这个地址上没有合约。" : "There is no contract at that address.");
       else if (text === "fee") setNote(zh ? "这一笔太小，千分之二舍成 0。合约不收这种单。" : "This order is too small. The 0.2 percent rounds to zero.");
@@ -307,8 +340,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
 
   const takeLevel = (level: Level, bookBid: boolean) => {
     const key = `${bookBid ? "b" : "a"}-${level.price}`;
-    const typed = (takes[key] ?? "").trim();
-    if (!typed) { setBad(true); setNote(zh ? "先在这一档右边填数量。点左边的价格，会把这一档填进下单栏。" : "Type a size on this row. The price on the left fills the ticket."); return; }
+    const typed = (takes[key] ?? "").trim() || plainBase(market, level.size);
     let qty = 0n;
     try { qty = spotBase(market, typed); } catch { setBad(true); setNote(zh ? "数量不对。NAND 和 LATCH 只收整数。" : "The amount is not valid. NAND and LATCH are whole numbers."); return; }
     if (qty <= 0n || qty > level.size) { setBad(true); setNote(zh ? `不能超过这一档的 ${plainBase(market, level.size)}。` : `It cannot be more than this level, ${plainBase(market, level.size)}.`); return; }
@@ -323,7 +355,6 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
     setSide(bookBid ? "sell" : "buy");
     setPrice(showPrice(level.price));
     setAmount(plainBase(market, level.size));
-    setTicketOpen(true);
   };
 
   const fillPct = (pct: number) => {
@@ -355,22 +386,16 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
     );
   }
 
-  return (
-    <SideRail items={choices.map((id) => ({
-      key: String(id),
-      label: id === "circuit" ? (zh ? "电路" : "Circuits") : id === "cap" ? (zh ? "容器" : "Container") : NAMES[id],
-      on: lane === id,
-      run: () => setLane(id),
-    }))}>
-    <section className="grid gap-3">
+  const book = (
+    <section className="flex min-h-0 flex-col lg:h-full">
       {lane === "circuit" ? <TapeCircuits zh={zh} /> : lane === "cap" ? <ContainerDesk zh={zh} /> : (
-        <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-3">
-          <div className="min-w-0 pb-24 lg:pb-0">
-          <article className="border border-gold bg-card">
-            <div className="flex items-end justify-between gap-3 px-3 py-3">
+        <div className="flex min-h-0 flex-col lg:grid lg:h-full lg:grid-cols-[minmax(0,1fr)_21.5rem] lg:items-stretch lg:overflow-hidden lg:border lg:border-gold xl:grid-cols-[minmax(0,1fr)_23rem]">
+          <div className="flex min-w-0 flex-col lg:h-full lg:min-h-0">
+          <article ref={bookBox} className="flex h-[58dvh] min-h-[22rem] shrink-0 flex-col overflow-hidden border border-gold bg-card lg:h-auto lg:min-h-0 lg:flex-1 lg:border-0">
+            <div className="flex shrink-0 flex-col gap-2 border-b border-gold/40 px-3 py-2 lg:flex-row lg:flex-wrap lg:items-end lg:justify-between">
               <div className="min-w-0">
-                <p className="text-[11px] tracking-[0.18em] text-gold">{name} / {unitName}</p>
-                <h3 className="font-mono text-[1.75rem] leading-none tabular-nums">{bestAsk > 0n ? moneyText(bestAsk, quoteUnit, okbRate) : bestBid > 0n ? moneyText(bestBid, quoteUnit, okbRate) : "—"}</h3>
+                <p className="text-[11px] tracking-[0.14em] text-gold lg:text-xs">{market === 0 ? "TAPE" : "TAPELIQUID"} · {name} / {unitName}{spot ? <> · <a className="underline" href={`${XLAYER.explorer}/address/${spot}`} target="_blank" rel="noreferrer">{spot.slice(0, 6)}…{spot.slice(-4)}</a></> : null}</p>
+                <h3 className="font-mono text-2xl leading-none tabular-nums lg:text-3xl">{bestAsk > 0n ? moneyText(bestAsk, quoteUnit, okbRate) : bestBid > 0n ? moneyText(bestBid, quoteUnit, okbRate) : "—"}</h3>
                 <div className="mt-2 flex gap-1">
                     {(["usdt", "okb"] as const).map((next) => (
                       <button key={next} type="button" className={`min-h-7 px-2 text-[11px] ${quoteUnit === next ? "bg-ink text-paper" : "border border-gold text-ink/70"}`} onClick={() => {
@@ -381,64 +406,69 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
                     ))}
                   </div>
               </div>
-              <p className="text-right text-xs leading-5 text-ink/60">
-                {zh ? "买一" : "Bid"} {bestBid > 0n ? moneyText(bestBid, quoteUnit, okbRate) : "—"}
-                <br />
-                {zh ? "卖一" : "Ask"} {bestAsk > 0n ? moneyText(bestAsk, quoteUnit, okbRate) : "—"}
-                <br />
-                <Hint label={zh ? "价差" : "Spread"} text={zh ? "卖一减去买一。价差越小，买卖两边越靠近。" : "Best ask minus best bid. A smaller spread means the two sides are closer."} /> {spread > 0n ? moneyText(spread, quoteUnit, okbRate) : "—"}
-              </p>
+              <div className="flex w-full gap-x-4 overflow-x-auto pb-1 text-right text-[11px] text-ink/60 sm:text-xs lg:w-auto lg:flex-nowrap lg:pb-0">
+                <p className="shrink-0">{zh ? "买一" : "Bid"}<br /><span className="font-mono text-sm text-ink">{bestBid > 0n ? moneyText(bestBid, quoteUnit, okbRate) : "—"}</span></p>
+                <p className="shrink-0">{zh ? "卖一" : "Ask"}<br /><span className="font-mono text-sm text-ink">{bestAsk > 0n ? moneyText(bestAsk, quoteUnit, okbRate) : "—"}</span></p>
+                <p className="shrink-0">{zh ? "价差" : "Spread"}<br /><span className="font-mono text-sm text-ink">{spread > 0n ? moneyText(spread, quoteUnit, okbRate) : "—"}</span></p>
+                <p className="shrink-0">{zh ? "卖盘" : "Asks"}<br /><span className="font-mono text-sm text-ink">{baseText(market, askBook.base)} {name}</span></p>
+                <p className="shrink-0">{zh ? "买盘" : "Bids"}<br /><span className="font-mono text-sm text-ink">{baseText(market, bidBook.base)} {name}</span></p>
+                <p className="shrink-0">{zh ? "成交" : "Prints"}<br /><span className="font-mono text-sm text-ink">{reading && traded.n === 0 ? "—" : traded.n}</span></p>
+                <p className="shrink-0">{zh ? "手续费" : "Fees"}<br /><span className="font-mono text-sm text-ink">{reading && traded.n === 0 ? "—" : moneyText(traded.fee, quoteUnit, okbRate)}</span></p>
+              </div>
             </div>
-            <div className="grid grid-cols-[3.2rem_minmax(0,1fr)_auto] items-center px-1.5 py-1 text-[11px] text-ink/45 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_auto] sm:px-2">
-              <span>{zh ? "价格" : "Price"}</span>
-              <span className="text-right sm:text-left">{zh ? "数量" : "Size"}</span>
-              <span className="hidden sm:block">{zh ? "总额" : "Total"}</span>
-              <span className="text-right">{zh ? "指定成交" : "Take"}</span>
+            <div className={`${bookGrid} shrink-0 text-xs text-ink/45`}>
+              <span className="px-2 py-1.5 lg:px-3">{zh ? "价格" : "Price"}</span>
+              <span className="px-2 py-1.5 text-right lg:px-3">{zh ? "数量" : "Size"}</span>
+              <span className="px-2 py-1.5 text-right lg:px-3">{zh ? "总额" : "Total"} <span className="text-ink/35">{unitName}</span></span>
+              <span className="hidden px-1 py-1.5 text-right lg:col-span-2 lg:block">{zh ? "指定成交" : "Take"}</span>
             </div>
-            <div ref={askBox} className="max-h-[min(16rem,32vh)] overflow-y-auto border-t border-gold/30">
-              {askView.length === 0 ? <p className="px-3 py-2 text-xs text-ink/55">{zh ? "卖盘空着。" : "No asks."}</p> : askView.map((level, index) => {
-                const key = `a-${level.price}`;
-                return <BookRow key={key} zh={zh} bid={false} best={index === askView.length - 1} on={picked === key} busy={busy} mine={orders.some((row) => row.market === market && !row.bid && row.price === level.price)} depth={maxAsk > 0n ? Number((level.size * 100n) / maxAsk) : 0} priceLabel={moneyText(level.price, quoteUnit, okbRate)} sizeLabel={baseText(market, level.size)} totalLabel={moneyText(cost(market, level.size, level.price), quoteUnit, okbRate)} cap={plainBase(market, level.size)} value={takes[key] ?? ""} onChange={(value) => setTakes((cur) => ({ ...cur, [key]: value }))} onPick={() => pickLevel(level, false)} onTake={() => takeLevel(level, false)} />;
-              })}
+            <div ref={askBox} onScroll={(event) => { const el = event.currentTarget; stickAsk.current = el.scrollHeight - el.scrollTop - el.clientHeight <= 8; }} className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-gold/30">
+              <div className="flex min-h-full flex-col justify-end">
+              {askView.length === 0 ? <p className="px-3 py-2 text-xs text-ink/55">{zh ? "卖盘空着。" : "No asks."}</p> : askView.map((level) => {
+                      const key = `a-${level.price}`;
+                      return <BookRow key={key} zh={zh} bid={false} mine={orders.some((row) => row.market === market && !row.bid && row.price === level.price)} on={picked === key} busy={busy} depth={maxAsk > 0n ? Number((level.size * 100n) / maxAsk) : 0} priceLabel={moneyText(level.price, quoteUnit, okbRate)} sizeLabel={baseText(market, level.size)} totalLabel={`${moneyText(cost(market, level.size, level.price), quoteUnit, okbRate)} ${unitName}`} cap={plainBase(market, level.size)} value={takes[key] ?? ""} onChange={(value) => setTakes((cur) => ({ ...cur, [key]: value }))} onPick={() => pickLevel(level, false)} onTake={() => takeLevel(level, false)} />;
+                    })}
+              </div>
             </div>
-            <p className="border-y border-gold/40 px-2 py-1 text-center font-mono text-[11px] text-ink/55">{spread > 0n ? `${zh ? "价差" : "Spread"} ${moneyText(spread, quoteUnit, okbRate)} ${unitName}` : (zh ? "还没有对敲的两档" : "No two-sided market")}</p>
-            <div className="max-h-[min(16rem,32vh)] overflow-y-auto">
-              {bids.length === 0 ? <p className="px-3 py-2 text-xs text-ink/55">{zh ? "买盘空着。" : "No bids."}</p> : bids.map((level, index) => {
-                const key = `b-${level.price}`;
-                return <BookRow key={key} zh={zh} bid best={index === 0} on={picked === key} busy={busy} mine={orders.some((row) => row.market === market && row.bid && row.price === level.price)} depth={maxBid > 0n ? Number((level.size * 100n) / maxBid) : 0} priceLabel={moneyText(level.price, quoteUnit, okbRate)} sizeLabel={baseText(market, level.size)} totalLabel={moneyText(cost(market, level.size, level.price), quoteUnit, okbRate)} cap={plainBase(market, level.size)} value={takes[key] ?? ""} onChange={(value) => setTakes((cur) => ({ ...cur, [key]: value }))} onPick={() => pickLevel(level, true)} onTake={() => takeLevel(level, true)} />;
-              })}
+            <p className="flex shrink-0 items-center gap-3 px-3 py-2 font-mono text-sm text-ink/60">
+              <span className="h-px flex-1 bg-gold/40" />
+              <span>{spread > 0n ? moneyText(spread, quoteUnit, okbRate) : "—"}</span>
+              <span className="h-px flex-1 bg-gold/40" />
+            </p>
+            <div ref={bidBox} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              {bids.length === 0 ? <p className="px-3 py-2 text-xs text-ink/55">{zh ? "买盘空着。" : "No bids."}</p> : bids.map((level) => {
+                      const key = `b-${level.price}`;
+                      return <BookRow key={key} zh={zh} bid mine={orders.some((row) => row.market === market && row.bid && row.price === level.price)} on={picked === key} busy={busy} depth={maxBid > 0n ? Number((level.size * 100n) / maxBid) : 0} priceLabel={moneyText(level.price, quoteUnit, okbRate)} sizeLabel={baseText(market, level.size)} totalLabel={`${moneyText(cost(market, level.size, level.price), quoteUnit, okbRate)} ${unitName}`} cap={plainBase(market, level.size)} value={takes[key] ?? ""} onChange={(value) => setTakes((cur) => ({ ...cur, [key]: value }))} onPick={() => pickLevel(level, true)} onTake={() => takeLevel(level, true)} />;
+                    })}
             </div>
-            {miss ? <p className="px-2 py-2 text-xs text-ink/55">{zh ? "这一次没读到。不写成 0。" : "This read missed. It is not shown as zero."}</p> : null}
-            <div className="grid grid-cols-2 border-t border-gold/40 text-xs sm:grid-cols-4">
-              <Stat k={<Hint label={zh ? "卖盘可买" : "Asks can buy"} text={zh ? "所有卖单加起来，现在还能买多少。" : "Size still offered by asks, and its value."} />} v={`${baseText(market, askBook.base)} ${name}`} s={`${moneyText(askBook.quote, quoteUnit, okbRate)} ${unitName} · ${askBook.lots}`} />
-              <Stat k={<Hint label={zh ? "买盘可卖" : "Bids can sell"} text={zh ? "所有买单加起来，现在还能卖多少。" : "Size still bid, and its value."} />} v={`${baseText(market, bidBook.base)} ${name}`} s={`${moneyText(bidBook.quote, quoteUnit, okbRate)} ${unitName} · ${bidBook.lots}`} />
-              <Stat k={<Hint label={zh ? "成交" : "Prints"} text={zh ? "从最新的区块往回读。NAND、LATCH、TAPE 分开算。读到的笔数和金额先显示，更早的还在补。" : "Reads backward from the newest block. NAND, LATCH and TAPE are counted apart. Counts already found stay on screen while older blocks are still being read."} />} v={reading && traded.n === 0 ? (zh ? "正在读" : "Reading") : `${traded.n}${zh ? " 笔" : ""}`} s={reading && traded.n === 0 ? (zh ? `已回读 ${readMin} 分钟` : `${readMin} min read`) : `${baseText(market, traded.base)} ${name} · ${moneyText(traded.quote, quoteUnit, okbRate)} ${unitName}`} />
-              <Stat k={<Hint label={zh ? "已收手续费" : "Fees read"} text={zh ? "这些成交里已经扣下的千分之二，进收费地址。卖方实收 99.8%。" : "The 0.2 percent already taken on these prints. Sellers receive 99.8 percent."} />} v={`${moneyText(traded.fee, quoteUnit, okbRate)} ${unitName}`} s={zh ? "只算已经读到的成交" : "Of the prints read"} />
-            </div>
-            <p className="px-3 py-2 text-[11px] leading-5 text-ink/50">{zh ? "点左边价格，这一档会填进右边下单栏。指定成交在每一行右侧，格子里先空着，提示是这一档的上限。不填数量，按钮不会亮。" : "The price fills the ticket on the right. Direct fill sits at the end of the row. The box starts empty and shows that level's cap. The button stays off until you type a size."}</p>
+            {miss ? <p className="shrink-0 px-2 py-2 text-xs text-ink/55">{zh ? "这一次没读到。不写成 0。" : "This read missed. It is not shown as zero."}</p> : null}
           </article>
-          <article className="mt-3 border border-gold bg-card">
-            <div className="grid grid-cols-2 border-b border-gold">
+          <article className="mt-2 flex h-72 shrink-0 flex-col overflow-hidden border border-gold bg-card lg:mt-0 lg:h-[30%] lg:max-h-52 lg:border-0 lg:border-t lg:border-gold">
+            <div className="grid shrink-0 grid-cols-2 border-b border-gold">
               <button type="button" onClick={() => setTab("tape")} className={`min-h-10 text-sm ${tab === "tape" ? "bg-ink text-paper" : ""}`}>{zh ? "成交" : "Prints"}</button>
               <button type="button" onClick={() => setTab("mine")} className={`min-h-10 text-sm ${tab === "mine" ? "bg-ink text-paper" : ""}`}>{zh ? "我的挂单" : "My orders"}</button>
             </div>
-            <div className="max-h-52 overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto">
             {tab === "tape" ? (
               <ul>
-                {prints.length === 0 ? <li className="px-3 py-3 text-sm text-ink/60">{reading ? (zh ? "正在把成交从链上读回来。" : "Reading prints from the chain.") : (zh ? "这本账还没有成交。" : "No prints on this book.")}</li> : null}
-                {prints.slice(0, 24).map((row) => (
-                  <li key={`${row.tx}-${row.base}`} className="grid grid-cols-[1fr_1fr_auto] gap-2 border-t border-gold/30 px-3 py-2 font-mono text-xs sm:grid-cols-4">
-                    <span>{moneyText(row.price, quoteUnit, okbRate)}</span>
-                    <span className="truncate">{baseText(market, row.base)}</span>
-                    <span className="hidden sm:block">{moneyText(row.quote, quoteUnit, okbRate)}</span>
-                    <a className="text-right underline" href={`${XLAYER.explorer}/tx/${row.tx}`} target="_blank" rel="noreferrer">{zh ? "链上" : "Tx"}</a>
+                {prints.length === 0 ? <li className="px-3 py-3 text-sm text-ink/45">{reading ? (zh ? "读取中" : "Reading") : (zh ? "没有成交" : "None")}</li> : null}
+                {prints.slice(0, 24).map((row) => {
+                  const ts = clock ? blockStamp(row.block) : 0;
+                  const time = ts ? new Intl.DateTimeFormat(zh ? "zh-CN" : "en-GB", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(ts * 1000)) : "—";
+                  return (
+                  <li key={`${row.tx}-${row.base}`} className="flex items-center gap-2 border-t border-gold/30 px-3 py-2 font-mono text-xs">
+                    <span className="w-16 shrink-0 text-ink/55 sm:w-24">{time}</span>
+                    <span className="min-w-0 flex-1 truncate">{moneyText(row.price, quoteUnit, okbRate)}</span>
+                    <span className="w-16 shrink-0 truncate text-right sm:w-24">{baseText(market, row.base)}</span>
+                    <a className="shrink-0 underline" href={`${XLAYER.explorer}/tx/${row.tx}`} target="_blank" rel="noreferrer">{zh ? "链上" : "Tx"}</a>
                   </li>
-                ))}
-                {prints.length > 24 ? <li className="px-3 py-2 text-[11px] text-ink/50">{zh ? `还有 ${prints.length - 24} 笔更早的，已经算进上面的笔数和交易量。` : `${prints.length - 24} older prints are already in the count and volume above.`}</li> : null}
+                  );
+                })}
+                {prints.length > 24 ? <li className="px-3 py-2 font-mono text-[11px] text-ink/40">+{prints.length - 24}</li> : null}
               </ul>
             ) : (
               <ul>
-                {orders.length === 0 ? <li className="px-3 py-3 text-sm text-ink/60">{zh ? "这本账上没有你的挂单。" : "You have no resting order on this book."}</li> : null}
+                {orders.length === 0 ? <li className="px-3 py-3 text-sm text-ink/45">{zh ? "没有挂单" : "None"}</li> : null}
                 {orders.map((row) => (
                   <li key={row.id.toString()} className="grid items-center gap-2 border-t border-gold/30 px-3 py-2 text-xs sm:grid-cols-[4rem_1fr_1fr_auto]">
                     <span className={row.bid ? "text-[#089981]" : "text-[#f23645]"}>{row.bid ? (zh ? "买" : "Bid") : (zh ? "卖" : "Ask")}</span>
@@ -452,18 +482,8 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
             </div>
           </article>
           </div>
-          <div className={`${ticketOpen ? "fixed inset-x-0 bottom-12 z-40 max-h-[78dvh] overflow-y-auto border-t border-gold bg-paper px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-plate lg:static lg:z-auto lg:max-h-none lg:overflow-visible lg:border lg:bg-card lg:p-3 lg:shadow-none" : "fixed inset-x-0 bottom-12 z-40 border-t border-gold bg-paper px-3 py-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:static lg:z-auto lg:border lg:bg-card lg:p-3"}`}>
-            <div className="grid grid-cols-2 gap-2 lg:hidden">
-              {ticketOpen ? (
-                <button type="button" className="col-span-2 min-h-9 text-xs text-ink/60" onClick={() => setTicketOpen(false)}>{zh ? "收起" : "Close"}</button>
-              ) : (
-                <>
-                  <button type="button" className="min-h-11 bg-[#089981] text-sm text-white" onClick={() => { setSide("buy"); setTicketOpen(true); }}>{zh ? "买入" : "Buy"}</button>
-                  <button type="button" className="min-h-11 bg-[#f23645] text-sm text-white" onClick={() => { setSide("sell"); setTicketOpen(true); }}>{zh ? "卖出" : "Sell"}</button>
-                </>
-              )}
-            </div>
-            <div className={ticketOpen ? "mt-2 lg:mt-0" : "hidden lg:block"}>
+          <div className="mt-2 border border-gold bg-card p-3 lg:mt-0 lg:h-full lg:overflow-y-auto lg:border-0 lg:border-l lg:border-gold">
+            <div>
             <div className="grid grid-cols-2 border border-gold">
               <button type="button" onClick={() => setSide("buy")} className={`min-h-11 text-sm ${side === "buy" ? "bg-[#089981] text-white" : "text-[#089981]"}`}>{zh ? "买入" : "Buy"}</button>
               <button type="button" onClick={() => setSide("sell")} className={`min-h-11 text-sm ${side === "sell" ? "bg-[#f23645] text-white" : "text-[#f23645]"}`}>{zh ? "卖出" : "Sell"}</button>
@@ -478,11 +498,11 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
             </label>
             <div className="mt-2 grid grid-cols-2 border border-gold/40">
               <p className="px-2 py-2">
-                <span className="block text-[10px] tracking-wide text-ink/45">{zh ? "可买入" : "Can buy"}</span>
+                <span className="block text-xs text-ink/45">{zh ? "可买入" : "Can buy"}</span>
                 <span className="font-mono text-sm">{purse ? `${usdtText(purse.usdt, 2)} USDT0` : "—"}</span>
               </p>
               <p className="border-l border-gold/40 px-2 py-2">
-                <span className="block text-[10px] tracking-wide text-ink/45">{zh ? "可卖出" : "Can sell"}</span>
+                <span className="block text-xs text-ink/45">{zh ? "可卖出" : "Can sell"}</span>
                 <span className="font-mono text-sm">{purse ? `${baseText(market, market === 0 ? purse.tape : market === 1 ? purse.nand : purse.latch)} ${name}` : "—"}</span>
               </p>
             </div>
@@ -493,27 +513,44 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
             </div>
             <Quote zh={zh} market={market} side={side} price={price} amount={amount} unit={quoteUnit} rate={okbRate} />
             <Plan zh={zh} market={market} side={side} price={price} amount={amount} asks={asks} bids={bids} purse={purse} name={name} unit={quoteUnit} rate={okbRate} />
-            {quoteUnit === "okb" ? <p className="mt-2 text-xs leading-5 text-ink/70">{(() => { try { return zh ? `钱包要签的是 ${usdtText(typedUsdt(price, "okb", okbRate), 4)} USDT0。OKB 只是池子折算，池子一动这个数就变。` : `The wallet signs ${usdtText(typedUsdt(price, "okb", okbRate), 4)} USDT0. OKB is only a pool conversion.`; } catch { return zh ? "还没读到 OKB 池子价，这一笔不会按 OKB 签。" : "No OKB pool price yet. This order will not be signed in OKB."; } })()}</p> : null}
-            <p className="mt-2 text-xs leading-5 text-ink/60">
-              {zh ? "两边都按钱包余额。买入切 USDT0，卖出切这种币。买方按价格付，卖方实收 99.8%。这一本订单簿的千分之二整笔进收费地址，合约里没有邀请人。永续、现货、加池、官方晶体管和官方电路，按邀请人 6%、少付 4%、收费地址 90% 拆。电路容器的开通费是协议的 BNB，不走这笔台费。" : "Both figures are the wallet. The buyer pays the price. The seller receives 99.8 percent. This book's 0.2 percent goes entirely to the fee address. Perps, spot, pools you add, official transistors, and official circuits split a referrer at 6%, 4% off, and 90%. A circuit container's open fee is protocol BNB, not this site fee."}
-            </p>
-            {ownHit ? <p className="mt-2 text-sm leading-6 text-sell">{zh ? `这个价会碰到你自己的${ownHit.bid ? "买单" : "卖单"} ${usdtText(ownHit.price, 4)}。同一个钱包不能互吃，点下去会被整笔拒绝。先撤掉，或改一个碰不到的价格。` : `This price reaches your own ${ownHit.bid ? "bid" : "ask"} at ${usdtText(ownHit.price, 4)}. The same wallet cannot take it. Cancel it, or move the price.`}</p> : null}
+            {quoteUnit === "okb" ? <p className="mt-2 font-mono text-xs text-ink/55">{(() => { try { return `USDT0 ${usdtText(typedUsdt(price, "okb", okbRate), 4)}`; } catch { return "—"; } })()}</p> : null}
+            {ownHit ? <p className="mt-2 text-sm text-sell">{zh ? "碰到自己的单。先撤掉。" : "That hits your own order. Cancel it first."}</p> : null}
             <button type="button" disabled={busy || Boolean(ownHit)} className={`mt-3 min-h-12 w-full text-sm text-white disabled:opacity-40 ${side === "buy" ? "bg-[#089981]" : "bg-[#f23645]"}`} onClick={() => {
               let px = 0n;
-              try { px = typedUsdt(price, quoteUnit, okbRate); } catch { setBad(true); setNote(zh ? "OKB 价格还没读到，先用 USDT0。" : "The OKB price is not in yet. Use USDT0."); return; }
-              run(() => placeSpot(account ?? "", market, side === "buy", px, spotBase(market, amount)), zh ? "已进订单簿。没有对手的部分继续挂着，不会消失。" : "It is on the book. Whatever did not meet another order stays there.");
+              let qty = 0n;
+              try {
+                px = typedUsdt(price, quoteUnit, okbRate);
+                qty = spotBase(market, amount);
+              } catch (err) {
+                setBad(true);
+                const text = err instanceof Error ? err.message : "";
+                setNote(text === "amount" ? (zh ? "数量不对。NAND 和 LATCH 只收整数。" : "The amount is not valid. NAND and LATCH are whole numbers.") : (zh ? "价格不对。OKB 价还没读到时先用 USDT0。" : "The price is not valid. Use USDT0 if the OKB price is not in yet."));
+                return;
+              }
+              run(() => placeSpot(account ?? "", market, side === "buy", px, qty), zh ? "已进订单簿。没有对手的部分继续挂着，不会消失。" : "It is on the book. Whatever did not meet another order stays there.");
             }}>
               {side === "buy" ? (zh ? `买入 ${name}` : `Buy ${name}`) : (zh ? `卖出 ${name}` : `Sell ${name}`)}
             </button>
+            {note ? <p className={`mt-2 text-sm leading-6 ${bad ? "text-sell" : ""}`}>{note}</p> : null}
+            <details className="mt-3 text-xs text-ink/45">
+              <summary className="cursor-pointer">{zh ? "说明" : "Notes"}</summary>
+              <p className="mt-2 leading-5">{zh ? "点价格、数量或总额，右边的买卖和价格会跟着变。行尾不填就是这一档全部，填了不能超过这一档。卖方实收 99.8%。" : "A price, a size, or a total fills the ticket. Buy and sell follow that row. A blank size takes the whole level. A typed size cannot pass it. The seller receives 99.8%."}</p>
+            </details>
             </div>
           </div>
         </div>
       )}
-      <p className="break-all text-[11px] text-ink/45">
-        <a className="underline" href={`${XLAYER.explorer}/address/${spot}`} target="_blank" rel="noreferrer">{spot}</a>
-      </p>
-      {note ? <p className={`text-sm leading-6 ${bad ? "text-sell" : ""}`}>{note}</p> : null}
     </section>
+  );
+  if (choices.length < 2) return book;
+  return (
+    <SideRail items={choices.map((id) => ({
+      key: String(id),
+      label: id === "circuit" ? (zh ? "电路 · TAPELIQUID" : "Circuits") : id === "cap" ? (zh ? "容器 · TAPELIQUID" : "Box") : id === 0 ? "TAPE" : `${NAMES[id]} · TAPELIQUID`,
+      on: lane === id,
+      run: () => setLane(id),
+    }))}>
+      {book}
     </SideRail>
   );
 }

@@ -87,6 +87,17 @@ export type TapeWire = {
 
 const cache = new Map<string, { at: number; body: TapeWire }>();
 
+async function multicallAll(contracts: readonly unknown[], size = 512) {
+  const slices: unknown[][] = [];
+  for (let i = 0; i < contracts.length; i += size) slices.push(contracts.slice(i, i + size));
+  const out: { status: string; result?: unknown }[] = [];
+  for (let i = 0; i < slices.length; i += 3) {
+    const parts = await Promise.all(slices.slice(i, i + 3).map((slice) => client.multicall({ contracts: slice as never, allowFailure: true })));
+    for (const part of parts) out.push(...(part as { status: string; result?: unknown }[]));
+  }
+  return out;
+}
+
 function dailyAt(start: bigint): bigint {
   const era = (BigInt(Math.floor(Date.now() / 1000)) - start) / HALVING;
   if (era < 0n || era >= 64n) return 0n;
@@ -212,11 +223,7 @@ async function ownerCensus(last: number): Promise<Census> {
       { address: CIRCUITS, abi: circuitAbi, functionName: "ownerOf" as const, args: [BigInt(id)] as const },
       { address: MINE, abi: mineAbi, functionName: "seat" as const, args: [BigInt(id)] as const },
     ]);
-    const owned: { status: string; result?: unknown }[] = [];
-    for (let i = 0; i < calls.length; i += 240) {
-      const part = await client.multicall({ contracts: calls.slice(i, i + 240) as never, allowFailure: true, batchSize: 1024 });
-      owned.push(...(part as { status: string; result?: unknown }[]));
-    }
+    const owned = calls.length ? await multicallAll(calls) : [];
     const owners = new Map<string, number[]>();
     let open = 0;
     let staked = 0;
@@ -253,19 +260,15 @@ async function ownerCensus(last: number): Promise<Census> {
     if (missed > Math.max(8, Math.floor(ids.length / 20))) throw new Error("scan");
     let pendingNet = 0n;
     let pendingStaked = 0n;
-    for (let i = 0; i < openIds.length; i += 180) {
-      const slice = openIds.slice(i, i + 180);
-      const part = await client.multicall({
-        contracts: slice.map((id) => ({ address: MINE, abi: mineAbi, functionName: "pendingOf" as const, args: [BigInt(id)] as const })),
-        allowFailure: true,
-        batchSize: 180,
-      });
-      part.forEach((row, index) => {
-        const amt = row.status === "success" && typeof row.result === "bigint" ? row.result : 0n;
-        pendingNet += amt;
-        if (stakedOn.has(slice[index])) pendingStaked += amt;
-      });
-    }
+    const pendingRows = openIds.length
+      ? await multicallAll(openIds.map((id) => ({ address: MINE, abi: mineAbi, functionName: "pendingOf" as const, args: [BigInt(id)] as const })))
+      : [];
+    openIds.forEach((id, index) => {
+      const row = pendingRows[index];
+      const amt = row?.status === "success" && typeof row.result === "bigint" ? row.result : 0n;
+      pendingNet += amt;
+      if (stakedOn.has(id)) pendingStaked += amt;
+    });
     census = { at: Date.now(), last, open, staked, stakedLive, stakedWeight, pendingNet, pendingStaked, owners };
     return census;
   })().finally(() => {
@@ -286,24 +289,25 @@ export async function loadTapeSeats(account: string | null): Promise<TapeWire> {
     { address: CIRCUITS, abi: circuitAbi, functionName: "circuitInfo" as const, args: [BigInt(id)] as const },
     { address: MINE, abi: mineAbi, functionName: "pendingOf" as const, args: [BigInt(id)] as const },
     { address: MINE, abi: mineAbi, functionName: "seat" as const, args: [BigInt(id)] as const },
+    { address: CIRCUITS, abi: circuitAbi, functionName: "ownerOf" as const, args: [BigInt(id)] as const },
   ]);
-  const detail: { status: string; result?: unknown }[] = [];
-  for (let i = 0; i < detailCalls.length; i += 180) {
-    const part = await client.multicall({ contracts: detailCalls.slice(i, i + 180) as never, allowFailure: true, batchSize: 180 });
-    detail.push(...(part as { status: string; result?: unknown }[]));
-  }
+  const detail = detailCalls.length ? await multicallAll(detailCalls) : [];
   const seats: TapeWire["seats"] = [];
   for (let i = 0; i < mineIds.length; i += 1) {
-    const info = detail[i * 3];
-    const pending = detail[i * 3 + 1];
-    const seat = detail[i * 3 + 2];
+    const info = detail[i * 4];
+    const pending = detail[i * 4 + 1];
+    const seat = detail[i * 4 + 2];
+    const holder = detail[i * 4 + 3];
     const infoRow = info?.status === "success" && Array.isArray(info.result) ? info.result : null;
     const pendingAmt = pending?.status === "success" && typeof pending.result === "bigint" ? pending.result : null;
     const seatRow = seat?.status === "success" && Array.isArray(seat.result) ? seat.result : null;
+    const ownerAddr = holder?.status === "success" && typeof holder.result === "string" ? holder.result.toLowerCase() : "";
     if (!infoRow || pendingAmt == null || !seatRow) continue;
     const gates = infoRow[3];
     if (typeof gates !== "bigint") continue;
     const on = Boolean(seatRow[3]);
+    const seatOwner = typeof seatRow[0] === "string" ? seatRow[0].toLowerCase() : "";
+    if (ownerAddr !== who && !(on && seatOwner === who)) continue;
     const share = on && row.weight > 0n ? (row.daily * gates) / row.weight : 0n;
     seats.push({ id: String(mineIds[i]), gates: gates.toString(), on, pending: pendingAmt.toString(), share: text(share) });
   }

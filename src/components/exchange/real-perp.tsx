@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { formatUnits, parseUnits } from "viem";
 import { copy } from "@/lib/copy";
-import { BSC, FEE_TO, connectBsc, ercPrice, pretty, tokenCap, units, type Balances } from "@/lib/bsc";
+import { BSC, FEE_TO, connectBsc, poolMark, pretty, tokenCap, units, type Balances } from "@/lib/bsc";
 import { getCandles, getCoinCandles, getXCandles, type Candle, type CandleFrame } from "@/lib/candles";
 import { currentAccount, onAccount, onOpenLink } from "@/lib/wallet";
 import { useExchange } from "@/lib/exchange-store";
@@ -38,6 +38,7 @@ import { connectXLayer, XLAYER } from "@/lib/xlayer";
 import { TAPE_BEM } from "@/lib/tape-pool";
 import { xCap } from "@/lib/okb";
 import { SideRail } from "@/components/exchange/side-rail";
+import { SymbolMenu } from "@/components/exchange/symbol-menu";
 
 function short(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
@@ -355,7 +356,7 @@ export function RealPerp() {
       getCoinCandles({ data: { coin, frame } })
         .then((next) => { if (!dead && next.length) setPrices(next); })
         .catch(() => undefined);
-      ercPrice(coin)
+      poolMark(coin)
         .then((text) => {
           const n = Number(String(text).replace(/,/g, ""));
           if (dead || !(n > 0)) return;
@@ -512,18 +513,19 @@ export function RealPerp() {
       { key: "xlayer", label: "X Layer · USDT", on: chain === "xlayer", run: () => { selectDesk("xlayer"); setChain("xlayer"); setPerp(bookOf("xlayer")); connectXLayer().catch(() => undefined); } },
     ]}>
     {chain === "bsc" ? (
-      <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">
-        {(["bem", "btc", "eth", "zec"] as const).map((id) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setCoin(id)}
-            className={`flex min-h-16 flex-col justify-center border px-3 py-2 text-left ${coin === id ? "border-ink bg-foil ring-1 ring-ink" : "border-gold/80 bg-card"}`}
-          >
-            <span className="font-mono text-sm tracking-wide sm:text-[15px]">{id.toUpperCase()} / USDT</span>
-            <span className="mt-0.5 text-[11px] text-ink/55">{lang === "zh" ? "BSC · 永续" : "BSC · Perp"}</span>
-          </button>
-        ))}
+      <div className="mb-3">
+        <SymbolMenu
+          zh={lang === "zh"}
+          label={`${base} / USDT`}
+          note="BSC"
+          items={(["bem", "btc", "eth", "zec"] as const).map((id) => ({
+            id,
+            title: `${id.toUpperCase()} / USDT`,
+            note: lang === "zh" ? "BSC · 永续" : "BSC · Perp",
+            on: coin === id,
+            run: () => setCoin(id),
+          }))}
+        />
       </div>
     ) : null}
     <section className="border border-gold bg-card shadow-plate">
@@ -617,7 +619,7 @@ export function RealPerp() {
           </a>
         ) : null}
         <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(17rem,22rem)]">
-        <div className="order-2 min-w-0 border border-gold bg-card lg:order-1">
+        <div className="order-1 min-w-0 border border-gold bg-card lg:order-1">
           <div className="flex flex-wrap items-end justify-between gap-3 border-b border-gold/30 px-3 py-3">
             <div>
               <p className="font-display text-2xl italic">{chain === "xlayer" ? "BEM / USDT0 · X Layer" : `${base} / USDT · BSC`}</p>
@@ -627,7 +629,7 @@ export function RealPerp() {
                   ? (lang === "zh" ? "标记是约 10 分钟均价。K 线是池子成交，不跟 BSC 同步。" : "The mark is about a 10-minute average. Candles are pool prints and do not follow BSC.")
                   : alt
                     ? (lang === "zh" ? "和 BEM 同一套 K 线，周期从 15 秒到一年。标记读这口 Pancake 池大约 10 分钟均价，不是最后一笔。" : "The same chart as BEM, from 15 seconds to a year. The mark is about a 10-minute average of this Pancake pool, not the last print.")
-                    : (lang === "zh" ? "标记是约 10 分钟均价，不是 K 线最后一笔。" : "The mark is about a 10-minute average, not the last candle.")}
+                    : (lang === "zh" ? "标记和现货是同一口 Pancake 池的现价，不是另一套价。" : "The mark is the same Pancake pool price as spot, not a second price.")}
                 {!alt && /^0x[a-fA-F0-9]{40}$/.test(perp) ? (
                   <>
                     {" "}
@@ -643,7 +645,7 @@ export function RealPerp() {
             </div>
           </div>
           <div className="flex flex-col gap-2 px-3 pt-2">
-            <div className="flex w-full flex-wrap border border-gold">
+            <div className="flex w-full overflow-x-auto border border-gold">
               {(
                 [
                   ["15s", "15秒", "15s"],
@@ -665,7 +667,6 @@ export function RealPerp() {
               ))}
             </div>
           </div>
-          <div className="max-h-64 overflow-hidden lg:max-h-none">
           <Kline
             bars={
               prices.length
@@ -680,7 +681,6 @@ export function RealPerp() {
             lang={lang}
             desk="perp"
           />
-          </div>
           <DeskLadder
             rows={board}
             mark={markN}
@@ -699,7 +699,7 @@ export function RealPerp() {
           {!view ? <p className="px-3 py-2 text-sm text-ink/60">{lang === "zh" ? "正在读合约，读完才能开仓。" : "Reading the contract. Open waits until that finishes."}</p> : null}
           {lock.status === "bad" ? <p className="px-3 pb-2 text-sm text-sell">{lang === "zh" ? "收费地址对不上，开仓停了。" : "The fee address does not match. Opening is stopped."}</p> : null}
         </div>
-        <div className="order-1 flex min-w-0 flex-col gap-3 lg:sticky lg:top-3 lg:order-2 lg:max-h-[calc(100dvh-1.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:pb-6 lg:pr-1">
+        <div className="order-2 flex min-w-0 flex-col gap-3 lg:sticky lg:top-3 lg:order-2 lg:max-h-[calc(100dvh-1.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:pb-6 lg:pr-1">
         {view?.liveDeals.length ? (
         <div className="border border-gold/40 p-3">
           <p className="text-xs tracking-widest text-gold">{c.pkTitle}</p>
@@ -898,7 +898,7 @@ export function RealPerp() {
                         <span className="block text-xs tracking-widest text-gold">{c.limitPrice}</span>
                         <input value={limit} onChange={(event) => setLimit(event.target.value)} inputMode="decimal" className="w-full bg-transparent font-mono text-3xl outline-none" />
                       </label>
-                    ) : <p className="text-xs leading-5 text-ink/60">{lang === "zh" ? "这一单用标记价。标记是大约 10 分钟的均价，不是 K 线最后一笔。" : "This order uses the mark. The mark is about a 10-minute average, not the last candle."}</p>}
+                    ) : <p className="text-xs leading-5 text-ink/60">{lang === "zh" ? "按标记价成交。标记为约 10 分钟均价，不是最后一根 K 线。" : "Fills at the mark. The mark is about a 10-minute average, not the last candle."}</p>}
                   </>
                 ) : null}
                 {mode === "pro" ? (
@@ -923,8 +923,8 @@ export function RealPerp() {
                   {c.useMark}{view?.mark ? ` $${pxText(view.mark)}` : ""}
                 </button>
                 ) : null}
-                {mode === "pro" ? <p className="text-xs leading-relaxed text-ink/60">{lang === "zh" ? "谁都可以挂单。价差和深度没有平台下限。撤单未确认时，单仍在合约里。做市激励和积分尚未开始。" : "Anyone can quote. There is no platform minimum for spread or depth. If a cancel is not confirmed, the order stays in the contract. Maker rewards and points have not started."}</p> : null}
-                <p className="text-sm leading-relaxed text-ink/70">{mode === "pro" ? c.priceNote : lang === "zh" ? "新手最高 20 倍。更高倍数在高级里，超过 20 倍要再确认一次。" : "Beginner stops at 20x. Higher multiples are in Advanced, and anything over 20x asks again."}</p>
+                {mode === "pro" ? <p className="text-xs leading-relaxed text-ink/60">{lang === "zh" ? "挂单无价差与深度下限。撤单未确认前，订单仍在合约中。做市激励尚未开始。" : "No minimum spread or depth. An unconfirmed cancel remains on the contract. Maker rewards have not started."}</p> : null}
+                <p className="text-sm leading-relaxed text-ink/70">{mode === "pro" ? c.priceNote : lang === "zh" ? "新手档杠杆不超过 20 倍。20 倍以上在高级，并需再次确认。" : "Simple mode caps leverage at 20×. Higher leverage is in Advanced and asks for a second confirmation."}</p>
                 <div className="border border-gold/40 p-3">
                   <div className="grid grid-cols-3 gap-2">
                     {(["easy", "pro", "off"] as const).map((item) => (
@@ -1044,15 +1044,15 @@ export function RealPerp() {
                     warn={
                       alt
                         ? lang === "zh"
-                          ? "这一张单和 BEM 相同。这条交易对的结算合约还没接上，确认不会签名，USDT 也不会扣，也不会去买现货。"
-                          : "This ticket matches BEM. This pair's settlement contract is not attached, so confirm does not sign, does not take USDT, and does not buy spot."
+                          ? "本交易对与 BEM 使用同一张下单卡。结算合约未接入，确认不会签名，也不会扣除 USDT。"
+                          : "This ticket matches BEM. Settlement is not attached, so confirm does not sign and does not take USDT."
                         : board.length === 0
                         ? lang === "zh"
-                          ? "簿上没有别人的单。签下去只是把保证金挂进合约，不会马上成交。想先看盈亏，去模拟。"
-                          : "Nobody else is on the book. Signing only posts margin into the contract. It does not fill. Use the paper book if you want to see PnL first."
+                          ? "订单簿暂无对手方。签名仅将保证金挂入合约，不会立即成交。"
+                          : "The book has no counterparty. Signing only posts margin. It does not fill."
                         : lang === "zh"
-                          ? "两链不能合成一笔。钱包不在这条链时，签名前会切过去。"
-                          : "The two chains do not net. If the wallet is on the other chain, it switches before the signature."
+                          ? "BSC 与 X Layer 不能合并仓位。钱包不在当前链时，签名前会切换。"
+                          : "BSC and X Layer do not net. The wallet switches to this chain before the signature."
                     }
                     onNo={() => setCard(null)}
                     onYes={() => {
