@@ -15,9 +15,11 @@ const zh: Section[] = [
   {
     h: "电路朋克",
     ps: [
-      "电路朋克，符号 CPUNK，是本站的创世 NFT。它是第一款电路朋克，也是唯一一款。TapeOut 上已经流片的创世电路仍是协议原件，买卖走官网市场。电路朋克不是那一批的复制，本站也不再另开第二套。",
-      "总量一万。七千张预留，不进公开铸造，预留要一笔领一张。三千张公开铸造，价锁在 1 TAPE 加 0.001 BEM，单人最多 10 次。只有名称正好是「电路朋克」时，创建才会把本站图片地址写进合约。改了名称，图片地址留空，那就不是电路朋克。工厂合约不按名字拒绝第二次创建。别人若用同一名字再调工厂，链上拦不住，但那不是这一款，本站也不会再发一套图。",
-      "每一张按编号现算，24×24 像素，不上传原图，也不临摹商标和真人。种类是极紫外晶粒 9、键合巨像 24、报废晶粒 88，其余按晶圆人像、吉祥晶粒、对准标记、缺陷图样、纪念版图的比例排开。衬底、金属层、对准、键合、封装跟编号走。创建签名上链之后，图片地址写死，不能改。在那之前，图只在本站。",
+      "电路朋克，符号 CPUNK，是本站的创世 NFT，也是向中本聪的一揖。中本聪留下的是一套不必求人的账本。TapeOut 把每一次流片写成自己的编年。这一万张像素是那本编年里的纪念，不是创世电路的仿品，不画商标，也不画真人。",
+      "它是第一款电路朋克，也只此一套。24×24 的格子里，衬底、金属层、对准、键合、封装都跟编号走。极紫外晶粒 9 枚，键合巨像 24 尊，报废晶粒 88 片，其余按晶圆人像、吉祥晶粒、对准标记、缺陷图样、纪念版图的比例排开。TapeOut 上已经流片的创世电路仍是协议原件，买卖走官网市场。本站不再另开第二套。",
+      "合约在 X Layer：0xB5ac1dddc158a639D4499aad2d8F393989D4bD34。总量一万。三千张公开铸造，价锁在 1 TAPE 加 0.001 BEM，一个钱包最多 10 次，编号从 7001 起，这一轮还没开铸。七千张是预留，不进公开价。图片地址 https://tapeliquid.net/api/circuit-punk/ 已经写死，不能改。只有名称正好是「电路朋克」，这一款才认这套图。工厂不按名字拦第二次创建。别人再调一次，链上拦不住，但那不是这一款。",
+      "预留先谢过先来的人。TapeCode-Test1 一号是火星人 @bitcoin2themars，地址 0xddb587D88C0AFa42317E033bDD11edC2462B873f，领 51 到 150 号，一百张。8855 号是 TapeOut 协议创始人 @Blonskr，地址 0x571d447f4f24688eC35Ccf07f1D6993655F6aF15，领 1 到 50 号。TapeCode 的持有地址一人一张，1000 到 6019，共 5020 张。本站电路的持有地址一人一张，151 到 369，共 219 张。销毁地址里的 TapeCode 没有份。",
+      "还没领出的预留是 1611 张：370 到 999，以及 6020 到 7000。这 1611 张留给基金会，做以后的新计划，不进公开铸造，仍要创建者一笔领一张。",
     ],
   },
   {
@@ -61,7 +63,7 @@ const zh: Section[] = [
     ps: [
       "官网晶体管的最新价和最高买价来自 tapeout.net。挂买单、卖给买价，发到官网同一份 BSC 合约 0xA6a80C1919a8326022d7c601a488888C13aA16E4。",
       "在 tapeout.net 流片得到的电路本来就是 ERC-721。本站展示的是同一枚，不套用 1 TAPE 对 0.001 BEM，也不另开一份市场。有挂单的，购买是直接签官网市场 0x6feEbbEbC07BcB90bd1Ac8b0CF9BaA4f0fF2B46f，一笔签名，不先扣本站手续费。没挂单的不能买。",
-      "TapeCode-Test1 是 X Layer 合集，合约 0x0e91460d6823c711643e650a9a4c0cc21de41614。OKX 的公开接口没有成交签名，所以 OKX 上的价格不能在这里吃。持有人可以在本站另挂一笔，买家付 OKB，经 X Layer 上的 Seaport 成交。以太坊上的 OpenSea 系列只有地板价，没有签名，不能在这条链上成交，页面也不跳走。",
+      "TapeCode-Test1 是 X Layer 合集，合约 0x0e91460d6823c711643e650a9a4c0cc21de41614。一号是火星人 @bitcoin2themars。8855 号是 TapeOut 协议创始人 @Blonskr。两人在电路朋克里的编号写在上一章。OKX 的公开接口没有成交签名，所以 OKX 上的价格不能在这里吃。持有人可以在本站另挂一笔，买家付 OKB，经 X Layer 上的 Seaport 成交。以太坊上的 OpenSea 系列只有地板价，没有签名，不能在这条链上成交，页面也不跳走。",
     ],
   },
   {
@@ -95,9 +97,11 @@ const en: Section[] = [
   {
     h: "Circuit Punk",
     ps: [
-      "Circuit Punk, symbol CPUNK, is this site's genesis NFT. It is the first circuit-punk collection, and the only one. Genesis circuits already taped out on TapeOut stay the protocol originals and still trade on the official market. Circuit Punk is not a copy of that set, and this site will not open a second one.",
-      "Supply is 10,000. 7,000 are reserved and skip the public mint. Each reserved token is claimed with its own signature. 3,000 are public, locked at 1 TAPE plus 0.001 BEM, at most 10 mints a wallet. The image address is written into the contract only when the name is exactly 电路朋克. Any other name leaves that address empty, and that project is not Circuit Punk. The factory does not refuse a second create that reuses the name. Such a call is not this collection, and this site will not publish a second set of pictures.",
-      "Each token is drawn from its number, 24 by 24 pixels. No source file is uploaded. Trademarks and real people are not copied. The census is 9 extreme-ultraviolet dies, 24 bond colossi, and 88 scrap dies. The rest follow the split of wafer portraits, mascot dies, alignment marks, defect patterns, and memorial layouts. Substrate, metal, alignment, bond, and package follow the number. After the create receipt the image address is fixed. Before that, the pictures live only on this site.",
+      "Circuit Punk, symbol CPUNK, is this site's genesis NFT, and a bow to Satoshi. What he left was a ledger that does not ask permission. TapeOut keeps its chronicle in every tape-out. These ten thousand pixels are a page of that chronicle, not a copy of the genesis circuits, and not a drawing of a trademark or a face.",
+      "It is the first circuit-punk collection, and the only one. On a 24 by 24 grid, substrate, metal, alignment, bond, and package follow the number. Nine extreme-ultraviolet dies, twenty-four bond colossi, eighty-eight scrap dies. The rest follow wafer portraits, mascot dies, alignment marks, defect patterns, and memorial layouts. Genesis circuits already taped out on TapeOut stay the protocol originals and still trade on the official market. This site will not open a second set.",
+      "The contract on X Layer is 0xB5ac1dddc158a639D4499aad2d8F393989D4bD34. Supply is 10,000. Three thousand are public, locked at 1 TAPE plus 0.001 BEM, at most ten mints a wallet, numbered from 7001, and not yet opened. Seven thousand were reserved and never entered the public price. The image address https://tapeliquid.net/api/circuit-punk/ is fixed. Only the name 电路朋克 belongs to this set of pictures. The factory does not refuse a second create that reuses the name. Such a call is not this collection.",
+      "The reserve first thanks the people who were already here. TapeCode-Test1 number 1 is the Martian, @bitcoin2themars, at 0xddb587D88C0AFa42317E033bDD11edC2462B873f, and holds 51 through 150, one hundred tokens. Number 8855 is @Blonskr, founder of the TapeOut protocol, at 0x571d447f4f24688eC35Ccf07f1D6993655F6aF15, and holds 1 through 50. Each TapeCode holder address received one, 1000 through 6019, 5,020 tokens. Each holder of this site's circuits received one, 151 through 369, 219 tokens. TapeCode in the burn address was left out.",
+      "What is still unclaimed is 1,611: 370 through 999, and 6020 through 7000. Those 1,611 stay for the foundation's later plans. They do not enter the public mint, and the creator still claims them one by one.",
     ],
   },
   {
@@ -141,7 +145,7 @@ const en: Section[] = [
     ps: [
       "Official transistor prices come from tapeout.net. Bids and sales go to the same BSC contract, 0xA6a80C1919a8326022d7c601a488888C13aA16E4.",
       "A circuit taped out on tapeout.net is already an ERC-721. This site shows that same token. It does not apply the 1 TAPE to 0.001 BEM price, and it does not run a second market. A listing is bought with one signature on the official market 0x6feEbbEbC07BcB90bd1Ac8b0CF9BaA4f0fF2B46f. Nothing is charged first. An unlisted circuit cannot be bought.",
-      "TapeCode-Test1 is an X Layer collection, contract 0x0e91460d6823c711643e650a9a4c0cc21de41614. OKX's public feed has no fill signature, so an OKX price cannot be taken here. A holder can list a new order on this site. The buyer pays OKB through Seaport on X Layer. OpenSea collections on Ethereum are floor prices only. There is no signature, they cannot settle on this chain, and the page does not leave.",
+      "TapeCode-Test1 is an X Layer collection, contract 0x0e91460d6823c711643e650a9a4c0cc21de41614. Number 1 is the Martian, @bitcoin2themars. Number 8855 is @Blonskr, founder of the TapeOut protocol. Their Circuit Punk numbers are in the chapter above. OKX's public feed has no fill signature, so an OKX price cannot be taken here. A holder can list a new order on this site. The buyer pays OKB through Seaport on X Layer. OpenSea collections on Ethereum are floor prices only. There is no signature, they cannot settle on this chain, and the page does not leave.",
     ],
   },
   {
