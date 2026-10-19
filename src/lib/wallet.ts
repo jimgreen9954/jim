@@ -186,6 +186,19 @@ export function getProvider(): Eth | null {
   return current;
 }
 
+export function walletKind(): WalletKind {
+  return kind;
+}
+
+export function disconnectWallet() {
+  const eth = current as (Eth & { disconnect?: () => Promise<unknown> }) | null;
+  void eth?.disconnect?.().catch(() => undefined);
+  current = null;
+  kind = "okx";
+  publishLink(null);
+  remember(null);
+}
+
 export async function ensureProvider(): Promise<Eth> {
   if (current) return current;
   const plugged = kind === "binance" ? binanceInjected() : okxInjected();

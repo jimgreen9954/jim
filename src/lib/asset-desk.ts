@@ -85,7 +85,9 @@ async function midOut(zeroForOne: boolean, amountIn: bigint): Promise<bigint> {
   return (step * Q96) / sqrt;
 }
 
-export async function quoteSwap(pair: SwapPair, side: SwapSide, raw: string): Promise<string> {
+export type SwapQuote = { amount: string; unit: string; venue: "bsc" | "xlayer" };
+
+export async function quoteSwap(pair: SwapPair, side: SwapSide, raw: string): Promise<SwapQuote> {
   if (pair === "bsc-bem") {
     const tokenIn = side === "buy" ? BSC.usdt : BSC.bem;
     const tokenOut = side === "buy" ? BSC.bem : BSC.usdt;
@@ -93,14 +95,14 @@ export async function quoteSwap(pair: SwapPair, side: SwapSide, raw: string): Pr
     const decimalsOut = side === "buy" ? BSC.bemDecimals : BSC.usdtDecimals;
     const out = await quoteExact(tokenIn, tokenOut, amountOf(raw, decimalsIn));
     const unit = side === "buy" ? "BEM" : "USDT";
-    return `大约得到 ${pretty(out, decimalsOut, 4)} ${unit}。报价来自 BSC 报价合约，滑点 1%。`;
+    return { amount: pretty(out, decimalsOut, 4), unit, venue: "bsc" };
   }
   const decimalsIn = side === "buy" ? 18 : 8;
   const out = await midOut(side === "sell", amountOf(raw, decimalsIn));
   if (out <= 0n) throw new Error("tiny");
   const unit = side === "buy" ? "BEM" : "OKB";
   const decimalsOut = side === "buy" ? 8 : 18;
-  return `大约得到 ${show(out, decimalsOut)} ${unit}。这是池子中间价，成交至少要到 95%，实际以钱包为准。`;
+  return { amount: show(out, decimalsOut), unit, venue: "xlayer" };
 }
 
 async function send(from: string, to: Hex, data: Hex, value = 0n): Promise<Hex> {

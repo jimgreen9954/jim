@@ -1,5 +1,6 @@
 import { decodeFunctionResult, encodeFunctionData, formatEther, parseAbi, parseEther, type Abi } from "viem";
-import { currentAccount, getProvider } from "@/lib/wallet";
+import { onLang, t, tf } from "@/lib/locale";
+import { connectKind, currentAccount, getProvider, walletKind } from "@/lib/wallet";
 
 const GENESIS = "0x50A994E71615474b55559fF4F500928fbc339DD9";
 const MARKET = "0x6feEbbEbC07BcB90bd1Ac8b0CF9BaA4f0fF2B46f";
@@ -124,7 +125,7 @@ export function bootGenesis(host: HTMLElement): () => void {
     if (rows.length === 0) {
       const empty = document.createElement("p");
       empty.className = "sub";
-      empty.textContent = mode === "sale" ? "这一页最近的挂单里没有创世电路。翻下一页，或切到「翻全部」。" : "这一页没有电路。";
+      empty.textContent = mode === "sale" ? t("emptySale") : t("emptyAll");
       grid.append(empty);
       return;
     }
@@ -139,9 +140,9 @@ export function bootGenesis(host: HTMLElement): () => void {
       const meta = document.createElement("div");
       meta.className = "meta";
       const title = document.createElement("b");
-      title.textContent = `创世 #${row.tokenId}`;
+      title.textContent = tf("genCard", { id: row.tokenId.toString() });
       const line = document.createElement("span");
-      line.textContent = row.valid && row.price != null ? `在售 ${bnb(row.price)} BNB` : "未挂单";
+      line.textContent = row.valid && row.price != null ? tf("listed", { px: bnb(row.price) }) : t("unlisted");
       meta.append(title, line);
       card.append(mark, meta);
       card.addEventListener("click", () => open(row));
@@ -158,11 +159,11 @@ export function bootGenesis(host: HTMLElement): () => void {
     const link = host.querySelector<HTMLAnchorElement>("#gen-link");
     const buy = host.querySelector<HTMLButtonElement>("#gen-buy");
     const list = host.querySelector<HTMLButtonElement>("#gen-list");
-    if (name) name.textContent = `创世电路 #${row.tokenId}`;
+    if (name) name.textContent = tf("genName", { id: row.tokenId.toString() });
     if (px) {
       px.textContent = row.valid && row.price != null
-        ? `官方挂单 ${bnb(row.price)} BNB，卖家 ${row.seller ? short(row.seller) : "—"}。买家付这个价，市场费 ${fee / 100}% 从里面扣。`
-        : `还没有有效挂单${row.owner ? `，持有人 ${short(row.owner)}` : ""}。不能在这里按一个假价格买。`;
+        ? tf("listedPx", { px: bnb(row.price), seller: row.seller ? short(row.seller) : "—", fee: fee / 100 })
+        : tf("noListing", { owner: row.owner ? tf("ownerBit", { owner: short(row.owner) }) : "" });
     }
     if (link) link.href = `https://bscscan.com/nft/${GENESIS}/${row.tokenId}`;
     if (buy) buy.disabled = !(row.valid && row.price != null && row.listingId != null);
@@ -179,12 +180,12 @@ export function bootGenesis(host: HTMLElement): () => void {
       }
       const minted = total > 0n ? total - 1n : 0n;
       if (note) {
-        note.textContent = `创世处理器 0x50A9…9DD9，链上已有 ${minted.toLocaleString("en-US")} 枚电路 NFT。买卖走 TapeOut 官方电路市场，手续费 ${fee / 100}%。`;
+        note.textContent = tf("genesisNote", { n: minted.toLocaleString("en-US"), fee: fee / 100 });
       }
       if (mode === "all") {
         const from = 1n + BigInt(page * PAGE);
         if (from > minted) {
-          paint([], `全部 · 已到末页`);
+          paint([], t("end"));
           return;
         }
         const ids: bigint[] = [];
@@ -217,7 +218,7 @@ export function bootGenesis(host: HTMLElement): () => void {
           return { tokenId: id, listingId: valid ? listingId : null, price: valid ? price : null, seller: valid ? seller : null, owner, valid };
         });
         const last = ids[ids.length - 1] ?? from;
-        paint(rows, `全部 ${from.toString()}–${last.toString()} / ${minted.toString()}`);
+        paint(rows, tf("pageAll", { from: from.toString(), to: last.toString(), minted: minted.toString() }));
         return;
       }
       const next = (await read(marketAbi, "nextListingId", [], MARKET)) as bigint;
@@ -248,21 +249,29 @@ export function bootGenesis(host: HTMLElement): () => void {
         cursor = start - 1n;
       }
       if (rows.length === 0 && cursor < 1n) {
-        paint([], "在售 · 没有更早的挂单");
+        paint([], t("pageSaleEmpty"));
         return;
       }
-      paint(rows, `在售 · 第 ${page + 1} 页 · 这一段扫到 ${rows.length} 笔创世挂单`);
+      paint(rows, tf("pageSale", { page: page + 1, n: rows.length }));
     } catch (error) {
       if (!alive) return;
-      if (note) note.textContent = `创世电路没读到：${error instanceof Error ? error.message.slice(0, 80) : "rpc"}。没有用假 NFT 顶上。`;
+      if (note) note.textContent = tf("genesisFail", { err: error instanceof Error ? error.message.slice(0, 80) : "rpc" });
     }
   };
 
   const gate = async (): Promise<{ eth: Injected; from: string } | null> => {
+    if (!getProvider() || walletKind() !== "okx") {
+      say(t("needOkx"));
+      try {
+        await connectKind("okx");
+      } catch {
+        say(t("noWallet"));
+        return null;
+      }
+    }
     const eth = getProvider();
-    if (!eth) {
-      host.querySelector<HTMLElement>("#wallet-sheet") && (host.querySelector<HTMLElement>("#wallet-sheet")!.hidden = false);
-      say("先连接 OKX 或其他钱包。成交在 BSC。");
+    if (!eth || walletKind() !== "okx") {
+      say(t("needOkx"));
       return null;
     }
     await ensureBsc(eth);
@@ -271,7 +280,7 @@ export function bootGenesis(host: HTMLElement): () => void {
       const accounts = (await eth.request({ method: "eth_requestAccounts" })) as string[];
       from = accounts[0] ?? null;
     }
-    if (!from) throw new Error("没有连上钱包");
+    if (!from) throw new Error(t("noWallet"));
     return { eth, from };
   };
 
@@ -307,17 +316,17 @@ export function bootGenesis(host: HTMLElement): () => void {
     try {
       const who = await gate();
       if (!who) return;
-      say(`钱包会支付 ${bnb(row.price!)} BNB。取消就等于没买。`);
+      say(tf("payBnb", { px: bnb(row.price!) }));
       const data = encodeFunctionData({
         abi: marketAbi,
         functionName: "buy",
         args: [row.listingId!, row.price!],
       });
       const hash = await send(who.eth, { from: who.from, to: MARKET, data, value: row.price! });
-      say(`买单已提交 ${short(hash)}。以链上收据为准，这里不提前改持有人。`);
+      say(tf("buySent", { hash: short(hash) }));
       void load();
     } catch (error) {
-      say(error instanceof Error ? error.message.slice(0, 160) : "没买成");
+      say(error instanceof Error ? error.message.slice(0, 160) : t("buyFail"));
     } finally {
       busy = false;
     }
@@ -328,35 +337,39 @@ export function bootGenesis(host: HTMLElement): () => void {
     const raw = host.querySelector<HTMLInputElement>("#gen-price")?.value.trim() ?? "";
     busy = true;
     try {
-      if (!/^\d+(\.\d+)?$/.test(raw) || Number(raw) <= 0) throw new Error("先写挂单价格，例如 0.05");
+      if (!/^\d+(\.\d+)?$/.test(raw) || Number(raw) <= 0) throw new Error(t("priceHint"));
       const price = parseEther(raw as `${number}`);
-      if (price >= 2n ** 96n) throw new Error("价格超出合约能收的范围");
+      if (price >= 2n ** 96n) throw new Error(t("priceRange"));
       const who = await gate();
       if (!who) return;
       const owner = String(await read(cpuAbi, "ownerOf", [row.tokenId]));
-      if (owner.toLowerCase() !== who.from.toLowerCase()) throw new Error("这枚不是当前钱包的，不能挂");
+      if (owner.toLowerCase() !== who.from.toLowerCase()) throw new Error(t("notOwner"));
       const approved = String(await read(cpuAbi, "getApproved", [row.tokenId]));
       const all = Boolean(await read(cpuAbi, "isApprovedForAll", [who.from, MARKET]));
       if (approved.toLowerCase() !== MARKET.toLowerCase() && !all) {
-        say("第一次挂单要授权官方市场。钱包会先弹出授权。");
+        say(t("approve"));
         const data = encodeFunctionData({ abi: cpuAbi, functionName: "approve", args: [MARKET, row.tokenId] });
         const hash = await send(who.eth, { from: who.from, to: GENESIS, data });
-        say(`授权已提交 ${short(hash)}。等它上链后再点一次挂单。`);
+        say(tf("approveSent", { hash: short(hash) }));
         return;
       }
       const data = encodeFunctionData({ abi: marketAbi, functionName: "list", args: [GENESIS, row.tokenId, price] });
       const hash = await send(who.eth, { from: who.from, to: MARKET, data });
-      say(`已提交挂单 ${short(hash)}。市场上出现之后这里才会显示在售。`);
+      say(tf("listSent", { hash: short(hash) }));
     } catch (error) {
-      say(error instanceof Error ? error.message.slice(0, 160) : "没挂上");
+      say(error instanceof Error ? error.message.slice(0, 160) : t("listFail"));
     } finally {
       busy = false;
     }
   })(), opt);
 
+  const stopLang = onLang(() => {
+    void load();
+  });
   void load();
   return () => {
     alive = false;
+    stopLang();
     ac.abort();
   };
 }

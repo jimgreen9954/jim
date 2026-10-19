@@ -4,7 +4,8 @@ import { getProtocolNfts, getTapeoutLive, type LiveTransistor, type ProtocolCirc
 import { mintChipArt } from "@/lib/chip-art";
 import { nickOf, readAvatar, readNicks, writeAvatar, writeNick } from "@/lib/nicks";
 import { deskError, quoteBridge, quoteSwap, runBridge, runSwap, type BridgeDir, type SwapPair, type SwapSide } from "@/lib/asset-desk";
-import { connectInjected, connectKind, currentAccount, getProvider, onAccount, onOpenLink, resumeInjected, walletLabel } from "@/lib/wallet";
+import { applyDom, bootLang, onLang, setUiLang, t, uiLang } from "@/lib/locale";
+import { connectInjected, connectKind, currentAccount, disconnectWallet, getProvider, onAccount, onOpenLink, resumeInjected, walletKind, walletLabel } from "@/lib/wallet";
 import { bootGenesis } from "@/lib/genesis-desk";
 
 type Injected = {
@@ -271,7 +272,7 @@ export function bootLaunch(host: HTMLElement): () => void {
   const themeBtn = host.querySelector<HTMLButtonElement>("#btn-theme");
   const paintTheme = (mode: "dark" | "light") => {
     host.dataset.theme = mode;
-    if (themeBtn) themeBtn.textContent = mode === "dark" ? "白天" : "深夜";
+    if (themeBtn) themeBtn.textContent = mode === "dark" ? t("themeDay") : t("themeNight");
     window.localStorage.setItem("tape-theme", mode);
   };
   paintTheme(saved);
@@ -281,8 +282,11 @@ export function bootLaunch(host: HTMLElement): () => void {
   const launchSupply = host.querySelector<HTMLInputElement>("#launch-supply");
   const launchReserve = host.querySelector<HTMLInputElement>("#launch-reserve");
   const launchPrice = host.querySelector("#launch-price");
+  const launchTrade = host.querySelector("#launch-trade");
+  let launchQuote: "pair" | "okb" | "bem" = "pair";
   const paintLaunch = () => {
     const mult = Math.max(1, Math.floor(Number(launchMult?.value) || 1));
+    if (launchMult && document.activeElement !== launchMult) launchMult.value = String(mult);
     const supply = Math.max(0, Math.floor(Number(launchSupply?.value) || 0));
     let reserve = Math.max(0, Math.floor(Number(launchReserve?.value) || 0));
     if (reserve > supply) reserve = supply;
@@ -290,8 +294,27 @@ export function bootLaunch(host: HTMLElement): () => void {
       launchReserve.value = String(reserve);
     }
     const bem = (mult * 0.001).toLocaleString("en-US", { maximumFractionDigits: 6 });
-    if (launchPrice) launchPrice.textContent = `公开铸造价 ${mult} TAPE + ${bem} BEM · 预留 ${reserve} / ${supply}`;
+    if (launchQuote === "okb") {
+      if (launchPrice) launchPrice.textContent = `公开铸造价 ${mult} OKB · 预留 ${reserve} / ${supply} · 单人最多 10 次`;
+      if (launchTrade) launchTrade.textContent = "二级市场只用 OKB。倍数是整数，不能改成别的币。";
+    } else if (launchQuote === "bem") {
+      if (launchPrice) launchPrice.textContent = `公开铸造价 ${bem} BEM · 预留 ${reserve} / ${supply} · 单人最多 10 次`;
+      if (launchTrade) launchTrade.textContent = "二级市场只用 BEM。单位锁在 0.001 BEM，只能按整数倍放大。";
+    } else {
+      if (launchPrice) launchPrice.textContent = `公开铸造价 ${mult} TAPE + ${bem} BEM · 预留 ${reserve} / ${supply} · 单人最多 10 次`;
+      if (launchTrade) launchTrade.textContent = "二级市场按这一对一起付。不能只改 TAPE 或只改 BEM。";
+    }
   };
+  host.querySelector("#launch-quote")?.addEventListener("click", (event) => {
+    const button = (event.target as HTMLElement).closest("button");
+    const next = button?.dataset.quote;
+    if (next !== "okb" && next !== "bem" && next !== "pair") return;
+    launchQuote = next;
+    host.querySelectorAll<HTMLButtonElement>("#launch-quote .fbtn").forEach((node) => {
+      node.classList.toggle("on", node === button);
+    });
+    paintLaunch();
+  }, opt);
   for (const input of [launchMult, launchSupply, launchReserve]) {
     input?.addEventListener("input", paintLaunch, opt);
   }
@@ -431,12 +454,24 @@ export function bootLaunch(host: HTMLElement): () => void {
       rare.className = "rare";
       rare.style.color = item.color;
       rare.textContent = item.rare;
-      meta.append(title, line, line2, rare);
+      const net = document.createElement("span");
+      net.className = "netlist";
+      net.dataset.netlist = `tapnet/1\nid=${item.id}\ngate=${item.gate}\nnode=${item.node}\nlayers=${item.layer}\npack=${item.pack}\nvolt=${item.volt}\ndie=${item.die}\nrarity=${item.rare}`;
+      net.textContent = "TAP-721 · L0 · 网表哈希计算中";
+      meta.append(title, line, line2, rare, net);
       slot.append(svg);
       card.append(slot, meta);
       traitGrid.append(card);
     }
     lastShown = preview;
+    const nodes = [...traitGrid.querySelectorAll<HTMLElement>(".netlist")];
+    void Promise.all(nodes.map(async (node) => {
+      const raw = new TextEncoder().encode(node.dataset.netlist ?? "");
+      const digest = await crypto.subtle.digest("SHA-256", raw);
+      const hex = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+      node.textContent = `TAP-721 · L0 · ${hex.slice(0, 10)}… 未流片`;
+      node.title = hex;
+    }));
   };
   host.querySelector("#trait-roll")?.addEventListener("click", () => {
     traitSalt += 1;
@@ -591,7 +626,7 @@ export function bootLaunch(host: HTMLElement): () => void {
     if (!address) {
       const line = document.createElement("p");
       line.className = "sub";
-      line.textContent = "连接 OKX 钱包后，这里显示这个地址在 BSC 和 X Layer 的 BNB、OKB、BEM、USDT。";
+      line.textContent = t("balEmpty");
       box.append(line);
       return;
     }
@@ -647,25 +682,31 @@ export function bootLaunch(host: HTMLElement): () => void {
       if (img) img.src = src;
     }
     const title = host.querySelector("#profile-name");
-    if (title) title.textContent = nick || "我的";
+    if (title) title.textContent = nick || t("profileTitle");
     const assets = host.querySelector("#assets-name");
-    if (assets) assets.textContent = nick || "我的资产";
+    if (assets) assets.textContent = nick || t("assetsTitle");
     const nickInput = host.querySelector<HTMLInputElement>("#profile-nick");
     if (nickInput && document.activeElement !== nickInput) nickInput.value = nick;
-    if (walletBtn) walletBtn.textContent = address ? `${walletLabel()} · ${nick || short(address)}` : "连接钱包";
+    if (walletBtn) walletBtn.textContent = address ? `${walletLabel()} · ${nick || short(address)}` : t("connect");
+    const logout = host.querySelector<HTMLButtonElement>("#wallet-logout");
+    const assetsLogout = host.querySelector<HTMLButtonElement>("#assets-logout");
+    const assetsLogin = host.querySelector<HTMLButtonElement>("#assets-login");
+    if (logout) logout.hidden = !address;
+    if (assetsLogout) assetsLogout.hidden = !address;
+    if (assetsLogin) assetsLogin.hidden = Boolean(address);
   };
 
   const paintAccount = (address: string | null) => {
     paintIdentity(address);
     for (const id of ["assets-addr", "profile-addr"]) {
       const node = host.querySelector("#" + id);
-      if (node) node.textContent = address ? `${short(address)} · 已连接` : "未连接钱包";
+      if (node) node.textContent = address ? `${short(address)} · ${uiLang() === "zh" ? "已连接" : "connected"}` : t("addrOff");
     }
     const bal = host.querySelector("#bal-native");
     const label = host.querySelector("#bal-label");
     if (!address) {
       if (bal) bal.textContent = "—";
-      if (label) label.textContent = "OKX 钱包 · 链上";
+      if (label) label.textContent = "OKX";
       paintBalances(null);
       refreshHolds();
       return;
@@ -695,17 +736,17 @@ export function bootLaunch(host: HTMLElement): () => void {
   };
   const stopAccount = onAccount(paintAccount);
   const stopLink = onOpenLink((link) => {
-    if (msg && link) msg.textContent = "已弹出钱包连接，请在 App 里确认";
+    if (msg && link) msg.textContent = t("walletPop");
   });
 
   const fail = (error: unknown) => {
     if (!msg) return;
     const text = error instanceof Error ? error.message : "";
-    msg.textContent = text === "binanceapp" ? "浏览器里没有币安钱包，请用币安 App 打开这个页面" : "没有连上。请安装钱包，或换 OKX / 币安 / 浏览器钱包";
+    msg.textContent = text === "binanceapp" ? t("binanceFail") : t("walletFail");
   };
 
   const connectNamed = async (which: "okx" | "binance") => {
-    if (msg) msg.textContent = "正在唤起钱包…";
+    if (msg) msg.textContent = which === "okx" ? t("walletWait") : t("binance");
     try {
       await connectKind(which);
       showSheet(false);
@@ -715,6 +756,13 @@ export function bootLaunch(host: HTMLElement): () => void {
   };
   host.querySelector('[data-wallet="okx"]')?.addEventListener("click", () => void connectNamed("okx"), opt);
   host.querySelector('[data-wallet="binance"]')?.addEventListener("click", () => void connectNamed("binance"), opt);
+  const logoutNow = () => {
+    disconnectWallet();
+    showSheet(false);
+  };
+  host.querySelector("#wallet-logout")?.addEventListener("click", logoutNow, opt);
+  host.querySelector("#assets-logout")?.addEventListener("click", logoutNow, opt);
+  host.querySelector("#assets-login")?.addEventListener("click", () => void connectNamed("okx"), opt);
   void resumeInjected();
 
   const profileMsg = host.querySelector("#profile-msg");
@@ -804,7 +852,7 @@ export function bootLaunch(host: HTMLElement): () => void {
     }
     button.append(document.createTextNode(name));
     button.addEventListener("click", () => {
-      if (msg) msg.textContent = "正在唤起钱包…";
+      if (msg) msg.textContent = t("walletWait");
       void connectInjected(provider)
         .then(() => showSheet(false))
         .catch(fail);
@@ -982,15 +1030,12 @@ export function bootLaunch(host: HTMLElement): () => void {
       mount(market.collections);
       const note = host.querySelector("#os-note");
       if (note) {
-        note.textContent =
-          market.collections.length > 0
-            ? "地板价、成交额和笔数来自 OpenSea。点「交易」进入该系列的真实市场。BEM、OKB 只是公开参考价，这里不成交。"
-            : "OpenSea 这次没有返回。能成交的只有代币页上的晶体管。";
+        note.textContent = t("refNote");
       }
     })
     .catch(() => {
       const note = host.querySelector("#os-note");
-      if (note) note.textContent = "OpenSea 行情暂时读不到。晶体管成交仍在代币页。";
+      if (note) note.textContent = t("refNote");
     });
 
   const tradeSheet = host.querySelector<HTMLElement>("#trade-sheet");
@@ -1500,25 +1545,48 @@ export function bootLaunch(host: HTMLElement): () => void {
     host.querySelectorAll<HTMLButtonElement>(`${box} .fbtn`).forEach((node) => node.classList.remove("on"));
     button.classList.add("on");
   };
-  const swapLabel = host.querySelector("#swap-in-label");
+  const paintTok = (id: string, symbol: "USDT" | "OKB" | "BEM") => {
+    const node = host.querySelector(id);
+    if (!node) return;
+    const mark = node.querySelector("i");
+    const img = node.querySelector("img");
+    const label = node.querySelector("b");
+    if (label) label.textContent = symbol;
+    const src = symbol === "BEM" ? "/tape-launch/tokens/bem.jpg" : symbol === "OKB" ? "/tape-launch/tokens/okb.png" : "";
+    if (img) {
+      img.hidden = !src;
+      if (src) img.src = src;
+    }
+    if (mark) mark.hidden = Boolean(src);
+  };
   const paintSwapLabel = () => {
-    if (!swapLabel) return;
     const pay = swapSide() === "buy" ? (swapPair() === "bsc-bem" ? "USDT" : "OKB") : "BEM";
-    swapLabel.textContent = `支付 ${pay}`;
+    const recv = swapSide() === "buy" ? "BEM" : swapPair() === "bsc-bem" ? "USDT" : "OKB";
+    const payLabel = host.querySelector("#swap-in-label");
+    const recvLabel = host.querySelector("#swap-out-label");
+    if (payLabel) payLabel.textContent = t("swapPay");
+    if (recvLabel) recvLabel.textContent = t("swapRecv");
+    paintTok("#swap-in-tok", pay);
+    paintTok("#swap-out-tok", recv);
   };
   let swapTicket = 0;
   const refreshSwap = () => {
     const ticket = ++swapTicket;
     const quote = host.querySelector("#swap-quote");
+    const amount = host.querySelector("#swap-out-amt");
     const raw = host.querySelector<HTMLInputElement>("#swap-amt")?.value ?? "";
     paintSwapLabel();
-    if (!quote) return;
+    if (!quote || !amount) return;
     void quoteSwap(swapPair(), swapSide(), raw)
-      .then((text) => {
-        if (alive && ticket === swapTicket && quote) quote.textContent = text;
+      .then((row) => {
+        if (!alive || ticket !== swapTicket) return;
+        amount.textContent = row.amount;
+        quote.textContent = row.venue === "bsc" ? t("quoteBsc") : t("quoteXl");
       })
       .catch((error) => {
-        if (alive && ticket === swapTicket && quote) quote.textContent = deskError(error);
+        if (!alive || ticket !== swapTicket) return;
+        amount.textContent = "—";
+        quote.textContent = deskError(error);
       });
   };
   let bridgeTicket = 0;
@@ -1568,16 +1636,29 @@ export function bootLaunch(host: HTMLElement): () => void {
     link.href = url;
     link.textContent = label;
   };
+  host.querySelectorAll<HTMLButtonElement>("[data-open-swap]").forEach((node) => {
+    node.addEventListener("click", () => {
+      const pair = node.dataset.openSwap;
+      const side = node.dataset.openSide;
+      const pairBtn = host.querySelector<HTMLButtonElement>(`#swap-pair [data-pair="${pair}"]`);
+      const sideBtn = host.querySelector<HTMLButtonElement>(`#swap-side [data-side="${side}"]`);
+      if (pairBtn) pick("#swap-pair", pairBtn);
+      if (sideBtn) pick("#swap-side", sideBtn);
+      refreshSwap();
+      open("tokens");
+    }, opt);
+  });
   host.querySelector("#swap-go")?.addEventListener("click", () => void (async () => {
     const button = host.querySelector<HTMLButtonElement>("#swap-go");
     const msg = host.querySelector("#swap-msg");
     if (!button || button.disabled) return;
     button.disabled = true;
-    if (msg) msg.textContent = "等钱包确认。取消就等于没成交。";
+    if (msg) msg.textContent = t("swapWait");
     try {
+      if (!getProvider() || walletKind() !== "okx") await connectKind("okx");
       const done = await runSwap(swapPair(), swapSide(), host.querySelector<HTMLInputElement>("#swap-amt")?.value ?? "");
-      if (msg) msg.textContent = "兑换已提交。到账以链上收据为准，这里不提前改余额。";
-      showLink("#swap-link", done.url, "查看这笔交易");
+      if (msg) msg.textContent = t("swapSent");
+      showLink("#swap-link", done.url, t("swapView"));
     } catch (error) {
       if (msg) msg.textContent = deskError(error);
     } finally {
@@ -1607,6 +1688,19 @@ export function bootLaunch(host: HTMLElement): () => void {
     refreshBridge();
   }, 20_000);
 
+  const langBtn = host.querySelector<HTMLButtonElement>("#btn-lang");
+  const paintLang = () => {
+    applyDom(host);
+    paintTheme(host.dataset.theme === "dark" ? "dark" : "light");
+    paintAccount(currentAccount());
+    refreshSwap();
+    if (langBtn) langBtn.textContent = t("langBtn");
+  };
+  bootLang();
+  paintLang();
+  langBtn?.addEventListener("click", () => setUiLang(uiLang() === "zh" ? "en" : "zh"), opt);
+  const stopLang = onLang(paintLang);
+
   const stopGenesis = bootGenesis(host);
 
   return () => {
@@ -1618,6 +1712,7 @@ export function bootLaunch(host: HTMLElement): () => void {
     stopAccount();
     stopLink();
     stopGenesis();
+    stopLang();
     ac.abort();
   };
 }
