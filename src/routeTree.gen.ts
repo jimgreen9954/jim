@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as WhitepaperRouteImport } from './routes/whitepaper'
+import { Route as ApiCircuitPunkSplatRouteImport } from './routes/api/circuit-punk/$'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,31 +23,40 @@ const WhitepaperRoute = WhitepaperRouteImport.update({
   path: '/whitepaper',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCircuitPunkSplatRoute = ApiCircuitPunkSplatRouteImport.update({
+  id: '/api/circuit-punk/$',
+  path: '/api/circuit-punk/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/whitepaper': typeof WhitepaperRoute
+  '/api/circuit-punk/$': typeof ApiCircuitPunkSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/whitepaper': typeof WhitepaperRoute
+  '/api/circuit-punk/$': typeof ApiCircuitPunkSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/whitepaper': typeof WhitepaperRoute
+  '/api/circuit-punk/$': typeof ApiCircuitPunkSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/whitepaper'
+  fullPaths: '/' | '/whitepaper' | '/api/circuit-punk/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/whitepaper'
-  id: '__root__' | '/' | '/whitepaper'
+  to: '/' | '/whitepaper' | '/api/circuit-punk/$'
+  id: '__root__' | '/' | '/whitepaper' | '/api/circuit-punk/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   WhitepaperRoute: typeof WhitepaperRoute
+  ApiCircuitPunkSplatRoute: typeof ApiCircuitPunkSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +75,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WhitepaperRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/circuit-punk/$': {
+      id: '/api/circuit-punk/$'
+      path: '/api/circuit-punk/$'
+      fullPath: '/api/circuit-punk/$'
+      preLoaderRoute: typeof ApiCircuitPunkSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   WhitepaperRoute: WhitepaperRoute,
+  ApiCircuitPunkSplatRoute: ApiCircuitPunkSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

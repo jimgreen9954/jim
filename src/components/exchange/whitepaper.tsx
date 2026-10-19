@@ -13,6 +13,14 @@ const zh: Section[] = [
     ],
   },
   {
+    h: "电路朋克",
+    ps: [
+      "电路朋克，符号 CPUNK，是本站的创世 NFT。它是第一款电路朋克，也是唯一一款。TapeOut 上已经流片的创世电路仍是协议原件，买卖走官网市场。电路朋克不是那一批的复制，本站也不再另开第二套。",
+      "总量一万。七千张预留，不进公开铸造，预留要一笔领一张。三千张公开铸造，价锁在 1 TAPE 加 0.001 BEM，单人最多 10 次。只有名称正好是「电路朋克」时，创建才会把本站图片地址写进合约。改了名称，图片地址留空，那就不是电路朋克。工厂合约不按名字拒绝第二次创建。别人若用同一名字再调工厂，链上拦不住，但那不是这一款，本站也不会再发一套图。",
+      "每一张按编号现算，24×24 像素，不上传原图，也不临摹商标和真人。种类是极紫外晶粒 9、键合巨像 24、报废晶粒 88，其余按晶圆人像、吉祥晶粒、对准标记、缺陷图样、纪念版图的比例排开。衬底、金属层、对准、键合、封装跟编号走。创建签名上链之后，图片地址写死，不能改。在那之前，图只在本站。",
+    ],
+  },
+  {
     h: "创世电路",
     ps: [
       "创世处理器是 BSC 上的 0x50A994E71615474b55559fF4F500928fbc339DD9。链上枚数以 nextId 为准，写这一页时是 12,454。买卖走 TapeOut 官方电路市场 0x6feEbbEbC07BcB90bd1Ac8b0CF9BaA4f0fF2B46f。",
@@ -82,6 +90,14 @@ const en: Section[] = [
       "TAPELIQUID is a TapeOut market. Three things already work: genesis circuits trade on the official market, BEM and OKB swap in official pools, and the top-right wallet can log in, log out, and switch BSC or X Layer. Funds do not sit in the page. Tokens stay in the wallet until you sign.",
       "The launch rules on this site bind only projects created here. Transistors and circuits already minted on tapeout.net stay the protocol originals. This site recognizes that contract, does not mint a second copy, and does not change the official BNB or OKB mint price.",
       "Create calls the deployed factory 0x2872E6D6AB14C5Cdb08587b437Bd16248270A04d, deployment 0x73ebdd1527e39065ba4da9f8869b5c06d8a3d5e62cbefe64ccddda24e94f5dd0. The fee address, the 0.026 OKB seed, and the buyback switch are fixed in that contract. It has no admin, no upgrade, and no way to pull the vault out. The page does not deploy a second factory.",
+    ],
+  },
+  {
+    h: "Circuit Punk",
+    ps: [
+      "Circuit Punk, symbol CPUNK, is this site's genesis NFT. It is the first circuit-punk collection, and the only one. Genesis circuits already taped out on TapeOut stay the protocol originals and still trade on the official market. Circuit Punk is not a copy of that set, and this site will not open a second one.",
+      "Supply is 10,000. 7,000 are reserved and skip the public mint. Each reserved token is claimed with its own signature. 3,000 are public, locked at 1 TAPE plus 0.001 BEM, at most 10 mints a wallet. The image address is written into the contract only when the name is exactly 电路朋克. Any other name leaves that address empty, and that project is not Circuit Punk. The factory does not refuse a second create that reuses the name. Such a call is not this collection, and this site will not publish a second set of pictures.",
+      "Each token is drawn from its number, 24 by 24 pixels. No source file is uploaded. Trademarks and real people are not copied. The census is 9 extreme-ultraviolet dies, 24 bond colossi, and 88 scrap dies. The rest follow the split of wafer portraits, mascot dies, alignment marks, defect patterns, and memorial layouts. Substrate, metal, alignment, bond, and package follow the number. After the create receipt the image address is fixed. Before that, the pictures live only on this site.",
     ],
   },
   {

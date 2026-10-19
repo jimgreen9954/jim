@@ -1,4 +1,4 @@
-import { createPublicClient, decodeFunctionResult, encodeFunctionData, http, parseAbi, parseEther } from "viem";
+import { createPublicClient, decodeEventLog, decodeFunctionResult, encodeFunctionData, http, parseAbi, parseEther } from "viem";
 import { getLaunchMarket, type OsCard, type TokenQuote } from "@/lib/opensea-feed";
 import { getProtocolNfts, getTapeoutLive, type LiveTransistor, type ProtocolCircuit, type TapeoutLive } from "@/lib/tapeout-live";
 import { mintChipArt } from "@/lib/chip-art";
@@ -10,7 +10,8 @@ import { connectBrowser, connectInjected, connectKind, currentAccount, currentCh
 import { bootGenesis } from "@/lib/genesis-desk";
 import { getTapeCode } from "@/lib/okx-tape";
 import { bookError, buyTapeOnSite, getTapeBook, listTapeOnSite, type BookOrder } from "@/lib/tape-book";
-import { factoryCreateData, factoryDeployData, FACTORY, FACTORY_PLATFORM } from "@/lib/tape-factory-deploy";
+import { createAbi, factoryCreateData, factoryDeployData, FACTORY, FACTORY_PLATFORM } from "@/lib/tape-factory-deploy";
+import { previewPathPrefix } from "@/lib/preview-path-prefix";
 import { TAPE_BEM, TAPE_TOKEN } from "@/lib/tape-pool";
 import { connectXLayer, txUrl } from "@/lib/xlayer";
 import { connectBsc } from "@/lib/bsc";
@@ -249,6 +250,12 @@ export function bootLaunch(host: HTMLElement): () => void {
       if (!Number.isInteger(supply) || supply < 1 || supply > 100_000) throw new Error("supply");
       if (!Number.isInteger(reserve) || reserve < 0 || reserve > supply) throw new Error("supply");
       if (!Number.isInteger(mult) || mult < 1 || mult > 1_000_000) throw new Error("mult");
+      let base = "";
+      if (name === "电路朋克") {
+        if (previewPathPrefix(window.location.hostname, window.location.pathname)) throw new Error("preview");
+        base = `${window.location.origin}/api/circuit-punk/`;
+        if (base.length > 128) throw new Error("uri");
+      }
       const xl = createPublicClient({ transport: http("https://rpc.xlayer.tech") });
       const seedAbi = parseAbi(["function okbSeed() view returns (uint256)", "function allowance(address,address) view returns (uint256)", "function approve(address,uint256) returns (bool)"]);
       const seed = await xl.readContract({ address: FACTORY, abi: seedAbi, functionName: "okbSeed" });
@@ -268,19 +275,32 @@ export function bootLaunch(host: HTMLElement): () => void {
       if (note) note.textContent = "先授权代币，再签创建。取消任何一步都等于没创建。";
       await allow(TAPE_TOKEN, 100_000_000n);
       if (mode !== 2) await allow(TAPE_BEM, 1_000_000n);
-      const data = factoryCreateData(mode, mult, supply, reserve, name, symbol);
+      const data = factoryCreateData(mode, mult, supply, reserve, name, symbol, base);
       const hash = (await getProvider()?.request({
         method: "eth_sendTransaction",
         params: [{ from, to: FACTORY, data, value: `0x${value.toString(16)}`, chainId: "0xc4" }],
       })) as string;
-      if (note) note.textContent = `已提交 ${hash.slice(0, 10)}… 项目地址等收据。`;
+      if (note) note.textContent = `已提交 ${hash.slice(0, 10)}… 等项目地址。`;
       showLink("#factory-link", txUrl(hash), "查看这笔创建");
+      const receipt = await xl.waitForTransactionReceipt({ hash: hash as `0x${string}`, timeout: 120_000 });
+      const born = receipt.logs.flatMap((log) => {
+        try {
+          const decoded = decodeEventLog({ abi: createAbi, data: log.data, topics: log.topics });
+          return decoded.eventName === "Created" ? [decoded.args.drop] : [];
+        } catch {
+          return [];
+        }
+      })[0];
+      if (note) note.textContent = born ? `项目已创建 ${born}` : `创建已上链 ${hash.slice(0, 10)}…`;
+      if (born) showLink("#factory-link", `https://www.oklink.com/x-layer/evm/address/${born}`, "打开这个项目");
     } catch (error) {
       const text = error instanceof Error ? error.message : String(error ?? "");
       if (note) {
         note.textContent = text === "name" ? "名称最多 32 字，符号最多 16 字。"
           : text === "supply" ? "总量 1 到 100000，预留不能超过总量。"
           : text === "mult" ? "倍数要是 1 到 1000000 的整数。"
+          : text === "uri" ? "图片地址超过 128 个字，合约装不下。换更短的正式网址再创建。"
+          : text === "preview" ? "现在是预览网址。发布之后用正式网址再点创建，不然图片会跟着预览失效。"
           : deskError(error);
       }
     } finally {
@@ -416,8 +436,77 @@ export function bootLaunch(host: HTMLElement): () => void {
   const generated = new Map<number, string>();
   const traitSum = host.querySelector("#trait-sum");
   const traitGrid = host.querySelector("#trait-grid");
+  const circuitOn = () => host.querySelector<HTMLInputElement>("#launch-name")?.value.trim() === "电路朋克";
+  const paintBase = () => {
+    const note = host.querySelector("#launch-base");
+    if (!note) return;
+    if (!circuitOn()) {
+      note.textContent = "改了名称就不会写成电路朋克。图片地址留空，链上没有图。";
+      return;
+    }
+    const preview = previewPathPrefix(window.location.hostname, window.location.pathname);
+    const base = `${window.location.origin}/api/circuit-punk/`;
+    note.textContent = preview
+      ? "样张可以看。创建要等站点发布，在正式网址上签。预览网址写进合约后图片会失效。"
+      : base.length > 128
+        ? `图片地址有 ${base.length} 字，合约最多 128，这次写不进去。`
+        : `创建后图片地址写死为 ${base}。公开铸造 1 TAPE + 0.001 BEM。预留 7000 张要一笔领一张。`;
+  };
+  async function paintCircuitPunks() {
+    if (!traitGrid || !traitSum) return;
+    const rollBtn = host.querySelector("#trait-roll");
+    if (rollBtn) rollBtn.textContent = "再看八种晶粒";
+    paintBase();
+    traitSum.textContent = "正在读取电路朋克样张…";
+    try {
+      const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+      const res = await fetch(`${prefix}/api/circuit-punk/sample`, { cache: "no-store" });
+      if (!res.ok) throw new Error("sample");
+      const body = (await res.json()) as {
+        census: { name: string; n: number; tier: string }[];
+        items: { name: string; attributes: { trait_type: string; value: string | number }[] }[];
+      };
+      const censusText = body.census.map((row) => `${row.name} ${row.n}`).join("，");
+      traitSum.textContent = `一万张按种类比例生成，商标和真人没有临摹。${censusText}。`;
+      traitGrid.replaceChildren();
+      for (const item of body.items) {
+        const id = Number(item.name.split("#")[1]);
+        const card = document.createElement("div");
+        card.className = "trait-card punk";
+        const slot = document.createElement("div");
+        slot.className = "art-slot";
+        const img = document.createElement("img");
+        img.alt = item.name;
+        img.src = `${prefix}/api/circuit-punk/${id}.png`;
+        slot.append(img);
+        const meta = document.createElement("div");
+        const title = document.createElement("b");
+        title.textContent = item.name;
+        meta.append(title);
+        for (const attr of item.attributes) {
+          const line = document.createElement("span");
+          line.textContent = `${attr.trait_type} ${attr.value}`;
+          if (attr.trait_type === "权重") line.className = "rare";
+          meta.append(line);
+        }
+        card.append(slot, meta);
+        traitGrid.append(card);
+      }
+      const artMsg = host.querySelector("#art-msg");
+      if (artMsg) artMsg.textContent = "这是按编号现算的 24×24 像素。一万张都在同一个图片地址上，不上传原图。";
+    } catch {
+      traitSum.textContent = "样张没有读到。创建前这个站点要能打开图片。";
+    }
+  }
   const rollTraits = () => {
     if (!traitGrid || !traitSum) return;
+    if (circuitOn()) {
+      void paintCircuitPunks();
+      return;
+    }
+    const rollBtn = host.querySelector("#trait-roll");
+    if (rollBtn) rollBtn.textContent = "批量生成属性";
+    paintBase();
     const supply = Math.max(0, Math.floor(Number(launchSupply?.value) || 0));
     const name = host.querySelector<HTMLInputElement>("#launch-name")?.value.trim() || "Tape";
     const symbol = host.querySelector<HTMLInputElement>("#launch-symbol")?.value.trim() || "TAPE";
@@ -560,6 +649,11 @@ export function bootLaunch(host: HTMLElement): () => void {
     generated.clear();
     rollTraits();
   }, opt);
+  host.querySelector("#launch-name")?.addEventListener("input", () => {
+    generated.clear();
+    paintArtMode();
+    rollTraits();
+  }, opt);
   rollTraits();
 
   type Shown = { id: number; gate: string; node: string; layer: number; pack: string; volt: string; die: string; rare: string };
@@ -580,6 +674,17 @@ export function bootLaunch(host: HTMLElement): () => void {
     if (artMsg) artMsg.textContent = text;
   };
   const paintArtMode = () => {
+    if (circuitOn()) {
+      const artSource = host.querySelector<HTMLElement>("#art-source");
+      if (artSource) artSource.hidden = true;
+      if (artKey) artKey.hidden = true;
+      if (artFiles) artFiles.hidden = true;
+      if (artStyleBox) artStyleBox.hidden = true;
+      if (artGo) artGo.hidden = true;
+      return;
+    }
+    const artSource = host.querySelector<HTMLElement>("#art-source");
+    if (artSource) artSource.hidden = false;
     host.querySelectorAll<HTMLButtonElement>("[data-art]").forEach((node) => {
       node.classList.toggle("on", node.dataset.art === artMode);
     });

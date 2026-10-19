@@ -681,7 +681,13 @@ td.right, th.right { text-align: right; }
 .art-slot { width: 48px; height: 48px; flex-shrink: 0; }
 .art-picks { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .art-picks .fbtn { height: 32px; }
-.trait-card b { display: block; font-size: 13px; }
+.trait-card.punk { flex-direction: column; align-items: stretch; }
+.trait-card.punk .art-slot { width: 100%; height: auto; }
+.trait-card.punk .art-slot img {
+  width: 100%; height: auto; aspect-ratio: 1;
+  image-rendering: pixelated; object-fit: contain; background: #638596; border-radius: 4px;
+}
+.trait-card.punk b { white-space: nowrap; }
 .trait-card span { display: block; color: var(--muted); font-size: 12px; line-height: 1.4; }
 .trait-card .rare { font-weight: 700; }
 .trait-card .netlist { font-size: 11px; word-break: break-all; }
@@ -1283,10 +1289,10 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
         </div>
         <form class="form" id="launch-form" onsubmit="return false">
           <h3 style="font-size:20px">创建项目</h3>
-          <label>名称</label><input id="launch-name" value="Tape Circuit">
-          <label>符号</label><input id="launch-symbol" value="TCIR">
-          <label>总量</label><input id="launch-supply" value="1000" inputmode="numeric">
-          <label>预留</label><input id="launch-reserve" value="0" inputmode="numeric">
+          <label>名称</label><input id="launch-name" maxlength="32" value="电路朋克">
+          <label>符号</label><input id="launch-symbol" maxlength="16" value="CPUNK">
+          <label>总量</label><input id="launch-supply" value="10000" inputmode="numeric">
+          <label>预留</label><input id="launch-reserve" value="7000" inputmode="numeric">
           <label>发射代币</label>
           <div class="art-picks" id="launch-quote">
             <button type="button" class="fbtn on" data-quote="pair">TAPE + BEM</button>
@@ -1297,7 +1303,7 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
           <p class="hint" id="launch-price">公开铸造价 1 TAPE + 0.001 BEM</p>
           <p class="hint" id="launch-trade">二级市场只用这次发射的代币。TAPE + BEM 两边一起付，不能只改一边。</p>
           <button class="buy ghost" id="trait-roll" type="button">批量生成属性</button>
-          <p class="hint" id="trait-sum">按总量生成。每张的芯片属性和稀有度单独算，组合不重复。</p>
+          <p class="hint" id="trait-sum">电路朋克一万张按种类比例生成。每种晶粒的属性和权重都不一样。</p>
           <div class="art-picks" id="art-source">
             <button type="button" class="fbtn on" data-art="upload">上传图片</button>
             <button type="button" class="fbtn" data-art="key">自己的 Key</button>
@@ -1314,6 +1320,7 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
           <div class="trait-grid" id="trait-grid"></div>
           <details class="rules">
             <summary>铸造规则</summary>
+            <p>电路朋克，符号 CPUNK，是本站的创世 NFT。它是第一款电路朋克，也是唯一一款。总量一万，预留七千，公开三千，公开价锁在 1 TAPE 加 0.001 BEM。只有名称正好是「电路朋克」才把图片地址写进合约。改名就不是这一款。本站不再另开第二套。TapeOut 上已经流片的创世电路仍走官网市场，不是这一款。</p>
             <p>公开价锁定 1 TAPE 对 0.001 BEM。倍数只能是整数，价格按这个比例放大，不能单独改一边。也可以改用 OKB 或只用 BEM 发射：单位锁死，同样只能填整数倍数。用哪种代币发射，公开铸造和二级交易就只用哪种。预留从总量里划出，不参与公开铸造，不能超过总量。单人最多铸造 10 次。总量由项目方自定。创建时按总量批量生成芯片属性和稀有度，同一项目里属性组合不重复。图片可以自己上传，也可以用自己的 Key 或平台默认生成，风格分朋克和真实。</p>
             <p>每枚 NFT 按 TAP-721 草案，除图片外还带一份 tapnet 网表和 SHA-256，来源可以对照。标准还在社区审核，这里只出可核验的预览，不假装已经流片上链。</p>
             <p>发射前，项目方必须先放入价值 3 美元的 OKB，这笔进金库。创建另付 1 TAPE + 0.01 枚发射代币：1 TAPE 直接销毁，0.01 锁进该项目金库。OKB 发射锁的是 0.01 OKB，BEM 或 TAPE 对发射锁的是 0.01 BEM。</p>
@@ -1321,8 +1328,9 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
             <p>最后 30% 不是按天发。售罄满 90 天，并且连续 3 天都有不低于 2 倍、已经挂满 1 天的挂单，同时没有低于 2 倍的挂单，项目方一次领完。满 90 天之后连续 3 天做不到，这份钱永久不能领。之后任何人可以调用 tick：记成一天、烧掉当天那一份，或买下一张低于两倍的单，调用者拿这次支出的 5%，从当天九十分之一里出。当天预算用完就不再付。网页不保管私钥。账上的 BEM 或 TAPE 直接销毁；OKB 则一半买 BEM、一半买 TAPE，买到就销毁，直到花完。两倍看的是本合约挂单，不是同一笔交易里的现货价。别人若连续三天挂一张回购当天买不掉的低价单，这 30% 会被判负。</p>
             <p>本站二级成交收 0.2%。平台那一半给收费地址。TAPE、BEM 或 OKB 的另一半留在这个项目合约里，没有提取函数，也不在成交当中拿去买别的币。这份已部署的字节码不会把 TAPE 那一半转进销毁地址。OKX 和 tapeout.net 上的成交不经过这份合约。创建调用已部署的工厂，会扣进金库的 OKB。</p>
           </details>
+          <p class="hint" id="launch-base"></p>
           <button class="buy" id="launch-create" style="margin-top:16px" type="button">创建</button>
-          <p class="hint" id="launch-create-msg">创建会调用已部署的工厂。OKB 进该项目金库，1 TAPE 销毁，0.01 锁进项目。</p>
+          <p class="hint" id="launch-create-msg">创建调用已部署的工厂，由你自己的钱包签名。电路朋克会把这个网站的图片地址写进合约，写死后不能改。私钥不会经过这个页面。</p>
           <div class="form" id="factory-box">
             <h3 style="font-size:20px">工厂</h3>
             <p class="hint">X Layer 上这份地址已写死。没有管理员，不能升级，也不能把金库转走。页面不再另签一份工厂。</p>

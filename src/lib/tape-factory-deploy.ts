@@ -48,6 +48,17 @@ const createAbi = [
     inputs: [],
     outputs: [{ name: "", type: "uint256" }],
   },
+  {
+    type: "event",
+    name: "Created",
+    inputs: [
+      { name: "drop", type: "address", indexed: true },
+      { name: "creator", type: "address", indexed: true },
+      { name: "mode", type: "uint8", indexed: false },
+      { name: "multiplier", type: "uint32", indexed: false },
+      { name: "supply", type: "uint32", indexed: false },
+    ],
+  },
 ] as const;
 
 export function factoryCreateData(
@@ -57,11 +68,12 @@ export function factoryCreateData(
   reserve: number,
   name: string,
   symbol: string,
+  base = "",
 ): Hex {
   return encodeFunctionData({
     abi: createAbi,
     functionName: "create",
-    args: [mode, multiplier, supply, reserve, name, symbol, ""],
+    args: [mode, multiplier, supply, reserve, name, symbol, base],
   });
 }
 
