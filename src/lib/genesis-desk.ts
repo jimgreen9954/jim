@@ -1,6 +1,6 @@
 import { decodeFunctionResult, encodeFunctionData, formatEther, parseAbi, parseEther, type Abi } from "viem";
 import { onLang, t, tf } from "@/lib/locale";
-import { connectKind, currentAccount, getProvider, walletKind } from "@/lib/wallet";
+import { connectBrowser, currentAccount, getProvider } from "@/lib/wallet";
 
 const GENESIS = "0x50A994E71615474b55559fF4F500928fbc339DD9";
 const MARKET = "0x6feEbbEbC07BcB90bd1Ac8b0CF9BaA4f0fF2B46f";
@@ -90,7 +90,23 @@ function short(address: string): string {
 async function ensureBsc(eth: Injected): Promise<void> {
   const chain = String(await eth.request({ method: "eth_chainId" })).toLowerCase();
   if (Number.parseInt(chain, 16) === 56) return;
-  await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: "0x38" }] });
+  try {
+    await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: "0x38" }] });
+  } catch (error) {
+    const code = typeof error === "object" && error && "code" in error ? Number((error as { code?: number }).code) : 0;
+    const message = error instanceof Error ? error.message : "";
+    if (code !== 4902 && !/unrecognized|not added|unknown chain/i.test(message)) throw error;
+    await eth.request({
+      method: "wallet_addEthereumChain",
+      params: [{
+        chainId: "0x38",
+        chainName: "BNB Smart Chain",
+        nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
+        rpcUrls: ["https://bsc-dataseed.binance.org"],
+        blockExplorerUrls: ["https://bscscan.com"],
+      }],
+    });
+  }
 }
 
 async function send(eth: Injected, tx: { from: string; to: string; data: `0x${string}`; value?: bigint }): Promise<string> {
@@ -175,8 +191,12 @@ export function bootGenesis(host: HTMLElement): () => void {
     if (!alive) return;
     try {
       if (total === 0n) {
-        total = (await read(cpuAbi, "nextId")) as bigint;
-        fee = Number(await read(marketAbi, "feeBps", [], MARKET));
+        const head = await aggregate([
+          { target: GENESIS, callData: encodeFunctionData({ abi: cpuAbi, functionName: "nextId" }) },
+          { target: MARKET, callData: encodeFunctionData({ abi: marketAbi, functionName: "feeBps" }) },
+        ]);
+        total = decodeFunctionResult({ abi: cpuAbi, functionName: "nextId", data: head[0] as `0x${string}` }) as bigint;
+        fee = Number(decodeFunctionResult({ abi: marketAbi, functionName: "feeBps", data: head[1] as `0x${string}` }));
       }
       const minted = total > 0n ? total - 1n : 0n;
       if (note) {
@@ -260,18 +280,19 @@ export function bootGenesis(host: HTMLElement): () => void {
   };
 
   const gate = async (): Promise<{ eth: Injected; from: string } | null> => {
-    if (!getProvider() || walletKind() !== "okx") {
-      say(t("needOkx"));
+    if (!getProvider()) {
       try {
-        await connectKind("okx");
+        await connectBrowser();
       } catch {
-        say(t("noWallet"));
+        say(t("needOkx"));
+        host.querySelector<HTMLButtonElement>("#btn-wallet")?.click();
         return null;
       }
     }
     const eth = getProvider();
-    if (!eth || walletKind() !== "okx") {
+    if (!eth) {
       say(t("needOkx"));
+      host.querySelector<HTMLButtonElement>("#btn-wallet")?.click();
       return null;
     }
     await ensureBsc(eth);

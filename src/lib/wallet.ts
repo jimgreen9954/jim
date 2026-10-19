@@ -1,29 +1,71 @@
 type Eth = {
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
-  on?: (event: string, cb: (accounts: string[]) => void) => void;
+  on?: (event: string, cb: (...args: unknown[]) => void) => void;
+  isOkxWallet?: boolean;
+  isBinance?: boolean;
+  isMetaMask?: boolean;
+  isRabby?: boolean;
+  isTrust?: boolean;
 };
 
-export type WalletKind = "okx" | "binance";
+export type WalletKind = "okx" | "binance" | "injected";
+export type DeskChain = 56 | 196;
+
+const CHAINS: Record<DeskChain, { hex: string; add: Record<string, unknown> }> = {
+  56: {
+    hex: "0x38",
+    add: {
+      chainId: "0x38",
+      chainName: "BNB Smart Chain",
+      nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
+      rpcUrls: ["https://bsc-dataseed.binance.org"],
+      blockExplorerUrls: ["https://bscscan.com"],
+    },
+  },
+  196: {
+    hex: "0xc4",
+    add: {
+      chainId: "0xc4",
+      chainName: "X Layer",
+      nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
+      rpcUrls: ["https://rpc.xlayer.tech"],
+      blockExplorerUrls: ["https://www.oklink.com/xlayer"],
+    },
+  },
+};
 
 let openLink: string | null = null;
 const linkListeners = new Set<(next: string | null) => void>();
 let current: Eth | null = null;
 let account: string | null = null;
-let kind: WalletKind = "okx";
+let kind: WalletKind = "injected";
+let labelName = "钱包";
+let chainId: number | null = null;
 const listeners = new Set<(next: string | null) => void>();
+const chainListeners = new Set<(next: number | null) => void>();
 
 export function currentAccount(): string | null {
   return account;
 }
 
+export function currentChain(): number | null {
+  return chainId;
+}
+
 export function walletLabel(): string {
-  return kind === "binance" ? "币安钱包" : "OKX Wallet";
+  return labelName;
 }
 
 export function onAccount(cb: (next: string | null) => void): () => void {
   listeners.add(cb);
   cb(account);
   return () => listeners.delete(cb);
+}
+
+export function onChain(cb: (next: number | null) => void): () => void {
+  chainListeners.add(cb);
+  cb(chainId);
+  return () => chainListeners.delete(cb);
 }
 
 export function onOpenLink(cb: (next: string | null) => void): () => void {
@@ -42,6 +84,11 @@ function remember(next: string | null) {
   listeners.forEach((cb) => cb(next));
 }
 
+function rememberChain(next: number | null) {
+  chainId = Number.isFinite(next) ? next : null;
+  chainListeners.forEach((cb) => cb(chainId));
+}
+
 export function rememberAccount(next: string) {
   remember(next);
 }
@@ -49,7 +96,7 @@ export function rememberAccount(next: string) {
 type Host = Window & {
   okxwallet?: Eth;
   binancew3w?: { ethereum?: Eth };
-  ethereum?: Eth & { isOkxWallet?: boolean; isBinance?: boolean };
+  ethereum?: Eth;
 };
 
 function host(): Host {
@@ -70,15 +117,33 @@ export function binanceInjected(): Eth | null {
   return null;
 }
 
+function anyInjected(): Eth | null {
+  return okxInjected() ?? binanceInjected() ?? host().ethereum ?? null;
+}
+
+function nameOf(eth: Eth): string {
+  if (eth.isOkxWallet || eth === okxInjected()) return "OKX";
+  if (eth.isBinance || eth === binanceInjected()) return "币安";
+  if (eth.isRabby) return "Rabby";
+  if (eth.isTrust) return "Trust";
+  if (eth.isMetaMask) return "MetaMask";
+  return "钱包";
+}
+
+function kindOf(eth: Eth): WalletKind {
+  if (eth.isOkxWallet || eth === okxInjected()) return "okx";
+  if (eth.isBinance || eth === binanceInjected()) return "binance";
+  return "injected";
+}
+
 function captureOkxOpen() {
   const original = window.open.bind(window);
   window.open = (url?: string | URL, target?: string, features?: string) => {
     const text = url == null ? "" : String(url);
-    if (text.includes("okx") || text.includes("topic=") || text.includes("/ul/connect")) {
-      publishLink(text);
-      return null;
-    }
-    return original(url, target, features);
+    const tracked = /okx|topic=|\/ul\/connect|^wc:/i.test(text);
+    const opened = original(url, target, features);
+    if (tracked) publishLink(text);
+    return opened;
   };
 }
 
@@ -90,13 +155,35 @@ function armCapture() {
   captureOkxOpen();
 }
 
+async function refreshChain(eth: Eth) {
+  try {
+    const hex = String(await eth.request({ method: "eth_chainId" }));
+    rememberChain(Number.parseInt(hex, 16));
+  } catch {
+    rememberChain(null);
+  }
+}
+
+const wired = new WeakSet<object>();
+
 async function useInjected(eth: Eth): Promise<string> {
   current = eth;
+  kind = kindOf(eth);
+  labelName = nameOf(eth);
   const accounts = (await eth.request({ method: "eth_requestAccounts" })) as string[];
   const next = accounts[0];
   if (!next) throw new Error("nowallet");
   remember(next);
-  eth.on?.("accountsChanged", (rows) => remember(rows[0] ?? null));
+  if (!wired.has(eth)) {
+    wired.add(eth);
+    eth.on?.("accountsChanged", (rows) => {
+      const list = Array.isArray(rows) ? (rows as string[]) : [];
+      remember(list[0] ?? null);
+      if (!list[0]) rememberChain(null);
+    });
+    eth.on?.("chainChanged", (hex) => rememberChain(Number.parseInt(String(hex), 16)));
+  }
+  await refreshChain(eth);
   return next;
 }
 
@@ -163,23 +250,55 @@ async function connectOkxRemote(): Promise<string> {
       }
     },
   };
+  kind = "okx";
+  labelName = "OKX";
   current = wrapped;
   const accounts = (await wrapped.request({ method: "eth_requestAccounts" })) as string[];
   const next = accounts[0];
   if (!next) throw new Error("nowallet");
   remember(next);
+  await refreshChain(wrapped);
   return next;
 }
 
+export async function connectBrowser(): Promise<string> {
+  const eth = host().ethereum ?? okxInjected() ?? binanceInjected();
+  if (!eth) throw new Error("nowallet");
+  return useInjected(eth);
+}
+
 export async function connectKind(which: WalletKind): Promise<string> {
-  kind = which;
+  if (which === "injected") return connectBrowser();
   const plugged = which === "binance" ? binanceInjected() : okxInjected();
   if (plugged) return useInjected(plugged);
   if (which === "binance") {
+    const eth = host().ethereum;
+    if (eth) return useInjected(eth);
     publishLink(`https://app.binance.com/cedefi/dapp?url=${encodeURIComponent(window.location.href)}`);
     throw new Error("binanceapp");
   }
+  const eth = host().ethereum;
+  if (eth) return useInjected(eth);
   return connectOkxRemote();
+}
+
+export async function switchDeskChain(id: DeskChain): Promise<void> {
+  const eth = current ?? anyInjected();
+  if (!eth) throw new Error("nowallet");
+  if (!current) current = eth;
+  const row = CHAINS[id];
+  try {
+    await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: row.hex }] });
+  } catch (err) {
+    const code = typeof err === "object" && err && "code" in err ? Number((err as { code?: number }).code) : 0;
+    const message = err instanceof Error ? err.message : "";
+    if (code === 4902 || /unrecognized|not added|unknown chain/i.test(message)) {
+      await eth.request({ method: "wallet_addEthereumChain", params: [row.add] });
+    } else {
+      throw err;
+    }
+  }
+  rememberChain(id);
 }
 
 export function getProvider(): Eth | null {
@@ -194,22 +313,23 @@ export function disconnectWallet() {
   const eth = current as (Eth & { disconnect?: () => Promise<unknown> }) | null;
   void eth?.disconnect?.().catch(() => undefined);
   current = null;
-  kind = "okx";
+  kind = "injected";
+  labelName = "钱包";
   publishLink(null);
   remember(null);
+  rememberChain(null);
 }
 
 export async function ensureProvider(): Promise<Eth> {
   if (current) return current;
-  const plugged = kind === "binance" ? binanceInjected() : okxInjected();
+  const plugged = anyInjected();
   if (plugged) {
     current = plugged;
+    kind = kindOf(plugged);
+    labelName = nameOf(plugged);
     return plugged;
   }
-  if (kind === "binance") throw new Error("binanceapp");
-  await connectOkxRemote();
-  if (!current) throw new Error("nowallet");
-  return current;
+  throw new Error("nowallet");
 }
 
 export async function connectInjected(eth: Eth): Promise<string> {
@@ -217,16 +337,22 @@ export async function connectInjected(eth: Eth): Promise<string> {
 }
 
 export async function resumeInjected(): Promise<string | null> {
-  const eth = okxInjected() ?? binanceInjected() ?? host().ethereum ?? null;
+  const eth = anyInjected();
   if (!eth) return null;
   try {
     const accounts = (await eth.request({ method: "eth_accounts" })) as string[];
     const next = accounts[0];
     if (!next) return null;
     current = eth;
-    kind = host().binancew3w?.ethereum === eth || eth === binanceInjected() ? "binance" : "okx";
+    kind = kindOf(eth);
+    labelName = nameOf(eth);
     remember(next);
-    eth.on?.("accountsChanged", (rows) => remember(rows[0] ?? null));
+    eth.on?.("accountsChanged", (rows) => {
+      const list = Array.isArray(rows) ? (rows as string[]) : [];
+      remember(list[0] ?? null);
+    });
+    eth.on?.("chainChanged", (hex) => rememberChain(Number.parseInt(String(hex), 16)));
+    await refreshChain(eth);
     return next;
   } catch {
     return null;

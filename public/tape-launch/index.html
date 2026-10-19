@@ -46,12 +46,16 @@
   overflow: hidden;
   transition: flex-basis .16s ease, max-width .16s ease, width .16s ease;
 }
-.rail:hover {
-  flex-basis: 232px;
-  width: 232px;
-  min-width: 232px;
-  max-width: 232px;
-  box-shadow: 12px 0 32px rgba(4,17,29,.06);
+@media (hover: hover) and (pointer: fine) {
+  .rail:hover {
+    flex-basis: 232px;
+    width: 232px;
+    min-width: 232px;
+    max-width: 232px;
+    box-shadow: 12px 0 32px rgba(4,17,29,.06);
+  }
+  .rail:hover .brand b,
+  .rail:hover .nav-item span { opacity: 1; }
 }
 .brand {
   height: 48px;
@@ -63,7 +67,6 @@
 }
 .brand img { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; }
 .brand b { font-size: 18px; letter-spacing: -.3px; white-space: nowrap; opacity: 0; }
-.rail:hover .brand b { opacity: 1; }
 .nav-item {
   height: 44px;
   border-radius: 12px;
@@ -80,7 +83,6 @@
 }
 .nav-item svg { width: 22px; height: 22px; flex-shrink: 0; }
 .nav-item span { opacity: 0; transition: opacity .12s; }
-.rail:hover .nav-item span { opacity: 1; }
 .nav-item:hover, .nav-item.active { background: var(--soft); color: var(--ink); }
 .rail-gap { flex: 1; min-height: 12px; }
 a.nav-item { text-decoration: none; }
@@ -129,6 +131,10 @@ a.nav-item { text-decoration: none; }
   font-size: 15px;
   padding: 8px 4px;
   flex-shrink: 0;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .signin:hover { color: var(--blue); }
 .content { flex: 1; min-height: 0; overflow: auto; }
@@ -499,6 +505,8 @@ td.right, th.right { text-align: right; }
 }
 .sheet-card {
   width: min(420px, 100%);
+  max-height: min(640px, 100%);
+  overflow: auto;
   background: var(--card);
   color: var(--ink);
   border: 1px solid var(--line);
@@ -522,6 +530,12 @@ td.right, th.right { text-align: right; }
   font-weight: 700;
 }
 .wbtn img { width: 28px; height: 28px; border-radius: 8px; object-fit: cover; }
+.chain-row { display: flex; gap: 8px; margin-top: 10px; }
+.chain-row button {
+  flex: 1; height: 40px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--ink); font-weight: 700;
+}
+.chain-row button.on { background: var(--ink); color: #fff; }
 .ghost-btn {
   margin-top: 12px;
   background: transparent;
@@ -540,6 +554,9 @@ td.right, th.right { text-align: right; }
 }
 .sheet-card label { display: block; margin-top: 8px; font-size: 13px; font-weight: 600; }
 .sheet-card a { display: inline-block; margin-top: 10px; color: var(--blue); font-weight: 700; }
+#wallet-link { display: grid; gap: 8px; margin-top: 12px; }
+#wallet-link[hidden] { display: none !important; }
+#wallet-link a.buy { display: flex; align-items: center; justify-content: center; height: 44px; line-height: 1; color: #fff; text-decoration: none; }
 .deal {
   height: 32px;
   padding: 0 10px;
@@ -559,7 +576,56 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
 .tok { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 10px 0 6px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); flex-shrink: 0; }
 .tok img, .tok i { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; display: grid; place-items: center; background: #2081e2; color: #fff; font-style: normal; font-weight: 800; font-size: 13px; }
 .tok b { font-size: 15px; }
-.profile-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 8px 16px; }
+.tape-banner {
+  position: relative;
+  min-height: 300px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #111 center/cover no-repeat;
+  color: #fff;
+  margin-bottom: 14px;
+}
+.tape-banner .veil {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,.12), rgba(0,0,0,.78));
+}
+.tape-banner .body { position: relative; z-index: 1; padding: 24px; display: flex; gap: 16px; align-items: flex-end; min-height: 300px; }
+.tape-banner img.logo { width: 84px; height: 84px; border-radius: 18px; border: 3px solid #fff; object-fit: cover; background: #111; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+.tape-banner h3 { font-size: 32px; margin: 0 0 6px; letter-spacing: -0.03em; }
+.tape-banner p { margin: 0; color: rgba(255,255,255,.88); font-size: 13px; max-width: 720px; line-height: 1.45; }
+.tape-metrics { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 16px; }
+.tape-metrics b { display: block; font-size: 18px; }
+.tape-metrics span { color: rgba(255,255,255,.72); font-size: 12px; }
+.tape-tools { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; }
+.tape-tools .sub { margin: 0; flex: 1; }
+.tape-tools a, .tape-tools button { font-weight: 700; color: var(--blue); background: transparent; border: 0; padding: 0; white-space: nowrap; }
+.tape-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+.tape-card { display: block; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--card); color: inherit; text-decoration: none; }
+.tape-card:hover { border-color: var(--blue); }
+.tape-card .face {
+  position: relative;
+  aspect-ratio: 1;
+  background: #0e141c center/cover no-repeat;
+}
+.tape-card .face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tape-card .face em {
+  position: absolute; left: 8px; bottom: 8px;
+  padding: 2px 7px; border-radius: 999px;
+  background: rgba(0,0,0,.72); color: #fff;
+  font-style: normal; font-size: 12px; font-weight: 700;
+}
+.tape-card .px { padding: 10px 12px 12px; }
+.tape-card .px b { display: block; font-size: 14px; }
+.tape-card .px span { color: var(--muted); font-size: 12px; }
+@media (max-width: 1100px) { .tape-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 720px) {
+  .tape-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tape-banner h3 { font-size: 24px; }
+  .search kbd { display: none; }
+  .pad { padding: 8px 12px 32px; }
+  .topbar { gap: 8px; padding: 0 10px; }
+}
+.profile-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 8px 16px; }
 .profile-actions .buy { width: auto; padding: 0 16px; }
 </style>
 </head>
@@ -582,10 +648,10 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 7h14M5 12h14M5 17h9"/></svg><span data-i18n="navActivity">动态</span>
   </button>
   <button class="nav-item" data-page="assets" onclick="switchPage('assets')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M7 15h4"/></svg><span data-i18n="navAssets">用户</span>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M7 15h4"/></svg><span data-i18n="navAssets">资产</span>
   </button>
   <button class="nav-item" data-page="profile" onclick="switchPage('profile')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.2"/><path d="M5 19c1.4-3 3.8-4.5 7-4.5S17.6 16 19 19"/></svg><span data-i18n="navProfile">资料</span>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.2"/><path d="M5 19c1.4-3 3.8-4.5 7-4.5S17.6 16 19 19"/></svg><span data-i18n="navProfile">个人中心</span>
   </button>
   <div class="rail-gap"></div>
   <a class="nav-item" href="/whitepaper">
@@ -640,6 +706,27 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
                 <div class="stat"><span>来源</span><b>tapeout.net</b></div>
               </div>
             </div>
+
+            <section class="block" id="tapecode-block">
+              <div class="tape-banner" id="tape-banner">
+                <div class="veil"></div>
+                <div class="body">
+                  <img class="logo" id="tape-logo" alt="" src="/tape-launch/logo.png">
+                  <div>
+                    <h3>TapeCode-Test1</h3>
+                    <p id="tape-desc">正在读 OKX 市场上的 X Layer 合集。合约 0x0e91460d6823c711643e650a9a4c0cc21de41614。</p>
+                    <div class="tape-metrics" id="tape-metrics"></div>
+                  </div>
+                </div>
+              </div>
+              <p class="sub" id="tape-code-note" hidden></p>
+              <div class="tape-tools">
+                <span class="grow"></span>
+                <a id="tape-okx" href="https://web3.okx.com/nft/collection/xlayer/tapecode-test1" target="_blank" rel="noopener">在 OKX 打开</a>
+                <button id="tape-more" type="button" hidden>更多挂单</button>
+              </div>
+              <div class="tape-grid" id="tape-grid"></div>
+            </section>
 
             <section class="block">
               <h3 data-i18n="genesisTitle">创世电路 NFT</h3>
@@ -781,7 +868,7 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
                 </div>
               </div>
               <p class="hint" id="swap-quote">报价读取中</p>
-              <button class="buy swap-go" id="swap-go" type="button" data-i18n="swapGo">用 OKX 兑换</button>
+              <button class="buy swap-go" id="swap-go" type="button" data-i18n="swapGo">兑换</button>
               <a id="swap-link" hidden target="_blank" rel="noopener"></a>
               <p class="hint" id="swap-msg">成交发给官方池子。取消就等于没换。</p>
             </form>
@@ -865,11 +952,21 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
             <p>公开价锁定 1 TAPE 对 0.001 BEM。倍数只能是整数，价格按这个比例放大，不能单独改一边。也可以改用 OKB 或只用 BEM 发射：单位锁死，同样只能填整数倍数。用哪种代币发射，公开铸造和二级交易就只用哪种。预留从总量里划出，不参与公开铸造，不能超过总量。单人最多铸造 10 次。总量由项目方自定。创建时按总量批量生成芯片属性和稀有度，同一项目里属性组合不重复。图片可以自己上传，也可以用自己的 Key 或平台默认生成，风格分朋克和真实。</p>
             <p>每枚 NFT 按 TAP-721 草案，除图片外还带一份 tapnet 网表和 SHA-256，来源可以对照。标准还在社区审核，这里只出可核验的预览，不假装已经流片上链。</p>
             <p>发射前，项目方必须先放入价值 3 美元的 OKB，这笔进金库。创建另付 1 TAPE + 0.01 枚发射代币：1 TAPE 直接销毁，0.01 锁进该项目金库。OKB 发射锁的是 0.01 OKB，BEM 或 TAPE 对发射锁的是 0.01 BEM。</p>
-            <p>铸造结束后代币这样分，分的是这次发射的那种代币。30% 项目方可以领取。40% 放进金库，谁也取不出来；金库里的代币每天回购价格低于铸造价 3 倍的 NFT，直到卖完。另外 30% 分 3 个月线性释放给项目方；价格低于铸造价 2 倍时，这部分不能领，并且用金库里的发射代币自动买入 TAPE 和 BEM 各一半，然后销毁。</p>
-            <p>金库地址任何人都取不出。平台二级交易手续费 0.2%，其中一半回购并销毁 TAPE，另一半归平台。在 tapeout.net 铸造的晶体管和流片电路，本来就是协议上的代币和 NFT，本站认同一份合约，不另铸、不改官网的 BNB 或 OKB 铸造价。本站的铸造价、预留、单人 10 次、金库和 TAP-721 预览，只约束在本站创建的项目。</p>
+            <p>铸造收进来的，是这次发射的那种代币，创建时就分成三份。30% 在售罄收盘后项目方可以领取。40% 没有提取函数。收盘后，本合约里低于铸造价 2 倍、挂满 1 天的 NFT，可以被这 40% 买下并销毁。每天最多花掉可回购余额的九十分之一。项目方自己的地址不能卖给它。进金库的 OKB 种子和锁进去的 0.01 不参与回购。另一个地址仍可能慢慢卖，所以一天封顶。</p>
+            <p>最后 30% 不是按天发。售罄满 90 天，并且连续 3 天都有不低于 2 倍、已经挂满 1 天的挂单，同时没有低于 2 倍的挂单，项目方一次领完。满 90 天之后连续 3 天做不到，这份钱永久不能领。之后每天一次：账上的 BEM 或 TAPE 直接销毁；OKB 则一半买 BEM、一半买 TAPE，买到就销毁，直到花完。两倍看的是本合约挂单，不是同一笔交易里的现货价。别人若连续三天挂一张回购当天买不掉的低价单，这 30% 会被判负。</p>
+            <p>本站二级成交收 0.2%。TAPE 的一半打进销毁地址，另一半给平台。BEM 或 OKB 的那一半锁在合约里，不在成交当中换成 TAPE，避免被夹。OKX 和 tapeout.net 上的成交不经过这份合约，收不到这一笔。创建按钮在工厂地址核对并写上之前不会扣款。</p>
           </details>
-          <button class="buy" style="margin-top:16px" type="button" disabled>创建还没接到链上，这里不会扣款</button>
-          <p class="hint">已上线的晶体管在代币页直接成交。带独立头像的 NFT 点进卡片成交。</p>
+          <button class="buy" id="launch-create" style="margin-top:16px" type="button">创建</button>
+          <p class="hint" id="launch-create-msg">工厂还没写进页面。点创建不会扣款，会滚到下面的部署。</p>
+          <div class="form" id="factory-box">
+            <h3 style="font-size:20px">部署工厂</h3>
+            <p class="hint">部署和收费都是 0x7a2cC9b4dd8302FDD104159CeE97Be8a90BF772c。这是钱包，不是工厂合约。请用这个地址签名。这一步不转币。数量只写进工厂，创建项目时才付。签名这份字节码就是上面的 30/40/30：40% 低于两倍就回购并销毁，最后 30% 满 90 天且连续 3 天不低于两倍才能领，否则按天销毁。构造函数里的回购开关传的是开，合约不再看这个开关。已经上链的永续、现货和预言机仍付给 0x823b9F6A93Ac44Ce5A469823A336c15b6117054D，那些合约改不了。OKB 大约 114 美元一个的话，3 美元约是 0.026。工厂地址出来并核对之前，创建按钮不扣款。</p>
+            <label>进金库的 OKB</label>
+            <input id="factory-okb" inputmode="decimal" placeholder="0.026" value="0.026">
+            <button class="buy" id="factory-go" type="button">用钱包签名部署</button>
+            <a id="factory-link" hidden target="_blank" rel="noopener"></a>
+            <p class="hint" id="factory-msg"></p>
+          </div>
         </form>
       </div>
     </div>
@@ -888,15 +985,14 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
         <div class="profile-banner"></div>
         <div class="profile-row">
           <img id="assets-av" src="logo.png" alt="">
-          <div><h2 id="assets-name" data-i18n="assetsTitle">用户中心</h2><p id="assets-addr">未连接钱包</p></div>
+          <div><h2 id="assets-name" data-i18n="assetsTitle">资产</h2><p id="assets-addr">未连接钱包</p></div>
         </div>
         <div class="profile-actions">
-          <button class="buy" id="assets-login" type="button" data-i18n="loginOkx">用 OKX 登录</button>
+          <button class="buy" id="assets-login" type="button" data-i18n="loginOkx">连接钱包</button>
           <button class="buy ghost" id="assets-logout" type="button" hidden data-i18n="logout">退出</button>
-          <button class="buy ghost" type="button" onclick="switchPage('profile')" data-i18n="navProfile">资料</button>
         </div>
         <div class="stats-row">
-          <div><b id="bal-native">—</b><span id="bal-label">OKX</span></div>
+          <div><b id="bal-native">—</b><span id="bal-label">余额</span></div>
           <div><b id="bal-hold">—</b><span>晶体管持仓</span></div>
         </div>
         <h3 data-i18n="holdings" style="font-size:16px;margin:4px 8px 8px">链上资产</h3>
@@ -911,10 +1007,14 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
         <div class="profile-banner"></div>
         <div class="profile-row">
           <img id="profile-av" src="logo.png" alt="">
-          <div><h2 id="profile-name" data-i18n="profileTitle">资料</h2><p id="profile-addr">未连接钱包</p></div>
+          <div><h2 id="profile-name" data-i18n="profileTitle">个人中心</h2><p id="profile-addr">未连接钱包</p></div>
         </div>
-        <form class="form" id="profile-form" onsubmit="return false">
-          <h3 style="font-size:20px" data-i18n="profileTitle">资料</h3>
+        <div class="profile-actions">
+          <button class="buy" id="profile-login" type="button" data-i18n="loginOkx">连接钱包</button>
+          <button class="buy ghost" id="profile-logout" type="button" hidden data-i18n="logout">退出</button>
+        </div>
+        <div class="form" id="profile-form">
+          <h3 style="font-size:20px" data-i18n="profileTitle">个人中心</h3>
           <label data-i18n="nickLabel">昵称</label>
           <input id="profile-nick" maxlength="16" data-i18n-ph="nickPh" placeholder="最多 16 个字">
           <label data-i18n="avatarLabel">头像</label>
@@ -922,7 +1022,7 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
           <p class="hint" id="profile-msg" data-i18n="profileHint">存在这台浏览器，只对当前连接的钱包生效。</p>
           <button class="buy" id="profile-save" type="button" data-i18n="save">保存</button>
           <button class="buy ghost" id="profile-clear" type="button" data-i18n="clearAv">去掉头像</button>
-        </form>
+        </div>
       </div>
     </div>
   </div>
@@ -948,21 +1048,38 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
     <p id="gen-px"></p>
     <label>挂单价格（BNB）</label>
     <input id="gen-price" inputmode="decimal" placeholder="只有持有人挂单时用">
-    <button class="buy" id="gen-buy" type="button" data-i18n="genBuy">用 OKX 买下</button>
+    <button class="buy" id="gen-buy" type="button" data-i18n="genBuy">用钱包买下</button>
     <button class="buy ghost" id="gen-list" type="button" data-i18n="genList">挂到官方市场</button>
     <a id="gen-link" target="_blank" rel="noopener" data-i18n="genScan">在 BscScan 看这枚</a>
     <p id="gen-msg"></p>
     <button class="ghost-btn" id="gen-close" type="button" data-i18n="close">关闭</button>
   </div>
 </div>
+<div class="sheet" id="proto-sheet" hidden>
+  <div class="sheet-card">
+    <h3 id="proto-name">协议电路</h3>
+    <p id="proto-px"></p>
+    <button class="buy" id="proto-buy" type="button">用钱包买下</button>
+    <a id="proto-link" target="_blank" rel="noopener">在 BscScan 看这枚</a>
+    <p id="proto-msg"></p>
+    <button class="ghost-btn" id="proto-close" type="button">关闭</button>
+  </div>
+</div>
 <div class="sheet" id="wallet-sheet" hidden>
   <div class="sheet-card">
-    <h3 data-i18n="connectTitle">登录</h3>
-    <p data-i18n="connectLead">创世电路和兑换用 OKX 钱包签名。点 OKX 会唤起 OKX 钱包。</p>
+    <h3 data-i18n="connectTitle">钱包</h3>
+    <p id="wallet-who">未连接</p>
+    <div class="chain-row" id="chain-row">
+      <button type="button" data-chain="56">BSC</button>
+      <button type="button" data-chain="196">X Layer</button>
+    </div>
+    <p data-i18n="connectLead">登录后可以退出，也可以在 BSC 和 X Layer 之间切换。创世、晶体管在 BSC，OKB 兑换在 X Layer。</p>
+    <button class="wbtn" type="button" data-wallet="browser" data-i18n="browserWallet">浏览器钱包</button>
     <button class="wbtn" type="button" data-wallet="okx">OKX Wallet</button>
     <button class="wbtn" type="button" data-wallet="binance" data-i18n="binance">币安钱包</button>
     <button class="wbtn" type="button" id="wallet-logout" hidden data-i18n="logout">退出</button>
     <div id="wallet-extra"></div>
+    <div id="wallet-link" hidden></div>
     <p id="wallet-msg"></p>
     <button class="ghost-btn" id="wallet-close" type="button" data-i18n="close">关闭</button>
   </div>
