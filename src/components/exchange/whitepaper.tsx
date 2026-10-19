@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { setUiLang } from "@/lib/locale";
 
 type Section = { h: string; ps: string[] };
 type Lang = "zh" | "en";
@@ -7,7 +8,7 @@ const zh: Section[] = [
   {
     h: "摘要",
     ps: [
-      "TAPELIQUID 是 TapeOut 的市场。已经能用的是三件事：创世电路在官方市场上买卖，BEM 和 OKB 在官方池子里兑换，右上角钱包可以登录、退出，并在 BSC 和 X Layer 之间切换。钱不进这个网页。签名之前，币留在你的钱包里。",
+      "TAPELIQUID 是 TapeOut 的市场。已经能用的是四件事：电路朋克在本站市场挂单成交，创世电路在官方市场上买卖，BEM、OKB 和 TAPE 在官方池子里兑换，右上角钱包可以登录、退出，并在 BSC 和 X Layer 之间切换。钱不进这个网页。签名之前，币留在你的钱包里。",
       "本站自己的发射规则只约束在这里创建的项目。tapeout.net 上已经铸出的晶体管和流片电路仍是协议原件，本站认同一份合约，不另铸，也不改官网的 BNB 或 OKB 铸造价。",
       "创建调用已部署的工厂 0x2872E6D6AB14C5Cdb08587b437Bd16248270A04d，部署交易 0x73ebdd1527e39065ba4da9f8869b5c06d8a3d5e62cbefe64ccddda24e94f5dd0。收费地址、0.026 OKB 进金库、回购开关都写死在这份合约里。没有管理员，不能升级，也不能把金库转走。页面不再另签一份工厂。",
     ],
@@ -17,7 +18,8 @@ const zh: Section[] = [
     ps: [
       "电路朋克，符号 CPUNK，是本站的创世 NFT，也是向中本聪的一揖。中本聪留下的是一套不必求人的账本。TapeOut 把每一次流片写成自己的编年。这一万张像素是那本编年里的纪念，不是创世电路的仿品，不画商标，也不画真人。",
       "它是第一款电路朋克，也只此一套。24×24 的格子里，衬底、金属层、对准、键合、封装都跟编号走。极紫外晶粒 9 枚，键合巨像 24 尊，报废晶粒 88 片，其余按晶圆人像、吉祥晶粒、对准标记、缺陷图样、纪念版图的比例排开。TapeOut 上已经流片的创世电路仍是协议原件，买卖走官网市场。本站不再另开第二套。",
-      "合约在 X Layer：0xB5ac1dddc158a639D4499aad2d8F393989D4bD34。总量一万。三千张公开铸造，价锁在 1 TAPE 加 0.001 BEM，一个钱包最多 10 次，编号从 7001 起，这一轮还没开铸。七千张是预留，不进公开价。图片地址 https://tapeliquid.net/api/circuit-punk/ 已经写死，不能改。只有名称正好是「电路朋克」，这一款才认这套图。工厂不按名字拦第二次创建。别人再调一次，链上拦不住，但那不是这一款。",
+      "合约在 X Layer：0xB5ac1dddc158a639D4499aad2d8F393989D4bD34。总量一万。三千张公开铸造已经打开，价锁在 1 TAPE 加 0.001 BEM，一个钱包最多 10 次，编号从 7001 起。七千张是预留，不进公开价。图片地址 https://tapeliquid.net/api/circuit-punk/ 已经写死，不能改。只有名称正好是「电路朋克」，这一款才认这套图。工厂不按名字拦第二次创建。别人再调一次，链上拦不住，但那不是这一款。",
+      "本站市场只做电路朋克。铸造页只铸造，成交不在那里。挂单可以按 BEM 标价，也可以按 TAPE 标价。买家两边一起付，按 1 BEM 对 1000 TAPE。手续费 0.2%，从成交里扣。挂出后 NFT 进合约托管。卖家在市场的「我的挂单」里撤单，不用再翻整本图录。点开一张，看类型、衬底、金属层、对准、键合、封装，以及存世和稀有度。点旁边空白处收起。持有的张数、编号和图片只在资产页。",
       "预留先谢过先来的人。TapeCode-Test1 一号是火星人 @bitcoin2themars，地址 0xddb587D88C0AFa42317E033bDD11edC2462B873f，领 51 到 150 号，一百张。8855 号是 TapeOut 协议创始人 @Blonskr，地址 0x571d447f4f24688eC35Ccf07f1D6993655F6aF15，领 1 到 50 号。TapeCode 的持有地址一人一张，1000 到 6019，共 5020 张。本站电路的持有地址一人一张，151 到 369，共 219 张。销毁地址里的 TapeCode 没有份。",
       "还没领出的预留是 1611 张：370 到 999，以及 6020 到 7000。这 1611 张留给基金会，做以后的新计划，不进公开铸造，仍要创建者一笔领一张。",
     ],
@@ -72,7 +74,7 @@ const zh: Section[] = [
       "登录、创世买卖和兑换，用右上角连上的钱包签名。可以是浏览器钱包、OKX、币安，或页面认到的其他钱包。没连上时右上角是登录，连上之后旁边是退出，也可以切 BSC 和 X Layer。退出只断开这个页面，不会转走资产。本站不接收私钥，也不会把私钥写进页面或仓库。",
       "资产页主要看这个地址的链上资产。昵称、头像和背景点一下就改：点头像换头像，点背景换背景，点名字改名字。只存在这台浏览器，绑在当前钱包。",
       "用户中心显示的是这个地址在 BSC 和 X Layer 上的 BNB、BEM、USDT、OKB。这是链上余额，不是欧易交易所账户。昵称和头像只存在这台浏览器。",
-      "顶栏可以切换中文和英文。语言存在这台浏览器，不写上链。",
+      "顶栏的中文和英文，和这篇白皮书是同一份设置。存在这台浏览器，不写上链。兑换页显示这个钱包在 BSC 和 X Layer 上的 USDT、OKB、BEM、TAPE 可用余额。某一条读失败时，其余的仍显示，不整排留空。",
     ],
   },
   {
@@ -89,7 +91,7 @@ const en: Section[] = [
   {
     h: "Abstract",
     ps: [
-      "TAPELIQUID is a TapeOut market. Three things already work: genesis circuits trade on the official market, BEM and OKB swap in official pools, and the top-right wallet can log in, log out, and switch BSC or X Layer. Funds do not sit in the page. Tokens stay in the wallet until you sign.",
+      "TAPELIQUID is a TapeOut market. Four things already work: Circuit Punk lists and trades on this site, genesis circuits trade on the official market, BEM, OKB and TAPE swap in official pools, and the top-right wallet can log in, log out, and switch BSC or X Layer. Funds do not sit in the page. Tokens stay in the wallet until you sign.",
       "The launch rules on this site bind only projects created here. Transistors and circuits already minted on tapeout.net stay the protocol originals. This site recognizes that contract, does not mint a second copy, and does not change the official BNB or OKB mint price.",
       "Create calls the deployed factory 0x2872E6D6AB14C5Cdb08587b437Bd16248270A04d, deployment 0x73ebdd1527e39065ba4da9f8869b5c06d8a3d5e62cbefe64ccddda24e94f5dd0. The fee address, the 0.026 OKB seed, and the buyback switch are fixed in that contract. It has no admin, no upgrade, and no way to pull the vault out. The page does not deploy a second factory.",
     ],
@@ -99,7 +101,8 @@ const en: Section[] = [
     ps: [
       "Circuit Punk, symbol CPUNK, is this site's genesis NFT, and a bow to Satoshi. What he left was a ledger that does not ask permission. TapeOut keeps its chronicle in every tape-out. These ten thousand pixels are a page of that chronicle, not a copy of the genesis circuits, and not a drawing of a trademark or a face.",
       "It is the first circuit-punk collection, and the only one. On a 24 by 24 grid, substrate, metal, alignment, bond, and package follow the number. Nine extreme-ultraviolet dies, twenty-four bond colossi, eighty-eight scrap dies. The rest follow wafer portraits, mascot dies, alignment marks, defect patterns, and memorial layouts. Genesis circuits already taped out on TapeOut stay the protocol originals and still trade on the official market. This site will not open a second set.",
-      "The contract on X Layer is 0xB5ac1dddc158a639D4499aad2d8F393989D4bD34. Supply is 10,000. Three thousand are public, locked at 1 TAPE plus 0.001 BEM, at most ten mints a wallet, numbered from 7001, and not yet opened. Seven thousand were reserved and never entered the public price. The image address https://tapeliquid.net/api/circuit-punk/ is fixed. Only the name 电路朋克 belongs to this set of pictures. The factory does not refuse a second create that reuses the name. Such a call is not this collection.",
+      "The contract on X Layer is 0xB5ac1dddc158a639D4499aad2d8F393989D4bD34. Supply is 10,000. The public three thousand are open, locked at 1 TAPE plus 0.001 BEM, at most ten mints a wallet, numbered from 7001. Seven thousand were reserved and never entered the public price. The image address https://tapeliquid.net/api/circuit-punk/ is fixed. Only the name 电路朋克 belongs to this set of pictures. The factory does not refuse a second create that reuses the name. Such a call is not this collection.",
+      "This site's market trades Circuit Punk only. The mint page mints and does not settle sales. A listing can be quoted in BEM or in TAPE. The buyer pays both, at 1 BEM to 1000 TAPE. The fee is 0.2%, taken from the sale. Once listed, the NFT is held by the contract. The seller cancels from My listings on the market, without paging through the catalog. Open one to read type, substrate, metal, alignment, bond, package, supply, and rarity. Click the blank beside it to close. Count, numbers, and pictures of what you hold live only on the Assets page.",
       "The reserve first thanks the people who were already here. TapeCode-Test1 number 1 is the Martian, @bitcoin2themars, at 0xddb587D88C0AFa42317E033bDD11edC2462B873f, and holds 51 through 150, one hundred tokens. Number 8855 is @Blonskr, founder of the TapeOut protocol, at 0x571d447f4f24688eC35Ccf07f1D6993655F6aF15, and holds 1 through 50. Each TapeCode holder address received one, 1000 through 6019, 5,020 tokens. Each holder of this site's circuits received one, 151 through 369, 219 tokens. TapeCode in the burn address was left out.",
       "What is still unclaimed is 1,611: 370 through 999, and 6020 through 7000. Those 1,611 stay for the foundation's later plans. They do not enter the public mint, and the creator still claims them one by one.",
     ],
@@ -154,7 +157,7 @@ const en: Section[] = [
       "Login, genesis trades, and swaps sign with whichever wallet is connected from the top right: a browser wallet, OKX, Binance, or any other wallet the page detects. Logged out, the corner says Log in. Once connected, Log out sits beside the address, and BSC or X Layer can be switched. Logout only disconnects this page. It does not move assets. This site never asks for a private key, and a key is not written into the page or the repository.",
       "The assets page is mainly this address's balances. Click the avatar to change it, the banner to change the background, and the name to rename. Those stay in this browser, tied to the connected wallet.",
       "The account page shows this address's BNB, BEM, and USDT on BSC, and OKB and BEM on X Layer. Those are on-chain balances, not an OKX exchange account. The name and avatar stay in this browser.",
-      "The top bar switches Chinese and English. The choice stays in this browser and is not written on chain.",
+      "The top bar and this paper share one language setting. It stays in this browser and is not written on chain. The swap page shows this wallet's available USDT, OKB, BEM and TAPE on BSC and X Layer. If one read fails, the others still show.",
     ],
   },
   {
@@ -170,14 +173,20 @@ const en: Section[] = [
 export function Whitepaper() {
   const [lang, setLang] = useState<Lang>("zh");
   useEffect(() => {
-    const stored = window.localStorage.getItem("tape-lang") === "en" ? "en" : "zh";
-    setLang(stored);
+    const sync = () => {
+      const next = window.localStorage.getItem("tape-lang") === "en" ? "en" : "zh";
+      setUiLang(next);
+      setLang(next);
+    };
+    sync();
+    window.addEventListener("tape-lang", sync);
+    return () => window.removeEventListener("tape-lang", sync);
   }, []);
   const sections = lang === "zh" ? zh : en;
   const flip = () => {
     const next = lang === "zh" ? "en" : "zh";
-    window.localStorage.setItem("tape-lang", next);
     setLang(next);
+    setUiLang(next);
   };
   return (
     <article className="flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-5 text-zinc-900">

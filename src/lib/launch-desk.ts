@@ -5,6 +5,7 @@ import { mintChipArt } from "@/lib/chip-art";
 import { nickOf, readAvatar, readCover, readNicks, writeAvatar, writeCover, writeNick } from "@/lib/nicks";
 import { showMintWin, whenMined } from "@/lib/mint-win";
 import { deskError, quoteBridge, quoteSwap, readSwapBalances, runBridge, runSwap, type BridgeDir, type CoinBals, type SwapPair, type SwapSide } from "@/lib/asset-desk";
+import { watchEnglish } from "@/lib/live-en";
 import { applyDom, bootLang, onLang, setUiLang, t, uiLang } from "@/lib/locale";
 import { connectBrowser, connectInjected, connectKind, currentAccount, currentChain, disconnectWallet, getProvider, onAccount, onChain, onOpenLink, resumeInjected, switchDeskChain, walletLabel } from "@/lib/wallet";
 import { bootGenesis } from "@/lib/genesis-desk";
@@ -14,6 +15,7 @@ import { createAbi, factoryCreateData, factoryDeployData, FACTORY, FACTORY_PLATF
 import { previewPathPrefix } from "@/lib/preview-path-prefix";
 import { TAPE_BEM, TAPE_TOKEN } from "@/lib/tape-pool";
 import { connectXLayer, txUrl } from "@/lib/xlayer";
+import { bootCpunk } from "@/lib/cpunk-desk";
 import { connectBsc } from "@/lib/bsc";
 
 type Injected = {
@@ -207,9 +209,14 @@ function quoteText(node: HTMLElement, quote: TokenQuote | undefined) {
 export function bootLaunch(host: HTMLElement): () => void {
   const ac = new AbortController();
   const opt = { signal: ac.signal };
+  host.querySelectorAll<HTMLElement>(".sheet").forEach((sheet) => {
+    sheet.addEventListener("click", (event) => {
+      if (event.target === sheet) sheet.hidden = true;
+    }, opt);
+  });
   let alive = true;
   const open = (id: string) => {
-    const next = id === "profile" ? "assets" : id;
+    const next = id === "profile" ? "assets" : id === "cpunk" ? "mint" : id;
     host.querySelectorAll(".page").forEach((node) => node.classList.remove("active"));
     host.querySelector("#page-" + next)?.classList.add("active");
     host.querySelectorAll(".nav-item").forEach((node) => node.classList.remove("active"));
@@ -218,6 +225,27 @@ export function bootLaunch(host: HTMLElement): () => void {
     if (scroller) scroller.scrollTop = 0;
   };
   (window as unknown as { switchPage?: (id: string) => void }).switchPage = open;
+  host.addEventListener("click", (event) => {
+    const button = (event.target as HTMLElement).closest("button");
+    if (!button || !host.contains(button)) return;
+    const unit = button.closest("#cp-unit");
+    if (unit) {
+      unit.querySelectorAll("button").forEach((node) => node.classList.remove("on"));
+      button.classList.add("on");
+      const input = host.querySelector<HTMLInputElement>("#cp-list-px");
+      const label = host.querySelector("#cp-px-label");
+      const pair = host.querySelector("#cp-pair");
+      const tape = button.dataset.unit === "tape";
+      if (input) input.value = tape ? "2" : "0.002";
+      if (label) label.textContent = tape ? "价格（TAPE）" : "价格（BEM）";
+      if (pair) pair.textContent = tape ? "现在按 TAPE 标价。买家同时付对应的 BEM。" : "现在按 BEM 标价。买家同时付 1000 倍的 TAPE。";
+    }
+    if (button.id === "cp-tab-items" || button.id === "cp-tab-lists") {
+      const lists = button.id === "cp-tab-lists";
+      host.querySelector("#cp-tab-items")?.classList.toggle("on", !lists);
+      host.querySelector("#cp-tab-lists")?.classList.toggle("on", lists);
+    }
+  }, opt);
   host.querySelectorAll<HTMLElement>("[onclick*='switchPage']").forEach((node) => {
     const id = node.getAttribute("onclick")?.match(/switchPage\('([^']+)'\)/)?.[1];
     if (!id) return;
@@ -370,6 +398,7 @@ export function bootLaunch(host: HTMLElement): () => void {
   const themeBtn = host.querySelector<HTMLButtonElement>("#btn-theme");
   const paintTheme = (mode: "dark" | "light") => {
     host.dataset.theme = mode;
+    host.style.colorScheme = mode;
     if (themeBtn) themeBtn.textContent = mode === "dark" ? t("themeDay") : t("themeNight");
     window.localStorage.setItem("tape-theme", mode);
   };
@@ -820,6 +849,7 @@ export function bootLaunch(host: HTMLElement): () => void {
       { chain: "BSC", symbol: "USDT", rpc: "https://bsc-dataseed.binance.org", token: "0x55d398326f99059fF775485246999027B3197955", decimals: 18 },
       { chain: "X Layer", symbol: "OKB", rpc: "https://rpc.xlayer.tech", native: true, decimals: 18 },
       { chain: "X Layer", symbol: "BEM", rpc: "https://rpc.xlayer.tech", token: "0x60e62Efa9405d6873C5deaBD4E6CC91c25363952", decimals: 8 },
+      { chain: "X Layer", symbol: "TAPE", rpc: "https://rpc.xlayer.tech", token: TAPE_TOKEN, decimals: 8 },
     ];
     void Promise.all(rows.map(async (row) => {
       const data = row.native ? undefined : `0x70a08231${address.toLowerCase().replace(/^0x/, "").padStart(64, "0")}`;
@@ -1533,10 +1563,15 @@ export function bootLaunch(host: HTMLElement): () => void {
     let eth = getProvider();
     if (!eth) {
       showSheet(true);
-      if (msg) msg.textContent = "先连接钱包。成交在 BSC，和 tapeout.net 同一份市场合约。";
+      say("先连接钱包。BSC 的挂单和卖出在这里签，链要切到 BSC。");
       return null;
     }
-    await ensureBsc(eth);
+    try {
+      await ensureBsc(eth);
+    } catch (error) {
+      say(tradeError(error));
+      return null;
+    }
     eth = getProvider() ?? eth;
     let from = currentAccount();
     if (!from) {
@@ -1931,6 +1966,8 @@ export function bootLaunch(host: HTMLElement): () => void {
         if (!alive) return;
         const note = host.querySelector("#tape-note");
         if (note) note.textContent = "读不到 tapeout.net，没有用假价格顶上。";
+        const body = host.querySelector("#tape-body");
+        if (body && body.textContent?.includes("正在读取")) body.textContent = "行情没读到。刷新后再挂单。";
       });
   };
   const circuitMarket = "0x6feEbbEbC07BcB90bd1Ac8b0CF9BaA4f0fF2B46f";
@@ -2276,7 +2313,7 @@ export function bootLaunch(host: HTMLElement): () => void {
     }
     try {
       const next = await readSwapBalances(account);
-      if (!alive || currentAccount() !== account) return;
+      if (!alive || currentAccount()?.toLowerCase() !== account.toLowerCase()) return;
       bals = next;
       const tape = swapPair() === "xl-tape";
       if (nodes.usdt) nodes.usdt.textContent = tape ? next.usdtXl : next.usdtBsc;
@@ -2685,6 +2722,8 @@ export function bootLaunch(host: HTMLElement): () => void {
   const stopTapeLang = onLang(() => {
     if (alive) renderTape();
   });
+  const stopCpunk = bootCpunk(host, ac.signal, showSheet, open);
+  const stopEnglish = watchEnglish(host);
 
   return () => {
     alive = false;
@@ -2698,6 +2737,8 @@ export function bootLaunch(host: HTMLElement): () => void {
     stopGenesis();
     stopTapeLang();
     stopLang();
+    stopEnglish();
+    stopCpunk();
     ac.abort();
   };
 }

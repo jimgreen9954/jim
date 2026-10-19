@@ -203,7 +203,7 @@ async function send(from: string, to: Hex, data: Hex): Promise<Hex> {
   await ensureBsc();
   return (await eth.request({
     method: "eth_sendTransaction",
-    params: [{ from, to, data, value: "0x0" }],
+    params: [{ from, to, data, value: "0x0", chainId: BSC.hex }],
   })) as Hex;
 }
 

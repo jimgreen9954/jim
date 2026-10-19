@@ -142,6 +142,94 @@ export function punk(id: number): Punk {
   };
 }
 
+const TRAIT_KEYS = ["类型", "稀有度", "衬底", "金属层", "对准", "键合", "封装"] as const;
+export type TraitKey = (typeof TRAIT_KEYS)[number];
+
+type TraitCell = { key: TraitKey; value: string; n: number };
+type TraitBook = {
+  counts: Record<TraitKey, Record<string, number>>;
+  rows: Record<TraitKey, string>[];
+  rank: Uint16Array;
+  byRank: number[];
+};
+
+let traitBook: TraitBook | null = null;
+
+function traitValues(row: Punk): Record<TraitKey, string> {
+  return {
+    类型: row.type,
+    稀有度: row.tier,
+    衬底: row.sub,
+    金属层: row.metal,
+    对准: row.eye,
+    键合: row.bond,
+    封装: row.pack,
+  };
+}
+
+function loadTraits(): TraitBook {
+  if (traitBook) return traitBook;
+  const counts = Object.fromEntries(TRAIT_KEYS.map((key) => [key, {}])) as TraitBook["counts"];
+  const rows: Record<TraitKey, string>[] = [];
+  for (let id = 1; id <= CPUNK_SUPPLY; id += 1) {
+    const values = traitValues(punk(id));
+    rows.push(values);
+    for (const key of TRAIT_KEYS) counts[key][values[key]] = (counts[key][values[key]] ?? 0) + 1;
+  }
+  const score = new Float64Array(CPUNK_SUPPLY);
+  rows.forEach((values, index) => {
+    let sum = 0;
+    for (const key of TRAIT_KEYS) sum += CPUNK_SUPPLY / counts[key][values[key]];
+    score[index] = sum;
+  });
+  const order = Array.from({ length: CPUNK_SUPPLY }, (_, index) => index);
+  order.sort((a, b) => score[b] - score[a] || a - b);
+  const rank = new Uint16Array(CPUNK_SUPPLY);
+  order.forEach((index, place) => {
+    rank[index] = place + 1;
+  });
+  traitBook = { counts, rows, rank, byRank: order.map((index) => index + 1) };
+  return traitBook;
+}
+
+export function traitFacets(): { key: TraitKey; options: { value: string; n: number }[] }[] {
+  const book = loadTraits();
+  return TRAIT_KEYS.map((key) => ({
+    key,
+    options: Object.entries(book.counts[key])
+      .map(([value, n]) => ({ value, n }))
+      .sort((a, b) => a.n - b.n || a.value.localeCompare(b.value, "zh")),
+  }));
+}
+
+export type PunkSort = "rare" | "common" | "id";
+
+export function filterPunks(
+  filters: Partial<Record<TraitKey, string>>,
+  listedOnly?: number[],
+  sort: PunkSort = "rare",
+): number[] {
+  const book = loadTraits();
+  const active = TRAIT_KEYS.filter((key) => filters[key]);
+  const source = listedOnly ?? (sort === "id" ? Array.from({ length: CPUNK_SUPPLY }, (_, index) => index + 1) : book.byRank);
+  const ids = source.filter((id) => {
+    const values = book.rows[id - 1];
+    return values ? active.every((key) => values[key] === filters[key]) : false;
+  });
+  if (sort === "id") ids.sort((a, b) => a - b);
+  else if (sort === "common") ids.sort((a, b) => (book.rank[b - 1] || 0) - (book.rank[a - 1] || 0));
+  else ids.sort((a, b) => (book.rank[a - 1] || 0) - (book.rank[b - 1] || 0));
+  return ids;
+}
+
+export function punkSheet(id: number): { id: number; tier: string; rank: number; traits: TraitCell[]; rarest: TraitCell } {
+  const book = loadTraits();
+  const values = book.rows[id - 1] ?? traitValues(punk(id));
+  const traits = TRAIT_KEYS.map((key) => ({ key, value: values[key], n: book.counts[key][values[key]] ?? 0 }));
+  const rarest = traits.reduce((best, cell) => (cell.n < best.n ? cell : best));
+  return { id, tier: values.稀有度, rank: book.rank[id - 1] || 0, traits, rarest };
+}
+
 export function sampleIds(): number[] {
   const want = TYPES.map((row) => row.name);
   const found: number[] = [];

@@ -6,6 +6,8 @@ const COPY = {
     navMarket: "系列",
     navTokens: "代币",
     navLaunch: "发射",
+    navMint: "正在铸造",
+    navTrade: "市场",
     navActivity: "动态",
     navAssets: "资产",
     navProfile: "个人中心",
@@ -76,7 +78,7 @@ const COPY = {
     addrOn: "{addr} · 已连接",
     addrOff: "未连接钱包",
     balNote: "余额是这个地址在 BSC 和 X Layer 上的链上数据，不是欧易交易所账户。",
-    balEmpty: "连接钱包后，这里显示 BNB、OKB、BEM、USDT。",
+    balEmpty: "连接钱包后，这里显示 BNB、OKB、BEM、USDT 和 TAPE。",
     holdings: "链上资产",
     profileTitle: "个人中心",
     nickLabel: "昵称",
@@ -111,6 +113,8 @@ const COPY = {
     navMarket: "Collections",
     navTokens: "Tokens",
     navLaunch: "Launch",
+    navMint: "Minting",
+    navTrade: "Market",
     navActivity: "Activity",
     navAssets: "Assets",
     navProfile: "Account",
@@ -181,7 +185,7 @@ const COPY = {
     addrOn: "{addr} · connected",
     addrOff: "Wallet not connected",
     balNote: "Balances are this address on BSC and X Layer, not an OKX exchange account.",
-    balEmpty: "Connect a wallet to see BNB, OKB, BEM and USDT.",
+    balEmpty: "Connect a wallet to see BNB, OKB, BEM, USDT and TAPE.",
     holdings: "On-chain assets",
     profileTitle: "Account",
     nickLabel: "Name",
@@ -223,9 +227,12 @@ export function uiLang(): Lang {
 }
 
 export function setUiLang(next: Lang) {
-  lang = next;
+  if (next !== "zh" && next !== "en") return;
   if (typeof window !== "undefined") window.localStorage.setItem("tape-lang", next);
+  if (lang === next) return;
+  lang = next;
   listeners.forEach((cb) => cb());
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("tape-lang"));
 }
 
 export function onLang(cb: () => void): () => void {
@@ -256,4 +263,12 @@ export function applyDom(root: ParentNode) {
 export function bootLang() {
   if (typeof window === "undefined") return;
   lang = window.localStorage.getItem("tape-lang") === "en" ? "en" : "zh";
+  const pull = () => {
+    const next = window.localStorage.getItem("tape-lang") === "en" ? "en" : "zh";
+    if (next !== lang) setUiLang(next);
+  };
+  window.addEventListener("tape-lang", pull);
+  window.addEventListener("storage", (event) => {
+    if (event.key === "tape-lang") pull();
+  });
 }

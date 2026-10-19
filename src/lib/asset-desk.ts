@@ -126,11 +126,11 @@ export async function quoteSwap(pair: SwapPair, side: SwapSide, raw: string): Pr
   return { amount: show(out, decimalsOut), unit, venue: "xlayer", live: true, note: "" };
 }
 
-async function send(from: string, to: Hex, data: Hex, value = 0n): Promise<Hex> {
+async function send(from: string, to: Hex, data: Hex, value = 0n, chainId = "0xc4"): Promise<Hex> {
   const eth = await ensureProvider();
   return (await eth.request({
     method: "eth_sendTransaction",
-    params: [{ from, to, data, value: `0x${value.toString(16)}` }],
+    params: [{ from, to, data, value: `0x${value.toString(16)}`, chainId }],
   })) as Hex;
 }
 
@@ -256,7 +256,7 @@ export async function runBridge(dir: BridgeDir, raw: string): Promise<{ hash: st
     });
     if (allowance < plan.param.amountLD) {
       const approveData = encodeFunctionData({ abi: erc20, functionName: "approve", args: [BRIDGE.bsc, plan.param.amountLD] });
-      const approveHash = await send(from, BSC.bem, approveData);
+      const approveHash = await send(from, BSC.bem, approveData, 0n, "0x38");
       await bsc.waitForTransactionReceipt({ hash: approveHash, timeout: 90_000 });
     }
   }
@@ -265,7 +265,7 @@ export async function runBridge(dir: BridgeDir, raw: string): Promise<{ hash: st
     functionName: "send",
     args: [plan.param, { nativeFee: fee, lzTokenFee: 0n }, from as Hex],
   });
-  const hash = await send(from, plan.oft, data, fee);
+  const hash = await send(from, plan.oft, data, fee, dir === "to-xlayer" ? "0x38" : "0xc4");
   return { hash, url: dir === "to-xlayer" ? bscTx(hash) : xTx(hash) };
 }
 
@@ -282,21 +282,29 @@ const emptyBals = (): CoinBals => ({ usdtBsc: "0", usdtXl: "0", okb: "0", bemBsc
 
 export async function readSwapBalances(account: string): Promise<CoinBals> {
   const who = account as Hex;
+  const read = async (task: Promise<bigint>) => {
+    try {
+      return await task;
+    } catch {
+      return null;
+    }
+  };
   const [usdtBsc, bemBsc, okb, usdtXl, bemXl, tape] = await Promise.all([
-    bsc.readContract({ address: BSC.usdt, abi: erc20, functionName: "balanceOf", args: [who] }),
-    bsc.readContract({ address: BSC.bem, abi: erc20, functionName: "balanceOf", args: [who] }),
-    xl.getBalance({ address: who }),
-    xl.readContract({ address: TAPE_USDT, abi: erc20, functionName: "balanceOf", args: [who] }),
-    xl.readContract({ address: XL.bem, abi: erc20, functionName: "balanceOf", args: [who] }),
-    xl.readContract({ address: TAPE_TOKEN, abi: erc20, functionName: "balanceOf", args: [who] }),
+    read(bsc.readContract({ address: BSC.usdt, abi: erc20, functionName: "balanceOf", args: [who] })),
+    read(bsc.readContract({ address: BSC.bem, abi: erc20, functionName: "balanceOf", args: [who] })),
+    read(xl.getBalance({ address: who })),
+    read(xl.readContract({ address: TAPE_USDT, abi: erc20, functionName: "balanceOf", args: [who] })),
+    read(xl.readContract({ address: XL.bem, abi: erc20, functionName: "balanceOf", args: [who] })),
+    read(xl.readContract({ address: TAPE_TOKEN, abi: erc20, functionName: "balanceOf", args: [who] })),
   ]);
+  const text = (raw: bigint | null, decimals: number) => (raw == null ? "—" : show(raw, decimals));
   return {
-    usdtBsc: show(usdtBsc, 18),
-    usdtXl: show(usdtXl, 6),
-    okb: show(okb, 18),
-    bemBsc: show(bemBsc, BSC.bemDecimals),
-    bemXl: show(bemXl, 8),
-    tape: show(tape, 8),
+    usdtBsc: text(usdtBsc, 18),
+    usdtXl: text(usdtXl, 6),
+    okb: text(okb, 18),
+    bemBsc: text(bemBsc, BSC.bemDecimals),
+    bemXl: text(bemXl, 8),
+    tape: text(tape, 8),
   };
 }
 

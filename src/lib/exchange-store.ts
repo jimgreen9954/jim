@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { setUiLang } from "@/lib/locale";
 import {
   cancelOrder,
   closePosition,
@@ -134,7 +135,8 @@ export const useExchange = create<Store>((set, get) => ({
     try {
       const raw = localStorage.getItem(KEY);
       if (!raw) {
-        set({ booted: true });
+        const stored = window.localStorage.getItem("tape-lang");
+        set({ booted: true, lang: stored === "en" ? "en" : "zh" });
         return;
       }
       const data = JSON.parse(raw) as {
@@ -148,13 +150,16 @@ export const useExchange = create<Store>((set, get) => ({
         set({ booted: true });
         return;
       }
+      const stored = window.localStorage.getItem("tape-lang");
+      const lang = stored === "en" || stored === "zh" ? stored : data.lang === "en" ? "en" : "zh";
       set({
         engine,
-        lang: data.lang === "en" ? "en" : "zh",
+        lang,
         market: data.market === "perp" ? "perp" : "spot",
         tf: data.tf === 4000 || data.tf === 16000 ? data.tf : 8000,
         booted: true,
       });
+      if (stored !== lang) window.localStorage.setItem("tape-lang", lang);
     } catch {
       set({ booted: true });
     }
@@ -170,7 +175,10 @@ export const useExchange = create<Store>((set, get) => ({
       banner: liq ? shout("liq") : s.banner,
     });
   },
-  setLang: (lang) => set({ lang }),
+  setLang: (lang) => {
+    set({ lang });
+    setUiLang(lang);
+  },
   setMarket: (market) => set({ market }),
   setSide: (side) => set({ side }),
   setTf: (tf) => set({ tf }),
@@ -257,6 +265,12 @@ export const useExchange = create<Store>((set, get) => ({
 
 export function startPersistence() {
   useExchange.getState().hydrate();
+  if (typeof window !== "undefined") {
+    window.addEventListener("tape-lang", () => {
+      const next = window.localStorage.getItem("tape-lang") === "en" ? "en" : "zh";
+      if (useExchange.getState().lang !== next) useExchange.setState({ lang: next });
+    });
+  }
   return useExchange.subscribe((s, p) => {
     const meaningful =
       s.engine.seq !== p.engine.seq ||
