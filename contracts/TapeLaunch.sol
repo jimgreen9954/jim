@@ -16,8 +16,16 @@ pragma solidity 0.8.24;
 ///     all of it only if three consecutive days each had a listing at or above
 ///     2x that was already a day old, and no listing under 2x. After those 90
 ///     days, three missed or cheap days forfeit it forever. Then anyone may
-///     call once a day. OKB is spent half on BEM and half on TAPE, and both
-///     are burned. BEM or TAPE already held is burned, not sold.
+///     call tick. OKB is spent half on BEM and half on TAPE, and both are
+///     burned. BEM or TAPE already held is burned, not sold.
+///
+/// tick pays the caller 5% of the work it just did. The 5% comes out of that
+/// day's 1/90 and is not added on top. Recording the day, burning the day's
+/// slice, or buying one cheap listing each qualify. Once the day's 1/90 is
+/// spent, further calls do the work only if it still fits, and pay nothing
+/// when it does not. The site holds no key. The chain still does not wake up.
+/// A passed id can only prove a listing at or above 2x. It cannot force a
+/// cheap day while a valid listing is still the anchor.
 ///
 /// The 2x check is this contract's own listings, not a same-transaction spot
 /// print. A spot print can be pushed under 2x inside one transaction and would
@@ -132,6 +140,7 @@ contract TapeDrop {
     uint32 public lowStreak;
     uint64 public lastBurnDay;
     bool public forfeit;
+    uint256 public anchorId;
     uint256 public day;
     uint256 public spentTape;
     uint256 public spentBem;
@@ -164,6 +173,7 @@ contract TapeDrop {
     event Poked(uint64 day, bool high, uint32 highStreak, uint32 lowStreak);
     event Forfeited(uint64 day);
     event Burned(address indexed token, uint256 amount);
+    event Tipped(address indexed to, address indexed token, uint256 amount);
 
     modifier lock() {
         require(entered == 1, "reenter");
@@ -311,63 +321,24 @@ contract TapeDrop {
 
     function poke(uint256 id) external lock {
         require(closed && !forfeit, "poke");
-        uint64 today = uint64(block.timestamp / 1 days);
-        require(today != lastPokeDay, "day");
-        bool past = block.timestamp >= uint256(closedAt) + VEST;
-        if (lastPokeDay != 0 && today > lastPokeDay + 1) {
-            highStreak = 0;
-            if (past) lowStreak += uint32(today - lastPokeDay - 1);
-        }
-        lastPokeDay = today;
-        bool high = underCount == 0 && _over2(id);
-        if (high) {
-            highStreak += 1;
-            lowStreak = 0;
-        } else {
-            highStreak = 0;
-            if (past) lowStreak += 1;
-        }
-        emit Poked(today, high, highStreak, lowStreak);
-        if (past && lowStreak >= 3) {
-            forfeit = true;
-            emit Forfeited(today);
-        }
+        _consider(id);
+        require(_markDay(), "day");
+    }
+
+    function tick(uint256 id) external lock {
+        require(closed, "closed");
+        _roll();
+        _consider(id);
+        bool poked = _markDay();
+        bool burned = _burnDay(msg.sender);
+        bool bought = id != 0 && _buyback(id, msg.sender);
+        if (poked && !burned && !bought) _payWatch(msg.sender);
+        require(poked || burned || bought, "idle");
     }
 
     function burnDay() external lock {
         require(forfeit, "open");
-        uint64 today = uint64(block.timestamp / 1 days);
-        require(today != lastBurnDay, "day");
-        lastBurnDay = today;
-        uint256 tape = _take(vestBasisTape, vestTape);
-        if (tape > 0) {
-            vestTape -= tape;
-            _push(TAPE, DEAD, tape);
-            emit Burned(TAPE, tape);
-        }
-        uint256 bem = _take(vestBasisBem, vestBem);
-        if (bem > 0) {
-            vestBem -= bem;
-            _push(BEM, DEAD, bem);
-            emit Burned(BEM, bem);
-        }
-        uint256 okb = _take(vestBasisOkb, vestOkb);
-        if (okb > 0) {
-            vestOkb -= okb;
-            uint256 half = okb / 2;
-            uint256 rest = okb - half;
-            if (half > 0) {
-                uint256 bemOut = _okbToBem(half);
-                _push(BEM, DEAD, bemOut);
-                emit Burned(BEM, bemOut);
-            }
-            if (rest > 0) {
-                uint256 bemForTape = _okbToBem(rest);
-                uint256 tapeOut = _bemToTape(bemForTape);
-                _push(TAPE, DEAD, tapeOut);
-                emit Burned(TAPE, tapeOut);
-            }
-        }
+        require(_burnDay(msg.sender), "day");
     }
 
     function list(uint256 id, uint256 quote) external lock {
@@ -375,6 +346,7 @@ contract TapeDrop {
         require(quote >= 10_000 && quote <= type(uint256).max / 1000, "quote");
         listings[id] = Listing(msg.sender, quote, uint64(block.timestamp));
         _note(quote, true);
+        _anchor(id, quote, true);
         _move(msg.sender, address(this), id);
         emit Listed(id, msg.sender, quote);
     }
@@ -383,6 +355,7 @@ contract TapeDrop {
         Listing memory row = listings[id];
         require(row.seller == msg.sender, "seller");
         _note(row.quote, false);
+        _anchor(id, row.quote, false);
         delete listings[id];
         _move(address(this), msg.sender, id);
         emit Cancelled(id);
@@ -392,6 +365,7 @@ contract TapeDrop {
         Listing memory row = listings[id];
         require(row.seller != address(0) && row.seller != msg.sender, "list");
         _note(row.quote, false);
+        _anchor(id, row.quote, false);
         delete listings[id];
         (uint256 toSeller, uint256 toPlat, uint256 toBurn) = _split(row.quote);
         if (mode == OKB) {
@@ -420,38 +394,8 @@ contract TapeDrop {
 
     function buyback(uint256 id) external lock {
         require(closed, "back");
-        Listing memory row = listings[id];
-        require(row.seller != address(0) && row.seller != creator, "seller");
-        require(block.timestamp >= uint256(row.at) + DELAY, "delay");
         _roll();
-        _note(row.quote, false);
-        delete listings[id];
-        if (mode == OKB) {
-            require(row.quote < unitOkb() * 2, "px");
-            require(spentOkb + row.quote <= _cap(basisOkb), "cap");
-            require(vaultOkb >= row.quote + lockedOkb, "vault");
-            spentOkb += row.quote;
-            vaultOkb -= row.quote;
-            _okb(row.seller, row.quote);
-        } else {
-            require(row.quote < unitBem() * 2, "px");
-            uint256 keepBem = SEED_BEM;
-            require(spentBem + row.quote <= _cap(basisBem), "cap");
-            require(vaultBem >= row.quote + keepBem, "vault");
-            spentBem += row.quote;
-            vaultBem -= row.quote;
-            _push(BEM, row.seller, row.quote);
-            if (mode == PAIR) {
-                uint256 tape = row.quote * 1000;
-                require(spentTape + tape <= _cap(basisTape), "cap");
-                require(vaultTape >= tape, "vault");
-                spentTape += tape;
-                vaultTape -= tape;
-                _push(TAPE, row.seller, tape);
-            }
-        }
-        _move(address(this), DEAD, id);
-        emit BoughtBack(id, row.seller, row.quote);
+        require(_buyback(id, msg.sender), "back");
     }
 
     function ownerOf(uint256 id) external view returns (address) {
@@ -526,6 +470,179 @@ contract TapeDrop {
         if (block.timestamp < uint256(closedAt) + VEST) return 0;
         if (lastPokeDay + 1 < block.timestamp / 1 days) return 0;
         return bucket;
+    }
+
+    function _anchor(uint256 id, uint256 quote, bool add) internal {
+        if (quote < _quoteUnit() * 2) return;
+        if (add) {
+            if (anchorId == 0) anchorId = id;
+        } else if (anchorId == id) {
+            anchorId = 0;
+        }
+    }
+
+    function _consider(uint256 id) internal {
+        if (id != 0 && anchorId == 0 && _over2(id)) anchorId = id;
+    }
+
+    function _markDay() internal returns (bool) {
+        if (forfeit) return false;
+        uint64 today = uint64(block.timestamp / 1 days);
+        if (today == lastPokeDay) return false;
+        bool past = block.timestamp >= uint256(closedAt) + VEST;
+        if (lastPokeDay != 0 && today > lastPokeDay + 1) {
+            highStreak = 0;
+            if (past) lowStreak += uint32(today - lastPokeDay - 1);
+        }
+        lastPokeDay = today;
+        bool high = underCount == 0 && _over2(anchorId);
+        if (high) {
+            highStreak += 1;
+            lowStreak = 0;
+        } else {
+            highStreak = 0;
+            if (past) lowStreak += 1;
+        }
+        emit Poked(today, high, highStreak, lowStreak);
+        if (past && lowStreak >= 3) {
+            forfeit = true;
+            emit Forfeited(today);
+        }
+        return true;
+    }
+
+    function _tip(uint256 amount) internal pure returns (uint256) {
+        return amount * 5 / 100;
+    }
+
+    function _payWatch(address to) internal {
+        _roll();
+        if (mode == OKB) {
+            uint256 cap = _cap(basisOkb);
+            uint256 tip = _tip(cap);
+            if (spentOkb + tip > cap) tip = cap > spentOkb ? cap - spentOkb : 0;
+            if (tip == 0 || vaultOkb < tip + lockedOkb) return;
+            spentOkb += tip;
+            vaultOkb -= tip;
+            _okb(to, tip);
+            emit Tipped(to, address(0), tip);
+        } else {
+            uint256 cap = _cap(basisBem);
+            uint256 tip = _tip(cap);
+            if (spentBem + tip > cap) tip = cap > spentBem ? cap - spentBem : 0;
+            if (tip == 0 || vaultBem < tip + SEED_BEM) return;
+            spentBem += tip;
+            vaultBem -= tip;
+            _push(BEM, to, tip);
+            emit Tipped(to, BEM, tip);
+        }
+    }
+
+    function _burnDay(address caller) internal returns (bool) {
+        if (!forfeit || lastBurnDay == uint64(block.timestamp / 1 days)) return false;
+        uint256 tape = _take(vestBasisTape, vestTape);
+        uint256 bem = _take(vestBasisBem, vestBem);
+        uint256 okb = _take(vestBasisOkb, vestOkb);
+        if (tape == 0 && bem == 0 && okb == 0) return false;
+        lastBurnDay = uint64(block.timestamp / 1 days);
+        if (tape > 0) {
+            vestTape -= tape;
+            uint256 tip = _tip(tape);
+            if (tip > 0) {
+                _push(TAPE, caller, tip);
+                emit Tipped(caller, TAPE, tip);
+            }
+            _push(TAPE, DEAD, tape - tip);
+            emit Burned(TAPE, tape - tip);
+        }
+        if (bem > 0) {
+            vestBem -= bem;
+            uint256 tip = _tip(bem);
+            if (tip > 0) {
+                _push(BEM, caller, tip);
+                emit Tipped(caller, BEM, tip);
+            }
+            _push(BEM, DEAD, bem - tip);
+            emit Burned(BEM, bem - tip);
+        }
+        if (okb > 0) {
+            vestOkb -= okb;
+            uint256 tip = _tip(okb);
+            uint256 rest = okb - tip;
+            if (tip > 0) {
+                _okb(caller, tip);
+                emit Tipped(caller, address(0), tip);
+            }
+            if (rest > 0) {
+                uint256 half = rest / 2;
+                uint256 other = rest - half;
+                if (half > 0) {
+                    uint256 bemOut = _okbToBem(half);
+                    _push(BEM, DEAD, bemOut);
+                    emit Burned(BEM, bemOut);
+                }
+                if (other > 0) {
+                    uint256 bemForTape = _okbToBem(other);
+                    uint256 tapeOut = _bemToTape(bemForTape);
+                    _push(TAPE, DEAD, tapeOut);
+                    emit Burned(TAPE, tapeOut);
+                }
+            }
+        }
+        return true;
+    }
+
+    function _buyback(uint256 id, address caller) internal returns (bool) {
+        Listing memory row = listings[id];
+        if (row.seller == address(0) || row.seller == creator) return false;
+        if (block.timestamp < uint256(row.at) + DELAY) return false;
+        _roll();
+        uint256 unit = _quoteUnit();
+        if (unit == 0 || row.quote >= unit * 2) return false;
+        uint256 tip = _tip(row.quote);
+        if (mode == OKB) {
+            uint256 cap = _cap(basisOkb);
+            if (spentOkb + row.quote > cap || vaultOkb < row.quote + lockedOkb) return false;
+            if (tip > 0 && (spentOkb + row.quote + tip > cap || vaultOkb < row.quote + tip + lockedOkb)) tip = 0;
+            spentOkb += row.quote + tip;
+            vaultOkb -= row.quote + tip;
+            _note(row.quote, false);
+            _anchor(id, row.quote, false);
+            delete listings[id];
+            _move(address(this), DEAD, id);
+            _okb(row.seller, row.quote);
+            if (tip > 0) {
+                _okb(caller, tip);
+                emit Tipped(caller, address(0), tip);
+            }
+        } else {
+            uint256 cap = _cap(basisBem);
+            if (spentBem + row.quote > cap || vaultBem < row.quote + SEED_BEM) return false;
+            uint256 tape = 0;
+            if (mode == PAIR) {
+                tape = row.quote * 1000;
+                if (spentTape + tape > _cap(basisTape) || vaultTape < tape) return false;
+            }
+            if (tip > 0 && (spentBem + row.quote + tip > cap || vaultBem < row.quote + tip + SEED_BEM)) tip = 0;
+            spentBem += row.quote + tip;
+            vaultBem -= row.quote + tip;
+            if (tape > 0) {
+                spentTape += tape;
+                vaultTape -= tape;
+            }
+            _note(row.quote, false);
+            _anchor(id, row.quote, false);
+            delete listings[id];
+            _move(address(this), DEAD, id);
+            _push(BEM, row.seller, row.quote);
+            if (tape > 0) _push(TAPE, row.seller, tape);
+            if (tip > 0) {
+                _push(BEM, caller, tip);
+                emit Tipped(caller, BEM, tip);
+            }
+        }
+        emit BoughtBack(id, row.seller, row.quote);
+        return true;
     }
 
     function _book(uint256 tape, uint256 bem, uint256 okb) internal {

@@ -707,8 +707,10 @@ export function bootLaunch(host: HTMLElement): () => void {
     if (nickInput && document.activeElement !== nickInput) nickInput.value = nick;
     if (walletBtn) {
       const chain = currentChain() === 56 ? "BSC" : currentChain() === 196 ? "X Layer" : "";
-      walletBtn.textContent = address ? `${nick || short(address)}${chain ? ` · ${chain}` : ""}` : t("connect");
+      walletBtn.textContent = address ? `${nick || short(address)}${chain ? ` · ${chain}` : ""}` : t("login");
     }
+    const topLogout = host.querySelector<HTMLButtonElement>("#btn-logout");
+    if (topLogout) topLogout.hidden = !address;
     const logout = host.querySelector<HTMLButtonElement>("#wallet-logout");
     if (logout) logout.hidden = !address;
     const assetsLogout = host.querySelector<HTMLButtonElement>("#assets-logout");
@@ -832,6 +834,7 @@ export function bootLaunch(host: HTMLElement): () => void {
     showSheet(false);
   };
   host.querySelector("#wallet-logout")?.addEventListener("click", logoutNow, opt);
+  host.querySelector("#btn-logout")?.addEventListener("click", logoutNow, opt);
   host.querySelector("#assets-logout")?.addEventListener("click", logoutNow, opt);
   host.querySelector("#profile-logout")?.addEventListener("click", logoutNow, opt);
   host.querySelector("#assets-login")?.addEventListener("click", () => showSheet(true), opt);
@@ -1857,7 +1860,10 @@ export function bootLaunch(host: HTMLElement): () => void {
     const msg = host.querySelector("#factory-msg");
     if (!button || button.disabled) return;
     button.disabled = true;
-    if (msg) msg.textContent = "等钱包确认。这一步不转 OKB，只把数量写进工厂。";
+    if (msg) {
+      msg.textContent = "等钱包确认。这一步不转 OKB，只把数量写进工厂。";
+      msg.scrollIntoView({ block: "nearest" });
+    }
     try {
       if (!getProvider()) {
         showSheet(true);
@@ -1982,6 +1988,17 @@ export function bootLaunch(host: HTMLElement): () => void {
   let tapeCursor = "";
   let tapeMore = false;
   let tapeBusy = false;
+  let tapeOpen = false;
+  const paintTapeOpen = () => {
+    const fold = host.querySelector<HTMLElement>("#tape-fold");
+    const banner = host.querySelector<HTMLElement>("#tape-banner");
+    const label = host.querySelector("#tape-open");
+    if (fold) fold.hidden = !tapeOpen;
+    if (banner) banner.setAttribute("aria-expanded", tapeOpen ? "true" : "false");
+    if (label) label.textContent = tapeOpen
+      ? (uiLang() === "zh" ? "收起挂单" : "Hide listings")
+      : (uiLang() === "zh" ? "点开看挂单" : "Show listings");
+  };
   const renderTape = () => {
     const banner = host.querySelector<HTMLElement>("#tape-banner");
     const logo = host.querySelector<HTMLImageElement>("#tape-logo");
@@ -1993,7 +2010,11 @@ export function bootLaunch(host: HTMLElement): () => void {
     const head = tapeHead;
     if (!head) return;
     if (!head.ok || !grid || !metrics) {
-      if (note) note.textContent = head?.error ? `OKX 合集没读到：${head.error}` : "OKX 合集没读到。";
+      if (note) {
+        note.hidden = false;
+        note.textContent = head?.error ? `OKX 合集没读到：${head.error}` : "OKX 合集没读到。";
+      }
+      paintTapeOpen();
       return;
     }
     if (banner && head.banner) banner.style.backgroundImage = `url("${head.banner.replace(/"/g, "")}")`;
@@ -2058,6 +2079,7 @@ export function bootLaunch(host: HTMLElement): () => void {
       more.disabled = tapeBusy;
       more.textContent = uiLang() === "zh" ? "更多挂单" : "More listings";
     }
+    paintTapeOpen();
   };
   const pullTape = (cursor: string) => {
     if (tapeBusy) return;
@@ -2088,6 +2110,16 @@ export function bootLaunch(host: HTMLElement): () => void {
       });
   };
   pullTape("");
+  const toggleTape = () => {
+    tapeOpen = !tapeOpen;
+    paintTapeOpen();
+  };
+  host.querySelector("#tape-banner")?.addEventListener("click", toggleTape, opt);
+  host.querySelector("#tape-banner")?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    toggleTape();
+  }, opt);
   host.querySelector("#tape-more")?.addEventListener("click", () => {
     if (tapeCursor) pullTape(tapeCursor);
   }, opt);

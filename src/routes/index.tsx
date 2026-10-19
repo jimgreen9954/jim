@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import launchHtml from "../../public/tape-launch/index.html?raw";
 import { bootLaunch } from "@/lib/launch-desk";
@@ -16,10 +16,17 @@ const html = pageHtml();
 
 function Home() {
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const host = ref.current;
     if (!host) return;
-    return bootLaunch(host);
+    host.innerHTML = html;
+    try {
+      return bootLaunch(host);
+    } catch (error) {
+      const msg = host.querySelector("#factory-msg");
+      if (msg) msg.textContent = error instanceof Error ? error.message : "页面没有绑上。";
+      return;
+    }
   }, []);
-  return <div ref={ref} className="tape-root" dangerouslySetInnerHTML={{ __html: html }} />;
+  return <div ref={ref} className="tape-root" />;
 }

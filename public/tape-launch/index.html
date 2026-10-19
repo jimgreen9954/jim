@@ -98,6 +98,7 @@ a.nav-item { text-decoration: none; }
 }
 .search {
   flex: 1;
+  min-width: 0;
   max-width: 760px;
   margin: 0 auto;
   height: 44px;
@@ -129,7 +130,9 @@ a.nav-item { text-decoration: none; }
 .signin {
   font-weight: 600;
   font-size: 15px;
-  padding: 8px 4px;
+  padding: 8px 8px;
+  border: 0;
+  background: transparent;
   flex-shrink: 0;
   max-width: 220px;
   overflow: hidden;
@@ -137,6 +140,8 @@ a.nav-item { text-decoration: none; }
   white-space: nowrap;
 }
 .signin:hover { color: var(--blue); }
+.signin.out { color: var(--red); }
+.account { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
 .content { flex: 1; min-height: 0; overflow: auto; }
 .page { display: none; }
 .page.active { display: block; }
@@ -492,7 +497,7 @@ td.right, th.right { text-align: right; }
 }
 .tape-root[data-theme="dark"] tr:hover td { background: #1c232d; }
 .tape-root[data-theme="dark"] .buy.ghost { color: var(--ink); }
-.theme, .signin { background: transparent; color: var(--ink); font-weight: 700; }
+.theme, .signin { background: transparent; color: var(--ink); font-weight: 700; border: 0; flex-shrink: 0; }
 .cat-item[hidden], .sheet[hidden], #filter-empty[hidden], #market-empty[hidden] { display: none !important; }
 .sheet {
   position: absolute;
@@ -584,7 +589,10 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
   background: #111 center/cover no-repeat;
   color: #fff;
   margin-bottom: 14px;
+  cursor: pointer;
 }
+.tape-open { display: inline-block; margin-top: 12px; font-weight: 700; font-size: 13px; }
+#tape-fold[hidden] { display: none !important; }
 .tape-banner .veil {
   position: absolute; inset: 0;
   background: linear-gradient(180deg, rgba(0,0,0,.12), rgba(0,0,0,.78));
@@ -669,7 +677,10 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
     </label>
     <button class="theme" id="btn-lang" type="button">EN</button>
     <button class="theme" id="btn-theme" type="button">深夜</button>
-    <button class="signin" id="btn-wallet" type="button">连接钱包</button>
+    <div class="account">
+      <button class="signin" id="btn-wallet" type="button" data-i18n="login">登录</button>
+      <button class="signin out" id="btn-logout" type="button" hidden data-i18n="logout">退出</button>
+    </div>
   </header>
 
   <div class="content">
@@ -708,7 +719,7 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
             </div>
 
             <section class="block" id="tapecode-block">
-              <div class="tape-banner" id="tape-banner">
+              <div class="tape-banner" id="tape-banner" role="button" tabindex="0" aria-expanded="false">
                 <div class="veil"></div>
                 <div class="body">
                   <img class="logo" id="tape-logo" alt="" src="/tape-launch/logo.png">
@@ -716,16 +727,19 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
                     <h3>TapeCode-Test1</h3>
                     <p id="tape-desc">正在读 OKX 市场上的 X Layer 合集。合约 0x0e91460d6823c711643e650a9a4c0cc21de41614。</p>
                     <div class="tape-metrics" id="tape-metrics"></div>
+                    <span class="tape-open" id="tape-open">点开看挂单</span>
                   </div>
                 </div>
               </div>
               <p class="sub" id="tape-code-note" hidden></p>
+              <div id="tape-fold" hidden>
               <div class="tape-tools">
                 <span class="grow"></span>
                 <a id="tape-okx" href="https://web3.okx.com/nft/collection/xlayer/tapecode-test1" target="_blank" rel="noopener">在 OKX 打开</a>
                 <button id="tape-more" type="button" hidden>更多挂单</button>
               </div>
               <div class="tape-grid" id="tape-grid"></div>
+              </div>
             </section>
 
             <section class="block">
@@ -953,7 +967,7 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
             <p>每枚 NFT 按 TAP-721 草案，除图片外还带一份 tapnet 网表和 SHA-256，来源可以对照。标准还在社区审核，这里只出可核验的预览，不假装已经流片上链。</p>
             <p>发射前，项目方必须先放入价值 3 美元的 OKB，这笔进金库。创建另付 1 TAPE + 0.01 枚发射代币：1 TAPE 直接销毁，0.01 锁进该项目金库。OKB 发射锁的是 0.01 OKB，BEM 或 TAPE 对发射锁的是 0.01 BEM。</p>
             <p>铸造收进来的，是这次发射的那种代币，创建时就分成三份。30% 在售罄收盘后项目方可以领取。40% 没有提取函数。收盘后，本合约里低于铸造价 2 倍、挂满 1 天的 NFT，可以被这 40% 买下并销毁。每天最多花掉可回购余额的九十分之一。项目方自己的地址不能卖给它。进金库的 OKB 种子和锁进去的 0.01 不参与回购。另一个地址仍可能慢慢卖，所以一天封顶。</p>
-            <p>最后 30% 不是按天发。售罄满 90 天，并且连续 3 天都有不低于 2 倍、已经挂满 1 天的挂单，同时没有低于 2 倍的挂单，项目方一次领完。满 90 天之后连续 3 天做不到，这份钱永久不能领。之后每天一次：账上的 BEM 或 TAPE 直接销毁；OKB 则一半买 BEM、一半买 TAPE，买到就销毁，直到花完。两倍看的是本合约挂单，不是同一笔交易里的现货价。别人若连续三天挂一张回购当天买不掉的低价单，这 30% 会被判负。</p>
+            <p>最后 30% 不是按天发。售罄满 90 天，并且连续 3 天都有不低于 2 倍、已经挂满 1 天的挂单，同时没有低于 2 倍的挂单，项目方一次领完。满 90 天之后连续 3 天做不到，这份钱永久不能领。之后任何人可以调用 tick：记成一天、烧掉当天那一份，或买下一张低于两倍的单，调用者拿这次支出的 5%，从当天九十分之一里出。当天预算用完就不再付。网页不保管私钥。账上的 BEM 或 TAPE 直接销毁；OKB 则一半买 BEM、一半买 TAPE，买到就销毁，直到花完。两倍看的是本合约挂单，不是同一笔交易里的现货价。别人若连续三天挂一张回购当天买不掉的低价单，这 30% 会被判负。</p>
             <p>本站二级成交收 0.2%。TAPE 的一半打进销毁地址，另一半给平台。BEM 或 OKB 的那一半锁在合约里，不在成交当中换成 TAPE，避免被夹。OKX 和 tapeout.net 上的成交不经过这份合约，收不到这一笔。创建按钮在工厂地址核对并写上之前不会扣款。</p>
           </details>
           <button class="buy" id="launch-create" style="margin-top:16px" type="button">创建</button>
