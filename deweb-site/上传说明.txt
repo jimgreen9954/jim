@@ -1,0 +1,8 @@
+TAPELIQUID 上传到 TapeOut DeWeb
+
+1. 解压这个压缩包。确认里面有 index.html，而且 index.html 在文件夹最外层，不要再套一层。
+2. DeWeb 的网站仓库在 BNB Chain，不在 X Layer。你的 TAPELIQUID 处理器在 X Layer，那枚电路现在挂不了这个网站。先在 BSC 上开通一枚电路容器，用持有那枚电路的钱包上传。
+3. 用电脑打开 https://deweb.tapeoutexplorer.com/deweb/publish.html
+   手机可以选这个 zip。电脑选解压后的文件夹。
+4. 连接钱包，选中容器，上传，逐笔签名。单个文件不要超过 8.4MB。这个包里的文件都远小于这个限制。
+5. 传完用电路容器编号打开。交易下单仍去 https://clover-cedar-solar-prism.grok.me/ ，因为吃单和 K 线需要服务器，DeWeb 只存页面文件。

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TAPELIQUID</title>
+    <meta name="description" content="TAPELIQUID. BEM spot and a shared perpetual. Connect a wallet and trade from the page." />
+    <link rel="icon" href="./favicon.svg" />
+    <link rel="stylesheet" href="./assets/style-AF6KgwuI.css" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,560;0,9..144,660;1,9..144,560&family=IBM+Plex+Mono:wght@400;500;600&display=swap" media="print" onload="this.media='all'" />
+    <style>
+      body { margin: 0; background: #f7f4ef; color: #2f2a26; font: 16px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      #boot { margin: 0; padding: 28px 20px; }
+      p.font-display.italic.tabular-nums {
+        font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-style: normal;
+        font-weight: 500;
+        letter-spacing: -0.04em;
+      }
+      p.font-display.italic.tabular-nums::first-letter {
+        font-size: 0.42em;
+        color: #b5a48e;
+        letter-spacing: 0.14em;
+        margin-right: 0.2em;
+        vertical-align: 0.7em;
+      }
+    </style>
+    <script>
+      (function () {
+        var orig = window.fetch.bind(window);
+        var hosts = ["https://tapeout.net/", "https://api-tapeout.firsto.ai/"];
+        function relay(url) {
+          var own = "https://trade.yizhantoken.com/api/feed?u=" + encodeURIComponent(url);
+          var alt = "https://cors.eu.org/" + url;
+          return orig(own).then(function (res) {
+            var type = res.headers.get("content-type") || "";
+            if (res.ok && type.indexOf("json") >= 0) return res;
+            return orig(alt);
+          }, function () {
+            return orig(alt);
+          });
+        }
+        window.fetch = function (input, init) {
+          try {
+            var url = typeof input === "string" ? input : (input && input.url) || "";
+            if (hosts.some(function (host) { return url.indexOf(host) === 0; })) return relay(url);
+          } catch (e) {}
+          return orig(input, init);
+        };
+        function fixUnit() {
+          var nodes = document.querySelectorAll("p.font-mono.text-2xl.tabular-nums");
+          for (var i = 0; i < nodes.length; i++) {
+            var kids = nodes[i].childNodes;
+            for (var j = 0; j < kids.length; j++) {
+              if (kids[j].nodeType === 3 && kids[j].nodeValue === " OKB") kids[j].nodeValue = " BNB";
+            }
+          }
+        }
+        new MutationObserver(fixUnit).observe(document.documentElement, { subtree: true, childList: true, characterData: true });
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"><p id="boot">正在打开 TAPELIQUID。</p></div>
+    <script>
+      window.addEventListener("error", function (e) {
+        var b = document.getElementById("boot");
+        if (b) b.textContent = "页面没有跑起来：" + ((e && e.message) || "未知错误");
+      });
+    </script>
+    <script type="module" src="./index-CXWEZ0EY.js" onerror="var b=document.getElementById('boot');if(b)b.textContent='脚本没读到。'"></script>
+  </body>
+</html>
