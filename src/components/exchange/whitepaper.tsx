@@ -1,0 +1,311 @@
+import { BSC_REBATE, KNOWN_PERP, KNOWN_XMARK, KNOWN_XPERP } from "@/lib/perp";
+import { BSC } from "@/lib/bsc";
+import { DEPLOYED, XLAYER } from "@/lib/xlayer";
+import { useExchange } from "@/lib/exchange-store";
+
+type Section = { h: string; ps: string[] };
+
+const zh: Section[] = [
+  {
+    h: "摘要",
+    ps: [
+      "TAPELIQUID 是给 BEM 用的交易台。现货在 BNB Smart Chain 的 PancakeSwap 上真成交。模拟盘只活在这台浏览器里。永续有两本账，各锁一份合约：BSC 用 USDT，X Layer 用 USDT0。同一条链上的人能看见并吃彼此的单。两条链的单不能合成一笔。",
+      "晶圆在 X Layer 上铸造和流片，地址和两本永续不是同一个。晶圆今天不参与盈亏。以后，晶圆上的晶体管和已流片电路会成为挖矿资格，挖出的是本站自己的平台币。矿池还没部署，现在流片不会发出任何平台币。",
+      "钱不进这个网页。现货留在你的钱包，直到你签名。永续的保证金进你选的那一份合约。页面只负责读链、报价和让你签名。",
+    ],
+  },
+  {
+    h: "四张桌子",
+    ps: [
+      "现货：买进或卖出 BEM。成交对手是 Pancake 的池子，不是另一个用户的挂单。",
+      "模拟：用来看盘口、下纸单、试爆仓。重熔只清空这台设备上的模拟账，不动 USDT、USDT0，也不动永续合约。",
+      "合约：先选 BSC 或 X Layer。挂单写进那一条链的固定合约。别人打开同一页，就能看见并吃单。吃到的是对手，不是池子。红的是空单，点整行或「开多吃」。绿的是多单，点整行或「开空吃」。和晶体管盘口同一套字。靠近现价的上下各留 5 张，其余折起来。",
+      "对手昵称、链上返佣、自己的推荐码、填写别人的码、邀请名单，都在「我的订单」。市场页只留盘口、K 线和开仓。昵称和邀请人多了也可以展开。",
+      "晶圆：铸造 NAND，在画布上流片。烧的是 OKB 和晶体管。流片不能撤回。电路不结算永续。",
+    ],
+  },
+  {
+    h: "现货",
+    ps: [
+      "交易对是 BEM / USDT。池子是 BNB Smart Chain 上的 PancakeSwap V3。页面上的价格是池子这一秒的中间价，现货、模拟、合约用同一个数，每秒从链上读，显示到小数点后 4 位。成交仍走 SwapRouter，按当时报价和滑点成交，不是按页面上的中间价保证成交。签名之前，币留在你的钱包。本台不托管现货。",
+      "页面上能看到这个钱包的 BEM、USDT 和 BNB。买入和卖出可以按余额的百分比下。滑点按页面上的保护价。池子手续费和 BNB gas 付给链和池子，不进永续合约，也不进返佣。",
+      "现货、模拟和合约的 BEM 价格是同一个池子中间价，每秒一起变。池子最近的成交大约每 4 秒重读一次。它是页面上的参考价，不是永续的成交价。永续的成交价是挂单上写的那个价。X Layer 合约里的结算价要有人点推进才写上链，不会每秒自动付 gas。",
+    ],
+  },
+  {
+    h: "模拟",
+    ps: [
+      "模拟撮合跑在浏览器里。它用来熟悉开多、开空、杠杆和爆仓长什么样。记录存在这台设备上，换浏览器就没了。",
+      "重熔的意思是把模拟账本烧掉重来。它不会去链上，不会转走真实的钱，也不会撤掉你已经挂在 BSC 或 X Layer 上的单。",
+    ],
+  },
+  {
+    h: "BSC 永续",
+    ps: [
+      "全站只有一份 BSC 合约。开多、开空、吃单、撤单、平仓都打到这个地址，所以任何人、任何时候打开这一页，看到的是同一本账。",
+      "保证金是 BSC 上的 USDT，从 1 到 500。杠杆从 1 倍到 1000 倍。新手可以用 1、5、10 USDT 和页面上的倍数。要自己写，就切到高级，手填倍数和开单价。",
+      "你填写的价格就是成交价。不填，就用当时的标记价。成交之后，盈亏跟着 Pancake 池大约 10 分钟的标记价走。标记价轻轻动一下，1000 倍就会碰到强平线。亏到大约一半保证金，仓就可以被强平。",
+      "自己的单不能自己吃。一边平仓或强平，两边一起结算。合约没有管理员，也不能升级。",
+    ],
+  },
+  {
+    h: "吃单、撤单、平仓",
+    ps: [
+      "市场页列出还没有人接的挂单，带地址、方向、保证金、倍数和开单价。点吃单，你成为对面。两笔保证金锁进同一份合约。",
+      "个人订单页只看你自己的挂单和已经对上的仓。还没人接的单可以撤。撤单收这张保证金的千分之二，剩下的退回。对上之后不能撤，只能平仓或等强平。",
+      "平仓不再另收一笔手续费。盈亏按平仓时的标记价，把两边的保证金重新切开。你可以给对手地址起一个只存在这台浏览器里的昵称，链上仍然是那个地址。",
+    ],
+  },
+  {
+    h: "X Layer 永续",
+    ps: [
+      "X Layer 另有一份合约，不和 BSC 共用订单簿。保证金是这条链上的 USDT0，6 位小数，从 1 美元起。Gas 是 OKB。BSC 里的 USDT 和 BNB 在这一页扣不到。",
+      "开多、开空、吃单、撤单、平仓都打到这一个地址。停在 X Layer 的人能看见并吃彼此的单。一条 X Layer 的单不能去填一条 BSC 的单。",
+      "杠杆、费用、返佣档位和强平规则与 BSC 相同。两本账各自结算，返佣也不能跨链提。",
+    ],
+  },
+  {
+    h: "晶体管合约",
+    ps: [
+      "合约和晶圆中间这一页只做六个标：TapeOut、Behemoth、Genesis CPU，各有 NAND 和 LATCH。右上角是官网参考价，每秒更新。中间的盘口是本站自己的。开多、开空、吃单、撤单、平仓都要钱包签名，从钱包划走或退回 BSC 的 USDT，最少 1，最多 500。没有签名的单不算。",
+      "下单、吃单、平仓之前，页面先看合约里的结算价。和官网价相差不超过 3% 才继续。差得更多就先把官网价推进去。推进不了，或者推进之后仍超过 3%，这一笔不做，避免按错价分钱。合约本身仍是第一次写入可以由任何人定，页面不跟那个错价。写进去之后，链上每 10 秒最多再动一半。成交按挂单价。",
+      "手续费是用掉的保证金的千分之二。有推荐人时，交易者少付其中 4%，推荐人记其中 6%，剩下的进开发者地址。比例和 BEM 永续相同，但是推荐码要在这份晶体管合约上重新确认一次，不能拿 BEM 那份码直接用。提到的是 BSC 的 USDT，不能和 BEM 的返佣混提。门槛是 1、10、20、50、100、300、500。",
+      "确认自己的码之后，页面生成邀请链接，形式是当前网址加 #gate=你的码。朋友打开会进晶体管页，码已经填好，仍要点绑定才写上链。只打开链接不会绑定。BEM 和 X Layer 的链接仍是 #ref=，两套码不要混用。",
+      "全站只有这一份晶体管永续：0xe380b8449280a1da46952dba0de0418e0958d668。任何地址、任何时候挂的单都在这一本账上，别人随时可以吃。页面不再让用户另外部署。部署过的人不能改规则，也不能动别人还锁着的保证金。三个标的的现货合约仍是 TapeOut 0xCC42ba5De07f01B472a5b14cF45aBcCA79Eb8087、Behemoth 0xE2DfD802081C7a05341E20b6582b04b908e8550c、Genesis CPU 0x1d23Bf70ec6bAAD95f396Ea38f8A8415119dFDE6。那是官网的现货，不是我们的永续。",
+    ],
+  },
+  {
+    h: "标记价",
+    ps: [
+      "BSC 的标记价直接读 BEM / USDT 池的大约 10 分钟均价。短线成交价和结算价会不一致，这是故意的，用来挡住瞬时插针。",
+      "X Layer 上没有这份 BEM 池。标记价由一份单独的标记合约保存。页面从 BSC 的池子读出现价，再推进去。每 30 秒最多挪一点。盈亏按推进后的价结算。谁都可以付 OKB 把价格推进一次，推不推得动由合约里的时间限制决定。",
+      "K 线给 15 秒、1 分、5 分、15 分、1 小时、4 小时。图是用来看的。输赢以链上标记价为准，不以图上的最后一根为准。",
+    ],
+  },
+  {
+    h: "费用",
+    ps: [
+      "撮合时，双方已用的保证金各收千分之二。这笔钱进开发者地址。撤下一张还没人接的挂单，也收这张保证金的千分之二。平仓不再另收。",
+      "有推荐人时，这笔手续费再拆开：交易者少付其中的 4%，推荐人记上其中的 6%，剩下的仍进开发者地址。比例写在合约里，页面改不了。",
+      "现货不走这套费用。现货只付池子手续费和 gas。",
+    ],
+  },
+  {
+    h: "返佣",
+    ps: [
+      "返佣在链上，不在客服手里。推荐码只登在你当前这条链的全站合约上。BSC 的登记、绑定和提现花 BNB，记的是 BSC 的 USDT。X Layer 花 OKB，记的是 USDT0。两条链的码不通用，也不能把一边的余额提到另一边。别人填你的码，要再确认一次。确认之后不能改。登在私人合约里的码，别人查不到。",
+      "BSC 上能写推荐码的是带返佣的那一份新合约。更早那份合约没有返佣函数，码写不进去，但它里面已经挂出的单仍然可以吃。新开的 BSC 单进新合约，手续费和返佣都在新合约里结算。",
+      "页面按成交和撤单当时的绑定关系，用合约同一套公式列出你邀请了谁、他们拿出的保证金、名义价值和记给你的返佣。可提余额以合约里的数字为准。提现只收整数。档位是 1、10、20、50、100、300、500 美元。",
+    ],
+  },
+  {
+    h: "晶圆",
+    ps: [
+      "处理器和晶体管在 X Layer。铸造 NAND、在画布流片，烧的是 OKB 和晶体管。流片不能撤回。电路地址和两份永续合约不是同一个。",
+      "晶圆上的电路今天不结算永续盈亏，也不增加你的保证金。它是这条产品后面要长出来的那一层的根。",
+    ],
+  },
+  {
+    h: "以后的挖矿和平台币",
+    ps: [
+      "晶圆以后可以用来挖矿。挖出来的是本站自己的平台币，不是 BEM，也不是 USDT 或 USDT0。",
+      "资格挂在晶圆上。处理器里的晶体管，和已经流片的电路，按届时写死的合约计算权重。没有晶圆的地址，不能因为在这里做了永续就自动有矿。",
+      "现在还没有矿池合约，也没有平台币合约。打开这个页面、做现货、做永续、铸造或流片，都不会发出平台币。总量、释放、减半和领取，等合约部署并锁进这一页之后才算数。这一节不预先许诺数字，也不保证价格。",
+    ],
+  },
+  {
+    h: "要接上的生态",
+    ps: [
+      "已经在跑的是四块：BEM 现货、浏览器里的模拟、两本共享永续账、X Layer 上的晶圆。返佣和昵称已经接在永续旁边。",
+      "后面按这个顺序长，每一块上线前都会先改这一页。现货从 BEM 扩到更多 TapeOut 资产。X Layer 的标记价可以从推进价换成这条链自己的池子。平台币上线之后，可以接手续费折扣和做市库存，不接对利润的保证。",
+      "前端可以放到 TapeOut 的 DeWeb 上。网站文件写进一枚电路的容器，谁持有那枚电路，谁就能更新网站。卖掉电路，网站的管理权跟着走。订单簿不跟着走，订单簿在两份永续合约里。",
+      "再往后是电路容器之间的消息，以及更多链上的同一本账。没写进合约之前，页面不会假装已经开通。",
+    ],
+  },
+  {
+    h: "已经锁死的地址",
+    ps: [
+      `BSC 旧永续 ${KNOWN_PERP}。里面已有的挂单还在。这份合约写不进推荐码。`,
+      `BSC 返佣永续 ${BSC_REBATE}。新开的 BSC 单、推荐码和提现都在这里。保证金是 BSC 的 USDT，gas 是 BNB。`,
+      `X Layer 永续 ${KNOWN_XPERP}。保证金是 USDT0，gas 是 OKB。标记价合约 ${KNOWN_XMARK}。`,
+      `晶圆电路 ${DEPLOYED.circuits}。晶体管 ${DEPLOYED.transistors}。这是 X Layer 上的处理器，不是永续。`,
+      "开发者收费地址 0xb67741A0463779c0dab3fDCFE883bA7572AC0AC2。手续费进这里。它不能改合约，也不能动你还锁着的保证金。",
+    ],
+  },
+  {
+    h: "风险",
+    ps: [
+      "两份永续都没有管理员，也没有审计。1000 倍时，标记价轻轻一动就会强平。限价成交之后，结算仍看标记价，不看你填的那个价。",
+      "BSC 的标记价是大约 10 分钟的均价。X Layer 的标记价是推进去的，可能落后于 BSC 上的最后一笔成交。节点失败时，页面可能暂时读不到挂单，链上的单还在。",
+      "只使用你亏得起的钱。这不是招股，不是托管，也不保证成交、上线进度或盈利。挖矿和平台币在合约锁定之前都不存在。",
+    ],
+  },
+];
+
+const en: Section[] = [
+  {
+    h: "Abstract",
+    ps: [
+      "TAPELIQUID is a BEM desk. Spot fills on PancakeSwap on BNB Smart Chain. The paper book lives only in this browser. The perpetual has two ledgers, each locked to one contract: USDT on BSC, USDT0 on X Layer. People on the same chain can see and take each other's orders. An order on one chain cannot fill an order on the other.",
+      "The wafer mints and tapes out on X Layer. Its address is not either perpetual. The wafer does not change PnL today. Later, transistors and taped circuits become mining weight for this desk's own platform token. No mining contract is deployed. Taping out now does not mint that token.",
+      "Funds do not sit in the page. Spot stays in your wallet until you sign. Perp margin sits in the contract you picked. The page reads the chain, shows a price, and asks you to sign.",
+    ],
+  },
+  {
+    h: "Four desks",
+    ps: [
+      "Spot: buy or sell BEM. The counterparty is the Pancake pool, not another person's order.",
+      "Paper: the book, paper tickets, and practice liquidations. Remelt clears only the paper book on this device. It does not move USDT, USDT0, or a live order.",
+      "Perp: pick BSC or X Layer. The order is written to that chain's fixed contract. Anyone who opens the page can see it and take it. The counterparty is a person. A red row is a short: click the row or Open long. A green row is a long: click the row or Open short. The words match the transistor book. Five quotes stay on each side of the mark. The rest fold.",
+      "Nicknames, on-chain rebates, your code, someone else's code, and the invite list live under My orders. The market page keeps the book, the chart, and the ticket. Long nickname and invite lists fold too.",
+      "Wafer: mint NAND and tape out on the canvas. It spends OKB and transistors. Tape-out cannot be undone. A circuit does not settle the perpetual.",
+    ],
+  },
+  {
+    h: "Spot",
+    ps: [
+      "The pair is BEM / USDT in a PancakeSwap V3 pool on BNB Smart Chain. Quotes come from the on-chain quoter. Swaps use the SwapRouter. Tokens stay in your wallet until you sign. This desk does not custody spot.",
+      "The page shows this wallet's BEM, USDT, and BNB. Buys and sells can use a percent of the balance. Protection is the slippage shown on the page. The pool fee and BNB gas go to the pool and the chain, not to the perpetual and not to rebates.",
+      "The spot price is read from the Pancake pool quote every second. The home page shows four decimal places so a moving price is visible. Recent pool trades are reread about every 4 seconds. That quote feeds the perpetual mark. It is not the perpetual fill. The fill is the price written on the order.",
+    ],
+  },
+  {
+    h: "Paper",
+    ps: [
+      "The paper matcher runs in the browser. It is there so a long, a short, leverage, and a liquidation have a shape before real money is used. The record stays on this device.",
+      "Remelt burns the paper book and starts again. It does not go on chain, does not move real money, and does not cancel an order already posted on BSC or X Layer.",
+    ],
+  },
+  {
+    h: "BSC perpetual",
+    ps: [
+      "There is one BSC contract. Longs, shorts, takes, cancels, and closes all use it, so anyone who opens the page sees the same book.",
+      "Margin is BSC USDT, from 1 to 500. Leverage is 1x to 1000x. A new trader can use 1, 5, or 10 USDT and the levers on the page. The advanced ticket takes a typed leverage and a typed price.",
+      "The price on the order is the fill. Leave it blank and the fill is the mark at that moment. After the fill, PnL follows the Pancake mark, about a 10-minute average. At 1000x a small mark move reaches liquidation. About half the margin lost and the position can be liquidated.",
+      "You cannot take your own order. One close or liquidation settles both sides. The contract has no admin and cannot be upgraded.",
+    ],
+  },
+  {
+    h: "Take, cancel, close",
+    ps: [
+      "The market lists untaken quotes with the address, side, margin, leverage, and price. Taking one makes you the other side. Both margins lock in the same contract.",
+      "The personal page shows only your quotes and your open deals. An untaken quote can be cancelled. A cancel costs 0.2% of that margin and returns the rest. A matched deal cannot be cancelled. It is closed or liquidated.",
+      "Closing does not add another fee. PnL uses the mark at close and splits the two margins. You can nickname a counterparty on this browser. The chain still stores the address.",
+    ],
+  },
+  {
+    h: "X Layer perpetual",
+    ps: [
+      "X Layer has its own contract and does not share the BSC book. Margin is USDT0 on this chain, 6 decimals, from 1 USD. Gas is OKB. BSC USDT and BNB are not spent on this tab.",
+      "Longs, shorts, takes, cancels, and closes all use this one address. People who stay on X Layer can see and take each other's orders. An X Layer order cannot fill a BSC order.",
+      "Leverage, fees, rebate steps, and liquidation match BSC. The two books settle separately. A rebate cannot be claimed on the other chain.",
+    ],
+  },
+  {
+    h: "Transistor contracts",
+    ps: [
+      "The page between the perpetual and the wafer lists six markets only: TapeOut, Behemoth, and Genesis CPU, each with NAND and LATCH. The official mark sits at the top and updates every second. The book in the middle is ours. A long, short, take, cancel, or close asks the wallet to sign and moves BSC USDT, from 1 to 500. An order without a signature does not count.",
+      "Before an open, a take, or a close, the page reads the mark stored in the contract. It continues only when that mark is within 3% of the official price. A wider gap is pushed toward the official price first. If the push cannot land inside 3%, the order does not go through, so money is not split at the wrong price. The contract still lets anyone write the first mark. This page will not follow a wrong one. After a mark is stored, the chain allows at most a 50% move every 10 seconds. A fill uses the resting price.",
+      "The fee is 0.2% of the margin that was used. With a referrer, the trader pays 4% less of that fee and the referrer is credited 6%. The rest goes to the developer. The split matches the BEM perpetual, but the code has to be confirmed again on this transistor contract. A BEM code does not carry over. Claims are BSC USDT and cannot be mixed with a BEM rebate. The steps are 1, 10, 20, 50, 100, 300, and 500.",
+      "After the code is confirmed, the page makes an invite link: the current address plus #gate= and the code. A friend who opens it lands on the transistor page with the code filled in, and still has to press bind. Opening the link does not bind by itself. BEM and X Layer links stay #ref=. The two codes are not interchangeable.",
+      "There is one transistor perpetual for the whole desk: 0xe380b8449280a1da46952dba0de0418e0958d668. An order from any address, at any time, sits on that one book and can be taken. The page does not ask anyone to deploy another copy. The deployer cannot change the rules and cannot take margin that is still locked. The spot contracts remain TapeOut 0xCC42ba5De07f01B472a5b14cF45aBcCA79Eb8087, Behemoth 0xE2DfD802081C7a05341E20b6582b04b908e8550c, and Genesis CPU 0x1d23Bf70ec6bAAD95f396Ea38f8A8415119dFDE6. Those are the official spot tokens, not this perpetual.",
+    ],
+  },
+  {
+    h: "The mark",
+    ps: [
+      "The BSC mark is read from the BEM / USDT pool, about a 10-minute average. The last trade and the settlement price can differ. That is intentional. It is there to dull a one-block wick.",
+      "X Layer has no BEM pool. The mark lives in a separate contract. The page reads the BSC pool and pushes that tick. It can move at most a small step every 30 seconds. PnL settles on the pushed price. Anyone can pay OKB to push. The contract decides whether the push is early.",
+      "The chart has 15 seconds, 1 minute, 5 minutes, 15 minutes, 1 hour, and 4 hours. The chart is for looking. The result uses the on-chain mark, not the last candle.",
+    ],
+  },
+  {
+    h: "Fees",
+    ps: [
+      "On a match, each side pays 0.2% of the margin that was used. That amount goes to the developer address. Cancelling an untaken quote also costs 0.2% of that margin. Closing does not add another fee.",
+      "With a referrer, the same fee is split: the trader pays 4% less of it, the referrer is credited 6% of it, and the rest still goes to the developer. The rates are in the contract. The page cannot change them.",
+      "Spot does not use this fee. Spot pays the pool fee and gas.",
+    ],
+  },
+  {
+    h: "Rebates",
+    ps: [
+      "Rebates are on chain. A code is registered only on the shared contract of the chain you are on. BSC registration, binding, and claims spend BNB and pay BSC USDT. X Layer spends OKB and pays USDT0. A code does not cross, and a balance cannot be claimed on the other chain. The other person confirms once. After that it cannot be changed. A code on a private contract cannot be found.",
+      "The BSC contract that can store a code is the newer one. The older contract has no rebate functions. Orders already posted there can still be taken. A new BSC order goes to the new contract, and its fee and rebate settle there.",
+      "The page lists who bound your code, the margin they posted, the notional, and the rebate credited to you, using the contract's own formula at the block of the fill or cancel. The claimable balance is the number stored in the contract. Claims are whole amounts of 1, 10, 20, 50, 100, 300, or 500 USD.",
+    ],
+  },
+  {
+    h: "Wafer",
+    ps: [
+      "The processor and its transistors live on X Layer. Minting NAND and taping out spends OKB and transistors. Tape-out cannot be undone. The circuit address is not either perpetual.",
+      "A taped circuit does not settle perpetual PnL and does not add margin. It is the root of the layer this desk grows next.",
+    ],
+  },
+  {
+    h: "Mining and the platform token, later",
+    ps: [
+      "Wafers will be usable for mining. The output is this desk's own platform token. It is not BEM, and it is not USDT or USDT0.",
+      "Weight sits on the wafer. Transistors in the processor, and circuits already taped out, are counted by the contract that gets locked here. An address with no wafer does not earn a mine just by trading the perpetual.",
+      "There is no mining contract and no platform-token contract now. Opening this page, trading spot, trading perp, minting, or taping out does not issue that token. Supply, release, halvings, and claims count only after that contract is deployed and written into this page. This section promises no number and no price.",
+    ],
+  },
+  {
+    h: "What gets connected next",
+    ps: [
+      "Four pieces are already running: BEM spot, the paper book, two shared perpetual books, and the wafer on X Layer. Rebates and nicknames sit beside the perpetual.",
+      "The rest is added in this order, and this page changes before each piece opens. Spot can grow past BEM to other TapeOut assets. The X Layer mark can move from a pushed price to a pool on that chain. After the platform token exists it can pay a fee discount and sit in a market-making inventory. It does not guarantee a profit.",
+      "The front end can be mirrored onto TapeOut DeWeb. The files live in one circuit's container. Whoever holds that circuit can update the site. Selling the circuit sells that right. The order books do not move with it. They stay in the two perpetual contracts.",
+      "After that come messages between circuit containers, and the same book on more chains. Until it is in a contract, the page will not pretend it is open.",
+    ],
+  },
+  {
+    h: "Addresses already locked",
+    ps: [
+      `Older BSC perpetual ${KNOWN_PERP}. Orders already there remain. A code cannot be written on it.`,
+      `BSC rebate perpetual ${BSC_REBATE}. New BSC orders, codes, and claims live here. Margin is BSC USDT. Gas is BNB.`,
+      `X Layer perpetual ${KNOWN_XPERP}. Margin is USDT0. Gas is OKB. Mark ${KNOWN_XMARK}.`,
+      `Wafer circuits ${DEPLOYED.circuits}. Transistors ${DEPLOYED.transistors}. This processor is on X Layer. It is not the perpetual.`,
+      "Developer fee address 0xb67741A0463779c0dab3fDCFE883bA7572AC0AC2. Fees go here. It cannot change the contract and it cannot take margin that is still locked.",
+    ],
+  },
+  {
+    h: "Risk",
+    ps: [
+      "Neither perpetual has an admin, and neither has been audited. At 1000x a small mark move liquidates the position. After a limit fill, settlement still uses the mark, not the price you typed.",
+      "The BSC mark is about a 10-minute average. The X Layer mark is pushed, so it can lag the last BSC trade. If a node fails, the page may hide orders that are still on chain.",
+      "Use only money you can lose. This is not an offering, not custody, and not a promise of a fill, a roadmap date, or a profit. Mining and the platform token do not exist until their contract is locked.",
+    ],
+  },
+];
+
+export function Whitepaper() {
+  const lang = useExchange((s) => s.lang);
+  const sections = lang === "zh" ? zh : en;
+  return (
+    <article className="flex flex-col gap-4 border border-gold bg-card p-4">
+      <header>
+        <p className="text-xs tracking-widest text-gold">TAPELIQUID</p>
+        <h2 className="font-display text-4xl italic leading-none">{lang === "zh" ? "白皮书" : "White paper"}</h2>
+      </header>
+      <p className="break-all font-mono text-xs">BSC {BSC_REBATE}</p>
+      <a className="text-sm underline decoration-gold underline-offset-4" href={`${BSC.explorer}/address/${BSC_REBATE}`} target="_blank" rel="noreferrer">
+        BscScan
+      </a>
+      <p className="break-all font-mono text-xs">X Layer {KNOWN_XPERP}</p>
+      <a className="text-sm underline decoration-gold underline-offset-4" href={`${XLAYER.explorer}/address/${KNOWN_XPERP}`} target="_blank" rel="noreferrer">
+        OKLink
+      </a>
+      {sections.map((section) => (
+        <section key={section.h} className="border-t border-gold/40 pt-3">
+          <h3 className="font-display text-2xl italic">{section.h}</h3>
+          {section.ps.map((p) => (
+            <p key={p.slice(0, 24)} className="mt-2 text-sm leading-relaxed">
+              {p}
+            </p>
+          ))}
+        </section>
+      ))}
+    </article>
+  );
+}
