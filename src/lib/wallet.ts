@@ -241,7 +241,7 @@ async function connectOkxRemote(): Promise<string> {
             ? (args.params as { chainId?: string }[] | undefined)?.[0]?.chainId
             : (args.params as { chainId?: string }[] | undefined)?.[0]?.chainId;
         if (hex) okx.setDefaultChain(String(Number.parseInt(hex, 16)));
-        else if (args.method === "eth_sendTransaction") okx.setDefaultChain("56");
+        else if (args.method === "eth_sendTransaction" && (chainId === 56 || chainId === 196)) okx.setDefaultChain(String(chainId));
       }
       try {
         return await okx.request(args);

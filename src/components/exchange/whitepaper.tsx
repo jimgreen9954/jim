@@ -9,7 +9,7 @@ const zh: Section[] = [
     ps: [
       "TAPELIQUID 是 TapeOut 的市场。已经能用的是三件事：创世电路在官方市场上买卖，BEM 和 OKB 在官方池子里兑换，右上角钱包可以登录、退出，并在 BSC 和 X Layer 之间切换。钱不进这个网页。签名之前，币留在你的钱包里。",
       "本站自己的发射规则只约束在这里创建的项目。tapeout.net 上已经铸出的晶体管和流片电路仍是协议原件，本站认同一份合约，不另铸，也不改官网的 BNB 或 OKB 铸造价。",
-      "创建项目的按钮还没有接到链上。下面的分配已经写进要签名的工厂字节码。点页面现在不会扣款。工厂地址核对并写上之前，创建不会发交易。",
+      "创建调用已部署的工厂 0x2872E6D6AB14C5Cdb08587b437Bd16248270A04d，部署交易 0x73ebdd1527e39065ba4da9f8869b5c06d8a3d5e62cbefe64ccddda24e94f5dd0。收费地址、0.026 OKB 进金库、回购开关都写死在这份合约里。没有管理员，不能升级，也不能把金库转走。页面不再另签一份工厂。",
     ],
   },
   {
@@ -26,7 +26,8 @@ const zh: Section[] = [
       "点 BEM，打开 BSC 上的 BEM / USDT。报价来自链上报价合约，滑点 1%。点兑换才会发交易，钱包会自己切到 BSC。",
       "点 OKB，打开 X Layer 上的 BEM / OKB。报价是池子中间价，成交至少要到 95%。池子是 0x2CcF8aa17F5DF9Fb5D51C9de12135a913fF29f7A，路由是 0x4f0c28f5926afda16bf2506d5d9e57ea190f9bca。",
       "BEM 可以走 TapeOut 官方桥，BSC 和 X Layer 一比一。桥合约在 BSC 是 0xa84B8D3893De6e9922f2B29bE1e1b115845F5E72。OKB 和 TAPE 没有这条桥，页面不会假装跨过去。",
-      "这两笔兑换付的是池子手续费和 gas。本站写在发射规则里的 0.2% 二级费，要等本站项目的二级市场接到链上才收。现在的 BEM、OKB 兑换不另收这一笔。",
+      "点 TAPE，打开 X Layer 官方池 TAPE / USDT，合约 0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641。池子要报价一侧到 5,000 USDT 才放行。没到之前页面只给报价，不发交易。现在的存量远小于这个数，流动性很小。",
+      "BEM、OKB 兑换付的是池子手续费和 gas。本站写在发射规则里的 0.2% 二级费，要等本站项目的二级市场接到链上才收。现在的 BEM、OKB、TAPE 兑换不另收这一笔。",
     ],
   },
   {
@@ -41,10 +42,10 @@ const zh: Section[] = [
     h: "金库和分配",
     ps: [
       "发射前，项目方必须先放入价值 3 美元的 OKB，这笔进金库。创建另付 1 TAPE + 0.01 枚发射代币。1 TAPE 直接销毁。OKB 发射锁进 0.01 OKB，BEM 或 TAPE 对发射锁进 0.01 BEM。",
-      "铸造收进来的，是这次发射的那种代币。创建时就分成三份，放在项目合约的两个账本里，之后不用项目方再签名。30% 在售罄收盘后，项目方可以领取。40% 没有提取函数。收盘后，本合约里低于铸造价 2 倍、并且已经挂满 1 天的 NFT，任何人可以叫合约用这 40% 买下，NFT 打进销毁地址。每天最多花掉可回购余额的九十分之一。项目方自己的地址不能卖给这份钱。进金库的 OKB 种子，以及锁进去的 0.01，不参与回购。另一个地址仍可能挂低价慢慢卖，所以有每天的上限，一天抽不空。",
+      "铸造收进来的，是这次发射的那种代币。创建时就分成三份，放在项目合约的两个账本里，之后不用项目方再签名。30% 在售罄收盘后，项目方可以领取。40% 没有提取函数。收盘后，本合约里低于铸造价 2 倍、并且已经挂满 1 天的 NFT，任何人可以叫合约用这 40% 买下，NFT 打进销毁地址。收盘时把这 40% 记成基数。每天最多花掉基数的九十分之一，当天没花完也不结转。90 天都有人来买，这 40% 可以花完，一天花不空。一天的上限小于一张合格挂单时，这张单就买不了。项目方自己的地址不能卖给这份钱。进金库的 OKB 种子，以及锁进去的 0.01，不参与回购。另一个地址仍可能挂低价慢慢卖，所以有每天的上限，一天抽不空。",
       "最后 30% 不是按天线性释放。售罄满 90 天，并且连续 3 个自然日都满足：至少有一笔挂单不低于铸造价 2 倍、而且挂满了 1 天，同时没有任何低于 2 倍的挂单，项目方可以一次领完。满 90 天之后如果连续 3 天做不到，这 30% 永久不能领。之后任何人可以调用 tick。记成一天、烧掉当天那一份，或买下一张低于两倍的单，调用者拿这次支出的 5%，从当天的九十分之一里出，不是另加。当天这份预算用完就不再付。网页不保管私钥，链也不会自己醒。账上如果是 BEM 或 TAPE，直接销毁，不拿去卖。如果是 OKB，一半买 BEM、一半买 TAPE，买到就销毁，直到这份钱花完。",
       "两倍看的是本合约自己的挂单，不是同一笔交易里的现货价。现货价可以在一笔里被打低，拿它当开关，金库会被抽走，所以没有这条路径。别人如果拿一枚 NFT 连续三天挂在两倍下面，而这张单又贵过当天的回购上限、买不掉，最后这 30% 会被判负。OKB 去买 BEM 和 TAPE 时，最少要拿到池子中间价的 95%。搜索者仍可能把这一天买差，但一天最多动九十分之一。",
-      "二级手续费 0.2% 只在这份合约自己的成交里收。付的是 TAPE 时，一半打进销毁地址，一半给平台 0x7a2cC9b4dd8302FDD104159CeE97Be8a90BF772c。付的是 BEM 或 OKB 时，烧毁那一半先锁住，不在用户这笔交易里去市场买 TAPE，避免被夹。OKX 和官网市场的成交不经过这里，也不先扣这一笔。已经上链的永续、现货和预言机仍付给 0x823b9F6A93Ac44Ce5A469823A336c15b6117054D，那些合约改不了。工厂地址核对之前，页面上的创建不会发交易。",
+      "二级手续费 0.2% 只在这份合约自己的成交里收。平台那一半给 0x7a2cC9b4dd8302FDD104159CeE97Be8a90BF772c。TAPE、BEM 或 OKB 的另一半留在项目合约里，没有提取函数，这份字节码也不会把 TAPE 那一半转进销毁地址。成交当中不会拿它去买别的币。OKX 和官网市场不经过这里。已经上链的永续、现货和预言机仍付给 0x823b9F6A93Ac44Ce5A469823A336c15b6117054D，那些合约改不了。",
     ],
   },
   {
@@ -52,13 +53,14 @@ const zh: Section[] = [
     ps: [
       "官网晶体管的最新价和最高买价来自 tapeout.net。挂买单、卖给买价，发到官网同一份 BSC 合约 0xA6a80C1919a8326022d7c601a488888C13aA16E4。",
       "在 tapeout.net 流片得到的电路本来就是 ERC-721。本站展示的是同一枚，不套用 1 TAPE 对 0.001 BEM，也不另开一份市场。有挂单的，购买是直接签官网市场 0x6feEbbEbC07BcB90bd1Ac8b0CF9BaA4f0fF2B46f，一笔签名，不先扣本站手续费。没挂单的不能买。",
-      "TapeCode-Test1 是 OKX 上的 X Layer 合集，合约 0x0e91460d6823c711643e650a9a4c0cc21de41614。本站只读挂单，默认收着，点横幅才展开。成交在 OKX，不经过本站签名。",
+      "TapeCode-Test1 是 X Layer 合集，合约 0x0e91460d6823c711643e650a9a4c0cc21de41614。OKX 的公开接口没有成交签名，所以 OKX 上的价格不能在这里吃。持有人可以在本站另挂一笔，买家付 OKB，经 X Layer 上的 Seaport 成交。以太坊上的 OpenSea 系列只有地板价，没有签名，不能在这条链上成交，页面也不跳走。",
     ],
   },
   {
     h: "账户",
     ps: [
       "登录、创世买卖和兑换，用右上角连上的钱包签名。可以是浏览器钱包、OKX、币安，或页面认到的其他钱包。没连上时右上角是登录，连上之后旁边是退出，也可以切 BSC 和 X Layer。退出只断开这个页面，不会转走资产。本站不接收私钥，也不会把私钥写进页面或仓库。",
+      "资产页主要看这个地址的链上资产。昵称、头像和背景点一下就改：点头像换头像，点背景换背景，点名字改名字。只存在这台浏览器，绑在当前钱包。",
       "用户中心显示的是这个地址在 BSC 和 X Layer 上的 BNB、BEM、USDT、OKB。这是链上余额，不是欧易交易所账户。昵称和头像只存在这台浏览器。",
       "顶栏可以切换中文和英文。语言存在这台浏览器，不写上链。",
     ],
@@ -67,7 +69,7 @@ const zh: Section[] = [
     h: "风险",
     ps: [
       "创世市场和兑换池都不是本站的托管。节点失败时，页面可能暂时读不到挂单或报价，链上的状态还在。",
-      "TAP-721 还是草案。页面上的网表哈希是预览，不是已经流片的电路。回购、销毁和满 90 天的那 30%，在工厂部署并写上地址之前都不执行。",
+      "TAP-721 还是草案。页面上的网表哈希是预览，不是已经流片的电路。回购和满 90 天的那 30% 要等项目在这份工厂里创建并收盘之后才跑。只用 OKB 发射时，判负后的 OKB 要先去买 BEM 和 TAPE；TAPE 官方池没开到 5,000 USDT 之前，这一步会失败，钱留在项目合约里。",
       "只使用你亏得起的钱。这不是招股，不是托管，也不保证成交、上线进度或价格。",
     ],
   },
@@ -79,7 +81,7 @@ const en: Section[] = [
     ps: [
       "TAPELIQUID is a TapeOut market. Three things already work: genesis circuits trade on the official market, BEM and OKB swap in official pools, and the top-right wallet can log in, log out, and switch BSC or X Layer. Funds do not sit in the page. Tokens stay in the wallet until you sign.",
       "The launch rules on this site bind only projects created here. Transistors and circuits already minted on tapeout.net stay the protocol originals. This site recognizes that contract, does not mint a second copy, and does not change the official BNB or OKB mint price.",
-      "The create button is not wired to a contract yet. The split below is already in the factory bytecode you would sign. Clicking the page does not charge you. Create sends no transaction until that factory address is checked and written in.",
+      "Create calls the deployed factory 0x2872E6D6AB14C5Cdb08587b437Bd16248270A04d, deployment 0x73ebdd1527e39065ba4da9f8869b5c06d8a3d5e62cbefe64ccddda24e94f5dd0. The fee address, the 0.026 OKB seed, and the buyback switch are fixed in that contract. It has no admin, no upgrade, and no way to pull the vault out. The page does not deploy a second factory.",
     ],
   },
   {
@@ -96,7 +98,8 @@ const en: Section[] = [
       "BEM opens BEM / USDT on BSC. The quote comes from the on-chain quoter, with 1% slippage. The transaction is sent only when you tap Swap. The wallet switches to BSC.",
       "OKB opens BEM / OKB on X Layer. The quote is the pool mid price, and a fill must clear at least 95%. The pool is 0x2CcF8aa17F5DF9Fb5D51C9de12135a913fF29f7A. The router is 0x4f0c28f5926afda16bf2506d5d9e57ea190f9bca.",
       "BEM can use the official TapeOut bridge, one for one, between BSC and X Layer. The BSC bridge is 0xa84B8D3893De6e9922f2B29bE1e1b115845F5E72. OKB and TAPE have no such bridge. The page will not pretend they do.",
-      "These swaps pay the pool fee and gas. The 0.2% secondary fee in the launch rules is collected only after this site's own secondary market is on chain. BEM and OKB swaps do not add that fee today.",
+      "TAPE opens the official X Layer pool TAPE / USDT, contract 0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641. The pool does not accept swaps until the quote side reaches 5,000 USDT. Before that the page shows a quote and does not send a transaction. The current reserve is far below that, so liquidity is thin.",
+      "BEM and OKB swaps pay the pool fee and gas. The 0.2% secondary fee in the launch rules is collected only after this site's own secondary market is on chain. BEM, OKB and TAPE swaps do not add that fee today.",
     ],
   },
   {
@@ -111,10 +114,10 @@ const en: Section[] = [
     h: "Vault and allocation",
     ps: [
       "Before launch the creator deposits 3 dollars of OKB into the vault. Creation also pays 1 TAPE plus 0.01 of the launch token. The 1 TAPE is burned. An OKB launch locks 0.01 OKB. A BEM launch or a TAPE pair locks 0.01 BEM.",
-      "What the mint takes in is the launch token. It is split into three parts as it arrives, and the two ledgers inside the project spend themselves. The creator does not sign again. 30% can be claimed once the sale closes. 40% has no withdraw. After close, a listing on this contract under twice the mint price, already a day old, can be bought with that 40%. The NFT is burned. At most one ninetieth of the spendable balance moves in a day. The creator's own address cannot sell into it. The OKB seed and the locked 0.01 are not part of the buyback. A second wallet can still sell in slowly, which is why the day is capped.",
+      "What the mint takes in is the launch token. It is split into three parts as it arrives, and the two ledgers inside the project spend themselves. The creator does not sign again. 30% can be claimed once the sale closes. 40% has no withdraw. After close, a listing on this contract under twice the mint price, already a day old, can be bought with that 40%. The NFT is burned. At close that 40% is written down as the base. Each day can spend at most one ninetieth of that base. What is left that day does not roll forward. Ninety called days can spend the whole 40%, but one day cannot. A listing priced above that day's slice is never bought. The creator's own address cannot sell into it. The OKB seed and the locked 0.01 are not part of the buyback. A second wallet can still sell in slowly, which is why the day is capped.",
       "The last 30% is not a linear vest. Ninety days after the close, the creator can take all of it only if three consecutive days each had a listing at or above twice the mint price that was already a day old, and no listing under twice. After those ninety days, three cheap or missing days forfeit it forever. Anyone may then call tick. Recording the day, burning that day's slice, or buying one listing under twice mint pays the caller 5% of that spend, taken out of the day's ninetieth, not added on top. When the day's budget is used up, the call is not paid. This site holds no key, and the chain does not wake itself. BEM or TAPE already held is burned, not sold. OKB is spent half on BEM and half on TAPE, and both are burned, until that ledger is empty.",
       "Twice mint is this contract's own listings, not a spot price printed in the same transaction. A spot print can be pushed under twice inside one transaction and would drain a vault that bought on it. That path is not in the bytecode. One NFT listed under twice for three days, at a price the daily cap cannot pay, forfeits the last 30%. The OKB buy must receive at least 95% of the pool mid. A searcher can still worsen that one day. One day is at most one ninetieth.",
-      "The 0.2% secondary fee is charged only on sales inside this contract. When the payment is TAPE, half is sent to the burn address and half to the platform 0x7a2cC9b4dd8302FDD104159CeE97Be8a90BF772c. When the payment is BEM or OKB, the burn half stays locked. It is not swapped for TAPE inside the user's transaction, because that swap can be sandwiched. OKX and the official market do not pass through this contract, and this site does not take that fee first. Spot, perpetuals, and the mark that are already on chain still pay 0x823b9F6A93Ac44Ce5A469823A336c15b6117054D. Those contracts cannot be retargeted. Create sends no transaction until the factory address has been checked and written in.",
+      "The 0.2% secondary fee is charged only on sales inside this contract. The platform half goes to 0x7a2cC9b4dd8302FDD104159CeE97Be8a90BF772c. The other half of a TAPE, BEM, or OKB payment stays in the project contract. This bytecode has no withdraw for it, and it does not transfer the TAPE half to the burn address. The sale does not swap that half. OKX and the official market do not pass through here. Spot, perpetuals, and the mark that are already on chain still pay 0x823b9F6A93Ac44Ce5A469823A336c15b6117054D. Those contracts cannot be retargeted.",
     ],
   },
   {
@@ -122,13 +125,14 @@ const en: Section[] = [
     ps: [
       "Official transistor prices come from tapeout.net. Bids and sales go to the same BSC contract, 0xA6a80C1919a8326022d7c601a488888C13aA16E4.",
       "A circuit taped out on tapeout.net is already an ERC-721. This site shows that same token. It does not apply the 1 TAPE to 0.001 BEM price, and it does not run a second market. A listing is bought with one signature on the official market 0x6feEbbEbC07BcB90bd1Ac8b0CF9BaA4f0fF2B46f. Nothing is charged first. An unlisted circuit cannot be bought.",
-      "TapeCode-Test1 is an OKX collection on X Layer, contract 0x0e91460d6823c711643e650a9a4c0cc21de41614. This site only reads the listings. They stay folded until the banner is opened. Fills happen on OKX, not with a signature on this site.",
+      "TapeCode-Test1 is an X Layer collection, contract 0x0e91460d6823c711643e650a9a4c0cc21de41614. OKX's public feed has no fill signature, so an OKX price cannot be taken here. A holder can list a new order on this site. The buyer pays OKB through Seaport on X Layer. OpenSea collections on Ethereum are floor prices only. There is no signature, they cannot settle on this chain, and the page does not leave.",
     ],
   },
   {
     h: "Account",
     ps: [
       "Login, genesis trades, and swaps sign with whichever wallet is connected from the top right: a browser wallet, OKX, Binance, or any other wallet the page detects. Logged out, the corner says Log in. Once connected, Log out sits beside the address, and BSC or X Layer can be switched. Logout only disconnects this page. It does not move assets. This site never asks for a private key, and a key is not written into the page or the repository.",
+      "The assets page is mainly this address's balances. Click the avatar to change it, the banner to change the background, and the name to rename. Those stay in this browser, tied to the connected wallet.",
       "The account page shows this address's BNB, BEM, and USDT on BSC, and OKB and BEM on X Layer. Those are on-chain balances, not an OKX exchange account. The name and avatar stay in this browser.",
       "The top bar switches Chinese and English. The choice stays in this browser and is not written on chain.",
     ],
@@ -137,7 +141,7 @@ const en: Section[] = [
     h: "Risk",
     ps: [
       "The genesis market and the swap pools are not custodied here. If a node fails, the page may hide a listing or a quote that is still on chain.",
-      "TAP-721 is still a draft. A netlist hash on this page is a preview, not a taped-out circuit. Buyback, burns, and the last 30% do not run until the factory is deployed and its address is written in.",
+      "TAP-721 is still a draft. A netlist hash on this page is a preview, not a taped-out circuit. Buyback and the last 30% run only after a project is created on this factory and the sale closes. An OKB-only forfeit tries to buy BEM and TAPE. Until the official TAPE pool reaches 5,000 USDT, that step fails and the OKB stays in the project.",
       "Use only money you can lose. This is not an offering, not custody, and not a promise of a fill, a date, or a price.",
     ],
   },

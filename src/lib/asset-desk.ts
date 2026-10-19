@@ -9,9 +9,10 @@ import {
 } from "viem";
 import { BSC, connectBsc, pretty, quoteExact, swapBem, txUrl as bscTx, units } from "@/lib/bsc";
 import { connectXLayer, txUrl as xTx } from "@/lib/xlayer";
+import { previewTapeSwap, swapTapePool, TAPE_POOL, TAPE_TOKEN, TAPE_USDT } from "@/lib/tape-pool";
 import { ensureProvider } from "@/lib/wallet";
 
-export type SwapPair = "bsc-bem" | "xl-bem";
+export type SwapPair = "bsc-bem" | "xl-bem" | "xl-tape";
 export type SwapSide = "buy" | "sell";
 export type BridgeDir = "to-xlayer" | "to-bsc";
 
@@ -33,6 +34,7 @@ const BRIDGE = {
 };
 
 const erc20 = parseAbi([
+  "function balanceOf(address) view returns (uint256)",
   "function allowance(address owner, address spender) view returns (uint256)",
   "function approve(address spender, uint256 amount) returns (bool)",
 ]);
@@ -85,7 +87,9 @@ async function midOut(zeroForOne: boolean, amountIn: bigint): Promise<bigint> {
   return (step * Q96) / sqrt;
 }
 
-export type SwapQuote = { amount: string; unit: string; venue: "bsc" | "xlayer" };
+const poolAbi = parseAbi(["function live() view returns (bool)", "function usdtPool() view returns (uint256 tape, uint256 quote, uint256 shares)"]);
+
+export type SwapQuote = { amount: string; unit: string; venue: "bsc" | "xlayer"; live: boolean; note: string };
 
 export async function quoteSwap(pair: SwapPair, side: SwapSide, raw: string): Promise<SwapQuote> {
   if (pair === "bsc-bem") {
@@ -95,14 +99,31 @@ export async function quoteSwap(pair: SwapPair, side: SwapSide, raw: string): Pr
     const decimalsOut = side === "buy" ? BSC.bemDecimals : BSC.usdtDecimals;
     const out = await quoteExact(tokenIn, tokenOut, amountOf(raw, decimalsIn));
     const unit = side === "buy" ? "BEM" : "USDT";
-    return { amount: pretty(out, decimalsOut, 4), unit, venue: "bsc" };
+    return { amount: pretty(out, decimalsOut, 4), unit, venue: "bsc", live: true, note: "" };
+  }
+  if (pair === "xl-tape") {
+    const buy = side === "buy";
+    const amountIn = amountOf(raw, buy ? 6 : 8);
+    const [preview, live, pool] = await Promise.all([
+      previewTapeSwap(0, !buy, amountIn),
+      xl.readContract({ address: TAPE_POOL, abi: poolAbi, functionName: "live" }),
+      xl.readContract({ address: TAPE_POOL, abi: poolAbi, functionName: "usdtPool" }),
+    ]);
+    if (preview.out <= 0n) throw new Error("tiny");
+    return {
+      amount: show(preview.out, buy ? 8 : 6),
+      unit: buy ? "TAPE" : "USDT",
+      venue: "xlayer",
+      live,
+      note: `官方池大约 ${show(pool[1], 6)} USDT 对 ${show(pool[0], 8)} TAPE。未到 5,000 USDT 不会放行。流动性很小。`,
+    };
   }
   const decimalsIn = side === "buy" ? 18 : 8;
   const out = await midOut(side === "sell", amountOf(raw, decimalsIn));
   if (out <= 0n) throw new Error("tiny");
   const unit = side === "buy" ? "BEM" : "OKB";
   const decimalsOut = side === "buy" ? 8 : 18;
-  return { amount: show(out, decimalsOut), unit, venue: "xlayer" };
+  return { amount: show(out, decimalsOut), unit, venue: "xlayer", live: true, note: "" };
 }
 
 async function send(from: string, to: Hex, data: Hex, value = 0n): Promise<Hex> {
@@ -119,6 +140,7 @@ export async function runSwap(pair: SwapPair, side: SwapSide, raw: string): Prom
     const hash = await swapBem(from, side, raw.trim());
     return { hash, url: bscTx(hash) };
   }
+  if (pair === "xl-tape") return runTapeSwap(side, raw);
   const from = await connectXLayer();
   const buy = side === "buy";
   const amountIn = amountOf(raw, buy ? 18 : 8);
@@ -163,6 +185,16 @@ export async function runSwap(pair: SwapPair, side: SwapSide, raw: string): Prom
         args: [deadline, [swapData, encodeFunctionData({ abi: routerAbi, functionName: "unwrapWETH9", args: [minOut, owner] })]],
       });
   const hash = await send(from, XL.router, data, buy ? amountIn : 0n);
+  return { hash, url: xTx(hash) };
+}
+
+export async function runTapeSwap(side: SwapSide, raw: string): Promise<{ hash: string; url: string }> {
+  const from = await connectXLayer();
+  const buy = side === "buy";
+  const amountIn = amountOf(raw, buy ? 6 : 8);
+  const live = await xl.readContract({ address: TAPE_POOL, abi: poolAbi, functionName: "live" });
+  if (!live) throw new Error("closed");
+  const hash = await swapTapePool(from, 0, !buy, amountIn);
   return { hash, url: xTx(hash) };
 }
 
@@ -237,12 +269,46 @@ export async function runBridge(dir: BridgeDir, raw: string): Promise<{ hash: st
   return { hash, url: dir === "to-xlayer" ? bscTx(hash) : xTx(hash) };
 }
 
+export type CoinBals = {
+  usdtBsc: string;
+  usdtXl: string;
+  okb: string;
+  bemBsc: string;
+  bemXl: string;
+  tape: string;
+};
+
+const emptyBals = (): CoinBals => ({ usdtBsc: "0", usdtXl: "0", okb: "0", bemBsc: "0", bemXl: "0", tape: "0" });
+
+export async function readSwapBalances(account: string): Promise<CoinBals> {
+  const who = account as Hex;
+  const [usdtBsc, bemBsc, okb, usdtXl, bemXl, tape] = await Promise.all([
+    bsc.readContract({ address: BSC.usdt, abi: erc20, functionName: "balanceOf", args: [who] }),
+    bsc.readContract({ address: BSC.bem, abi: erc20, functionName: "balanceOf", args: [who] }),
+    xl.getBalance({ address: who }),
+    xl.readContract({ address: TAPE_USDT, abi: erc20, functionName: "balanceOf", args: [who] }),
+    xl.readContract({ address: XL.bem, abi: erc20, functionName: "balanceOf", args: [who] }),
+    xl.readContract({ address: TAPE_TOKEN, abi: erc20, functionName: "balanceOf", args: [who] }),
+  ]);
+  return {
+    usdtBsc: show(usdtBsc, 18),
+    usdtXl: show(usdtXl, 6),
+    okb: show(okb, 18),
+    bemBsc: show(bemBsc, BSC.bemDecimals),
+    bemXl: show(bemXl, 8),
+    tape: show(tape, 8),
+  };
+}
+
+export { emptyBals };
+
 export function deskError(error: unknown): string {
   const text = error instanceof Error ? error.message : String(error ?? "");
   const code = typeof error === "object" && error && "code" in error ? Number((error as { code?: number }).code) : 0;
   if (code === 4001 || /user rejected|denied|cancel/i.test(text)) return "你在钱包里取消了，没有成交。";
   if (text === "amount" || /invalid|parse/i.test(text)) return "数量要写成大于 0 的数字。";
   if (text === "tiny") return "数量太小，报价是 0，没有发出去。";
+  if (text === "closed") return "TAPE 官方池还没开。要到 5,000 USDT 才放行，现在流动性很小，没有发出去。";
   if (text === "nowallet") return "没有连上钱包。";
   if (/insufficient funds/i.test(text)) return "余额或 gas 不够。";
   return text ? `没发出去：${text.slice(0, 160)}` : "没发出去。";

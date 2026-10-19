@@ -1,14 +1,17 @@
-import { decodeFunctionResult, encodeFunctionData, parseAbi, parseEther } from "viem";
+import { createPublicClient, decodeFunctionResult, encodeFunctionData, http, parseAbi, parseEther } from "viem";
 import { getLaunchMarket, type OsCard, type TokenQuote } from "@/lib/opensea-feed";
 import { getProtocolNfts, getTapeoutLive, type LiveTransistor, type ProtocolCircuit, type TapeoutLive } from "@/lib/tapeout-live";
 import { mintChipArt } from "@/lib/chip-art";
-import { nickOf, readAvatar, readNicks, writeAvatar, writeNick } from "@/lib/nicks";
-import { deskError, quoteBridge, quoteSwap, runBridge, runSwap, type BridgeDir, type SwapPair, type SwapSide } from "@/lib/asset-desk";
+import { nickOf, readAvatar, readCover, readNicks, writeAvatar, writeCover, writeNick } from "@/lib/nicks";
+import { showMintWin, whenMined } from "@/lib/mint-win";
+import { deskError, quoteBridge, quoteSwap, readSwapBalances, runBridge, runSwap, type BridgeDir, type CoinBals, type SwapPair, type SwapSide } from "@/lib/asset-desk";
 import { applyDom, bootLang, onLang, setUiLang, t, uiLang } from "@/lib/locale";
 import { connectBrowser, connectInjected, connectKind, currentAccount, currentChain, disconnectWallet, getProvider, onAccount, onChain, onOpenLink, resumeInjected, switchDeskChain, walletLabel } from "@/lib/wallet";
 import { bootGenesis } from "@/lib/genesis-desk";
 import { getTapeCode } from "@/lib/okx-tape";
-import { factoryDeployData, FACTORY_PLATFORM } from "@/lib/tape-factory-deploy";
+import { bookError, buyTapeOnSite, getTapeBook, listTapeOnSite, type BookOrder } from "@/lib/tape-book";
+import { factoryCreateData, factoryDeployData, FACTORY, FACTORY_PLATFORM } from "@/lib/tape-factory-deploy";
+import { TAPE_BEM, TAPE_TOKEN } from "@/lib/tape-pool";
 import { connectXLayer, txUrl } from "@/lib/xlayer";
 import { connectBsc } from "@/lib/bsc";
 
@@ -205,10 +208,11 @@ export function bootLaunch(host: HTMLElement): () => void {
   const opt = { signal: ac.signal };
   let alive = true;
   const open = (id: string) => {
+    const next = id === "profile" ? "assets" : id;
     host.querySelectorAll(".page").forEach((node) => node.classList.remove("active"));
-    host.querySelector("#page-" + id)?.classList.add("active");
+    host.querySelector("#page-" + next)?.classList.add("active");
     host.querySelectorAll(".nav-item").forEach((node) => node.classList.remove("active"));
-    host.querySelector(`.nav-item[data-page="${id}"]`)?.classList.add("active");
+    host.querySelector(`.nav-item[data-page="${next}"]`)?.classList.add("active");
     const scroller = host.querySelector(".content");
     if (scroller) scroller.scrollTop = 0;
   };
@@ -221,12 +225,68 @@ export function bootLaunch(host: HTMLElement): () => void {
       open(id);
     }, opt);
   });
-  host.querySelector("#launch-create")?.addEventListener("click", () => {
+  host.querySelector("#launch-create")?.addEventListener("click", () => void (async () => {
     const note = host.querySelector("#launch-create-msg");
-    if (note) note.textContent = "这一下不扣款。工厂地址核对之前不能创建。请用收费钱包签下面的部署。";
-    open("launch");
-    host.querySelector("#factory-box")?.scrollIntoView({ block: "start" });
-  }, opt);
+    const button = host.querySelector<HTMLButtonElement>("#launch-create");
+    if (!button || button.disabled) return;
+    button.disabled = true;
+    if (note) note.textContent = "等钱包确认。创建会付进金库的 OKB，并授权 1 TAPE。";
+    try {
+      if (!getProvider()) {
+        showSheet(true);
+        if (note) note.textContent = "先连接钱包，再创建。";
+        return;
+      }
+      const from = await connectXLayer();
+      const name = host.querySelector<HTMLInputElement>("#launch-name")?.value.trim() ?? "";
+      const symbol = host.querySelector<HTMLInputElement>("#launch-symbol")?.value.trim() ?? "";
+      const supply = Number(host.querySelector<HTMLInputElement>("#launch-supply")?.value ?? "");
+      const reserve = Number(host.querySelector<HTMLInputElement>("#launch-reserve")?.value ?? "");
+      const mult = Number(host.querySelector<HTMLInputElement>("#launch-mult")?.value ?? "");
+      const quote = host.querySelector<HTMLButtonElement>("#launch-quote .on")?.dataset.quote;
+      const mode = quote === "okb" ? 2 : quote === "bem" ? 3 : 1;
+      if (!name || name.length > 32 || !symbol || symbol.length > 16) throw new Error("name");
+      if (!Number.isInteger(supply) || supply < 1 || supply > 100_000) throw new Error("supply");
+      if (!Number.isInteger(reserve) || reserve < 0 || reserve > supply) throw new Error("supply");
+      if (!Number.isInteger(mult) || mult < 1 || mult > 1_000_000) throw new Error("mult");
+      const xl = createPublicClient({ transport: http("https://rpc.xlayer.tech") });
+      const seedAbi = parseAbi(["function okbSeed() view returns (uint256)", "function allowance(address,address) view returns (uint256)", "function approve(address,uint256) returns (bool)"]);
+      const seed = await xl.readContract({ address: FACTORY, abi: seedAbi, functionName: "okbSeed" });
+      const value = mode === 2 ? seed + 10n ** 16n : seed;
+      const allow = async (token: `0x${string}`, need: bigint) => {
+        const current = await xl.readContract({ address: token, abi: seedAbi, functionName: "allowance", args: [from as `0x${string}`, FACTORY] });
+        if (current >= need) return;
+        if (current > 0n) {
+          const zero = encodeFunctionData({ abi: seedAbi, functionName: "approve", args: [FACTORY, 0n] });
+          const zeroHash = (await getProvider()?.request({ method: "eth_sendTransaction", params: [{ from, to: token, data: zero, value: "0x0", chainId: "0xc4" }] })) as string;
+          await xl.waitForTransactionReceipt({ hash: zeroHash as `0x${string}`, timeout: 90_000 });
+        }
+        const data = encodeFunctionData({ abi: seedAbi, functionName: "approve", args: [FACTORY, need] });
+        const hash = (await getProvider()?.request({ method: "eth_sendTransaction", params: [{ from, to: token, data, value: "0x0", chainId: "0xc4" }] })) as string;
+        await xl.waitForTransactionReceipt({ hash: hash as `0x${string}`, timeout: 90_000 });
+      };
+      if (note) note.textContent = "先授权代币，再签创建。取消任何一步都等于没创建。";
+      await allow(TAPE_TOKEN, 100_000_000n);
+      if (mode !== 2) await allow(TAPE_BEM, 1_000_000n);
+      const data = factoryCreateData(mode, mult, supply, reserve, name, symbol);
+      const hash = (await getProvider()?.request({
+        method: "eth_sendTransaction",
+        params: [{ from, to: FACTORY, data, value: `0x${value.toString(16)}`, chainId: "0xc4" }],
+      })) as string;
+      if (note) note.textContent = `已提交 ${hash.slice(0, 10)}… 项目地址等收据。`;
+      showLink("#factory-link", txUrl(hash), "查看这笔创建");
+    } catch (error) {
+      const text = error instanceof Error ? error.message : String(error ?? "");
+      if (note) {
+        note.textContent = text === "name" ? "名称最多 32 字，符号最多 16 字。"
+          : text === "supply" ? "总量 1 到 100000，预留不能超过总量。"
+          : text === "mult" ? "倍数要是 1 到 1000000 的整数。"
+          : deskError(error);
+      }
+    } finally {
+      button.disabled = false;
+    }
+  })(), opt);
 
   let cat = "all";
   let query = "";
@@ -607,6 +667,7 @@ export function bootLaunch(host: HTMLElement): () => void {
         applyImages();
       }
       sayArt(artMode === "platform" ? "这 4 张是平台默认出的。" : "这 4 张是用你的 Key 出的。");
+      showMintWin(host, uiLang() === "zh" ? "恭喜，这 4 张芯片图已经生成。" : "These four chips are ready.");
     })()
       .catch(() => sayArt("出图没有完成，没有换成假图。"))
       .finally(() => {
@@ -694,17 +755,20 @@ export function bootLaunch(host: HTMLElement): () => void {
   const paintIdentity = (address: string | null) => {
     const nick = address ? nickOf(address, readNicks()) : "";
     const avatar = address ? readAvatar(address) : "";
+    const cover = address ? readCover(address) : "";
     const src = avatar || "/tape-launch/logo.png";
-    for (const id of ["profile-av", "assets-av"]) {
-      const img = host.querySelector<HTMLImageElement>("#" + id);
-      if (img) img.src = src;
-    }
-    const title = host.querySelector("#profile-name");
-    if (title) title.textContent = nick || t("profileTitle");
+    const av = host.querySelector<HTMLImageElement>("#assets-av");
+    if (av) av.src = src;
+    const banner = host.querySelector<HTMLElement>("#user-banner");
+    if (banner) banner.style.backgroundImage = cover ? `url("${cover}")` : "";
     const assets = host.querySelector("#assets-name");
     if (assets) assets.textContent = nick || t("assetsTitle");
     const nickInput = host.querySelector<HTMLInputElement>("#profile-nick");
     if (nickInput && document.activeElement !== nickInput) nickInput.value = nick;
+    const clearAv = host.querySelector<HTMLButtonElement>("#profile-clear");
+    if (clearAv) clearAv.hidden = !avatar;
+    const clearCover = host.querySelector<HTMLButtonElement>("#cover-clear");
+    if (clearCover) clearCover.hidden = !cover;
     if (walletBtn) {
       const chain = currentChain() === 56 ? "BSC" : currentChain() === 196 ? "X Layer" : "";
       walletBtn.textContent = address ? `${nick || short(address)}${chain ? ` · ${chain}` : ""}` : t("login");
@@ -715,8 +779,6 @@ export function bootLaunch(host: HTMLElement): () => void {
     if (logout) logout.hidden = !address;
     const assetsLogout = host.querySelector<HTMLButtonElement>("#assets-logout");
     const assetsLogin = host.querySelector<HTMLButtonElement>("#assets-login");
-    const profileLogout = host.querySelector<HTMLButtonElement>("#profile-logout");
-    const profileLogin = host.querySelector<HTMLButtonElement>("#profile-login");
     const who = host.querySelector("#wallet-who");
     if (who) {
       who.textContent = address
@@ -725,16 +787,12 @@ export function bootLaunch(host: HTMLElement): () => void {
     }
     if (assetsLogout) assetsLogout.hidden = !address;
     if (assetsLogin) assetsLogin.hidden = Boolean(address);
-    if (profileLogout) profileLogout.hidden = !address;
-    if (profileLogin) profileLogin.hidden = Boolean(address);
   };
 
   const paintAccount = (address: string | null) => {
     paintIdentity(address);
-    for (const id of ["assets-addr", "profile-addr"]) {
-      const node = host.querySelector("#" + id);
-      if (node) node.textContent = address ? `${short(address)} · ${uiLang() === "zh" ? "已连接" : "connected"}` : t("addrOff");
-    }
+    const node = host.querySelector("#assets-addr");
+    if (node) node.textContent = address ? `${short(address)} · ${uiLang() === "zh" ? "已连接" : "connected"}` : t("addrOff");
     const bal = host.querySelector("#bal-native");
     const label = host.querySelector("#bal-label");
     if (!address) {
@@ -836,14 +894,19 @@ export function bootLaunch(host: HTMLElement): () => void {
   host.querySelector("#wallet-logout")?.addEventListener("click", logoutNow, opt);
   host.querySelector("#btn-logout")?.addEventListener("click", logoutNow, opt);
   host.querySelector("#assets-logout")?.addEventListener("click", logoutNow, opt);
-  host.querySelector("#profile-logout")?.addEventListener("click", logoutNow, opt);
   host.querySelector("#assets-login")?.addEventListener("click", () => showSheet(true), opt);
-  host.querySelector("#profile-login")?.addEventListener("click", () => showSheet(true), opt);
+  host.querySelector("#mint-close")?.addEventListener("click", () => {
+    const win = host.querySelector<HTMLElement>("#mint-win");
+    if (win) win.hidden = true;
+  }, opt);
   void resumeInjected();
 
-  const profileMsg = host.querySelector("#profile-msg");
+  const profileMsg = host.querySelector<HTMLElement>("#profile-msg");
   const sayProfile = (text: string) => {
-    if (profileMsg) profileMsg.textContent = text;
+    if (profileMsg) {
+      profileMsg.hidden = false;
+      profileMsg.textContent = text;
+    }
   };
   const shrinkAvatar = (file: File) =>
     new Promise<string>((resolve, reject) => {
@@ -870,38 +933,123 @@ export function bootLaunch(host: HTMLElement): () => void {
       };
       img.src = url;
     });
-  host.querySelector("#profile-save")?.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const address = currentAccount();
-    if (!address) {
-      sayProfile(uiLang() === "zh" ? "还在个人中心。先连接钱包，头像和昵称才绑到这个地址。" : "Still on Account. Connect a wallet so the name sticks to it.");
-      showSheet(true);
-      return;
-    }
-    const nickInput = host.querySelector<HTMLInputElement>("#profile-nick");
-    writeNick(address, nickInput?.value ?? "");
-    const file = host.querySelector<HTMLInputElement>("#profile-file")?.files?.[0];
-    if (!file) {
-      paintIdentity(address);
-      sayProfile(uiLang() === "zh" ? "昵称已保存，留在个人中心。只存在这台浏览器。" : "Name saved. Still on Account. This browser only.");
-      return;
-    }
-    if (!file.type.startsWith("image/") || file.size > 8_000_000) {
-      sayProfile(uiLang() === "zh" ? "请选一张 8MB 以内的图片。" : "Pick an image under 8MB.");
-      return;
-    }
-    void shrinkAvatar(file)
-      .then((data) => {
-        if (data.length > 140_000) {
-          sayProfile(uiLang() === "zh" ? "这张图压缩后还是太大，换一张。" : "That image is still too large.");
+  const shrinkCover = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 960;
+        canvas.height = 320;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          URL.revokeObjectURL(url);
+          reject(new Error("canvas"));
           return;
         }
-        writeAvatar(address, data);
+        const scale = Math.max(canvas.width / img.width, canvas.height / img.height);
+        const w = img.width * scale;
+        const h = img.height * scale;
+        ctx.drawImage(img, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL("image/jpeg", 0.72));
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("image"));
+      };
+      img.src = url;
+    });
+  const readPic = async (file: File | undefined, kind: "avatar" | "cover") => {
+    if (!file) return "";
+    if (!file.type.startsWith("image/") || file.size > 8_000_000) throw new Error("size");
+    const data = kind === "avatar" ? await shrinkAvatar(file) : await shrinkCover(file);
+    if (data.length > (kind === "avatar" ? 140_000 : 220_000)) throw new Error("large");
+    return data;
+  };
+  const needWallet = () => {
+    const address = currentAccount();
+    if (address) return address;
+    sayProfile(uiLang() === "zh" ? "先连接钱包。昵称、头像和背景才会绑到这个地址。" : "Connect a wallet so the name sticks to it.");
+    const msgBox = host.querySelector<HTMLElement>("#profile-msg");
+    if (msgBox) msgBox.hidden = false;
+    showSheet(true);
+    return null;
+  };
+  const sayPic = (error: unknown) => {
+    const code = error instanceof Error ? error.message : "";
+    const box = host.querySelector<HTMLElement>("#profile-msg");
+    if (box) box.hidden = false;
+    sayProfile(code === "large"
+      ? (uiLang() === "zh" ? "这张图压缩后还是太大，换一张。" : "That image is still too large.")
+      : code === "size"
+        ? (uiLang() === "zh" ? "请选一张 8MB 以内的图片。" : "Pick an image under 8MB.")
+        : (uiLang() === "zh" ? "这张图读不了。" : "Could not read that image."));
+  };
+  const openPic = (inputId: string) => {
+    if (!needWallet()) return;
+    host.querySelector<HTMLInputElement>(inputId)?.click();
+  };
+  const onPic = (inputId: string, kind: "avatar" | "cover") => {
+    host.querySelector<HTMLInputElement>(inputId)?.addEventListener("change", () => {
+      const address = currentAccount();
+      const input = host.querySelector<HTMLInputElement>(inputId);
+      const file = input?.files?.[0];
+      if (!address || !file) return;
+      void readPic(file, kind).then((data) => {
+        if (kind === "avatar") writeAvatar(address, data);
+        else writeCover(address, data);
+        if (input) input.value = "";
         paintIdentity(address);
-        sayProfile(uiLang() === "zh" ? "头像和昵称已保存，留在个人中心。" : "Avatar and name saved. Still on Account.");
-      })
-      .catch(() => sayProfile(uiLang() === "zh" ? "这张图读不了。" : "Could not read that image."));
+        const box = host.querySelector<HTMLElement>("#profile-msg");
+        if (box) box.hidden = false;
+        sayProfile(uiLang() === "zh" ? "已换上。只存在这台浏览器。" : "Saved in this browser only.");
+      }).catch(sayPic);
+    }, opt);
+  };
+  host.querySelector("#avatar-edit")?.addEventListener("click", () => openPic("#profile-file"), opt);
+  host.querySelector("#cover-edit")?.addEventListener("click", () => openPic("#cover-file"), opt);
+  host.querySelector("#user-banner")?.addEventListener("click", (event) => {
+    if ((event.target as HTMLElement).closest("button")) return;
+    openPic("#cover-file");
+  }, opt);
+  onPic("#profile-file", "avatar");
+  onPic("#cover-file", "cover");
+  const nickInput = host.querySelector<HTMLInputElement>("#profile-nick");
+  const nameBtn = host.querySelector<HTMLButtonElement>("#name-edit");
+  let nickSkip = false;
+  const closeNick = (save: boolean) => {
+    if (!nickInput || !nameBtn || nickInput.hidden) return;
+    const address = currentAccount();
+    if (save && address) writeNick(address, nickInput.value);
+    nickInput.hidden = true;
+    nameBtn.hidden = false;
+    if (address) paintIdentity(address);
+  };
+  nameBtn?.addEventListener("click", () => {
+    const address = needWallet();
+    if (!address || !nickInput || !nameBtn) return;
+    nickInput.value = nickOf(address, readNicks());
+    nickInput.hidden = false;
+    nameBtn.hidden = true;
+    nickInput.focus();
+    nickInput.select();
+  }, opt);
+  nickInput?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      closeNick(true);
+    } else if (event.key === "Escape") {
+      nickSkip = true;
+      closeNick(false);
+    }
+  }, opt);
+  nickInput?.addEventListener("blur", () => {
+    if (nickSkip) {
+      nickSkip = false;
+      return;
+    }
+    closeNick(true);
   }, opt);
   host.querySelector("#profile-clear")?.addEventListener("click", (event) => {
     event.preventDefault();
@@ -916,6 +1064,20 @@ export function bootLaunch(host: HTMLElement): () => void {
     if (file) file.value = "";
     paintIdentity(address);
     sayProfile("已去掉头像。");
+  }, opt);
+  host.querySelector("#cover-clear")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    const address = currentAccount();
+    if (!address) {
+      sayProfile("先连接钱包。");
+      showSheet(true);
+      return;
+    }
+    writeCover(address, "");
+    const file = host.querySelector<HTMLInputElement>("#cover-file");
+    if (file) file.value = "";
+    paintIdentity(address);
+    sayProfile(uiLang() === "zh" ? "已去掉背景。" : "Background cleared.");
   }, opt);
 
   const addWallet = (name: string, icon: string, provider: Injected) => {
@@ -955,10 +1117,116 @@ export function bootLaunch(host: HTMLElement): () => void {
       if (!getProvider()) showSheet(true);
       else if (msg) {
         showSheet(true);
-        msg.textContent = "钱包已连接。本地芯片挂单还没接成交合约，OpenSea 系列请点卡片上的链接。";
+        msg.textContent = uiLang() === "zh" ? "钱包已连接。" : "Wallet connected.";
       }
     }, opt);
   });
+
+  const openExt = (name: string, line: string, tokenId = "") => {
+    const sheet = host.querySelector<HTMLElement>("#ext-sheet");
+    const title = host.querySelector("#ext-name");
+    const px = host.querySelector("#ext-px");
+    const msg = host.querySelector("#ext-msg");
+    const book = host.querySelector("#ext-book");
+    const list = host.querySelector<HTMLButtonElement>("#ext-list");
+    const price = host.querySelector<HTMLInputElement>("#ext-price");
+    const listLabel = host.querySelector<HTMLElement>("#ext-list-label");
+    const buy = host.querySelector<HTMLButtonElement>("#ext-buy");
+    if (title) title.textContent = name;
+    if (px) px.textContent = line;
+    if (sheet) {
+      sheet.dataset.token = tokenId;
+      sheet.hidden = false;
+    }
+    const tape = Boolean(tokenId);
+    if (list) list.hidden = !tape;
+    if (price) price.hidden = !tape;
+    if (listLabel) listLabel.hidden = !tape;
+    if (buy) buy.hidden = !tape;
+    if (msg) {
+      msg.textContent = tape
+        ? "OKX 的公开接口没有成交签名，那一笔不能在这里吃。持有人可以在本站另挂，买家付 OKB，在 X Layer 成交。"
+        : "这是以太坊上的地板价。公开接口没有签名，不能在 X Layer 上成交，页面也不跳走。";
+    }
+    if (book) book.textContent = "";
+    if (!tape) return;
+    void getTapeBook()
+      .then((rows) => {
+        const hit = rows.find((row) => row.tokenId === tokenId);
+        if (sheet) sheet.dataset.order = hit ? JSON.stringify(hit) : "";
+        if (book) {
+          book.textContent = hit
+            ? `本站挂单 ${Number(hit.price) / 1e18} OKB`
+            : "本站还没有这枚的挂单。";
+        }
+        if (buy) buy.hidden = !hit;
+      })
+      .catch(() => {
+        if (book) book.textContent = "本站挂单没读到。";
+      });
+  };
+  host.querySelector("#ext-close")?.addEventListener("click", () => {
+    const sheet = host.querySelector<HTMLElement>("#ext-sheet");
+    if (sheet) sheet.hidden = true;
+  }, opt);
+  host.querySelector("#ext-sheet")?.addEventListener("click", (event) => {
+    const sheet = host.querySelector<HTMLElement>("#ext-sheet");
+    if (event.target === sheet && sheet) sheet.hidden = true;
+  }, opt);
+  host.querySelector("#ext-buy")?.addEventListener("click", () => void (async () => {
+    const sheet = host.querySelector<HTMLElement>("#ext-sheet");
+    const msg = host.querySelector("#ext-msg");
+    const raw = sheet?.dataset.order || "";
+    if (!raw) {
+      if (msg) msg.textContent = sheet?.dataset.token
+        ? "本站还没有可成交的签名。"
+        : "以太坊上的系列没有拿到签名，这一下不会发交易。";
+      return;
+    }
+    const button = host.querySelector<HTMLButtonElement>("#ext-buy");
+    if (button) button.disabled = true;
+    if (msg) msg.textContent = "等钱包确认。付的是挂单价的 OKB。";
+    try {
+      if (!getProvider()) {
+        showSheet(true);
+        if (msg) msg.textContent = "先连接钱包。";
+        return;
+      }
+      const from = await connectXLayer();
+      const done = await buyTapeOnSite(from, JSON.parse(raw) as BookOrder);
+      if (msg) msg.textContent = `已提交。${done.url}`;
+      if (sheet) sheet.dataset.order = "";
+    } catch (error) {
+      if (msg) msg.textContent = bookError(error);
+    } finally {
+      if (button) button.disabled = false;
+    }
+  })(), opt);
+  host.querySelector("#ext-list")?.addEventListener("click", () => void (async () => {
+    const sheet = host.querySelector<HTMLElement>("#ext-sheet");
+    const msg = host.querySelector("#ext-msg");
+    const tokenId = sheet?.dataset.token || "";
+    const price = host.querySelector<HTMLInputElement>("#ext-price")?.value ?? "";
+    const button = host.querySelector<HTMLButtonElement>("#ext-list");
+    if (!tokenId || !button) return;
+    button.disabled = true;
+    if (msg) msg.textContent = "等钱包确认。第一次要先授权这枚 NFT。";
+    try {
+      if (!getProvider()) {
+        showSheet(true);
+        if (msg) msg.textContent = "先连接钱包。";
+        return;
+      }
+      const from = await connectXLayer();
+      await listTapeOnSite(from, tokenId, price);
+      if (msg) msg.textContent = "已经挂在本站。买家在这里付 OKB。";
+      openExt(`TapeCode #${tokenId}`, host.querySelector("#ext-px")?.textContent || "", tokenId);
+    } catch (error) {
+      if (msg) msg.textContent = bookError(error);
+    } finally {
+      button.disabled = false;
+    }
+  })(), opt);
 
   const mount = (list: OsCard[]) => {
     if (!alive) return;
@@ -994,10 +1262,10 @@ export function bootLaunch(host: HTMLElement): () => void {
         deal.textContent = "交易";
         deal.addEventListener("click", (event) => {
           event.stopPropagation();
-          window.open(card.url, "_blank", "noopener");
+          openExt(card.name, floorText(card));
         });
         row.append(img, meta, deal);
-        row.addEventListener("click", () => window.open(card.url, "_blank", "noopener"));
+        row.addEventListener("click", () => openExt(card.name, floorText(card)));
         grid.append(row);
       }
       if (rank) {
@@ -1012,7 +1280,7 @@ export function bootLaunch(host: HTMLElement): () => void {
         if (name) name.textContent = card.verified ? `${card.name} ✓` : card.name;
         const floor = row.querySelector(".floor");
         if (floor) floor.textContent = floorText(card);
-        row.addEventListener("click", () => window.open(card.url, "_blank", "noopener"));
+        row.addEventListener("click", () => openExt(card.name, floorText(card)));
         rank.append(row);
       }
       if (body) {
@@ -1051,21 +1319,19 @@ export function bootLaunch(host: HTMLElement): () => void {
         deal.textContent = "交易";
         deal.addEventListener("click", (event) => {
           event.stopPropagation();
-          window.open(card.url, "_blank", "noopener");
+          openExt(card.name, floorText(card));
         });
         tr.children[4]?.append(deal);
-        tr.addEventListener("click", () => window.open(card.url, "_blank", "noopener"));
+        tr.addEventListener("click", () => openExt(card.name, floorText(card)));
         body.append(tr);
       }
       if (movers && moverCount < 3) {
         moverCount += 1;
-        const tile = document.createElement("a");
+        const tile = document.createElement("button");
+        tile.type = "button";
         tile.className = "mover cat-item js-live";
         tile.dataset.cat = card.cat;
         tile.dataset.name = card.name;
-        tile.href = card.url;
-        tile.target = "_blank";
-        tile.rel = "noopener";
         tile.style.backgroundImage = `url("${card.image.replace(/"/g, "")}")`;
         const cap = document.createElement("div");
         cap.className = "cap";
@@ -1075,9 +1341,11 @@ export function bootLaunch(host: HTMLElement): () => void {
         sub.textContent = `地板 ${floorText(card)}`;
         cap.append(title, sub);
         tile.append(cap);
+        tile.addEventListener("click", () => openExt(card.name, floorText(card)));
         movers.append(tile);
       }
     }
+    placeTape();
     apply();
   };
 
@@ -1749,7 +2017,15 @@ export function bootLaunch(host: HTMLElement): () => void {
         args: [row.listingId, row.price],
       });
       const hash = await sendTx(eth, { from, to: circuitMarket, data, value: row.price });
-      sayProto(`买单已提交 ${short(hash)}。成交以链上为准，没有假装到账。`);
+      sayProto(`买单已提交 ${short(hash)}。等链上确认。`);
+      const ok = await whenMined(eth, hash);
+      if (!alive) return;
+      if (!ok) {
+        sayProto("还没确认成功，没有放礼花。");
+        return;
+      }
+      sayProto(`已确认 ${short(hash)}。`);
+      showMintWin(host, uiLang() === "zh" ? "恭喜，这枚协议电路已经属于你。" : "This circuit is yours.");
     } catch (error) {
       sayProto(tradeError(error));
     } finally {
@@ -1764,7 +2040,7 @@ export function bootLaunch(host: HTMLElement): () => void {
     host.querySelectorAll<HTMLButtonElement>(`${box} .fbtn`).forEach((node) => node.classList.remove("on"));
     button.classList.add("on");
   };
-  const paintTok = (id: string, symbol: "USDT" | "OKB" | "BEM") => {
+  const paintTok = (id: string, symbol: "USDT" | "OKB" | "BEM" | "TAPE") => {
     const node = host.querySelector(id);
     if (!node) return;
     const mark = node.querySelector("i");
@@ -1776,11 +2052,23 @@ export function bootLaunch(host: HTMLElement): () => void {
       img.hidden = !src;
       if (src) img.src = src;
     }
-    if (mark) mark.hidden = Boolean(src);
+    if (mark) {
+      mark.hidden = Boolean(src);
+      mark.textContent = symbol === "TAPE" ? "T" : "₮";
+      mark.classList.toggle("tape", symbol === "TAPE");
+    }
+  };
+  const paySymbol = (): "USDT" | "OKB" | "BEM" | "TAPE" => {
+    if (swapSide() === "sell") return swapPair() === "xl-tape" ? "TAPE" : "BEM";
+    if (swapPair() === "bsc-bem") return "USDT";
+    if (swapPair() === "xl-tape") return "USDT";
+    return "OKB";
   };
   const paintSwapLabel = () => {
-    const pay = swapSide() === "buy" ? (swapPair() === "bsc-bem" ? "USDT" : "OKB") : "BEM";
-    const recv = swapSide() === "buy" ? "BEM" : swapPair() === "bsc-bem" ? "USDT" : "OKB";
+    const pair = swapPair();
+    const buy = swapSide() === "buy";
+    const pay = paySymbol();
+    const recv = buy ? (pair === "xl-tape" ? "TAPE" : "BEM") : pair === "bsc-bem" || pair === "xl-tape" ? "USDT" : "OKB";
     const payLabel = host.querySelector("#swap-in-label");
     const recvLabel = host.querySelector("#swap-out-label");
     if (payLabel) payLabel.textContent = t("swapPay");
@@ -1800,12 +2088,33 @@ export function bootLaunch(host: HTMLElement): () => void {
       .then((row) => {
         if (!alive || ticket !== swapTicket) return;
         amount.textContent = row.amount;
-        quote.textContent = row.venue === "bsc" ? t("quoteBsc") : t("quoteXl");
+        const tape = swapPair() === "xl-tape";
+        quote.textContent = tape
+          ? (row.live ? "报价来自官方 TAPE 池。流动性很小。" : "报价能读。池子没开，这一下不会发交易。")
+          : row.venue === "bsc" ? t("quoteBsc") : t("quoteXl");
+        const warn = host.querySelector<HTMLElement>("#swap-liq");
+        const go = host.querySelector<HTMLButtonElement>("#swap-go");
+        if (warn) {
+          warn.hidden = !tape;
+          warn.textContent = row.note;
+        }
+        if (go) {
+          const closed = tape && !row.live;
+          go.disabled = closed;
+          go.textContent = closed ? "池子未开" : t("swapGo");
+        }
       })
       .catch((error) => {
         if (!alive || ticket !== swapTicket) return;
         amount.textContent = "—";
         quote.textContent = deskError(error);
+        const warn = host.querySelector<HTMLElement>("#swap-liq");
+        const go = host.querySelector<HTMLButtonElement>("#swap-go");
+        if (warn) warn.hidden = swapPair() !== "xl-tape";
+        if (go && swapPair() !== "xl-tape") {
+          go.disabled = false;
+          go.textContent = t("swapGo");
+        }
       });
   };
   let bridgeTicket = 0;
@@ -1841,6 +2150,75 @@ export function bootLaunch(host: HTMLElement): () => void {
     refreshSwap();
   }, opt);
   host.querySelector("#swap-amt")?.addEventListener("input", refreshSwap, opt);
+  let bals: CoinBals | null = null;
+  const paintBals = async () => {
+    const account = currentAccount();
+    const nodes = {
+      usdt: host.querySelector("#bal-usdt"),
+      okb: host.querySelector("#bal-okb"),
+      bem: host.querySelector("#bal-bem"),
+      tape: host.querySelector("#bal-tape"),
+      usdtCh: host.querySelector("#bal-usdt-ch"),
+      bemCh: host.querySelector("#bal-bem-ch"),
+    };
+    if (!account) {
+      bals = null;
+      if (nodes.usdt) nodes.usdt.textContent = "—";
+      if (nodes.okb) nodes.okb.textContent = "—";
+      if (nodes.bem) nodes.bem.textContent = "—";
+      if (nodes.tape) nodes.tape.textContent = "—";
+      return;
+    }
+    try {
+      const next = await readSwapBalances(account);
+      if (!alive || currentAccount() !== account) return;
+      bals = next;
+      const tape = swapPair() === "xl-tape";
+      if (nodes.usdt) nodes.usdt.textContent = tape ? next.usdtXl : next.usdtBsc;
+      if (nodes.usdtCh) nodes.usdtCh.textContent = tape ? "X Layer" : "BSC";
+      if (nodes.okb) nodes.okb.textContent = next.okb;
+      if (nodes.bem) nodes.bem.textContent = swapPair() === "bsc-bem" ? next.bemBsc : next.bemXl;
+      if (nodes.bemCh) nodes.bemCh.textContent = swapPair() === "bsc-bem" ? "BSC" : "X Layer";
+      if (nodes.tape) nodes.tape.textContent = next.tape;
+    } catch {
+      if (nodes.usdt) nodes.usdt.textContent = "—";
+    }
+  };
+  const fillPay = (symbol: "usdt" | "okb" | "bem" | "tape") => {
+    const pairBtn = (pair: SwapPair) => host.querySelector<HTMLButtonElement>(`#swap-pair [data-pair="${pair}"]`);
+    const sideBtn = (side: SwapSide) => host.querySelector<HTMLButtonElement>(`#swap-side [data-side="${side}"]`);
+    const choose = (pair: SwapPair, side: SwapSide) => {
+      const a = pairBtn(pair);
+      const b = sideBtn(side);
+      if (a) pick("#swap-pair", a);
+      if (b) pick("#swap-side", b);
+    };
+    if (symbol === "usdt") choose(swapPair() === "xl-tape" ? "xl-tape" : "bsc-bem", "buy");
+    if (symbol === "okb") choose("xl-bem", "buy");
+    if (symbol === "bem") choose(swapPair() === "bsc-bem" ? "bsc-bem" : "xl-bem", "sell");
+    if (symbol === "tape") choose("xl-tape", "sell");
+    const input = host.querySelector<HTMLInputElement>("#swap-amt");
+    const value = !bals
+      ? ""
+      : symbol === "usdt"
+        ? swapPair() === "xl-tape" ? bals.usdtXl : bals.usdtBsc
+        : symbol === "okb"
+          ? bals.okb
+          : symbol === "bem"
+            ? swapPair() === "bsc-bem" ? bals.bemBsc : bals.bemXl
+            : bals.tape;
+    if (input && value && value !== "0") {
+      const n = Number(value);
+      input.value = symbol === "okb" && n > 0.002 ? String(Math.floor((n - 0.002) * 1e6) / 1e6) : value;
+    }
+    refreshSwap();
+    void paintBals();
+  };
+  host.querySelector("#swap-bals")?.addEventListener("click", (event) => {
+    const button = (event.target as HTMLElement).closest("button");
+    const fill = button?.dataset.fill;
+    if (fill === "usdt" || fill === "okb" || fill === "bem" || fill === "tape") fillPay(fill);
+  }, opt);
   host.querySelector("#bridge-dir")?.addEventListener("click", (event) => {
     const button = (event.target as HTMLElement).closest("button");
     if (!button) return;
@@ -1879,9 +2257,15 @@ export function bootLaunch(host: HTMLElement): () => void {
       if (seed <= 0n || seed > parseEther("10")) throw new Error("amount");
       const eth = getProvider();
       if (!eth) throw new Error("nowallet");
+      const data = factoryDeployData(seed);
+      const estimated = await eth.request({
+        method: "eth_estimateGas",
+        params: [{ from, data, value: "0x0" }],
+      });
+      const gas = (BigInt(String(estimated)) * 12n) / 10n + 80_000n;
       const hash = (await eth.request({
         method: "eth_sendTransaction",
-        params: [{ from, data: factoryDeployData(seed), value: "0x0" }],
+        params: [{ from, chainId: "0xc4", data, value: "0x0", gas: `0x${gas.toString(16)}` }],
       })) as string;
       showLink("#factory-link", txUrl(hash), "查看这笔部署");
       let deployed = "";
@@ -1967,7 +2351,12 @@ export function bootLaunch(host: HTMLElement): () => void {
   const deskTimer = window.setInterval(() => {
     refreshSwap();
     refreshBridge();
+    void paintBals();
   }, 20_000);
+  void paintBals();
+  const stopBal = onAccount(() => {
+    void paintBals();
+  });
 
   const langBtn = host.querySelector<HTMLButtonElement>("#btn-lang");
   const paintLang = () => {
@@ -2021,8 +2410,7 @@ export function bootLaunch(host: HTMLElement): () => void {
     if (logo && head.logo) logo.src = head.logo;
     const supply = head.supply == null ? "—" : head.supply.toLocaleString("en-US");
     if (desc) {
-      const chain = uiLang() === "zh" ? `X Layer · ${head.contract} · 链上 ${supply}` : `X Layer · ${head.contract} · on-chain ${supply}`;
-      desc.textContent = head.desc ? `${head.desc} ${chain}` : chain;
+      desc.textContent = uiLang() === "zh" ? `X Layer · ${supply}` : `X Layer · ${supply}`;
     }
     const cells = [
       [head.floor ? `${head.floor} OKB` : "—", uiLang() === "zh" ? "地板价" : "Floor"],
@@ -2045,11 +2433,9 @@ export function bootLaunch(host: HTMLElement): () => void {
     if (note) note.hidden = true;
     grid.replaceChildren();
     for (const card of tapeCards) {
-      const link = document.createElement("a");
+      const link = document.createElement("button");
+      link.type = "button";
       link.className = "tape-card";
-      link.href = card.href;
-      link.target = "_blank";
-      link.rel = "noopener";
       const face = document.createElement("div");
       face.className = "face";
       if (head.logo) {
@@ -2072,6 +2458,10 @@ export function bootLaunch(host: HTMLElement): () => void {
       line.textContent = bits.join(" · ") || card.name;
       meta.append(title, line);
       link.append(face, meta);
+      link.addEventListener("click", () => {
+        const price = card.price ? `${card.price} OKB` : (uiLang() === "zh" ? "未标价" : "Unpriced");
+        openExt(`TapeCode #${card.tokenId}`, price, card.tokenId);
+      });
       grid.append(link);
     }
     if (more) {
@@ -2080,6 +2470,70 @@ export function bootLaunch(host: HTMLElement): () => void {
       more.textContent = uiLang() === "zh" ? "更多挂单" : "More listings";
     }
     paintTapeOpen();
+    placeTape();
+  };
+  const placeTape = () => {
+    host.querySelectorAll(".js-tape-pin").forEach((node) => node.remove());
+    const head = tapeHead;
+    if (!head?.ok) return;
+    const floor = head.floor ? `${head.floor} OKB` : "—";
+    const openHere = () => {
+      open("discover");
+      tapeOpen = true;
+      paintTapeOpen();
+      host.querySelector("#tape-banner")?.scrollIntoView({ block: "nearest" });
+    };
+    const rank = host.querySelector("#rank-rows");
+    const headRow = rank?.querySelector(".rank-head");
+    if (rank && headRow) {
+      const row = document.createElement("div");
+      row.className = "rank-row js-tape-pin";
+      row.innerHTML = `<div class="who"><img alt=""><div><div class="nm">TapeCode-Test1</div></div></div><div class="floor"></div>`;
+      const img = row.querySelector("img");
+      if (img && head.logo) img.src = head.logo;
+      const floorEl = row.querySelector(".floor");
+      if (floorEl) floorEl.textContent = floor;
+      row.addEventListener("click", openHere);
+      headRow.insertAdjacentElement("afterend", row);
+    }
+    const grid = host.querySelector("#series-grid");
+    if (grid) {
+      const row = document.createElement("div");
+      row.className = "mini js-tape-pin";
+      const img = document.createElement("img");
+      img.alt = "";
+      if (head.logo) img.src = head.logo;
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      const title = document.createElement("b");
+      title.textContent = "TapeCode-Test1";
+      const sub = document.createElement("span");
+      sub.textContent = `${floor} · X Layer`;
+      meta.append(title, sub);
+      row.append(img, meta);
+      row.addEventListener("click", openHere);
+      grid.prepend(row);
+    }
+    const body = host.querySelector("#market-body");
+    if (body) {
+      const tr = document.createElement("tr");
+      tr.className = "js-tape-pin";
+      tr.innerHTML = `<td></td><td class="right"></td><td class="right">—</td><td class="right">—</td><td></td>`;
+      const nameCell = document.createElement("div");
+      nameCell.className = "namecell";
+      const img = document.createElement("img");
+      img.className = "av";
+      img.alt = "";
+      if (head.logo) img.src = head.logo;
+      const spanName = document.createElement("span");
+      spanName.textContent = "TapeCode-Test1 · X Layer";
+      nameCell.append(img, spanName);
+      tr.children[0]?.append(nameCell);
+      const cell = tr.children[1];
+      if (cell) cell.textContent = floor;
+      tr.addEventListener("click", openHere);
+      body.prepend(tr);
+    }
   };
   const pullTape = (cursor: string) => {
     if (tapeBusy) return;
@@ -2133,6 +2587,7 @@ export function bootLaunch(host: HTMLElement): () => void {
     window.clearInterval(protoTimer);
     window.clearInterval(deskTimer);
     stopAccount();
+    stopBal();
     stopChain();
     stopLink();
     stopGenesis();

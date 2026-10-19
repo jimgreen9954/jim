@@ -1,5 +1,6 @@
 import { decodeFunctionResult, encodeFunctionData, formatEther, parseAbi, parseEther, type Abi } from "viem";
-import { onLang, t, tf } from "@/lib/locale";
+import { onLang, t, tf, uiLang } from "@/lib/locale";
+import { showMintWin, whenMined } from "@/lib/mint-win";
 import { connectBrowser, currentAccount, getProvider } from "@/lib/wallet";
 
 const GENESIS = "0x50A994E71615474b55559fF4F500928fbc339DD9";
@@ -345,6 +346,13 @@ export function bootGenesis(host: HTMLElement): () => void {
       });
       const hash = await send(who.eth, { from: who.from, to: MARKET, data, value: row.price! });
       say(tf("buySent", { hash: short(hash) }));
+      const ok = await whenMined(who.eth, hash);
+      if (!alive) return;
+      if (!ok) {
+        say(uiLang() === "zh" ? "还没确认成功，没有放礼花。" : "Not confirmed, so no celebration.");
+        return;
+      }
+      showMintWin(host, uiLang() === "zh" ? "恭喜，这枚创世电路已经属于你。" : "This genesis circuit is yours.");
       void load();
     } catch (error) {
       say(error instanceof Error ? error.message.slice(0, 160) : t("buyFail"));

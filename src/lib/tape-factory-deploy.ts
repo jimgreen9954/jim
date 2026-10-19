@@ -1,6 +1,7 @@
-import { encodeDeployData, type Hex } from "viem";
+import { encodeDeployData, encodeFunctionData, type Hex } from "viem";
 
 export const FACTORY_PLATFORM = "0x7a2cC9b4dd8302FDD104159CeE97Be8a90BF772c" as const;
+export const FACTORY = "0x2872E6D6AB14C5Cdb08587b437Bd16248270A04d" as const;
 
 const abi = [
   {
@@ -23,3 +24,45 @@ export function factoryDeployData(okbSeed: bigint): Hex {
     args: [FACTORY_PLATFORM, okbSeed, true],
   });
 }
+
+const createAbi = [
+  {
+    type: "function",
+    name: "create",
+    stateMutability: "payable",
+    inputs: [
+      { name: "mode", type: "uint8" },
+      { name: "multiplier", type: "uint32" },
+      { name: "supply", type: "uint32" },
+      { name: "reserve", type: "uint32" },
+      { name: "name_", type: "string" },
+      { name: "symbol_", type: "string" },
+      { name: "base_", type: "string" },
+    ],
+    outputs: [{ name: "drop", type: "address" }],
+  },
+  {
+    type: "function",
+    name: "okbSeed",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+] as const;
+
+export function factoryCreateData(
+  mode: number,
+  multiplier: number,
+  supply: number,
+  reserve: number,
+  name: string,
+  symbol: string,
+): Hex {
+  return encodeFunctionData({
+    abi: createAbi,
+    functionName: "create",
+    args: [mode, multiplier, supply, reserve, name, symbol, ""],
+  });
+}
+
+export { createAbi };
