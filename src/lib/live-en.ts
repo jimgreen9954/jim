@@ -82,6 +82,13 @@ const EXACT: Record<string, string> = {
   "24小时量 BNB": "24h volume BNB",
   "正在读取 tapeout.net…": "Reading tapeout.net…",
   "只铸造。挂单和成交在市场页。公开价 1 TAPE + 0.001 BEM。": "Mint only. Listings and sales are on the market page. Public price is 1 TAPE + 0.001 BEM.",
+  "一次一张，一个钱包最多十次。挂单和成交在市场页。公开价 1 TAPE + 0.001 BEM。": "One each time, ten times a wallet. Listings and sales are on the market page. Public price is 1 TAPE + 0.001 BEM.",
+  "一次一张。一个钱包最多十次。正在读取合约。": "One each time. Ten times a wallet. Reading the contract.",
+  "铸造这一张": "Mint this one",
+  "连上钱包后，这里写明还能铸几次。铸完会刷新。持有的在资产里看。": "After you connect, the remaining mints show here. They refresh after a mint. Holdings are on Assets.",
+  "正在读下一张。一次一张。": "Reading the next one. One at a time.",
+  "先授权 1 TAPE 和 0.001 BEM。": "Approve 1 TAPE and 0.001 BEM first.",
+  "一次只能铸一张。": "Only one per mint.",
   "持有": "Held",
   "铸造": "Mint",
   "正在读取合约。": "Reading the contract.",
@@ -282,7 +289,9 @@ const LINES: [RegExp, string][] = [
   [/^稀有的在前$/, "rarest first"],
   [/^稀有的在后$/, "rarest last"],
   [/^按编号排$/, "by ID"],
-  [/^全部$/, "all"],
+  [/^一次一张。下一张是 #(\d+|—)。一个钱包最多十次。这个钱包已铸 (\d+) 次，还能 (\d+) 次。$/, "One at a time. Next is #$1. Ten times a wallet. This wallet has minted $2, $3 left."],
+  [/^一次一张。下一张是 #(\d+|—)。一个钱包最多十次。连上钱包后显示还能铸几次。$/, "One at a time. Next is #$1. Ten times a wallet. Connect to see how many are left."],
+  [/^等钱包确认。这一张铸完，这个钱包还剩 (\d+) 次。$/, "Confirm in the wallet. After this one, $1 mints left."],
 ];
 
 const GLOSS: [string, string][] = [

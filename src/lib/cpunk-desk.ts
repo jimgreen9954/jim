@@ -118,6 +118,7 @@ export function readCpunkWallet(address: `0x${string}`, onIds?: (ids: number[], 
         });
         ids.sort((a, b) => a - b);
         tell();
+        await new Promise((resolve) => window.setTimeout(resolve, 200));
       }
     }
     return { tape, bem, okb, count, ids };
@@ -141,6 +142,7 @@ export function bootCpunk(
     "function ownerOf(uint256) view returns (address)",
     "function listings(uint256) view returns (address seller, uint256 quote, uint64 at)",
     "function mint(uint256 qty, bytes32[] traits)",
+    "function mintedBy(address) view returns (uint32)",
     "function list(uint256 id, uint256 quote)",
     "function buy(uint256 id)",
     "function cancel(uint256 id)",
@@ -151,6 +153,7 @@ export function bootCpunk(
   let listed = new Map<number, { seller: string; quote: bigint }>();
   const tradeNotes = new Map<number, string>();
   let minted = 0;
+  let walletMints: number | null = null;
   let reserve = 7000;
   let supply = 10000;
   let live = true;
@@ -312,7 +315,7 @@ export function bootCpunk(
           });
         paintHolders();
         paint();
-        await new Promise((resolve) => window.setTimeout(resolve, 30));
+        await new Promise((resolve) => window.setTimeout(resolve, 400));
       }
     } catch {
       if (note) note.textContent = "持有地址这次没读完。刷新后再对一次。";
@@ -470,6 +473,13 @@ export function bootCpunk(
     paintMyLists();
     const left = Math.max(0, supply - reserve - minted);
     const next = reserve + minted + 1;
+    const leftNote = host.querySelector("#cp-left");
+    if (leftNote) {
+      const times = walletMints == null ? "连上钱包后显示还能铸几次。" : `这个钱包已铸 ${walletMints} 次，还能 ${Math.max(0, 10 - walletMints)} 次。`;
+      leftNote.textContent = !live || closed
+        ? "铸造还没打开，或已经收盘。"
+        : `一次一张。下一张是 #${next > supply ? "—" : next}。一个钱包最多十次。${times}`;
+    }
     const stats = host.querySelector("#cp-stats");
     if (stats) {
       stats.replaceChildren();
@@ -643,6 +653,10 @@ export function bootCpunk(
       supply = Number(sup);
       live = on;
       closed = shut;
+    } catch {
+      /* keep the last counts */
+    }
+    try {
       const latest = await client.getBlockNumber();
       const from = latest > 99n ? latest - 99n : 0n;
       const logs = await client.getLogs({ address: CPUNK, event: listedEvent, fromBlock: from, toBlock: latest });
@@ -654,7 +668,20 @@ export function bootCpunk(
       }
       listed = new Map([...listed, ...next]);
     } catch {
-      /* keep the last grid */
+      /* listings can wait */
+    }
+    const who = currentAccount();
+    if (who) {
+      try {
+        walletMints = Number(await client.readContract({
+          address: CPUNK,
+          abi,
+          functionName: "mintedBy",
+          args: [who as `0x${string}`],
+        }));
+      } catch {
+        walletMints = null;
+      }
     }
     paint();
   };
@@ -840,21 +867,27 @@ export function bootCpunk(
         if (msg) msg.textContent = "先连接钱包。";
         return;
       }
-      const qty = Number(host.querySelector<HTMLInputElement>("#cp-qty")?.value ?? "");
-      if (!Number.isInteger(qty) || qty < 1 || qty > 10) throw new Error("qty");
+      if (walletMints != null && walletMints >= 10) throw new Error("wallet");
+      const qty = 1;
+      if (msg) msg.textContent = "正在读下一张。一次一张。";
       const from = await connectXLayer();
       const now = Number(await client.readContract({ address: CPUNK, abi, functionName: "publicMinted" }));
+      const used = Number(await client.readContract({ address: CPUNK, abi, functionName: "mintedBy", args: [from as `0x${string}`] }));
+      walletMints = used;
+      if (used >= 10) throw new Error("wallet");
       const start = BigInt(reserve) + BigInt(now) + 1n;
-      const traits = Array.from({ length: qty }, (_, index) => toHex(start + BigInt(index), { size: 32 }));
-      await allow(from, TAPE_TOKEN, BigInt(qty) * 100_000_000n);
-      await allow(from, TAPE_BEM, BigInt(qty) * 100_000n);
+      const traits = [toHex(start, { size: 32 })];
+      if (msg) msg.textContent = "先授权 1 TAPE 和 0.001 BEM。";
+      await allow(from, TAPE_TOKEN, 100_000_000n);
+      await allow(from, TAPE_BEM, 100_000n);
+      if (msg) msg.textContent = "等钱包确认。这一张铸完，这个钱包还剩 " + String(9 - used) + " 次。";
       await send(from, CPUNK, encodeFunctionData({ abi, functionName: "mint", args: [BigInt(qty), traits] }));
       showMintWin(host, `恭喜，电路朋克 #${start} 属于你了。`);
       paintAssets(from);
       await refresh();
     } catch (error) {
       const text = error instanceof Error ? error.message : "";
-      if (msg) msg.textContent = text === "qty" ? "数量要是 1 到 10 的整数。" : deskError(error);
+      if (msg) msg.textContent = text === "qty" ? "一次只能铸一张。" : deskError(error);
     } finally {
       button.disabled = false;
     }
@@ -903,7 +936,7 @@ export function bootCpunk(
         cursor = latest > 900n ? latest - 900n : born;
         feedReady = true;
       }
-      for (let step = 0; step < 4 && cursor <= latest; step += 1) {
+      for (let step = 0; step < 1 && cursor <= latest; step += 1) {
         const end = cursor + 99n > latest ? latest : cursor + 99n;
         const logs = await client.getLogs({ address: CPUNK, fromBlock: cursor, toBlock: end });
         for (const log of logs) {
@@ -941,9 +974,19 @@ export function bootCpunk(
   };
   paintFeed();
   void scanFeed();
-  const feedTimer = window.setInterval(() => void scanFeed(), 1600);
+  const tradePage = host.querySelector("#page-trade");
+  let holdersStarted = false;
+  const startHolders = () => {
+    if (holdersStarted || signal.aborted) return;
+    if (!tradePage?.classList.contains("active")) return;
+    holdersStarted = true;
+    void scanHolders();
+  };
+  const pageObs = new MutationObserver(startHolders);
+  if (tradePage) pageObs.observe(tradePage, { attributes: true, attributeFilter: ["class"] });
+  startHolders();
+  const feedTimer = window.setInterval(() => void scanFeed(), 12_000);
 
-  void scanHolders();
   void refresh();
   paintAssets(currentAccount());
   const stopWallet = onAccount((address) => paintAssets(address));
@@ -957,6 +1000,7 @@ export function bootCpunk(
   return () => {
     window.clearInterval(timer);
     window.clearInterval(feedTimer);
+    pageObs.disconnect();
     stopWallet();
     stopLang();
   };

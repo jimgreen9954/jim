@@ -315,8 +315,13 @@ export function deskError(error: unknown): string {
   if (text === "amount" || /invalid|parse/i.test(text)) return "数量要写成大于 0 的数字。";
   if (text === "tiny") return "数量太小，报价是 0，没有发出去。";
   if (text === "closed") return "TAPE 官方池还没开。要到 5,000 USDT 才放行，现在流动性很小，没有发出去。";
+  if (text === "xlayer") return "币安钱包没有停在 X Layer。打开钱包，手动选 X Layer，再铸造或成交。";
+  if (text === "bsc") return "钱包没有停在 BSC。打开钱包，手动选 BNB Smart Chain。";
   if (text === "nowallet") return "没有连上钱包。";
   if (/insufficient funds/i.test(text)) return "余额或 gas 不够。";
+  if (text === "wallet") return "这个钱包已经铸满十次。一次一张，不能再铸。";
+  if (text === "sold") return "公开的三千张已经铸完。";
+  if (text === "closed") return "铸造还没打开，或已经收盘。";
   if (/HTTP request failed|Failed to fetch|network|timeout|Load failed/i.test(text)) return "节点没连上，没有发出去。再点一次。";
   return text ? `没发出去：${text.slice(0, 160)}` : "没发出去。";
 }

@@ -61,11 +61,13 @@ const zh: Section[] = [
   {
     h: "金库和分配",
     ps: [
-      "发射前，项目方必须先放入价值 3 美元的 OKB，这笔进金库。创建另付 1 TAPE + 0.01 枚发射代币。1 TAPE 直接销毁。OKB 发射锁进 0.01 OKB，BEM 或 TAPE 对发射锁进 0.01 BEM。",
-      "铸造收进来的，是这次发射的那种代币。创建时就分成三份，放在项目合约的两个账本里，之后不用项目方再签名。30% 在售罄收盘后，项目方可以领取。40% 没有提取函数。收盘后，本合约里低于铸造价 2 倍、并且已经挂满 1 天的 NFT，任何人可以叫合约用这 40% 买下，NFT 打进销毁地址。收盘时把这 40% 记成基数。每天最多花掉基数的九十分之一，当天没花完也不结转。90 天都有人来买，这 40% 可以花完，一天花不空。一天的上限小于一张合格挂单时，这张单就买不了。项目方自己的地址不能卖给这份钱。进金库的 OKB 种子，以及锁进去的 0.01，不参与回购。另一个地址仍可能挂低价慢慢卖，所以有每天的上限，一天抽不空。",
-      "最后 30% 不是按天线性释放。售罄满 90 天，并且连续 3 个自然日都满足：至少有一笔挂单不低于铸造价 2 倍、而且挂满了 1 天，同时没有任何低于 2 倍的挂单，项目方可以一次领完。满 90 天之后如果连续 3 天做不到，这 30% 永久不能领。之后任何人可以调用 tick。记成一天、烧掉当天那一份，或买下一张低于两倍的单，调用者拿这次支出的 5%，从当天的九十分之一里出，不是另加。当天这份预算用完就不再付。网页不保管私钥，链也不会自己醒。账上如果是 BEM 或 TAPE，直接销毁，不拿去卖。如果是 OKB，一半买 BEM、一半买 TAPE，买到就销毁，直到这份钱花完。",
-      "两倍看的是本合约自己的挂单，不是同一笔交易里的现货价。现货价可以在一笔里被打低，拿它当开关，金库会被抽走，所以没有这条路径。别人如果拿一枚 NFT 连续三天挂在两倍下面，而这张单又贵过当天的回购上限、买不掉，最后这 30% 会被判负。OKB 去买 BEM 和 TAPE 时，最少要拿到池子中间价的 95%。搜索者仍可能把这一天买差，但一天最多动九十分之一。",
-      "二级手续费 0.2% 只在这份合约自己的成交里收。平台那一半给 0x7a2cC9b4dd8302FDD104159CeE97Be8a90BF772c。TAPE、BEM 或 OKB 的另一半留在项目合约里，没有提取函数，这份字节码也不会把 TAPE 那一半转进销毁地址。成交当中不会拿它去买别的币。OKX 和官网市场不经过这里。已经上链的永续、现货和预言机仍付给 0x823b9F6A93Ac44Ce5A469823A336c15b6117054D，那些合约改不了。",
+      "发射前，项目方放入当时价值 3 美元的 OKB，记为金库种子。已部署工厂的种子是 0.026 OKB。创建另付 1 TAPE，直接销毁。TAPE + BEM 与只用 BEM，再锁入 0.01 BEM。只用 OKB，再锁入 0.01 OKB。种子和这 0.01 不进入下面三份。",
+      "公开铸造收到的，只是这次选择的代币。每一笔按整数分成三份，除不尽的余数留在第三份。30% 记在项目方可领账上。30% 记在释放账上，不按天发给项目方。40% 记在回购账上，没有提取函数。售罄后任何人可以收盘。未售罄时，只有项目方能在创建满 90 天后收盘。收盘后，项目方可领取那 30%，不看价格。",
+      "倍数为 1、公开 3000 张时，三份正好落在整数上。TAPE + BEM 收进 3000 TAPE 与 3 BEM，分成 900 / 900 / 1200 TAPE，以及 0.9 / 0.9 / 1.2 BEM。只用 OKB 收进 3000 OKB，分成 900 / 900 / 1200 OKB。只用 BEM 收进 3 BEM，分成 0.9 / 0.9 / 1.2 BEM。",
+      "回购花的是这 40%。收盘时把它记成基数。每天最多花基数的九十分之一，当日未用的部分不结转。单子必须低于铸造价两倍，并且已经挂满 1 天。项目方自己的地址不能卖给它。买下之后，NFT 转到销毁地址，款项付给卖家。TAPE + BEM 同时付 BEM 和 1000 倍的 TAPE。只用 BEM 只付 BEM。只用 OKB 只付 OKB。这 40% 不到市场上去买 TAPE 或 BEM。3000 张、倍数 1 时，一天的上限约为 0.0133 BEM 加 13.33 TAPE，或 13.33 OKB，低于两倍的一张单买得动。公开只铸出 1 张时，一天的上限小于最低挂单，回购买不了。",
+      "释放账上的 30%，要收盘满 90 天，并且连续 3 个自然日都满足：至少有一张不低于两倍、已挂满 1 天的挂单，同时没有低于两倍的挂单。项目方一次领完。满 90 天之后连续 3 天做不到，这份永久不能领。此后任何人可以按天销毁，一天一份，90 天可以烧完。TAPE 与 BEM 直接打入销毁地址。只用 OKB 的这一份才会兑换：一半换成 BEM 销毁，一半再换成 TAPE 销毁，最少拿到池子中间价的 95%。今日 TAPE/BEM 池的两侧余额都是 0，这一跳会失败，OKB 留在合约里，直到池子有存货。",
+      "两倍只看本合约的挂单，不看同一笔交易里的现货价。一枚 NFT 连续三天挂在两倍之下，价格又高于当日回购上限、因而买不掉，这 30% 会被判负。记日、烧掉当日一份，或买下一张低于两倍的单，调用者取得该笔支出的 5%，从当日的九十分之一里出。当日预算用完就不再付。这些函数都要有人调用。页面不保管私钥，链不会自己执行。已部署工厂的回购开关当前为开。项目合约不读取这个开关，因此无论真假，回购函数都可以被调用。",
+      "二级费 0.2% 只在本合约的成交里收取。平台一半付给 0x7a2cC9b4dd8302FDD104159CeE97Be8a90BF772c。另一半留在项目合约里，没有提取函数，成交中也不拿去兑换。OKX 和官网市场不经过本合约。已经上链的永续、现货和预言机仍付给 0x823b9F6A93Ac44Ce5A469823A336c15b6117054D。那些合约不能改收款地址。",
     ],
   },
   {
@@ -89,7 +91,7 @@ const zh: Section[] = [
     h: "风险",
     ps: [
       "创世市场和兑换池都不是本站的托管。节点失败时，页面可能暂时读不到挂单或报价，链上的状态还在。",
-      "TAP-721 还是草案。页面上的网表哈希是预览，不是已经流片的电路。回购和满 90 天的那 30% 要等项目在这份工厂里创建并收盘之后才跑。只用 OKB 发射时，判负后的 OKB 要先去买 BEM 和 TAPE；TAPE 官方池没开到 5,000 USDT 之前，这一步会失败，钱留在项目合约里。",
+      "TAP-721 仍是草案。页面上的网表哈希是预览，不是已经流片的电路。回购和最后 30% 只在项目于本工厂创建并收盘之后才会动，而且要有人调用。只用 OKB 且那 30% 被判负时，合约才会去买 BEM 和 TAPE。TAPE/BEM 池没有存货时，这一步失败，OKB 留在项目合约里。",
       "只使用你亏得起的钱。这不是招股，不是托管，也不保证成交、上线进度或价格。",
     ],
   },
@@ -152,11 +154,13 @@ const en: Section[] = [
   {
     h: "Vault and allocation",
     ps: [
-      "Before launch the creator deposits 3 dollars of OKB into the vault. Creation also pays 1 TAPE plus 0.01 of the launch token. The 1 TAPE is burned. An OKB launch locks 0.01 OKB. A BEM launch or a TAPE pair locks 0.01 BEM.",
-      "What the mint takes in is the launch token. It is split into three parts as it arrives, and the two ledgers inside the project spend themselves. The creator does not sign again. 30% can be claimed once the sale closes. 40% has no withdraw. After close, a listing on this contract under twice the mint price, already a day old, can be bought with that 40%. The NFT is burned. At close that 40% is written down as the base. Each day can spend at most one ninetieth of that base. What is left that day does not roll forward. Ninety called days can spend the whole 40%, but one day cannot. A listing priced above that day's slice is never bought. The creator's own address cannot sell into it. The OKB seed and the locked 0.01 are not part of the buyback. A second wallet can still sell in slowly, which is why the day is capped.",
-      "The last 30% is not a linear vest. Ninety days after the close, the creator can take all of it only if three consecutive days each had a listing at or above twice the mint price that was already a day old, and no listing under twice. After those ninety days, three cheap or missing days forfeit it forever. Anyone may then call tick. Recording the day, burning that day's slice, or buying one listing under twice mint pays the caller 5% of that spend, taken out of the day's ninetieth, not added on top. When the day's budget is used up, the call is not paid. This site holds no key, and the chain does not wake itself. BEM or TAPE already held is burned, not sold. OKB is spent half on BEM and half on TAPE, and both are burned, until that ledger is empty.",
-      "Twice mint is this contract's own listings, not a spot price printed in the same transaction. A spot print can be pushed under twice inside one transaction and would drain a vault that bought on it. That path is not in the bytecode. One NFT listed under twice for three days, at a price the daily cap cannot pay, forfeits the last 30%. The OKB buy must receive at least 95% of the pool mid. A searcher can still worsen that one day. One day is at most one ninetieth.",
-      "The 0.2% secondary fee is charged only on sales inside this contract. The platform half goes to 0x7a2cC9b4dd8302FDD104159CeE97Be8a90BF772c. The other half of a TAPE, BEM, or OKB payment stays in the project contract. This bytecode has no withdraw for it, and it does not transfer the TAPE half to the burn address. The sale does not swap that half. OKX and the official market do not pass through here. Spot, perpetuals, and the mark that are already on chain still pay 0x823b9F6A93Ac44Ce5A469823A336c15b6117054D. Those contracts cannot be retargeted.",
+      "Before a launch the creator deposits OKB then worth 3 dollars. That is the vault seed. The deployed factory's seed is 0.026 OKB. Creation also burns 1 TAPE. A TAPE pair or a BEM-only launch locks another 0.01 BEM. An OKB-only launch locks another 0.01 OKB. The seed and that 0.01 do not enter the three parts below.",
+      "A public mint takes in only the token chosen for that launch. Each receipt is split by integer division into three parts. The remainder stays in the third. 30% is credited to the creator. 30% is credited to the release ledger and is not paid out by the day. 40% is credited to the buyback ledger and has no withdraw. Anyone may close a sold-out sale. If it is not sold out, only the creator may close it, and only 90 days after creation. After close, the creator may claim that 30% with no price test.",
+      "At multiplier 1 and 3,000 public mints, the split lands on integers. A TAPE pair takes in 3,000 TAPE and 3 BEM, divided 900 / 900 / 1,200 TAPE and 0.9 / 0.9 / 1.2 BEM. OKB only takes in 3,000 OKB, divided 900 / 900 / 1,200 OKB. BEM only takes in 3 BEM, divided 0.9 / 0.9 / 1.2 BEM.",
+      "Buyback spends that 40%. At close it is written down as the base. A day may spend at most one ninetieth of the base. The unused part of a day does not carry forward. A listing must be under twice the mint price and at least one day old. The creator's own address cannot sell into it. After the purchase, the NFT is sent to the burn address and the proceeds are paid to the seller. A TAPE pair pays BEM and 1,000 times that amount in TAPE. BEM only pays BEM. OKB only pays OKB. This 40% is not spent on the open market for TAPE or BEM. At 3,000 mints and multiplier 1, one day is about 0.0133 BEM plus 13.33 TAPE, or 13.33 OKB, enough for one listing just under twice mint. If only one public mint lands, the day's cap is below the minimum listing, and buyback cannot fill it.",
+      "The 30% on the release ledger requires 90 days after close, and three consecutive days on which at least one listing is at or above twice mint and already a day old, and no listing is under twice. The creator then takes it in one claim. Three failing days after those 90 forfeit it forever. Anyone may then burn one day's slice, and ninety such days can finish it. TAPE and BEM are sent straight to the burn address. Only the forfeited OKB is swapped: half into BEM and burned, half onward into TAPE and burned, at no less than 95% of the pool mid. The TAPE/BEM pool's two sides are zero today, so that hop fails and the OKB stays in the contract until the pool has inventory.",
+      "Twice mint is read from this contract's listings, not from a spot print in the same transaction. One NFT listed under twice for three days, at a price above that day's cap and therefore unbought, forfeits the 30%. A caller who records the day, burns that day's slice, or buys one listing under twice receives 5% of that spend, taken from the day's ninetieth. Once the day's budget is spent, the call is not paid. None of these functions run by themselves. This site holds no key. The deployed factory's buyback flag is currently on. The project contract does not read that flag, so the buyback functions can be called either way.",
+      "The 0.2% secondary fee is charged only on sales inside this contract. The platform half is paid to 0x7a2cC9b4dd8302FDD104159CeE97Be8a90BF772c. The other half stays in the project contract. It has no withdraw, and a sale does not swap it. OKX and the official market do not pass through this contract. Spot, perpetuals, and the mark already on chain still pay 0x823b9F6A93Ac44Ce5A469823A336c15b6117054D. Those contracts cannot change the payee.",
     ],
   },
   {
@@ -180,7 +184,7 @@ const en: Section[] = [
     h: "Risk",
     ps: [
       "The genesis market and the swap pools are not custodied here. If a node fails, the page may hide a listing or a quote that is still on chain.",
-      "TAP-721 is still a draft. A netlist hash on this page is a preview, not a taped-out circuit. Buyback and the last 30% run only after a project is created on this factory and the sale closes. An OKB-only forfeit tries to buy BEM and TAPE. Until the official TAPE pool reaches 5,000 USDT, that step fails and the OKB stays in the project.",
+      "TAP-721 is still a draft. A netlist hash on this page is a preview, not a taped-out circuit. Buyback and the last 30% move only after a project on this factory has closed, and only when someone calls. Only a forfeited OKB balance is swapped into BEM and TAPE. While the TAPE/BEM pool is empty, that step fails and the OKB stays in the project.",
       "Use only money you can lose. This is not an offering, not custody, and not a promise of a fill, a date, or a price.",
     ],
   },

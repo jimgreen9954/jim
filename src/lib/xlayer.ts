@@ -62,7 +62,7 @@ const abi = [
   },
 ] as const;
 
-import { ensureProvider, getProvider, rememberAccount } from "@/lib/wallet";
+import { ensureProvider, getProvider, rememberAccount, switchDeskChain } from "@/lib/wallet";
 
 export function hasWallet(): boolean {
   return Boolean(getProvider());
@@ -117,30 +117,7 @@ export function formatOkb(wei: bigint): string {
 }
 
 async function ensureXLayer(): Promise<void> {
-  const eth = ethereum();
-  if (!eth) throw new Error("nowallet");
-  try {
-    await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: XLAYER.hex }] });
-  } catch (err) {
-    const code = (err as { code?: number }).code;
-    const message = err instanceof Error ? err.message : "";
-    if (code === 4902 || message.includes("Unrecognized")) {
-      await eth.request({
-        method: "wallet_addEthereumChain",
-        params: [
-          {
-            chainId: XLAYER.hex,
-            chainName: "X Layer",
-            rpcUrls: [XLAYER.rpc],
-            nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
-            blockExplorerUrls: [XLAYER.explorer],
-          },
-        ],
-      });
-    } else {
-      throw err;
-    }
-  }
+  await switchDeskChain(196);
 }
 
 export async function connectXLayer(): Promise<string> {

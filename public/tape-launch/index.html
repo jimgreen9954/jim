@@ -1517,7 +1517,7 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
           <div>
             <p class="cp-kicker">正在铸造</p>
             <h2>电路朋克</h2>
-            <p class="by">只铸造。挂单和成交在市场页。公开价 1 TAPE + 0.001 BEM。</p>
+            <p class="by">一次一张，一个钱包最多十次。挂单和成交在市场页。公开价 1 TAPE + 0.001 BEM。</p>
           </div>
         </div>
         <div class="cp-stats" id="cp-stats"></div>
@@ -1530,11 +1530,10 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
         <div class="cp-layout">
           <aside class="cp-mint">
             <h3>铸造</h3>
-            <p class="hint" id="cp-left" style="text-align:left">正在读取合约。</p>
-            <label>数量，最多 10</label>
-            <input id="cp-qty" inputmode="numeric" value="1">
-            <button class="buy" id="cp-mint" type="button">铸造</button>
-            <p class="hint" id="cp-mint-msg" style="text-align:left">连上钱包后，上面显示 TAPE、BEM 和已铸到的张数。铸完会刷新。持有的在资产里看。</p>
+            <p class="hint" id="cp-left" style="text-align:left">一次一张。一个钱包最多十次。正在读取合约。</p>
+            <input id="cp-qty" value="1" hidden>
+            <button class="buy" id="cp-mint" type="button">铸造这一张</button>
+            <p class="hint" id="cp-mint-msg" style="text-align:left">连上钱包后，这里写明还能铸几次。铸完会刷新。持有的在资产里看。</p>
           </aside>
         </div>
       </div>

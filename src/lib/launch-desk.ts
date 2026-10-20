@@ -7,7 +7,7 @@ import { showMintWin, whenMined } from "@/lib/mint-win";
 import { deskError, quoteBridge, quoteSwap, readSwapBalances, runBridge, runSwap, type BridgeDir, type CoinBals, type SwapPair, type SwapSide } from "@/lib/asset-desk";
 import { watchEnglish } from "@/lib/live-en";
 import { applyDom, bootLang, onLang, setUiLang, t, uiLang } from "@/lib/locale";
-import { connectBrowser, connectInjected, connectKind, currentAccount, currentChain, disconnectWallet, getProvider, onAccount, onChain, onOpenLink, resumeInjected, switchDeskChain, walletLabel } from "@/lib/wallet";
+import { connectBrowser, connectInjected, connectKind, currentAccount, currentChain, disconnectWallet, getProvider, onAccount, onChain, onOpenLink, parseChainId, resumeInjected, switchDeskChain, walletLabel } from "@/lib/wallet";
 import { bootGenesis } from "@/lib/genesis-desk";
 import { getTapeCode, tapeImage } from "@/lib/okx-tape";
 import { bookError, buyTapeOnSite, getTapeBook, listTapeOnSite, type BookOrder } from "@/lib/tape-book";
@@ -126,31 +126,38 @@ function tradeError(error: unknown): string {
   if (code === 4001 || /user rejected|denied|cancel/i.test(text)) return "你在钱包里取消了，没有成交。";
   if (/数量要是|价格要写成|价格超出|当前买价只剩|数量太大/.test(text)) return text;
   if (/insufficient funds/i.test(text)) return "BNB 不够锁这笔买单。";
+  if (text === "xlayer") return "币安钱包没有停在 X Layer。打开钱包，手动选 X Layer，再铸造或成交。";
+  if (text === "bsc") return "钱包没有停在 BSC。打开钱包，手动选 BNB Smart Chain。";
   if (text === "nowallet") return "没有连上钱包。";
   if (/HTTP request failed|Failed to fetch|network|timeout|Load failed/i.test(text)) return "节点没连上，没有发出去。再点一次。";
   return text ? `没发出去：${text.slice(0, 160)}` : "没发出去。";
 }
 
 async function ensureBsc(eth: Injected): Promise<void> {
-  const chain = String(await eth.request({ method: "eth_chainId" })).toLowerCase();
-  if (Number.parseInt(chain, 16) === 56) return;
+  const chain = await eth.request({ method: "eth_chainId" });
+  if (parseChainId(chain) === 56) return;
   try {
     await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: BSC }] });
   } catch (error) {
     const code = typeof error === "object" && error && "code" in error ? Number((error as { code?: number }).code) : 0;
-    if (code !== 4902) throw error;
-    await eth.request({
-      method: "wallet_addEthereumChain",
-      params: [
-        {
-          chainId: BSC,
-          chainName: "BNB Smart Chain",
-          nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
-          rpcUrls: ["https://bsc.publicnode.com", "https://bsc-dataseed.bnbchain.org", "https://bsc-dataseed.binance.org"],
-          blockExplorerUrls: ["https://bscscan.com"],
-        },
-      ],
-    });
+    const message = error instanceof Error ? error.message : String(error ?? "");
+    if (code === 4001 || /user rejected|denied|cancel/i.test(message)) throw error;
+    if (code === 4902 || code === -32603 || /unrecognized|not added|unknown chain|not support/i.test(message)) {
+      await eth.request({
+        method: "wallet_addEthereumChain",
+        params: [
+          {
+            chainId: BSC,
+            chainName: "BNB Smart Chain",
+            nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
+            rpcUrls: ["https://bsc.publicnode.com", "https://bsc-dataseed.bnbchain.org", "https://bsc-dataseed.binance.org"],
+            blockExplorerUrls: ["https://bscscan.com"],
+          },
+        ],
+      });
+      return;
+    }
+    throw error;
   }
 }
 
