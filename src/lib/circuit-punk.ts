@@ -2,7 +2,8 @@ export const CPUNK_SUPPLY = 10_000;
 export const CPUNK_RESERVE = 7_000;
 export const CPUNK_NAME = "电路朋克";
 export const CPUNK_SYMBOL = "CPUNK";
-export const CPUNK_BLURB = "向中本聪致敬。TAPEOUT 社区的历史纪念。";
+export const CPUNK_BLURB =
+  "Circuit Punk 是本市场的创始收藏，依照 TapeOut TAP-721 草案发行。每一枚在图像之外附有一份 tapnet/1 网表及其 SHA-256。本收藏现处于 L0，网表可以核对，尚未流片，也不是协议上的创世电路。肖像致敬比特币与 BEM 的早期参与者。第一套，也是唯一一套。本文件不构成投资建议。";
 
 // 120 source pictures, collage and one duplicate left out.
 // 人像 52, 吉祥物 28, 标识 18, 抽象 14, 场景 8.

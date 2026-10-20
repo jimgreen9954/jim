@@ -349,7 +349,7 @@ export function bootCpunk(
       if (note) {
         const selling = mineListings.length ? `另有 ${mineListings.length} 张挂单中。` : "";
         note.textContent = count === 0n && !mineListings.length
-          ? "这个地址还没有电路朋克。"
+          ? "这个地址还没有 Circuit Punk。"
           : done
             ? `钱包里 ${count.toString()} 张。${selling}`
             : `持有 ${count.toString()} 张，正在核对编号 ${ids.length}/${count.toString()}。${selling}`;
@@ -370,7 +370,7 @@ export function bootCpunk(
           card.type = "button";
           card.className = "hold-card";
           const img = document.createElement("img");
-          img.alt = `电路朋克 ${id}`;
+          img.alt = `Circuit Punk ${id}`;
           img.src = `/api/circuit-punk/${id}.png`;
           const title = document.createElement("b");
           const info = punkSheet(id);
@@ -410,7 +410,7 @@ export function bootCpunk(
         ? `挂单中 ${mineListings.map((id) => `#${id}`).join(" ")}。市场的「挂单」里能看到。`
         : held.length
           ? "点编号填进上面，再点挂出。"
-          : "这个钱包还没有可挂的电路朋克。";
+          : "这个钱包还没有可挂的 Circuit Punk。";
     };
     void readCpunkWallet(address as `0x${string}`, (ids, count) => draw(ids, count, ids.length >= Number(count)))
       .then((row) => {
@@ -425,7 +425,7 @@ export function bootCpunk(
         draw(row.ids, row.count, true);
       })
       .catch(() => {
-        if (note) note.textContent = "电路朋克这次没读到，没有写成 0。";
+        if (note) note.textContent = "Circuit Punk 这次没读到，没有写成 0。";
       });
   };
 
@@ -478,7 +478,7 @@ export function bootCpunk(
       const times = walletMints == null ? "连上钱包后显示还能铸几次。" : `这个钱包已铸 ${walletMints} 次，还能 ${Math.max(0, 10 - walletMints)} 次。`;
       leftNote.textContent = !live || closed
         ? "铸造还没打开，或已经收盘。"
-        : `一次一张。下一张是 #${next > supply ? "—" : next}。一个钱包最多十次。${times}`;
+        : `一次一张。每次 1 TAPE + 0.001 BEM。下一张是 #${next > supply ? "—" : next}。一个钱包最多十次。${times}`;
     }
     const stats = host.querySelector("#cp-stats");
     if (stats) {
@@ -525,7 +525,7 @@ export function bootCpunk(
     if (!ids.length) {
       const empty = document.createElement("p");
       empty.className = "sub";
-      empty.textContent = listsOnly ? "这个属性下还没有挂单。" : "没有符合这些属性的电路朋克。";
+      empty.textContent = listsOnly ? "这个属性下还没有挂单。" : "没有符合这些属性的 Circuit Punk。";
       grid.append(empty);
       return;
     }
@@ -585,7 +585,7 @@ export function bootCpunk(
     const cancel = host.querySelector<HTMLButtonElement>("#cp-cancel");
     const name = host.querySelector("#cp-sheet-name");
     if (img) img.src = `/api/circuit-punk/${id}.png`;
-    if (name) name.textContent = `电路朋克 #${id}`;
+    if (name) name.textContent = `Circuit Punk #${id}`;
     const meta = host.querySelector("#cp-sheet-meta");
     if (meta) {
       const info = punkSheet(id);
@@ -733,7 +733,7 @@ export function bootCpunk(
       await allow(from, TAPE_BEM, listing[1]);
       await allow(from, TAPE_TOKEN, listing[1] * 1000n);
       await send(from, CPUNK, encodeFunctionData({ abi, functionName: "buy", args: [BigInt(openId)] }));
-      showMintWin(host, `恭喜，电路朋克 #${openId} 属于你了。`);
+      showMintWin(host, `恭喜，Circuit Punk #${openId} 属于你了。`);
       paintAssets(from);
       await refresh();
     } catch (error) {
@@ -869,7 +869,7 @@ export function bootCpunk(
       }
       if (walletMints != null && walletMints >= 10) throw new Error("wallet");
       const qty = 1;
-      if (msg) msg.textContent = "正在读下一张。一次一张。";
+      if (msg) msg.textContent = "正在读下一张。这次付 1 TAPE 和 0.001 BEM。";
       const from = await connectXLayer();
       const now = Number(await client.readContract({ address: CPUNK, abi, functionName: "publicMinted" }));
       const used = Number(await client.readContract({ address: CPUNK, abi, functionName: "mintedBy", args: [from as `0x${string}`] }));
@@ -882,7 +882,7 @@ export function bootCpunk(
       await allow(from, TAPE_BEM, 100_000n);
       if (msg) msg.textContent = "等钱包确认。这一张铸完，这个钱包还剩 " + String(9 - used) + " 次。";
       await send(from, CPUNK, encodeFunctionData({ abi, functionName: "mint", args: [BigInt(qty), traits] }));
-      showMintWin(host, `恭喜，电路朋克 #${start} 属于你了。`);
+      showMintWin(host, `恭喜，Circuit Punk #${start} 属于你了。`);
       paintAssets(from);
       await refresh();
     } catch (error) {

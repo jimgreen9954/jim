@@ -223,8 +223,8 @@ a.nav-item { text-decoration: none; }
 .cp-hero { position: relative; width: min(280px, 100%); border-radius: 16px; overflow: hidden; border: 1px solid var(--gold); cursor: pointer; line-height: 0; background: #101820; }
 .cp-hero .face { width: 100%; height: 280px; image-rendering: pixelated; background: #638596; object-fit: contain; display: block; }
 .cp-hero .gold-crown { width: 56px; height: 44px; top: 8px; right: 8px; }
-.head-slot { position: relative; width: 96px; height: 96px; flex: none; }
-.head-slot .face { width: 96px; height: 96px; image-rendering: pixelated; background: #638596; border: 2px solid var(--gold); display: block; }
+.head-slot { position: relative; width: 120px; height: 120px; flex: none; }
+.head-slot .face { width: 120px; height: 120px; image-rendering: pixelated; background: #638596; border: 2px solid var(--gold); display: block; border-radius: 12px; }
 .head-slot .gold-crown { width: 34px; height: 26px; top: -8px; right: -6px; }
 .av-hit .gold-crown { width: 22px; height: 18px; top: 2px; right: 2px; }
 .profile-row .av-hit { overflow: hidden; }
@@ -259,9 +259,12 @@ a.nav-item { text-decoration: none; }
   display: flex; gap: 18px; align-items: flex-end;
   padding: 22px; border: 1px solid var(--line); border-radius: 16px;
   background:
-    radial-gradient(480px 160px at 0% 100%, rgba(224,177,90,.18), transparent 70%),
-    #101820;
+    radial-gradient(480px 160px at 0% 100%, rgba(224,177,90,.28), transparent 70%),
+    #1a2430;
+  color: #e7edf6;
 }
+.cp-banner h2, .cp-banner .by, .cp-banner p { color: #e7edf6; }
+.cp-banner .by { color: #c9d4e3; font-size: 14px; line-height: 1.5; max-width: 640px; }
 .cp-banner .head-slot { align-self: flex-end; }
 .cp-kicker { color: var(--gold); font-size: 12px; font-weight: 800; letter-spacing: .16em; display: flex; align-items: center; gap: 8px; }
 .cp-banner h2 { font-size: 36px; letter-spacing: -.4px; margin: 4px 0; }
@@ -270,6 +273,13 @@ a.nav-item { text-decoration: none; }
 #page-mint .cp-layout { grid-template-columns: minmax(0, 520px); }
 .cp-mint { border: 1px solid var(--line); border-radius: 16px; padding: 16px; background: var(--card); }
 .cp-mint h3 { font-size: 16px; margin: 12px 0 6px; }
+.cp-cost { margin: 10px 0 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--soft); font-size: 14px; }
+.cp-cost b { color: var(--gold); }
+.cp-mint label { display: block; font-size: 13px; font-weight: 600; margin: 12px 0 6px; }
+.cp-mint input {
+  width: 100%; height: 44px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--bg); color: var(--ink); padding: 0 12px; font-size: 16px;
+}
 .cp-card .pic { height: auto; background: #638596; }
 .cp-card img { width: 100%; aspect-ratio: 1; display: block; image-rendering: pixelated; }
 .cp-sheet { width: min(560px, 100%); max-height: min(88vh, 860px); overflow: auto; }
@@ -1189,9 +1199,17 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
   .feed-row { grid-template-columns: 1fr; gap: 4px; }
   .cp-hero { width: min(240px, 72vw); }
   .cp-hero .face { height: auto; width: 100%; aspect-ratio: 1; }
-  .drop-hero { height: 200px; }
-  .drop-hero .hero-body { left: 14px; right: 14px; }
-  .drop-hero .hero-body h2 { font-size: 26px; }
+  .drop-hero { height: auto; overflow: visible; }
+  .drop-hero .hero-body {
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    padding: 16px 14px 14px;
+  }
+  .drop-hero .hero-body h2 { font-size: 22px; line-height: 1.25; }
+  .drop-hero .hero-body .by { margin: 6px 0 10px; font-size: 13px; line-height: 1.45; }
+  .drop-hero .stat { min-width: 0; flex: 1 1 calc(50% - 8px); }
   .tape-banner .body { min-height: 220px; padding: 16px; }
   .form { padding: 16px; }
   .sheet, .mint-win { position: fixed; z-index: 70; }
@@ -1282,13 +1300,13 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
         <div class="discover">
           <div>
             <div class="hero cp-hero">
-              <img class="face" src="/tape-launch/punk-1.png" alt="电路朋克 1 号" onclick="switchPage('mint')">
+              <img class="face" src="/tape-launch/punk-1.png" alt="Circuit Punk 1 号" onclick="switchPage('mint')">
               <img class="gold-crown" src="/tape-launch/crown.svg" alt="">
               <span class="minting">正在铸造</span>
             </div>
             <div class="hero-meta">
               <div>
-                <h2>电路朋克</h2>
+                <h2>Circuit Punk</h2>
                 <div class="by">1 TAPE + 0.001 BEM</div>
                 <div class="cp-jump">
                   <button class="buy" type="button" onclick="switchPage('mint')">去铸造</button>
@@ -1373,7 +1391,7 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
               <div class="floor">—</div>
             </div>
             <div class="rank-row" id="rank-punk">
-              <div class="who"><img alt="" src="/tape-launch/punk-1.png"><div><div class="nm">电路朋克</div></div></div>
+              <div class="who"><img alt="" src="/tape-launch/punk-1.png"><div><div class="nm">Circuit Punk</div></div></div>
               <div class="floor">铸造中</div>
             </div>
           </aside>
@@ -1511,13 +1529,14 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
       <div class="pad">
         <div class="cp-banner">
           <div class="head-slot">
-            <img class="face" src="/tape-launch/punk-1.png" alt="电路朋克 1">
+            <img class="face" src="/tape-launch/punk-1.png" alt="Circuit Punk 1">
             <img class="gold-crown" src="/tape-launch/crown.svg" alt="">
           </div>
           <div>
             <p class="cp-kicker">正在铸造</p>
-            <h2>电路朋克</h2>
-            <p class="by">一次一张，一个钱包最多十次。挂单和成交在市场页。公开价 1 TAPE + 0.001 BEM。</p>
+            <h2>Circuit Punk</h2>
+            <p class="by">Circuit Punk 是本市场的创始收藏，第一套，也是唯一一套。它依照 TapeOut 的 TAP-721 草案发行：在 ERC-721 的图像之外，每一枚另附一份 tapnet/1 网表及其 SHA-256。本收藏现处于 L0，网表可以核对，但尚未流片。肖像致敬比特币与 BEM 的早期参与者，包括 Hal Finney、Adam Back、Jameson Lopp，以及 BEM 的早期持有人。肖像是纪念，不构成投资建议。</p>
+            <p class="by">一次一张，一个钱包最多十次。挂单和成交在市场页。每次 1 TAPE + 0.001 BEM。</p>
           </div>
         </div>
         <div class="cp-stats" id="cp-stats"></div>
@@ -1525,12 +1544,13 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
           <button type="button"><em>TAPE</em><b id="cp-bal-tape">—</b><small>X Layer</small></button>
           <button type="button"><em>BEM</em><b id="cp-bal-bem">—</b><small>X Layer</small></button>
           <button type="button"><em>OKB</em><b id="cp-bal-okb">—</b><small>gas</small></button>
-          <button type="button"><em>电路朋克</em><b id="cp-bal-punk">—</b><small>持有</small></button>
+          <button type="button"><em>Circuit Punk</em><b id="cp-bal-punk">—</b><small>持有</small></button>
         </div>
         <div class="cp-layout">
           <aside class="cp-mint">
             <h3>铸造</h3>
-            <p class="hint" id="cp-left" style="text-align:left">一次一张。一个钱包最多十次。正在读取合约。</p>
+            <p class="hint" id="cp-left" style="text-align:left">一次一张。每次 1 TAPE + 0.001 BEM。一个钱包最多十次。</p>
+            <p class="cp-cost" id="cp-cost">每次需要 <b>1 TAPE</b> 和 <b>0.001 BEM</b></p>
             <input id="cp-qty" value="1" hidden>
             <button class="buy" id="cp-mint" type="button">铸造这一张</button>
             <p class="hint" id="cp-mint-msg" style="text-align:left">连上钱包后，这里写明还能铸几次。铸完会刷新。持有的在资产里看。</p>
@@ -1543,27 +1563,29 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
       <div class="pad">
         <div class="cp-banner">
           <div class="head-slot">
-            <img class="face" src="/tape-launch/punk-1.png" alt="电路朋克 1">
+            <img class="face" src="/tape-launch/punk-1.png" alt="Circuit Punk 1">
             <img class="gold-crown" src="/tape-launch/crown.svg" alt="">
           </div>
           <div>
             <p class="cp-kicker">市场交易</p>
-            <h2>电路朋克</h2>
-            <p class="by">挂单可以按 BEM 标价，也可以按 TAPE 标价。成交按 1 BEM 对 1000 TAPE，两边一起付。手续费 0.2%。</p>
+            <h2>Circuit Punk</h2>
+            <p class="by">Circuit Punk 是本市场的创始收藏，第一套，也是唯一一套。它依照 TapeOut 的 TAP-721 草案发行：在 ERC-721 的图像之外，每一枚另附一份 tapnet/1 网表及其 SHA-256。本收藏现处于 L0，网表可以核对，但尚未流片。肖像致敬比特币与 BEM 的早期参与者，包括 Hal Finney、Adam Back、Jameson Lopp，以及 BEM 的早期持有人。肖像是纪念，不构成投资建议。</p>
+            <p class="by">一次挂一张。编号和价格写在下面的框里。可以按 BEM 标价，也可以按 TAPE 标价。成交按 1 BEM 对 1000 TAPE，两边一起付。手续费 0.2%。</p>
           </div>
         </div>
         <div class="cp-layout">
           <aside class="cp-mint">
             <h3>挂出你的一张</h3>
+            <p class="hint" style="text-align:left">一次一张。编号和价格都可以在这里改。</p>
             <label>编号</label>
-            <input id="cp-list-id" inputmode="numeric" placeholder="例如 7001">
+            <input id="cp-list-id" inputmode="numeric" placeholder="在这里输入编号，例如 7001">
             <label>用哪种标价</label>
             <div class="art-picks" id="cp-unit">
               <button type="button" class="fbtn on" data-unit="bem">BEM</button>
               <button type="button" class="fbtn" data-unit="tape">TAPE</button>
             </div>
             <label id="cp-px-label">价格（BEM）</label>
-            <input id="cp-list-px" inputmode="decimal" value="0.002">
+            <input id="cp-list-px" inputmode="decimal" value="0.002" placeholder="在这里输入价格">
             <p class="hint" id="cp-pair" style="text-align:left">买家付 0.002 BEM，同时付 2 TAPE。</p>
             <p class="hint" id="cp-mine" style="text-align:left">连接钱包后，点下面的编号就能挂。</p>
             <div class="hold-ids" id="cp-mine-row"></div>
@@ -1628,7 +1650,7 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
         <div class="drop-hero">
           <div class="shade"></div>
           <div class="hero-body">
-            <h2>电路朋克已上链</h2>
+            <h2>Circuit Punk 已上链</h2>
             <div class="by">不用再创建。铸造在「正在铸造」，买卖在「市场」。这里只留给以后另开的项目。</div>
             <div class="stats">
               <div class="stat"><span>TAPE 对</span><b>1 : 0.001 BEM</b></div>
@@ -1637,10 +1659,10 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
             </div>
           </div>
         </div>
-        <button class="buy" type="button" onclick="switchPage('mint')" style="max-width:560px;margin:16px auto;display:block">去铸造电路朋克</button>
+        <button class="buy" type="button" onclick="switchPage('mint')" style="max-width:560px;margin:16px auto;display:block">去铸造 Circuit Punk</button>
         <form class="form" id="launch-form" onsubmit="return false">
           <h3 style="font-size:20px">另开一个项目</h3>
-          <p class="hint" style="text-align:left">电路朋克已经在 X Layer，合约 0xB5ac1dddc158a639D4499aad2d8F393989D4bD34。不要用这个名字再创建一次。</p>
+          <p class="hint" style="text-align:left">Circuit Punk 已经在 X Layer，合约 0xB5ac1dddc158a639D4499aad2d8F393989D4bD34。不要用这个名字再创建一次。</p>
           <label>名称</label><input id="launch-name" maxlength="32" value="">
           <label>符号</label><input id="launch-symbol" maxlength="16" value="">
           <label>总量</label><input id="launch-supply" value="10000" inputmode="numeric">
@@ -1655,7 +1677,7 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
           <p class="hint" id="launch-price">公开铸造价 1 TAPE + 0.001 BEM</p>
           <p class="hint" id="launch-trade">二级市场只用这次发射的代币。TAPE + BEM 两边一起付，不能只改一边。</p>
           <button class="buy ghost" id="trait-roll" type="button">批量生成属性</button>
-          <p class="hint" id="trait-sum">电路朋克一万张按种类比例生成。每种晶粒的属性和权重都不一样。</p>
+          <p class="hint" id="trait-sum">Circuit Punk 一万张按种类比例生成。每种晶粒的属性和权重都不一样。</p>
           <div class="art-picks" id="art-source">
             <button type="button" class="fbtn on" data-art="upload">上传图片</button>
             <button type="button" class="fbtn" data-art="key">自己的 Key</button>
@@ -1672,9 +1694,9 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
           <div class="trait-grid" id="trait-grid"></div>
           <details class="rules">
             <summary>铸造规则</summary>
-            <p>电路朋克，符号 CPUNK，是本站的创世 NFT，也是向中本聪的一揖。它是第一款电路朋克，也只此一套。合约 0xB5ac1dddc158a639D4499aad2d8F393989D4bD34。总量一万，预留七千，公开三千，公开价锁在 1 TAPE 加 0.001 BEM。TapeCode 一号火星人 @bitcoin2themars 领 51–150。8855 号、TapeOut 创始人 @Blonskr 领 1–50。还没领出的 1611 张，370–999 和 6020–7000，留给基金会以后的新计划。图片地址已经写死。改名就不是这一款。本站不再另开第二套。TapeOut 上已经流片的创世电路仍走官网市场，不是这一款。</p>
+            <p>Circuit Punk，符号 CPUNK，是本站的创世 NFT，也是向中本聪的一揖。它是第一套 Circuit Punk，也只此一套。合约 0xB5ac1dddc158a639D4499aad2d8F393989D4bD34。总量一万，预留七千，公开三千，公开价锁在 1 TAPE 加 0.001 BEM。TapeCode 一号火星人 @bitcoin2themars 领 51–150。8855 号、TapeOut 创始人 @Blonskr 领 1–50。还没领出的 1611 张，370–999 和 6020–7000，留给基金会以后的新计划。图片地址已经写死。改名就不是这一款。本站不再另开第二套。TapeOut 上已经流片的创世电路仍走官网市场，不是这一款。</p>
             <p>公开价锁定 1 TAPE 对 0.001 BEM。倍数只能是整数，价格按这个比例放大，不能单独改一边。也可以改用 OKB 或只用 BEM 发射：单位锁死，同样只能填整数倍数。用哪种代币发射，公开铸造和二级交易就只用哪种。预留从总量里划出，不参与公开铸造，不能超过总量。单人最多铸造 10 次。总量由项目方自定。创建时按总量批量生成芯片属性和稀有度，同一项目里属性组合不重复。图片可以自己上传，也可以用自己的 Key 或平台默认生成，风格分朋克和真实。</p>
-            <p>每枚 NFT 按 TAP-721 草案，除图片外还带一份 tapnet 网表和 SHA-256，来源可以对照。标准还在社区审核，这里只出可核验的预览，不假装已经流片上链。</p>
+            <p>每枚收藏按 TapeOut 的 TAP-721 草案写。图像之外是一份 tapnet/1 网表和它的 SHA-256。Circuit Punk 目前是 L0，可以核对，还不是链上接口，也不假装已经流片。</p>
             <p>发射前，项目方必须先放入价值 3 美元的 OKB，这笔进金库。创建另付 1 TAPE + 0.01 枚发射代币：1 TAPE 直接销毁，0.01 锁进该项目金库。OKB 发射锁的是 0.01 OKB，BEM 或 TAPE 对发射锁的是 0.01 BEM。</p>
             <p>铸造收进来的，是这次发射的那种代币，创建时就分成三份。30% 在售罄收盘后项目方可以领取。40% 没有提取函数。收盘后，本合约里低于铸造价 2 倍、挂满 1 天的 NFT，可以被这 40% 买下并销毁。收盘时把这 40% 记成基数。每天最多花掉基数的九十分之一，当天没花完也不结转。90 天都有人来买，这 40% 可以花完，一天花不空。一天的上限小于一张合格挂单时，这张单就买不了。项目方自己的地址不能卖给它。进金库的 OKB 种子和锁进去的 0.01 不参与回购。另一个地址仍可能慢慢卖，所以一天封顶。</p>
             <p>最后 30% 不是按天发。售罄满 90 天，并且连续 3 天都有不低于 2 倍、已经挂满 1 天的挂单，同时没有低于 2 倍的挂单，项目方一次领完。满 90 天之后连续 3 天做不到，这份钱永久不能领。之后任何人可以调用 tick：记成一天、烧掉当天那一份，或买下一张低于两倍的单，调用者拿这次支出的 5%，从当天九十分之一里出。当天预算用完就不再付。网页不保管私钥。账上的 BEM 或 TAPE 直接销毁；OKB 则一半买 BEM、一半买 TAPE，买到就销毁，直到花完。两倍看的是本合约挂单，不是同一笔交易里的现货价。别人若连续三天挂一张回购当天买不掉的低价单，这 30% 会被判负。</p>
@@ -1682,7 +1704,7 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
           </details>
           <p class="hint" id="launch-base"></p>
           <button class="buy" id="launch-create" style="margin-top:16px" type="button">创建</button>
-          <p class="hint" id="launch-create-msg">电路朋克不用再创建。这里只签一个新项目，私钥不会经过这个页面。</p>
+          <p class="hint" id="launch-create-msg">Circuit Punk 不用再创建。这里只签一个新项目，私钥不会经过这个页面。</p>
           <div class="form" id="factory-box">
             <h3 style="font-size:20px">工厂</h3>
             <p class="hint">X Layer 上这份地址已写死。没有管理员，不能升级，也不能把金库转走。页面不再另签一份工厂。</p>
@@ -1733,10 +1755,10 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
         <p class="hint" id="profile-msg" hidden></p>
         <div class="stats-row">
           <div><b id="bal-native">—</b><span id="bal-label">余额</span></div>
-          <div><b id="bal-punk">—</b><span>电路朋克</span></div>
+          <div><b id="bal-punk">—</b><span>Circuit Punk</span></div>
           <div><b id="bal-hold">—</b><span>晶体管持仓</span></div>
         </div>
-        <h3 style="font-size:16px;margin:4px 8px 8px">我的电路朋克</h3>
+        <h3 style="font-size:16px;margin:4px 8px 8px">我的 Circuit Punk</h3>
         <p class="sub" id="punk-hold-note">连接钱包后，这里显示张数、编号和图片。</p>
         <div class="hold-ids" id="punk-hold-ids"></div>
         <div class="hold-grid" id="punk-hold"></div>
@@ -1751,7 +1773,7 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
 <div class="sheet" id="cp-sheet" hidden>
   <div class="sheet-card cp-sheet">
     <img id="cp-sheet-img" alt="">
-    <h3 id="cp-sheet-name">电路朋克</h3>
+    <h3 id="cp-sheet-name">Circuit Punk</h3>
     <p id="cp-sheet-own"></p>
     <p id="cp-sheet-px"></p>
     <div id="cp-sheet-meta"></div>

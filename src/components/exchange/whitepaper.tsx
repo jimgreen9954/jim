@@ -8,18 +8,19 @@ const zh: Section[] = [
   {
     h: "摘要",
     ps: [
-      "TAPELIQUID 是 TapeOut 的市场。已经能用的是四件事：电路朋克在本站市场挂单成交，创世电路在官方市场上买卖，BEM、OKB 和 TAPE 在官方池子里兑换，右上角钱包可以登录、退出，并在 BSC 和 X Layer 之间切换。钱不进这个网页。签名之前，币留在你的钱包里。",
+      "TAPELIQUID 是 TapeOut 的市场。已经能用的是四件事：Circuit Punk 在本站市场挂单成交，创世电路在官方市场上买卖，BEM、OKB 和 TAPE 在官方池子里兑换，右上角钱包可以登录、退出，并在 BSC 和 X Layer 之间切换。钱不进这个网页。签名之前，币留在你的钱包里。",
       "本站自己的发射规则只约束在这里创建的项目。tapeout.net 上已经铸出的晶体管和流片电路仍是协议原件，本站认同一份合约，不另铸，也不改官网的 BNB 或 OKB 铸造价。",
       "创建调用已部署的工厂 0x2872E6D6AB14C5Cdb08587b437Bd16248270A04d，部署交易 0x73ebdd1527e39065ba4da9f8869b5c06d8a3d5e62cbefe64ccddda24e94f5dd0。收费地址、0.026 OKB 进金库、回购开关都写死在这份合约里。没有管理员，不能升级，也不能把金库转走。页面不再另签一份工厂。",
     ],
   },
   {
-    h: "电路朋克",
+    h: "Circuit Punk",
     ps: [
-      "电路朋克，符号 CPUNK，是本站的创世 NFT，也是向中本聪的一揖。中本聪留下的是一套不必求人的账本。TapeOut 把每一次流片写成自己的编年。这一万张像素是那本编年里的纪念，不是创世电路的仿品，不画商标，也不画真人。",
-      "它是第一款电路朋克，也只此一套。24×24 的格子里，衬底、金属层、对准、键合、封装都跟编号走。极紫外晶粒 9 枚，键合巨像 24 尊，报废晶粒 88 片，其余按晶圆人像、吉祥晶粒、对准标记、缺陷图样、纪念版图的比例排开。TapeOut 上已经流片的创世电路仍是协议原件，买卖走官网市场。本站不再另开第二套。",
-      "合约在 X Layer：0xB5ac1dddc158a639D4499aad2d8F393989D4bD34。总量一万。三千张公开铸造已经打开，价锁在 1 TAPE 加 0.001 BEM，一个钱包最多 10 次，编号从 7001 起。七千张是预留，不进公开价。图片地址 https://tapeliquid.net/api/circuit-punk/ 已经写死，不能改。只有名称正好是「电路朋克」，这一款才认这套图。工厂不按名字拦第二次创建。别人再调一次，链上拦不住，但那不是这一款。",
-      "本站市场只做电路朋克。铸造页只铸造，成交不在那里。挂单可以按 BEM 标价，也可以按 TAPE 标价。买家两边一起付，按 1 BEM 对 1000 TAPE。手续费 0.2%，从成交里扣。挂出后 NFT 进合约托管。卖家在市场的「我的挂单」里撤单，不用再翻整本图录。点开一张，看类型、衬底、金属层、对准、键合、封装，以及存世和稀有度。点旁边空白处收起。持有的张数、编号和图片只在资产页。",
+      "Circuit Punk，符号 CPUNK，是本市场的创始收藏。它是第一套 Circuit Punk，也是唯一一套。发行所依据的文本，是 TapeOut 的 Netlist-Bound NFT 草案，提案名称为 TAP-721。该草案于 2026 年 10 月 18 日提交至 TapeOutProtocol/TAPs，编号尚未由编辑正式分配，现以议题 66 与拉取请求 67 中的文本为准，公开副本在 github.com/BruceLanLan/TAP-721。",
+      "TAP-721 扩展 ERC-721。每一枚代币除图像外，还绑定一份自包含的 tapnet/1 网表：TAP-02 所定义的 NAND 与 LATCH 记录，前置 16 字节文件头，不含 REF。该文件的 SHA-256 即网表哈希。一致性分为两级。L0 只要求元数据给出图像、网表与哈希，合约不必实现 ITapNetlistNFT。L1 才把网表接口写入合约。Circuit Punk 目前处于 L0。持有人可以核对网表与哈希，但不能据此主张已经流片，也不能把它视为协议上的创世电路。创世电路仍是 TAP-10 下的 ERC-721，交易继续在官网市场完成。",
+      "创始收藏里的 OG，指的是名册，不是修饰。比特币一侧收入 Hal Finney、Adam Back 与 Jameson Lopp，分别对应第一个客户端、工作量证明的前身，以及节点与自托管的公开实践。BEM 一侧收入早期持有人，其中包括 TapeCode 一号、火星人 @bitcoin2themars，以及协议创始人 @Blonskr。2026 年 10 月 19 日，这些当时公开的头像被收成 24×24 的电路肖像，写入这一万枚的生成规则，供后来的读者辨认这条路是从哪里走来的。肖像仅为纪念。本文件不构成投资建议。本收藏不使用商标。被收入者可以要求撤下相应底样。版图仍由编号决定：极紫外晶粒 9 枚，键合巨像 24 尊，报废晶粒 88 片，其余为晶圆人像、吉祥晶粒、对准标记、缺陷图样与纪念版图。",
+      "合约在 X Layer：0xB5ac1dddc158a639D4499aad2d8F393989D4bD34。总量一万。三千张公开铸造已经打开，价锁在 1 TAPE 加 0.001 BEM，一个钱包最多 10 次，编号从 7001 起。七千张是预留，不进公开价。图片地址 https://tapeliquid.net/api/circuit-punk/ 已经写死，不能改。页面上一律写作 Circuit Punk。链上名称已经固定，改名再创建的不是这一套图。工厂不按名字拦第二次创建。别人再调一次，链上拦不住，但那不是这一款。",
+      "本站市场只做 Circuit Punk。铸造页只铸造，成交不在那里。挂单可以按 BEM 标价，也可以按 TAPE 标价。买家两边一起付，按 1 BEM 对 1000 TAPE。手续费 0.2%，从成交里扣。挂出后 NFT 进合约托管。卖家在市场的「我的挂单」里撤单，不用再翻整本图录。点开一张，看类型、衬底、金属层、对准、键合、封装，以及存世和稀有度。点旁边空白处收起。持有的张数、编号和图片只在资产页。",
       "预留是一份名册，不是一句谢辞。TapeCode-Test1 一号，火星人 @bitcoin2themars，地址 0xddb587D88C0AFa42317E033bDD11edC2462B873f，空投 100 张，编号 51–150。TapeCode #8855，TapeOut 协议创始人 @Blonskr，地址 0x571d447f4f24688eC35Ccf07f1D6993655F6aF15，空投 50 张，编号 1–50。TapeCode 持有地址一人一张，编号 1000–6019，共 5020 张。本站电路持有地址一人一张，编号 151–369，共 219 张。销毁地址里的 TapeCode 不在名册上。",
       "还没领出的是 1611 张：370–999，以及 6020–7000。这 1611 张留给基金会，不进公开价，仍要创建者一笔领一张。",
     ],
@@ -28,7 +29,7 @@ const zh: Section[] = [
     h: "以后",
     ps: [
       "公开的三千张从 7001 起继续铸造，价锁在 1 TAPE 加 0.001 BEM。市场只做这一套：按属性筛，按稀有度排，挂单用 BEM 或 TAPE 标价，成交两边一起付。",
-      "基金会那 1611 张不拿来凑公开盘。它们留给以后的纪念和新计划，编号已经划定，不另开第二套电路朋克。",
+      "基金会那 1611 张不拿来凑公开盘。它们留给以后的纪念和新计划，编号已经划定，不另开第二套 Circuit Punk。",
       "TAPE 官方池要到报价一侧 5,000 USDT 才放行兑换。此前只报价。回购和最后 30% 不自己醒来，要等项目在这份工厂里收盘，再由任何人来调用。链上的账比页面上的句子硬。",
     ],
   },
@@ -55,7 +56,7 @@ const zh: Section[] = [
     ps: [
       "公开价锁定 1 TAPE 对 0.001 BEM。倍数只能是整数，两边一起放大，不能只改一边。也可以改用 OKB，或只用 BEM。用哪种代币发射，公开铸造和二级交易就只用哪种。OKB 的单位是 1，BEM 的单位是 0.001，同样只能按整数倍放大。",
       "预留从总量里划出，不参与公开铸造，不能超过总量。单人最多铸造 10 次。总量由项目方自定。创建时按总量生成芯片属性和稀有度，同一项目里属性组合不重复。图片可以自己上传，也可以用自己的 Key 或平台默认生成，风格分朋克和真实。",
-      "每枚 NFT 按 TAP-721 草案，除图片外还带一份 tapnet 网表和 SHA-256。标准还在社区审核，这里只出可核验的预览，标的是 L0、未流片，不假装已经铸上链。草案在 github.com/BruceLanLan/TAP-721。",
+      "每枚收藏按 TAP-721 草案携带图像、tapnet/1 网表和 SHA-256。Circuit Punk 目前是 L0：哈希可以核对，标准仍在社区审核，这里不把它写成 L1，也不假装已经流片。草案在 github.com/BruceLanLan/TAP-721。",
     ],
   },
   {
@@ -75,7 +76,7 @@ const zh: Section[] = [
     ps: [
       "官网晶体管的最新价和最高买价来自 tapeout.net。挂买单、卖给买价，发到官网同一份 BSC 合约 0xA6a80C1919a8326022d7c601a488888C13aA16E4。",
       "在 tapeout.net 流片得到的电路本来就是 ERC-721。本站展示的是同一枚，不套用 1 TAPE 对 0.001 BEM，也不另开一份市场。有挂单的，购买是直接签官网市场 0x6feEbbEbC07BcB90bd1Ac8b0CF9BaA4f0fF2B46f，一笔签名，不先扣本站手续费。没挂单的不能买。",
-      "TapeCode-Test1 是 X Layer 合集，合约 0x0e91460d6823c711643e650a9a4c0cc21de41614。榜上它在前，电路朋克在后。一号是火星人 @bitcoin2themars。8855 号是 TapeOut 协议创始人 @Blonskr。两人在电路朋克里的编号写在上一章。点开之后，挂单按 OKX 公开市场一页 20 条来读。OKX 没有给每一枚单独的图，本站只显示合集图，并且由本站转发，不把外链直接嵌进页面。OKX 的公开接口没有成交签名，所以 OKX 上的价格不能在这里吃。持有人可以在本站另挂一笔，买家付 OKB，经 X Layer 上的 Seaport 成交。创世电路、官方晶体管和协议电路收在 TapeOut 里，点开才展开。以太坊上的 OpenSea 系列只有地板价，没有签名，不能在这条链上成交，页面也不跳走。",
+      "TapeCode-Test1 是 X Layer 合集，合约 0x0e91460d6823c711643e650a9a4c0cc21de41614。榜上它在前，Circuit Punk 在后。一号是火星人 @bitcoin2themars。8855 号是 TapeOut 协议创始人 @Blonskr。两人在 Circuit Punk 里的编号写在上一章。点开之后，挂单按 OKX 公开市场一页 20 条来读。OKX 没有给每一枚单独的图，本站只显示合集图，并且由本站转发，不把外链直接嵌进页面。OKX 的公开接口没有成交签名，所以 OKX 上的价格不能在这里吃。持有人可以在本站另挂一笔，买家付 OKB，经 X Layer 上的 Seaport 成交。创世电路、官方晶体管和协议电路收在 TapeOut 里，点开才展开。以太坊上的 OpenSea 系列只有地板价，没有签名，不能在这条链上成交，页面也不跳走。",
     ],
   },
   {
@@ -109,9 +110,10 @@ const en: Section[] = [
   {
     h: "Circuit Punk",
     ps: [
-      "Circuit Punk, symbol CPUNK, is this site's genesis NFT, and a bow to Satoshi. What he left was a ledger that does not ask permission. TapeOut keeps its chronicle in every tape-out. These ten thousand pixels are a page of that chronicle, not a copy of the genesis circuits, and not a drawing of a trademark or a face.",
-      "It is the first circuit-punk collection, and the only one. On a 24 by 24 grid, substrate, metal, alignment, bond, and package follow the number. Nine extreme-ultraviolet dies, twenty-four bond colossi, eighty-eight scrap dies. The rest follow wafer portraits, mascot dies, alignment marks, defect patterns, and memorial layouts. Genesis circuits already taped out on TapeOut stay the protocol originals and still trade on the official market. This site will not open a second set.",
-      "The contract on X Layer is 0xB5ac1dddc158a639D4499aad2d8F393989D4bD34. Supply is 10,000. The public three thousand are open, locked at 1 TAPE plus 0.001 BEM, at most ten mints a wallet, numbered from 7001. Seven thousand were reserved and never entered the public price. The image address https://tapeliquid.net/api/circuit-punk/ is fixed. Only the name 电路朋克 belongs to this set of pictures. The factory does not refuse a second create that reuses the name. Such a call is not this collection.",
+      "Circuit Punk, symbol CPUNK, is the founding collection of this market. It is the first circuit-punk set, and the only one. The text it follows is TapeOut's Netlist-Bound NFT draft, proposed as TAP-721. The draft was submitted to TapeOutProtocol/TAPs on 18 October 2026. Editors have not yet assigned a number. Until they do, the text of record is issue 66 and pull request 67, with the public copy at github.com/BruceLanLan/TAP-721.",
+      "TAP-721 extends ERC-721. Beside its image, each token carries a self-contained tapnet/1 netlist: NAND and LATCH records as defined by TAP-02, a 16-byte header, and no REF. The SHA-256 of that file is the netlist hash. Conformance has two levels. L0 requires only that metadata present the image, the netlist, and the hash. The contract need not implement ITapNetlistNFT. L1 places the netlist interface in the contract. Circuit Punk is at L0. A holder may check the netlist and the hash, and may not describe the token as taped out, or as a genesis circuit of the protocol. Genesis circuits remain ERC-721 tokens under TAP-10 and continue to trade on the official market.",
+      "In this collection, OG names a roll, not a flourish. The Bitcoin side records Hal Finney, Adam Back, and Jameson Lopp: the first client, the predecessor of proof of work, and the public practice of nodes and self-custody. The BEM side records the early holders, including TapeCode number 1, the Martian @bitcoin2themars, and the founder of the protocol, @Blonskr. On 19 October 2026 the avatars they had made public were reduced to 24 by 24 circuit portraits and written into the rule that generates these ten thousand, so a later reader can see where the road began. A portrait is a memorial. This document is not investment advice. The collection does not use trademarks. Anyone included may ask that the corresponding base be retired. The layout is still determined by the number: nine extreme-ultraviolet dies, twenty-four bond colossi, eighty-eight scrap dies, and the rest wafer portraits, mascot dies, alignment marks, defect patterns, and memorial layouts.",
+      "The contract on X Layer is 0xB5ac1dddc158a639D4499aad2d8F393989D4bD34. Supply is 10,000. The public three thousand are open, locked at 1 TAPE plus 0.001 BEM, at most ten mints a wallet, numbered from 7001. Seven thousand were reserved and never entered the public price. The image address https://tapeliquid.net/api/circuit-punk/ is fixed. The page writes the collection as Circuit Punk. The name fixed on chain is what this set of pictures recognizes. A later create under another name is not this collection. The factory does not refuse that second create.",
       "This site's market trades Circuit Punk only. The mint page mints and does not settle sales. A listing can be quoted in BEM or in TAPE. The buyer pays both, at 1 BEM to 1000 TAPE. The fee is 0.2%, taken from the sale. Once listed, the NFT is held by the contract. The seller cancels from My listings on the market, without paging through the catalog. Open one to read type, substrate, metal, alignment, bond, package, supply, and rarity. Click the blank beside it to close. Count, numbers, and pictures of what you hold live only on the Assets page.",
       "The reserve is a roll, not a toast. TapeCode-Test1 number 1, the Martian @bitcoin2themars, at 0xddb587D88C0AFa42317E033bDD11edC2462B873f, was airdropped 100, numbers 51–150. TapeCode #8855, TapeOut founder @Blonskr, at 0x571d447f4f24688eC35Ccf07f1D6993655F6aF15, was airdropped 50, numbers 1–50. Each TapeCode holder address received one, 1000–6019, 5,020 in all. Each holder of this site's circuits received one, 151–369, 219 in all. TapeCode sitting in the burn address is not on the roll.",
       "Still unclaimed: 1,611, numbers 370–999 and 6020–7000. Those stay with the foundation. They do not enter the public price. The creator still claims them one by one.",
@@ -148,7 +150,7 @@ const en: Section[] = [
     ps: [
       "The public price is locked at 1 TAPE to 0.001 BEM. The multiplier is an integer and scales both sides. One side cannot be edited alone. A project can instead launch in OKB only, or in BEM only. The token you launch with is the token used for the public mint and for secondary trades. OKB steps by 1. BEM steps by 0.001.",
       "A reserve is carved from supply, skips the public mint, and cannot exceed supply. One wallet can mint at most 10 times. The creator sets the supply. Creation assigns chip traits and rarity across the supply. Combinations do not repeat inside one project. Art can be uploaded, generated with your own key, or generated by the platform, in punk or realistic style.",
-      "Each NFT follows the TAP-721 draft. Besides the image it carries a tapnet netlist and a SHA-256. The standard is still in community review. This site shows a checkable preview, marked L0 and not taped out. It does not pretend the circuit is on chain. The draft is at github.com/BruceLanLan/TAP-721.",
+      "Each collectible follows the TAP-721 draft: an image, a tapnet/1 netlist, and a SHA-256. Circuit Punk is at L0. The hash can be checked. The standard is still in community review. This site does not call it L1, and it does not claim a tape-out. The draft is at github.com/BruceLanLan/TAP-721.",
     ],
   },
   {
@@ -209,21 +211,40 @@ export function Whitepaper() {
     setUiLang(next);
   };
   return (
-    <article className="flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-5 text-zinc-900">
-      <header className="flex items-end justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-zinc-500">TAPELIQUID</p>
-          <h2 className="text-4xl font-semibold leading-none">{lang === "zh" ? "白皮书" : "White paper"}</h2>
-        </div>
-        <button type="button" className="rounded-xl border border-zinc-200 px-3 py-2 text-sm font-semibold" onClick={flip}>
-          {lang === "zh" ? "EN" : "中文"}
+    <article className="bg-[#fffdf8] text-[#1a140c] shadow-[0_0_0_1px_#1a140c]">
+      <header className="border-b border-[#1a140c] px-5 py-6 sm:px-8 sm:py-8">
+        <p className="text-[11px] font-semibold tracking-[0.22em] text-[#6d6256]">TAPELIQUID · 20 OCTOBER 2026</p>
+        <h2 className="mt-3 font-serif text-[32px] leading-tight sm:text-4xl">{lang === "zh" ? "白皮书" : "White Paper"}</h2>
+        <p className="mt-2 max-w-xl text-sm leading-6 text-[#3c3428]">
+          {lang === "zh"
+            ? "Circuit Punk · TAP-721 · X Layer。本文只记载已经部署的规则，不构成投资建议。"
+            : "Circuit Punk · TAP-721 · X Layer. This paper records the rules already deployed. It is not investment advice."}
+        </p>
+        <button type="button" className="mt-4 h-9 rounded-full border border-[#1a140c] px-3 text-xs font-semibold" onClick={flip}>
+          {lang === "zh" ? "English" : "中文"}
         </button>
       </header>
-      {sections.map((section) => (
-        <section key={section.h} className="border-t border-zinc-200 pt-3">
-          <h3 className="text-xl font-semibold">{section.h}</h3>
-          {section.ps.map((p) => (
-            <p key={p.slice(0, 32)} className="mt-2 text-sm leading-relaxed text-zinc-600">
+      <nav className="border-b border-[#e7dfd2] px-5 py-4 sm:px-8" aria-label={lang === "zh" ? "目录" : "Contents"}>
+        <p className="text-[11px] font-semibold tracking-[0.18em] text-[#6d6256]">{lang === "zh" ? "目录" : "CONTENTS"}</p>
+        <ol className="mt-2 grid gap-1 sm:grid-cols-2">
+          {sections.map((section, index) => (
+            <li key={section.h}>
+              <a className="text-sm leading-6 text-[#1a140c] underline-offset-2 hover:underline" href={`#paper-${index + 1}`}>
+                {String(index + 1).padStart(2, "0")} {section.h}
+              </a>
+            </li>
+          ))}
+        </ol>
+      </nav>
+      {sections.map((section, index) => (
+        <section key={section.h} id={`paper-${index + 1}`} className="scroll-mt-16 border-b border-[#e7dfd2] px-5 py-5 last:border-b-0 sm:px-8">
+          <h3 className="font-serif text-xl leading-snug">
+            <span className="mr-2 text-[#8a7a62]">{String(index + 1).padStart(2, "0")}</span>
+            {section.h}
+          </h3>
+          {section.ps.map((p, i) => (
+            <p key={p.slice(0, 40)} className="mt-3 text-[15px] leading-7 text-[#241c14]">
+              <span className="mr-2 text-xs text-[#8a7a62]">{index + 1}.{i + 1}</span>
               {p}
             </p>
           ))}

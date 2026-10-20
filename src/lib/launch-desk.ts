@@ -483,7 +483,7 @@ export function bootLaunch(host: HTMLElement): () => void {
     const note = host.querySelector("#launch-base");
     if (!note) return;
     if (!circuitOn()) {
-      note.textContent = "改了名称就不会写成电路朋克。图片地址留空，链上没有图。";
+      note.textContent = "改了名称就对不上已部署的这一套。图片地址留空，链上没有图。";
       return;
     }
     const preview = previewPathPrefix(window.location.hostname, window.location.pathname);
@@ -499,7 +499,7 @@ export function bootLaunch(host: HTMLElement): () => void {
     const rollBtn = host.querySelector("#trait-roll");
     if (rollBtn) rollBtn.textContent = "再看八种晶粒";
     paintBase();
-    traitSum.textContent = "正在读取电路朋克样张…";
+    traitSum.textContent = "正在读取 Circuit Punk 样张…";
     try {
       const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
       const res = await fetch(`${prefix}/api/circuit-punk/sample`, { cache: "no-store" });
