@@ -17,6 +17,7 @@ const BITMAP = "0x8ec346d8a7156776adfacba5dddb2ff9b308cb50";
 const YANG = "0xa11e739adf417ffe34e1eba75df2031499192b66";
 const LOYAL = "0x2b067593b4f9b0d26564c83f20e91b5d0e286dc6";
 const FOUNDATION = "0x04b649076a11819ef7ada36e02dd55e0923550ee";
+const XING = "0x876c3500883c072d6ea447e6e7c8f097aa7c7bc0";
 const HOLDER_LABEL: Record<string, { name: string; tag: string }> = {
   [FOUNDER]: { name: "TapeOut 协议创始人", tag: "founder" },
   [MARTIAN]: { name: "火星人", tag: "mars" },
@@ -25,13 +26,15 @@ const HOLDER_LABEL: Record<string, { name: string; tag: string }> = {
   [YANG]: { name: "0x杨杨｜tapeout", tag: "yang" },
   [LOYAL]: { name: "LOYAL路遥", tag: "loyal" },
   [FOUNDATION]: { name: "基金会TapeOutCF", tag: "foundation" },
+  [XING]: { name: "星帅", tag: "xing" },
 };
-const HOLDER_RANK = [FOUNDER, MARTIAN, OFFICIAL, BITMAP, YANG, LOYAL, FOUNDATION];
+const HOLDER_RANK = [FOUNDER, MARTIAN, OFFICIAL, BITMAP, YANG, LOYAL, FOUNDATION, XING];
 const GRANTS: { address: string; ids: number[] }[] = [
   { address: BITMAP, ids: Array.from({ length: 10 }, (_, index) => 370 + index) },
   { address: YANG, ids: Array.from({ length: 10 }, (_, index) => 380 + index) },
   { address: LOYAL, ids: Array.from({ length: 10 }, (_, index) => 390 + index) },
   { address: FOUNDATION, ids: Array.from({ length: 10 }, (_, index) => 400 + index) },
+  { address: XING, ids: Array.from({ length: 10 }, (_, index) => 410 + index) },
 ];
 const client = xClient;
 const coinAbi = parseAbi(["function balanceOf(address) view returns (uint256)"]);
