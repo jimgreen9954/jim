@@ -13,11 +13,26 @@ const MULTICALL = "0xcA11bde05977b3631167028862bE2a173976CA11" as const;
 const FOUNDER = "0x571d447f4f24688ec35ccf07f1d6993655f6af15";
 const MARTIAN = "0xddb587d88c0afa42317e033bdd11edc2462b873f";
 const OFFICIAL = "0x2d44129d8ddb14ce5ac5ceebafa572eddd964c18";
+const BITMAP = "0x8ec346d8a7156776adfacba5dddb2ff9b308cb50";
+const YANG = "0xa11e739adf417ffe34e1eba75df2031499192b66";
+const LOYAL = "0x2b067593b4f9b0d26564c83f20e91b5d0e286dc6";
+const FOUNDATION = "0x04b649076a11819ef7ada36e02dd55e0923550ee";
 const HOLDER_LABEL: Record<string, { name: string; tag: string }> = {
   [FOUNDER]: { name: "TapeOut 协议创始人", tag: "founder" },
   [MARTIAN]: { name: "火星人", tag: "mars" },
   [OFFICIAL]: { name: "TAPE NFT 官方", tag: "official" },
+  [BITMAP]: { name: "93.bitmap", tag: "bitmap" },
+  [YANG]: { name: "0x杨杨｜tapeout", tag: "yang" },
+  [LOYAL]: { name: "LOYAL路遥", tag: "loyal" },
+  [FOUNDATION]: { name: "基金会TapeOutCF", tag: "foundation" },
 };
+const HOLDER_RANK = [FOUNDER, MARTIAN, OFFICIAL, BITMAP, YANG, LOYAL, FOUNDATION];
+const GRANTS: { address: string; ids: number[] }[] = [
+  { address: BITMAP, ids: Array.from({ length: 10 }, (_, index) => 370 + index) },
+  { address: YANG, ids: Array.from({ length: 10 }, (_, index) => 380 + index) },
+  { address: LOYAL, ids: Array.from({ length: 10 }, (_, index) => 390 + index) },
+  { address: FOUNDATION, ids: Array.from({ length: 10 }, (_, index) => 400 + index) },
+];
 const client = xClient;
 const coinAbi = parseAbi(["function balanceOf(address) view returns (uint256)"]);
 const ownerAbi = parseAbi([
@@ -198,14 +213,26 @@ export function bootCpunk(
     const pageNote = host.querySelector("#cp-holder-page");
     const query = (host.querySelector<HTMLInputElement>("#cp-holder-q")?.value ?? "").trim().toLowerCase().replace(/^#/, "");
     if (note) {
-      const named = [FOUNDER, MARTIAN, OFFICIAL].filter((addr) => holderRows.some((row) => row.address === addr)).length;
+      const named = HOLDER_RANK.filter((addr) => holderRows.some((row) => row.address === addr)).length;
       note.textContent = holderSeen < holderTotal
-        ? `已核对 ${holderSeen} / ${holderTotal} 张。三个标注地址里已出现 ${named} 个。`
-        : `共 ${holderRows.length} 个持有地址。每页 30 个，创始人、火星人、官方在最前。`;
+        ? `已核对 ${holderSeen} / ${holderTotal} 张。标注地址里已出现 ${named} 个。`
+        : `共 ${holderRows.length} 个持有地址。每页 30 个，标注地址在最前。`;
     }
     if (!body) return;
     const me = (currentAccount() ?? "").toLowerCase();
-    const pool = holderSeen < holderTotal ? holderRows.filter((row) => HOLDER_LABEL[row.address]) : holderRows;
+    const pending = GRANTS.flatMap((grant) => {
+      const owned = new Set(holderRows.find((row) => row.address === grant.address)?.ids ?? []);
+      const ids = grant.ids.filter((id) => !owned.has(id));
+      return ids.length ? [{ address: grant.address, ids, pending: true }] : [];
+    });
+    const real = holderRows.map((row) => ({ address: row.address, ids: row.ids, pending: false }));
+    const pool = (holderSeen < holderTotal ? [...real.filter((row) => HOLDER_LABEL[row.address]), ...pending] : [...real, ...pending]).sort((a, b) => {
+      const rank = (addr: string) => {
+        const place = HOLDER_RANK.indexOf(addr);
+        return place < 0 ? 9 : place;
+      };
+      return rank(a.address) - rank(b.address) || Number(a.pending) - Number(b.pending) || b.ids.length - a.ids.length || (a.address < b.address ? -1 : 1);
+    });
     const filtered = query
       ? pool.filter((row) => row.address.includes(query) || row.ids.some((id) => String(id).includes(query)) || (HOLDER_LABEL[row.address]?.name ?? "").toLowerCase().includes(query))
       : pool;
@@ -224,6 +251,13 @@ export function bootCpunk(
         tag.textContent = mark.name;
         label.append(tag);
       } else label.textContent = "持有人";
+      if (row.pending) {
+        const wait = document.createElement("span");
+        wait.className = "tag wait";
+        wait.textContent = "待领";
+        wait.style.marginLeft = "6px";
+        label.append(wait);
+      }
       if (row.address === me) {
         const you = document.createElement("span");
         you.className = "tag you";
@@ -240,7 +274,7 @@ export function bootCpunk(
       addr.append(link);
       const count = document.createElement("td");
       count.className = "right";
-      count.textContent = String(row.ids.length);
+      count.textContent = row.pending ? `${row.ids.length} 待领` : String(row.ids.length);
       const ids = document.createElement("td");
       ids.textContent = idSpans(row.ids);
       tr.append(label, addr, count, ids);
@@ -310,7 +344,10 @@ export function bootCpunk(
         holderRows = [...bags.entries()]
           .map(([address, held]) => ({ address, ids: held }))
           .sort((a, b) => {
-            const rank = (addr: string) => (addr === FOUNDER ? 0 : addr === MARTIAN ? 1 : addr === OFFICIAL ? 2 : 9);
+            const rank = (addr: string) => {
+              const place = HOLDER_RANK.indexOf(addr);
+              return place < 0 ? 9 : place;
+            };
             return rank(a.address) - rank(b.address) || b.ids.length - a.ids.length || (a.address < b.address ? -1 : 1);
           });
         paintHolders();
@@ -981,6 +1018,7 @@ export function bootCpunk(
     if (!tradePage?.classList.contains("active")) return;
     holdersStarted = true;
     void scanHolders();
+    paintHolders();
   };
   const pageObs = new MutationObserver(startHolders);
   if (tradePage) pageObs.observe(tradePage, { attributes: true, attributeFilter: ["class"] });

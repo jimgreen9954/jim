@@ -4,7 +4,7 @@ import { getProtocolNfts, getTapeoutLive, type LiveTransistor, type ProtocolCirc
 import { mintChipArt } from "@/lib/chip-art";
 import { nickOf, readAvatar, readCover, readNicks, writeAvatar, writeCover, writeNick } from "@/lib/nicks";
 import { showMintWin, whenMined } from "@/lib/mint-win";
-import { deskError, quoteBridge, quoteSwap, readSwapBalances, runBridge, runSwap, type BridgeDir, type CoinBals, type SwapPair, type SwapSide } from "@/lib/asset-desk";
+import { deskError, quoteBridge, quoteSwap, readSwapBalances, runBridge, runSwap, type BridgeDir, type CoinBals, type SwapPair, type SwapQuoteToken, type SwapSide } from "@/lib/asset-desk";
 import { watchEnglish } from "@/lib/live-en";
 import { applyDom, bootLang, onLang, setUiLang, t, uiLang } from "@/lib/locale";
 import { connectBrowser, connectInjected, connectKind, currentAccount, currentChain, disconnectWallet, getProvider, onAccount, onChain, onOpenLink, parseChainId, resumeInjected, switchDeskChain, walletLabel } from "@/lib/wallet";
@@ -2181,13 +2181,20 @@ export function bootLaunch(host: HTMLElement): () => void {
 
   const swapPair = () => (host.querySelector<HTMLButtonElement>("#swap-pair .on")?.dataset.pair as SwapPair) || "bsc-bem";
   const swapSide = () => (host.querySelector<HTMLButtonElement>("#swap-side .on")?.dataset.side as SwapSide) || "buy";
+  const quotePick: Record<SwapPair, SwapQuoteToken> = { "bsc-bem": "USDT", "xl-bem": "OKB", "xl-tape": "USDT" };
+  const quoteChoices: Record<SwapPair, SwapQuoteToken[]> = {
+    "bsc-bem": ["USDT", "BNB"],
+    "xl-bem": ["OKB", "USDT"],
+    "xl-tape": ["USDT", "OKB", "BEM"],
+  };
+  const swapQuote = () => quotePick[swapPair()];
   const bridgeDir = () => (host.querySelector<HTMLButtonElement>("#bridge-dir .on")?.dataset.dir as BridgeDir) || "to-xlayer";
   const pick = (box: string, button: HTMLButtonElement) => {
     host.querySelectorAll<HTMLButtonElement>(`${box} .fbtn`).forEach((node) => node.classList.remove("on"));
     button.classList.add("on");
   };
-  const paintTok = (id: string, symbol: "USDT" | "OKB" | "BEM" | "TAPE") => {
-    const node = host.querySelector(id);
+  const paintTok = (id: string, symbol: "USDT" | "OKB" | "BNB" | "BEM" | "TAPE", pickable: boolean) => {
+    const node = host.querySelector<HTMLButtonElement>(id);
     if (!node) return;
     const mark = node.querySelector("i");
     const img = node.querySelector("img");
@@ -2200,27 +2207,33 @@ export function bootLaunch(host: HTMLElement): () => void {
     }
     if (mark) {
       mark.hidden = Boolean(src);
-      mark.textContent = symbol === "TAPE" ? "T" : "₮";
+      mark.textContent = symbol === "TAPE" ? "T" : symbol === "BNB" ? "B" : "₮";
       mark.classList.toggle("tape", symbol === "TAPE");
+      mark.classList.toggle("bnb", symbol === "BNB");
     }
+    node.dataset.pick = pickable ? "1" : "0";
+    node.disabled = !pickable;
+    node.title = pickable ? "切换计价币" : "";
   };
-  const paySymbol = (): "USDT" | "OKB" | "BEM" | "TAPE" => {
+  const paySymbol = (): "USDT" | "OKB" | "BNB" | "BEM" | "TAPE" => {
     if (swapSide() === "sell") return swapPair() === "xl-tape" ? "TAPE" : "BEM";
-    if (swapPair() === "bsc-bem") return "USDT";
-    if (swapPair() === "xl-tape") return "USDT";
-    return "OKB";
+    return swapQuote();
   };
   const paintSwapLabel = () => {
     const pair = swapPair();
     const buy = swapSide() === "buy";
     const pay = paySymbol();
-    const recv = buy ? (pair === "xl-tape" ? "TAPE" : "BEM") : pair === "bsc-bem" || pair === "xl-tape" ? "USDT" : "OKB";
+    const recv = buy ? (pair === "xl-tape" ? "TAPE" : "BEM") : swapQuote();
     const payLabel = host.querySelector("#swap-in-label");
     const recvLabel = host.querySelector("#swap-out-label");
     if (payLabel) payLabel.textContent = t("swapPay");
     if (recvLabel) recvLabel.textContent = t("swapRecv");
-    paintTok("#swap-in-tok", pay);
-    paintTok("#swap-out-tok", recv);
+    paintTok("#swap-in-tok", pay, buy);
+    paintTok("#swap-out-tok", recv, !buy);
+    const bnbBtn = host.querySelector<HTMLButtonElement>("#bal-bnb-btn");
+    if (bnbBtn) bnbBtn.hidden = pair !== "bsc-bem";
+    const menu = host.querySelector<HTMLElement>("#swap-menu");
+    if (menu) menu.hidden = true;
   };
   let swapTicket = 0;
   const refreshSwap = () => {
@@ -2230,24 +2243,25 @@ export function bootLaunch(host: HTMLElement): () => void {
     const raw = host.querySelector<HTMLInputElement>("#swap-amt")?.value ?? "";
     paintSwapLabel();
     if (!quote || !amount) return;
-    void quoteSwap(swapPair(), swapSide(), raw)
+    void quoteSwap(swapPair(), swapSide(), raw, swapQuote())
       .then((row) => {
         if (!alive || ticket !== swapTicket) return;
         amount.textContent = row.amount;
-        const tape = swapPair() === "xl-tape";
-        quote.textContent = tape
-          ? (row.live ? "报价来自官方 TAPE 池。流动性很小。" : "报价能读。池子没开，这一下不会发交易。")
-          : row.venue === "bsc" ? t("quoteBsc") : t("quoteXl");
+        const tape = swapPair() === "xl-tape" && swapQuote() !== "OKB";
+        quote.textContent = !row.live
+          ? row.note
+          : tape
+            ? (row.live ? "报价来自官方 TAPE 池。流动性很小。" : "报价能读。池子没开，这一下不会发交易。")
+            : row.venue === "bsc" ? t("quoteBsc") : t("quoteXl");
         const warn = host.querySelector<HTMLElement>("#swap-liq");
         const go = host.querySelector<HTMLButtonElement>("#swap-go");
         if (warn) {
-          warn.hidden = !tape;
+          warn.hidden = !row.note;
           warn.textContent = row.note;
         }
         if (go) {
-          const closed = tape && !row.live;
-          go.disabled = closed;
-          go.textContent = closed ? "池子未开" : t("swapGo");
+          go.disabled = !row.live;
+          go.textContent = row.live ? t("swapGo") : swapPair() === "xl-tape" && swapQuote() !== "OKB" ? "池子未开" : "没有池子";
         }
       })
       .catch((error) => {
@@ -2256,10 +2270,16 @@ export function bootLaunch(host: HTMLElement): () => void {
         quote.textContent = deskError(error);
         const warn = host.querySelector<HTMLElement>("#swap-liq");
         const go = host.querySelector<HTMLButtonElement>("#swap-go");
-        if (warn) warn.hidden = swapPair() !== "xl-tape";
-        if (go && swapPair() !== "xl-tape") {
-          go.disabled = false;
-          go.textContent = t("swapGo");
+        const dead = error instanceof Error && (error.message === "nopool" || error.message === "closed");
+        if (warn) warn.hidden = !dead && swapPair() !== "xl-tape";
+        if (go) {
+          if (dead) {
+            go.disabled = true;
+            go.textContent = error instanceof Error && error.message === "closed" ? "池子未开" : "没有池子";
+          } else if (swapPair() !== "xl-tape") {
+            go.disabled = false;
+            go.textContent = t("swapGo");
+          }
         }
       });
   };
@@ -2295,12 +2315,41 @@ export function bootLaunch(host: HTMLElement): () => void {
     pick("#swap-side", next);
     refreshSwap();
   }, opt);
+  const openQuoteMenu = (anchor: HTMLButtonElement) => {
+    const menu = host.querySelector<HTMLElement>("#swap-menu");
+    if (!menu || anchor.dataset.pick !== "1") return;
+    if (!menu.hidden) {
+      menu.hidden = true;
+      return;
+    }
+    menu.replaceChildren();
+    for (const symbol of quoteChoices[swapPair()]) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = symbol === swapQuote() ? "fbtn on" : "fbtn";
+      button.textContent = symbol;
+      button.addEventListener("click", () => {
+        quotePick[swapPair()] = symbol;
+        menu.hidden = true;
+        refreshSwap();
+      });
+      menu.append(button);
+    }
+    menu.hidden = false;
+  };
+  host.querySelector("#swap-in-tok")?.addEventListener("click", (event) => {
+    openQuoteMenu(event.currentTarget as HTMLButtonElement);
+  }, opt);
+  host.querySelector("#swap-out-tok")?.addEventListener("click", (event) => {
+    openQuoteMenu(event.currentTarget as HTMLButtonElement);
+  }, opt);
   host.querySelector("#swap-amt")?.addEventListener("input", refreshSwap, opt);
   let bals: CoinBals | null = null;
   const paintBals = async () => {
     const account = currentAccount();
     const nodes = {
       usdt: host.querySelector("#bal-usdt"),
+      bnb: host.querySelector("#bal-bnb"),
       okb: host.querySelector("#bal-okb"),
       bem: host.querySelector("#bal-bem"),
       tape: host.querySelector("#bal-tape"),
@@ -2310,6 +2359,7 @@ export function bootLaunch(host: HTMLElement): () => void {
     if (!account) {
       bals = null;
       if (nodes.usdt) nodes.usdt.textContent = "—";
+      if (nodes.bnb) nodes.bnb.textContent = "—";
       if (nodes.okb) nodes.okb.textContent = "—";
       if (nodes.bem) nodes.bem.textContent = "—";
       if (nodes.tape) nodes.tape.textContent = "—";
@@ -2322,6 +2372,7 @@ export function bootLaunch(host: HTMLElement): () => void {
       const tape = swapPair() === "xl-tape";
       if (nodes.usdt) nodes.usdt.textContent = tape ? next.usdtXl : next.usdtBsc;
       if (nodes.usdtCh) nodes.usdtCh.textContent = tape ? "X Layer" : "BSC";
+      if (nodes.bnb) nodes.bnb.textContent = next.bnb;
       if (nodes.okb) nodes.okb.textContent = next.okb;
       if (nodes.bem) nodes.bem.textContent = swapPair() === "bsc-bem" ? next.bemBsc : next.bemXl;
       if (nodes.bemCh) nodes.bemCh.textContent = swapPair() === "bsc-bem" ? "BSC" : "X Layer";
@@ -2330,7 +2381,7 @@ export function bootLaunch(host: HTMLElement): () => void {
       if (nodes.usdt) nodes.usdt.textContent = "—";
     }
   };
-  const fillPay = (symbol: "usdt" | "okb" | "bem" | "tape") => {
+  const fillPay = (symbol: "usdt" | "bnb" | "okb" | "bem" | "tape") => {
     const pairBtn = (pair: SwapPair) => host.querySelector<HTMLButtonElement>(`#swap-pair [data-pair="${pair}"]`);
     const sideBtn = (side: SwapSide) => host.querySelector<HTMLButtonElement>(`#swap-side [data-side="${side}"]`);
     const choose = (pair: SwapPair, side: SwapSide) => {
@@ -2339,8 +2390,19 @@ export function bootLaunch(host: HTMLElement): () => void {
       if (a) pick("#swap-pair", a);
       if (b) pick("#swap-side", b);
     };
-    if (symbol === "usdt") choose(swapPair() === "xl-tape" ? "xl-tape" : "bsc-bem", "buy");
-    if (symbol === "okb") choose("xl-bem", "buy");
+    if (symbol === "usdt") {
+      const pair: SwapPair = swapPair() === "xl-tape" ? "xl-tape" : "bsc-bem";
+      quotePick[pair] = "USDT";
+      choose(pair, "buy");
+    }
+    if (symbol === "bnb") {
+      quotePick["bsc-bem"] = "BNB";
+      choose("bsc-bem", "buy");
+    }
+    if (symbol === "okb") {
+      quotePick["xl-bem"] = "OKB";
+      choose("xl-bem", "buy");
+    }
     if (symbol === "bem") choose(swapPair() === "bsc-bem" ? "bsc-bem" : "xl-bem", "sell");
     if (symbol === "tape") choose("xl-tape", "sell");
     const input = host.querySelector<HTMLInputElement>("#swap-amt");
@@ -2348,14 +2410,16 @@ export function bootLaunch(host: HTMLElement): () => void {
       ? ""
       : symbol === "usdt"
         ? swapPair() === "xl-tape" ? bals.usdtXl : bals.usdtBsc
-        : symbol === "okb"
-          ? bals.okb
-          : symbol === "bem"
-            ? swapPair() === "bsc-bem" ? bals.bemBsc : bals.bemXl
-            : bals.tape;
+        : symbol === "bnb"
+          ? bals.bnb
+          : symbol === "okb"
+            ? bals.okb
+            : symbol === "bem"
+              ? swapPair() === "bsc-bem" ? bals.bemBsc : bals.bemXl
+              : bals.tape;
     if (input && value && value !== "0") {
       const n = Number(value);
-      input.value = symbol === "okb" && n > 0.002 ? String(Math.floor((n - 0.002) * 1e6) / 1e6) : value;
+      input.value = (symbol === "okb" || symbol === "bnb") && n > 0.002 ? String(Math.floor((n - 0.002) * 1e6) / 1e6) : value;
     }
     refreshSwap();
     void paintBals();
@@ -2363,7 +2427,7 @@ export function bootLaunch(host: HTMLElement): () => void {
   host.querySelector("#swap-bals")?.addEventListener("click", (event) => {
     const button = (event.target as HTMLElement).closest("button");
     const fill = button?.dataset.fill;
-    if (fill === "usdt" || fill === "okb" || fill === "bem" || fill === "tape") fillPay(fill);
+    if (fill === "usdt" || fill === "bnb" || fill === "okb" || fill === "bem" || fill === "tape") fillPay(fill);
   }, opt);
   host.querySelector("#bridge-dir")?.addEventListener("click", (event) => {
     const button = (event.target as HTMLElement).closest("button");
@@ -2462,7 +2526,7 @@ export function bootLaunch(host: HTMLElement): () => void {
         if (msg) msg.textContent = t("swapNeed");
         return;
       }
-      const done = await runSwap(swapPair(), swapSide(), host.querySelector<HTMLInputElement>("#swap-amt")?.value ?? "");
+      const done = await runSwap(swapPair(), swapSide(), host.querySelector<HTMLInputElement>("#swap-amt")?.value ?? "", swapQuote());
       if (msg) msg.textContent = t("swapSent");
       showLink("#swap-link", done.url, t("swapView"));
     } catch (error) {

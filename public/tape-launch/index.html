@@ -504,6 +504,11 @@ td.right, th.right { text-align: right; }
 .tag.founder { background: #e0b15a; color: #1a1206; }
 .tag.mars { background: #c4554a; color: #fff; }
 .tag.official { background: #3ddea2; color: #06281c; }
+.tag.bitmap { background: #7aa2ff; color: #07101f; }
+.tag.yang { background: #d7b4ff; color: #1a1024; }
+.tag.loyal { background: #f0b90b; color: #1a140c; }
+.tag.foundation { background: #e7edf6; color: #121820; }
+.tag.wait { background: transparent; color: var(--muted); border: 1px solid var(--line); font-weight: 700; }
 .tag.you { background: var(--ink); color: var(--bg); }
 .pill {
   display: inline-flex; align-items: center; height: 26px; padding: 0 8px;
@@ -685,7 +690,19 @@ td.right, th.right { text-align: right; }
   background: var(--card);
   border: 1px solid var(--line);
   box-shadow: none;
+  color: inherit;
+  font: inherit;
 }
+.tok[data-pick="1"] { cursor: pointer; }
+.tok[data-pick="1"]::after { content: "▾"; margin-left: 2px; color: var(--muted); font-size: 12px; }
+.tok:disabled { cursor: default; opacity: 1; color: inherit; }
+.tok-menu {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0 0;
+}
+.tok-menu[hidden] { display: none; }
+.tok-menu button { height: 32px; }
 .tok img, .tok i {
   width: 28px;
   height: 28px;
@@ -762,6 +779,7 @@ td.right, th.right { text-align: right; }
   color: var(--ink);
   text-align: left;
 }
+.swap-bals button[hidden] { display: none !important; }
 .swap-bals em { font-style: normal; font-size: 11px; font-weight: 600; color: var(--muted); }
 .swap-bals b {
   max-width: 100%;
@@ -786,6 +804,7 @@ td.right, th.right { text-align: right; }
 }
 #ext-price[hidden], #ext-list[hidden], #ext-list-label[hidden], #ext-buy[hidden] { display: none !important; }
 .tok i.tape { background: #3ddea2; color: #07140f; }
+.tok i.bnb { background: #f0b90b; color: #1a140c; }
 .gen-bar { display: flex; gap: 8px; align-items: center; margin: 0 0 12px; flex-wrap: wrap; }
 .gen-bar span { color: var(--muted); font-size: 13px; font-weight: 600; }
 .wallet-balances { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0 16px; }
@@ -1462,6 +1481,7 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
               </div>
               <div class="swap-bals" id="swap-bals">
                 <button type="button" data-fill="usdt"><em>USDT 可用</em><b id="bal-usdt">—</b><small id="bal-usdt-ch">BSC</small></button>
+                <button type="button" data-fill="bnb" id="bal-bnb-btn" hidden><em>BNB 可用</em><b id="bal-bnb">—</b><small>BSC</small></button>
                 <button type="button" data-fill="okb"><em>OKB 可用</em><b id="bal-okb">—</b><small>X Layer</small></button>
                 <button type="button" data-fill="bem"><em>BEM 可用</em><b id="bal-bem">—</b><small id="bal-bem-ch">BSC</small></button>
                 <button type="button" data-fill="tape"><em>TAPE 可用</em><b id="bal-tape">—</b><small>X Layer</small></button>
@@ -1475,7 +1495,7 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
                   <div class="swap-k"><span id="swap-in-label">支付</span></div>
                   <div class="swap-line">
                     <input id="swap-amt" inputmode="decimal" value="1" placeholder="0" aria-label="支付数量">
-                    <span class="tok" id="swap-in-tok"><i>₮</i><img alt="" hidden><b>USDT</b></span>
+                    <button class="tok" id="swap-in-tok" type="button"><i>₮</i><img alt="" hidden><b>USDT</b></button>
                   </div>
                 </div>
                 <button class="swap-flip" id="swap-flip" type="button" aria-label="切换方向">
@@ -1485,10 +1505,11 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
                   <span class="swap-k" id="swap-out-label">收到</span>
                   <div class="swap-line">
                     <b class="swap-amt" id="swap-out-amt">—</b>
-                    <span class="tok" id="swap-out-tok"><img alt="" src="/tape-launch/tokens/bem.jpg"><b>BEM</b></span>
+                    <button class="tok" id="swap-out-tok" type="button"><i hidden>₮</i><img alt="" src="/tape-launch/tokens/bem.jpg"><b>BEM</b></button>
                   </div>
                 </div>
               </div>
+              <div class="tok-menu" id="swap-menu" hidden></div>
               <p class="hint" id="swap-quote">报价读取中</p>
               <p class="hint swap-warn" id="swap-liq" hidden></p>
               <button class="buy swap-go" id="swap-go" type="button" data-i18n="swapGo">兑换</button>
@@ -1694,7 +1715,7 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
           <div class="trait-grid" id="trait-grid"></div>
           <details class="rules">
             <summary>铸造规则</summary>
-            <p>Circuit Punk，符号 CPUNK，是本站的创世 NFT，也是向中本聪的一揖。它是第一套 Circuit Punk，也只此一套。合约 0xB5ac1dddc158a639D4499aad2d8F393989D4bD34。总量一万，预留七千，公开三千，公开价锁在 1 TAPE 加 0.001 BEM。TapeCode 一号火星人 @bitcoin2themars 领 51–150。8855 号、TapeOut 创始人 @Blonskr 领 1–50。还没领出的 1611 张，370–999 和 6020–7000，留给基金会以后的新计划。图片地址已经写死。改名就不是这一款。本站不再另开第二套。TapeOut 上已经流片的创世电路仍走官网市场，不是这一款。</p>
+            <p>Circuit Punk，符号 CPUNK，是本站的创世 NFT，也是向中本聪的一揖。它是第一套 Circuit Punk，也只此一套。合约 0xB5ac1dddc158a639D4499aad2d8F393989D4bD34。总量一万，预留七千，公开三千，公开价锁在 1 TAPE 加 0.001 BEM。TapeCode 一号火星人 @bitcoin2themars 领 51–150。8855 号、TapeOut 创始人 @Blonskr 领 1–50。还没领出的 1611 张里，370–379 记给 93.bitmap，地址 0x8EC346D8a7156776aDFacbA5ddDB2fF9B308cB50；380–389 记给 0x杨杨｜tapeout，地址 0xA11E739adF417ffe34e1EBa75dF2031499192B66；390–399 记给 LOYAL路遥，地址 0x2b067593B4f9B0D26564C83F20E91b5D0e286Dc6；400–409 记给基金会 TapeOutCF，地址 0x04B649076a11819EF7AdA36e02DD55e0923550Ee。四个地址各 10 张。这 40 张还没领出，链上还不是这四个地址的。剩下 1571 张，410–999 和 6020–7000，留给基金会以后的新计划。图片地址已经写死。改名就不是这一款。本站不再另开第二套。TapeOut 上已经流片的创世电路仍走官网市场，不是这一款。</p>
             <p>公开价锁定 1 TAPE 对 0.001 BEM。倍数只能是整数，价格按这个比例放大，不能单独改一边。也可以改用 OKB 或只用 BEM 发射：单位锁死，同样只能填整数倍数。用哪种代币发射，公开铸造和二级交易就只用哪种。预留从总量里划出，不参与公开铸造，不能超过总量。单人最多铸造 10 次。总量由项目方自定。创建时按总量批量生成芯片属性和稀有度，同一项目里属性组合不重复。图片可以自己上传，也可以用自己的 Key 或平台默认生成，风格分朋克和真实。</p>
             <p>每枚收藏按 TapeOut 的 TAP-721 草案写。图像之外是一份 tapnet/1 网表和它的 SHA-256。Circuit Punk 目前是 L0，可以核对，还不是链上接口，也不假装已经流片。</p>
             <p>发射前，项目方必须先放入价值 3 美元的 OKB，这笔进金库。创建另付 1 TAPE + 0.01 枚发射代币：1 TAPE 直接销毁，0.01 锁进该项目金库。OKB 发射锁的是 0.01 OKB，BEM 或 TAPE 对发射锁的是 0.01 BEM。</p>

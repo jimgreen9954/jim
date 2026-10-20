@@ -33,7 +33,7 @@ function PaperPage() {
           </a>
         </div>
       </div>
-      <div className="mx-auto flex max-w-3xl flex-col gap-4 px-5 py-8">
+      <div className="mx-auto flex min-w-0 max-w-3xl flex-col gap-4 overflow-x-hidden px-5 py-8">
         <Whitepaper />
       </div>
     </main>

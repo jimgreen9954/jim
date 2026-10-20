@@ -32,7 +32,7 @@ export function Exchange({ initial }: { initial?: Pane }) {
       <SimClock />
       <BannerToast />
       <FuseFlash />
-      <div className={`mx-auto flex max-w-6xl flex-col gap-4 px-3 pt-4 lg:px-6 ${pane === "paper" ? "pb-24 lg:pb-10" : "pb-8"}`}>
+      <div className={`mx-auto flex min-w-0 max-w-6xl flex-col gap-4 px-3 pt-4 lg:px-6 ${pane === "paper" ? "pb-24 lg:pb-10" : "pb-8"}`}>
         <Header pane={pane} setPane={setPane} />
         {pane === "spot" ? <SpotDesk /> : null}
         {pane === "paper" ? <PaperFloor /> : null}
