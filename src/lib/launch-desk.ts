@@ -9,14 +9,14 @@ import { watchEnglish } from "@/lib/live-en";
 import { applyDom, bootLang, onLang, setUiLang, t, uiLang } from "@/lib/locale";
 import { connectBrowser, connectInjected, connectKind, currentAccount, currentChain, disconnectWallet, getProvider, onAccount, onChain, onOpenLink, resumeInjected, switchDeskChain, walletLabel } from "@/lib/wallet";
 import { bootGenesis } from "@/lib/genesis-desk";
-import { getTapeCode } from "@/lib/okx-tape";
+import { getTapeCode, tapeImage } from "@/lib/okx-tape";
 import { bookError, buyTapeOnSite, getTapeBook, listTapeOnSite, type BookOrder } from "@/lib/tape-book";
 import { createAbi, factoryCreateData, factoryDeployData, FACTORY, FACTORY_PLATFORM } from "@/lib/tape-factory-deploy";
 import { previewPathPrefix } from "@/lib/preview-path-prefix";
 import { TAPE_BEM, TAPE_TOKEN } from "@/lib/tape-pool";
-import { connectXLayer, txUrl } from "@/lib/xlayer";
+import { connectXLayer, txUrl, xRpc } from "@/lib/xlayer";
 import { bootCpunk } from "@/lib/cpunk-desk";
-import { connectBsc } from "@/lib/bsc";
+import { bscRpc, connectBsc } from "@/lib/bsc";
 
 type Injected = {
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
@@ -127,6 +127,7 @@ function tradeError(error: unknown): string {
   if (/数量要是|价格要写成|价格超出|当前买价只剩|数量太大/.test(text)) return text;
   if (/insufficient funds/i.test(text)) return "BNB 不够锁这笔买单。";
   if (text === "nowallet") return "没有连上钱包。";
+  if (/HTTP request failed|Failed to fetch|network|timeout|Load failed/i.test(text)) return "节点没连上，没有发出去。再点一次。";
   return text ? `没发出去：${text.slice(0, 160)}` : "没发出去。";
 }
 
@@ -145,7 +146,7 @@ async function ensureBsc(eth: Injected): Promise<void> {
           chainId: BSC,
           chainName: "BNB Smart Chain",
           nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
-          rpcUrls: ["https://bsc-dataseed.binance.org"],
+          rpcUrls: ["https://bsc.publicnode.com", "https://bsc-dataseed.bnbchain.org", "https://bsc-dataseed.binance.org"],
           blockExplorerUrls: ["https://bscscan.com"],
         },
       ],
@@ -399,7 +400,12 @@ export function bootLaunch(host: HTMLElement): () => void {
   const paintTheme = (mode: "dark" | "light") => {
     host.dataset.theme = mode;
     host.style.colorScheme = mode;
-    if (themeBtn) themeBtn.textContent = mode === "dark" ? t("themeDay") : t("themeNight");
+    if (themeBtn) {
+      const narrow = window.matchMedia("(max-width: 860px)").matches;
+      const day = narrow ? (uiLang() === "zh" ? "昼" : "Day") : t("themeDay");
+      const night = narrow ? (uiLang() === "zh" ? "夜" : "Night") : t("themeNight");
+      themeBtn.textContent = mode === "dark" ? day : night;
+    }
     window.localStorage.setItem("tape-theme", mode);
   };
   paintTheme(saved);
@@ -844,30 +850,29 @@ export function bootLaunch(host: HTMLElement): () => void {
       return;
     }
     const rows = [
-      { chain: "BSC", symbol: "BNB", rpc: "https://bsc-dataseed.binance.org", native: true, decimals: 18 },
-      { chain: "BSC", symbol: "BEM", rpc: "https://bsc-dataseed.binance.org", token: "0x5ce033B2bFCa3Af30b3e8C8457DeaF776A8b695a", decimals: 8 },
-      { chain: "BSC", symbol: "USDT", rpc: "https://bsc-dataseed.binance.org", token: "0x55d398326f99059fF775485246999027B3197955", decimals: 18 },
-      { chain: "X Layer", symbol: "OKB", rpc: "https://rpc.xlayer.tech", native: true, decimals: 18 },
-      { chain: "X Layer", symbol: "BEM", rpc: "https://rpc.xlayer.tech", token: "0x60e62Efa9405d6873C5deaBD4E6CC91c25363952", decimals: 8 },
-      { chain: "X Layer", symbol: "TAPE", rpc: "https://rpc.xlayer.tech", token: TAPE_TOKEN, decimals: 8 },
+      { chain: "BSC", symbol: "BNB", native: true, decimals: 18 },
+      { chain: "BSC", symbol: "BEM", token: "0x5ce033B2bFCa3Af30b3e8C8457DeaF776A8b695a", decimals: 8 },
+      { chain: "BSC", symbol: "USDT", token: "0x55d398326f99059fF775485246999027B3197955", decimals: 18 },
+      { chain: "X Layer", symbol: "OKB", native: true, decimals: 18 },
+      { chain: "X Layer", symbol: "BEM", token: "0x60e62Efa9405d6873C5deaBD4E6CC91c25363952", decimals: 8 },
+      { chain: "X Layer", symbol: "TAPE", token: TAPE_TOKEN, decimals: 8 },
     ];
     void Promise.all(rows.map(async (row) => {
-      const data = row.native ? undefined : `0x70a08231${address.toLowerCase().replace(/^0x/, "").padStart(64, "0")}`;
-      const res = await fetch(row.rpc, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
+      try {
+        const data = row.native ? undefined : `0x70a08231${address.toLowerCase().replace(/^0x/, "").padStart(64, "0")}`;
+        const ask = row.chain === "BSC" ? bscRpc : xRpc;
+        const result = await ask({
           jsonrpc: "2.0",
           id: 1,
           method: row.native ? "eth_getBalance" : "eth_call",
           params: row.native ? [address, "latest"] : [{ to: row.token, data }, "latest"],
-        }),
-        signal: AbortSignal.timeout(12000),
-      });
-      const body = (await res.json()) as { result?: string };
-      if (!body.result || body.result === "0x") return null;
-      const value = Number(BigInt(body.result)) / 10 ** row.decimals;
-      return { chain: row.chain, symbol: row.symbol, value };
+        });
+        if (!result || result === "0x") return null;
+        const value = Number(BigInt(result)) / 10 ** row.decimals;
+        return { chain: row.chain, symbol: row.symbol, value };
+      } catch {
+        return null;
+      }
     })).then((items) => {
       if (!alive || gen !== balGen) return;
       box.replaceChildren();
@@ -906,7 +911,9 @@ export function bootLaunch(host: HTMLElement): () => void {
     if (clearCover) clearCover.hidden = !cover;
     if (walletBtn) {
       const chain = currentChain() === 56 ? "BSC" : currentChain() === 196 ? "X Layer" : "";
-      walletBtn.textContent = address ? `${nick || short(address)}${chain ? ` · ${chain}` : ""}` : t("login");
+      const narrow = window.matchMedia("(max-width: 860px)").matches;
+      const who = nick || short(address || "");
+      walletBtn.textContent = address ? (narrow || !chain ? who : `${who} · ${chain}`) : t("login");
     }
     const topLogout = host.querySelector<HTMLButtonElement>("#btn-logout");
     if (topLogout) topLogout.hidden = !address;
@@ -1274,6 +1281,15 @@ export function bootLaunch(host: HTMLElement): () => void {
       sheet.hidden = false;
     }
     const tape = Boolean(tokenId);
+    const art = host.querySelector<HTMLImageElement>("#ext-art");
+    if (art) {
+      if (tape && tapeHead?.logo) {
+        art.hidden = false;
+        art.src = tapeImage(tapeHead.logo);
+      } else {
+        art.hidden = true;
+      }
+    }
     if (list) list.hidden = !tape;
     if (price) price.hidden = !tape;
     if (listLabel) listLabel.hidden = !tape;
@@ -1853,16 +1869,9 @@ export function bootLaunch(host: HTMLElement): () => void {
       }),
     }));
     const data = encodeFunctionData({ abi: multicallAbi, functionName: "aggregate", args: [calls] });
-    void fetch("https://bsc-dataseed.binance.org", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: "0xcA11bde05977b3631167028862bE2a173976CA11", data }, "latest"] }),
-      signal: AbortSignal.timeout(12000),
-    })
-      .then(async (res) => {
-        const body = (await res.json()) as { result?: `0x${string}` };
-        if (!body.result) throw new Error("rpc");
-        const decoded = decodeFunctionResult({ abi: multicallAbi, functionName: "aggregate", data: body.result });
+    void bscRpc({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: "0xcA11bde05977b3631167028862bE2a173976CA11", data }, "latest"] })
+      .then((result) => {
+        const decoded = decodeFunctionResult({ abi: multicallAbi, functionName: "aggregate", data: result as `0x${string}` });
         return rows.map((row, index) => ({ row, qty: Number(BigInt(decoded[1][index] ?? "0x0")) }));
       })
       .then((heldRows) => {
@@ -2051,23 +2060,17 @@ export function bootLaunch(host: HTMLElement): () => void {
                 }),
               }));
               const dataHex = encodeFunctionData({ abi: circuitMulti, functionName: "aggregate", args: [calls] });
-              const res = await fetch("https://bsc-dataseed.binance.org", {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({
-                  jsonrpc: "2.0",
-                  id: 1,
-                  method: "eth_call",
-                  params: [{ to: "0xcA11bde05977b3631167028862bE2a173976CA11", data: dataHex }, "latest"],
-                }),
-                signal: AbortSignal.timeout(12000),
+              const result = await bscRpc({
+                jsonrpc: "2.0",
+                id: 1,
+                method: "eth_call",
+                params: [{ to: "0xcA11bde05977b3631167028862bE2a173976CA11", data: dataHex }, "latest"],
               });
-              const body = (await res.json()) as { result?: string };
-              if (!body.result || body.result === "0x") return data.circuits.map((row) => ({ ...row, listingId: null, price: null }));
+              if (!result || result === "0x") return data.circuits.map((row) => ({ ...row, listingId: null, price: null }));
               const decoded = decodeFunctionResult({
                 abi: circuitMulti,
                 functionName: "aggregate",
-                data: body.result as `0x${string}`,
+                data: result as `0x${string}`,
               }) as readonly [bigint, `0x${string}`[]];
               return data.circuits.map((row, index) => {
                 try {
@@ -2139,15 +2142,9 @@ export function bootLaunch(host: HTMLElement): () => void {
         functionName: "listingFor",
         args: [row.circuit as `0x${string}`, BigInt(row.tokenId)],
       });
-      const res = await fetch("https://bsc-dataseed.binance.org", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: circuitMarket, data: call }, "latest"] }),
-        signal: AbortSignal.timeout(12000),
-      });
-      const body = (await res.json()) as { result?: string };
-      if (!body.result || body.result === "0x") throw new Error("挂单没了");
-      const decoded = decodeFunctionResult({ abi: circuitAbi, functionName: "listingFor", data: body.result as `0x${string}` }) as readonly [bigint, string, bigint, boolean];
+      const result = await bscRpc({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: circuitMarket, data: call }, "latest"] });
+      if (!result || result === "0x") throw new Error("挂单没了");
+      const decoded = decodeFunctionResult({ abi: circuitAbi, functionName: "listingFor", data: result as `0x${string}` }) as readonly [bigint, string, bigint, boolean];
       if (!decoded[3] || decoded[0] !== row.listingId || decoded[2] !== row.price) {
         sayProto("挂单变了。刷新后再买，没有按旧价格发出去。");
         return;
@@ -2548,8 +2545,8 @@ export function bootLaunch(host: HTMLElement): () => void {
       paintTapeOpen();
       return;
     }
-    if (banner && head.banner) banner.style.backgroundImage = `url("${head.banner.replace(/"/g, "")}")`;
-    if (logo && head.logo) logo.src = head.logo;
+    if (banner && head.logo) banner.style.backgroundImage = `url("${tapeImage(head.logo)}")`;
+    if (logo && head.logo) logo.src = tapeImage(head.logo);
     const supply = head.supply == null ? "—" : head.supply.toLocaleString("en-US");
     if (desc) {
       desc.textContent = uiLang() === "zh" ? `X Layer · ${supply}` : `X Layer · ${supply}`;
@@ -2583,7 +2580,9 @@ export function bootLaunch(host: HTMLElement): () => void {
       if (head.logo) {
         const img = document.createElement("img");
         img.alt = "";
-        img.src = head.logo;
+        img.referrerPolicy = "no-referrer";
+        img.src = tapeImage(head.logo);
+        face.style.backgroundImage = `url("${tapeImage(head.logo)}")`;
         face.append(img);
       }
       const badge = document.createElement("em");
@@ -2614,29 +2613,40 @@ export function bootLaunch(host: HTMLElement): () => void {
     paintTapeOpen();
     placeTape();
   };
+  const pinPunk = () => {
+    const row = host.querySelector<HTMLElement>("#rank-punk");
+    const floor = row?.querySelector(".floor");
+    if (floor) floor.textContent = uiLang() === "zh" ? "铸造中" : "Minting";
+    if (row && !row.dataset.bound) {
+      row.dataset.bound = "1";
+      row.addEventListener("click", () => open("trade"));
+    }
+  };
+  const openTape = () => {
+    open("discover");
+    tapeOpen = true;
+    paintTapeOpen();
+    host.querySelector("#tape-banner")?.scrollIntoView({ block: "nearest" });
+  };
   const placeTape = () => {
     host.querySelectorAll(".js-tape-pin").forEach((node) => node.remove());
     const head = tapeHead;
-    if (!head?.ok) return;
+    const rankRow = host.querySelector<HTMLElement>("#rank-tape");
+    if (rankRow && !rankRow.dataset.bound) {
+      rankRow.dataset.bound = "1";
+      rankRow.addEventListener("click", openTape);
+    }
+    if (!head?.ok) {
+      pinPunk();
+      return;
+    }
     const floor = head.floor ? `${head.floor} OKB` : "—";
-    const openHere = () => {
-      open("discover");
-      tapeOpen = true;
-      paintTapeOpen();
-      host.querySelector("#tape-banner")?.scrollIntoView({ block: "nearest" });
-    };
-    const rank = host.querySelector("#rank-rows");
-    const headRow = rank?.querySelector(".rank-head");
-    if (rank && headRow) {
-      const row = document.createElement("div");
-      row.className = "rank-row js-tape-pin";
-      row.innerHTML = `<div class="who"><img alt=""><div><div class="nm">TapeCode-Test1</div></div></div><div class="floor"></div>`;
-      const img = row.querySelector("img");
-      if (img && head.logo) img.src = head.logo;
-      const floorEl = row.querySelector(".floor");
+    const shown = tapeImage(head.logo);
+    if (rankRow) {
+      const img = rankRow.querySelector("img");
+      if (img) img.src = shown;
+      const floorEl = rankRow.querySelector(".floor");
       if (floorEl) floorEl.textContent = floor;
-      row.addEventListener("click", openHere);
-      headRow.insertAdjacentElement("afterend", row);
     }
     const grid = host.querySelector("#series-grid");
     if (grid) {
@@ -2644,7 +2654,7 @@ export function bootLaunch(host: HTMLElement): () => void {
       row.className = "mini js-tape-pin";
       const img = document.createElement("img");
       img.alt = "";
-      if (head.logo) img.src = head.logo;
+      if (head.logo) img.src = shown;
       const meta = document.createElement("div");
       meta.className = "meta";
       const title = document.createElement("b");
@@ -2653,7 +2663,7 @@ export function bootLaunch(host: HTMLElement): () => void {
       sub.textContent = `${floor} · X Layer`;
       meta.append(title, sub);
       row.append(img, meta);
-      row.addEventListener("click", openHere);
+      row.addEventListener("click", openTape);
       grid.prepend(row);
     }
     const body = host.querySelector("#market-body");
@@ -2666,17 +2676,29 @@ export function bootLaunch(host: HTMLElement): () => void {
       const img = document.createElement("img");
       img.className = "av";
       img.alt = "";
-      if (head.logo) img.src = head.logo;
+      if (head.logo) img.src = shown;
       const spanName = document.createElement("span");
       spanName.textContent = "TapeCode-Test1 · X Layer";
       nameCell.append(img, spanName);
       tr.children[0]?.append(nameCell);
       const cell = tr.children[1];
       if (cell) cell.textContent = floor;
-      tr.addEventListener("click", openHere);
+      tr.addEventListener("click", openTape);
       body.prepend(tr);
     }
+    pinPunk();
   };
+  pinPunk();
+  const tapeoutBody = host.querySelector<HTMLElement>("#tapeout-body");
+  const tapeoutBtn = host.querySelector<HTMLButtonElement>("#tapeout-toggle");
+  const tapeoutLabel = host.querySelector("#tapeout-label");
+  tapeoutBtn?.addEventListener("click", () => {
+    if (!tapeoutBody || !tapeoutBtn) return;
+    const opening = tapeoutBody.hidden;
+    tapeoutBody.hidden = !opening;
+    tapeoutBtn.setAttribute("aria-expanded", opening ? "true" : "false");
+    if (tapeoutLabel) tapeoutLabel.textContent = opening ? (uiLang() === "zh" ? "隐藏" : "Hide") : (uiLang() === "zh" ? "打开" : "Open");
+  }, opt);
   const pullTape = (cursor: string) => {
     if (tapeBusy) return;
     tapeBusy = true;

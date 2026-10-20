@@ -1,6 +1,7 @@
 import {
   createPublicClient,
   encodeFunctionData,
+  fallback,
   formatUnits,
   http,
   parseAbi,
@@ -54,14 +55,50 @@ function ethereum() {
   return getProvider();
 }
 
-const client = createPublicClient({ transport: http(BSC.rpc) });
+const client = createPublicClient({
+  transport: fallback(
+    [
+      "https://bsc.publicnode.com",
+      "https://bsc-dataseed.bnbchain.org",
+      "https://bsc-dataseed.binance.org",
+      "https://bsc-dataseed1.defibit.io",
+      "https://bsc-dataseed1.ninicoin.io",
+      "https://rpc.48.club",
+    ].map((url) => http(url, { timeout: 8_000, retryCount: 0 })),
+    { rank: false },
+  ),
+});
+
+export const bscClient = client;
 
 const receiptRpcs = [
+  "https://bsc.publicnode.com",
+  "https://bsc-dataseed.bnbchain.org",
   BSC.rpc,
   "https://bsc-dataseed1.defibit.io",
   "https://bsc-dataseed1.ninicoin.io",
   "https://rpc.48.club",
 ];
+
+export async function bscRpc(body: unknown): Promise<string> {
+  let last = "rpc";
+  for (const url of receiptRpcs) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(8_000),
+      });
+      const json = (await res.json()) as { result?: string; error?: { message?: string } };
+      if (res.ok && json.result) return json.result;
+      last = json.error?.message || `rpc ${res.status}`;
+    } catch (err) {
+      last = err instanceof Error ? err.message : "rpc";
+    }
+  }
+  throw new Error(last);
+}
 
 export async function waitReceipt(hash: Hex) {
   let last: unknown;

@@ -1,12 +1,12 @@
 import { decodeFunctionResult, encodeFunctionData, formatEther, parseAbi, parseEther, type Abi } from "viem";
 import { onLang, t, tf, uiLang } from "@/lib/locale";
 import { showMintWin, whenMined } from "@/lib/mint-win";
+import { bscRpc } from "@/lib/bsc";
 import { connectBrowser, currentAccount, getProvider } from "@/lib/wallet";
 
 const GENESIS = "0x50A994E71615474b55559fF4F500928fbc339DD9";
 const MARKET = "0x6feEbbEbC07BcB90bd1Ac8b0CF9BaA4f0fF2B46f";
 const MULTICALL = "0xcA11bde05977b3631167028862bE2a173976CA11";
-const RPC = "https://bsc-dataseed.binance.org";
 const PAGE = 12;
 
 const cpuAbi = parseAbi([
@@ -44,15 +44,7 @@ export type GenesisCard = {
 };
 
 async function ethCall(to: string, data: string): Promise<string> {
-  const res = await fetch(RPC, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to, data }, "latest"] }),
-    signal: AbortSignal.timeout(15000),
-  });
-  const body = (await res.json()) as { result?: string; error?: { message?: string } };
-  if (!body.result) throw new Error(body.error?.message || "rpc");
-  return body.result;
+  return bscRpc({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to, data }, "latest"] });
 }
 
 function callData(abi: Abi, fn: string, args: readonly unknown[] = []): `0x${string}` {
@@ -103,7 +95,7 @@ async function ensureBsc(eth: Injected): Promise<void> {
         chainId: "0x38",
         chainName: "BNB Smart Chain",
         nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
-        rpcUrls: ["https://bsc-dataseed.binance.org"],
+        rpcUrls: ["https://bsc.publicnode.com", "https://bsc-dataseed.bnbchain.org", "https://bsc-dataseed.binance.org"],
         blockExplorerUrls: ["https://bscscan.com"],
       }],
     });

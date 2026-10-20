@@ -1,11 +1,11 @@
-import { createPublicClient, decodeEventLog, decodeFunctionResult, encodeFunctionData, http, parseAbi, parseAbiItem, toHex } from "viem";
+import { decodeEventLog, decodeFunctionResult, encodeFunctionData, parseAbi, parseAbiItem, toHex } from "viem";
 import { deskError } from "@/lib/asset-desk";
 import { showMintWin, whenMined } from "@/lib/mint-win";
 import { TAPE_BEM, TAPE_TOKEN } from "@/lib/tape-pool";
 import { currentAccount, getProvider, onAccount } from "@/lib/wallet";
 import { filterPunks, punkSheet, traitFacets, type PunkSort, type TraitKey } from "@/lib/circuit-punk";
 import { onLang } from "@/lib/locale";
-import { connectXLayer } from "@/lib/xlayer";
+import { connectXLayer, xClient } from "@/lib/xlayer";
 
 const CPUNK = "0xB5ac1dddc158a639D4499aad2d8F393989D4bD34" as const;
 const ZERO = "0x0000000000000000000000000000000000000000";
@@ -18,7 +18,7 @@ const HOLDER_LABEL: Record<string, { name: string; tag: string }> = {
   [MARTIAN]: { name: "火星人", tag: "mars" },
   [OFFICIAL]: { name: "TAPE NFT 官方", tag: "official" },
 };
-const client = createPublicClient({ transport: http("https://rpc.xlayer.tech") });
+const client = xClient;
 const coinAbi = parseAbi(["function balanceOf(address) view returns (uint256)"]);
 const ownerAbi = parseAbi([
   "function ownerOf(uint256) view returns (address)",

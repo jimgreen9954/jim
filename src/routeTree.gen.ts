@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as WhitepaperRouteImport } from './routes/whitepaper'
+import { Route as ApiOkxImgRouteImport } from './routes/api/okx-img'
 import { Route as ApiCircuitPunkSplatRouteImport } from './routes/api/circuit-punk/$'
 
 const IndexRoute = IndexRouteImport.update({
@@ -23,6 +24,11 @@ const WhitepaperRoute = WhitepaperRouteImport.update({
   path: '/whitepaper',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiOkxImgRoute = ApiOkxImgRouteImport.update({
+  id: '/api/okx-img',
+  path: '/api/okx-img',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiCircuitPunkSplatRoute = ApiCircuitPunkSplatRouteImport.update({
   id: '/api/circuit-punk/$',
   path: '/api/circuit-punk/$',
@@ -32,30 +38,34 @@ const ApiCircuitPunkSplatRoute = ApiCircuitPunkSplatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/whitepaper': typeof WhitepaperRoute
+  '/api/okx-img': typeof ApiOkxImgRoute
   '/api/circuit-punk/$': typeof ApiCircuitPunkSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/whitepaper': typeof WhitepaperRoute
+  '/api/okx-img': typeof ApiOkxImgRoute
   '/api/circuit-punk/$': typeof ApiCircuitPunkSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/whitepaper': typeof WhitepaperRoute
+  '/api/okx-img': typeof ApiOkxImgRoute
   '/api/circuit-punk/$': typeof ApiCircuitPunkSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/whitepaper' | '/api/circuit-punk/$'
+  fullPaths: '/' | '/whitepaper' | '/api/okx-img' | '/api/circuit-punk/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/whitepaper' | '/api/circuit-punk/$'
-  id: '__root__' | '/' | '/whitepaper' | '/api/circuit-punk/$'
+  to: '/' | '/whitepaper' | '/api/okx-img' | '/api/circuit-punk/$'
+  id: '__root__' | '/' | '/whitepaper' | '/api/okx-img' | '/api/circuit-punk/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   WhitepaperRoute: typeof WhitepaperRoute
+  ApiOkxImgRoute: typeof ApiOkxImgRoute
   ApiCircuitPunkSplatRoute: typeof ApiCircuitPunkSplatRoute
 }
 
@@ -75,6 +85,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WhitepaperRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/okx-img': {
+      id: '/api/okx-img'
+      path: '/api/okx-img'
+      fullPath: '/api/okx-img'
+      preLoaderRoute: typeof ApiOkxImgRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/circuit-punk/$': {
       id: '/api/circuit-punk/$'
       path: '/api/circuit-punk/$'
@@ -88,6 +105,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   WhitepaperRoute: WhitepaperRoute,
+  ApiOkxImgRoute: ApiOkxImgRoute,
   ApiCircuitPunkSplatRoute: ApiCircuitPunkSplatRoute,
 }
 export const routeTree = rootRouteImport

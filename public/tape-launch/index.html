@@ -941,7 +941,18 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
   cursor: pointer;
 }
 .tape-open { display: inline-block; margin-top: 12px; font-weight: 700; font-size: 13px; }
-#tape-fold[hidden] { display: none !important; }
+#tape-fold[hidden], #tape-code-note[hidden] { display: none !important; }
+.tapeout-box { border: 1px solid var(--line); border-radius: 16px; padding: 0 14px 4px; background: var(--card); }
+.tapeout-toggle {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  background: transparent; border: 0; color: inherit; font: inherit;
+  font-size: 18px; font-weight: 800; padding: 14px 0; letter-spacing: .04em;
+}
+.tapeout-toggle em { font-style: normal; font-size: 13px; color: var(--blue); }
+#tapeout-body[hidden] { display: none !important; }
+#ext-art { width: 100%; max-height: 280px; object-fit: cover; border-radius: 12px; display: block; margin-bottom: 12px; background: #111; }
+#ext-art[hidden] { display: none !important; }
+.tapeout-box .block { margin-top: 8px; }
 .tape-banner .veil {
   position: absolute; inset: 0;
   background: linear-gradient(180deg, rgba(0,0,0,.12), rgba(0,0,0,.78));
@@ -1079,9 +1090,8 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
     height: calc(62px + env(safe-area-inset-bottom));
     flex-direction: row;
     align-items: stretch;
-    overflow-x: auto;
-    overflow-y: hidden;
-    scroll-snap-type: x mandatory;
+    overflow: hidden;
+    scroll-snap-type: none;
     border-right: 0;
     border-top: 1px solid var(--line);
     box-shadow: 0 -8px 24px rgba(0,0,0,.12);
@@ -1090,25 +1100,67 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
   }
   .rail .brand, .rail-gap { display: none; }
   .nav-item {
-    flex: 0 0 76px;
-    scroll-snap-align: start;
+    flex: 1 1 0;
+    min-width: 0;
     flex-direction: column;
     justify-content: center;
     height: auto;
-    gap: 2px;
-    padding: 4px 2px;
-    font-size: 10px;
-    border-radius: 10px;
+    gap: 1px;
+    padding: 2px 0;
+    font-size: 9px;
+    border-radius: 8px;
   }
-  .nav-item span { opacity: 1; font-size: 10px; white-space: nowrap; }
-  .nav-item svg { width: 20px; height: 20px; }
-  .shell { min-height: 100%; }
-  .content { padding-bottom: calc(74px + env(safe-area-inset-bottom)); }
-  .topbar { height: 56px; gap: 6px; padding: 0 8px; overflow-x: auto; }
-  .search { height: 40px; min-width: 96px; }
-  #btn-theme, #btn-lang, .account, .top-logo { flex-shrink: 0; }
-  .top-logo { display: flex; }
-  .top-logo .name { display: flex; }
+  .nav-item span { opacity: 1; font-size: 9px; white-space: normal; line-height: 1.05; text-align: center; letter-spacing: -0.03em; }
+  .nav-item svg { width: 16px; height: 16px; }
+  .content { padding-bottom: calc(74px + env(safe-area-inset-bottom)); overflow-x: hidden; }
+  .page, .pad, .cp-layout, #cp-market-col, .cp-mint, .form { min-width: 0; max-width: 100%; }
+  #cp-market-col { display: flex; flex-direction: column; gap: 12px; }
+  #cp-log-block { order: -1; }
+  #cp-log { max-height: 240px; overflow: auto; }
+  .cp-log .feed-row { white-space: normal; overflow-wrap: anywhere; font-size: 13px; line-height: 1.4; }
+  .table-wrap { overflow-x: auto; max-width: 100%; }
+  table { min-width: 520px; }
+  .buy, #cp-mint, #cp-list, #cp-buy, #trade-bid, #trade-sell, #ext-buy, #ext-list {
+    min-height: 48px;
+    font-size: 15px;
+  }
+  .sheet, .mint-win {
+    position: fixed;
+    z-index: 80;
+    padding: 56px 12px calc(78px + env(safe-area-inset-bottom));
+  }
+  .sheet-card { max-height: 100%; }
+  .toolbar { flex-wrap: wrap; }
+  .toolbar input, #cp-find, #cp-holder-q { width: 100% !important; max-width: 100%; }
+  #assets-addr, .sub, .hint { overflow-wrap: anywhere; }
+  .nav-item span { font-size: 10px; }
+  .topbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 60;
+    height: 48px;
+    gap: 4px;
+    padding: 0 6px;
+    overflow: hidden;
+    background: var(--bg);
+  }
+  .shell { min-height: 100%; padding-top: 48px; }
+  .search { height: 32px; min-width: 0; flex: 1 1 auto; padding: 0 8px; }
+  .search input { font-size: 13px; min-width: 0; }
+  .search input::placeholder { font-size: 12px; }
+  .search svg { width: 14px; height: 14px; }
+  #btn-theme, #btn-lang, .account { flex: 0 0 auto; }
+  .top-logo { flex: 0 0 auto; min-width: 0; }
+  #btn-theme, #btn-lang, .signin, .signin.out {
+    font-size: 12px;
+    height: 28px;
+    line-height: 28px;
+    padding: 0 7px;
+    max-width: 92px;
+  }
+  .top-logo { display: flex; gap: 0; }
+  .top-logo .mark { width: 28px; height: 28px; }
+  .top-logo .name { display: none; }
   .cp-hero { width: min(240px, 72vw); }
   .cp-hero .face, .hero .face { height: auto; width: 100%; aspect-ratio: 1; }
   .cp-banner { flex-direction: column; align-items: flex-start; }
@@ -1123,7 +1175,16 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
   .profile-row .av-hit, .profile-row .av-hit > img:not(.gold-crown) { width: 64px; height: 64px; }
   .stats-row { flex-wrap: wrap; gap: 8px; }
   .profile-row .av-hit, .profile-row .av-hit > img:not(.gold-crown) { width: 64px; height: 64px; }
-  .pad { padding: 8px 12px 96px; }
+  .toolbar { flex-wrap: wrap; }
+  .hero-meta .cp-jump { flex-direction: column; }
+  .hero-meta .cp-jump .buy, .hero-meta .cp-jump .ghost-btn { width: 100%; }
+  .tape-banner .body { min-height: 0; flex-direction: column; align-items: flex-start; }
+  .rank { order: -1; }
+  .facet > b { width: auto; }
+  .my-lists { grid-template-columns: 1fr; }
+  .cp-sheet { width: 100%; }
+  table { min-width: 520px; }
+  .search { flex: 1 1 auto; min-width: 0; }
   .item-grid, .tape-grid, .trait-grid, .wallet-balances { grid-template-columns: 1fr 1fr; }
   .feed-row { grid-template-columns: 1fr; gap: 4px; }
   .cp-hero { width: min(240px, 72vw); }
@@ -1164,7 +1225,7 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/><path d="M5 19h14"/></svg><span data-i18n="navLaunch">发射</span>
   </button>
   <button class="nav-item" data-page="mint" onclick="switchPage('mint')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 12h8M12 8v8"/></svg><span data-i18n="navMint">正在铸造</span>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 12h8M12 8v8"/></svg><span data-i18n="navMint">铸造</span>
   </button>
   <button class="nav-item" data-page="trade" onclick="switchPage('trade')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 12h10M4 17h13"/><path d="M17 10l3 2-3 2"/></svg><span data-i18n="navTrade">市场</span>
@@ -1228,7 +1289,7 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
             <div class="hero-meta">
               <div>
                 <h2>电路朋克</h2>
-                <div class="by">发射、铸造、市场是三页。点左上角标志去铸造，挂单在市场。</div>
+                <div class="by">1 TAPE + 0.001 BEM</div>
                 <div class="cp-jump">
                   <button class="buy" type="button" onclick="switchPage('mint')">去铸造</button>
                   <button class="buy ghost" type="button" onclick="switchPage('trade')">去市场</button>
@@ -1259,6 +1320,12 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
               </div>
             </section>
 
+            <section class="block tapeout-box">
+              <button class="tapeout-toggle" id="tapeout-toggle" type="button" aria-expanded="false">
+                <span>TapeOut</span>
+                <em id="tapeout-label">打开</em>
+              </button>
+              <div id="tapeout-body" hidden>
             <section class="block">
               <h3 data-i18n="genesisTitle">创世电路 NFT</h3>
               <p class="sub" id="genesis-note" hidden></p>
@@ -1283,6 +1350,8 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
               <p class="sub" id="proto-note" hidden></p>
               <div class="token-grid" id="proto-grid"></div>
             </section>
+            </div>
+            </section>
 
             <section class="block">
               <h3>热门系列</h3>
@@ -1299,6 +1368,14 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
 
           <aside class="rank" id="rank-rows">
             <div class="rank-head"><span>系列</span><span>地板价</span></div>
+            <div class="rank-row" id="rank-tape">
+              <div class="who"><img alt="" src="/api/okx-img?u=https%3A%2F%2Fweb3.okx.com%2Fcdn%2Fnft%2F0085a0bb-6bec-42f8-b180-6c67fbba49b5.png"><div><div class="nm">TapeCode-Test1</div></div></div>
+              <div class="floor">—</div>
+            </div>
+            <div class="rank-row" id="rank-punk">
+              <div class="who"><img alt="" src="/tape-launch/punk-1.png"><div><div class="nm">电路朋克</div></div></div>
+              <div class="floor">铸造中</div>
+            </div>
           </aside>
         </div>
       </div>
@@ -1497,7 +1574,13 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
               <button class="buy ghost" type="button" onclick="switchPage('mint')">去铸造</button>
             </div>
           </aside>
-          <div>
+          <div id="cp-market-col">
+            <div id="cp-log-block">
+              <h3 style="font-size:16px;margin:0 0 8px">交易记录</h3>
+              <div class="feed cp-log" id="cp-log">
+                <div class="feed-row"><span>正在读链上的铸造、挂单和成交。</span></div>
+              </div>
+            </div>
             <h3 style="font-size:16px;margin:0 0 6px">我的挂单</h3>
             <p class="hint" id="cp-my-note" style="text-align:left;margin:0 0 8px">连上钱包后，这里只放你挂着的，方便撤单。</p>
             <div class="my-lists" id="cp-my-lists"></div>
@@ -1535,10 +1618,6 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
                 </thead>
                 <tbody id="cp-holders"></tbody>
               </table>
-            </div>
-            <h3 style="font-size:16px;margin:18px 0 8px">交易记录</h3>
-            <div class="feed cp-log" id="cp-log">
-              <div class="feed-row"><span>正在读链上的铸造、挂单和成交。</span></div>
             </div>
           </div>
         </div>
@@ -1742,6 +1821,7 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
 </div>
 <div class="sheet" id="ext-sheet" hidden>
   <div class="sheet-card">
+    <img id="ext-art" alt="" hidden>
     <h3 id="ext-name">挂单</h3>
     <p id="ext-px"></p>
     <p id="ext-book"></p>

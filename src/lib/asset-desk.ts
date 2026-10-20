@@ -1,14 +1,12 @@
 import {
-  createPublicClient,
   encodeFunctionData,
   formatUnits,
-  http,
   pad,
   parseAbi,
   type Hex,
 } from "viem";
-import { BSC, connectBsc, pretty, quoteExact, swapBem, txUrl as bscTx, units } from "@/lib/bsc";
-import { connectXLayer, txUrl as xTx } from "@/lib/xlayer";
+import { BSC, bscClient, connectBsc, pretty, quoteExact, swapBem, txUrl as bscTx, units } from "@/lib/bsc";
+import { connectXLayer, txUrl as xTx, xClient } from "@/lib/xlayer";
 import { previewTapeSwap, swapTapePool, TAPE_POOL, TAPE_TOKEN, TAPE_USDT } from "@/lib/tape-pool";
 import { ensureProvider } from "@/lib/wallet";
 
@@ -54,8 +52,8 @@ const oftAbi = parseAbi([
   "function send((uint32 dstEid, bytes32 to, uint256 amountLD, uint256 minAmountLD, bytes extraOptions, bytes composeMsg, bytes oftCmd) _sendParam, (uint256 nativeFee, uint256 lzTokenFee) _fee, address _refundAddress) payable",
 ]);
 
-const xl = createPublicClient({ transport: http(XL.rpc, { timeout: 12_000 }) });
-const bsc = createPublicClient({ transport: http(BSC.rpc, { timeout: 12_000 }) });
+const xl = xClient;
+const bsc = bscClient;
 
 const Q96 = 1n << 96n;
 
@@ -208,7 +206,7 @@ type SendParam = {
   oftCmd: Hex;
 };
 
-function bridgePlan(dir: BridgeDir, from: string, raw: string): { client: typeof bsc; oft: Hex; param: SendParam } {
+function bridgePlan(dir: BridgeDir, from: string, raw: string) {
   const amountLD = amountOf(raw, 8);
   const param: SendParam = {
     dstEid: dir === "to-xlayer" ? BRIDGE.toX : BRIDGE.toBsc,
@@ -319,5 +317,6 @@ export function deskError(error: unknown): string {
   if (text === "closed") return "TAPE 官方池还没开。要到 5,000 USDT 才放行，现在流动性很小，没有发出去。";
   if (text === "nowallet") return "没有连上钱包。";
   if (/insufficient funds/i.test(text)) return "余额或 gas 不够。";
+  if (/HTTP request failed|Failed to fetch|network|timeout|Load failed/i.test(text)) return "节点没连上，没有发出去。再点一次。";
   return text ? `没发出去：${text.slice(0, 160)}` : "没发出去。";
 }

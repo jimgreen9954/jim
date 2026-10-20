@@ -5,7 +5,13 @@ const PROJECT = 20687112;
 const PAGE = "https://web3.okx.com/nft/collection/xlayer/tapecode-test1";
 const MARKET = "https://web3.okx.com/priapi/v1/nft/secondary/market";
 const RPC = "https://rpc.xlayer.tech";
-const PAGE_SIZE = 24;
+const LOGO = "https://web3.okx.com/cdn/nft/0085a0bb-6bec-42f8-b180-6c67fbba49b5.png";
+const PAGE_SIZE = 20;
+
+export function tapeImage(value: string): string {
+  const raw = value && /^https:\/\/(web3\.okx\.com|static\.okx\.com|static\.coinall\.ltd)\//.test(value.split("?")[0]) ? value : LOGO;
+  return `/api/okx-img?u=${encodeURIComponent(raw)}`;
+}
 
 export type TapeCard = {
   tokenId: string;
@@ -64,7 +70,7 @@ function empty(error: string | null): TapeCode {
 function okxImage(value: unknown): string {
   if (typeof value !== "string") return "";
   const clean = value.split("?")[0];
-  if (!/^https:\/\/(web3\.okx\.com|static\.coinall\.ltd)\//.test(clean)) return "";
+  if (!/^https:\/\/(web3\.okx\.com|static\.okx\.com|static\.coinall\.ltd)\//.test(clean)) return "";
   return value;
 }
 
@@ -90,6 +96,7 @@ type Item = {
   tokenId?: string;
   name?: string;
   ownerAddress?: string;
+  projectUrl?: string;
   sale?: Sale | null;
   lastPrice?: Sale | null;
 };
@@ -203,6 +210,7 @@ export const getTapeCode = createServerFn({ method: "POST" })
         first ? chainSupply().catch(() => null) : Promise.resolve(null),
       ]);
       const cards = cardsOf(page.list);
+      const fromList = okxImage(page.list.find((row) => row.projectUrl)?.projectUrl);
       return {
         ...empty(null),
         ok: true,
@@ -211,6 +219,8 @@ export const getTapeCode = createServerFn({ method: "POST" })
         name: "TapeCode-Test1",
         contract: (meta.contract || CONTRACT).toLowerCase(),
         supply: first ? supply : null,
+        logo: meta.logo || fromList || LOGO,
+        banner: meta.banner || fromList || LOGO,
         cursor: page.cursor,
         more: cards.length === PAGE_SIZE && Boolean(page.cursor),
         cards,
