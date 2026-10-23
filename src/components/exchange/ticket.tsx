@@ -68,7 +68,7 @@ export function Ticket() {
         <button
           type="button"
           onClick={() => setSide("sell")}
-          className={`min-h-12 border border-gold ${side === "sell" ? "bg-sell text-paper" : "bg-card text-sell"}`}
+          className={`min-h-12 border border-gold ${side === "sell" ? "bg-sell text-[#f7f5f0]" : "bg-card text-sell"}`}
         >
           <span className="block text-sm">{c.askSub}</span>
           <span className="block font-display text-lg italic">{side === "sell" ? label : lang === "zh" ? "卖出" : "Sell"}</span>
@@ -156,18 +156,20 @@ export function Ticket() {
         <dd className="text-right">{fmtSz(bem)}</dd>
         <dt className="text-ink/60">{c.est}</dt>
         <dd className="text-right">{holdBem ? `${fmtSz(hold)} BEM` : fmtUsd(hold)}</dd>
+        <dt className="text-ink/60">{lang === "zh" ? "本单费用" : "This fee"}</dt>
+        <dd className="text-right">{fmtUsd(fee)}</dd>
         <dt className="text-ink/60">
           {c.taker}/{c.maker}
         </dt>
         <dd className="text-right">
-          {takerBps}/{makerBps} bp
+          {(takerBps / 100).toFixed(2)}% / {(makerBps / 100).toFixed(2)}%
         </dd>
       </dl>
 
       <button
         type="button"
         onClick={submit}
-        className={`mt-4 min-h-12 w-full font-display text-xl italic ${side === "buy" ? "bg-foil text-ink" : "bg-sell text-paper"}`}
+        className={`mt-4 min-h-12 w-full font-display text-xl italic ${side === "buy" ? "bg-foil text-ink" : "bg-sell text-[#f7f5f0]"}`}
       >
         {label}
       </button>

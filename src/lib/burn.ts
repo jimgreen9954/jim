@@ -2,6 +2,7 @@ import { createPublicClient, defineChain, encodeFunctionData, http, parseAbi, ty
 import { claimTape, TAPE } from "@/lib/tape-mine";
 import { getProvider } from "@/lib/wallet";
 import { connectXLayer, DEPLOYED, transferCircuit, transferTransistor, transistorHeld, XLAYER } from "@/lib/xlayer";
+import { circuitTip } from "@/lib/circuit-tip";
 
 export const ASH = "0x000000000000000000000000000000000000dEaD" as const;
 
@@ -85,7 +86,7 @@ export async function readAsh(): Promise<AshBoard> {
     transistorHeld(ASH),
     client.readContract({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "nextId" }),
   ]);
-  const last = Number(next) - 1;
+  const last = await circuitTip(client, DEPLOYED.circuits, Number(next));
   const fresh = deadCircuits && deadCircuits.taped === last && Date.now() - deadCircuits.at < 60_000;
   if (!fresh) countDead(last).catch(() => undefined);
   return {

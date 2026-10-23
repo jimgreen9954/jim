@@ -11,7 +11,7 @@ import { BSC_REBATE, KNOWN_XPERP, readPerp } from "@/lib/perp";
 import { currentAccount, getProvider, onAccount } from "@/lib/wallet";
 import { connectXLayer, transferCircuit, transferTransistor, XLAYER } from "@/lib/xlayer";
 import { LOCK_TERMS, readLocks, type LockSeat } from "@/lib/tape-lock";
-import { readTapePool, showQuote, showTape, TAPE_BEM, TAPE_TERMS, TAPE_TOKEN, TAPE_USDT, type TapePosition } from "@/lib/tape-pool";
+import { openTapePrice, readTapePool, showQuote, showTape, TAPE_BEM, TAPE_TERMS, TAPE_TOKEN, TAPE_USDT, type TapePosition } from "@/lib/tape-pool";
 import { GiftDeploy, NewbieGift } from "@/components/exchange/newbie-gift";
 import { PayDesk } from "@/components/exchange/pay-desk";
 import { tapeText } from "@/lib/tape-mine";
@@ -197,7 +197,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
     const load = async () => {
       const mine = ++flight;
       const keys = Object.keys(ERC_BOOKS) as ErcKey[];
-      const [bal, purse, bemRaw, bnbRaw, okbRaw, ercBal, pool] = await Promise.all([
+      const [bal, purse, bemRaw, bnbRaw, okbRaw, ercBal, pool, tapeMark] = await Promise.all([
         readBalances(account).catch(() => null),
         readOkbPurse(account).catch(() => null),
         bemPrice().catch(() => ""),
@@ -205,6 +205,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
         okbPrice().catch(() => ""),
         Promise.all(keys.map((key) => readAsset(account, ERC_BOOKS[key].token).catch(() => 0n))),
         readTapePool(account).catch(() => null),
+        openTapePrice().catch(() => null),
       ]);
       if (dead || mine !== flight) return;
       const bnbUsd = num(bnbRaw);
@@ -224,10 +225,10 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
         add({ key: "okb", name: "OKB", qty: qtyOf(purse.okb, 18, 6), px: okbRaw ? `${okbRaw} USDT` : "—", usd: Number(formatEther(purse.okb)) * num(okbRaw), chain: "xlayer", kind: "native", decimals: 18, raw: purse.okb });
         add({ key: "xusdt", name: zh ? "X Layer USDT" : "X Layer USDT", qty: qtyOf(purse.usdt, 18, 2), px: "1 USDT", usd: Number(formatUnits(purse.usdt, 18)), chain: "xlayer", kind: "erc20", token: OKB.usdt, decimals: 18, raw: purse.usdt });
       }
-      const tapePx = pool && pool.usdt.tape > 0n && pool.usdt.quote > 0n ? Number(formatUnits(pool.usdt.quote, 6)) / Number(formatUnits(pool.usdt.tape, 8)) : 0;
+      const tapePx = tapeMark && tapeMark > 0 ? tapeMark : 0;
       if (pool) {
         add({ key: "tape", name: "TAPE", qty: qtyOf(pool.tape, 8, 4), px: tapePx > 0 ? `${tapePx.toFixed(4)} USDT` : "—", usd: tapePx > 0 ? Number(formatUnits(pool.tape, 8)) * tapePx : null, chain: "xlayer", kind: "erc20", token: TAPE_TOKEN, decimals: 8, raw: pool.tape });
-        add({ key: "usdt0", name: "USDT0", qty: qtyOf(pool.usdtBal, 6, 2), px: "1 USDT", usd: Number(formatUnits(pool.usdtBal, 6)), chain: "xlayer", kind: "erc20", token: TAPE_USDT, decimals: 6, raw: pool.usdtBal });
+        add({ key: "usdt0", name: "USDT", qty: qtyOf(pool.usdtBal, 6, 2), px: "1 USDT", usd: Number(formatUnits(pool.usdtBal, 6)), chain: "xlayer", kind: "erc20", token: TAPE_USDT, decimals: 6, raw: pool.usdtBal });
         const xbemUsd = tapePx > 0 && pool.bem.quote > 0n && pool.bem.tape > 0n ? (Number(formatUnits(pool.bem.tape, 8)) / Number(formatUnits(pool.bem.quote, 8))) * tapePx : Number.NaN;
         add({ key: "xbem", name: zh ? "X Layer BEM" : "X Layer BEM", qty: qtyOf(pool.bemBal, 8, 4), px: Number.isFinite(xbemUsd) ? `${xbemUsd.toFixed(4)} USDT` : "—", usd: Number.isFinite(xbemUsd) ? Number(formatUnits(pool.bemBal, 8)) * xbemUsd : null, chain: "xlayer", kind: "erc20", token: TAPE_BEM, decimals: 8, raw: pool.bemBal });
         for (const pos of pool.positions) {
@@ -240,7 +241,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
           const otherUsd = pos.quote === 0 ? Number(formatUnits(other, 6)) : Number(formatUnits(other, 8)) * (Number.isFinite(bemUsd) ? bemUsd : 0);
           lines.push({
             key: `stake-${pos.id}`,
-            name: zh ? (pos.quote === 0 ? "TAPE/USDT0 质押" : "TAPE/BEM 质押") : pos.quote === 0 ? "TAPE/USDT0 stake" : "TAPE/BEM stake",
+            name: zh ? (pos.quote === 0 ? "TAPE/USDT 质押" : "TAPE/BEM 质押") : pos.quote === 0 ? "TAPE/USDT stake" : "TAPE/BEM stake",
             qty: `${qtyOf(tape, 8, 4)} TAPE`,
             px: tapePx > 0 ? `${tapePx.toFixed(4)} USDT` : "—",
             usd: tapeUsd + otherUsd > 0 ? tapeUsd + otherUsd : null,
@@ -659,7 +660,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
                 )}
               </div>
             ) : <p className="border-t border-gold/30 px-3 py-3 text-xs text-ink/50 sm:px-4">{zh ? "点一项资产。一对一或一对多都在下面填，不会跳走。" : "Pick an asset. One or many stays on this page."}</p>}
-            <p className="border-t border-gold/30 px-4 py-2 text-xs leading-5 text-ink/55">{zh ? "TAPE 在最前，BEM 其次，其余按金额从高到低。钱包余额约 20 秒重读，不等电路名单。质押和保证金不能在这里转。TAPE 用 TAPE/USDT0 池子价。晶体管用最高买单。没有价格的金额写成 —，不写成 0。" : "TAPE is first, BEM is second, then the rest by value. Wallet balances refresh about every 20 seconds and do not wait for the circuit list. Stakes and margin cannot be sent here. TAPE uses the TAPE/USDT0 pool. A missing price is shown as —, not zero."}</p>
+            <p className="border-t border-gold/30 px-4 py-2 text-xs leading-5 text-ink/55">{zh ? "TAPE 在最前，BEM 其次，其余按金额从高到低。钱包余额约 20 秒重读，不等电路名单。质押和保证金不能在这里转。TAPE 用现货池的价，价格没读到写成 —。" : "TAPE is first, BEM is second, then the rest by value. Wallet balances refresh about every 20 seconds and do not wait for the circuit list. Stakes and margin cannot be sent here. TAPE uses the spot pool, and a missing price is shown as —."}</p>
           </>
         ) : null}
       </div>
@@ -818,7 +819,7 @@ function StakeLines({ zh, stakes }: { zh: boolean; stakes: { lp: TapePosition[];
     const tape = slice(row.shares, row.quote === 0 ? stakes.usdtShares : stakes.bemShares, row.quote === 0 ? stakes.usdtTape : stakes.bemTape);
     const other = slice(row.shares, row.quote === 0 ? stakes.usdtShares : stakes.bemShares, row.quote === 0 ? stakes.usdtQuote : stakes.bemQuote);
     const term = TAPE_TERMS[row.term];
-    return { key: `lp-${row.id}`, name: `TAPE/${row.quote === 0 ? "USDT0" : "BEM"} #${row.id}`, qty: `${showTape(tape)} TAPE · ${showQuote(row.quote as 0 | 1, other)} ${row.quote === 0 ? "USDT0" : "BEM"}`, term: zh ? term?.zh : term?.en, until: when(row.unlock) };
+    return { key: `lp-${row.id}`, name: `TAPE/${row.quote === 0 ? "USDT" : "BEM"} #${row.id}`, qty: `${showTape(tape)} TAPE · ${showQuote(row.quote as 0 | 1, other)} ${row.quote === 0 ? "USDT" : "BEM"}`, term: zh ? term?.zh : term?.en, until: when(row.unlock) };
   }) ?? [];
   for (const seat of stakes?.seats ?? []) {
     const term = LOCK_TERMS[seat.term];

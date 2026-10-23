@@ -24,9 +24,6 @@ export type LiveTransistor = {
   bidBnb: number | null;
   bidBem: number | null;
   bidQty: number;
-  token: string;
-  tokenId: number;
-  bidId: number | null;
   prints: LivePrint[];
 };
 
@@ -43,28 +40,7 @@ export type TapeoutLive = {
   bidding: number;
 };
 
-export type ProtocolCircuit = {
-  id: string;
-  tokenId: string;
-  circuit: string;
-  grossBnb: number;
-  tx: string;
-  at: number;
-};
-
-export type ProtocolNftFeed = {
-  ok: boolean;
-  error: string | null;
-  asOf: string | null;
-  circuits: ProtocolCircuit[];
-};
-
 export const getTapeoutLive = createServerFn({ method: "GET" }).handler(async (): Promise<TapeoutLive> => {
   const { loadTapeoutLive } = await import("./tapeout-live.server");
   return loadTapeoutLive();
-});
-
-export const getProtocolNfts = createServerFn({ method: "GET" }).handler(async (): Promise<ProtocolNftFeed> => {
-  const { loadProtocolNfts } = await import("./tapeout-live.server");
-  return loadProtocolNfts();
 });

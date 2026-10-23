@@ -4,9 +4,7 @@ import { fmt, fmtPx, fmtSz } from "@/lib/format";
 import { buildBook, spreadBps, type Level } from "@/lib/match-engine";
 
 export function Book() {
-  const enginePrice = useExchange((s) => s.engine.price);
-  const live = useExchange((s) => s.chainBem);
-  const price = live && live > 0 ? live : enginePrice;
+  const price = useExchange((s) => s.engine.price);
   const orders = useExchange((s) => s.engine.orders);
   const clock = useExchange((s) => s.engine.clock);
   const market = useExchange((s) => s.market);

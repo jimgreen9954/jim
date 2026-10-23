@@ -1,8 +1,9 @@
 import { createPublicClient, encodeFunctionData, http, parseAbi, type Hex } from "viem";
-import { BSC, TxPending, connectBsc, waitOk } from "@/lib/bsc";
+import { BSC, DESK_FEE_BPS, FEE_TO, TxPending, connectBsc, waitOk, waitReceipt } from "@/lib/bsc";
 import { OFFICIAL } from "@/lib/official-books";
 import type { CircuitSigned } from "@/lib/circuit-board";
 import { getProvider } from "@/lib/wallet";
+import { deskParts } from "@/lib/invite-cut";
 
 const client = createPublicClient({ transport: http(BSC.rpc) });
 
@@ -29,6 +30,10 @@ const moveAbi = parseAbi([
   "function transferFrom(address from, address to, uint256 tokenId)",
 ]);
 
+function feeOf(notional: bigint): bigint {
+  return (notional * BigInt(DESK_FEE_BPS)) / 10_000n;
+}
+
 async function send(from: string, to: Hex, data: Hex, value = 0n): Promise<Hex> {
   const eth = getProvider();
   if (!eth) throw new Error("nowallet");
@@ -39,17 +44,36 @@ async function send(from: string, to: Hex, data: Hex, value = 0n): Promise<Hex> 
   })) as Hex;
 }
 
-async function finish(hash: Hex): Promise<Hex> {
+async function payFee(from: string, notional: bigint): Promise<void> {
+  const parts = await deskParts("bsc", from, notional);
+  const pay = async (to: Hex, value: bigint) => {
+    if (value <= 0n) return;
+    const hash = await send(from, to, "0x", value);
+    try {
+      await waitOk(hash);
+    } catch (err) {
+      if (err instanceof TxPending) throw err;
+      throw new Error("reverted");
+    }
+  };
+  if (parts.reward > 0n && parts.referrer) await pay(parts.referrer, parts.reward);
+  if (parts.desk > 0n) await pay(FEE_TO, parts.desk);
+}
+
+async function finishPaid(hash: Hex): Promise<Hex> {
   try {
     await waitOk(hash);
     return hash;
   } catch (err) {
-    if (err instanceof TxPending) throw err;
-    throw new Error("revert");
+    if (err instanceof TxPending) {
+      err.paid = true;
+      throw err;
+    }
+    throw new Error("fee-kept");
   }
 }
 
-/** Eat an official bid. The bid is re-read on chain first. One signature, the official market only. */
+/** Eat an official bid. The bid is re-read on chain first. 0.2% is paid before the official fill. */
 export async function fillOfficialBid(from: string, id: bigint, quantity: bigint, transistors: string, priceWei: bigint): Promise<Hex> {
   if (quantity < 1n) throw new Error("amount");
   const row = await client.readContract({
@@ -60,6 +84,7 @@ export async function fillOfficialBid(from: string, id: bigint, quantity: bigint
   });
   if (row[1].toLowerCase() !== transistors.toLowerCase() || row[2] !== priceWei) throw new Error("gone");
   if (row[5] < quantity) throw new Error("gone");
+  const notional = row[2] * quantity;
   const data = encodeFunctionData({ abi: bidAbi, functionName: "fillBid", args: [id, quantity] });
   const approved = await client.readContract({
     address: row[1],
@@ -82,7 +107,13 @@ export async function fillOfficialBid(from: string, id: bigint, quantity: bigint
     }
   }
   await client.call({ account: from as Hex, to: OFFICIAL.transistorMarket, data });
-  return finish(await send(from, OFFICIAL.transistorMarket, data));
+  await payFee(from, notional);
+  try {
+    return await finishPaid(await send(from, OFFICIAL.transistorMarket, data));
+  } catch (err) {
+    if (err instanceof TxPending || (err instanceof Error && err.message === "fee-kept")) throw err;
+    throw new Error("fee-kept");
+  }
 }
 
 /** Place a bid on a processor that is already in the official snapshot. */
@@ -96,7 +127,13 @@ export async function placeOfficialBid(from: string, transistors: Hex, tokenId: 
     args: [transistors, tokenId, priceWei, quantity],
   });
   await client.call({ account: from as Hex, to: OFFICIAL.transistorMarket, data, value: notional });
-  return finish(await send(from, OFFICIAL.transistorMarket, data, notional));
+  await payFee(from, notional);
+  try {
+    return await finishPaid(await send(from, OFFICIAL.transistorMarket, data, notional));
+  } catch (err) {
+    if (err instanceof TxPending || (err instanceof Error && err.message === "fee-kept")) throw err;
+    throw new Error("fee-kept");
+  }
 }
 
 /** Buy one official circuit listing at the exact wei price from the snapshot. */
@@ -104,10 +141,16 @@ export async function buyOfficialCircuit(from: string, id: bigint, priceWei: big
   if (priceWei <= 0n) throw new Error("amount");
   const data = encodeFunctionData({ abi: listAbi, functionName: "buy", args: [id, priceWei] });
   await client.call({ account: from as Hex, to: OFFICIAL.circuitMarket, data, value: priceWei });
-  return finish(await send(from, OFFICIAL.circuitMarket, data, priceWei));
+  await payFee(from, priceWei);
+  try {
+    return await finishPaid(await send(from, OFFICIAL.circuitMarket, data, priceWei));
+  } catch (err) {
+    if (err instanceof TxPending || (err instanceof Error && err.message === "fee-kept")) throw err;
+    throw new Error("fee-kept");
+  }
 }
 
-/** Fill one signed circuit ask. The price in the signature is what the wallet pays. */
+/** Fill one signed circuit ask. The exchange price includes its own fee. Ours is another 0.2%, paid first. */
 export async function fillSignedCircuit(from: string, ask: CircuitSigned): Promise<Hex> {
   const price = BigInt(ask.price);
   const value = BigInt(ask.buyerCost || ask.price);
@@ -127,7 +170,13 @@ export async function fillSignedCircuit(from: string, ask: CircuitSigned): Promi
     ? encodeFunctionData({ abi: signedAbiEpoch, functionName: "fillSignedAsk", args: [{ ...common, feeEpoch: BigInt(ask.feeEpoch) }, ask.signature, from as Hex] })
     : encodeFunctionData({ abi: signedAbi, functionName: "fillSignedAsk", args: [common, ask.signature, from as Hex] });
   await client.call({ account: from as Hex, to: ask.exchange, data, value });
-  return finish(await send(from, ask.exchange, data, value));
+  await payFee(from, price);
+  try {
+    return await finishPaid(await send(from, ask.exchange, data, value));
+  } catch (err) {
+    if (err instanceof TxPending || (err instanceof Error && err.message === "fee-kept")) throw err;
+    throw new Error("fee-kept");
+  }
 }
 
 export const CAPACITY_EXCHANGE = "0x9273d46b77B67Ba9B24177C25EC25fcbADf27040" as Hex;

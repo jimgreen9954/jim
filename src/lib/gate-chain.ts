@@ -1,15 +1,18 @@
 import { encodeAbiParameters, encodeFunctionData, formatUnits, parseAbi, parseUnits, type Hex } from "viem";
-import { BSC, connectBsc, readBalances } from "@/lib/bsc";
+import { BSC, FEE_TO, connectBsc, readBalances } from "@/lib/bsc";
 import { GATE_BYTECODE } from "@/lib/gate-artifact";
 import { getProvider } from "@/lib/wallet";
 
 const KEY = "tapeliquid-gate-perp";
-export const GATE = "0xe380b8449280a1da46952dba0de0418e0958d668";
+const FIXED = "tapeliquid-gate-fixed";
+const HOLD = "tapeliquid-gate-hold";
+export const GATE = "0x798637b6d18cE053D69CfC0B08Ead105de352c11";
 const USDT = BSC.usdt;
 
 const abi = parseAbi([
   "function nextQuote() view returns (uint256)",
   "function nextDeal() view returns (uint256)",
+  "function markOf(uint8) view returns (uint256)",
   "function marks(uint8) view returns (uint256)",
   "function markedAt(uint8) view returns (uint256)",
   "function quotes(uint256) view returns (address user, uint8 market, bool long, uint96 margin, uint16 lev, bool open, uint128 price)",
@@ -36,8 +39,36 @@ const erc20 = parseAbi([
 export type ChainOrder = { id: string; market: number; user: string; long: boolean; price: number; margin: number; lev: number };
 export type ChainDeal = { id: string; market: number; longUser: string; shortUser: string; entry: number; marginL: number; marginS: number; base: number; levL: number; levS: number };
 
+export function gateHolds(): boolean {
+  return typeof window !== "undefined" && /^0x[a-fA-F0-9]{40}$/.test(window.localStorage.getItem(HOLD) ?? "");
+}
+
 export function gateAddress(): string {
   return GATE;
+}
+
+export async function deployFixedGate(from: string): Promise<string> {
+  if (from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("oracle");
+  const existing = window.localStorage.getItem(HOLD) ?? "";
+  if (/^0x[a-fA-F0-9]{40}$/.test(existing)) return existing;
+  const args = encodeAbiParameters([{ type: "address" }], [USDT]);
+  const data = (GATE_BYTECODE + args.slice(2)) as Hex;
+  const hash = await send(from, undefined, data, 8_000_000n);
+  const receipt = await (await client()).getTransactionReceipt({ hash });
+  const addr = receipt.contractAddress ?? "";
+  if (receipt.status !== "success" || !addr) throw new Error("revert");
+  window.localStorage.setItem(HOLD, addr);
+  window.localStorage.setItem(FIXED, addr);
+  return addr;
+}
+
+export async function gateReady(perp: string, market: number): Promise<boolean> {
+  try {
+    await (await client()).readContract({ address: perp as Hex, abi, functionName: "markOf", args: [market] });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function priceWei(price: number): bigint {
@@ -102,24 +133,15 @@ async function approve(from: string, perp: string, amount: bigint) {
   await send(from, USDT, data, 80_000n);
 }
 
-function diverge(stored: number, official: number): boolean {
-  if (!(official > 0) || !(stored > 0)) return true;
-  const ratio = stored / official;
-  return ratio < 0.97 || ratio > 1.03;
-}
-
 export async function gateMark(perp: string, market: number): Promise<number> {
   const c = await client();
-  const prev = await c.readContract({ address: perp as Hex, abi, functionName: "marks", args: [market] });
-  return Number(formatUnits(prev, 18));
-}
-
-async function alignMark(from: string, perp: string, market: number, official: number) {
-  if (!(official > 0)) throw new Error("mark");
-  const stored = await gateMark(perp, market);
-  if (diverge(stored, official)) await pushMark(from, perp, market, official);
-  const next = await gateMark(perp, market);
-  if (diverge(next, official)) throw new Error("mark");
+  try {
+    const live = await c.readContract({ address: perp as Hex, abi, functionName: "markOf", args: [market] });
+    return Number(formatUnits(live, 18));
+  } catch {
+    const prev = await c.readContract({ address: perp as Hex, abi, functionName: "marks", args: [market] });
+    return Number(formatUnits(prev, 18));
+  }
 }
 
 export async function pushMark(from: string, perp: string, market: number, price: number) {
@@ -130,8 +152,12 @@ export async function pushMark(from: string, perp: string, market: number, price
   ]);
   const px = priceWei(price);
   const now = BigInt(Math.floor(Date.now() / 1000));
-  if (prev !== 0n && now < at + 10n) return;
-  if (prev !== 0n && (px * 2n > prev * 3n || prev * 2n > px * 3n)) return;
+  if (prev !== 0n && now < at + 30n) return;
+  if (prev !== 0n && now < at + 1800n) {
+    const cap = prev + prev / 200n;
+    const floor = prev - prev / 200n;
+    if (px > cap || px < floor) throw new Error("step");
+  }
   const data = encodeFunctionData({ abi, functionName: "push", args: [market, px] });
   await send(from, perp as Hex, data, 120_000n);
 }
@@ -141,7 +167,6 @@ export async function openGate(from: string, perp: string, market: number, long:
   if (amount < parseUnits("1", 18) || amount > parseUnits("500", 18)) throw new Error("margin");
   const balances = await readBalances(from);
   if (balances.usdt < amount) throw new Error("usdt");
-  await alignMark(from, perp, market, mark);
   await approve(from, perp, amount);
   const px = priceWei(limit);
   const data = encodeFunctionData({ abi, functionName: "open", args: [market, long, amount, lev, px] });
@@ -153,7 +178,6 @@ export async function takeGateChain(from: string, perp: string, id: bigint, marg
   if (amount < parseUnits("1", 18)) throw new Error("margin");
   const balances = await readBalances(from);
   if (balances.usdt < amount) throw new Error("usdt");
-  await alignMark(from, perp, market, official);
   await approve(from, perp, amount);
   const data = encodeFunctionData({ abi, functionName: "take", args: [id, amount, lev] });
   return send(from, perp as Hex, data, 400_000n);
@@ -164,8 +188,7 @@ export async function cancelGateChain(from: string, perp: string, id: bigint) {
   return send(from, perp as Hex, data, 200_000n);
 }
 
-export async function closeGateChain(from: string, perp: string, id: bigint, market: number, official: number) {
-  await alignMark(from, perp, market, official);
+export async function closeGateChain(from: string, perp: string, id: bigint) {
   const data = encodeFunctionData({ abi, functionName: "close", args: [id] });
   return send(from, perp as Hex, data, 250_000n);
 }

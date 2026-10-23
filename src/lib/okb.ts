@@ -1,4 +1,4 @@
-import { createPublicClient, encodeFunctionData, formatUnits, http, parseAbi, parseAbiItem, type Hex } from "viem";
+import { createPublicClient, encodeFunctionData, encodePacked, formatUnits, http, parseAbi, parseAbiItem, type Hex } from "viem";
 import { FEE_TO, TxPending, type PoolPrint, units, pretty } from "@/lib/bsc";
 import { deskParts } from "@/lib/invite-cut";
 import { ensureProvider, rememberAccount } from "@/lib/wallet";
@@ -29,8 +29,10 @@ export async function xCap(token: Hex): Promise<number> {
 
 const routerAbi = parseAbi([
   "function getAmountsOut(uint256 amountIn, address[] path) view returns (uint256[] amounts)",
+  "function getAmountsIn(uint256 amountOut, address[] path) view returns (uint256[] amounts)",
   "function swapExactTokensForETH(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline) returns (uint256[] amounts)",
   "function swapExactETHForTokens(uint256 amountOutMin, address[] path, address to, uint256 deadline) payable returns (uint256[] amounts)",
+  "function swapETHForExactTokens(uint256 amountOut, address[] path, address to, uint256 deadline) payable returns (uint256[] amounts)",
 ]);
 
 const erc20 = parseAbi([
@@ -180,9 +182,246 @@ export async function quoteOkb(side: "buy" | "sell", amountIn: bigint): Promise<
   return out;
 }
 
+const BOOK_USDT = "0x779Ded0c9e1022225f8E0630b35a9b54bE713736" as const;
+
+export async function bookOkbRate(): Promise<bigint> {
+  const amounts = await xClient.readContract({
+    address: OKB.router,
+    abi: routerAbi,
+    functionName: "getAmountsOut",
+    args: [10n ** 18n, [OKB.wokb, BOOK_USDT]],
+  });
+  return amounts[amounts.length - 1] ?? 0n;
+}
+
+export async function okbForBookUsdt(usdtOut: bigint): Promise<bigint> {
+  if (usdtOut <= 0n) return 0n;
+  const amounts = await xClient.readContract({
+    address: OKB.router,
+    abi: routerAbi,
+    functionName: "getAmountsIn",
+    args: [usdtOut, [OKB.wokb, BOOK_USDT]],
+  });
+  return amounts[0] ?? 0n;
+}
+
+export async function okbOutOfBookUsdt(usdtIn: bigint): Promise<bigint> {
+  if (usdtIn <= 0n) return 0n;
+  const amounts = await xClient.readContract({
+    address: OKB.router,
+    abi: routerAbi,
+    functionName: "getAmountsOut",
+    args: [usdtIn, [BOOK_USDT, OKB.wokb]],
+  });
+  return amounts[amounts.length - 1] ?? 0n;
+}
+
+export async function readNativeOkb(account: string): Promise<bigint> {
+  return xClient.getBalance({ address: account as Hex });
+}
+
+async function approveBookUsdt(from: string, need: bigint) {
+  const allowance = await xClient.readContract({
+    address: BOOK_USDT,
+    abi: erc20,
+    functionName: "allowance",
+    args: [from as Hex, OKB.router],
+  });
+  if (allowance >= need) return;
+  await waitOkX(await send(from, BOOK_USDT, encodeFunctionData({ abi: erc20, functionName: "approve", args: [OKB.router, need] })));
+}
+
+export async function buyExactBookUsdt(from: string, usdtOut: bigint, okbMax: bigint) {
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20);
+  const data = encodeFunctionData({
+    abi: routerAbi,
+    functionName: "swapETHForExactTokens",
+    args: [usdtOut, [OKB.wokb, BOOK_USDT], from as Hex, deadline],
+  });
+  await waitOkX(await send(from, OKB.router, data, okbMax));
+}
+
+export async function sellBookUsdtForOkb(from: string, usdtIn: bigint, minOkb: bigint) {
+  await approveBookUsdt(from, usdtIn);
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20);
+  const data = encodeFunctionData({
+    abi: routerAbi,
+    functionName: "swapExactTokensForETH",
+    args: [usdtIn, minOkb, [BOOK_USDT, OKB.wokb], from as Hex, deadline],
+  });
+  await waitOkX(await send(from, OKB.router, data));
+}
+
 export async function okbPrice(): Promise<string> {
   const out = await quoteOkb("sell", 10n ** 18n);
   return pretty(out, OKB.usdtDecimals, 2);
+}
+
+export const X_BEM = {
+  token: "0x60e62Efa9405d6873C5deaBD4E6CC91c25363952" as const,
+  decimals: 8,
+  router: "0x4f0C28f5926AFDA16bf2506D5D9e57Ea190f9bcA" as const,
+  quoter: "0xD1b797D92d87B688193A2B976eFc8D577D204343" as const,
+  pool: "0x2ccf8aa17f5df9fb5d51c9de12135a913ff29f7a" as const,
+  usdt: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736" as const,
+} as const;
+
+const xBemQuoterAbi = parseAbi([
+  "function quoteExactInput(bytes path, uint256 amountIn) returns (uint256 amountOut, uint160[] sqrtPriceX96AfterList, uint32[] initializedTicksCrossed, uint256 gasEstimate)",
+]);
+const xBemRouterAbi = parseAbi([
+  "function exactInput((bytes path, address recipient, uint256 amountIn, uint256 amountOutMinimum) params) payable returns (uint256 amountOut)",
+]);
+const swapV3 = parseAbiItem("event Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick)");
+
+function xBemPath(side: "buy" | "sell"): Hex {
+  return side === "buy"
+    ? encodePacked(["address", "uint24", "address", "uint24", "address"], [X_BEM.usdt, 500, OKB.wokb, 10000, X_BEM.token])
+    : encodePacked(["address", "uint24", "address", "uint24", "address"], [X_BEM.token, 10000, OKB.wokb, 500, X_BEM.usdt]);
+}
+
+export async function quoteXBem(side: "buy" | "sell", amountIn: bigint): Promise<bigint> {
+  if (amountIn <= 0n) return 0n;
+  const quoted = await xClient.simulateContract({
+    address: X_BEM.quoter,
+    abi: xBemQuoterAbi,
+    functionName: "quoteExactInput",
+    args: [xBemPath(side), amountIn],
+  });
+  return quoted.result[0] ?? 0n;
+}
+
+export async function xBemPrice(): Promise<string> {
+  const out = await quoteXBem("sell", 10n ** BigInt(X_BEM.decimals));
+  return pretty(out, 6, 2);
+}
+
+export async function readXBemPurse(account: string): Promise<{ bem: bigint; usdt: bigint }> {
+  const [bem, usdt] = await Promise.all([
+    xClient.readContract({ address: X_BEM.token, abi: erc20, functionName: "balanceOf", args: [account as Hex] }),
+    xClient.readContract({ address: X_BEM.usdt, abi: erc20, functionName: "balanceOf", args: [account as Hex] }),
+  ]);
+  return { bem, usdt };
+}
+
+async function approveToken(from: string, token: Hex, spender: Hex, need: bigint) {
+  const allowance = await xClient.readContract({
+    address: token,
+    abi: erc20,
+    functionName: "allowance",
+    args: [from as Hex, spender],
+  });
+  if (allowance >= need) return;
+  if (allowance > 0n) await waitOkX(await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, 0n] })));
+  await waitOkX(await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, need] })));
+}
+
+export async function swapXBem(from: string, side: "buy" | "sell", amount: string, floor?: bigint): Promise<Hex> {
+  const owner = from as Hex;
+  const decimals = side === "buy" ? 6 : X_BEM.decimals;
+  const amountIn = units(amount, decimals);
+  if (amountIn <= 0n) throw new Error("amount");
+  const parts = await deskParts("xlayer", from, amountIn);
+  const swapIn = parts.swapIn;
+  if (swapIn <= 0n) throw new Error("amount");
+  const who = from.toLowerCase();
+  const swapKey = `tl-swap:${who}:xbem-${side}:${amountIn}`;
+  const feeKey = `tl-fee:${who}:xbem-${side}:${amountIn}`;
+  const already = await resumeX(swapKey);
+  if (already) {
+    forget(feeKey);
+    return already;
+  }
+  const quoted = await quoteXBem(side, swapIn);
+  const fresh = (quoted * BigInt(10_000 - 100)) / 10_000n;
+  if (floor != null && fresh < floor) throw new Error("quote-moved");
+  const minOut = floor ?? fresh;
+  const token = side === "buy" ? X_BEM.usdt : X_BEM.token;
+  await approveToken(from, token, X_BEM.router, swapIn);
+  let paid = false;
+  const ref = parts.referrer;
+  if (parts.reward > 0n && ref) {
+    await stepX(`${feeKey}:ref`, () => send(from, token, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [ref, parts.reward] })));
+    paid = true;
+  }
+  if (parts.desk > 0n) {
+    await stepX(feeKey, () => send(from, token, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, parts.desk] })));
+    paid = true;
+  }
+  const data = encodeFunctionData({
+    abi: xBemRouterAbi,
+    functionName: "exactInput",
+    args: [{ path: xBemPath(side), recipient: owner, amountIn: swapIn, amountOutMinimum: minOut }],
+  });
+  let hash: Hex;
+  try {
+    hash = await send(from, X_BEM.router, data);
+  } catch (err) {
+    if (paid) throw new Error("fee-kept");
+    throw err;
+  }
+  remember(swapKey, hash);
+  try {
+    await waitOkX(hash);
+    forget(swapKey);
+    forget(feeKey);
+    return hash;
+  } catch (err) {
+    if (err instanceof TxPending) {
+      err.paid = paid;
+      throw err;
+    }
+    if (err instanceof Error && err.message === "reverted") {
+      forget(swapKey);
+      throw new Error(paid ? "fee-kept" : "reverted");
+    }
+    if (paid) throw new Error("fee-kept");
+    throw err;
+  }
+}
+
+export async function xBemPrints(): Promise<PoolPrint[]> {
+  const head = await xClient.getBlockNumber();
+  let logs: Awaited<ReturnType<typeof xClient.getLogs<typeof swapV3>>> = [];
+  for (const span of [90n, 40n]) {
+    try {
+      logs = await xClient.getLogs({ address: X_BEM.pool, event: swapV3, fromBlock: head > span ? head - span : 0n, toBlock: head });
+      break;
+    } catch {
+      logs = [];
+    }
+  }
+  const rows = logs.slice(-8).reverse();
+  let rate = 0n;
+  try {
+    rate = await bookOkbRate();
+  } catch {
+    rate = 0n;
+  }
+  const signers = await Promise.all(rows.map(async (log) => {
+    try {
+      const tx = await xClient.getTransaction({ hash: log.transactionHash });
+      return tx.from ?? "";
+    } catch {
+      return "";
+    }
+  }));
+  return rows.flatMap((log, index) => {
+    const amount0 = log.args.amount0 ?? 0n;
+    const amount1 = log.args.amount1 ?? 0n;
+    const bem = amount0 < 0n ? -amount0 : amount0;
+    const wokb = amount1 < 0n ? -amount1 : amount1;
+    if (bem === 0n) return [];
+    const usdt = rate > 0n ? (wokb * rate) / 10n ** 18n : 0n;
+    return [{
+      id: `${log.transactionHash}-${log.logIndex}`,
+      side: amount0 < 0n ? "buy" as const : "sell" as const,
+      bem: pretty(bem, X_BEM.decimals, 4),
+      usdt: pretty(usdt, 6, 2),
+      tx: log.transactionHash,
+      who: signers[index] ?? "",
+    }];
+  });
 }
 
 export async function readOkbPurse(account: string): Promise<{ okb: bigint; usdt: bigint }> {

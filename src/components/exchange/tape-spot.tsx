@@ -2,16 +2,18 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { SideRail } from "@/components/exchange/side-rail";
 import { formatUnits } from "viem";
 import { chainNote, XLAYER } from "@/lib/xlayer";
-import { quoteOkb } from "@/lib/okb";
+import { bookOkbRate } from "@/lib/okb";
 import { TapeCircuits } from "@/components/exchange/tape-circuits";
 import { ContainerDesk } from "@/components/exchange/capacitor-desk";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import {
   baseText,
-  cancelSpot,
+  cancelSpotPaid,
   deploySpot,
-  placeSpot,
+  isOkbBid,
+  placeSpotPaid,
   readSpotView,
+  readDustHeads,
   peekSpotPrints,
   blockStamp,
   spotAddress,
@@ -24,7 +26,9 @@ import {
   type SpotMarket,
   type SpotPrint,
   type SpotPurse,
+  type BookDust,
 } from "@/lib/tape-spot";
+import { openTapePrice } from "@/lib/tape-pool";
 
 const UNIT = 100_000_000n;
 const NAMES = ["TAPE", "NAND", "LATCH"] as const;
@@ -37,11 +41,11 @@ function typedUsdt(text: string, unit: MoneyUnit, rate: bigint): bigint {
   return raw * rate / 1_000_000n;
 }
 
-function moneyText(usdt: bigint, unit: MoneyUnit, rate: bigint): string {
-  if (unit !== "okb" || rate <= 0n) return usdtText(usdt, 2);
+function moneyText(usdt: bigint, unit: MoneyUnit, rate: bigint, digits = 2): string {
+  if (unit !== "okb" || rate <= 0n) return usdtText(usdt, digits);
   const okb = usdt * 1_000_000n / rate;
-  const short = usdtText(okb, 2);
-  return short === "0" && okb > 0n ? usdtText(okb, 4) : short;
+  const short = usdtText(okb, digits);
+  return short === "0" && okb > 0n ? usdtText(okb, Math.max(digits, 4)) : short;
 }
 
 function cost(market: number, size: bigint, price: bigint): bigint {
@@ -62,7 +66,9 @@ function Plan({ zh, market, side, price, amount, asks, bids, purse, name, unit, 
     return null;
   }
   const scale = market === 0 ? UNIT : 1n;
-  const walletBuy = purse && px > 0n ? purse.usdt * scale / px : 0n;
+  const spendableOkb = purse && purse.okb > 2_000_000_000_000_000n ? purse.okb - 2_000_000_000_000_000n : 0n;
+  const budget = !purse ? 0n : unit === "okb" ? (rate > 0n ? spendableOkb * rate / 10n ** 18n : 0n) : purse.usdt;
+  const walletBuy = purse && px > 0n ? budget * scale / px : 0n;
   const walletSell = purse ? (market === 0 ? purse.tape : market === 1 ? purse.nand : purse.latch) : 0n;
   const book = side === "buy" ? asks : bids;
   let left = qty;
@@ -98,7 +104,7 @@ function Quote({ zh, market, side, price, amount, unit, rate }: { zh: boolean; m
     return null;
   }
   if (pay === 0n || fee === 0n) return <p className="mt-2 text-xs text-sell">{zh ? "这一笔太小，手续费舍成 0，合约不会收。" : "This order is too small. The fee rounds to zero and the contract will not take it."}</p>;
-  const label = unit === "okb" ? "OKB" : "USDT0";
+  const label = unit === "okb" ? "OKB" : "USDT";
   return (
     <div className="mt-2 grid grid-cols-3 border border-gold/40 text-center">
       <p className="px-1 py-2"><span className="block text-[10px] text-ink/45">{side === "buy" ? (zh ? "你支付" : "You pay") : (zh ? "买方支付" : "Buyer pays")}</span><span className="font-mono text-sm">{moneyText(pay, unit, rate)} {label}</span></p>
@@ -106,6 +112,27 @@ function Quote({ zh, market, side, price, amount, unit, rate }: { zh: boolean; m
       <p className="px-1 py-2"><span className="block text-[10px] text-ink/45">{side === "sell" ? (zh ? "你实收" : "You receive") : (zh ? "卖方实收" : "Seller receives")}</span><span className="font-mono text-sm">{moneyText(pay - fee, unit, rate)}</span></p>
     </div>
   );
+}
+
+function usdRaw(n: number): bigint {
+  if (!(n > 0) || !Number.isFinite(n)) return 0n;
+  const [whole, frac = ""] = n.toFixed(6).split(".");
+  return BigInt(`${whole}${frac.padEnd(6, "0").slice(0, 6)}`);
+}
+
+function okbText(amount: bigint): string {
+  const [whole, frac = ""] = formatUnits(amount, 18).split(".");
+  const cut = frac.slice(0, 4).replace(/0+$/, "");
+  return `${Number(whole).toLocaleString("en-US")}${cut ? `.${cut}` : ""}`;
+}
+
+function ago(ts: number): string {
+  if (!ts) return "—";
+  const sec = Math.max(0, Math.floor(Date.now() / 1000) - ts);
+  if (sec < 60) return `${sec}s`;
+  if (sec < 3600) return `${Math.floor(sec / 60)}m`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h`;
+  return `${Math.floor(sec / 86400)}d`;
 }
 
 function plainBase(market: number, amount: bigint): string {
@@ -137,7 +164,7 @@ function BookRow({ priceLabel, sizeLabel, totalLabel, cap, value, onChange, onPi
         <input value={value} placeholder={`≤${cap}`} inputMode="decimal" onChange={(event) => onChange(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); if (!busy) onTake(); } }} aria-label={zh ? `填数量，最多 ${cap}。不填就是这一档` : `Size, at most ${cap}. Blank takes the level.`} className="box-border h-7 w-full min-w-0 border border-ink/20 bg-paper px-1.5 text-right font-mono text-xs text-ink outline-none placeholder:text-ink/35 focus:border-ink" />
       </div>
       <div className="relative hidden bg-card py-1 pr-2 lg:block">
-        <button type="button" disabled={busy} onClick={() => { if (!busy) onTake(); }} className={`h-7 w-full border bg-paper text-xs disabled:opacity-40 ${bid ? "border-[#f23645] text-[#f23645]" : "border-[#089981] text-[#089981]"}`}>{bid ? (zh ? "卖出" : "Sell") : (zh ? "买入" : "Buy")}</button>
+        <button type="button" disabled={busy} onClick={() => { if (!busy) onTake(); }} className={`h-7 w-full text-xs text-white disabled:opacity-40 ${bid ? "bg-[#c47b7b]" : "bg-[#6f9a86]"}`}>{bid ? (zh ? "卖出" : "Sell") : (zh ? "买入" : "Buy")}</button>
       </div>
       </div>
       {on ? (
@@ -161,11 +188,16 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   const [amount, setAmount] = useState("");
   const [unit, setUnit] = useState<MoneyUnit>("usdt");
   const [okbRate, setOkbRate] = useState(0n);
+  const [poolPx, setPoolPx] = useState<number | null>(null);
   const [bids, setBids] = useState<Level[]>([]);
   const [asks, setAsks] = useState<Level[]>([]);
+  const [dustAsk, setDustAsk] = useState<BookDust | null>(null);
+  const [dustBid, setDustBid] = useState<BookDust | null>(null);
   const [purse, setPurse] = useState<SpotPurse | null>(null);
   const [orders, setOrders] = useState<OpenOrder[]>([]);
   const [prints, setPrints] = useState<SpotPrint[]>([]);
+  const [older, setOlder] = useState(true);
+  const [sheet, setSheet] = useState(false);
   const [clock, setClock] = useState(0);
   const [reading, setReading] = useState(false);
   const [tab, setTab] = useState<"tape" | "mine">("tape");
@@ -193,6 +225,8 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   useEffect(() => {
     setBids([]);
     setAsks([]);
+    setDustAsk(null);
+    setDustBid(null);
     setPrints([]);
     setReading(true);
     setOrders([]);
@@ -207,6 +241,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
       if (dead) return;
       setPrints(snap.rows);
       setReading(snap.pending);
+      setOlder(snap.older);
       setClock(blockStamp(snap.rows[0]?.block ?? 1) || Date.now());
     };
     look();
@@ -239,7 +274,14 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
           }).catch(() => { if (!dead) setMiss(true); });
         }, 800);
       });
-      quoteOkb("sell", 10n ** 18n).then((rate) => { if (!dead && rate > 0n) setOkbRate(rate); }).catch(() => undefined);
+      readDustHeads(market).then((dust) => {
+        if (dead) return;
+        setDustAsk(dust.ask);
+        setDustBid(dust.bid);
+      }).catch(() => undefined);
+      bookOkbRate().then((rate) => { if (!dead && rate > 0n) setOkbRate(rate); }).catch(() => undefined);
+      if (market === 0) openTapePrice().then((px) => { if (!dead) setPoolPx(px); }).catch(() => undefined);
+      else setPoolPx(null);
     };
     pull();
     const id = window.setInterval(pull, 6000);
@@ -284,8 +326,11 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   const bestBid = bids[0]?.price ?? 0n;
   const spread = bestAsk > bestBid && bestBid > 0n ? bestAsk - bestBid : 0n;
   const name = NAMES[market];
+  const pairTitle = market === 0 ? "TAPE" : `TAPELIQUID / ${name}`;
+  const poolRaw = market === 0 ? usdRaw(poolPx ?? 0) : 0n;
+  const headPx = poolRaw > 0n ? poolRaw : bestAsk > 0n ? bestAsk : bestBid;
   const quoteUnit: MoneyUnit = unit;
-  const unitName = quoteUnit === "okb" ? "OKB" : "USDT0";
+  const unitName = quoteUnit === "okb" ? "OKB" : "USDT";
   const showPrice = (usdt: bigint, next: MoneyUnit = quoteUnit) => {
     const raw = next === "okb" && okbRate > 0n ? usdt * 1_000_000n / okbRate : usdt;
     const text = formatUnits(raw, 6);
@@ -299,11 +344,18 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
     try { px = price.trim() ? typedUsdt(price, market === 0 ? "usdt" : unit, okbRate) : 0n; } catch { return null; }
     return orders.find((row) => row.market === market && row.left > 0n && (side === "sell" ? row.bid && px > 0n && px <= row.price : !row.bid && px > 0n && px >= row.price)) ?? null;
   })();
+  let crossDust = false;
+  try {
+    const px = price.trim() ? typedUsdt(price, market === 0 ? "usdt" : unit, okbRate) : 0n;
+    crossDust = side === "buy" ? Boolean(dustAsk && px >= dustAsk.price) : Boolean(dustBid && px > 0n && px <= dustBid.price);
+  } catch {
+    crossDust = false;
+  }
 
-  const run = (task: () => Promise<unknown>, ok: string) => {
+  const run = (task: () => Promise<unknown>, ok: string, start?: string) => {
     setBusy(true);
     setBad(false);
-    setNote(zh ? "正在连接 X Layer 钱包。请在钱包中确认。" : "Connecting the X Layer wallet. Confirm the request there.");
+    setNote(start ?? (zh ? "正在连接 X Layer 钱包。请在钱包中确认。" : "Connecting the X Layer wallet. Confirm the request there."));
     task().then((result) => {
       if (typeof result === "string" && /^0x[a-fA-F0-9]{40}$/.test(result)) {
         setSpot(result);
@@ -332,13 +384,19 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
       else if (text === "chain") setNote(chainNote(zh, err && typeof err === "object" && "chainId" in err ? String((err as { chainId?: unknown }).chainId ?? "") : ""));
       else if (text === "address") setNote(zh ? "地址格式不对。" : "That address is not valid.");
       else if (text === "empty") setNote(zh ? "这个地址上没有合约。" : "There is no contract at that address.");
-      else if (text === "fee") setNote(zh ? "这一笔太小，千分之二舍成 0。合约不收这种单。" : "This order is too small. The 0.2 percent rounds to zero.");
+      else if (text === "fee" || /reason: fee|reverted: fee|reverted with reason: fee/i.test(text)) setNote(market === 0 ? (zh ? "挂单吃不过去。卖一最前有一笔灰单，合约整笔拒绝。只有挂出的地址能撤。买 TAPE 去上面的现货。" : "The book cannot be taken. A dust order is first, so the trade reverts. Only that maker can cancel it. Buy TAPE on Spot.") : (zh ? "对手盘最前有一笔灰单，合约整笔拒绝。只有挂出的地址能撤。" : "A dust order is first, so the trade reverts. Only that maker can cancel it."));
+      else if (text === "okbshort") setNote(zh ? "OKB 不够。还要留一点做 gas。" : "Not enough OKB. A little has to stay for gas.");
+      else if (text === "okbpool") setNote(zh ? "OKB 没换成。池子不够，或价格刚动过。单没进订单簿。" : "The OKB swap did not clear. Nothing was placed.");
+      else if (text === "usdtleft") setNote(zh ? "OKB 已换成 USDT，挂单没成功，也没换回去。USDT 在钱包里。" : "OKB became USDT, the order missed, and the swap back failed. USDT is in the wallet.");
+      else if (text === "usdtback") setNote(zh ? "这一步已经完成。换成 OKB 没走成，USDT 在钱包里。" : "That step is done. The swap back to OKB failed. USDT is in the wallet.");
       else if (/nowallet/i.test(text)) setNote(zh ? "没有检测到 X Layer 钱包。" : "No X Layer wallet was found.");
       else setNote(zh ? `没有成交。${text ? text.slice(0, 80) : "先授权，再挂单。"}` : `It did not fill. ${text ? text.slice(0, 80) : "Approve, then place."}`);
     }).finally(() => setBusy(false));
   };
 
   const takeLevel = (level: Level, bookBid: boolean) => {
+    if (!bookBid && dustAsk) { setBad(true); setNote(market === 0 ? (zh ? "这一档吃不过去。卖一最前是灰单，买单会整笔失败。要买去现货。" : "This level cannot be taken. The best ask is dust, so a buy reverts. Use Spot to buy.") : (zh ? `卖一最前面是灰单 #${dustAsk.id}。买单会整笔失败。` : `The best ask starts with dust order #${dustAsk.id}. The buy reverts.`)); return; }
+    if (bookBid && dustBid) { setBad(true); setNote(zh ? `买一最前面是灰单 #${dustBid.id}。卖出吃单会被整笔拒绝。` : `The best bid starts with dust order #${dustBid.id}. A sell that takes it reverts.`); return; }
     const key = `${bookBid ? "b" : "a"}-${level.price}`;
     const typed = (takes[key] ?? "").trim() || plainBase(market, level.size);
     let qty = 0n;
@@ -346,7 +404,8 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
     if (qty <= 0n || qty > level.size) { setBad(true); setNote(zh ? `不能超过这一档的 ${plainBase(market, level.size)}。` : `It cannot be more than this level, ${plainBase(market, level.size)}.`); return; }
     const mine = orders.some((row) => row.market === market && row.bid === bookBid && (bookBid ? row.price >= level.price : row.price <= level.price));
     if (mine) { setBad(true); setNote(zh ? "这一档或更优的价格上有你自己的单。合约会整笔拒绝。先撤掉。" : "You have an order at this price or a better one. The contract rejects the whole trade. Cancel it first."); return; }
-    run(() => placeSpot(account ?? "", market, !bookBid, level.price, qty), zh ? "已按这一档提交。数量不超过这一档，多出来的不会再挂成新单。" : "Submitted at this level. The amount does not exceed it, so nothing extra is left on the book.");
+    const paying = quoteUnit === "okb" ? (zh ? "用 OKB。钱包先签兑换，再签订单簿。" : "Paying in OKB. The wallet signs the swap, then the book.") : undefined;
+    run(() => placeSpotPaid(account ?? "", market, !bookBid, level.price, qty, quoteUnit), zh ? "已按这一档提交。" : "Submitted at this level.", paying);
   };
 
   const pickLevel = (level: Level, bookBid: boolean) => {
@@ -367,11 +426,82 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
       setAmount(market === 0 ? formatUnits(cut, 8) : cut.toString());
       return;
     }
-    const unit = market === 0 ? UNIT : 1n;
-    const raw = purse.usdt * unit / px;
+    const scale = market === 0 ? UNIT : 1n;
+    const spendableOkb = purse.okb > 2_000_000_000_000_000n ? purse.okb - 2_000_000_000_000_000n : 0n;
+    const budget = quoteUnit === "okb" ? (okbRate > 0n ? spendableOkb * okbRate / 10n ** 18n : 0n) : purse.usdt;
+    const raw = px > 0n ? budget * scale / px : 0n;
     const cut = raw * BigInt(pct) / 100n;
     setAmount(market === 0 ? formatUnits(cut, 8) : cut.toString());
   };
+
+  const submitOrder = () => {
+    let px = 0n;
+    let qty = 0n;
+    try {
+      px = typedUsdt(price, quoteUnit, okbRate);
+      qty = spotBase(market, amount);
+    } catch (err) {
+      setBad(true);
+      const text = err instanceof Error ? err.message : "";
+      setNote(text === "amount" ? (zh ? "数量不对。NAND 和 LATCH 只收整数。" : "The amount is not valid. NAND and LATCH are whole numbers.") : (zh ? "价格不对。OKB 价还没读到时先用 USDT。" : "The price is not valid. Use USDT if the OKB price is not in yet."));
+      return;
+    }
+    const paying = quoteUnit === "okb" ? (zh ? "用 OKB。钱包先签兑换，再签订单簿。" : "Paying in OKB. The wallet signs the swap, then the book.") : undefined;
+    if (side === "buy" && dustAsk && px >= dustAsk.price) { setBad(true); setNote(market === 0 ? (zh ? `这个价格会碰到灰单。买单失败。挂在 ${showPrice(dustAsk.price)} 下面，或去现货买。` : `This price hits the dust order. The buy reverts. Rest below ${showPrice(dustAsk.price)}, or use Spot.`) : (zh ? `这个价格会碰到灰单 #${dustAsk.id}。买单整笔失败。` : `This price hits dust order #${dustAsk.id}. The buy reverts.`)); return; }
+    if (side === "sell" && dustBid && px <= dustBid.price) { setBad(true); setNote(zh ? `这个价格会碰到灰单 #${dustBid.id}。卖单整笔失败。` : `This price hits dust order #${dustBid.id}. The sell reverts.`); return; }
+    run(() => placeSpotPaid(account ?? "", market, side === "buy", px, qty, quoteUnit), zh ? "已进订单簿。没有对手的部分继续挂着。" : "It is on the book. Whatever did not meet another order stays there.", paying);
+  };
+
+  const openOrder = (next: "buy" | "sell") => {
+    setSide(next);
+    if (!price.trim()) {
+      const px = next === "buy" ? bestAsk : bestBid;
+      if (px > 0n) setPrice(showPrice(px));
+    }
+    setSheet(true);
+  };
+
+  const orderForm = (
+    <>
+      <div className="grid grid-cols-2 border border-gold">
+        <button type="button" onClick={() => setSide("buy")} className={`min-h-11 text-sm ${side === "buy" ? "bg-[#089981] text-white" : "text-[#089981]"}`}>{zh ? "买入" : "Buy"}</button>
+        <button type="button" onClick={() => setSide("sell")} className={`min-h-11 text-sm ${side === "sell" ? "bg-[#f23645] text-white" : "text-[#f23645]"}`}>{zh ? "卖出" : "Sell"}</button>
+      </div>
+      <label className="mt-3 grid gap-1 text-xs text-ink/55">
+        <span className="flex items-center justify-between"><span>{zh ? `价格 ${unitName}` : `Price ${unitName}`}</span></span>
+        <span className="relative block">
+          <input value={price} onChange={(event) => setPrice(event.target.value)} inputMode="decimal" className="min-h-12 w-full border border-gold/50 bg-paper px-2 pr-[4.5rem] font-mono text-base text-ink" />
+          <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-[#c47b7b]" onClick={() => {
+            const px = side === "buy" ? bestAsk : bestBid;
+            if (px > 0n) setPrice(showPrice(px));
+          }}>{side === "buy" ? (zh ? "最优卖价" : "Best ask") : (zh ? "最优买价" : "Best bid")}</button>
+        </span>
+      </label>
+      <label className="mt-2 grid gap-1 text-xs text-ink/55">
+        {zh ? `数量 ${name}` : `Amount ${name}`}
+        <span className="flex items-center justify-between gap-2">
+          <span>{zh ? `钱包 ${purse ? (side === "sell" ? `${baseText(market, market === 0 ? purse.tape : market === 1 ? purse.nand : purse.latch)} ${name}` : quoteUnit === "okb" ? `${okbText(purse.okb)} OKB` : `${usdtText(purse.usdt, 2)} USDT`) : "—"}` : `Wallet ${purse ? (side === "sell" ? `${baseText(market, market === 0 ? purse.tape : market === 1 ? purse.nand : purse.latch)} ${name}` : quoteUnit === "okb" ? `${okbText(purse.okb)} OKB` : `${usdtText(purse.usdt, 2)} USDT`) : "—"}`}</span>
+          <button type="button" onClick={() => fillPct(100)} className="text-[#089981]">{zh ? "全部" : "All"}</button>
+        </span>
+        <input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono text-base text-ink" />
+      </label>
+      <div className="mt-2 grid grid-cols-4 gap-1">
+        {[25, 50, 75, 100].map((pct) => (
+          <button key={pct} type="button" onClick={() => fillPct(pct)} className="min-h-9 border border-gold text-xs">{pct === 100 ? (zh ? "全部" : "All") : `${pct}%`}</button>
+        ))}
+      </div>
+      <Quote zh={zh} market={market} side={side} price={price} amount={amount} unit={quoteUnit} rate={okbRate} />
+      <Plan zh={zh} market={market} side={side} price={price} amount={amount} asks={asks} bids={bids} purse={purse} name={name} unit={quoteUnit} rate={okbRate} />
+      {quoteUnit === "okb" ? <p className="mt-2 font-mono text-xs text-ink/55">{(() => { try { return `USDT ${usdtText(typedUsdt(price, "okb", okbRate), 4)}`; } catch { return "—"; } })()}</p> : null}
+      {ownHit ? <p className="mt-2 text-sm text-sell">{zh ? "碰到自己的单。先撤掉。" : "That hits your own order. Cancel it first."}</p> : null}
+      {dustAsk && market === 0 ? <p className="mt-2 text-sm leading-6 text-sell">{zh ? "这是挂单，不是现货。卖一最前有一笔灰单，吃单会失败，只有挂出的地址能撤。" : "This is the order book, not the spot pool. A dust order is first, so a crossing buy fails. Only that maker can cancel it."} <a className="underline" href="#tape">{zh ? "去现货" : "Open spot"}</a></p> : null}
+      <button type="button" disabled={busy || Boolean(ownHit) || !amount.trim() || crossDust} className={`mt-3 min-h-12 w-full text-sm text-white disabled:opacity-40 ${side === "buy" ? "bg-[#089981]" : "bg-[#f23645]"}`} onClick={submitOrder}>
+        {!amount.trim() ? (zh ? "输入数量" : "Enter an amount") : side === "buy" ? (zh ? `买入 ${name}` : `Buy ${name}`) : (zh ? `卖出 ${name}` : `Sell ${name}`)}
+      </button>
+      {note ? <p className={`mt-2 text-sm leading-6 ${bad ? "text-sell" : ""}`}>{note}</p> : null}
+      <p className="mt-2 text-right text-[11px] text-ink/45" title={quoteUnit === "okb" ? (zh ? "OKB 先换成这本订单簿的 USDT。买单没吃完的，撤单时换回 OKB。卖出当场收到的换成 OKB。挂着等别人来吃的卖单，之后进钱包的是 USDT。" : "OKB is swapped into the book's USDT. A resting bid returns as OKB on cancel. A sell that fills now comes back as OKB. A resting ask pays USDT when someone else takes it.") : (zh ? "限价。点盘口一行，数量不能超过这一档。卖方实收 99.8%。" : "Limit only. A row take cannot pass that level. The seller receives 99.8%.")}>{quoteUnit === "okb" ? (zh ? "用 OKB。挂着的卖单，之后进账是 USDT。" : "OKB. A resting ask pays USDT later.") : (zh ? "限价。卖方实收 99.8%。" : "Limit. The seller receives 99.8%.")}</p>
+    </>
+  );
 
   if (!ready) {
     return (
@@ -387,33 +517,64 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   }
 
   const book = (
-    <section className="flex min-h-0 flex-col lg:h-full">
+    <section className="flex flex-col lg:h-full lg:min-h-0 lg:flex-1">
       {lane === "circuit" ? <TapeCircuits zh={zh} /> : lane === "cap" ? <ContainerDesk zh={zh} /> : (
-        <div className="flex min-h-0 flex-col lg:grid lg:h-full lg:grid-cols-[minmax(0,1fr)_21.5rem] lg:items-stretch lg:overflow-hidden lg:border lg:border-gold xl:grid-cols-[minmax(0,1fr)_23rem]">
-          <div className="flex min-w-0 flex-col lg:h-full lg:min-h-0">
-          <article ref={bookBox} className="flex h-[58dvh] min-h-[22rem] shrink-0 flex-col overflow-hidden border border-gold bg-card lg:h-auto lg:min-h-0 lg:flex-1 lg:border-0">
-            <div className="flex shrink-0 flex-col gap-2 border-b border-gold/40 px-3 py-2 lg:flex-row lg:flex-wrap lg:items-end lg:justify-between">
+        <>
+        <div className="flex flex-col gap-2 lg:grid lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_20.5rem] lg:items-stretch lg:gap-3 lg:overflow-hidden xl:grid-cols-[minmax(0,1fr)_22rem]">
+          <div className="flex min-w-0 flex-col lg:h-full lg:min-h-0 lg:overflow-hidden lg:border lg:border-gold lg:bg-card">
+          <article ref={bookBox} className="flex h-[clamp(12rem,calc(100dvh-30rem),22rem)] flex-col overflow-hidden border border-gold bg-card lg:h-auto lg:max-h-none lg:min-h-0 lg:flex-1 lg:border-0">
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-gold/40 px-3 py-1.5 lg:hidden">
               <div className="min-w-0">
-                <p className="text-[11px] tracking-[0.14em] text-gold lg:text-xs">{market === 0 ? "TAPE" : "TAPELIQUID"} · {name} / {unitName}{spot ? <> · <a className="underline" href={`${XLAYER.explorer}/address/${spot}`} target="_blank" rel="noreferrer">{spot.slice(0, 6)}…{spot.slice(-4)}</a></> : null}</p>
-                <h3 className="font-mono text-2xl leading-none tabular-nums lg:text-3xl">{bestAsk > 0n ? moneyText(bestAsk, quoteUnit, okbRate) : bestBid > 0n ? moneyText(bestBid, quoteUnit, okbRate) : "—"}</h3>
-                <div className="mt-2 flex gap-1">
+                <p className="truncate text-[11px] tracking-[0.14em] text-gold">{pairTitle}{market === 0 ? "" : ` / ${unitName}`}{spot ? <> · <a className="underline" href={`${XLAYER.explorer}/address/${spot}`} target="_blank" rel="noreferrer">{spot.slice(0, 6)}…{spot.slice(-4)}</a></> : null}</p>
+                <div className="mt-0.5 flex items-center gap-2">
+                  {poolRaw > 0n ? <span className="text-[10px] tracking-widest text-ink/45">{zh ? "现货" : "Spot"}</span> : null}
+                  <h3 className="font-mono text-[1.65rem] leading-none tabular-nums">{headPx > 0n ? moneyText(headPx, quoteUnit, okbRate, poolRaw > 0n ? 4 : 2) : "—"}</h3>
+                  <div className="flex gap-1">
                     {(["usdt", "okb"] as const).map((next) => (
                       <button key={next} type="button" className={`min-h-7 px-2 text-[11px] ${quoteUnit === next ? "bg-ink text-paper" : "border border-gold text-ink/70"}`} onClick={() => {
                         if (next === unit) return;
                         try { if (price.trim()) setPrice(showPrice(typedUsdt(price, quoteUnit, okbRate), next)); } catch { /* keep the typed price */ }
                         setUnit(next);
-                      }}>{next === "okb" ? "OKB" : "USDT0"}</button>
+                      }}>{next === "okb" ? "OKB" : "USDT"}</button>
                     ))}
                   </div>
+                </div>
               </div>
-              <div className="flex w-full gap-x-4 overflow-x-auto pb-1 text-right text-[11px] text-ink/60 sm:text-xs lg:w-auto lg:flex-nowrap lg:pb-0">
-                <p className="shrink-0">{zh ? "买一" : "Bid"}<br /><span className="font-mono text-sm text-ink">{bestBid > 0n ? moneyText(bestBid, quoteUnit, okbRate) : "—"}</span></p>
-                <p className="shrink-0">{zh ? "卖一" : "Ask"}<br /><span className="font-mono text-sm text-ink">{bestAsk > 0n ? moneyText(bestAsk, quoteUnit, okbRate) : "—"}</span></p>
-                <p className="shrink-0">{zh ? "价差" : "Spread"}<br /><span className="font-mono text-sm text-ink">{spread > 0n ? moneyText(spread, quoteUnit, okbRate) : "—"}</span></p>
-                <p className="shrink-0">{zh ? "卖盘" : "Asks"}<br /><span className="font-mono text-sm text-ink">{baseText(market, askBook.base)} {name}</span></p>
-                <p className="shrink-0">{zh ? "买盘" : "Bids"}<br /><span className="font-mono text-sm text-ink">{baseText(market, bidBook.base)} {name}</span></p>
-                <p className="shrink-0">{zh ? "成交" : "Prints"}<br /><span className="font-mono text-sm text-ink">{reading && traded.n === 0 ? "—" : traded.n}</span></p>
-                <p className="shrink-0">{zh ? "手续费" : "Fees"}<br /><span className="font-mono text-sm text-ink">{reading && traded.n === 0 ? "—" : moneyText(traded.fee, quoteUnit, okbRate)}</span></p>
+              <div className="grid shrink-0 grid-cols-2 gap-x-3 text-right text-[11px] text-ink/60">
+                <p>{zh ? "买一" : "Bid"}<br /><span className="font-mono text-sm text-ink">{bestBid > 0n ? moneyText(bestBid, quoteUnit, okbRate) : "—"}</span></p>
+                <p>{zh ? "卖一" : "Ask"}<br /><span className="font-mono text-sm text-ink">{bestAsk > 0n ? moneyText(bestAsk, quoteUnit, okbRate) : "—"}</span></p>
+              </div>
+            </div>
+            <div className="hidden shrink-0 items-center gap-4 overflow-x-auto border-b border-gold/40 px-3 py-2 lg:flex">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">{pairTitle}</p>
+                <p className="truncate font-mono text-[11px] text-ink/45">{spot ? <a className="underline" href={`${XLAYER.explorer}/address/${spot}`} target="_blank" rel="noreferrer">{spot.slice(0, 6)}…{spot.slice(-4)}</a> : "—"}</p>
+              </div>
+              <div className="flex gap-1">
+                {(["usdt", "okb"] as const).map((next) => (
+                  <button key={next} type="button" className={`min-h-7 px-2 text-[11px] ${quoteUnit === next ? "bg-ink text-paper" : "border border-gold text-ink/70"}`} onClick={() => {
+                    if (next === unit) return;
+                    try { if (price.trim()) setPrice(showPrice(typedUsdt(price, quoteUnit, okbRate), next)); } catch { /* keep */ }
+                    setUnit(next);
+                  }}>{next === "okb" ? "OKB" : "USDT"}</button>
+                ))}
+              </div>
+              <div className="ml-auto flex items-end gap-4 text-right">
+                {([
+                  [market === 0 ? (zh ? "现货" : "Spot") : (zh ? "参考价" : "Ref"), headPx > 0n ? moneyText(headPx, quoteUnit, okbRate, poolRaw > 0n ? 4 : 2) : "—"],
+                  [zh ? "买一" : "Bid", bestBid > 0n ? moneyText(bestBid, quoteUnit, okbRate) : "—"],
+                  [zh ? "卖一" : "Ask", bestAsk > 0n ? moneyText(bestAsk, quoteUnit, okbRate) : "—"],
+                  [zh ? "价差" : "Spread", spread > 0n ? moneyText(spread, quoteUnit, okbRate) : "—"],
+                  [zh ? "卖盘" : "Asks", baseText(market, askBook.base)],
+                  [zh ? "买盘" : "Bids", baseText(market, bidBook.base)],
+                  [zh ? "成交" : "Prints", reading && traded.n === 0 ? "—" : String(traded.n)],
+                  [zh ? "手续费" : "Fees", reading && traded.n === 0 ? "—" : moneyText(traded.fee, quoteUnit, okbRate)],
+                ] as const).map(([k, v]) => (
+                  <p key={k} className="min-w-[3.2rem] shrink-0">
+                    <span className="block text-[10px] tracking-wide text-ink/40">{k}</span>
+                    <span className="font-mono text-sm text-ink">{v}</span>
+                  </p>
+                ))}
               </div>
             </div>
             <div className={`${bookGrid} shrink-0 text-xs text-ink/45`}>
@@ -430,10 +591,8 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
                     })}
               </div>
             </div>
-            <p className="flex shrink-0 items-center gap-3 px-3 py-2 font-mono text-sm text-ink/60">
-              <span className="h-px flex-1 bg-gold/40" />
-              <span>{spread > 0n ? moneyText(spread, quoteUnit, okbRate) : "—"}</span>
-              <span className="h-px flex-1 bg-gold/40" />
+            <p className="flex shrink-0 items-center justify-center border-y border-gold/30 px-3 py-1 font-mono text-sm font-semibold text-[#089981] lg:py-1.5">
+              {bestAsk > 0n ? moneyText(bestAsk, quoteUnit, okbRate) : bestBid > 0n ? moneyText(bestBid, quoteUnit, okbRate) : "—"} {unitName}
             </p>
             <div ref={bidBox} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
               {bids.length === 0 ? <p className="px-3 py-2 text-xs text-ink/55">{zh ? "买盘空着。" : "No bids."}</p> : bids.map((level) => {
@@ -443,38 +602,65 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
             </div>
             {miss ? <p className="shrink-0 px-2 py-2 text-xs text-ink/55">{zh ? "这一次没读到。不写成 0。" : "This read missed. It is not shown as zero."}</p> : null}
           </article>
-          <article className="mt-2 flex h-72 shrink-0 flex-col overflow-hidden border border-gold bg-card lg:mt-0 lg:h-[30%] lg:max-h-52 lg:border-0 lg:border-t lg:border-gold">
-            <div className="grid shrink-0 grid-cols-2 border-b border-gold">
-              <button type="button" onClick={() => setTab("tape")} className={`min-h-10 text-sm ${tab === "tape" ? "bg-ink text-paper" : ""}`}>{zh ? "成交" : "Prints"}</button>
-              <button type="button" onClick={() => setTab("mine")} className={`min-h-10 text-sm ${tab === "mine" ? "bg-ink text-paper" : ""}`}>{zh ? "我的挂单" : "My orders"}</button>
+          <article className="mt-2 flex flex-col border border-gold bg-card lg:mt-0 lg:h-[34%] lg:max-h-none lg:min-h-36 lg:flex-none lg:overflow-hidden lg:border-0 lg:border-t lg:border-gold/50">
+            <div className="flex shrink-0 gap-5 border-b border-gold/40 px-3">
+              <button type="button" onClick={() => setTab("tape")} className={`min-h-10 text-sm ${tab === "tape" ? "border-b-2 border-ink font-medium" : "text-ink/45"}`}>{zh ? "活动" : "Prints"}</button>
+              <button type="button" onClick={() => setTab("mine")} className={`min-h-10 text-sm ${tab === "mine" ? "border-b-2 border-ink font-medium" : "text-ink/45"}`}>{zh ? "我的挂单" : "My orders"}</button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
             {tab === "tape" ? (
-              <ul>
-                {prints.length === 0 ? <li className="px-3 py-3 text-sm text-ink/45">{reading ? (zh ? "读取中" : "Reading") : (zh ? "没有成交" : "None")}</li> : null}
-                {prints.slice(0, 24).map((row) => {
-                  const ts = clock ? blockStamp(row.block) : 0;
-                  const time = ts ? new Intl.DateTimeFormat(zh ? "zh-CN" : "en-GB", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(ts * 1000)) : "—";
+              <table className="w-full table-fixed border-collapse font-mono text-[12px] tabular-nums">
+                <colgroup>
+                  <col className="w-[14%]" />
+                  <col className="w-[20%]" />
+                  <col className="w-[18%]" />
+                  <col className="w-[20%]" />
+                  <col className="w-[28%]" />
+                </colgroup>
+                <thead>
+                  <tr className="text-[11px] text-ink/40">
+                    <th className="px-2 py-1.5 text-left font-normal">{zh ? "买卖" : "Side"}</th>
+                    <th className="px-1 py-1.5 text-right font-normal">{zh ? "价格" : "Price"}</th>
+                    <th className="px-1 py-1.5 text-right font-normal">{zh ? "数量" : "Size"}</th>
+                    <th className="px-1 py-1.5 text-right font-normal">{zh ? "总额" : "Total"}</th>
+                    <th className="px-2 py-1.5 text-right font-normal">{zh ? "时间" : "Time"}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                {prints.length === 0 ? <tr><td colSpan={5} className="px-3 py-6 text-left font-sans text-sm text-ink/55">{reading ? (zh ? "正在读成交。节点一次只给一小段，不会把没读到写成 0。" : "Reading prints. A miss is not written as zero.") : (zh ? "这段还没有成交。" : "No prints in this stretch.")}</td></tr> : null}
+                {prints.slice(0, 80).map((row) => {
+                  const ts = blockStamp(row.block);
+                  const who = row.taker || "";
+                  const short = who.length > 8 ? `${who.slice(0, 4)}…${who.slice(-4)}` : "—";
+                  const buy = row.side === "buy";
+                  const sell = row.side === "sell";
+                  const tone = buy ? "text-[#089981]" : sell ? "text-[#f23645]" : "text-ink/35";
                   return (
-                  <li key={`${row.tx}-${row.base}`} className="flex items-center gap-2 border-t border-gold/30 px-3 py-2 font-mono text-xs">
-                    <span className="w-16 shrink-0 text-ink/55 sm:w-24">{time}</span>
-                    <span className="min-w-0 flex-1 truncate">{moneyText(row.price, quoteUnit, okbRate)}</span>
-                    <span className="w-16 shrink-0 truncate text-right sm:w-24">{baseText(market, row.base)}</span>
-                    <a className="shrink-0 underline" href={`${XLAYER.explorer}/tx/${row.tx}`} target="_blank" rel="noreferrer">{zh ? "链上" : "Tx"}</a>
-                  </li>
+                  <tr key={`${row.tx}-${row.base}-${row.quote}`} className="border-t border-gold/30">
+                    <td className={`px-2 py-1.5 text-left ${tone}`}>{buy ? (zh ? "买" : "Buy") : sell ? (zh ? "卖" : "Sell") : "·"}</td>
+                    <td className={`px-1 py-1.5 text-right ${tone}`}>{moneyText(row.price, quoteUnit, okbRate)}</td>
+                    <td className="px-1 py-1.5 text-right">{baseText(market, row.base)}</td>
+                    <td className="px-1 py-1.5 text-right">{moneyText(row.quote, quoteUnit, okbRate)}</td>
+                    <td className="px-2 py-1 text-right leading-tight text-ink/55">
+                      <span className="block">{clock >= 0 ? ago(ts) : "—"}</span>
+                      {who ? <a className="block truncate text-[10px] underline" href={`${XLAYER.explorer}/tx/${row.tx}`} target="_blank" rel="noreferrer">{short}</a> : null}
+                    </td>
+                  </tr>
                   );
                 })}
-                {prints.length > 24 ? <li className="px-3 py-2 font-mono text-[11px] text-ink/40">+{prints.length - 24}</li> : null}
-              </ul>
+                {prints.length > 80 ? <tr><td colSpan={5} className="px-3 py-2 text-[11px] text-ink/40">+{prints.length - 80}</td></tr> : null}
+                {older && prints.length > 0 ? <tr><td colSpan={5} className="px-3 py-2 text-left font-sans text-[11px] text-ink/40">{zh ? "更早的成交还在往前读。" : "Older prints are still being read."}</td></tr> : null}
+                </tbody>
+              </table>
             ) : (
               <ul>
                 {orders.length === 0 ? <li className="px-3 py-3 text-sm text-ink/45">{zh ? "没有挂单" : "None"}</li> : null}
                 {orders.map((row) => (
-                  <li key={row.id.toString()} className="grid items-center gap-2 border-t border-gold/30 px-3 py-2 text-xs sm:grid-cols-[4rem_1fr_1fr_auto]">
-                    <span className={row.bid ? "text-[#089981]" : "text-[#f23645]"}>{row.bid ? (zh ? "买" : "Bid") : (zh ? "卖" : "Ask")}</span>
-                    <span className="font-mono">{moneyText(row.price, quoteUnit, okbRate)}</span>
-                    <span className="font-mono">{baseText(row.market, row.left)}</span>
-                    <button type="button" disabled={busy} className="min-h-9 border border-gold px-2 disabled:opacity-40" onClick={() => run(() => cancelSpot(account ?? "", row.id), zh ? "已撤单。没吃掉的退回钱包。" : "Cancelled. The rest is back in the wallet.")}>{zh ? "撤单" : "Cancel"}</button>
+                  <li key={row.id.toString()} className="grid grid-cols-[4.6rem_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2 border-t border-gold/30 px-3 py-2 text-xs">
+                    <span className={row.bid ? "text-[#089981]" : "text-[#f23645]"}>{row.bid ? (zh ? "买" : "Bid") : (zh ? "卖" : "Ask")}{row.bid && isOkbBid(row.id) ? " ·OKB" : ""}</span>
+                    <span className="text-right font-mono tabular-nums">{moneyText(row.price, quoteUnit, okbRate)}</span>
+                    <span className="text-right font-mono tabular-nums">{baseText(row.market, row.left)}</span>
+                    <button type="button" disabled={busy} className="min-h-9 border border-gold px-2 disabled:opacity-40" onClick={() => run(() => cancelSpotPaid(account ?? "", row.id), row.bid && isOkbBid(row.id) ? (zh ? "已撤单。锁着的换成 OKB 退回。" : "Cancelled. The locked amount swaps back to OKB.") : (zh ? "已撤单。没吃掉的退回钱包。" : "Cancelled. The rest is back in the wallet."), row.bid && isOkbBid(row.id) ? (zh ? "撤单后把锁着的 USDT 换回 OKB。" : "After the cancel, the locked USDT swaps back to OKB.") : undefined)}>{zh ? "撤单" : "Cancel"}</button>
                   </li>
                 ))}
               </ul>
@@ -482,63 +668,27 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
             </div>
           </article>
           </div>
-          <div className="mt-2 border border-gold bg-card p-3 lg:mt-0 lg:h-full lg:overflow-y-auto lg:border-0 lg:border-l lg:border-gold">
-            <div>
-            <div className="grid grid-cols-2 border border-gold">
-              <button type="button" onClick={() => setSide("buy")} className={`min-h-11 text-sm ${side === "buy" ? "bg-[#089981] text-white" : "text-[#089981]"}`}>{zh ? "买入" : "Buy"}</button>
-              <button type="button" onClick={() => setSide("sell")} className={`min-h-11 text-sm ${side === "sell" ? "bg-[#f23645] text-white" : "text-[#f23645]"}`}>{zh ? "卖出" : "Sell"}</button>
-            </div>
-            <label className="mt-3 grid gap-1 text-xs text-ink/55">
-              {zh ? `价格 ${unitName}` : `Price in ${unitName}`}
-              <input value={price} onChange={(event) => setPrice(event.target.value)} inputMode="decimal" className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono text-base text-ink" />
-            </label>
-            <label className="mt-2 grid gap-1 text-xs text-ink/55">
-              {zh ? `数量 ${name}` : `Amount ${name}`}
-              <input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono text-base text-ink" />
-            </label>
-            <div className="mt-2 grid grid-cols-2 border border-gold/40">
-              <p className="px-2 py-2">
-                <span className="block text-xs text-ink/45">{zh ? "可买入" : "Can buy"}</span>
-                <span className="font-mono text-sm">{purse ? `${usdtText(purse.usdt, 2)} USDT0` : "—"}</span>
-              </p>
-              <p className="border-l border-gold/40 px-2 py-2">
-                <span className="block text-xs text-ink/45">{zh ? "可卖出" : "Can sell"}</span>
-                <span className="font-mono text-sm">{purse ? `${baseText(market, market === 0 ? purse.tape : market === 1 ? purse.nand : purse.latch)} ${name}` : "—"}</span>
-              </p>
-            </div>
-            <div className="mt-2 grid grid-cols-4 gap-1">
-              {[25, 50, 75, 100].map((pct) => (
-                <button key={pct} type="button" onClick={() => fillPct(pct)} className="min-h-9 border border-gold text-xs">{pct === 100 ? (zh ? "全部" : "All") : `${pct}%`}</button>
-              ))}
-            </div>
-            <Quote zh={zh} market={market} side={side} price={price} amount={amount} unit={quoteUnit} rate={okbRate} />
-            <Plan zh={zh} market={market} side={side} price={price} amount={amount} asks={asks} bids={bids} purse={purse} name={name} unit={quoteUnit} rate={okbRate} />
-            {quoteUnit === "okb" ? <p className="mt-2 font-mono text-xs text-ink/55">{(() => { try { return `USDT0 ${usdtText(typedUsdt(price, "okb", okbRate), 4)}`; } catch { return "—"; } })()}</p> : null}
-            {ownHit ? <p className="mt-2 text-sm text-sell">{zh ? "碰到自己的单。先撤掉。" : "That hits your own order. Cancel it first."}</p> : null}
-            <button type="button" disabled={busy || Boolean(ownHit)} className={`mt-3 min-h-12 w-full text-sm text-white disabled:opacity-40 ${side === "buy" ? "bg-[#089981]" : "bg-[#f23645]"}`} onClick={() => {
-              let px = 0n;
-              let qty = 0n;
-              try {
-                px = typedUsdt(price, quoteUnit, okbRate);
-                qty = spotBase(market, amount);
-              } catch (err) {
-                setBad(true);
-                const text = err instanceof Error ? err.message : "";
-                setNote(text === "amount" ? (zh ? "数量不对。NAND 和 LATCH 只收整数。" : "The amount is not valid. NAND and LATCH are whole numbers.") : (zh ? "价格不对。OKB 价还没读到时先用 USDT0。" : "The price is not valid. Use USDT0 if the OKB price is not in yet."));
-                return;
-              }
-              run(() => placeSpot(account ?? "", market, side === "buy", px, qty), zh ? "已进订单簿。没有对手的部分继续挂着，不会消失。" : "It is on the book. Whatever did not meet another order stays there.");
-            }}>
-              {side === "buy" ? (zh ? `买入 ${name}` : `Buy ${name}`) : (zh ? `卖出 ${name}` : `Sell ${name}`)}
-            </button>
-            {note ? <p className={`mt-2 text-sm leading-6 ${bad ? "text-sell" : ""}`}>{note}</p> : null}
-            <details className="mt-3 text-xs text-ink/45">
-              <summary className="cursor-pointer">{zh ? "说明" : "Notes"}</summary>
-              <p className="mt-2 leading-5">{zh ? "点价格、数量或总额，右边的买卖和价格会跟着变。行尾不填就是这一档全部，填了不能超过这一档。卖方实收 99.8%。" : "A price, a size, or a total fills the ticket. Buy and sell follow that row. A blank size takes the whole level. A typed size cannot pass it. The seller receives 99.8%."}</p>
-            </details>
-            </div>
+          <div className="hidden overflow-y-auto border border-gold bg-card p-3 lg:block lg:h-full">
+            {orderForm}
           </div>
         </div>
+        <div className="fixed inset-x-0 bottom-[3.75rem] z-30 grid grid-cols-2 gap-2 border-t border-gold/40 bg-paper px-3 py-2 lg:hidden">
+          <button type="button" className="min-h-12 bg-[#089981] text-sm text-white" onClick={() => openOrder("buy")}>{zh ? "买入" : "Buy"}</button>
+          <button type="button" className="min-h-12 bg-[#f23645] text-sm text-white" onClick={() => openOrder("sell")}>{zh ? "卖出" : "Sell"}</button>
+        </div>
+        {sheet ? (
+          <div className="fixed inset-0 z-40 lg:hidden">
+            <button type="button" aria-label={zh ? "关闭" : "Close"} className="absolute inset-0 bg-ink/40" onClick={() => setSheet(false)} />
+            <div className="absolute inset-x-0 bottom-0 max-h-[min(36rem,88dvh)] overflow-y-auto rounded-t-2xl border border-gold bg-paper px-3 pb-4 pt-3">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-sm">{zh ? `交易 ${name}` : `Trade ${name}`}</p>
+                <button type="button" className="min-h-9 px-2 text-lg leading-none" onClick={() => setSheet(false)}>×</button>
+              </div>
+              {orderForm}
+            </div>
+          </div>
+        ) : null}
+        </>
       )}
     </section>
   );

@@ -30,13 +30,13 @@ export async function getTransistorDesk(input: { data: { token: string; id: numb
   try {
     const rail = await fetch("https://api-tapeout.firsto.ai/v1/markets/rail?limit=20", { headers: { accept: "application/json" } });
     if (!rail.ok) throw new Error(`rail ${rail.status}`);
-    const body = (await rail.json()) as { asOf?: string; markets?: { transistors: string; assets: { tokenId: number; symbol: string; referencePriceWei: string | null; referenceBidPriceWei: string | null; referenceAskPriceWei: string | null; estimatedMarketCapUsdMicros: string | null; rolling24h?: { referenceChangeBps?: string; volumeWei?: string } }[] }[] };
+    const body = (await rail.json()) as { asOf?: string; markets?: { transistors: string; assets: { tokenId: number; symbol: string; latestPriceWei?: string | null; referencePriceWei: string | null; referenceBidPriceWei: string | null; referenceAskPriceWei: string | null; estimatedMarketCapUsdMicros: string | null; rolling24h?: { changeBps?: string; referenceChangeBps?: string; volumeWei?: string } }[] }[] };
     const gates: Gate[] = [];
     for (const wanted of WANTED) {
       const market = (body.markets ?? []).find((row) => row.transistors.toLowerCase() === wanted.transistors.toLowerCase());
       for (const kind of ["NAND", "LATCH"] as const) {
         const asset = market?.assets.find((row) => row.symbol === kind);
-        const price = bnb(asset?.referencePriceWei);
+        const price = bnb(asset?.latestPriceWei) || bnb(asset?.referencePriceWei);
         gates.push({
           id: `${wanted.name}-${kind}`.toLowerCase().replace(/\s+/g, "-"),
           name: wanted.name,
@@ -46,7 +46,7 @@ export async function getTransistorDesk(input: { data: { token: string; id: numb
           price,
           bid: bnb(asset?.referenceBidPriceWei) || price,
           ask: bnb(asset?.referenceAskPriceWei) || price,
-          changePct: Number(asset?.rolling24h?.referenceChangeBps ?? 0) / 100,
+          changePct: Number(asset?.rolling24h?.changeBps ?? asset?.rolling24h?.referenceChangeBps ?? 0) / 100,
           volumeBnb: bnb(asset?.rolling24h?.volumeWei),
           capUsd: Number(asset?.estimatedMarketCapUsdMicros ?? 0) / 1e6,
         });

@@ -1,5 +1,5 @@
 import { encodeAbiParameters, encodeFunctionData, type Hex } from "viem";
-import { BSC, connectBsc, pretty, readBalances, units, waitReceipt } from "@/lib/bsc";
+import { BSC, FEE_TO, connectBsc, pretty, readBalances, units, waitReceipt } from "@/lib/bsc";
 import { PERP_BYTECODE } from "@/lib/perp-artifact";
 import { MARK_BYTECODE } from "@/lib/mark-artifact";
 import { getProvider } from "@/lib/wallet";
@@ -11,6 +11,12 @@ export const REBATE_KEY = "tapeliquid-rebate-v1";
 const DESK_KEY = "tapeliquid-desk-v1";
 const XPERP_KEY = "tapeliquid-xperp-v1";
 const XMARK_KEY = "tapeliquid-xmark-v1";
+const XPERP_FIXED = "tapeliquid-xperp-fixed";
+const XPERP_HOLD = "tapeliquid-xperp-hold";
+const XMARK_FIXED = "tapeliquid-xmark-fixed";
+const XMARK_HOLD = "tapeliquid-xmark-hold";
+const XBEM_MARK_KEY = "tapeliquid-xbem-mark";
+const XBEM_PERP_KEY = "tapeliquid-xbem-perp";
 export const X_USDT = "0x779Ded0c9e1022225f8E0630b35a9b54bE713736" as const;
 
 export type Desk = "bsc" | "xlayer";
@@ -43,9 +49,12 @@ function tokenUnit(): bigint {
   return 10n ** BigInt(tokenDecimals());
 }
 export const KNOWN_PERP = "0xB98D14333a93D49a4E05478d002FC3944D88A3b7";
-export const BSC_REBATE = "0x5753fb0ba5975a2dc0fae5bd0dcf521dbba7cc12";
-export const KNOWN_XPERP = "0xa0344f5B0518D31B7CFa6CaC266b4eDd289821ce";
-export const KNOWN_XMARK = "0xc35C8cB9FFaC92F25cAFaEdC82F03144b24bCb1d";
+export const BSC_REBATE = "0xce3511b6e909c9694826cfd5dbe434d457920eba";
+export const KNOWN_XPERP = "0xCAC69F02c06bfCa3bFDb1eaF1F4a60e17e718081";
+export const KNOWN_XMARK = "0xb4B2ee90D10ECfC7ed36A58e96e03074fA8731Eb";
+export const PREV_XPERP = "0xF771BECD373af1d062169E42AB7b3B1fadE2b11b";
+export const PREV_XMARK = "0xba5234cd46ec5eB0DFdf4ac329FF42EB3062B4eA";
+export const NEXT_XMARK = KNOWN_XMARK;
 export const BOARD = [KNOWN_PERP];
 
 const abi = [
@@ -395,9 +404,47 @@ export function savedXPerp(): string {
 
 const BSC_BOOK_KEY = "tapeliquid-bsc-book";
 
+export function savedXBemPerp(): string {
+  if (typeof window === "undefined") return "";
+  const saved = window.localStorage.getItem(XBEM_PERP_KEY) ?? "";
+  return /^0x[a-fA-F0-9]{40}$/.test(saved) ? saved : "";
+}
+
 export function bookOf(which: Desk = desk): string {
-  if (which === "xlayer") return /^0x[a-fA-F0-9]{40}$/.test(KNOWN_XPERP) ? KNOWN_XPERP : savedXPerp();
+  if (which === "xlayer") return savedXBemPerp() || KNOWN_XPERP;
   return BSC_REBATE;
+}
+
+export async function rememberXBem(address: string): Promise<string> {
+  const perp = address.trim();
+  if (!/^0x[a-fA-F0-9]{40}$/.test(perp)) throw new Error("address");
+  const state = await xBookState(perp);
+  if (state === "down") throw new Error("empty");
+  window.localStorage.setItem(XBEM_PERP_KEY, perp);
+  return perp;
+}
+
+export async function xBookState(perp: string): Promise<"ready" | "scale" | "down"> {
+  try {
+    const c = await deskClient("xlayer");
+    const px = await c.readContract({
+      address: perp as Hex,
+      abi: [{ name: "mark", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] }] as const,
+      functionName: "mark",
+    });
+    if (px < 10n ** 15n) return "scale";
+    return "ready";
+  } catch {
+    return "down";
+  }
+}
+
+export function xHolds(): boolean {
+  return typeof window !== "undefined" && /^0x[a-fA-F0-9]{40}$/.test(window.localStorage.getItem(XMARK_HOLD) ?? "");
+}
+
+export async function xReady(perp: string): Promise<boolean> {
+  return (await xBookState(perp)) === "ready";
 }
 
 export async function deployBscBook(from: string): Promise<string> {
@@ -426,7 +473,7 @@ export async function activeBook(): Promise<string> {
 }
 
 export async function readBoard(): Promise<{ perp: string; quote: BookQuote }[]> {
-  const addrs = desk === "xlayer" ? [bookOf("xlayer")] : [BSC_REBATE, KNOWN_PERP];
+  const addrs = [bookOf(desk)];
   const rows: { perp: string; quote: BookQuote }[] = [];
   for (const addr of addrs) {
     if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) continue;
@@ -549,52 +596,57 @@ export async function readPerp(perp: string, account: string | null): Promise<Pe
   const code = await c.getBytecode({ address: addr });
   if (!code || code === "0x") throw new Error("nochain");
   const empty = "0x0000000000000000000000000000000000000000";
-  let mark = 0n;
-  let min = 10n * 10n ** 18n;
+  const [markRead, minRead] = await Promise.all([
+    c.readContract({ address: addr, abi, functionName: "mark" }).catch(() => 0n),
+    c.readContract({ address: addr, abi, functionName: "MIN_MARGIN" }).catch(() => 10n * 10n ** 18n),
+  ]);
+  let mark = markRead;
+  let min = minRead;
   try {
-    mark = await c.readContract({ address: addr, abi, functionName: "mark" });
-  } catch {
-    mark = 0n;
-  }
-  try {
-    min = await c.readContract({ address: addr, abi, functionName: "MIN_MARGIN" });
-  } catch {
-    min = 10n * 10n ** 18n;
-  }
-  try {
-    const nextQuote = await c.readContract({ address: addr, abi, functionName: "nextQuote" });
-    const nextDeal = await c.readContract({ address: addr, abi, functionName: "nextDeal" });
+    const [nextQuote, nextDeal] = await Promise.all([
+      c.readContract({ address: addr, abi, functionName: "nextQuote" }),
+      c.readContract({ address: addr, abi, functionName: "nextDeal" }),
+    ]);
     const quotes: BookQuote[] = [];
     const startQ = nextQuote > 24n ? nextQuote - 23n : 1n;
-    for (let id = nextQuote; id >= startQ && id > 0n; id -= 1n) {
-      let user = empty;
-      let long = false;
-      let margin = 0n;
-      let lev = 0;
-      let open = false;
-      let price = 0n;
-      try {
-        const row = await c.readContract({ address: addr, abi: quoteWideAbi, functionName: "quotes", args: [id] });
-        user = row[0];
-        long = row[1];
-        margin = row[2];
-        lev = Number(row[3]);
-        open = row[4];
-        price = row[5];
-      } catch {
-        const row = await c.readContract({ address: addr, abi, functionName: "quotes", args: [id] });
-        user = row[0];
-        long = row[1];
-        margin = row[2];
-        lev = Number(row[3]);
-        open = row[4];
+    const quoteIds: bigint[] = [];
+    for (let id = nextQuote; id >= startQ && id > 0n; id -= 1n) quoteIds.push(id);
+    const wideQuotes = quoteIds.length
+      ? await c.multicall({ allowFailure: true, contracts: quoteIds.map((id) => ({ address: addr, abi: quoteWideAbi, functionName: "quotes" as const, args: [id] as const })) })
+      : [];
+    const narrowIds = quoteIds.filter((_, index) => wideQuotes[index]?.status !== "success");
+    const narrowQuotes = narrowIds.length
+      ? await c.multicall({ allowFailure: true, contracts: narrowIds.map((id) => ({ address: addr, abi, functionName: "quotes" as const, args: [id] as const })) })
+      : [];
+    const narrowAt = new Map(narrowIds.map((id, index) => [id, narrowQuotes[index]]));
+    quoteIds.forEach((id, index) => {
+      const wide = wideQuotes[index];
+      if (wide?.status === "success") {
+        const row = wide.result;
+        if (!row[4]) return;
+        quotes.push({ id, user: row[0], long: row[1], margin: row[2], lev: Number(row[3]), price: row[5] });
+        return;
       }
-      if (!open) continue;
-      quotes.push({ id, user, long, margin, lev, price });
-    }
+      const narrow = narrowAt.get(id);
+      if (!narrow || narrow.status !== "success" || !narrow.result[4]) return;
+      const row = narrow.result;
+      quotes.push({ id, user: row[0], long: row[1], margin: row[2], lev: Number(row[3]), price: 0n });
+    });
     const liveDeals: LiveDeal[] = [];
     const startD = nextDeal > 16n ? nextDeal - 15n : 1n;
-    for (let id = nextDeal; id >= startD && id > 0n; id -= 1n) {
+    const dealIds: bigint[] = [];
+    for (let id = nextDeal; id >= startD && id > 0n; id -= 1n) dealIds.push(id);
+    const wideDeals = dealIds.length
+      ? await c.multicall({ allowFailure: true, contracts: dealIds.map((id) => ({ address: addr, abi: dealWideAbi, functionName: "deals" as const, args: [id] as const })) })
+      : [];
+    const narrowDealIds = dealIds.filter((_, index) => wideDeals[index]?.status !== "success");
+    const narrowDeals = narrowDealIds.length
+      ? await c.multicall({ allowFailure: true, contracts: narrowDealIds.map((id) => ({ address: addr, abi, functionName: "deals" as const, args: [id] as const })) })
+      : [];
+    const narrowDealAt = new Map(narrowDealIds.map((id, index) => [id, narrowDeals[index]]));
+    for (let index = 0; index < dealIds.length; index += 1) {
+      const id = dealIds[index]!;
+      const wide = wideDeals[index];
       let long = empty;
       let short = empty;
       let marginL = 0n;
@@ -604,19 +656,21 @@ export async function readPerp(perp: string, account: string | null): Promise<Pe
       let open = false;
       let levL = 0;
       let levS = 0;
-      try {
-        const wide = await c.readContract({ address: addr, abi: dealWideAbi, functionName: "deals", args: [id] });
-        long = wide[0];
-        short = wide[1];
-        marginL = wide[2];
-        marginS = wide[3];
-        base = wide[4];
-        entry = wide[5];
-        open = wide[6];
-        levL = Number(wide[7]);
-        levS = Number(wide[8]);
-      } catch {
-        const row = await c.readContract({ address: addr, abi, functionName: "deals", args: [id] });
+      if (wide?.status === "success") {
+        const row = wide.result;
+        long = row[0];
+        short = row[1];
+        marginL = row[2];
+        marginS = row[3];
+        base = row[4];
+        entry = row[5];
+        open = row[6];
+        levL = Number(row[7]);
+        levS = Number(row[8]);
+      } else {
+        const narrow = narrowDealAt.get(id);
+        if (!narrow || narrow.status !== "success") continue;
+        const row = narrow.result;
         long = row[0];
         short = row[1];
         marginL = row[2];
@@ -680,21 +734,27 @@ export async function readPerp(perp: string, account: string | null): Promise<Pe
   } catch {
     // The contract already on chain has one shared quote, not an order book.
   }
-  const pending = await c.readContract({ address: addr, abi, functionName: "pending" });
-  const nextId = await c.readContract({ address: addr, abi, functionName: "nextId" });
+  const [pending, nextId, status] = await Promise.all([
+    c.readContract({ address: addr, abi, functionName: "pending" }),
+    c.readContract({ address: addr, abi, functionName: "nextId" }),
+    account
+      ? c.readContract({ address: addr, abi, functionName: "status", args: [account as Hex] })
+      : Promise.resolve([0, false, 0n, 0n, 0n, 0n, false, empty] as const),
+  ]);
   let found: readonly [string, string, bigint, bigint, bigint, bigint, boolean] | null = null;
   let foundId = 0n;
-  for (let id = nextId; id > 0n && nextId - id < 6n; id -= 1n) {
-    const row = await c.readContract({ address: addr, abi, functionName: "deals", args: [id] });
-    if (row[6]) {
-      found = row;
-      foundId = id;
-      break;
-    }
+  const oldIds: bigint[] = [];
+  for (let id = nextId; id > 0n && nextId - id < 6n; id -= 1n) oldIds.push(id);
+  const oldDeals = oldIds.length
+    ? await c.multicall({ allowFailure: true, contracts: oldIds.map((id) => ({ address: addr, abi, functionName: "deals" as const, args: [id] as const })) })
+    : [];
+  for (let index = 0; index < oldIds.length; index += 1) {
+    const row = oldDeals[index];
+    if (!row || row.status !== "success" || !row.result[6]) continue;
+    found = row.result;
+    foundId = oldIds[index]!;
+    break;
   }
-  const status = account
-    ? await c.readContract({ address: addr, abi, functionName: "status", args: [account as Hex] })
-    : ([0, false, 0n, 0n, 0n, 0n, false, empty] as const);
   return {
     book: false,
     priced: false,
@@ -857,60 +917,116 @@ async function bscTick(): Promise<number> {
   return row[1];
 }
 
-export async function pushMark(from: string): Promise<void> {
-  const saved = typeof window !== "undefined" ? window.localStorage.getItem(XMARK_KEY) ?? "" : "";
-  const mark = /^0x[a-fA-F0-9]{40}$/.test(KNOWN_XMARK) ? KNOWN_XMARK : saved;
-  if (!/^0x[a-fA-F0-9]{40}$/.test(mark)) return;
+const pokeAbi = [
+  { name: "poke", type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
+] as const;
+
+export async function pokeXBem(from: string): Promise<void> {
+  const saved = typeof window === "undefined" ? "" : window.localStorage.getItem(XBEM_MARK_KEY) ?? "";
+  const mark = /^0x[a-fA-F0-9]{40}$/.test(saved) ? saved : KNOWN_XMARK;
   const was = desk;
   desk = "xlayer";
   try {
-    const tick = await bscTick();
-    const data = encodeFunctionData({ abi: pushAbi, functionName: "push", args: [tick] });
-    await send(from, mark as Hex, data);
-  } catch {
+    const data = encodeFunctionData({ abi: pokeAbi, functionName: "poke" });
+    await send(from, mark as Hex, data, 400_000n);
+  } finally {
     desk = was;
-    return;
   }
-  desk = was;
+}
+
+export async function pushMark(from: string): Promise<void> {
+  await pokeXBem(from);
 }
 
 export async function deployXLayer(from: string, onStep?: (step: 1 | 2 | 3) => void): Promise<string> {
+  if (from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("oracle");
   const was = desk;
   desk = "xlayer";
   try {
     const rpc = await client();
-    let mark = typeof window !== "undefined" ? window.localStorage.getItem(XMARK_KEY) ?? "" : "";
-    const fresh = !/^0x[a-fA-F0-9]{40}$/.test(mark);
+    let mark = typeof window !== "undefined" ? window.localStorage.getItem(XBEM_MARK_KEY) ?? "" : "";
     if (!/^0x[a-fA-F0-9]{40}$/.test(mark)) {
       onStep?.(1);
-      const markHash = await send(from, undefined, MARK_BYTECODE);
-      const markReceipt = await rpc.waitForTransactionReceipt({ hash: markHash, timeout: 90_000 });
+      const markHash = await send(from, undefined, MARK_BYTECODE, 6_000_000n);
+      const markReceipt = await rpc.waitForTransactionReceipt({ hash: markHash, timeout: 120_000 });
       mark = markReceipt.contractAddress ?? "";
-      if (!mark) throw new Error("revert");
-      window.localStorage.setItem(XMARK_KEY, mark);
+      if (markReceipt.status !== "success" || !mark) throw new Error("revert");
+      window.localStorage.setItem(XBEM_MARK_KEY, mark);
     }
     onStep?.(2);
-    try {
-      const tick = await bscTick();
-      const push = encodeFunctionData({ abi: pushAbi, functionName: "push", args: [tick] });
-      await send(from, mark as Hex, push);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "";
-      if (fresh || message !== "revert") throw err;
-    }
-    const existing = savedXPerp();
-    if (/^0x[a-fA-F0-9]{40}$/.test(existing)) return existing;
+    const poke = encodeFunctionData({ abi: pokeAbi, functionName: "poke" });
+    await send(from, mark as Hex, poke, 400_000n);
+    const existing = typeof window !== "undefined" ? window.localStorage.getItem(XBEM_PERP_KEY) ?? "" : "";
+    if (/^0x[a-fA-F0-9]{40}$/.test(existing) && (await xBookState(existing)) === "ready") return existing;
     onStep?.(3);
     const args = encodeAbiParameters(
       [{ type: "address" }, { type: "address" }, { type: "uint256" }],
       [X_USDT, mark as Hex, 1_000_000n],
     );
     const data = (PERP_BYTECODE + args.slice(2)) as Hex;
-    const perpHash = await send(from, undefined, data);
-    const perpReceipt = await rpc.waitForTransactionReceipt({ hash: perpHash, timeout: 90_000 });
+    const perpHash = await send(from, undefined, data, 8_000_000n);
+    const perpReceipt = await rpc.waitForTransactionReceipt({ hash: perpHash, timeout: 180_000 });
     if (perpReceipt.status !== "success" || !perpReceipt.contractAddress) throw new Error("revert");
-    window.localStorage.setItem(XPERP_KEY, perpReceipt.contractAddress);
+    window.localStorage.setItem(XBEM_PERP_KEY, perpReceipt.contractAddress);
     return perpReceipt.contractAddress;
+  } finally {
+    desk = was;
+  }
+}
+
+/** Deploy a mark that keeps the last price, then the X Layer book on it. */
+export async function deployFixedX(from: string): Promise<string> {
+  if (from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("oracle");
+  const was = desk;
+  desk = "xlayer";
+  try {
+    const rpc = await client();
+    let mark = window.localStorage.getItem(XMARK_HOLD) ?? "";
+    if (!/^0x[a-fA-F0-9]{40}$/.test(mark)) {
+      const markHash = await send(from, undefined, MARK_BYTECODE, 2_000_000n);
+      const markReceipt = await rpc.waitForTransactionReceipt({ hash: markHash, timeout: 120_000 });
+      mark = markReceipt.contractAddress ?? "";
+      if (markReceipt.status !== "success" || !mark) throw new Error("revert");
+      window.localStorage.setItem(XMARK_HOLD, mark);
+      window.localStorage.setItem(XMARK_FIXED, mark);
+    }
+    const poke = encodeFunctionData({ abi: pokeAbi, functionName: "poke" });
+    await send(from, mark as Hex, poke, 400_000n);
+    const existing = window.localStorage.getItem(XPERP_HOLD) ?? "";
+    if (/^0x[a-fA-F0-9]{40}$/.test(existing) && (await xBookState(existing)) === "ready") return existing;
+    const args = encodeAbiParameters(
+      [{ type: "address" }, { type: "address" }, { type: "uint256" }],
+      [X_USDT, mark as Hex, 1_000_000n],
+    );
+    const data = (PERP_BYTECODE + args.slice(2)) as Hex;
+    const perpHash = await send(from, undefined, data, 8_000_000n);
+    const perpReceipt = await rpc.waitForTransactionReceipt({ hash: perpHash, timeout: 180_000 });
+    const perp = perpReceipt.contractAddress ?? "";
+    if (perpReceipt.status !== "success" || !perp) throw new Error("revert");
+    window.localStorage.setItem(XPERP_HOLD, perp);
+    window.localStorage.setItem(XPERP_FIXED, perp);
+    return perp;
+  } finally {
+    desk = was;
+  }
+}
+export async function deployLockedPair(from: string): Promise<{ mark: string; perp: string }> {
+  if (from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("oracle");
+  const was = desk;
+  desk = "xlayer";
+  try {
+    const rpc = await client();
+    const mark = NEXT_XMARK;
+    const args = encodeAbiParameters(
+      [{ type: "address" }, { type: "address" }, { type: "uint256" }],
+      [X_USDT, mark, 1_000_000n],
+    );
+    const data = (PERP_BYTECODE + args.slice(2)) as Hex;
+    const perpHash = await send(from, undefined, data, 3_000_000n);
+    const perpReceipt = await rpc.waitForTransactionReceipt({ hash: perpHash, timeout: 120_000 });
+    const perp = perpReceipt.contractAddress ?? "";
+    if (perpReceipt.status !== "success" || !perp) throw new Error("revert");
+    return { mark, perp };
   } finally {
     desk = was;
   }
@@ -934,7 +1050,7 @@ export function savedRebate(): string {
 }
 
 function rebateTarget(which: Desk): { desk: Desk; addr: Hex } {
-  return which === "xlayer" ? { desk: "xlayer", addr: KNOWN_XPERP } : { desk: "bsc", addr: BSC_REBATE };
+  return { desk: which, addr: bookOf(which) as Hex };
 }
 
 export async function hasRebates(which: Desk = "bsc"): Promise<boolean> {

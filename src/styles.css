@@ -4,16 +4,16 @@
 @source "./lib";
 
 @theme {
-  --color-paper: #f7f5f0;
-  --color-card: #fffcf8;
-  --color-ink: #14110d;
-  --color-gold: #6e5014;
-  --color-foil: #e4c56b;
-  --color-sell: #9e1b12;
+  --color-paper: #f6f1e8;
+  --color-card: #fbf7f1;
+  --color-ink: #14110e;
+  --color-gold: #8a7044;
+  --color-foil: #efe3d0;
+  --color-sell: #8e2a22;
   --font-sans: "IBM Plex Mono", ui-monospace, monospace;
   --font-display: "Fraunces", Georgia, serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
-  --shadow-plate: 0 18px 40px -28px rgb(20 17 13 / 0.45);
+  --shadow-plate: 0 28px 70px -40px rgb(20 17 14 / 0.42);
 }
 
 @layer base {
@@ -21,15 +21,53 @@
     color-scheme: light;
     -webkit-font-smoothing: antialiased;
   }
+  html.night {
+    color-scheme: dark;
+    --color-paper: #0e0c0a;
+    --color-card: #171410;
+    --color-ink: #f6f1e8;
+    --color-gold: #c6a56a;
+    --color-foil: #2a241c;
+    --color-sell: #e7a598;
+    --shadow-plate: 0 28px 70px -42px rgb(0 0 0 / 0.88);
+  }
   body {
-    background: var(--color-paper);
+    background:
+      radial-gradient(1100px 320px at 50% -140px, color-mix(in srgb, var(--color-gold) 16%, transparent), transparent 68%),
+      var(--color-paper);
     color: var(--color-ink);
     font-family: var(--font-sans);
   }
   button:not(:disabled),
-  [role="button"]:not(:disabled) {
+  [role="button"]:not(:disabled),
+  summary {
     cursor: pointer;
     touch-action: manipulation;
+    transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease, opacity 180ms ease, transform 180ms ease;
+  }
+  button:not(:disabled):not(.bg-ink):hover,
+  [role="button"]:not(:disabled):hover {
+    background-color: color-mix(in srgb, var(--color-foil) 72%, transparent);
+  }
+  button:not(:disabled):active,
+  [role="button"]:not(:disabled):active {
+    transform: translateY(1px);
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--color-gold) 32%, transparent);
+    color: var(--color-ink);
+  }
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  @media (min-width: 640px) {
+    input,
+    select,
+    textarea {
+      font-size: 14px;
+    }
   }
   :focus-visible {
     outline: 2px solid var(--color-gold);
@@ -42,6 +80,25 @@
   p {
     text-wrap: pretty;
   }
+}
+
+.bg-ink {
+  background-color: #14110e !important;
+  color: #f6f1e8 !important;
+  letter-spacing: 0.06em;
+}
+
+html.night .bg-ink {
+  background-color: #f3eadc !important;
+  color: #14110e !important;
+}
+
+.bg-ink:hover {
+  background-color: #2a241c !important;
+}
+
+html.night .bg-ink:hover {
+  background-color: #fff8ee !important;
 }
 
 .misreg {
@@ -86,6 +143,12 @@
 @media (max-width: 1023px) {
   .crop-bl,
   .crop-br {
+    display: none;
+  }
+}
+
+@media (max-width: 639px) {
+  .crop {
     display: none;
   }
 }

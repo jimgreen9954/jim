@@ -10,7 +10,7 @@ type Grip = "move" | "a" | "b" | "ab" | "ba";
 type Stroke = { kind: "line" | "zone"; a: Pt; b: Pt; color: string };
 type Drag = { i: number; mode: Grip; origin: Pt; a: Pt; b: Pt };
 
-const PAINTS = ["#2f2a26", "#b5a48e", "#efe6d8", "#f23645", "#089981", "#2962ff"];
+const PAINTS = ["#1a1714", "#8c7f6e", "#e6dccb", "#f23645", "#089981", "#2962ff"];
 const UP = "#089981";
 const DOWN = "#f23645";
 
@@ -406,10 +406,10 @@ export function Kline({
 
   const lean = bias?.side === "long" ? (zh ? "看多" : "Long") : bias?.side === "short" ? (zh ? "看空" : "Short") : zh ? "不明显" : "Unclear";
 
-  return (
-    <div>
-      <div>
-      <div className="flex flex-col gap-2 border-b border-gold/30 px-3 py-2">
+  const clockText = focus.t && focus.t > 1e9 ? `${zh ? "新加坡" : "Singapore"} ${clock(focus.t)}` : "";
+  const tools = (
+    <>
+      <div className="flex flex-col gap-2 border-b border-gold/30 px-3 py-2 lg:border-b">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex border border-gold/60">
             {(
@@ -515,11 +515,22 @@ export function Kline({
         <span>{zh ? "市值" : "Mkt"} {supply != null && supply > 0 ? fmtUsd(supply * focus.c) : "—"}</span>
         <span>RSI {rsiLine[safeIdx] != null ? rsiLine[safeIdx]!.toFixed(1) : "—"}</span>
         <span>Stoch {stochK[safeIdx] != null ? `${stochK[safeIdx]!.toFixed(1)}/${stochD[safeIdx] != null ? stochD[safeIdx]!.toFixed(1) : "—"}` : "—"}</span>
-        {focus.t && focus.t > 1e9 ? <span className="text-ink">新加坡 {clock(focus.t)}</span> : null}
+        {clockText ? <span className="text-ink">{clockText}</span> : null}
       </p>
+    </>
+  );
+
+  return (
+    <div>
+      <div>
+      <div className="hidden lg:block">{tools}</div>
+      <details className="lg:hidden">
+        <summary className="cursor-pointer px-3 py-2 font-mono text-xs text-ink/70">{clockText || (zh ? "时间" : "Time")}</summary>
+        {tools}
+      </details>
       <div ref={plotRef} className="relative">
       <div className="flex items-center gap-2 px-3 pb-1 text-xs">
-        <span className="font-mono tabular-nums text-ink/60">{zh ? `${viewCount} 根` : `${viewCount}`}</span>
+        <span className="hidden font-mono tabular-nums text-ink/60 lg:inline">{zh ? `${viewCount} 根` : `${viewCount}`}</span>
         {focus.t && focus.t > 1e9 ? <span className="bg-ink px-2 py-0.5 font-mono text-paper">新加坡 {clock(focus.t)}</span> : null}
       </div>
       <svg

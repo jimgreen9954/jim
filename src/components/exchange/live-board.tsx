@@ -14,9 +14,6 @@ function fmtTs(ts: number): string {
 
 export function LiveBoard() {
   const lang = useExchange((s) => s.lang);
-  const fills = useExchange((s) => s.engine.fills.length);
-  const orders = useExchange((s) => s.engine.orders.length);
-  const position = useExchange((s) => s.engine.position);
   const c = copy[lang];
   const [data, setData] = useState<TapeoutLive | null>(null);
   const [failed, setFailed] = useState(false);
@@ -64,7 +61,6 @@ export function LiveBoard() {
     return view === "all" ? traded : traded.slice(0, 12);
   }, [data, q, view]);
 
-  const held = fills > 0 || orders > 0 || Boolean(position);
   const toggle = (id: string) => setPick((cur) => (cur === id ? null : id));
 
   return (
@@ -85,7 +81,7 @@ export function LiveBoard() {
       </header>
 
       {!data && !failed ? <p className="px-3 py-4 text-sm">{c.loading}</p> : null}
-      {failed && !data?.ok ? <p className="px-3 py-4 text-sm text-sell">{data?.error ?? c.liveFail}</p> : null}
+      {failed && !data?.ok ? <p className="px-3 py-4 text-sm text-sell">{c.liveFail}</p> : null}
 
       {data?.ok ? (
         <div className="flex flex-col gap-3 p-3">
@@ -109,7 +105,7 @@ export function LiveBoard() {
             />
           </div>
           <p className="text-xs text-ink/70">
-            {held ? c.heldNote : c.following} {data.traded} {c.withTrades} / {data.listed} · {data.bidding} {c.onlyBids}
+            {c.following} {data.traded} {c.withTrades} / {data.listed} · {data.bidding} {c.onlyBids}
           </p>
           <input
             value={q}

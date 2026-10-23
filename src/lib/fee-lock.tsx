@@ -31,6 +31,10 @@ export function FeeLockProvider({ children }: { children: ReactNode }) {
   const [lock, setLock] = useState<Lock>({ status: "checking", rows: [] });
   useEffect(() => {
     let dead = false;
+    const timer = window.setTimeout(() => {
+      if (dead) return;
+      setLock((cur) => (cur.status === "checking" ? { status: "ok", rows: cur.rows } : cur));
+    }, 8000);
     void Promise.all([
       readOne(BSC.rpc, BSC_REBATE, "BSC 永续"),
       readOne(XLAYER.rpc, KNOWN_XPERP, "X Layer 永续"),
@@ -38,9 +42,12 @@ export function FeeLockProvider({ children }: { children: ReactNode }) {
     ]).then((rows) => {
       if (dead) return;
       setLock({ status: rows.some((row) => row.got != null && !row.ok) ? "bad" : "ok", rows });
+    }).catch(() => {
+      if (!dead) setLock((cur) => (cur.status === "checking" ? { status: "ok", rows: [] } : cur));
     });
     return () => {
       dead = true;
+      window.clearTimeout(timer);
     };
   }, []);
   return <Ctx.Provider value={lock}>{children}</Ctx.Provider>;

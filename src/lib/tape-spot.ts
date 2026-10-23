@@ -1,6 +1,7 @@
-import { createPublicClient, defineChain, encodeFunctionData, formatUnits, http, parseAbi, parseAbiItem, parseUnits, type Hex } from "viem";
+import { createPublicClient, decodeEventLog, defineChain, encodeFunctionData, fallback, formatUnits, http, parseAbi, parseAbiItem, parseUnits, toFunctionSelector, type Hex, type PublicClient } from "viem";
 import { TAPE_SPOT_BYTECODE } from "@/lib/tape-spot-artifact";
 import { FEE_TO } from "@/lib/bsc";
+import { buyExactBookUsdt, OKB, okbForBookUsdt, okbOutOfBookUsdt, readNativeOkb, sellBookUsdtForOkb } from "@/lib/okb";
 import { TAPE_TOKEN, TAPE_USDT } from "@/lib/tape-pool";
 import { getProvider, walletKind } from "@/lib/wallet";
 import { DEPLOYED, connectXLayer, quoteGas, XLAYER } from "@/lib/xlayer";
@@ -21,6 +22,8 @@ const abi = parseAbi([
   "function buyCircuit(uint256)",
   "function book(uint8,bool,uint256) view returns (uint256 count, uint128[] price, uint128[] size, uint32[] lots)",
   "function myOrders(address) view returns (uint64[] ids, uint8[] markets, bool[] bids, uint128[] prices, uint128[] lefts)",
+  "function best(uint8,bool) view returns (uint64)",
+  "function orders(uint64) view returns (address maker, uint8 market, bool bid, uint128 price, uint128 left, uint128 escrow, uint64 prev, uint64 next)",
   "function listingCount() view returns (uint256)",
   "function listings(uint256,uint256) view returns (uint256[] ids, address[] sellers, uint128[] prices)",
   "event Take(uint64 indexed id, address indexed taker, address indexed maker, uint8 market, uint128 price, uint128 base, uint128 quote, uint128 fee)",
@@ -48,10 +51,21 @@ const xlayer = defineChain({
   contracts: { multicall3: { address: "0xcA11bde05977b3631167028862bE2a173976CA11" } },
 });
 
+const READ_RPCS = [XLAYER.rpc, "https://xlayerrpc.okx.com", "https://xlayer.drpc.org"];
+
 const client = createPublicClient({
   chain: xlayer,
-  transport: http(XLAYER.rpc, { batch: { batchSize: 40, wait: 16 }, timeout: 8_000 }),
+  transport: fallback(
+    READ_RPCS.map((url) => http(url, { batch: { batchSize: 8, wait: 8 }, timeout: 6_000, retryCount: 0 })),
+    { rank: true, retryCount: 0 },
+  ),
 });
+
+const logClients: PublicClient[] = READ_RPCS.map((url) => createPublicClient({
+  chain: xlayer,
+  transport: http(url, { batch: false, timeout: 8_000, retryCount: 0 }),
+}));
+let logCursor = 0;
 
 export type SpotMarket = 0 | 1 | 2;
 
@@ -87,8 +101,8 @@ export async function rememberSpot(address: string): Promise<Hex> {
 export type Level = { price: bigint; size: bigint; lots: number };
 export type OpenOrder = { id: bigint; market: number; bid: boolean; price: bigint; left: bigint };
 export type CircuitAsk = { id: bigint; seller: string; price: bigint };
-export type SpotPrint = { tx: string; market: number; price: bigint; base: bigint; quote: bigint; fee: bigint; taker: string; maker: string; block: number };
-export type SpotPurse = { usdt: bigint; tape: bigint; nand: bigint; latch: bigint };
+export type SpotPrint = { tx: string; market: number; price: bigint; base: bigint; quote: bigint; fee: bigint; taker: string; maker: string; block: number; side?: "buy" | "sell" };
+export type SpotPurse = { usdt: bigint; tape: bigint; nand: bigint; latch: bigint; okb: bigint };
 
 function levels(row: unknown): Level[] {
   const tuple = Array.isArray(row) ? row : null;
@@ -113,6 +127,25 @@ export function spotCost(market: SpotMarket, base: bigint, price: bigint): bigin
   return market === 0 ? base * price / 100_000_000n : base * price;
 }
 
+export type BookDust = { id: string; maker: string; price: bigint; left: bigint };
+
+export async function readDustHeads(market: SpotMarket): Promise<{ ask: BookDust | null; bid: BookDust | null }> {
+  const spot = spotAddress();
+  if (!spot) return { ask: null, bid: null };
+  const load = async (bid: boolean): Promise<BookDust | null> => {
+    const id = await client.readContract({ address: spot, abi, functionName: "best", args: [market, bid] });
+    if (id === 0n) return null;
+    const row = await client.readContract({ address: spot, abi, functionName: "orders", args: [id] });
+    const price = row[3];
+    const left = row[4];
+    const cost = spotCost(market, left, price);
+    if (cost * 20n / 10000n > 0n) return null;
+    return { id: id.toString(), maker: row[0], price, left };
+  };
+  const [ask, bid] = await Promise.all([load(false), load(true)]);
+  return { ask, bid };
+}
+
 export async function readSpotBook(market: SpotMarket): Promise<{ bids: Level[]; asks: Level[] } | null> {
   const view = await readSpotView(market, null);
   return view.book;
@@ -135,14 +168,17 @@ export async function readSpotView(market: SpotMarket, account: string | null): 
       { address: spot, abi, functionName: "myOrders", args: [who] },
     );
   }
-  const rows = await client.multicall({ contracts: calls as never, allowFailure: true }) as { status: string; result?: unknown }[];
+  const [rows, okbBal] = await Promise.all([
+    client.multicall({ contracts: calls as never, allowFailure: true }) as Promise<{ status: string; result?: unknown }[]>,
+    who ? client.getBalance({ address: who }).catch(() => 0n) : Promise.resolve(0n),
+  ]);
   const bid = rows[0];
   const ask = rows[1];
   if (!bid || bid.status !== "success" || !ask || ask.status !== "success") throw new Error("book");
   let purse: SpotPurse | null = null;
   let orders: OpenOrder[] | null = null;
   if (who && rows[2]?.status === "success" && rows[3]?.status === "success" && rows[4]?.status === "success" && rows[5]?.status === "success") {
-    purse = { usdt: rows[2].result as bigint, tape: rows[3].result as bigint, nand: rows[4].result as bigint, latch: rows[5].result as bigint };
+    purse = { usdt: rows[2].result as bigint, tape: rows[3].result as bigint, nand: rows[4].result as bigint, latch: rows[5].result as bigint, okb: okbBal };
   }
   if (who && rows[6]?.status === "success" && Array.isArray(rows[6].result)) {
     const row = rows[6].result as [bigint[], number[], boolean[], bigint[], bigint[]];
@@ -283,23 +319,25 @@ function stampCircuits(rows: CircuitPrint[]): CircuitPrint[] {
   return [...rows].sort((a, b) => b.block - a.block).map((row) => ({ ...row, ts: blockStamp(row.block) || row.ts }));
 }
 
-const PRINT_KEY = "tapeliquid-spot-prints-v4";
-const PRINT_OLD = "tapeliquid-spot-prints-v3";
-const LOG_SPAN = 2_000n;
+const PRINT_KEY = "tapeliquid-spot-prints-v5";
+const PRINT_OLD = "tapeliquid-spot-prints-v4";
+const LOG_CAP = 90n;
+const LOG_STEP = 270n;
 const SPOT_BORN = 72965200n;
 
-type PrintWire = { tx: string; market: number; price: string; base: string; quote: string; fee: string; taker: string; maker: string; block?: number };
+type PrintWire = { tx: string; market: number; price: string; base: string; quote: string; fee: string; taker: string; maker: string; block?: number; side?: "buy" | "sell" };
 type PrintCache = { low: string; high: string; rows: PrintWire[] };
 
 let printMemory: { low: bigint; high: bigint; rows: SpotPrint[] } | null = null;
 let printFlight: Promise<void> | null = null;
 
 function packPrint(row: SpotPrint): PrintWire {
-  return { tx: row.tx, market: row.market, price: row.price.toString(), base: row.base.toString(), quote: row.quote.toString(), fee: row.fee.toString(), taker: row.taker, maker: row.maker, block: row.block };
+  return { tx: row.tx, market: row.market, price: row.price.toString(), base: row.base.toString(), quote: row.quote.toString(), fee: row.fee.toString(), taker: row.taker, maker: row.maker, block: row.block, side: row.side };
 }
 
 function unpackPrint(row: PrintWire): SpotPrint {
-  return { tx: row.tx, market: row.market, price: BigInt(row.price), base: BigInt(row.base), quote: BigInt(row.quote), fee: BigInt(row.fee), taker: row.taker, maker: row.maker, block: row.block ?? 0 };
+  const side = row.side === "buy" || row.side === "sell" ? row.side : undefined;
+  return { tx: row.tx, market: row.market, price: BigInt(row.price), base: BigInt(row.base), quote: BigInt(row.quote), fee: BigInt(row.fee), taker: row.taker, maker: row.maker, block: row.block ?? 0, side };
 }
 
 function printKey(row: SpotPrint): string {
@@ -327,39 +365,53 @@ function mergePrints(rows: SpotPrint[], extra: SpotPrint[]) {
       rows.push(row);
       continue;
     }
-    if (rows[index].block <= 0 && row.block > 0) rows[index] = row;
+    const prev = rows[index];
+    if (prev.block <= 0 && row.block > 0) rows[index] = { ...row, side: row.side ?? prev.side };
+    else if (!prev.side && row.side) prev.side = row.side;
   }
 }
 
-async function pullLogs(spot: Hex, start: bigint, end: bigint): Promise<SpotPrint[] | null> {
-  const once = async (from: bigint, to: bigint) => {
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      try {
-        const logs = await client.getLogs({ address: spot, event: takeEvent, fromBlock: from, toBlock: to });
-        return logs.map((log) => ({
-          tx: log.transactionHash ?? "",
-          market: Number(log.args.market ?? 0),
-          price: log.args.price ?? 0n,
-          base: log.args.base ?? 0n,
-          quote: log.args.quote ?? 0n,
-          fee: log.args.fee ?? 0n,
-          taker: log.args.taker ?? "",
-          maker: log.args.maker ?? "",
-          block: Number(log.blockNumber ?? 0),
-        }));
-      } catch {
-        await new Promise((resolve) => setTimeout(resolve, 150 * (attempt + 1)));
-      }
+async function readSpan(spot: Hex, from: bigint, to: bigint, salt: number): Promise<SpotPrint[] | null> {
+  for (let attempt = 0; attempt < logClients.length; attempt += 1) {
+    const node = logClients[(salt + attempt) % logClients.length];
+    try {
+      const logs = await node.getLogs({ address: spot, event: takeEvent, fromBlock: from, toBlock: to });
+      return logs.map((log) => ({
+        tx: log.transactionHash ?? "",
+        market: Number(log.args.market ?? 0),
+        price: log.args.price ?? 0n,
+        base: log.args.base ?? 0n,
+        quote: log.args.quote ?? 0n,
+        fee: log.args.fee ?? 0n,
+        taker: log.args.taker ?? "",
+        maker: log.args.maker ?? "",
+        block: Number(log.blockNumber ?? 0),
+      }));
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 160));
     }
-    return null;
-  };
-  const found = await once(start, end);
-  if (found || end <= start + 25n) return found;
-  const mid = start + (end - start) / 2n;
-  const left = await once(start, mid);
-  const right = await once(mid + 1n, end);
-  if (!left || !right) return null;
-  return [...left, ...right];
+  }
+  return null;
+}
+
+async function pullLogs(spot: Hex, start: bigint, end: bigint): Promise<SpotPrint[] | null> {
+  const spans: { from: bigint; to: bigint }[] = [];
+  for (let from = start; from <= end; from += LOG_CAP) {
+    const to = from + LOG_CAP - 1n > end ? end : from + LOG_CAP - 1n;
+    spans.push({ from, to });
+  }
+  const out: SpotPrint[] = [];
+  for (let i = 0; i < spans.length; i += 3) {
+    const part = spans.slice(i, i + 3);
+    let found = await Promise.all(part.map((span, index) => readSpan(spot, span.from, span.to, logCursor++ + index)));
+    if (found.some((row) => !row)) {
+      await new Promise((resolve) => setTimeout(resolve, 220));
+      found = await Promise.all(part.map((span, index) => (found[index] ? found[index] : readSpan(spot, span.from, span.to, logCursor++ + index))));
+    }
+    if (found.some((row) => !row)) return null;
+    for (const rows of found) if (rows) out.push(...rows);
+  }
+  return out;
 }
 
 function parseCache(raw: string | null): { low: bigint; high: bigint; rows: SpotPrint[] } | null {
@@ -407,13 +459,37 @@ async function attachBlocks(rows: SpotPrint[]) {
 }
 
 let headCache: { at: number; tip: bigint } | null = null;
-let nextBackfill = 0;
 
 async function chainHead(): Promise<bigint> {
   if (headCache && Date.now() - headCache.at < 4_000) return headCache.tip;
   const tip = await client.getBlockNumber();
   headCache = { at: Date.now(), tip };
   return tip;
+}
+
+const PLACE_SELECTOR = toFunctionSelector("function place(uint8,bool,uint128,uint128)");
+const makeEvent = parseAbiItem("event Make(uint64 indexed id, address indexed maker, uint8 market, bool bid, uint128 price, uint128 left)");
+
+async function attachSides(rows: SpotPrint[]) {
+  const txs = [...new Set(rows.filter((row) => !row.side && row.tx.startsWith("0x")).sort((a, b) => b.block - a.block).map((row) => row.tx))].slice(0, 16);
+  if (!txs.length) return false;
+  let changed = false;
+  await Promise.all(txs.map(async (hash) => {
+    try {
+      const tx = await client.getTransaction({ hash: hash as Hex });
+      const input = (tx.input ?? "0x").toLowerCase();
+      if (!input.startsWith(PLACE_SELECTOR.toLowerCase()) || input.length < 10 + 128) return;
+      const bid = BigInt(`0x${input.slice(10 + 64, 10 + 128)}`) === 1n;
+      const side = bid ? "buy" : "sell";
+      for (const row of rows) if (row.tx === hash && !row.side) {
+        row.side = side;
+        changed = true;
+      }
+    } catch {
+      /* The next pass reads the side. */
+    }
+  }));
+  return changed;
 }
 
 async function fillPrints() {
@@ -425,39 +501,34 @@ async function fillPrints() {
   const cached = readPrintCache();
   const rows = cached?.rows ?? [];
   let low = cached?.low ?? tip + 1n;
-  let high = cached?.high ?? tip - 1n;
-  if (!cached) {
-    const first = 400n;
-    const start = tip > first ? tip - first + 1n : born;
-    const found = await pullLogs(spot, start < born ? born : start, tip);
-    if (!found) return;
-    mergePrints(rows, found);
-    writePrintCache(start < born ? born : start, tip, rows);
-    return;
-  }
-  let steps = 0;
-  while (high < tip && steps < 2) {
+  let high = cached?.high ?? tip;
+  const deadline = Date.now() + 1_400;
+  let guard = 0;
+  while (high < tip && Date.now() < deadline && guard < 3) {
     const start = high + 1n;
-    const end = start + LOG_SPAN - 1n > tip ? tip : start + LOG_SPAN - 1n;
+    const end = start + LOG_STEP - 1n > tip ? tip : start + LOG_STEP - 1n;
     const found = await pullLogs(spot, start, end);
     if (!found) break;
     mergePrints(rows, found);
     high = end;
     if (low > high + 1n) low = high + 1n;
     writePrintCache(low, high, rows);
-    steps += 1;
+    guard += 1;
   }
-  if (Date.now() < nextBackfill || low <= born) return;
-  nextBackfill = Date.now() + 8_000;
-  const end = low - 1n;
-  const start = end - LOG_SPAN + 1n < born ? born : end - LOG_SPAN + 1n;
-  const found = await pullLogs(spot, start, end);
-  if (!found) return;
-  mergePrints(rows, found);
-  writePrintCache(start, high, rows);
+  while (low > born && Date.now() < deadline && guard < 4) {
+    const end = low - 1n;
+    const start = end - LOG_STEP + 1n < born ? born : end - LOG_STEP + 1n;
+    const found = await pullLogs(spot, start, end);
+    if (!found) break;
+    mergePrints(rows, found);
+    low = start;
+    writePrintCache(low, high, rows);
+    guard += 1;
+  }
+  if (await attachSides(rows)) writePrintCache(low, high, rows);
 }
 
-export function peekSpotPrints(market: SpotMarket | null): { rows: SpotPrint[]; pending: boolean; minutes: number } {
+export function peekSpotPrints(market: SpotMarket | null): { rows: SpotPrint[]; pending: boolean; older: boolean; minutes: number } {
   if (!printFlight) {
     printFlight = fillPrints().finally(() => {
       printFlight = null;
@@ -469,8 +540,9 @@ export function peekSpotPrints(market: SpotMarket | null): { rows: SpotPrint[]; 
   const low = cached?.low ?? 0n;
   const high = cached?.high ?? 0n;
   const covered = high >= low ? high - low + 1n : 0n;
-  const pending = rows.length === 0 && printFlight != null;
-  return { rows, pending, minutes: Number(covered / 60n) };
+  const older = !cached || low > SPOT_BORN;
+  const pending = rows.length === 0 && (older || printFlight != null);
+  return { rows, pending, older, minutes: Number(covered / 60n) };
 }
 
 const blockTime = new Map<number, number>();
@@ -510,13 +582,14 @@ export async function readBlockTimes(blocks: number[]): Promise<Record<number, n
 export async function readSpotPurse(account: string | null): Promise<SpotPurse | null> {
   if (!account) return null;
   const who = account as Hex;
-  const [usdt, tape, nand, latch] = await Promise.all([
+  const [usdt, tape, nand, latch, okb] = await Promise.all([
     client.readContract({ address: TAPE_USDT, abi: erc20, functionName: "balanceOf", args: [who] }),
     client.readContract({ address: TAPE_TOKEN, abi: erc20, functionName: "balanceOf", args: [who] }),
     client.readContract({ address: DEPLOYED.transistors, abi: erc1155, functionName: "balanceOf", args: [who, 0n] }),
     client.readContract({ address: DEPLOYED.transistors, abi: erc1155, functionName: "balanceOf", args: [who, 1n] }),
+    client.getBalance({ address: who }),
   ]);
-  return { usdt, tape, nand, latch };
+  return { usdt, tape, nand, latch, okb };
 }
 
 async function send(from: string, to: Hex | undefined, data: Hex): Promise<Hex> {
@@ -609,6 +682,122 @@ export async function placeSpot(from: string, market: SpotMarket, bid: boolean, 
   else if (market === 0) await approveErc20(from, TAPE_TOKEN, amount);
   else await approveAll(from, DEPLOYED.transistors, "wafer");
   return call(from, encodeFunctionData({ abi, functionName: "place", args: [market, bid, price, amount] }));
+}
+
+const OKB_BIDS = "tapeliquid-okb-bids";
+
+function okbBidSet(): Set<string> {
+  try {
+    const raw = JSON.parse(window.localStorage.getItem(OKB_BIDS) || "[]") as unknown;
+    return new Set(Array.isArray(raw) ? raw.map(String) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeOkbBids(ids: Set<string>) {
+  try { window.localStorage.setItem(OKB_BIDS, JSON.stringify([...ids])); } catch { /* the cancel still returns USDT */ }
+}
+
+export function isOkbBid(id: bigint): boolean {
+  return okbBidSet().has(id.toString());
+}
+
+async function usdt0Of(from: string): Promise<bigint> {
+  return client.readContract({ address: TAPE_USDT, abi: erc20, functionName: "balanceOf", args: [from as Hex] });
+}
+
+async function makeIds(hash: Hex): Promise<bigint[]> {
+  const receipt = await client.getTransactionReceipt({ hash });
+  const ids: bigint[] = [];
+  for (const log of receipt.logs) {
+    try {
+      const decoded = decodeEventLog({ abi: [makeEvent], data: log.data, topics: log.topics });
+      if (decoded.eventName === "Make") ids.push(decoded.args.id);
+    } catch { /* not a make */ }
+  }
+  return ids;
+}
+
+function rejected(err: unknown) {
+  return (err as { code?: number }).code === 4001;
+}
+
+async function swapBack(from: string, usdtIn: bigint) {
+  if (usdtIn <= 0n) return;
+  const quoted = await okbOutOfBookUsdt(usdtIn);
+  const minOkb = quoted * 9900n / 10000n;
+  await sellBookUsdtForOkb(from, usdtIn, minOkb);
+}
+
+export async function placeSpotPaid(from: string, market: SpotMarket, bid: boolean, price: bigint, amount: bigint, unit: "usdt" | "okb") {
+  if (unit !== "okb") return placeSpot(from, market, bid, price, amount);
+  const need = spotCost(market, amount, price);
+  if (need * 20n / 10000n === 0n) throw new Error("fee");
+  const before = await usdt0Of(from);
+  if (!bid) {
+    const hash = await placeSpot(from, market, false, price, amount);
+    const after = await usdt0Of(from);
+    const gained = after > before ? after - before : 0n;
+    if (gained > 0n) {
+      try { await swapBack(from, gained); } catch { throw new Error("usdtback"); }
+    }
+    return hash;
+  }
+  let quoted = 0n;
+  try { quoted = await okbForBookUsdt(need); } catch { throw new Error("okbpool"); }
+  if (quoted <= 0n) throw new Error("okbpool");
+  const max = quoted + quoted / 100n;
+  const bal = await readNativeOkb(from);
+  const cap = bal > OKB.gasReserve ? bal - OKB.gasReserve : 0n;
+  if (max > cap) throw new Error("okbshort");
+  try {
+    await buyExactBookUsdt(from, need, max);
+  } catch (err) {
+    if (rejected(err)) throw err;
+    throw new Error("okbpool");
+  }
+  let hash: Hex;
+  try {
+    hash = await placeSpot(from, market, true, price, amount);
+  } catch (err) {
+    const now = await usdt0Of(from);
+    const extra = now > before ? now - before : 0n;
+    if (extra > 0n) {
+      try { await swapBack(from, extra); } catch { throw new Error("usdtleft"); }
+    }
+    throw err;
+  }
+  const after = await usdt0Of(from);
+  const surplus = after > before ? after - before : 0n;
+  if (surplus > 0n) {
+    try { await swapBack(from, surplus); } catch { /* the order is in; leftover USDT stays in the wallet */ }
+  }
+  try {
+    const ids = await makeIds(hash);
+    if (ids.length) {
+      const set = okbBidSet();
+      for (const id of ids) set.add(id.toString());
+      writeOkbBids(set);
+    }
+  } catch { /* the order is already on the book */ }
+  return hash;
+}
+
+export async function cancelSpotPaid(from: string, id: bigint) {
+  const funded = isOkbBid(id);
+  const before = funded ? await usdt0Of(from) : 0n;
+  const hash = await cancelSpot(from, id);
+  if (!funded) return hash;
+  const set = okbBidSet();
+  set.delete(id.toString());
+  writeOkbBids(set);
+  const after = await usdt0Of(from);
+  const gained = after > before ? after - before : 0n;
+  if (gained > 0n) {
+    try { await swapBack(from, gained); } catch { throw new Error("usdtback"); }
+  }
+  return hash;
 }
 
 export async function cancelSpot(from: string, id: bigint) {

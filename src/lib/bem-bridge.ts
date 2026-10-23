@@ -1,7 +1,8 @@
 import { createPublicClient, encodeFunctionData, http, pad, parseAbi, type Hex } from "viem";
-import { BSC, connectBsc } from "@/lib/bsc";
+import { BSC, connectBsc, FEE_TO } from "@/lib/bsc";
+import { deskParts } from "@/lib/invite-cut";
 import { TAPE_BEM } from "@/lib/tape-pool";
-import { getProvider } from "@/lib/wallet";
+import { getProvider, walletKind } from "@/lib/wallet";
 import { connectXLayer, XLAYER } from "@/lib/xlayer";
 
 export const BSC_BRIDGE = "0xa84B8D3893De6e9922f2B29bE1e1b115845F5E72" as const;
@@ -18,6 +19,7 @@ const erc20 = parseAbi([
   "function approve(address,uint256) returns (bool)",
   "function allowance(address,address) view returns (uint256)",
   "function balanceOf(address) view returns (uint256)",
+  "function transfer(address,uint256) returns (bool)",
 ]);
 
 const bsc = createPublicClient({ transport: http(BSC.rpc) });
@@ -52,6 +54,24 @@ export async function bscBemBalance(account: string): Promise<bigint> {
   return bsc.readContract({ address: BSC.bem, abi: erc20, functionName: "balanceOf", args: [account as Hex] });
 }
 
+export async function payBridgeFee(toX: boolean, from: string, amount: bigint): Promise<void> {
+  const parts = await deskParts(toX ? "bsc" : "xlayer", from, amount);
+  if (parts.reward <= 0n && parts.desk <= 0n) return;
+  const token = (toX ? BSC.bem : TAPE_BEM) as Hex;
+  const client = toX ? bsc : xlayer;
+  const chainId = toX ? BSC.hex : XLAYER.hex;
+  if (toX) await connectBsc();
+  else await connectXLayer();
+  if (parts.reward > 0n && parts.referrer) {
+    const data = encodeFunctionData({ abi: erc20, functionName: "transfer", args: [parts.referrer, parts.reward] });
+    await tx(from, token, data, 0n, chainId, client);
+  }
+  if (parts.desk > 0n) {
+    const data = encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, parts.desk] });
+    await tx(from, token, data, 0n, chainId, client);
+  }
+}
+
 export async function sendBridge(toX: boolean, from: string, amount: bigint): Promise<Hex> {
   const quote = await quoteBridge(toX, from, amount);
   const bridge = (toX ? BSC_BRIDGE : TAPE_BEM) as Hex;
@@ -73,16 +93,37 @@ export async function sendBridge(toX: boolean, from: string, amount: bigint): Pr
     functionName: "send",
     args: [param(toX, from, amount, fresh.received), { nativeFee: fresh.nativeFee, lzTokenFee: 0n }, from as Hex],
   });
-  await client.call({ account: from as Hex, to: bridge, data, value: fresh.nativeFee });
+  let failed: unknown = null;
+  for (let i = 0; i < 4; i += 1) {
+    try {
+      await client.call({ account: from as Hex, to: bridge, data, value: fresh.nativeFee });
+      failed = null;
+      break;
+    } catch (error) {
+      failed = error;
+      const text = error instanceof Error ? error.message : "";
+      if (!/allow|allowance/i.test(text) || i === 3) break;
+      await new Promise((resolve) => setTimeout(resolve, 800));
+    }
+  }
+  if (failed) throw failed;
   return tx(from, bridge, data, fresh.nativeFee, toX ? BSC.hex : XLAYER.hex, client);
 }
 
 async function tx(from: string, to: Hex, data: Hex, value: bigint, chainId: string, client: typeof bsc): Promise<Hex> {
   const eth = getProvider();
   if (!eth) throw new Error("nowallet");
+  const row: { from: string; to: Hex; data: Hex; value: string; chainId?: string; gas?: Hex } = { from, to, data, value: `0x${value.toString(16)}` };
+  if (walletKind() !== "binance") row.chainId = chainId;
+  try {
+    const gas = await client.estimateGas({ account: from as Hex, to, data, value });
+    row.gas = `0x${((gas * 3n) / 2n).toString(16)}`;
+  } catch {
+    /* The wallet estimates when this RPC cannot see the new allowance yet. */
+  }
   const hash = (await eth.request({
     method: "eth_sendTransaction",
-    params: [{ from, to, data, value: `0x${value.toString(16)}`, chainId }],
+    params: [row],
   })) as Hex;
   const receipt = await client.waitForTransactionReceipt({ hash, timeout: 180_000 });
   if (receipt.status !== "success") throw new Error("revert");

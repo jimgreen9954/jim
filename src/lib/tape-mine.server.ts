@@ -1,4 +1,5 @@
 import { createPublicClient, defineChain, fallback, http, parseAbi, type Hex } from "viem";
+import { circuitTip } from "@/lib/circuit-tip";
 
 const CIRCUITS = "0x69F663931209096037474d7C20402232E5C762cA" as const;
 
@@ -53,7 +54,7 @@ const xlayer = defineChain({
 const client = createPublicClient({
   chain: xlayer,
   transport: fallback(
-    ["https://xlayerrpc.okx.com", "https://rpc.xlayer.tech", "https://xlayer.drpc.org"].map((url) => http(url, { timeout: 8_000, retryCount: 0 })),
+    ["https://xlayer.drpc.org", "https://rpc.xlayer.tech", "https://xlayerrpc.okx.com"].map((url) => http(url, { timeout: 8_000, retryCount: 0 })),
     { rank: false },
   ),
 });
@@ -141,7 +142,7 @@ async function headOf(account: string | null) {
     balance: account ? (head[12] as bigint) : 0n,
     start,
     daily: dailyAt(start),
-    last: Number(next) - 1,
+    last: await circuitTip(client, CIRCUITS, Number(next)),
     burned: head[5] as bigint,
     pooled: head[6] as bigint,
     circuitHeld: head[7] as bigint,
@@ -214,21 +215,35 @@ let census: Census | null = null;
 let censusFlight: Promise<Census> | null = null;
 
 async function ownerCensus(last: number): Promise<Census> {
-  if (census && census.last === last && Date.now() - census.at < 300_000) return census;
+  if (census && census.last === last && Date.now() - census.at < 90_000) return census;
   if (censusFlight) return censusFlight;
   censusFlight = (async () => {
-    const ids: number[] = [];
-    for (let id = 1; id <= last && ids.length < 8000; id += 1) ids.push(id);
-    const calls = ids.flatMap((id) => [
-      { address: CIRCUITS, abi: circuitAbi, functionName: "ownerOf" as const, args: [BigInt(id)] as const },
-      { address: MINE, abi: mineAbi, functionName: "seat" as const, args: [BigInt(id)] as const },
-    ]);
-    const owned = calls.length ? await multicallAll(calls) : [];
+    const prior = census;
+    const fresh = Boolean(prior && Date.now() - prior.at < 90_000 && last >= prior.last && last - prior.last <= 64);
+    const from = fresh && prior ? prior.last + 1 : 1;
     const owners = new Map<string, number[]>();
     let open = 0;
     let staked = 0;
     let stakedLive = 0;
     let stakedWeight = 0n;
+    let pendingNet = 0n;
+    let pendingStaked = 0n;
+    if (fresh && prior) {
+      for (const [who, ids] of prior.owners) owners.set(who, ids.slice());
+      open = prior.open;
+      staked = prior.staked;
+      stakedLive = prior.stakedLive;
+      stakedWeight = prior.stakedWeight;
+      pendingNet = prior.pendingNet;
+      pendingStaked = prior.pendingStaked;
+    }
+    const ids: number[] = [];
+    for (let id = from; id <= last && ids.length < 8000; id += 1) ids.push(id);
+    const calls = ids.flatMap((id) => [
+      { address: CIRCUITS, abi: circuitAbi, functionName: "ownerOf" as const, args: [BigInt(id)] as const },
+      { address: MINE, abi: mineAbi, functionName: "seat" as const, args: [BigInt(id)] as const },
+    ]);
+    const owned = calls.length ? await multicallAll(calls) : [];
     let missed = 0;
     const openIds: number[] = [];
     const stakedOn = new Set<number>();
@@ -253,13 +268,11 @@ async function ownerCensus(last: number): Promise<Census> {
       }
       for (const who of new Set([ownerAddr, seatOwner].filter((item) => item && item !== "0x0000000000000000000000000000000000000000"))) {
         const list = owners.get(who) ?? [];
-        list.push(ids[i]);
+        if (!list.includes(ids[i])) list.push(ids[i]);
         owners.set(who, list);
       }
     }
-    if (missed > Math.max(8, Math.floor(ids.length / 20))) throw new Error("scan");
-    let pendingNet = 0n;
-    let pendingStaked = 0n;
+    if (ids.length && missed > Math.max(8, Math.floor(ids.length / 20))) throw new Error("scan");
     const pendingRows = openIds.length
       ? await multicallAll(openIds.map((id) => ({ address: MINE, abi: mineAbi, functionName: "pendingOf" as const, args: [BigInt(id)] as const })))
       : [];
@@ -279,9 +292,9 @@ async function ownerCensus(last: number): Promise<Census> {
 
 export async function loadTapeSeats(account: string | null): Promise<TapeWire> {
   const key = `s:${(account ?? "").toLowerCase()}`;
-  const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < 20_000) return hit.body;
   const row = await headOf(account);
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < 12_000 && hit.body.circuits >= Math.max(0, row.last)) return hit.body;
   const found = await ownerCensus(row.last);
   const who = account?.toLowerCase() ?? "";
   const mineIds = who ? (found.owners.get(who) ?? []) : [];

@@ -22,7 +22,7 @@ const rows: Row[] = [
   { name: "晶体管", chain: "X Layer", address: DEPLOYED.transistors, href: xlayer(DEPLOYED.transistors) },
   { name: "BEM", chain: "BSC", address: BSC.bem, href: bsc(BSC.bem) },
   { name: "USDT", chain: "BSC", address: BSC.usdt, href: bsc(BSC.usdt) },
-  { name: "USDT0", chain: "X Layer", address: X_USDT, href: xlayer(X_USDT) },
+  { name: "USDT", chain: "X Layer", address: X_USDT, href: xlayer(X_USDT) },
   { name: "收费地址", chain: "BSC · X Layer", address: FEE_TO, href: bsc(FEE_TO) },
 ];
 

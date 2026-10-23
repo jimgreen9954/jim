@@ -25,7 +25,7 @@ export type TransistorDesk = {
   asks: Level[];
 };
 
-export const getTransistorDesk = createServerFn({ method: "GET" })
+export const getTransistorDesk = createServerFn({ method: "POST" })
   .validator((input: { token?: string; id?: number }) => ({
     token: input?.token ?? "0xCC42ba5De07f01B472a5b14cF45aBcCA79Eb8087",
     id: input?.id ?? 0,

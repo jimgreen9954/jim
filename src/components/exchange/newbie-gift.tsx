@@ -124,7 +124,7 @@ export function NewbieGift({ account, zh, pulse = 0 }: { account: string; zh: bo
         </div>
         <div>
           <p className="text-[11px] tracking-[0.18em] text-gold">{zh ? "领 NAND" : "NAND"}</p>
-          <p className="mt-1 text-ink/80">{zh ? "X Layer 永续，已经撮合，你这一边保证金不少于 5 USDT0。记下这一笔，领 10 个。一个地址最多 5 次。池子少于 10 个就停。" : "One matched X Layer perpetual, with your margin at least 5 USDT0. Count that fill, then claim 10. Five times per address. The pool stops under 10."}</p>
+          <p className="mt-1 text-ink/80">{zh ? "X Layer 永续，已经撮合，你这一边保证金不少于 5 USDT。记下这一笔，领 10 个。一个地址最多 5 次。池子少于 10 个就停。" : "One matched X Layer perpetual, with your margin at least 5 USDT. Count that fill, then claim 10. Five times per address. The pool stops under 10."}</p>
         </div>
         <div>
           <p className="text-[11px] tracking-[0.18em] text-gold">{zh ? "领 BEM" : "BEM"}</p>

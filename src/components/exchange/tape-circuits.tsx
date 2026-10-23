@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { circuitShapes, chainNote, connectXLayer, matchCircuitTask, myCircuits, rememberTask, rememberedCircuits, rememberedTasks, XLAYER } from "@/lib/xlayer";
 import { claimFreshCircuit, readCircuitLocks, type CircuitSeat } from "@/lib/tape-lock";
 import { openTape, readSeatFlags, readTapePace, tapeText } from "@/lib/tape-mine";
-import { readTapePool } from "@/lib/tape-pool";
+import { openTapePrice } from "@/lib/tape-pool";
 import { Kline, type Bar } from "@/components/exchange/kline";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import {
@@ -183,11 +183,7 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
       if (document.hidden) return;
       readListings().then((rows) => { if (!dead) { setLists(rows); setLoaded(true); setMiss(false); } }).catch(() => { if (!dead) setMiss(true); });
       readTapePace().then((next) => { if (!dead && next) setPace(next); }).catch(() => undefined);
-      readTapePool(null).then((pool) => {
-        if (dead || pool.usdt.tape <= 0n) return;
-        const px = (Number(pool.usdt.quote) / 1e6) / (Number(pool.usdt.tape) / 1e8);
-        if (Number.isFinite(px) && px > 0) setTapePx(px);
-      }).catch(() => undefined);
+      openTapePrice().then((px) => { if (!dead && px && px > 0) setTapePx(px); }).catch(() => undefined);
       readCircuitPrints().then((tape) => { if (!dead) { setPrints(tape.rows); setPrintsPending(tape.pending); } }).catch(() => undefined);
       if (!account) {
         setOwned([]);
@@ -281,11 +277,11 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
       setBad(true);
       if (/4001|rejected|denied/i.test(text)) setNote(zh ? "签名取消了。" : "Cancelled.");
       else if (text === "chain") setNote(chainNote(zh, seen));
-      else if (/token/i.test(text)) setNote(zh ? "网络对了也不够。买电路花的是这个钱包里的 X Layer USDT0。币在别的链上、余额不够，或上一笔授权没签成，合约都拒绝。" : "The network is not enough. A circuit is bought with X Layer USDT0 in this wallet. Another chain, a short balance, or a missed approval is rejected.");
+      else if (/token/i.test(text)) setNote(zh ? "网络对了也不够。买电路花的是这个钱包里的 X Layer USDT。币在别的链上、余额不够，或上一笔授权没签成，合约都拒绝。" : "The network is not enough. A circuit is bought with X Layer USDT in this wallet. Another chain, a short balance, or a missed approval is rejected.");
       else if (/escrow|listed/i.test(text)) setNote(zh ? "这张现在不能这样成交。在售的才能买，在这个钱包里的才能挂出。" : "This circuit cannot settle that way. Only a listing can be bought, and only one in this wallet can be listed.");
       else if (/owner/i.test(text)) setNote(zh ? "这张电路不在当前这个钱包里。" : "This wallet does not hold this circuit.");
       else if (/gas|insufficient/i.test(text)) setNote(zh ? "OKB 不够付这笔矿工费。" : "Not enough OKB for the fee.");
-      else setNote(zh ? `没有成交。${text ? text.slice(0, 80) : "先看是不是 X Layer，再看 USDT0。"}` : `It did not fill. ${text ? text.slice(0, 80) : "Check X Layer, then USDT0."}`);
+      else setNote(zh ? `没有成交。${text ? text.slice(0, 80) : "先看是不是 X Layer，再看 USDT。"}` : `It did not fill. ${text ? text.slice(0, 80) : "Check X Layer, then USDT."}`);
     }).finally(() => setBusy(false));
   };
 
@@ -365,7 +361,7 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
                       </div>
                       <div className="text-right">
                         <p className="font-mono text-lg tabular-nums leading-none">{usdtText(row.price, 2)}</p>
-                        <p className="mt-1 text-[11px] text-ink/40">USDT0</p>
+                        <p className="mt-1 text-[11px] text-ink/40">USDT</p>
                       </div>
                     </div>
                     <p className="mt-2 font-mono text-[12px] text-ink/55">
@@ -488,7 +484,7 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
             <div className="mt-3">
               <label className="grid gap-1 text-[12px] text-ink/45">
                 {zh ? "挂出价" : "Ask"}
-                <input value={price} onChange={(event) => setPrice(event.target.value)} inputMode="decimal" placeholder="USDT0" className="h-12 border border-gold/50 bg-paper px-3 font-mono text-lg text-ink outline-none" />
+                <input value={price} onChange={(event) => setPrice(event.target.value)} inputMode="decimal" placeholder="USDT" className="h-12 border border-gold/50 bg-paper px-3 font-mono text-lg text-ink outline-none" />
               </label>
               <button type="button" disabled={busy || typed == null} className="mt-2 min-h-12 w-full bg-[#f23645] text-sm text-white disabled:opacity-40" onClick={() => typed != null && run((from) => listSpotCircuit(from, BigInt(pick), typed), zh ? "已挂上。" : "Listed.")}>{zh ? "挂出这一张" : "List this one"}</button>
             </div>
@@ -546,7 +542,7 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
                 <p className="mt-1 text-[12px] text-ink/45">{zh ? "当前可购买 1 个" : "1 available"}</p>
                 <div className="mt-3 flex items-end justify-between">
                   <span className="text-sm">{zh ? "需支付" : "Pay"}</span>
-                  <strong className="font-mono text-2xl font-medium tabular-nums">{quote != null ? `${usdtText(quote, 4)} USDT0` : "—"}</strong>
+                  <strong className="font-mono text-2xl font-medium tabular-nums">{quote != null ? `${usdtText(quote, 4)} USDT` : "—"}</strong>
                 </div>
               {pickedList && account?.toLowerCase() !== pickedList.seller.toLowerCase() ? (
                 <button type="button" disabled={busy} className="mt-3 min-h-12 w-full bg-[#089981] text-sm text-white disabled:opacity-40" onClick={() => run((from) => buySpotCircuit(from, pickedList.id, pickedList.price), zh ? "已买下。" : "Bought.")}>{zh ? `买入 ${usdtText(pickedList.price, 2)}` : `Buy ${usdtText(pickedList.price, 2)}`}</button>
@@ -558,7 +554,7 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
                 <div className="mt-3 flex items-end gap-2">
                   <label className="grid min-w-0 flex-1 gap-1 text-[12px] text-ink/45">
                     {zh ? "挂出价" : "Ask"}
-                    <input value={price} onChange={(event) => setPrice(event.target.value)} inputMode="decimal" placeholder="USDT0" className="h-12 border-b border-gold bg-transparent font-mono text-lg text-ink outline-none" />
+                    <input value={price} onChange={(event) => setPrice(event.target.value)} inputMode="decimal" placeholder="USDT" className="h-12 border-b border-gold bg-transparent font-mono text-lg text-ink outline-none" />
                   </label>
                   <button type="button" disabled={busy || typed == null} className="min-h-12 shrink-0 bg-[#f23645] px-4 text-sm text-white disabled:opacity-40" onClick={() => typed != null && run((from) => listSpotCircuit(from, BigInt(pick), typed), zh ? "已挂上。" : "Listed.")}>{zh ? "挂出" : "List"}</button>
                 </div>
@@ -671,7 +667,7 @@ function Prints({ zh, rows, pending }: { zh: boolean; rows: CircuitPrint[]; pend
         {rows.map((row) => (
           <li key={row.tx} className="grid grid-cols-2 gap-x-3 gap-y-1 py-3 text-[13px]">
             <p className="font-mono">#{row.id}</p>
-            <p className="text-right font-mono tabular-nums">{usdtText(row.price, 2)} <span className="text-[11px] text-ink/45">USDT0</span></p>
+            <p className="text-right font-mono tabular-nums">{usdtText(row.price, 2)} <span className="text-[11px] text-ink/45">USDT</span></p>
             <p className="font-mono text-ink/55">{age(row.ts)}</p>
             <p className="text-right font-mono tabular-nums text-ink/55">{zh ? "手续费" : "Fee"} {usdtText(row.fee, 4)}</p>
             <p className="col-span-2 font-mono text-[12px] text-ink/55">{short(row.buyer)} → {short(row.seller)} · <a className="underline" href={`${XLAYER.explorer}/tx/${row.tx}`} target="_blank" rel="noreferrer">{zh ? "链上" : "Tx"}</a></p>

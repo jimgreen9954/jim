@@ -15,11 +15,11 @@ export const Route = createRootRoute({
       {
         name: "description",
         content:
-          "TAPELIQUID etches a BEM spot and perpetual book into a TapeOut NAND lattice. White wafer, gold traces.",
+          "BEM and BNB spot on PancakeSwap. Two perpetual contracts. A TapeOut wafer on X Layer.",
       },
     ],
     links: [
-      { rel: "icon", type: "image/png", href: "/tape-launch/favicon.png" },
+      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {

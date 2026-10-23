@@ -160,7 +160,7 @@ export async function readRebate(chain: RebateChain, account: string | null): Pr
       passed: false,
       balance: 0n,
       decimals: chain === "xlayer" ? 6 : 18,
-      symbol: chain === "xlayer" ? "USDT0" : "USDT",
+      symbol: "USDT",
       weekly: true,
       claimedThisWeek: false,
       resetAt: 0,
@@ -179,7 +179,7 @@ export async function readRebate(chain: RebateChain, account: string | null): Pr
   const [balance, decimalsRead, symbolRead] = await Promise.all([
     c.readContract({ address: usdt, abi: erc20, functionName: "balanceOf", args: [rebate] }),
     c.readContract({ address: usdt, abi: erc20, functionName: "decimals" }).catch(() => (chain === "xlayer" ? 6 : 18)),
-    c.readContract({ address: usdt, abi: erc20, functionName: "symbol" }).catch(() => (chain === "xlayer" ? "USDT0" : "USDT")),
+    c.readContract({ address: usdt, abi: erc20, functionName: "symbol" }).catch(() => "USDT"),
   ]);
   const decimals = Number(decimalsRead);
   const now = await c.getBlock({ blockTag: "latest" });
@@ -206,7 +206,7 @@ export async function readRebate(chain: RebateChain, account: string | null): Pr
     passed,
     balance,
     decimals,
-    symbol: symbolRead,
+    symbol: /^USDT0$/i.test(String(symbolRead)) ? "USDT" : String(symbolRead),
     weekly,
     claimedThisWeek,
     resetAt: nextMondaySgt(Number(now.timestamp)),

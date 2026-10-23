@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { createPublicClient, defineChain, encodeFunctionData, fallback, formatUnits, http, parseAbi, parseAbiItem, type Hex } from "viem";
-import { connectXLayer, DEPLOYED, myCircuits, XLAYER } from "@/lib/xlayer";
+import { connectXLayer, DEPLOYED, myCircuits, rememberedCircuits, XLAYER } from "@/lib/xlayer";
+import { circuitTip } from "@/lib/circuit-tip";
 import { getProvider } from "@/lib/wallet";
 
 export const TAPE_MINE = "0x60b1b7cae1bbd0e84ac3e1e43f933712f3ab67e8" as const;
@@ -36,7 +37,7 @@ const xlayer = defineChain({
   contracts: { multicall3: { address: "0xcA11bde05977b3631167028862bE2a173976CA11" } },
 });
 
-const RPCS = [XLAYER.rpc, "https://xlayerrpc.okx.com", "https://xlayer.drpc.org"];
+const RPCS = ["https://xlayer.drpc.org", XLAYER.rpc, "https://xlayerrpc.okx.com"];
 
 const client = createPublicClient({
   chain: xlayer,
@@ -297,13 +298,22 @@ function boardFrom(wire: TapeWire): TapeBoard {
 
 let mineFlight: Promise<TapeBoard> | null = null;
 let mineKey = "";
+const headListen = new Set<(board: TapeBoard) => void>();
+let lastBoard: TapeBoard | null = null;
 const MINE_KEY = "tapeliquid-mine-board-v1";
+
+function publishHead(board: TapeBoard) {
+  lastBoard = board;
+  for (const fn of headListen) fn(board);
+}
 
 export function peekTapeMine(account: string | null): TapeBoard | null {
   if (typeof window === "undefined") return null;
   try {
     const saved = JSON.parse(window.localStorage.getItem(MINE_KEY) ?? "") as { account?: string; board?: TapeWire };
-    if (!saved?.board || (saved.account ?? "") !== (account ?? "").toLowerCase()) return null;
+    if (!saved?.board) return null;
+    const key = (account ?? "").toLowerCase();
+    if ((saved.account ?? "") !== key && key) return null;
     return boardFrom(saved.board);
   } catch {
     return null;
@@ -311,7 +321,11 @@ export function peekTapeMine(account: string | null): TapeBoard | null {
 }
 
 function rememberTapeMine(account: string | null, board: TapeBoard) {
-  if (typeof window === "undefined" || !board.scanOk) return;
+  if (typeof window === "undefined") return;
+  if (!board.scanOk) {
+    const prev = peekTapeMine(account);
+    if (prev?.scanOk && prev.supply > 0n && prev.seats.length >= board.seats.length) return;
+  }
   const wire: TapeWire = {
     supply: board.supply.toString(), cap: board.cap.toString(), weight: board.weight.toString(), balance: board.balance.toString(),
     start: board.start.toString(), daily: board.daily.toString(), circuits: board.circuits, open: board.open,
@@ -321,24 +335,193 @@ function rememberTapeMine(account: string | null, board: TapeBoard) {
     pendingNet: board.pendingNet.toString(), pendingStaked: board.pendingStaked.toString(),
     staked: board.staked, stakedLive: board.stakedLive, stakedWeight: board.stakedWeight.toString(),
     seats: board.seats.map((row) => ({ ...row, pending: row.pending.toString() })),
-    scanOk: true, scanning: false,
+    scanOk: board.scanOk, scanning: false,
   };
   try { window.localStorage.setItem(MINE_KEY, JSON.stringify({ account: (account ?? "").toLowerCase(), board: wire })); } catch { /* The next read still hits the chain. */ }
 }
 
+function sortSeats(rows: TapeSeat[]): TapeSeat[] {
+  return [...rows].sort((a, b) => Number(a.on) - Number(b.on) || Number(b.id) - Number(a.id));
+}
+
+function mergeSeats(primary: TapeSeat[], extra: TapeSeat[]): TapeSeat[] {
+  const map = new Map<string, TapeSeat>();
+  for (const row of extra) if (row.id) map.set(row.id, row);
+  for (const row of primary) if (row.id) map.set(row.id, row);
+  return sortSeats([...map.values()]);
+}
+
+function rememberedSeats(account: string | null): TapeSeat[] {
+  if (!account) return [];
+  return rememberedCircuits(account).slice(0, 40).map((row) => ({
+    id: row.id,
+    gates: row.gates || "0",
+    on: false,
+    pending: 0n,
+    share: "0",
+  }));
+}
+
+function blankBoard(seats: TapeSeat[]): TapeBoard {
+  return {
+    supply: 0n,
+    cap: CAP,
+    weight: 0n,
+    balance: 0n,
+    start: 0n,
+    daily: 0n,
+    circuits: 0,
+    open: 0,
+    burned: 0n,
+    pooled: 0n,
+    locked: 0n,
+    circuitHeld: 0n,
+    waferHeld: 0n,
+    termPrincipal: 0n,
+    termReward: 0n,
+    termHeld: 0n,
+    pendingNet: 0n,
+    pendingStaked: 0n,
+    staked: 0,
+    stakedLive: 0,
+    stakedWeight: 0n,
+    seats,
+    scanOk: false,
+    scanning: true,
+  };
+}
+
+async function knownSeats(account: string, weight: bigint, daily: bigint): Promise<TapeSeat[]> {
+  const known = rememberedCircuits(account).slice(0, 40);
+  if (!known.length) return [];
+  const stub = rememberedSeats(account);
+  try {
+    const rows = await until(client.multicall({
+      contracts: known.flatMap((row) => [
+        { address: DEPLOYED.circuits, abi: circuitAbi, functionName: "ownerOf" as const, args: [BigInt(row.id)] as const },
+        { address: DEPLOYED.circuits, abi: circuitAbi, functionName: "circuitInfo" as const, args: [BigInt(row.id)] as const },
+        { address: TAPE_MINE, abi: mineAbi, functionName: "seat" as const, args: [BigInt(row.id)] as const },
+        { address: TAPE_MINE, abi: mineAbi, functionName: "pendingOf" as const, args: [BigInt(row.id)] as const },
+      ]),
+      allowFailure: true,
+    }), 4_000);
+    const mine = account.toLowerCase();
+    const seats: TapeSeat[] = [];
+    let answered = false;
+    known.forEach((item, index) => {
+      const owner = rows[index * 4];
+      const info = rows[index * 4 + 1];
+      const seat = rows[index * 4 + 2];
+      const pending = rows[index * 4 + 3];
+      const ownerAddr = owner?.status === "success" && typeof owner.result === "string" ? owner.result.toLowerCase() : "";
+      const infoRow = info?.status === "success" && Array.isArray(info.result) ? info.result : null;
+      const seatRow = seat?.status === "success" && Array.isArray(seat.result) ? seat.result : null;
+      const pendingAmt = pending?.status === "success" && typeof pending.result === "bigint" ? pending.result : 0n;
+      const seatOwner = seatRow && typeof seatRow[0] === "string" ? seatRow[0].toLowerCase() : "";
+      const on = Boolean(seatRow && seatRow[3]);
+      if (ownerAddr) answered = true;
+      if (ownerAddr && ownerAddr !== mine && !(on && seatOwner === mine)) return;
+      const gates = infoRow && typeof infoRow[3] === "bigint" ? infoRow[3].toString() : (item.gates || "0");
+      const share = on && weight > 0n ? (daily * BigInt(gates || "0")) / weight : 0n;
+      seats.push({ id: item.id, gates, on, pending: pendingAmt, share: tapeText(share) });
+    });
+    return seats.length || answered ? seats : stub;
+  } catch {
+    return stub;
+  }
+}
+
+async function walletSeats(account: string): Promise<TapeSeat[]> {
+  const who = account.toLowerCase();
+  try {
+    return sortSeats(await until((async () => {
+    const next = await client.readContract({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "nextId" });
+    const last = await circuitTip(client, DEPLOYED.circuits, Number(next));
+    if (last < 1) return [] as TapeSeat[];
+    const from = last > 8000 ? last - 7999 : 1;
+    const ids: number[] = [];
+    for (let id = from; id <= last; id += 1) ids.push(id);
+    for (const row of rememberedCircuits(account)) {
+      const id = Number(row.id);
+      if (id > last && id < last + 256) ids.push(id);
+    }
+    const [owners, seatRows] = await Promise.all([
+      client.multicall({
+        contracts: ids.map((id) => ({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "ownerOf" as const, args: [BigInt(id)] as const })),
+        allowFailure: true,
+      }),
+      client.multicall({
+        contracts: ids.map((id) => ({ address: TAPE_MINE, abi: mineAbi, functionName: "seat" as const, args: [BigInt(id)] as const })),
+        allowFailure: true,
+      }),
+    ]);
+    const mineIds: number[] = [];
+    ids.forEach((id, index) => {
+      const owner = owners[index];
+      const seat = seatRows[index];
+      const ownerAddr = owner?.status === "success" && typeof owner.result === "string" ? owner.result.toLowerCase() : "";
+      const seatRow = seat?.status === "success" && Array.isArray(seat.result) ? seat.result : null;
+      const seatOwner = seatRow && typeof seatRow[0] === "string" ? seatRow[0].toLowerCase() : "";
+      if (ownerAddr === who || seatOwner === who) mineIds.push(id);
+    });
+    if (!mineIds.length) return [] as TapeSeat[];
+    const detail = await client.multicall({
+      contracts: mineIds.flatMap((id) => [
+        { address: DEPLOYED.circuits, abi: circuitAbi, functionName: "circuitInfo" as const, args: [BigInt(id)] as const },
+        { address: TAPE_MINE, abi: mineAbi, functionName: "pendingOf" as const, args: [BigInt(id)] as const },
+        { address: TAPE_MINE, abi: mineAbi, functionName: "seat" as const, args: [BigInt(id)] as const },
+      ]),
+      allowFailure: true,
+    });
+    const out: TapeSeat[] = [];
+    mineIds.forEach((id, index) => {
+      const info = detail[index * 3];
+      const pending = detail[index * 3 + 1];
+      const seat = detail[index * 3 + 2];
+      const infoRow = info?.status === "success" && Array.isArray(info.result) ? info.result : null;
+      const seatRow = seat?.status === "success" && Array.isArray(seat.result) ? seat.result : null;
+      if (!seatRow) return;
+      const gates = infoRow && typeof infoRow[3] === "bigint" ? infoRow[3] : null;
+      if (gates == null) return;
+      const on = Boolean(seatRow[3]);
+      const pendingAmt = pending?.status === "success" && typeof pending.result === "bigint" ? pending.result : 0n;
+      out.push({ id: String(id), gates: gates.toString(), on, pending: pendingAmt, share: "0" });
+    });
+    return out;
+    })(), 8_000));
+  } catch {
+    return [];
+  }
+}
+
 export function readTapeMine(account: string | null, onHead?: (board: TapeBoard) => void): Promise<TapeBoard> {
   const key = (account ?? "").toLowerCase();
-  const cached = peekTapeMine(account);
-  if (cached) onHead?.({ ...cached, scanning: true });
-  if (mineFlight && mineKey === key) return mineFlight;
-  mineKey = key;
-  mineFlight = readThroughSite(account, onHead).then((board) => {
-    rememberTapeMine(account, board);
-    return board;
-  }).finally(() => {
-    mineFlight = null;
-  });
-  return mineFlight;
+  if (onHead) {
+    headListen.add(onHead);
+    const cached = lastBoard ?? peekTapeMine(account) ?? peekTapeMine(null);
+    const known = rememberedSeats(account);
+    const base = cached
+      ? { ...cached, scanning: true, seats: mergeSeats(cached.seats, known) }
+      : (known.length ? blankBoard(known) : null);
+    if (base) onHead(base);
+  }
+  const drop = () => { if (onHead) headListen.delete(onHead); };
+  if (!(mineFlight && mineKey === key)) {
+    mineKey = key;
+    mineFlight = readThroughSite(account, (board) => {
+      publishHead(board);
+      rememberTapeMine(account, board);
+    }).then((board) => {
+      publishHead({ ...board, scanning: false });
+      rememberTapeMine(account, board);
+      return board;
+    }).finally(() => {
+      mineFlight = null;
+    });
+  }
+  const flight = mineFlight;
+  if (!flight) return Promise.reject(new Error("mine"));
+  return flight.finally(drop);
 }
 
 function until<T>(work: Promise<T>, ms: number): Promise<T> {
@@ -352,32 +535,51 @@ function until<T>(work: Promise<T>, ms: number): Promise<T> {
 }
 
 async function withHeld(account: string | null, board: TapeBoard): Promise<TapeBoard> {
-  if (!account) return board;
+  const painted = mergeSeats(board.seats, rememberedSeats(account));
+  const next = painted === board.seats ? board : { ...board, seats: painted };
+  if (!account || next.scanOk) return next;
   try {
-    const held = await myCircuits(account);
-    const seen = new Set(board.seats.map((row) => row.id));
+    const held = await until(myCircuits(account), 3_000);
+    const seen = new Set(next.seats.map((row) => row.id));
     const extra = held.filter((row) => !seen.has(row.id)).map((row) => ({ id: row.id, gates: row.gates, on: false, pending: 0n, share: "0" }));
-    if (!extra.length) return board;
-    const seats = [...extra, ...board.seats].sort((a, b) => Number(a.on) - Number(b.on) || Number(b.id) - Number(a.id));
-    return { ...board, seats, scanOk: true, scanning: false };
+    if (!extra.length) return next;
+    return { ...next, seats: sortSeats([...extra, ...next.seats]) };
   } catch {
-    return board;
+    return next;
   }
 }
 
 async function readThroughSite(account: string | null, onHead?: (board: TapeBoard) => void): Promise<TapeBoard> {
-  if (import.meta.env.VITE_TAPE_STATIC === "1") return withHeld(account, await loadTapeMine(account, onHead, true));
+  const quickPromise = loadTapeMine(account, onHead, false).catch(() => null);
+  const seatPromise = account ? walletSeats(account) : Promise.resolve([] as TapeSeat[]);
+  const [quick, mine] = await Promise.all([quickPromise, seatPromise]);
+  const weight = quick?.weight ?? 0n;
+  const daily = quick?.daily ?? 0n;
+  const seated = mine.map((row) => {
+    const share = row.on && weight > 0n ? (daily * BigInt(row.gates || "0")) / weight : 0n;
+    return { ...row, share: tapeText(share) };
+  });
+  if (account) {
+    const base = quick ?? blankBoard([]);
+    const painted = { ...base, seats: sortSeats(mergeSeats(seated, rememberedSeats(account))), scanning: seated.length > 0 };
+    onHead?.(painted);
+    publishHead(painted);
+  }
+  if (import.meta.env.VITE_TAPE_STATIC === "1") return withHeld(account, quick ?? await loadTapeMine(account, onHead, true));
   try {
-    const head = boardFrom(await until(getTapeHead({ data: { account: account ?? "" } }), 8_000));
-    onHead?.({ ...head, scanning: true, seats: [], scanOk: false });
-    try {
-      const full = boardFrom(await until(getTapeSeats({ data: { account: account ?? "" } }), 20_000));
-      return full.scanOk ? full : withHeld(account, full);
-    } catch {
-      return withHeld(account, { ...head, scanning: false });
-    }
+    const full = boardFrom(await until(getTapeSeats({ data: { account: account ?? "" } }), 8_000));
+    if (full.scanOk) return withHeld(account, { ...full, seats: mergeSeats(full.seats, seated) });
+  } catch { /* Personal rows are already on screen. */ }
+  if (quick || seated.length) {
+    const base = quick ?? blankBoard([]);
+    return withHeld(account, { ...base, scanning: false, seats: sortSeats(mergeSeats(seated, rememberedSeats(account))) });
+  }
+  try {
+    const head = boardFrom(await until(getTapeHead({ data: { account: account ?? "" } }), 6_000));
+    onHead?.({ ...head, scanning: false, seats: rememberedSeats(account), scanOk: false });
+    return withHeld(account, { ...head, scanning: false });
   } catch {
-    return withHeld(account, await loadTapeMine(account, onHead, false));
+    return withHeld(account, quick ?? await loadTapeMine(account, onHead, false));
   }
 }
 
@@ -438,7 +640,7 @@ async function loadTapeMine(account: string | null, onHead?: (board: TapeBoard) 
   const balance = account ? (head[12] as bigint) : 0n;
   if (cap !== CAP) throw new Error("cap");
   const daily = dailyAt(start);
-  const last = Number(next) - 1;
+  const last = await circuitTip(client, DEPLOYED.circuits, Number(next));
   const partial: TapeBoard = {
     supply, cap, weight, balance, start, daily,
     circuits: Math.max(0, last),

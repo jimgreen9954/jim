@@ -4,6 +4,7 @@ import { BSC, connectBsc, waitReceipt } from "@/lib/bsc";
 import type { TapeTarget } from "@/lib/tape-targets";
 import { getProvider } from "@/lib/wallet";
 import { connectXLayer, DEPLOYED, rememberCircuit, XLAYER } from "@/lib/xlayer";
+import { circuitTip } from "@/lib/circuit-tip";
 
 const abi = parseAbi([
   "function tapeout(bytes netlist, uint32 nIn, uint32 nOut) payable returns (uint256)",
@@ -54,13 +55,14 @@ export async function readTapeDesk(target: TapeTarget, account: string | null): 
       : Promise.resolve(0n),
     account ? client.getBalance({ address: account as Hex }) : Promise.resolve(0n),
   ]);
-  return { nand, latch, fee: formatEther(feeWei), feeWei, native, total: Math.max(0, Number(next) - 1) };
+  const tip = await circuitTip(client, target.circuits as Hex, Number(next));
+  return { nand, latch, fee: formatEther(feeWei), feeWei, native, total: tip };
 }
 
 export async function readTapeRows(target: TapeTarget, limit = 8): Promise<{ id: string; nIn: string; nOut: string; gates: string; owner: string }[]> {
   const client = reader(target.chain);
   const next = await client.readContract({ address: target.circuits as Hex, abi, functionName: "nextId" });
-  const last = Number(next) - 1;
+  const last = await circuitTip(client, target.circuits as Hex, Number(next));
   if (last < 1) return [];
   const start = Math.max(1, last - limit + 1);
   const ids: number[] = [];

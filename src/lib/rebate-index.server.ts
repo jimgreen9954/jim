@@ -2,8 +2,8 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createPublicClient, decodeEventLog, http, keccak256, toBytes, type Hex } from "viem";
 import type { Invitee, RebateBook } from "./rebate-index";
 
-const PERP = "0xa0344f5B0518D31B7CFa6CaC266b4eDd289821ce" as const;
-const BIRTH = 72_163_300n;
+const PERP = "0xce3511b6e909c9694826cfd5dbe434d457920eba" as const;
+const BIRTH = 72_430_087n;
 const FILE = "/workspace/data/rebate-index.json";
 const STEP = 250n;
 const client = createPublicClient({ transport: http("https://rpc.xlayer.tech") });

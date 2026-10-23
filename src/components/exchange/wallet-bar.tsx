@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { connectKind, currentAccount, onAccount, onOpenLink } from "@/lib/wallet";
+import { connectKind, currentAccount, disconnectWallet, onAccount, onOpenLink } from "@/lib/wallet";
 import { copy } from "@/lib/copy";
 import { useExchange } from "@/lib/exchange-store";
 import {
@@ -7,10 +7,14 @@ import {
   connectXLayer,
   DEPLOYED,
   mintCost,
-  mintNand,
+  mintTransistor,
   processorUrl,
   readProcessor,
+  tapeRecipe,
+  transistorHeld,
+  catchKindSupply,
   txUrl,
+  type KindSupply,
   type ProcessorStatus,
 } from "@/lib/xlayer";
 
@@ -27,32 +31,43 @@ export function ConnectButton() {
   const [link, setLink] = useState<string | null>(null);
   useEffect(() => onAccount(setAccount), []);
   useEffect(() => onOpenLink(setLink), []);
-  if (link) {
+  if (link && !account) {
     const binance = link.includes("binance.com");
     return (
-      <a href={link} className="inline-flex min-h-11 items-center border border-gold bg-ink px-3 text-sm text-paper">
-        {binance ? (lang === "zh" ? "打开币安" : "Open Binance") : lang === "zh" ? "打开 OKX" : "Open OKX"}
-      </a>
+      <span className="flex max-w-[18rem] flex-wrap items-center gap-1 sm:max-w-none sm:gap-2">
+        <a href={link} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center border border-gold bg-ink px-3 text-sm text-paper">
+          {binance ? (lang === "zh" ? "打开币安" : "Open Binance") : lang === "zh" ? "去 OKX 确认" : "Confirm in OKX"}
+        </a>
+        <span className="text-[11px] leading-4 text-ink/55">{lang === "zh" ? "这一页不跳走" : "This page stays"}</span>
+      </span>
     );
   }
   if (account) {
     return (
-      <button type="button" className="min-h-11 max-w-40 truncate border border-gold px-3 text-sm" disabled>
-        {short(account)}
-      </button>
+      <span className="flex max-w-[18rem] flex-wrap items-center gap-1 sm:max-w-none sm:gap-2">
+        <span className="inline-flex min-h-8 max-w-24 items-center truncate font-mono text-xs text-ink/80 sm:min-h-11 sm:max-w-40 sm:border sm:border-gold sm:bg-card sm:px-3 sm:text-sm">{short(account)}</span>
+        {link ? (
+          <a href={link} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center border border-gold bg-ink px-2 text-xs text-paper sm:min-h-11 sm:text-sm">
+            {lang === "zh" ? "去 OKX 确认" : "Confirm in OKX"}
+          </a>
+        ) : null}
+        <button type="button" className="min-h-8 shrink-0 px-1 text-xs text-ink/50 sm:min-h-11 sm:border sm:border-gold sm:px-3 sm:text-ink" onClick={() => void disconnectWallet()}>
+          {lang === "zh" ? "退出" : "Out"}
+        </button>
+      </span>
     );
   }
   return (
-    <span className="flex gap-2">
+    <span className="flex gap-1 sm:gap-2">
       {(["okx", "binance"] as const).map((which) => (
         <button
           key={which}
           type="button"
-          className="min-h-11 border border-gold px-3 text-sm"
+          className="min-h-10 border border-gold px-2 text-xs sm:min-h-11 sm:px-3 sm:text-sm"
           disabled={busy}
           onClick={() => {
             setBusy(true);
-            setNote(null);
+            setNote(lang === "zh" ? "停在这一页。去 OKX 点确认，不要让网站跳进去。" : "Stay on this page. Confirm in OKX. Do not open the site inside it.");
             connectKind(which)
               .catch((err: unknown) => {
                 if (err instanceof Error && err.message === "binanceapp") return;
@@ -80,6 +95,10 @@ export function WalletBar() {
   const [bad, setBad] = useState(false);
   const [hash, setHash] = useState<string | null>(null);
   const [cpu, setCpu] = useState<ProcessorStatus | null>(null);
+  const [kind, setKind] = useState<0 | 1>(0);
+  const [qtyText, setQtyText] = useState("100");
+  const [held, setHeld] = useState<{ nand: bigint; latch: bigint } | null>(null);
+  const [kinds, setKinds] = useState<KindSupply | null>(null);
 
   useEffect(() => {
     let dead = false;
@@ -95,11 +114,49 @@ export function WalletBar() {
     };
   }, [hash]);
 
+  useEffect(() => {
+    if (!account) {
+      setHeld(null);
+      return;
+    }
+    let dead = false;
+    const pull = () => {
+      transistorHeld(account)
+        .then((row) => {
+          if (!dead) setHeld(row);
+        })
+        .catch(() => undefined);
+    };
+    pull();
+    const id = window.setInterval(pull, 5000);
+    return () => {
+      dead = true;
+      window.clearInterval(id);
+    };
+  }, [account, hash]);
+
+  useEffect(() => {
+    let dead = false;
+    const timer = window.setTimeout(() => {
+      catchKindSupply((row) => {
+        if (!dead) setKinds(row);
+      }).catch(() => undefined);
+    }, 2500);
+    return () => {
+      dead = true;
+      window.clearTimeout(timer);
+    };
+  }, [hash]);
+
   const fail = (err: unknown) => {
     const code = (err as { code?: number }).code;
     const message = err instanceof Error ? err.message : "";
     if (message === "nowallet") {
       setNote(c.walletNo);
+    } else if (message === "cap") {
+      setNote(lang === "zh" ? "超过还能铸的数量。" : "That is more than the supply still left.");
+    } else if (message === "amount") {
+      setNote(lang === "zh" ? "数量要是整数。" : "Use a whole number.");
     } else if (code === 4001 || message === "minprice") {
       setNote(message === "minprice" ? c.walletMin : c.walletReject);
     } else {
@@ -130,7 +187,7 @@ export function WalletBar() {
     try {
       const from = account ?? (await connectXLayer());
       setAccount(from);
-      const tx = await mintNand(from, 16n);
+      const tx = await mintTransistor(from, kind, qty);
       setHash(tx);
       setNote(null);
     } catch (err) {
@@ -140,7 +197,11 @@ export function WalletBar() {
     }
   };
 
-  const cost = cpu ? mintCost(cpu.price, cpu.fee, 16n) : null;
+  const left = cpu ? BigInt(cpu.cap) - BigInt(cpu.minted) : null;
+  const qty = /^\d+$/.test(qtyText.trim()) ? BigInt(qtyText.trim()) : 0n;
+  const cost = cpu && qty > 0n ? mintCost(cpu.price, cpu.fee, qty) : null;
+  const label = kind === 0 ? "NAND" : "LATCH";
+  const tooMany = left !== null && qty > left;
 
   return (
     <section className="border border-gold bg-card shadow-plate">
@@ -167,6 +228,46 @@ export function WalletBar() {
             </span>
           </p>
           <p className="border border-gold/40 px-3 py-2">
+            <span className="block text-xs tracking-widest text-gold">{lang === "zh" ? "NAND 剩余" : "NAND left"}</span>
+            <span className="font-mono text-lg tabular-nums">
+              {kinds ? Number(kinds.nandMint - kinds.nandBurn).toLocaleString("en-US") : "—"}
+            </span>
+            <span className="mt-1 block text-xs text-ink/60">
+              {kinds
+                ? lang === "zh"
+                  ? `已铸 ${Number(kinds.nandMint).toLocaleString("en-US")} · 烧掉 ${Number(kinds.nandBurn).toLocaleString("en-US")}`
+                  : `Minted ${Number(kinds.nandMint).toLocaleString("en-US")} · Burned ${Number(kinds.nandBurn).toLocaleString("en-US")}`
+                : lang === "zh"
+                  ? "正在按铸造记录拆"
+                  : "Reading mint records"}
+            </span>
+          </p>
+          <p className="border border-gold/40 px-3 py-2">
+            <span className="block text-xs tracking-widest text-gold">{lang === "zh" ? "LATCH 剩余" : "LATCH left"}</span>
+            <span className="font-mono text-lg tabular-nums">
+              {kinds ? Number(kinds.latchMint - kinds.latchBurn).toLocaleString("en-US") : "—"}
+            </span>
+            <span className="mt-1 block text-xs text-ink/60">
+              {kinds
+                ? lang === "zh"
+                  ? `已铸 ${Number(kinds.latchMint).toLocaleString("en-US")} · 烧掉 ${Number(kinds.latchBurn).toLocaleString("en-US")}`
+                  : `Minted ${Number(kinds.latchMint).toLocaleString("en-US")} · Burned ${Number(kinds.latchBurn).toLocaleString("en-US")}`
+                : "—"}
+            </span>
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <p className="border border-gold/40 px-3 py-2">
+              <span className="block text-xs tracking-widest text-gold">{lang === "zh" ? "可流片 NAND" : "NAND you can tape"}</span>
+              <span className="font-mono text-3xl tabular-nums">{held ? Number(held.nand).toLocaleString("en-US") : "—"}</span>
+              <span className="mt-1 block text-xs text-ink/60">{lang === "zh" ? "这个地址的 balanceOf，5 秒重读。不是上面的剩余。" : "balanceOf for this address, every 5s. Not the supply above."}</span>
+            </p>
+            <p className="border border-gold/40 px-3 py-2">
+              <span className="block text-xs tracking-widest text-gold">{lang === "zh" ? "可流片 LATCH" : "LATCH you can tape"}</span>
+              <span className="font-mono text-3xl tabular-nums">{held ? Number(held.latch).toLocaleString("en-US") : "—"}</span>
+              <span className="mt-1 block text-xs text-ink/60">{lang === "zh" ? "流片从这里扣，不是铸造剩余" : "Tape-out spends this, not the mint left"}</span>
+            </p>
+          </div>
+          <p className="border border-gold/40 px-3 py-2">
             <span className="block text-xs tracking-widest text-gold">{c.liveCircuits}</span>
             <span className="font-mono text-lg tabular-nums">{cpu?.circuits ?? "—"}</span>
           </p>
@@ -174,13 +275,40 @@ export function WalletBar() {
         <p className="break-all font-mono text-xs">
           {c.walletCpu} {DEPLOYED.circuits}
         </p>
+        <div className="grid grid-cols-2 gap-2">
+          {([0, 1] as const).map((id) => (
+            <button key={id} type="button" onClick={() => setKind(id)} className={`min-h-11 border border-gold ${kind === id ? "bg-ink text-paper" : ""}`}>
+              {id === 0 ? "NAND" : "LATCH"}
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {(["100", "1000", "10000"] as const).map((item) => (
+            <button key={item} type="button" onClick={() => setQtyText(item)} className={`min-h-11 border border-gold font-mono ${qtyText === item ? "bg-ink text-paper" : ""}`}>
+              {Number(item).toLocaleString("en-US")}
+            </button>
+          ))}
+        </div>
+        <label className="border border-gold/40 px-3 py-2">
+          <span className="block text-xs tracking-widest text-gold">{lang === "zh" ? "自定义数量" : "Custom amount"}</span>
+          <input
+            value={qtyText}
+            onChange={(event) => setQtyText(event.target.value.replace(/[^\d]/g, ""))}
+            inputMode="numeric"
+            className="w-full bg-transparent font-mono text-3xl outline-none"
+          />
+        </label>
+        {tooMany ? <p className="text-sm text-sell">{lang === "zh" ? "超过还能铸的数量。" : "More than the supply still left."}</p> : null}
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" className="min-h-11 border border-gold bg-ink px-3 text-paper" disabled={busy} onClick={mint}>
-            {c.mintNand}
+          <button type="button" className="min-h-14 bg-ink px-4 font-display text-2xl italic text-paper disabled:opacity-40" disabled={busy || qty < 1n || tooMany} onClick={mint}>
+            {lang === "zh" ? `铸造 ${qty.toString()} 颗 ${label}` : `Mint ${qty.toString()} ${label}`}
             {cost ? ` · ${cost} OKB` : ""}
           </button>
           <a className="inline-flex min-h-11 items-center border border-gold px-3" href={CANVAS} target="_blank" rel="noreferrer">
             {c.openCanvas}
+          </a>
+          <a className="inline-flex min-h-11 items-center border border-gold px-3" href={processorUrl()} target="_blank" rel="noreferrer">
+            {c.walletOfficial}
           </a>
           {!account ? (
             <button type="button" className="min-h-11 border border-gold px-3" disabled={busy} onClick={connect}>
@@ -201,7 +329,125 @@ export function WalletBar() {
             {c.walletPrice} {cpu.price} OKB
           </a>
         ) : null}
+        <RecipeGrid held={held} lang={lang} onDone={setHash} />
       </div>
     </section>
+  );
+}
+
+const RECIPES: [number, number][] = [
+  [1, 0],
+  [1, 1],
+  [2, 0],
+  [3, 0],
+  [1, 9],
+  [1, 60],
+  [4, 0],
+  [7, 0],
+  [9, 0],
+  [11, 0],
+  [20, 0],
+  [25, 0],
+  [21, 9],
+  [31, 0],
+  [38, 0],
+  [41, 0],
+  [49, 0],
+  [6, 54],
+  [2, 64],
+  [72, 0],
+  [100, 0],
+  [207, 0],
+  [318, 0],
+  [400, 0],
+];
+
+function RecipeGrid({
+  held,
+  lang,
+  onDone,
+}: {
+  held: { nand: bigint; latch: bigint } | null;
+  lang: "zh" | "en";
+  onDone: (hash: string) => void;
+}) {
+  const [pick, setPick] = useState<[number, number] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [bad, setBad] = useState(false);
+  const short = (n: number, l: number) => `${n}N + ${l}L`;
+  const go = async () => {
+    if (!pick) return;
+    const [n, l] = pick;
+    setBusy(true);
+    setBad(false);
+    setNote(lang === "zh" ? "正在连接钱包。" : "Connecting the wallet.");
+    try {
+      const from = currentAccount() ?? (await connectXLayer());
+      if (held && (held.nand < BigInt(n) || held.latch < BigInt(l))) {
+        throw new Error("short");
+      }
+      setNote(lang === "zh" ? `正在流片 ${short(n, l)}。签名之后还要等回执。回执成功，电路就在链上。` : `Taping ${short(n, l)}. After you sign, this waits for the receipt. The circuit is on chain when that receipt succeeds.`);
+      const sheet = await tapeRecipe(from, n, l);
+      setNote(lang === "zh" ? `流片完成${sheet.id ? ` #${sheet.id}` : ""}。${short(n, l)}。挖矿页现在能看到这张，还没开工。再点「开工」签一笔，才进矿机。不用再付 0.0013 OKB。` : `Taped${sheet.id ? ` #${sheet.id}` : ""}. ${short(n, l)}. It is on the mine page and is not mining yet. Open it with a second signature. That one does not pay another 0.0013 OKB.`);
+      setPick(null);
+      onDone(sheet.hash);
+      window.open(txUrl(sheet.hash), "_blank", "noopener,noreferrer");
+    } catch (error) {
+      setBad(true);
+      const message = error instanceof Error ? error.message : "";
+      setNote(
+        message === "short"
+          ? lang === "zh"
+            ? "这个地址的 NAND 或 LATCH 不够。"
+            : "This address does not hold enough NAND or LATCH."
+          : message.includes("rejected") || message.includes("denied")
+            ? lang === "zh"
+              ? "你取消了。"
+              : "You cancelled."
+            : lang === "zh"
+              ? "流片没有完成。颗数还在。"
+              : "Tape-out did not finish. The transistors are still there.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="border-t border-gold/40 pt-3">
+      <h3 className="font-display text-xl italic">{lang === "zh" ? "按配方直接流片" : "Tape a recipe directly"}</h3>
+      <p className="mt-1 text-sm leading-relaxed text-ink/80">
+        {lang === "zh"
+          ? "要自己接线，点页顶「流片 TAPELIQUID」进画布。下面这些配方不画图，确认后直接烧掉。每次另付 0.0013 OKB。回执成功只代表电路有了编号。挖矿还要再签一笔开工，不签就不会出现在矿机里。"
+          : "To draw the wires yourself, use Tape TAPELIQUID at the top. These recipes skip the drawing and burn on confirm. Each one pays 0.0013 OKB. A successful receipt only means the circuit has an id. Mining starts with a second signature. Without that, it does not show as a miner."}
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        {RECIPES.map(([n, l]) => {
+          const on = pick?.[0] === n && pick?.[1] === l;
+          const enough = !held || (held.nand >= BigInt(n) && held.latch >= BigInt(l));
+          return (
+            <button
+              key={`${n}-${l}`}
+              type="button"
+              onClick={() => setPick([n, l])}
+              className={`flex items-center justify-between border px-3 py-2 text-left ${on ? "border-ink bg-ink text-paper" : "border-gold"} ${enough ? "" : "opacity-50"}`}
+            >
+              <span className="font-mono">{short(n, l)}</span>
+              <span className="font-mono text-sm tabular-nums">{n + l} H</span>
+            </button>
+          );
+        })}
+      </div>
+      <button type="button" className="mt-3 min-h-12 w-full bg-ink font-display text-xl italic text-paper disabled:opacity-40" disabled={!pick || busy} onClick={() => void go()}>
+        {pick
+          ? lang === "zh"
+            ? `流片 ${pick[0]}N + ${pick[1]}L`
+            : `Tape ${pick[0]}N + ${pick[1]}L`
+          : lang === "zh"
+            ? "先选一个配方"
+            : "Pick a recipe"}
+      </button>
+      {note ? <p className={`mt-2 text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
+    </div>
   );
 }
