@@ -528,7 +528,7 @@ export function Kline({
         <summary className="cursor-pointer px-3 py-2 font-mono text-xs text-ink/70">{clockText || (zh ? "时间" : "Time")}</summary>
         {tools}
       </details>
-      <div ref={plotRef} className="relative">
+      <div ref={plotRef} className="kline-sheet relative">
       <div className="flex items-center gap-2 px-3 pb-1 text-xs">
         <span className="hidden font-mono tabular-nums text-ink/60 lg:inline">{zh ? `${viewCount} 根` : `${viewCount}`}</span>
         {focus.t && focus.t > 1e9 ? <span className="bg-ink px-2 py-0.5 font-mono text-paper">新加坡 {clock(focus.t)}</span> : null}
@@ -536,7 +536,7 @@ export function Kline({
       <svg
         ref={svgRef}
         viewBox={`0 0 ${VB_W} ${VB_H}`}
-        className="block h-auto w-full touch-none overflow-hidden"
+        className="block h-auto w-full touch-none overflow-hidden bg-white"
         overflow="hidden"
         style={{ cursor: tool === "look" ? "grab" : "crosshair" }}
         role="img"
@@ -619,6 +619,7 @@ export function Kline({
           }
         }}
       >
+        <rect x="0" y="0" width={VB_W} height={VB_H} fill="#ffffff" />
         {ticks.map((p) => (
           <g key={p}>
             <line x1={PAD.l} x2={VB_W - PAD.r} y1={y(p)} y2={y(p)} stroke="var(--color-gold)" strokeOpacity="0.18" />

@@ -82,6 +82,16 @@
   }
 }
 
+.kline-sheet {
+  background: #fff;
+  color: #14110e;
+  --color-ink: #14110e;
+  --color-paper: #ffffff;
+  --color-card: #ffffff;
+  --color-gold: #8a7044;
+  --color-foil: #f4efe6;
+}
+
 .bg-ink {
   background-color: #14110e !important;
   color: #f6f1e8 !important;

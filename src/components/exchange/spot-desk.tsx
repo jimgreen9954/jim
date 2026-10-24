@@ -395,7 +395,9 @@ export function SpotDesk() {
             <span className="font-mono text-4xl tabular-nums tracking-tight sm:text-5xl">{shown ?? "—"}</span>
             {shown ? <span className="font-mono text-xs tracking-widest text-gold">USDT</span> : null}
           </p>
-          <p className="mt-1 font-mono text-xs text-ink/50">
+          <details className="mt-2 text-sm">
+            <summary className="cursor-pointer text-xs tracking-widest text-gold">{lang === "zh" ? "说明" : "Note"}</summary>
+            <p className="mt-2 font-mono text-xs leading-5 text-ink/55">
             {stock
               ? lang === "zh"
                 ? `Pancake ${base} / USDT · bStocks · 池费率 ${(ERC_BOOKS[pair as ErcKey].fee / 10000).toFixed(2)}% · 买到的是钱包里的代币，一枚对一股`
@@ -439,8 +441,9 @@ export function SpotDesk() {
                     : lang === "zh"
                       ? "Pancake 池子报价 · 每秒从链上读"
                       : "Pancake pool quote · read every second"}
-          </p>
-          {pair === "xbem" || pair === "okb" ? null : <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink/80">{c.realNote}</p>}
+            </p>
+            {pair === "xbem" || pair === "okb" ? null : <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink/70">{c.realNote}</p>}
+          </details>
           <div className="mt-3 flex flex-wrap border border-gold">
             {(["1m", "5m", "15m", "1h", "1d"] as const).map((item) => (
               <button key={item} type="button" onClick={() => setFrame(item)} className={`min-h-9 flex-1 font-mono text-xs ${frame === item ? "bg-ink text-paper" : ""}`}>
@@ -449,7 +452,8 @@ export function SpotDesk() {
             ))}
           </div>
           <Kline bars={bars} lang={lang} desk="spot" supply={supply} />
-          <h2 className="mt-4 text-xs tracking-widest text-gold">{lang === "zh" ? "链上成交 · 地址是签名的钱包" : "On-chain fills · the address signed the trade"}</h2>
+          <details className="mt-3 text-sm">
+            <summary className="cursor-pointer text-xs tracking-widest text-gold">{lang === "zh" ? "成交" : "Fills"}</summary>
           <div className="mt-2 overflow-x-auto">
           <div className="grid min-w-[22rem] grid-cols-[3rem_1fr_5rem_7.5rem] gap-2 font-mono text-xs text-ink/45">
             <span>{lang === "zh" ? "买卖" : "Side"}</span>
@@ -477,6 +481,7 @@ export function SpotDesk() {
             ))}
           </ul>
           </div>
+          </details>
         </div>
         <form
           className="flex flex-col gap-3 p-3 lg:sticky lg:top-28 lg:col-span-5 lg:self-start"
@@ -573,21 +578,26 @@ export function SpotDesk() {
           </p>
           <p className="font-mono text-xs tabular-nums text-ink/70">
             {lang === "zh" ? "本单台费" : "Fee"} {deskFee ? pretty(deskFee.fee, payDecimals, 4) : "—"} {payUnit}
-            {lang === "zh" ? " · 绑了邀请人则这笔的 6% 给邀请人，少付 4%，90% 进收费地址" : " · with a referrer, 6% of this fee, 4% off, 90% to the fee address"}
             {" · "}
             {lang === "zh" ? "最少到账" : "Min. received"} {minOut ?? "—"} {recvUnit}
           </p>
+          <details className="text-sm">
+            <summary className="cursor-pointer text-xs tracking-widest text-gold">{lang === "zh" ? "台费" : "Fee"}</summary>
+            <p className="mt-2 font-mono text-xs leading-5 text-ink/60">
+              {lang === "zh" ? "绑了邀请人则这笔的 6% 给邀请人，少付 4%，90% 进收费地址。" : "With a referrer, 6% of this fee, 4% off, 90% to the fee address."}
+            </p>
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink/60">
+              <span>{lang === "zh" ? "收款地址与规则页一致" : "Same address as the rules page."}</span>
+              <button
+                type="button"
+                className="font-mono underline decoration-gold underline-offset-4"
+                onClick={() => void navigator.clipboard?.writeText(FEE_TO)}
+              >
+                {FEE_TO.slice(0, 6)}…{FEE_TO.slice(-4)}
+              </button>
+            </p>
+          </details>
           {over ? <p className="text-sm text-sell">{lang === "zh" ? "余额不够，减一点数量。" : "Not enough balance. Use a smaller size."}</p> : null}
-          <p className="flex flex-wrap items-center gap-2 text-xs text-ink/70">
-            <span>{lang === "zh" ? "本单台费收款，与规则页登记地址一致" : "This order's fee. Same address as the rules page."}</span>
-            <button
-              type="button"
-              className="font-mono underline decoration-gold underline-offset-4"
-              onClick={() => void navigator.clipboard?.writeText(FEE_TO)}
-            >
-              {FEE_TO.slice(0, 6)}…{FEE_TO.slice(-4)}
-            </button>
-          </p>
           {!account ? (
             <div className="grid grid-cols-2 gap-2">
               <button type="button" className="min-h-12 border border-gold" disabled={busy} onClick={() => void connectHere("okx")}>

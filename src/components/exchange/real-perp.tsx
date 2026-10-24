@@ -577,7 +577,12 @@ export function RealPerp() {
             >
               {busy ? (lang === "zh" ? "等待钱包确认" : "Waiting for the wallet") : (lang === "zh" ? "部署读 X Layer 池子的新永续" : "Deploy the book that reads the X Layer pools")}
             </button>
-            {deployNote ? <p className={`text-sm leading-6 ${bad ? "text-sell" : ""}`}>{deployNote}</p> : <p className="text-sm leading-6 text-ink/70">{lang === "zh" ? "若已经部署过，把永续地址贴在下面。本机记得之后，部署按钮会收起。" : "If it is already deployed, paste the perpetual address. Once this device remembers it, the deploy button goes away."}</p>}
+            {deployNote ? <p className={`text-sm leading-6 ${bad ? "text-sell" : ""}`}>{deployNote}</p> : (
+              <details className="text-sm text-ink/60">
+                <summary className="cursor-pointer text-xs tracking-widest text-gold">{lang === "zh" ? "说明" : "Note"}</summary>
+                <p className="mt-2 leading-6">{lang === "zh" ? "若已经部署过，把永续地址贴在下面。本机记得之后，部署按钮会收起。" : "If it is already deployed, paste the perpetual address. Once this device remembers it, the deploy button goes away."}</p>
+              </details>
+            )}
             <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
               <input value={pasted} onChange={(event) => setPasted(event.target.value)} placeholder="0x" className="min-h-12 border border-gold bg-transparent px-2 font-mono text-sm" />
               <button
@@ -623,8 +628,10 @@ export function RealPerp() {
           <div className="flex flex-wrap items-end justify-between gap-3 border-b border-gold/30 px-3 py-3">
             <div>
               <p className="font-display text-2xl italic">{chain === "xlayer" ? "BEM / USDT · X Layer" : `${base} / USDT · BSC`}</p>
-              <p className="mt-1 font-mono text-xs text-ink/70">{chain === "xlayer" ? (lang === "zh" ? "币 BEM · 链 X Layer · 保证金 USDT · 永续" : "Coin BEM · chain X Layer · margin USDT · perp") : (lang === "zh" ? `币 ${base} · 链 BSC · 保证金 USDT · 永续` : `Coin ${base} · chain BSC · margin USDT · perp`)}</p>
-              <p className="mt-1 text-xs leading-5 text-ink/55">
+              <details className="mt-1 text-sm">
+                <summary className="cursor-pointer text-xs tracking-widest text-gold">{lang === "zh" ? "说明" : "Note"}</summary>
+                <p className="mt-1 font-mono text-xs text-ink/70">{chain === "xlayer" ? (lang === "zh" ? "币 BEM · 链 X Layer · 保证金 USDT · 永续" : "Coin BEM · chain X Layer · margin USDT · perp") : (lang === "zh" ? `币 ${base} · 链 BSC · 保证金 USDT · 永续` : `Coin ${base} · chain BSC · margin USDT · perp`)}</p>
+                <p className="mt-1 text-xs leading-5 text-ink/55">
                 {chain === "xlayer"
                   ? (lang === "zh" ? "标记是约 10 分钟均价。K 线是池子成交，不跟 BSC 同步。" : "The mark is about a 10-minute average. Candles are pool prints and do not follow BSC.")
                   : alt
@@ -636,7 +643,8 @@ export function RealPerp() {
                     <a className="underline decoration-gold underline-offset-4" href={`${scan}/address/${perp}`} target="_blank" rel="noreferrer">{lang === "zh" ? "合约" : "Contract"}</a>
                   </>
                 ) : null}
-              </p>
+                </p>
+              </details>
             </div>
             <div className="text-right">
               <p className="text-xs tracking-widest text-gold">{c.mark}</p>
@@ -898,7 +906,12 @@ export function RealPerp() {
                         <span className="block text-xs tracking-widest text-gold">{c.limitPrice}</span>
                         <input value={limit} onChange={(event) => setLimit(event.target.value)} inputMode="decimal" className="w-full bg-transparent font-mono text-3xl outline-none" />
                       </label>
-                    ) : <p className="text-xs leading-5 text-ink/60">{lang === "zh" ? "按标记价成交。标记为约 10 分钟均价，不是最后一根 K 线。" : "Fills at the mark. The mark is about a 10-minute average, not the last candle."}</p>}
+                    ) : (
+                      <details className="text-sm">
+                        <summary className="cursor-pointer text-xs tracking-widest text-gold">{lang === "zh" ? "说明" : "Note"}</summary>
+                        <p className="mt-1 text-xs leading-5 text-ink/60">{lang === "zh" ? "按标记价成交。标记为约 10 分钟均价，不是最后一根 K 线。" : "Fills at the mark. The mark is about a 10-minute average, not the last candle."}</p>
+                      </details>
+                    )}
                   </>
                 ) : null}
                 {mode === "pro" ? (
@@ -923,8 +936,11 @@ export function RealPerp() {
                   {c.useMark}{view?.mark ? ` $${pxText(view.mark)}` : ""}
                 </button>
                 ) : null}
-                {mode === "pro" ? <p className="text-xs leading-relaxed text-ink/60">{lang === "zh" ? "挂单无价差与深度下限。撤单未确认前，订单仍在合约中。做市激励尚未开始。" : "No minimum spread or depth. An unconfirmed cancel remains on the contract. Maker rewards have not started."}</p> : null}
-                <p className="text-sm leading-relaxed text-ink/70">{mode === "pro" ? c.priceNote : lang === "zh" ? "新手档杠杆不超过 20 倍。20 倍以上在高级，并需再次确认。" : "Simple mode caps leverage at 20×. Higher leverage is in Advanced and asks for a second confirmation."}</p>
+                <details className="text-sm">
+                  <summary className="cursor-pointer text-xs tracking-widest text-gold">{lang === "zh" ? "说明" : "Note"}</summary>
+                  {mode === "pro" ? <p className="mt-2 text-xs leading-relaxed text-ink/60">{lang === "zh" ? "挂单无价差与深度下限。撤单未确认前，订单仍在合约中。做市激励尚未开始。" : "No minimum spread or depth. An unconfirmed cancel remains on the contract. Maker rewards have not started."}</p> : null}
+                  <p className="mt-2 text-sm leading-relaxed text-ink/70">{mode === "pro" ? c.priceNote : lang === "zh" ? "新手档杠杆不超过 20 倍。20 倍以上在高级，并需再次确认。" : "Simple mode caps leverage at 20×. Higher leverage is in Advanced and asks for a second confirmation."}</p>
+                </details>
                 <div className="border border-gold/40 p-3">
                   <div className="grid grid-cols-3 gap-2">
                     {(["easy", "pro", "off"] as const).map((item) => (
@@ -962,7 +978,10 @@ export function RealPerp() {
                       {c.stopTp} ${easyBand(Number(limit) || markN, lev || 1, true).tp.toFixed(2)} · {c.stopSl} ${easyBand(Number(limit) || markN, lev || 1, true).sl.toFixed(2)}
                     </p>
                   ) : null}
-                  <p className="mt-2 text-xs leading-relaxed text-ink/60">{c.stopNote}</p>
+                  <details className="mt-2 text-sm">
+                    <summary className="cursor-pointer text-xs tracking-widest text-gold">{lang === "zh" ? "止盈止损说明" : "Stop note"}</summary>
+                    <p className="mt-2 text-xs leading-relaxed text-ink/60">{c.stopNote}</p>
+                  </details>
                   {arm && !arm.spent ? (
                     <p className="mt-2 font-mono text-sm">
                       {arm.hold ? (lang === "zh" ? "上次没平掉。保护还在，不会自动再弹钱包。" : "The last close did not finish. The stop stays, and the wallet will not pop by itself.") : c.stopArmed} · {c.stopTp} ${arm.tp.toFixed(2)} · {c.stopSl} ${arm.sl.toFixed(2)}
