@@ -521,7 +521,7 @@ export function Kline({
   );
 
   return (
-    <div>
+    <div className="kline-sheet">
       <div>
       <div className="hidden lg:block">{tools}</div>
       <details className="lg:hidden">

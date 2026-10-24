@@ -68,7 +68,10 @@ export function LiveBoard() {
       <header className="flex flex-wrap items-end justify-between gap-3 border-b border-gold/40 px-3 py-3">
         <div>
           <h2 className="font-display text-2xl italic">{c.liveTitle}</h2>
-          <p className="mt-1 max-w-2xl text-sm leading-relaxed text-ink/80">{c.liveNote}</p>
+          <details className="mt-1 max-w-2xl text-sm text-ink/80">
+            <summary className="cursor-pointer text-xs tracking-widest text-gold">{lang === "zh" ? "说明" : "Note"}</summary>
+            <p className="mt-1 leading-relaxed">{c.liveNote}</p>
+          </details>
         </div>
         <a
           className="min-h-11 underline decoration-gold underline-offset-4"

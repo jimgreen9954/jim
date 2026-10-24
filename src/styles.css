@@ -111,6 +111,16 @@ html.night .bg-ink:hover {
   background-color: #fff8ee !important;
 }
 
+.kline-sheet {
+  background: #ffffff;
+  color: #14110e;
+  --color-ink: #14110e;
+  --color-paper: #ffffff;
+  --color-card: #ffffff;
+  --color-gold: #8a7044;
+  --color-foil: #f4efe6;
+}
+
 .misreg {
   text-shadow:
     2px 0 color-mix(in srgb, var(--color-foil) 95%, var(--color-sell)),

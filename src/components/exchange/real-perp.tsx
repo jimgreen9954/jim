@@ -185,11 +185,14 @@ function DeskLadder({
         {zh ? "买一" : "Bid"} {bestBid > 0 ? bestBid.toFixed(4) : "—"}
         {spread > 0 ? ` · ${zh ? "价差" : "Spread"} ${((spread / Math.max(mark, bestBid)) * 100).toFixed(2)}%` : ""}
       </p>
-      <div className="grid grid-cols-[2.2rem_minmax(0,1fr)_auto] gap-2 px-2 py-1 text-xs text-ink/50">
-        <span>{zh ? "方向" : "Side"}</span>
-        <span>{zh ? "价格 · 保证金 · 倍数" : "Price · margin · leverage"}</span>
-        <span className="text-right">{zh ? "对手" : "Who"}</span>
-      </div>
+      <details className="px-2 text-xs text-ink/50">
+        <summary className="cursor-pointer py-1">{zh ? "盘口" : "Book"}</summary>
+        <div className="grid grid-cols-[2.2rem_minmax(0,1fr)_auto] gap-2 py-1">
+          <span>{zh ? "方向" : "Side"}</span>
+          <span>{zh ? "价格 · 保证金 · 倍数" : "Price · margin · leverage"}</span>
+          <span className="text-right">{zh ? "对手" : "Who"}</span>
+        </div>
+      </details>
       {asks.length === 0 && bids.length === 0 ? <p className="px-2 py-3 text-sm text-ink/60">{zh ? "还没有人挂单。" : "Nobody has a quote yet."}</p> : null}
       {asks.length === 0 && bids.length > 0 ? <p className="px-2 py-1 text-xs text-ink/40">{zh ? "卖盘空" : "No asks"}</p> : null}
       {askRows.map((row) => line(row, true))}
@@ -201,7 +204,10 @@ function DeskLadder({
       {bidRows.map((row) => line(row, false))}
       {bids.length === 0 && asks.length > 0 ? <p className="px-2 py-1 text-xs text-ink/40">{zh ? "买盘空" : "No bids"}</p> : null}
       {nearAsks.length + nearBids.length === 0 && farCount > 0 ? (
-        <p className="px-2 pb-1 text-xs text-ink/50">{zh ? "这些价离标记超过 15%，成交价按挂单价，不按标记价。" : "These prices are more than 15% from the mark. A fill uses the quote, not the mark."}</p>
+        <details className="px-2 pb-1 text-xs text-ink/50">
+          <summary className="cursor-pointer">{zh ? "偏离的单" : "Far quotes"}</summary>
+          <p className="mt-1">{zh ? "这些价离标记超过 15%，成交价按挂单价，不按标记价。" : "These prices are more than 15% from the mark. A fill uses the quote, not the mark."}</p>
+        </details>
       ) : null}
       {farCount > 0 && nearAsks.length + nearBids.length > 0 ? (
         <button type="button" className="min-h-9 w-full text-xs text-ink/60" onClick={() => setShowFar((value) => !value)}>
@@ -649,7 +655,12 @@ export function RealPerp() {
             <div className="text-right">
               <p className="text-xs tracking-widest text-gold">{c.mark}</p>
               <p className="font-mono text-2xl tabular-nums">{markN > 0 ? markN.toFixed(4) : "—"}</p>
-              {prices.at(-1)?.c ? <p className="font-mono text-xs text-ink/50">{lang === "zh" ? "K 线最后一笔" : "Last candle"} {prices.at(-1)!.c.toFixed(4)}</p> : null}
+              {prices.at(-1)?.c ? (
+                <details className="text-sm">
+                  <summary className="cursor-pointer font-mono text-xs text-ink/50">{lang === "zh" ? "最后一笔" : "Last"}</summary>
+                  <p className="font-mono text-xs text-ink/50">{prices.at(-1)!.c.toFixed(4)}</p>
+                </details>
+              ) : null}
             </div>
           </div>
           <div className="flex flex-col gap-2 px-3 pt-2">
@@ -996,27 +1007,30 @@ export function RealPerp() {
                     </p>
                   ) : null}
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-sm">
-                  <p className="border border-gold/40 px-2 py-2">
-                    <span className="block text-xs tracking-widest text-gold">{c.notional}</span>
-                    <span className="font-mono tabular-nums">{ticket ? `$${ticket.notional.toFixed(0)}` : "—"}</span>
+                <details className="text-sm">
+                  <summary className="cursor-pointer text-xs tracking-widest text-gold">{lang === "zh" ? "本单" : "This order"}</summary>
+                  <div className="mt-2 grid grid-cols-3 gap-2 text-sm">
+                    <p className="border border-gold/40 px-2 py-2">
+                      <span className="block text-xs tracking-widest text-gold">{c.notional}</span>
+                      <span className="font-mono tabular-nums">{ticket ? `$${ticket.notional.toFixed(0)}` : "—"}</span>
+                    </p>
+                    <p className="border border-gold/40 px-2 py-2">
+                      <span className="block text-xs tracking-widest text-gold">{c.sizeEst}</span>
+                      <span className="font-mono tabular-nums">{ticket ? `${ticket.size.toFixed(4)}` : "—"}</span>
+                    </p>
+                    <p className="border border-gold/40 px-2 py-2">
+                      <span className="block text-xs tracking-widest text-gold">{c.liqRough}</span>
+                      <span className="font-mono tabular-nums">{liqMove ? `${liqMove}%` : "—"}</span>
+                    </p>
+                  </div>
+                  <p className="mt-2 font-mono text-xs tabular-nums text-ink/70">
+                    {lang === "zh" ? "可用" : "Available"} {bal ? pretty(bal.usdt, dec, 2) : "—"} USDT
+                    {" · "}
+                    {lang === "zh" ? "本单手续费" : "Fee"} {marginOk ? (Number(margin) * 0.002).toFixed(4) : "—"} USDT
+                    {" · "}
+                    {ticket ? `${ticket.size.toFixed(4)} ${base}` : "—"}
                   </p>
-                  <p className="border border-gold/40 px-2 py-2">
-                    <span className="block text-xs tracking-widest text-gold">{c.sizeEst}</span>
-                    <span className="font-mono tabular-nums">{ticket ? `${ticket.size.toFixed(4)}` : "—"}</span>
-                  </p>
-                  <p className="border border-gold/40 px-2 py-2">
-                    <span className="block text-xs tracking-widest text-gold">{c.liqRough}</span>
-                    <span className="font-mono tabular-nums">{liqMove ? `${liqMove}%` : "—"}</span>
-                  </p>
-                </div>
-                <p className="font-mono text-xs tabular-nums text-ink/70">
-                  {lang === "zh" ? "可用" : "Available"} {bal ? pretty(bal.usdt, dec, 2) : "—"} USDT
-                  {" · "}
-                  {lang === "zh" ? "本单手续费" : "Fee"} {marginOk ? (Number(margin) * 0.002).toFixed(4) : "—"} USDT
-                  {" · "}
-                  {ticket ? `${ticket.size.toFixed(4)} ${base}` : "—"}
-                </p>
+                </details>
                 {levOk && lev >= 100 && liqMove ? (
                   <p className="text-sm text-sell">
                     {lang === "zh"

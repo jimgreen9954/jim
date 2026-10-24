@@ -506,8 +506,9 @@ export function SpotDesk() {
               </button>
             ))}
           </div>
-          <p className="text-xs tracking-widest text-gold">{c.balTitle}</p>
-          <div className="grid grid-cols-3 gap-2">
+          <details className="text-sm">
+            <summary className="cursor-pointer text-xs tracking-widest text-gold">{c.balTitle}</summary>
+            <div className="mt-2 grid grid-cols-3 gap-2">
             {(
               pair === "okb"
                 ? ([
@@ -538,7 +539,8 @@ export function SpotDesk() {
                 <span className="block truncate font-mono text-sm tabular-nums">{value}</span>
               </p>
             ))}
-          </div>
+            </div>
+          </details>
           <label className="border border-gold/40 px-3 py-2">
             <span className="flex items-center justify-between text-xs tracking-widest text-gold">
               {c.pay}
@@ -576,13 +578,13 @@ export function SpotDesk() {
               {out ?? "—"} {recvUnit}
             </span>
           </p>
-          <p className="font-mono text-xs tabular-nums text-ink/70">
-            {lang === "zh" ? "本单台费" : "Fee"} {deskFee ? pretty(deskFee.fee, payDecimals, 4) : "—"} {payUnit}
-            {" · "}
-            {lang === "zh" ? "最少到账" : "Min. received"} {minOut ?? "—"} {recvUnit}
-          </p>
           <details className="text-sm">
             <summary className="cursor-pointer text-xs tracking-widest text-gold">{lang === "zh" ? "台费" : "Fee"}</summary>
+            <p className="mt-2 font-mono text-xs tabular-nums text-ink/70">
+              {lang === "zh" ? "本单台费" : "Fee"} {deskFee ? pretty(deskFee.fee, payDecimals, 4) : "—"} {payUnit}
+              {" · "}
+              {lang === "zh" ? "最少到账" : "Min. received"} {minOut ?? "—"} {recvUnit}
+            </p>
             <p className="mt-2 font-mono text-xs leading-5 text-ink/60">
               {lang === "zh" ? "绑了邀请人则这笔的 6% 给邀请人，少付 4%，90% 进收费地址。" : "With a referrer, 6% of this fee, 4% off, 90% to the fee address."}
             </p>

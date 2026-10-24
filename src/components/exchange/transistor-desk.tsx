@@ -223,20 +223,25 @@ export function TransistorDesk() {
           <div className="flex flex-wrap items-end justify-between gap-3 border-b border-gold/30 px-3 py-3">
             <div>
               <h3 className="font-display text-[1.65rem] italic leading-none">{gate ? `${gate.name} / ${gate.kind}` : "TapeOut / NAND"}</h3>
-              <p className="mt-1 font-mono text-xs text-ink/45">{zh ? "合约" : "Contract"} {perp ? `${perp.slice(0, 6)}…${perp.slice(-4)}` : "—"}</p>
+              <details className="mt-1 text-xs text-ink/45">
+                <summary className="cursor-pointer">{zh ? "合约" : "Contract"}</summary>
+                <p className="mt-1 font-mono">{perp ? `${perp.slice(0, 6)}…${perp.slice(-4)}` : "—"} · {zh ? "结算" : "Settle"} {chainMark > 0 ? `${px(chainMark)} BNB` : "—"}</p>
+              </details>
             </div>
             <div className="text-right">
               <p className="text-[11px] text-ink/45">{zh ? "参考价" : "Mark"}</p>
               <p className="font-mono text-lg tabular-nums text-[#089981]">{px(mark)} BNB</p>
-              <p className="font-mono text-[11px] text-ink/45">{zh ? "结算" : "Settle"} {chainMark > 0 ? `${px(chainMark)} BNB` : "—"}</p>
             </div>
           </div>
-          <div className="grid grid-cols-[3.6rem_minmax(0,1fr)_auto] items-center px-2 py-1 text-[11px] text-ink/45 sm:grid-cols-[4.2rem_minmax(0,1fr)_4.2rem_4.6rem]">
-            <span>{zh ? "价格" : "Price"}</span>
-            <span>{zh ? "保证金" : "Margin"}</span>
-            <span className="hidden text-right sm:block">{zh ? "名义" : "Notional"}</span>
-            <span className="text-right">{zh ? "指定成交" : "Take"}</span>
-          </div>
+          <details className="px-2 text-[11px] text-ink/45">
+            <summary className="cursor-pointer py-1">{zh ? "盘口" : "Book"}</summary>
+            <div className="grid grid-cols-[3.6rem_minmax(0,1fr)_auto] items-center py-1 sm:grid-cols-[4.2rem_minmax(0,1fr)_4.2rem_4.6rem]">
+              <span>{zh ? "价格" : "Price"}</span>
+              <span>{zh ? "保证金" : "Margin"}</span>
+              <span className="hidden text-right sm:block">{zh ? "名义" : "Notional"}</span>
+              <span className="text-right">{zh ? "指定成交" : "Take"}</span>
+            </div>
+          </details>
           <div className="max-h-[22rem] overflow-y-auto">
             {asks.map((row) => <OrderRow key={row.id} row={row} mine={mine} zh={zh} max={Math.max(...resting.map((item) => item.margin), 1)} onCancel={() => cancel(row)} onTake={() => take(row)} />)}
             <p className="my-1 flex items-center gap-3 px-2 font-mono text-[13px]">
@@ -320,49 +325,52 @@ export function TransistorDesk() {
               } finally { setBusy(false); }
             }}>{zh ? "写入结算价" : "Post the mark"}</button>
           ) : null}
-          <p className="text-[11px] leading-5 text-ink/50">{zh ? "盈亏按推进后的参考价，不按限价。保证金是 BSC 的 USDT。指定成交吃的是左边这一张真实挂单。" : "PnL uses the pushed mark, not the limit. Margin is BSC USDT. Take fills one real order."}</p>
-          <p className="text-[11px] tracking-[0.14em] text-gold">{zh ? "推荐" : "Referral"}</p>
-          {rebate.code ? (
-            <button type="button" className="h-8 border border-gold text-xs" onClick={() => navigator.clipboard.writeText(inviteLink(rebate.code)).then(() => setNote(zh ? "链接已复制。" : "Link copied.")).catch(() => setNote(inviteLink(rebate.code)))}>{zh ? "复制邀请链接" : "Copy invite"}</button>
-          ) : (
-            <div className="flex gap-1">
-              <input value={mineCode} onChange={(event) => setMineCode(event.target.value)} className="h-8 min-w-0 flex-1 border border-gold/50 bg-transparent px-2 text-xs outline-none" placeholder={zh ? "我的码" : "My code"} />
-              <button type="button" disabled={busy} className="h-8 border border-gold px-2 text-xs" onClick={async () => {
-                const user = account ?? currentAccount();
-                if (!user) return;
-                setBusy(true);
-                try { await registerGate(user, mineCode); setNote(zh ? "推荐码已写上。确认后不能改。" : "Code written. It cannot be changed."); }
-                catch { setNote(zh ? "推荐码没写上。" : "The code was not written."); }
-                finally { setBusy(false); }
-              }}>{zh ? "确认" : "Set"}</button>
+          <details className="text-[11px] leading-5 text-ink/50">
+            <summary className="cursor-pointer tracking-widest text-gold">{zh ? "说明" : "Note"}</summary>
+            <p className="mt-1">{zh ? "盈亏按推进后的参考价，不按限价。保证金是 BSC 的 USDT。指定成交吃的是左边这一张真实挂单。" : "PnL uses the pushed mark, not the limit. Margin is BSC USDT. Take fills one real order."}</p>
+            <p className="mt-2 tracking-[0.14em] text-gold">{zh ? "推荐" : "Referral"}</p>
+            {rebate.code ? (
+              <button type="button" className="mt-1 h-8 border border-gold text-xs" onClick={() => navigator.clipboard.writeText(inviteLink(rebate.code)).then(() => setNote(zh ? "链接已复制。" : "Link copied.")).catch(() => setNote(inviteLink(rebate.code)))}>{zh ? "复制邀请链接" : "Copy invite"}</button>
+            ) : (
+              <div className="mt-1 flex gap-1">
+                <input value={mineCode} onChange={(event) => setMineCode(event.target.value)} className="h-8 min-w-0 flex-1 border border-gold/50 bg-transparent px-2 text-xs outline-none" placeholder={zh ? "我的码" : "My code"} />
+                <button type="button" disabled={busy} className="h-8 border border-gold px-2 text-xs" onClick={async () => {
+                  const user = account ?? currentAccount();
+                  if (!user) return;
+                  setBusy(true);
+                  try { await registerGate(user, mineCode); setNote(zh ? "推荐码已写上。确认后不能改。" : "Code written. It cannot be changed."); }
+                  catch { setNote(zh ? "推荐码没写上。" : "The code was not written."); }
+                  finally { setBusy(false); }
+                }}>{zh ? "确认" : "Set"}</button>
+              </div>
+            )}
+            {rebate.referrer && rebate.referrer !== "0x0000000000000000000000000000000000000000" ? <p className="mt-2 font-mono text-[11px]">{short(rebate.referrer)}</p> : (
+              <div className="mt-2 flex gap-1">
+                <input value={friend} onChange={(event) => setFriend(event.target.value)} className="h-8 min-w-0 flex-1 border border-gold/50 bg-transparent px-2 text-xs outline-none" placeholder={zh ? "对方的码" : "Their code"} />
+                <button type="button" disabled={busy} className="h-8 border border-gold px-2 text-xs" onClick={async () => {
+                  const user = account ?? currentAccount();
+                  if (!user) return;
+                  setBusy(true);
+                  try { await bindGate(user, friend); setNote(zh ? "已绑定。" : "Bound."); }
+                  catch { setNote(zh ? "绑定失败。对方要先确认过自己的码。" : "Bind failed."); }
+                  finally { setBusy(false); }
+                }}>{zh ? "绑定" : "Bind"}</button>
+              </div>
+            )}
+            <p className="mt-2 font-mono text-xs">{zh ? "可提" : "Claimable"} {rebate.accrued.toFixed(2)} USDT</p>
+            <div className="mt-1 grid grid-cols-4 gap-1">
+              {[1, 10, 20, 50, 100, 300, 500].map((step) => (
+                <button key={step} type="button" disabled={busy || rebate.accrued + 1e-9 < step} className="h-8 border border-gold/50 font-mono text-[11px] disabled:opacity-40" onClick={async () => {
+                  const user = account ?? currentAccount();
+                  if (!user) return;
+                  setBusy(true);
+                  try { await claimGate(user, BigInt(step) * 10n ** 18n); setNote(zh ? `已提 ${step} USDT。` : `Claimed ${step} USDT.`); }
+                  catch { setNote(zh ? "提现没有完成。" : "The claim did not finish."); }
+                  finally { setBusy(false); }
+                }}>{step}</button>
+              ))}
             </div>
-          )}
-          {rebate.referrer && rebate.referrer !== "0x0000000000000000000000000000000000000000" ? <p className="font-mono text-[11px]">{short(rebate.referrer)}</p> : (
-            <div className="flex gap-1">
-              <input value={friend} onChange={(event) => setFriend(event.target.value)} className="h-8 min-w-0 flex-1 border border-gold/50 bg-transparent px-2 text-xs outline-none" placeholder={zh ? "对方的码" : "Their code"} />
-              <button type="button" disabled={busy} className="h-8 border border-gold px-2 text-xs" onClick={async () => {
-                const user = account ?? currentAccount();
-                if (!user) return;
-                setBusy(true);
-                try { await bindGate(user, friend); setNote(zh ? "已绑定。" : "Bound."); }
-                catch { setNote(zh ? "绑定失败。对方要先确认过自己的码。" : "Bind failed."); }
-                finally { setBusy(false); }
-              }}>{zh ? "绑定" : "Bind"}</button>
-            </div>
-          )}
-          <p className="font-mono text-xs">{zh ? "可提" : "Claimable"} {rebate.accrued.toFixed(2)} USDT</p>
-          <div className="grid grid-cols-4 gap-1">
-            {[1, 10, 20, 50, 100, 300, 500].map((step) => (
-              <button key={step} type="button" disabled={busy || rebate.accrued + 1e-9 < step} className="h-8 border border-gold/50 font-mono text-[11px] disabled:opacity-40" onClick={async () => {
-                const user = account ?? currentAccount();
-                if (!user) return;
-                setBusy(true);
-                try { await claimGate(user, BigInt(step) * 10n ** 18n); setNote(zh ? `已提 ${step} USDT。` : `Claimed ${step} USDT.`); }
-                catch { setNote(zh ? "提现没有完成。" : "The claim did not finish."); }
-                finally { setBusy(false); }
-              }}>{step}</button>
-            ))}
-          </div>
+          </details>
           {note ? <p className="text-xs leading-5">{note}</p> : null}
         </div>
       </section>
