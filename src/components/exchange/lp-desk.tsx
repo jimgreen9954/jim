@@ -114,8 +114,8 @@ export function LpPanel() {
       <div className="border-b border-gold/40 p-3 lg:col-span-7 lg:border-r lg:border-b-0">
         <p className="text-sm leading-7 text-ink/80">
           {zh
-            ? "只填一边。另一边按池子现价配平，做成全区间。对 BEM 的有 BNB、BTC、黄金，和现货里的美股。池子还没有时，第一笔按两边对 USDT 的现价建池。年化按这口池近几个小时的真实手续费来算。凭证在你钱包里，随时可以一键撤回。OKB 在 X Layer，不能和 BEM 组在同一个池。"
-            : "Type one side. The other matches the pool price, full range. Against BEM: BNB, BTC, gold, and the stocks on this desk. The first deposit opens a missing pool at the two USDT prices. The annualized figure uses this pool's real fees over the last few hours. The position stays in your wallet and can be removed any time. OKB is on X Layer and cannot share a pool with BEM."}
+            ? "只填一边。另一边按池子现价配平。用户和机构用同一笔签名，没有单独的大户入口。仓位在你的钱包里。TAPE 池不再接受新的加池。"
+            : "Type one side. The other matches the pool price, full range. Against BEM: BNB, BTC, gold, and the stocks on this desk. The first deposit opens a missing pool at the two USDT prices. The annualized figure uses this pool's real fees over the last few hours. The position stays in your wallet and can be removed any time. OKB is on X Layer and cannot share a pool with BEM. A large wallet uses this same signature. There is no separate institution gate. The TAPE pool does not take a new deposit."}
         </p>
         <div className="mt-3 grid grid-cols-3">
           {(

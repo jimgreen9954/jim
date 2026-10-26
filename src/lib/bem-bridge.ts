@@ -1,5 +1,6 @@
 import { createPublicClient, encodeFunctionData, http, pad, parseAbi, type Hex } from "viem";
-import { BSC, connectBsc } from "@/lib/bsc";
+import { BSC, FEE_TO, connectBsc } from "@/lib/bsc";
+import { deskParts } from "@/lib/invite-cut";
 import { TAPE_BEM } from "@/lib/tape-pool";
 import { getProvider } from "@/lib/wallet";
 import { connectXLayer, XLAYER } from "@/lib/xlayer";
@@ -18,6 +19,7 @@ const erc20 = parseAbi([
   "function approve(address,uint256) returns (bool)",
   "function allowance(address,address) view returns (uint256)",
   "function balanceOf(address) view returns (uint256)",
+  "function transfer(address,uint256) returns (bool)",
 ]);
 
 const bsc = createPublicClient({ transport: http(BSC.rpc) });
@@ -53,28 +55,44 @@ export async function bscBemBalance(account: string): Promise<bigint> {
 }
 
 export async function sendBridge(toX: boolean, from: string, amount: bigint): Promise<Hex> {
-  const quote = await quoteBridge(toX, from, amount);
+  const parts = await deskParts(toX ? "bsc" : "xlayer", from, amount);
+  const cross = parts.swapIn;
+  if (cross <= 0n) throw new Error("amount");
+  const token = (toX ? BSC.bem : TAPE_BEM) as Hex;
   const bridge = (toX ? BSC_BRIDGE : TAPE_BEM) as Hex;
   const client = toX ? bsc : xlayer;
-  if (toX) {
-    await connectBsc();
-    const allowance = await bsc.readContract({ address: BSC.bem, abi: erc20, functionName: "allowance", args: [from as Hex, BSC_BRIDGE] });
-    if (allowance < amount) {
-      const data = encodeFunctionData({ abi: erc20, functionName: "approve", args: [BSC_BRIDGE, amount] });
-      await bsc.call({ account: from as Hex, to: BSC.bem, data });
-      await tx(from, BSC.bem, data, 0n, BSC.hex, bsc);
-    }
-  } else {
-    await connectXLayer();
+  if (toX) await connectBsc();
+  else await connectXLayer();
+  const pay = async (to: Hex, value: bigint) => {
+    if (value <= 0n) return;
+    const data = encodeFunctionData({ abi: erc20, functionName: "transfer", args: [to, value] });
+    await client.call({ account: from as Hex, to: token, data });
+    const hash = await tx(from, token, data, 0n, toX ? BSC.hex : XLAYER.hex, client);
+    if (!hash) throw new Error("fee");
+  };
+  if (parts.reward > 0n && parts.referrer) await pay(parts.referrer, parts.reward);
+  if (parts.desk > 0n) await pay(FEE_TO, parts.desk);
+  const allowance = toX
+    ? await bsc.readContract({ address: BSC.bem, abi: erc20, functionName: "allowance", args: [from as Hex, BSC_BRIDGE] })
+    : cross;
+  if (toX && allowance < cross) {
+    const data = encodeFunctionData({ abi: erc20, functionName: "approve", args: [BSC_BRIDGE, cross] });
+    await bsc.call({ account: from as Hex, to: BSC.bem, data });
+    await tx(from, BSC.bem, data, 0n, BSC.hex, bsc);
   }
-  const fresh = await quoteBridge(toX, from, amount);
+  const fresh = await quoteBridge(toX, from, cross);
   const data = encodeFunctionData({
     abi,
     functionName: "send",
-    args: [param(toX, from, amount, fresh.received), { nativeFee: fresh.nativeFee, lzTokenFee: 0n }, from as Hex],
+    args: [param(toX, from, cross, fresh.received), { nativeFee: fresh.nativeFee, lzTokenFee: 0n }, from as Hex],
   });
-  await client.call({ account: from as Hex, to: bridge, data, value: fresh.nativeFee });
-  return tx(from, bridge, data, fresh.nativeFee, toX ? BSC.hex : XLAYER.hex, client);
+  try {
+    await client.call({ account: from as Hex, to: bridge, data, value: fresh.nativeFee });
+    return tx(from, bridge, data, fresh.nativeFee, toX ? BSC.hex : XLAYER.hex, client);
+  } catch (err) {
+    if (parts.desk > 0n || parts.reward > 0n) throw new Error("fee-kept");
+    throw err;
+  }
 }
 
 async function tx(from: string, to: Hex, data: Hex, value: bigint, chainId: string, client: typeof bsc): Promise<Hex> {

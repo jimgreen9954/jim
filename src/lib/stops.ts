@@ -11,6 +11,9 @@ export type Arm = {
   before?: string;
   /** Close was rejected or failed. Do not pop the wallet again until the user asks. */
   hold?: boolean;
+  /** Retrace fraction. 0.05 closes a long after a 5% drop from the peak. */
+  trail?: number;
+  peak?: number;
 };
 
 const KEY = "tapeliquid-stops-v1";

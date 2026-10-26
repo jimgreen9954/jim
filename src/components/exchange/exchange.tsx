@@ -10,22 +10,25 @@ import { TraceChart } from "@/components/exchange/chart";
 import { DiePanel } from "@/components/exchange/die";
 import { Ticket } from "@/components/exchange/ticket";
 import { OfficialDesk } from "@/components/exchange/official-desk";
-import { RealPerp } from "@/components/exchange/real-perp";
-import { SpotDesk } from "@/components/exchange/spot-desk";
+import { DeskHome, rememberDesk, rememberLp } from "@/components/exchange/desk-home";
 import { TransistorDesk } from "@/components/exchange/transistor-desk";
 import { TapeCanvas } from "@/components/exchange/tape-canvas";
 import { ConnectButton } from "@/components/exchange/wallet-bar";
+import { SettingsMenu } from "@/components/exchange/settings-menu";
 import { AccountCenter } from "@/components/exchange/account-center";
 import { TapeSpotDesk } from "@/components/exchange/tape-spot";
 import { WorkshopRisk } from "@/components/exchange/risk-calc";
 import { MineDesk } from "@/components/exchange/mine-desk";
 import { Whitepaper } from "@/components/exchange/whitepaper";
 import { SideRail } from "@/components/exchange/side-rail";
-import { bemPrice } from "@/lib/bsc";
+import { bemPrice, BSC, FEE_TO, readBalances } from "@/lib/bsc";
 import { FeeLockProvider, useFeeLock } from "@/lib/fee-lock";
-import { currentAccount, onAccount } from "@/lib/wallet";
-import { CLAIM_STEPS, bindCode, claimRebate, codeText, readRebate, registerCode, type Desk } from "@/lib/perp";
+import { currentAccount, onAccount, resumeSession } from "@/lib/wallet";
+import { CLAIM_STEPS, bindCode, claimRebate, codeText, readRebate, registerCode, X_USDT, type Desk } from "@/lib/perp";
+import { readPrefs } from "@/lib/desk-prefs";
+import { readOkb, XLAYER } from "@/lib/xlayer";
 import { formatUnits } from "viem";
+import { OfficialBridge } from "@/components/exchange/tape-desk";
 
 type Floor = "desk" | "paper" | "shop" | "rules" | "canvas" | "me" | "mine";
 type DeskTab = "spot" | "perp";
@@ -36,10 +39,12 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
   const [desk, setDesk] = useState<DeskTab>(start === "perp" ? "perp" : "spot");
   const [shop, setShop] = useState<ShopTab>(start === "gate" ? "gate" : "book");
   const [giftOpen, setGiftOpen] = useState(false);
+  const [place, setPlace] = useState("");
   const { night, setNight } = useNight();
   useEffect(() => {
     const apply = () => {
       const named = window.location.hash.replace(/^#/, "");
+      setPlace(named);
       if (named === "spot") { setFloor("desk"); setDesk("spot"); }
       if (named === "perp") { setFloor("desk"); setDesk("perp"); }
       if (named === "paper") setFloor("paper");
@@ -48,13 +53,14 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
       if (named === "chips") { setFloor("shop"); setShop("chips"); }
       if (named === "circuits") { setFloor("shop"); setShop("circuits"); }
       if (named === "canvas") setFloor("canvas");
-      if (named === "mine") setFloor("mine");
+      if (named === "mine" || named === "earn" || named === "net" || named === "stake" || named === "vault" || named === "bid" || named === "ash") setFloor("mine");
       if (named === "me" || named === "gift") setFloor("me");
       if (named === "gift") setGiftOpen(true);
       if (named === "brief" || named === "rules") setFloor("rules");
     };
     apply();
     window.addEventListener("hashchange", apply);
+    if (readPrefs().keepAlive) void resumeSession();
     return () => window.removeEventListener("hashchange", apply);
   }, []);
   return (
@@ -64,17 +70,19 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
         <SimClock />
         <BannerToast />
         <FuseFlash />
-        <div className={`mx-auto flex w-full flex-col gap-3 px-2 pt-2 sm:px-3 lg:gap-3 lg:px-4 ${floor === "paper" ? "pb-16 lg:pb-16" : "pb-16"}`}>
-          <Header floor={floor} desk={desk} shop={shop} night={night} setNight={setNight} setFloor={setFloor} setDesk={setDesk} setShop={setShop} setGiftOpen={setGiftOpen} />
+        <div className="mx-auto flex min-h-screen w-full flex-col pb-10">
+          <Header floor={floor} desk={desk} shop={shop} place={place} night={night} setNight={setNight} setFloor={setFloor} setDesk={setDesk} setShop={setShop} setGiftOpen={setGiftOpen} />
+          {floor === "desk" ? <TradeBanner /> : null}
+          <div key={`${floor}-${shop}`} className={`floor-enter flex flex-col gap-3 px-2 pt-2 sm:px-3 ${floor === "paper" ? "pb-6" : ""}`}>
           <FeeStrip />
-          {floor === "desk" && desk === "spot" ? <SpotDesk /> : null}
-          {floor === "desk" && desk === "perp" ? <RealPerp /> : null}
+          {floor === "desk" ? <DeskHome desk={desk} onDesk={setDesk} /> : null}
           {floor === "paper" ? <PaperFloor /> : null}
           {floor === "shop" ? <ShopFloor shop={shop} setShop={setShop} /> : null}
           {floor === "canvas" ? <TapeCanvas /> : null}
           {floor === "mine" ? <MineDesk /> : null}
           {floor === "me" ? <AccountCenter giftOpen={giftOpen} /> : null}
           {floor === "rules" ? <Whitepaper /> : null}
+          </div>
         </div>
         <TerminalBar night={night} setNight={setNight} />
       </div>
@@ -83,20 +91,52 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
 }
 
 function useNight() {
-  const [night, setNight] = useState(false);
+  const [night, setNight] = useState(true);
   const [ready, setReady] = useState(false);
   useEffect(() => {
-    const on = window.localStorage.getItem("tapeliquid-night") === "1";
+    const on = window.localStorage.getItem("tapeliquid-night") !== "day";
     setNight(on);
-    document.documentElement.classList.toggle("night", on);
+    document.documentElement.classList.toggle("day", !on);
     setReady(true);
   }, []);
   useEffect(() => {
     if (!ready) return;
-    document.documentElement.classList.toggle("night", night);
-    window.localStorage.setItem("tapeliquid-night", night ? "1" : "0");
+    document.documentElement.classList.toggle("day", !night);
+    window.localStorage.setItem("tapeliquid-night", night ? "1" : "day");
   }, [night, ready]);
   return { night, setNight };
+}
+
+function ThemeButton({ night, setNight, compact = false }: { night: boolean; setNight: (next: boolean | ((on: boolean) => boolean)) => void; compact?: boolean }) {
+  const lang = useExchange((s) => s.lang);
+  const zh = lang === "zh";
+  const label = night ? (zh ? "夜间" : "Night") : (zh ? "日间" : "Day");
+  const flip = () => {
+    const next = !night;
+    const apply = () => {
+      document.documentElement.classList.toggle("day", !next);
+      setNight(next);
+    };
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const vt = document as Document & { startViewTransition?: (cb: () => void) => void };
+    if (!reduced && typeof vt.startViewTransition === "function") vt.startViewTransition(apply);
+    else apply();
+  };
+  return (
+    <button
+      type="button"
+      aria-pressed={night}
+      title={night ? (zh ? "现在是夜间。点一下换成日间。" : "Night. Switch to day.") : (zh ? "现在是日间。点一下换成夜间。" : "Day. Switch to night.")}
+      className={`inline-flex shrink-0 items-center gap-1 border border-gold text-ink ${compact ? "h-6 px-1.5 text-[11px]" : "h-8 px-2 text-xs"}`}
+      onClick={flip}
+    >
+      <span className="theme-ico" aria-hidden>
+        <svg viewBox="0 0 24 24" className={night ? "theme-ico-on" : "theme-ico-off"} fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M20 14.5A7.5 7.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5Z" /></svg>
+        <svg viewBox="0 0 24 24" className={night ? "theme-ico-off" : "theme-ico-on"} fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="12" cy="12" r="3.5" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4" /></svg>
+      </span>
+      <span>{label}</span>
+    </button>
+  );
 }
 
 function TerminalBar({ night, setNight }: { night: boolean; setNight: (next: boolean | ((on: boolean) => boolean)) => void }) {
@@ -104,23 +144,48 @@ function TerminalBar({ night, setNight }: { night: boolean; setNight: (next: boo
   const setLang = useExchange((s) => s.setLang);
   const zh = lang === "zh";
   return (
-    <footer className="fixed inset-x-0 bottom-0 z-30 flex h-11 items-center gap-3 overflow-x-auto border-t border-gold/60 bg-paper/95 px-3 text-[12px] text-ink/80 backdrop-blur-sm">
-      <a href="#rules" className="shrink-0 underline decoration-gold underline-offset-4">{zh ? "使用指南" : "Guide"}</a>
-      <a href="https://x.com/Icp_chinese" target="_blank" rel="noreferrer" className="shrink-0 underline decoration-gold underline-offset-4">X</a>
-      <a href="https://t.me/+RWVnnxXf1LY1MWVh" target="_blank" rel="noreferrer" className="shrink-0 underline decoration-gold underline-offset-4">Telegram</a>
-      <a href="https://github.com/jimgreen9954/jim" target="_blank" rel="noreferrer" className="shrink-0 underline decoration-gold underline-offset-4">GitHub</a>
-      <a href="#rules" className="shrink-0 underline decoration-gold underline-offset-4">{zh ? "白皮书" : "Paper"}</a>
+    <footer className="desk-bar fixed inset-x-0 bottom-0 z-30 flex h-8 items-center gap-3 overflow-x-auto border-t border-gold px-3 text-[11px] text-ink/55">
+      <span className="inline-flex shrink-0 items-center gap-1 text-up"><span className="live-dot size-1.5 rounded-full bg-up" />{zh ? "在线" : "Live"}</span>
+      <a href="#rules" className="shrink-0 hover:text-ink">{zh ? "文档" : "Docs"}</a>
+      <a href="https://x.com/TAPELIQUID" target="_blank" rel="noreferrer" className="shrink-0 hover:text-ink">X</a>
+      <a href="https://t.me/+JN0c8XGQpIkxNTRh" target="_blank" rel="noreferrer" className="shrink-0 hover:text-ink">Telegram</a>
+      <a href="https://github.com/jimgreen9954/jim" target="_blank" rel="noreferrer" className="shrink-0 hover:text-ink">GitHub</a>
+      <a href="#rules" className="shrink-0 hover:text-ink">{zh ? "条款" : "Rules"}</a>
       <span className="ml-auto flex shrink-0 items-center gap-1">
-        <button type="button" aria-label={night ? (zh ? "白天" : "Day") : zh ? "黑夜" : "Night"} className="inline-flex size-8 items-center justify-center" onClick={() => setNight((on) => !on)}>
-          {night ? (
-            <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="12" cy="12" r="3.5" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4" /></svg>
-          ) : (
-            <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M20 14.5A7.5 7.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5Z" /></svg>
-          )}
-        </button>
+        <ThemeButton night={night} setNight={setNight} compact />
         <button type="button" className="min-h-8 px-1.5" onClick={() => setLang(lang === "zh" ? "en" : "zh")}>{zh ? "EN" : "中文"}</button>
       </span>
     </footer>
+  );
+}
+
+function TradeBanner() {
+  const zh = useExchange((s) => s.lang) === "zh";
+  const cells = zh
+    ? [
+        ["现货", "TAPE"],
+        ["委托", "限价 / 市价"],
+        ["合约", "TAPE"],
+        ["市场", "全部"],
+      ]
+    : [
+        ["Spot", "TAPE"],
+        ["Order", "Limit / Market"],
+        ["Perps", "TAPE"],
+        ["Markets", "All"],
+      ];
+  return (
+    <div className="trade-ribbon overflow-x-auto" role="status">
+      <div className="mx-auto flex h-8 w-max min-w-full items-stretch justify-center">
+        {cells.map(([key, value], index) => (
+          <div key={key} className={`flex items-center gap-2 px-3.5 ${index > 0 ? "ribbon-rule" : ""}`}>
+            {index === 0 ? <span className="live-dot size-1.5 shrink-0 rounded-full bg-up" aria-hidden /> : null}
+            <span className="text-[10px] tracking-[0.18em] text-current/45 uppercase">{key}</span>
+            <span className="font-mono text-[12px]">{value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -198,7 +263,7 @@ function BannerToast() {
   if (!banner || banner.key === "liq") return null;
   const text = copy[lang].banners[banner.key] ?? banner.key;
   return (
-    <p className="fixed inset-x-3 top-4 z-50 mx-auto max-w-md border border-gold bg-card px-3 py-2 text-center text-sm shadow-plate">
+    <p className="toast-in fixed inset-x-3 top-4 z-50 mx-auto max-w-md border border-gold bg-card px-3 py-2 text-center text-sm shadow-plate">
       {text}
     </p>
   );
@@ -226,6 +291,232 @@ function FuseFlash() {
 function inviteHref(code: string): string {
   if (typeof window === "undefined") return `#ref=${encodeURIComponent(code)}`;
   return `${window.location.origin}${window.location.pathname}#ref=${encodeURIComponent(code)}`;
+}
+
+const TAPE = "0x8f2d517D3d62019CD8D7F08ae178Be05BBb6EBE3";
+const BEM_X = "0x60e62Efa9405d6873C5deaBD4E6CC91c25363952";
+
+function trimAmount(raw: string): string {
+  const [whole, frac = ""] = raw.split(".");
+  const cut = frac.slice(0, 4).replace(/0+$/, "");
+  return cut ? `${whole}.${cut}` : whole;
+}
+
+async function tokenBalance(rpc: string, token: string, holder: string): Promise<bigint> {
+  const data = `0x70a08231${holder.slice(2).toLowerCase().padStart(64, "0")}`;
+  const res = await fetch(rpc, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: token, data }, "latest"] }),
+  });
+  const json = await res.json() as { result?: string };
+  if (!json.result || json.result === "0x") return 0n;
+  return BigInt(json.result);
+}
+
+const TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+
+async function recentFees(): Promise<{ side: "in" | "out"; k: string; v: string; href: string }[]> {
+  const fee = FEE_TO.slice(2).toLowerCase().padStart(64, "0");
+  const books = [
+    { rpc: BSC.rpc, token: BSC.usdt, dec: 18, k: "USDT", scan: BSC.explorer },
+    { rpc: BSC.rpc, token: BSC.bem, dec: 8, k: "BEM", scan: BSC.explorer },
+    { rpc: XLAYER.rpc, token: X_USDT, dec: 6, k: "USDT0", scan: XLAYER.explorer },
+    { rpc: XLAYER.rpc, token: TAPE, dec: 8, k: "TAPE", scan: XLAYER.explorer },
+    { rpc: XLAYER.rpc, token: BEM_X, dec: 8, k: "BEM", scan: XLAYER.explorer },
+  ];
+  const rows: { side: "in" | "out"; k: string; v: string; href: string; block: number }[] = [];
+  for (const book of books) {
+    try {
+    const head = await fetch(book.rpc, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_blockNumber", params: [] }),
+    }).then((res) => res.json() as Promise<{ result?: string }>);
+    const latest = head.result ? Number(BigInt(head.result)) : 0;
+    if (!latest) continue;
+    const fromBlock = `0x${Math.max(0, latest - 3000).toString(16)}`;
+    for (const side of ["in", "out"] as const) {
+      const topics = side === "in" ? [TRANSFER, null, `0x${fee}`] : [TRANSFER, `0x${fee}`];
+      const json = await fetch(book.rpc, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_getLogs", params: [{ address: book.token, fromBlock, toBlock: "latest", topics }] }),
+      }).then((res) => res.json() as Promise<{ result?: { transactionHash: string; data: string; blockNumber: string }[] }>);
+      for (const log of json.result ?? []) {
+        let amount = 0n;
+        try { amount = BigInt(log.data); } catch { amount = 0n; }
+        if (amount <= 0n) continue;
+        rows.push({
+          side,
+          k: book.k,
+          v: trimAmount(formatUnits(amount, book.dec)),
+          href: `${book.scan}/tx/${log.transactionHash}`,
+          block: Number(BigInt(log.blockNumber)),
+        });
+      }
+    }
+    } catch {
+      continue;
+    }
+  }
+  return rows.sort((a, b) => b.block - a.block).slice(0, 8).map(({ side, k, v, href }) => ({ side, k, v, href }));
+}
+
+function GoldMark() {
+  return (
+    <svg viewBox="0 0 32 32" className="size-6" aria-hidden>
+      <rect width="32" height="32" rx="6" fill="#1c1408" />
+      <path fill="#e6c27a" d="M6 20c1.2-6 4.2-8.2 10-8.2s8.8 2.2 10 8.2c-2.2 3-6 4.2-10 4.2S8.2 23 6 20Z" />
+      <path fill="#f6e3b0" d="M11 15.5h10c.8 1.6.8 3.2 0 4.8H11c-.8-1.6-.8-3.2 0-4.8Z" />
+      <ellipse cx="8.2" cy="18.5" rx="2" ry="2.6" fill="#c4963c" />
+      <ellipse cx="23.8" cy="18.5" rx="2" ry="2.6" fill="#c4963c" />
+    </svg>
+  );
+}
+
+function FeeBook() {
+  const zh = useExchange((s) => s.lang) === "zh";
+  const [open, setOpen] = useState(false);
+  const [rows, setRows] = useState<{ k: string; v: string }[]>([]);
+  const [flows, setFlows] = useState<{ side: "in" | "out"; k: string; v: string; href: string }[]>([]);
+  const box = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: PointerEvent) => {
+      const node = event.target;
+      if (node instanceof Node && (box.current?.contains(node) || panel.current?.contains(node))) return;
+      setOpen(false);
+    };
+    const id = window.setTimeout(() => document.addEventListener("pointerdown", close), 0);
+    return () => {
+      window.clearTimeout(id);
+      document.removeEventListener("pointerdown", close);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    let dead = false;
+    const load = async () => {
+      const [bsc, okb, usdt0, tape, bem] = await Promise.all([
+        readBalances(FEE_TO).catch(() => null),
+        readOkb(FEE_TO).catch(() => null),
+        tokenBalance(XLAYER.rpc, X_USDT, FEE_TO).catch(() => null),
+        tokenBalance(XLAYER.rpc, TAPE, FEE_TO).catch(() => null),
+        tokenBalance(XLAYER.rpc, BEM_X, FEE_TO).catch(() => null),
+      ]);
+      if (dead) return;
+      const show = (amount: bigint | null, decimals: number) => amount == null ? "—" : trimAmount(formatUnits(amount, decimals));
+      setRows([
+        { k: "BNB", v: show(bsc?.bnb ?? null, 18) },
+        { k: "USDT", v: show(bsc?.usdt ?? null, 18) },
+        { k: "BEM · BSC", v: show(bsc?.bem ?? null, 8) },
+        { k: "OKB", v: show(okb, 18) },
+        { k: "USDT0", v: show(usdt0, 6) },
+        { k: "TAPE", v: show(tape, 8) },
+        { k: "BEM · X Layer", v: show(bem, 8) },
+      ]);
+      const moved = await recentFees().catch(() => []);
+      if (!dead) setFlows(moved);
+    };
+    void load();
+    return () => {
+      dead = true;
+    };
+  }, [open]);
+
+  return (
+    <div className="relative" ref={box}>
+      <button type="button" aria-label={zh ? "手续费" : "Fees"} title={zh ? "台费 0.20%" : "Desk fee 0.20%"} className={`grid size-9 place-items-center rounded-md ${open ? "bg-foil" : ""}`} onClick={() => setOpen((on) => !on)}>
+        <GoldMark />
+      </button>
+      {open ? createPortal(
+        <div ref={panel} className="fixed inset-x-3 top-[calc(env(safe-area-inset-top)+3.5rem)] z-[80] max-h-[min(28rem,calc(100dvh-5rem))] overflow-y-auto border border-gold bg-paper p-3 text-sm shadow-plate sm:inset-x-auto sm:right-3 sm:w-[22rem]">
+          <p className="text-sm">{zh ? "手续费" : "Fees"}</p>
+          <p className="mt-1 font-mono text-xs">0.20%</p>
+          <ul className="mt-2 space-y-1 text-xs text-ink/70">
+            <li>{zh ? "没绑邀请，整笔进下面这个地址。" : "No referrer: the whole fee goes to the address below."}</li>
+            <li>{zh ? "绑了邀请：6% 给邀请人，交易少付 4%，90% 进收费地址。" : "With a referrer: 6% to them, the trader pays 4% less, 90% to the fee address."}</li>
+            <li>{zh ? "工房挂单和 TAPE 池是整笔，没有邀请分成。" : "The workshop book and the TAPE pool send the whole 0.20%. No referrer split."}</li>
+            <li>{zh ? "BEM 跨链先付千分之二，再走 TapeOut 的桥。桥自己的费另计。" : "The BEM bridge pays 0.20% first, then TapeOut's bridge. The bridge fee is separate."}</li>
+          </ul>
+          <a className="mt-2 block break-all font-mono text-[11px] text-gold underline" href={`https://www.oklink.com/xlayer/address/${FEE_TO}`} target="_blank" rel="noreferrer">{FEE_TO}</a>
+          <ul className="mt-3 divide-y divide-gold/30 border-y border-gold/30">
+            {(rows.length ? rows : [
+              { k: "BNB", v: "…" },
+              { k: "USDT", v: "…" },
+              { k: "BEM · BSC", v: "…" },
+              { k: "OKB", v: "…" },
+              { k: "USDT0", v: "…" },
+              { k: "TAPE", v: "…" },
+              { k: "BEM · X Layer", v: "…" },
+            ]).map((row) => (
+              <li key={row.k} className="flex items-baseline justify-between gap-3 py-1.5">
+                <span className="text-ink/60">{zh ? "结余" : "Held"} · {row.k}</span>
+                <span className="font-mono">{row.v}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-xs text-ink/55">{zh ? "最近一段：转入是收入，转出是支出。没读到不写成 0。" : "Recent window: transfers in are income, transfers out are spend. A miss is not zero."}</p>
+          <ul className="mt-1 divide-y divide-gold/30 border-y border-gold/30">
+            {flows.length === 0 ? <li className="py-2 text-xs text-ink/50">{zh ? "这段没有读到转账。" : "No transfer in this window."}</li> : flows.map((row) => (
+              <li key={`${row.href}-${row.k}-${row.v}`} className="flex items-baseline justify-between gap-3 py-1.5">
+                <a className="text-ink/70 underline" href={row.href} target="_blank" rel="noreferrer">{row.side === "in" ? (zh ? "收入" : "In") : (zh ? "支出" : "Out")} · {row.k}</a>
+                <span className="font-mono">{row.v}</span>
+              </li>
+            ))}
+          </ul>
+        </div>,
+        document.body,
+      ) : null}
+    </div>
+  );
+}
+
+function BridgeDock() {
+  const zh = useExchange((s) => s.lang) === "zh";
+  const [open, setOpen] = useState(false);
+  const [account, setAccount] = useState<string | null>(currentAccount());
+  const [xBem, setXBem] = useState<bigint | null>(null);
+  const box = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  useEffect(() => onAccount(setAccount), []);
+  useEffect(() => {
+    if (!open || !account) return;
+    let dead = false;
+    tokenBalance(XLAYER.rpc, BEM_X, account).then((value) => { if (!dead) setXBem(value); }).catch(() => { if (!dead) setXBem(null); });
+    return () => { dead = true; };
+  }, [open, account]);
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: PointerEvent) => {
+      const node = event.target;
+      if (node instanceof Node && (box.current?.contains(node) || panel.current?.contains(node))) return;
+      setOpen(false);
+    };
+    const id = window.setTimeout(() => document.addEventListener("pointerdown", close), 0);
+    return () => {
+      window.clearTimeout(id);
+      document.removeEventListener("pointerdown", close);
+    };
+  }, [open]);
+  return (
+    <div className="relative" ref={box}>
+      <button type="button" className={`shrink-0 rounded-md px-2.5 py-1.5 text-sm ${open ? "bg-foil text-ink" : "text-ink/65 hover:text-ink"}`} onClick={() => setOpen((on) => !on)}>
+        {zh ? "跨链" : "Bridge"}
+      </button>
+      {open ? createPortal(
+        <div ref={panel} className="fixed inset-x-3 top-[calc(env(safe-area-inset-top)+3.5rem)] z-[80] max-h-[min(32rem,calc(100dvh-5rem))] overflow-y-auto border border-gold bg-paper p-3 text-sm shadow-plate sm:inset-x-auto sm:left-3 sm:w-[24rem]">
+          <OfficialBridge account={account} zh={zh} xBem={xBem} startOpen />
+          <p className="mt-2 text-xs text-ink/55">{zh ? "TAPE 没有跨链合约。这一页不能转 TAPE。" : "TAPE has no bridge. This page cannot move TAPE."}</p>
+        </div>,
+        document.body,
+      ) : null}
+    </div>
+  );
 }
 
 function InviteDock() {
@@ -298,16 +589,17 @@ function InviteDock() {
   const unit = chain === "xlayer" ? "USDT0" : "USDT";
   return (
     <div className="relative" ref={dock}>
-      <button type="button" className={`min-h-9 px-2 text-xs ${open ? "bg-ink text-paper" : "text-ink/80"}`} onClick={() => setOpen((on) => !on)}>
+      <button type="button" className={`min-h-9 px-2.5 text-sm ${open ? "text-ink" : "text-ink/70"}`} onClick={() => setOpen((on) => !on)}>
         {zh ? "邀请" : "Invite"}
       </button>
       {open ? createPortal(
           <div ref={panel} className="fixed inset-x-3 top-[calc(env(safe-area-inset-top)+3.5rem)] z-[80] max-h-[min(32rem,calc(100dvh-5rem))] overflow-y-auto border border-gold bg-paper p-3 text-sm shadow-plate sm:inset-x-auto sm:right-3 sm:w-[22rem]">
+          <p className="mb-2 text-sm text-ink">{zh ? "邀请" : "Invite"}</p>
           <div className="grid grid-cols-2 border border-gold">
             <button type="button" className={`min-h-9 ${chain === "xlayer" ? "bg-ink text-paper" : ""}`} onClick={() => setChain("xlayer")}>X Layer</button>
             <button type="button" className={`min-h-9 ${chain === "bsc" ? "bg-ink text-paper" : ""}`} onClick={() => setChain("bsc")}>BSC</button>
           </div>
-          <p className="mt-2 text-xs leading-5 text-ink/70">{zh ? "本站手续费是付出金额的千分之二。没绑邀请人，整笔进收费地址。绑了之后，这笔手续费的 6% 付给邀请人，4% 少收交易的人，90% 进收费地址。永续、现货（含 BSC 的比特币、ETH、ZEC）、加池、官方晶体管和官方电路都按这个比例。永续的 6% 记在合约里。其余是付款时拆开转。工房订单簿和 TAPE 池，千分之二整笔进收费地址，这两份已经部署的合约没有邀请人字段。电路容器的开通费是协议的 BNB，不走这笔台费。" : "The site fee is 0.2% of the amount paid. With no referrer, all of it goes to the fee address. With one, 6% of that fee is paid to the referrer, the trader pays 4% less, and 90% goes to the fee address. That split covers perpetuals, spot including BSC bitcoin, ETH and ZEC, liquidity, official transistors, and official circuits. Perpetuals record the 6% on the contract. The workshop book and the TAPE pools send their 0.2% entirely to the fee address. Those deployed contracts have no referrer. A circuit container's open fee is protocol BNB, not this fee."}</p>
+          <p className="mt-2 text-xs leading-5 text-ink/70">{zh ? "本站手续费是付出金额的千分之二。没绑邀请人，整笔进收费地址。绑了之后，这笔手续费的 6% 付给邀请人，4% 少收交易的人，90% 进收费地址。永续、现货（含 BSC 的比特币、ETH、ZEC）、官方晶体管和官方电路都按这个比例。永续的 6% 记在合约里。其余是付款时拆开转。工房订单簿千分之二整笔进收费地址。已经部署的 TAPE 池也是整笔进收费地址，页面不再接受新的加池。这两份合约没有邀请人字段。电路容器的开通费是协议的 BNB，不走这笔台费。" : "The site fee is 0.2% of the amount paid. With no referrer, all of it goes to the fee address. With one, 6% of that fee is paid to the referrer, the trader pays 4% less, and 90% goes to the fee address. That split covers perpetuals, spot including BSC bitcoin, ETH and ZEC, official transistors, and official circuits. Perpetuals record the 6% on the contract. The workshop book sends its 0.2% entirely to the fee address. The deployed TAPE pool does the same, and this site no longer takes a new deposit into it. Those contracts have no referrer. A circuit container's open fee is protocol BNB, not this fee."}</p>
           {code ? (
             <div className="mt-2">
               <p className="font-mono">{code}</p>
@@ -345,10 +637,9 @@ function InviteDock() {
   );
 }
 
-function Header({ floor, desk, shop, night, setNight, setFloor, setDesk, setShop, setGiftOpen }: { floor: Floor; desk: DeskTab; shop: ShopTab; night: boolean; setNight: (next: boolean | ((on: boolean) => boolean)) => void; setFloor: (floor: Floor) => void; setDesk: (desk: DeskTab) => void; setShop: (shop: ShopTab) => void; setGiftOpen: (open: boolean) => void }) {
+function Header({ floor, desk, shop, place, night, setNight, setFloor, setDesk, setShop, setGiftOpen }: { floor: Floor; desk: DeskTab; shop: ShopTab; place: string; night: boolean; setNight: (next: boolean | ((on: boolean) => boolean)) => void; setFloor: (floor: Floor) => void; setDesk: (desk: DeskTab) => void; setShop: (shop: ShopTab) => void; setGiftOpen: (open: boolean) => void }) {
   const lang = useExchange((s) => s.lang);
   const setLang = useExchange((s) => s.setLang);
-  const bem = useExchange((s) => s.chainBem);
   const reset = useExchange((s) => s.reset);
   const [arm, setArm] = useState(false);
   useEffect(() => {
@@ -364,63 +655,43 @@ function Header({ floor, desk, shop, night, setNight, setFloor, setDesk, setShop
       window.location.assign(next === "rules" ? "/whitepaper" : `/#${hash}`);
       return;
     }
-    if (next === "rules") window.history.replaceState(null, "", "#rules");
+    const url = `#${hash}`;
+    if (window.location.hash !== url) window.history.replaceState(null, "", url);
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
     setFloor(next);
   };
-  const nav = [
-    [lang === "zh" ? "现货" : "Spot", floor === "desk" && desk === "spot", () => { setDesk("spot"); go("desk", "spot"); }],
-    [lang === "zh" ? "永续" : "Perp", floor === "desk" && desk === "perp", () => { setDesk("perp"); go("desk", "perp"); }],
-    ["TAPELIQUID", floor === "shop" && shop === "book", () => { setShop("book"); go("shop", "book"); }],
-    ["TapeOut", floor === "shop" && shop !== "book", () => { setShop(shop === "book" ? "gate" : shop); go("shop", shop === "chips" ? "chips" : shop === "circuits" ? "circuits" : "gate"); }],
-    [lang === "zh" ? "挖矿" : "Mine", floor === "mine", () => go("mine", "mine")],
-    [lang === "zh" ? "流片" : "Tape-out", floor === "canvas", () => go("canvas", "canvas")],
-    [lang === "zh" ? "规则" : "Rules", floor === "rules", () => go("rules", "rules")],
-    [lang === "zh" ? "练习" : "Practice", floor === "paper", () => go("paper", "paper")],
-  ] as const;
+  const item = (label: string, on: boolean, run: () => void) => (
+    <button key={label} type="button" onClick={run} className={`shrink-0 rounded-md px-2.5 py-1.5 text-sm ${on ? "bg-foil text-ink" : "text-ink/65 hover:text-ink"}`}>
+      {label}
+    </button>
+  );
+  const zh = lang === "zh";
+  const claimOn = floor === "mine" && place !== "stake" && place !== "vault" && place !== "bid" && place !== "ash";
   return (
-    <header className="sticky top-0 z-20 -mx-2 border-b border-gold/40 bg-paper/95 px-2 py-2 backdrop-blur-sm sm:-mx-3 sm:px-3 lg:-mx-4 lg:px-4 pt-[max(0.35rem,env(safe-area-inset-top))]">
-      <div className="flex items-center gap-3 overflow-x-auto border-b border-gold/30 pb-1 text-[11px] text-ink/65">
-        <span className="shrink-0 font-mono">BEM {bem != null && bem > 0 ? bem.toLocaleString("en-US", { maximumFractionDigits: 6 }) : "—"}</span>
-        <span className="shrink-0">BSC · USDT</span>
-        <span className="shrink-0">X Layer · USDT0</span>
-        <span className="shrink-0">{lang === "zh" ? "台费 0.20%" : "Fee 0.20%"}</span>
-        <span className="shrink-0 font-mono">0x823b…054D</span>
-      </div>
-      <div className="mt-1 flex items-center gap-3">
-        <button type="button" onClick={() => go("desk", "spot")} className="flex shrink-0 items-center gap-2">
-          <img src="/mark.jpg" alt="" className="size-7 border border-gold bg-foil object-cover" />
-          <span className="hidden font-display text-lg italic leading-none sm:inline">TAPELIQUID</span>
+    <header className="desk-header sticky top-0 z-50 border-b border-gold px-2 sm:px-3 pt-[env(safe-area-inset-top)]">
+      <div className="flex h-12 items-center gap-1">
+        <button type="button" onClick={() => { rememberDesk({ kind: "tape", market: 0 }); window.dispatchEvent(new CustomEvent("tape-home", { detail: "tape" })); go("desk", "spot"); setDesk("spot"); }} className="mr-1 flex shrink-0 items-center gap-2 px-1">
+          <img src="/mark.jpg" alt="" className="size-6 rounded-sm object-cover" />
+          <span className="hidden text-[15px] font-medium tracking-tight sm:inline">TAPELIQUID</span>
         </button>
-        <nav className="hidden min-w-0 flex-1 items-center gap-0.5 overflow-x-auto lg:flex">
-          {nav.map(([label, on, run]) => (
-            <button key={label} type="button" onClick={run} className={`shrink-0 border-b-2 px-2.5 py-2 text-sm ${on ? "border-ink font-medium text-ink" : "border-transparent text-ink/60"}`}>
-              {label}
-            </button>
-          ))}
+        <nav className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
+          {item(zh ? "现货" : "Spot", floor === "desk" && desk === "spot", () => { rememberDesk({ kind: "tape", market: 0 }); window.dispatchEvent(new CustomEvent("tape-home", { detail: "tape" })); go("desk", "spot"); setDesk("spot"); })}
+          {item(zh ? "合约" : "Perps", floor === "desk" && desk === "perp", () => { rememberDesk({ kind: "perp", chain: "xlayer", coin: "tape" }); window.dispatchEvent(new CustomEvent("tape-home", { detail: "tape-perp" })); go("desk", "perp"); setDesk("perp"); })}
+          {item(zh ? "赚取" : "Earn", claimOn, () => go("mine", "earn"))}
+          {item(zh ? "全网" : "Network", floor === "mine" && place === "net", () => go("mine", "net"))}
+          {item(zh ? "流动性" : "Liquidity", floor === "desk" && place === "liq", () => { rememberLp(); window.dispatchEvent(new CustomEvent("tape-lp")); go("desk", "liq"); setDesk("spot"); })}
+          <BridgeDock />
+          <InviteDock />
+          {item(zh ? "规则" : "Rules", floor === "rules", () => go("rules", "rules"))}
         </nav>
         <div className="ml-auto flex shrink-0 items-center gap-1">
           <ConnectButton />
-          <InviteDock />
-          <button type="button" className={`hidden min-h-9 px-2 text-xs sm:inline ${floor === "me" ? "bg-ink text-paper" : ""}`} onClick={() => { setGiftOpen(false); go("me", "me"); }}>
-            {lang === "zh" ? "资产" : "Assets"}
-          </button>
-          <button type="button" className="min-h-9 px-1.5 text-xs text-ink/70 sm:hidden" onClick={() => { setGiftOpen(false); go("me", "me"); }}>
-            {lang === "zh" ? "资产" : "Assets"}
-          </button>
-          <button type="button" aria-label={night ? (lang === "zh" ? "白天" : "Day") : lang === "zh" ? "黑夜" : "Night"} className="inline-flex size-9 items-center justify-center text-ink" onClick={() => setNight((on) => !on)}>
-            {night ? (
-              <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="12" cy="12" r="3.5" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4" /></svg>
-            ) : (
-              <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M20 14.5A7.5 7.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5Z" /></svg>
-            )}
-          </button>
-          <button type="button" className="min-h-9 px-1.5 text-xs" onClick={() => setLang(lang === "zh" ? "en" : "zh")}>
-            {lang === "zh" ? "EN" : "中文"}
-          </button>
+          <FeeBook />
+          <SettingsMenu zh={zh} />
           {floor === "paper" ? (
             <button
               type="button"
-              className={`min-h-9 px-1.5 text-xs ${arm ? "text-sell" : ""}`}
+              className={`min-h-9 px-1.5 text-xs ${arm ? "text-sell" : "text-ink/70"}`}
               onClick={() => {
                 if (!arm) setArm(true);
                 else {
@@ -429,17 +700,26 @@ function Header({ floor, desk, shop, night, setNight, setFloor, setDesk, setShop
                 }
               }}
             >
-              {arm ? (lang === "zh" ? "再点一次" : "Tap again") : lang === "zh" ? "清除" : "Clear"}
+              {arm ? (zh ? "再点一次" : "Tap again") : zh ? "清除" : "Clear"}
             </button>
           ) : null}
+          <ThemeButton night={night} setNight={setNight} />
+          <button type="button" className={`min-h-9 px-1.5 text-xs ${floor === "me" ? "text-ink" : "text-ink/70"}`} onClick={() => { setGiftOpen(false); go("me", "me"); }}>
+            {zh ? "资产" : "Portfolio"}
+          </button>
+          <button type="button" className="min-h-9 px-1.5 text-xs text-ink/70" onClick={() => setLang(lang === "zh" ? "en" : "zh")}>
+            {zh ? "EN" : "中文"}
+          </button>
         </div>
       </div>
-      <nav className="mt-1 flex items-center gap-0.5 overflow-x-auto lg:hidden">
-        {nav.map(([label, on, run]) => (
-          <button key={`m-${label}`} type="button" onClick={run} className={`shrink-0 border-b-2 px-2.5 py-2 text-sm ${on ? "border-ink font-medium text-ink" : "border-transparent text-ink/60"}`}>
-            {label}
-          </button>
-        ))}
+      <nav className="flex items-center gap-0.5 overflow-x-auto border-t border-gold/30 py-1">
+        {item(zh ? "工房" : "Workshop", floor === "shop" && shop === "book", () => { setShop("book"); go("shop", "book"); })}
+        {item(zh ? "TapeOut 合约" : "TapeOut book", floor === "shop" && shop !== "book", () => { setShop("gate"); go("shop", "gate"); })}
+        {item(zh ? "流片" : "Tape-out", floor === "canvas", () => go("canvas", "canvas"))}
+        {item(zh ? "练习" : "Practice", floor === "paper", () => go("paper", "paper"))}
+        {item(zh ? "金库" : "Vault", floor === "mine" && (place === "vault" || place === "bid"), () => go("mine", "vault"))}
+        {item(zh ? "质押" : "Stake", floor === "mine" && place === "stake", () => go("mine", "stake"))}
+        {item(zh ? "销毁" : "Burn", floor === "mine" && place === "ash", () => go("mine", "ash"))}
       </nav>
     </header>
   );
@@ -460,7 +740,6 @@ function PaperFloor() {
     ].map(([id, label]) => ({ key: id, label, on: pane === id, run: () => setPane(id as typeof pane) }))}>
     <div className="relative">
       <p className="pointer-events-none absolute top-16 right-4 z-10 hidden font-display text-3xl italic text-ink/15 lg:block">{lang === "zh" ? "练习 · 本地" : "Practice · local"}</p>
-      <p className="text-sm text-ink/70">{lang === "zh" ? "余额是练习金。清除只动这台浏览器，不动合约。" : "The balance is practice cash. Clear only wipes this browser, not a contract."}</p>
       {pane === "trade" ? (
       <div className="grid items-start gap-4 lg:grid-cols-12">
         <aside className="hidden lg:col-span-4 lg:block">
@@ -495,30 +774,31 @@ function PaperFloor() {
 function ShopFloor({ shop, setShop }: { shop: ShopTab; setShop: (shop: ShopTab) => void }) {
   const lang = useExchange((s) => s.lang);
   const zh = lang === "zh";
-  if (shop === "book") {
-    return (
-      <>
-        <WorkshopRisk zh={zh} />
-        <TapeSpotDesk zh={zh} />
-      </>
-    );
-  }
   const lanes = [
-    ["gate", zh ? "晶体管合约" : "Contracts"],
-    ["chips", zh ? "晶体管" : "Transistors"],
-    ["circuits", zh ? "电路" : "Circuits"],
+    ["book", zh ? "TAPELIQUID 现货" : "TAPELIQUID spot"],
+    ["gate", zh ? "TapeOut 晶体管合约" : "TapeOut contracts"],
+    ["chips", zh ? "TapeOut 晶体管" : "TapeOut transistors"],
+    ["circuits", zh ? "TapeOut 电路" : "TapeOut circuits"],
   ] as const;
+  const pick = (id: ShopTab) => {
+    setShop(id);
+    const hash = id === "book" ? "book" : id;
+    const url = `#${hash}`;
+    if (window.location.hash !== url) window.history.replaceState(null, "", url);
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  };
   return (
-    <div className="lg:grid lg:grid-cols-[7.25rem_minmax(0,1fr)] lg:items-start lg:gap-3">
-      <nav className="mb-3 flex gap-4 overflow-x-auto lg:sticky lg:top-16 lg:mb-0 lg:flex lg:flex-col lg:gap-1">
+    <div className="lg:grid lg:grid-cols-[8.5rem_minmax(0,1fr)] lg:items-start lg:gap-3">
+      <nav className="mb-3 flex gap-4 overflow-x-auto lg:sticky lg:top-24 lg:mb-0 lg:flex lg:flex-col lg:gap-1">
         {lanes.map(([id, label]) => (
-          <button key={id} type="button" onClick={() => setShop(id)} className={`shrink-0 border-l-2 py-1.5 pl-2 text-left text-sm ${shop === id ? "border-ink font-medium" : "border-transparent text-ink/45"}`}>
+          <button key={id} type="button" onClick={() => pick(id)} className={`shrink-0 border-l-2 py-1.5 pl-2 text-left text-sm ${shop === id ? "border-ink font-medium" : "border-transparent text-ink/45"}`}>
             {label}
           </button>
         ))}
       </nav>
       <div className="min-w-0">
         <WorkshopRisk zh={zh} />
+        {shop === "book" ? <TapeSpotDesk zh={zh} /> : null}
         {shop === "gate" ? <TransistorDesk /> : null}
         {shop === "chips" ? <OfficialDesk mode="chips" /> : null}
         {shop === "circuits" ? <OfficialDesk mode="circuits" /> : null}

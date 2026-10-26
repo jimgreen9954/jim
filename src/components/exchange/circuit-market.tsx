@@ -153,7 +153,7 @@ export function CircuitMarket({ zh, lang }: { zh: boolean; lang: "zh" | "en" }) 
       <div className="min-w-0">
         <nav className="flex gap-5 overflow-x-auto border-b border-gold/40">
           {([
-            ["official", zh ? "TapeOut矿机" : "TapeOut"],
+            ["official", zh ? "TapeOut 矿机电路" : "TapeOut circuits"],
             ["other", zh ? "其他电路" : "Other"],
             ["mine", zh ? "我的电路" : "Mine"],
           ] as const).map(([id, label]) => (
@@ -254,7 +254,7 @@ function BuyColumn({ zh, row, rows, busy, onBuy }: { zh: boolean; row: CircuitRo
       <div className="grid grid-cols-2 border-b border-gold/30">
         <div className="border-r border-gold/30 px-4 py-3">
           <p className="text-[11px] text-ink/45"><Hint label={zh ? "最低卖价" : "Best ask"} text={zh ? "这张电路的卖价。没点选时，是左边表里最低的卖价。单位 BNB。" : "This circuit's ask. With nothing picked, the lowest ask in the table. BNB."} /></p>
-          <p className="mt-1 font-mono text-xl tabular-nums text-[#f23645]">{ask != null ? num(ask, 4) : "—"}</p>
+          <p className="mt-1 font-mono text-xl tabular-nums text-sell">{ask != null ? num(ask, 4) : "—"}</p>
         </div>
         <div className="px-4 py-3">
           <p className="text-[11px] text-ink/45"><Hint label={zh ? "最高出价" : "Best bid"} text={zh ? "有人挂的最高买价。没有就写暂无，不写成 0。" : "The highest bid. None is not written as zero."} /></p>
@@ -274,7 +274,7 @@ function BuyColumn({ zh, row, rows, busy, onBuy }: { zh: boolean; row: CircuitRo
           <strong className="font-mono text-2xl font-medium tabular-nums">{ask != null && (row ? can : false) ? `${num(ask, 4)} BNB` : "—"}</strong>
         </div>
         <p className="mt-1 text-[11px] leading-5 text-ink/45">{zh ? "电路整张成交，数量锁成 1。买入另付本站千分之二，先付，没成交不退。" : "A circuit sells whole, so the quantity stays 1. Buying adds this site's 0.2%, paid first and not returned."}</p>
-        <button type="button" disabled={!can || busy} className="mt-3 min-h-12 w-full bg-[#f23645] text-sm text-white disabled:opacity-40" onClick={onBuy}>{zh ? "买入这一张" : "Buy this one"}</button>
+        <button type="button" disabled={!can || busy} className="mt-3 min-h-12 w-full bg-sell text-sm text-white disabled:opacity-40" onClick={onBuy}>{zh ? "买入这一张" : "Buy this one"}</button>
         {row ? (
           <dl className="mt-4 border-t border-gold/30">
             <RightLine k={zh ? "结构" : "Shape"} v={`NAND ${row.nand} · LATCH ${row.latch}`} />
@@ -301,15 +301,15 @@ function Book({ zh, rows, picked, busy, onPick, onBuy }: { zh: boolean; rows: Ci
               <span>
                 <span className="block text-sm">{row.name}</span>
                 <span className="font-mono text-[11px] text-ink/45">#{row.tokenId} · NAND {row.nand} · LATCH {row.latch}</span>
-                <span className={`mt-1 block text-[11px] ${row.status === "verified" ? "text-[#089981]" : "text-ink/45"}`}><StatusMark status={row.status} zh={zh} /></span>
+                <span className={`mt-1 block text-[11px] ${row.status === "verified" ? "text-up" : "text-ink/45"}`}><StatusMark status={row.status} zh={zh} /></span>
               </span>
               <span className="text-right font-mono text-xs">
-                <span className="block text-[#f23645]">{row.ask != null ? `${num(row.ask, 4)} BNB` : "—"}</span>
+                <span className="block text-sell">{row.ask != null ? `${num(row.ask, 4)} BNB` : "—"}</span>
                 <span className="text-ink/45">{row.dayPx != null ? `${num(row.dayPx, 2)}` : "—"}</span>
               </span>
             </button>
             {row.ask != null && (row.officialId != null || row.signed) ? (
-              <button type="button" disabled={busy} className="mt-2 h-8 w-full bg-[#f23645] text-xs text-white disabled:opacity-40" onClick={() => onBuy(row)}>{zh ? "买入" : "Buy"}</button>
+              <button type="button" disabled={busy} className="mt-2 h-8 w-full bg-sell text-xs text-white disabled:opacity-40" onClick={() => onBuy(row)}>{zh ? "买入" : "Buy"}</button>
             ) : null}
           </li>
         ))}
@@ -331,7 +331,7 @@ function Book({ zh, rows, picked, busy, onPick, onBuy }: { zh: boolean; rows: Ci
               <td className="px-2 py-1.5 font-mono">{age(row.listedAt)}</td>
               <td className="px-2 py-1.5"><span className="block">{row.name}</span><span className="font-mono text-[11px] text-ink/45">#{row.tokenId}</span></td>
               <td className="px-2 py-1.5 font-mono">NAND {row.nand} · LATCH {row.latch}<br />{row.nIn} → {row.nOut} · S{row.nState}</td>
-              <td className={`px-2 py-1.5 ${row.status === "verified" ? "text-[#089981]" : "text-ink/45"}`}><StatusMark status={row.status} zh={zh} /></td>
+              <td className={`px-2 py-1.5 ${row.status === "verified" ? "text-up" : "text-ink/45"}`}><StatusMark status={row.status} zh={zh} /></td>
               <td className="px-2 py-1.5 font-mono">{row.hash.toLocaleString("en-US")}</td>
               <td className="px-2 py-1.5 font-mono">{num(row.crystal, 5)}</td>
               <td className="px-2 py-1.5 font-mono">{num(row.hashPx, 5)}</td>
@@ -341,7 +341,7 @@ function Book({ zh, rows, picked, busy, onPick, onBuy }: { zh: boolean; rows: Ci
               <td className="px-2 py-1.5 font-mono">{row.bid != null ? num(row.bid, 4) : "—"}</td>
               <td className="sticky right-0 bg-paper px-2 py-1.5 text-right">
                 {row.ask != null && (row.officialId != null || row.signed) ? (
-                  <button type="button" disabled={busy} className="min-h-7 bg-[#f23645] px-2 text-white disabled:opacity-40" onClick={(event) => { event.stopPropagation(); onBuy(row); }}>{zh ? "买入" : "Buy"}</button>
+                  <button type="button" disabled={busy} className="min-h-7 bg-sell px-2 text-white disabled:opacity-40" onClick={(event) => { event.stopPropagation(); onBuy(row); }}>{zh ? "买入" : "Buy"}</button>
                 ) : "—"}
               </td>
             </tr>

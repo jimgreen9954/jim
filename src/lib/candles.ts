@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { pullPaper, type PaperFrame } from "@/lib/candle-book";
-import { pullBem, pullCoin, pullXBem, type Candle, type CandleFrame } from "@/lib/bem-ohlcv";
+import { pullBem, pullCoin, pullTape, pullXBem, type Candle, type CandleFrame } from "@/lib/bem-ohlcv";
 import { pullSpot, type SpotFrame, type SpotPair } from "@/lib/spot-ohlcv";
 import { STOCK_KEYS } from "@/lib/stocks";
 
@@ -13,6 +13,10 @@ const frames: CandleFrame[] = ["15s", "1m", "5m", "15m", "1h", "4h", "1d", "1w",
 export const getCandles = createServerFn({ method: "GET" })
   .validator((frame: CandleFrame) => (frames.includes(frame) ? frame : "1m"))
   .handler(async ({ data }) => pullBem(data));
+
+export const getTapeCandles = createServerFn({ method: "GET" })
+  .validator((frame: CandleFrame) => (frames.includes(frame) ? frame : "1m"))
+  .handler(async ({ data }) => pullTape(data));
 
 export const getXCandles = createServerFn({ method: "GET" })
   .validator((frame: CandleFrame) => (frames.includes(frame) ? frame : "1m"))

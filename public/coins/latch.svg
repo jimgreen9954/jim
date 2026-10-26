@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <circle cx="32" cy="32" r="32" fill="#102033"/>
+  <rect x="18" y="16" width="28" height="32" fill="none" stroke="#d5e6ff" stroke-width="3"/>
+  <path d="M18 32h28" stroke="#d5e6ff" stroke-width="2"/>
+  <text x="32" y="28" text-anchor="middle" font-family="ui-monospace, monospace" font-size="9" fill="#d5e6ff">SR</text>
+  <text x="32" y="42" text-anchor="middle" font-family="ui-monospace, monospace" font-size="9" fill="#d5e6ff">Q</text>
+</svg>

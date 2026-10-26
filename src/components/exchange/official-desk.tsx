@@ -94,7 +94,7 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
           const rows = (books?.bids ?? []).filter((row) => row.name.toLowerCase().includes(family.toLowerCase()));
           return (
             <div key={family} className="min-w-36 shrink-0 border-b border-gold/30 lg:min-w-0">
-              <p className="px-2 pt-2 text-sm">{family === "Genesis" ? "Genesis CPU" : family}</p>
+              <p className="px-2 pt-2 text-sm">TapeOut · {family === "Genesis" ? "Genesis" : family}</p>
               {([0, 1] as const).map((id) => {
                 const sample = rows.find((row) => row.tokenId === id);
                 const on = name.toLowerCase().includes(family.toLowerCase()) && kind === id;
@@ -112,7 +112,7 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
       <div className="min-w-0 border border-gold/50">
         <div className="flex items-end justify-between gap-3 px-3 py-3">
           <div>
-            <h3 className="font-display text-2xl italic leading-none">{name} / {kind === 0 ? "NAND" : "LATCH"}</h3>
+            <h3 className="font-display text-2xl italic leading-none">TapeOut · {name} / {kind === 0 ? "NAND" : "LATCH"}</h3>
             <p className="mt-1 text-[11px] text-ink/45">{books?.ok ? (zh ? `快照 ${books.asOf ?? ""} · 约 15 秒` : `Snapshot ${books.asOf ?? ""}`) : (zh ? "快照没读到" : "Snapshot missed")}</p>
           </div>
           <p className="font-mono text-sm">{bids[0] ? `${px(bids[0].priceBnb)} BNB` : "—"}</p>
@@ -126,11 +126,11 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
               <span className="text-right">{zh ? "指定成交" : "Take"}</span>
             </div>
             {bids.length === 0 ? <p className="px-3 py-4 text-sm text-ink/55">{zh ? "这只标的现在没有买单。右边可以自己挂。" : "No bid on this one. Place one from the ticket."}</p> : bids.map((row) => (
-              <div key={row.id} className={`grid grid-cols-[8.5rem_7.5rem_8.5rem_auto] items-center gap-x-6 px-3 py-1.5 font-mono text-[12px] tabular-nums ${bid?.id === row.id ? "bg-[#089981]/10" : ""}`}>
-                <span className="whitespace-nowrap text-[#089981]">{px(row.priceBnb)}</span>
+              <div key={row.id} className={`grid grid-cols-[8.5rem_7.5rem_8.5rem_auto] items-center gap-x-6 px-3 py-1.5 font-mono text-[12px] tabular-nums ${bid?.id === row.id ? "bg-up/10" : ""}`}>
+                <span className="whitespace-nowrap text-up">{px(row.priceBnb)}</span>
                 <span className="whitespace-nowrap">{row.remaining.toLocaleString("en-US")}</span>
                 <span className="whitespace-nowrap text-right">{px(row.priceBnb * row.remaining)}</span>
-                <button type="button" className="ml-2 h-6 justify-self-end border border-[#f23645] px-2 text-[11px] text-[#f23645]" onClick={() => { setBid(row); setQty(String(row.remaining)); }}>{zh ? "卖出" : "Sell"}</button>
+                <button type="button" className="ml-2 h-6 justify-self-end border border-sell px-2 text-[11px] text-sell" onClick={() => { setBid(row); setQty(String(row.remaining)); }}>{zh ? "卖出" : "Sell"}</button>
               </div>
             ))}
           </div>
@@ -143,7 +143,6 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
           <div className="flex justify-between gap-3"><dt className="text-ink/60">{zh ? "链" : "Chain"}</dt><dd>BSC</dd></div>
           <div className="grid gap-1 sm:grid-cols-[5rem_1fr]"><dt className="text-ink/60">{zh ? "TapeOut 合约" : "TapeOut"}</dt><dd className="break-all font-mono text-xs">{mode === "chips" ? OFFICIAL.transistorMarket : OFFICIAL.circuitMarket}</dd></div>
           <div className="flex justify-between gap-3"><dt className="shrink-0 text-ink/60">{zh ? "本站服务费" : "Our fee"}</dt><dd className="text-right">0.20% → {OFFICIAL.feeTo.slice(0, 6)}…{OFFICIAL.feeTo.slice(-4)}</dd></div>
-          <p className="text-xs leading-5 text-ink/70">{zh ? "TapeOut 费在他们合约里。我们另收千分之二，先付，不退。" : "The TapeOut fee stays in their contract. Ours is an extra 0.2%, paid first, not returned."}</p>
         </dl>
         {mode === "chips" ? (
           <div className="mt-3 flex flex-col gap-2">

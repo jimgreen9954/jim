@@ -14,7 +14,7 @@ export function TraceChart() {
   const clock = useExchange((s) => s.engine.clock);
   const market = useExchange((s) => s.market);
   const c = copy[lang];
-  const [frame, setFrame] = useState<PaperFrame>("1m");
+  const [frame, setFrame] = useState<PaperFrame>("1h");
   const [rows, setRows] = useState<Ohlc[]>([]);
 
   useEffect(() => {
@@ -58,7 +58,7 @@ export function TraceChart() {
           ))}
         </div>
       </div>
-      {view.length === 0 ? <p className="px-3 py-6 text-sm text-ink/60">{lang === "zh" ? "K线还在读池子。" : "Reading the pool candles."}</p> : <Kline bars={view} lang={lang} desk="paper" />}
+      <Kline bars={view} lang={lang} desk="paper" />
       <DepthTape bids={book.bids} asks={book.asks} lang={lang} />
     </section>
   );

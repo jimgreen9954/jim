@@ -202,7 +202,7 @@ export function TransistorDesk() {
             if (!rows.length) return null;
             return (
               <div key={family} className="border-b border-gold/30">
-                <p className="px-3 pt-2 text-sm font-medium">{family === "Genesis" ? "Genesis CPU" : family}</p>
+                <p className="px-3 pt-2 text-sm font-medium">TapeOut · {family === "Genesis" ? "Genesis" : family}</p>
                 {rows.map((row) => {
                   const on = row.transistors.toLowerCase() === pick.token.toLowerCase() && row.tokenId === pick.id;
                   return (
@@ -210,7 +210,7 @@ export function TransistorDesk() {
                       <span className="text-[13px]">{row.kind}</span>
                       <span className="text-right font-mono text-[12px] tabular-nums">
                         <span className="block">{px(row.price)} BNB</span>
-                        <span className={row.changePct >= 0 ? "text-[#089981]" : "text-[#f23645]"}>{row.changePct >= 0 ? "+" : ""}{row.changePct.toFixed(2)}%</span>
+                        <span className={row.changePct >= 0 ? "text-up" : "text-sell"}>{row.changePct >= 0 ? "+" : ""}{row.changePct.toFixed(2)}%</span>
                       </span>
                     </button>
                   );
@@ -222,12 +222,12 @@ export function TransistorDesk() {
         <div className="min-w-0 border border-gold/70 bg-card">
           <div className="flex flex-wrap items-end justify-between gap-3 border-b border-gold/30 px-3 py-3">
             <div>
-              <h3 className="font-display text-[1.65rem] italic leading-none">{gate ? `${gate.name} / ${gate.kind}` : "TapeOut / NAND"}</h3>
+              <h3 className="font-display text-[1.65rem] italic leading-none">{gate ? `TapeOut · ${gate.name} / ${gate.kind}` : "TapeOut / NAND"}</h3>
               <p className="mt-1 font-mono text-xs text-ink/45">{zh ? "合约" : "Contract"} {perp ? `${perp.slice(0, 6)}…${perp.slice(-4)}` : "—"}</p>
             </div>
             <div className="text-right">
               <p className="text-[11px] text-ink/45">{zh ? "参考价" : "Mark"}</p>
-              <p className="font-mono text-lg tabular-nums text-[#089981]">{px(mark)} BNB</p>
+              <p className="font-mono text-lg tabular-nums text-up">{px(mark)} BNB</p>
               <p className="font-mono text-[11px] text-ink/45">{zh ? "结算" : "Settle"} {chainMark > 0 ? `${px(chainMark)} BNB` : "—"}</p>
             </div>
           </div>
@@ -268,7 +268,7 @@ export function TransistorDesk() {
               return (
                 <div key={row.id} className="border-t border-gold/20 py-2">
                   <p className="font-mono text-xs">{NAMES[row.market]} · {long ? (zh ? "多" : "Long") : zh ? "空" : "Short"} · {zh ? "开仓" : "Entry"} {px(row.entry)} · {zh ? "现价" : "Mark"} {px(live)}</p>
-                  <p className={`font-mono text-xs ${pnl >= 0 ? "text-[#089981]" : "text-[#f23645]"}`}>{pnl >= 0 ? "+" : ""}{pnl.toFixed(4)} USDT</p>
+                  <p className={`font-mono text-xs ${pnl >= 0 ? "text-up" : "text-sell"}`}>{pnl >= 0 ? "+" : ""}{pnl.toFixed(4)} USDT</p>
                   <button type="button" className="mt-1 h-7 border border-gold px-2 text-xs" onClick={() => close(row)}>{zh ? "平仓" : "Close"}</button>
                 </div>
               );
@@ -284,8 +284,8 @@ export function TransistorDesk() {
         </div>
         <div className="flex flex-col gap-2 border border-gold/70 bg-card p-3">
           <div className="grid grid-cols-2 border border-gold/50 text-sm">
-            <button type="button" onClick={() => setLongSide(true)} className={`min-h-10 ${longSide ? "bg-[#089981] text-white" : ""}`}>{zh ? "开多" : "Long"}</button>
-            <button type="button" onClick={() => setLongSide(false)} className={`min-h-10 ${!longSide ? "bg-[#f23645] text-white" : ""}`}>{zh ? "开空" : "Short"}</button>
+            <button type="button" onClick={() => setLongSide(true)} className={`min-h-10 ${longSide ? "bg-ink text-white" : ""}`}>{zh ? "开多" : "Long"}</button>
+            <button type="button" onClick={() => setLongSide(false)} className={`min-h-10 ${!longSide ? "bg-sell text-white" : ""}`}>{zh ? "开空" : "Short"}</button>
           </div>
           <label className="text-xs text-ink/55">
             {zh ? "限价 BNB，空着用参考价" : "Limit in BNB. Blank uses the mark."}
@@ -300,7 +300,7 @@ export function TransistorDesk() {
               <button key={item} type="button" onClick={() => setLev(item)} className={`min-h-9 border font-mono text-xs ${lev === item ? "border-ink bg-ink text-paper" : "border-gold/50"}`}>{item}×</button>
             ))}
           </div>
-          <button type="button" disabled={busy || !ready} onClick={() => place(longSide)} className={`min-h-11 text-sm text-white disabled:opacity-40 ${longSide ? "bg-[#089981]" : "bg-[#f23645]"}`}>
+          <button type="button" disabled={busy || !ready} onClick={() => place(longSide)} className={`min-h-11 text-sm text-white disabled:opacity-40 ${longSide ? "bg-ink" : "bg-sell"}`}>
             {longSide ? (zh ? "开多" : "Open long") : zh ? "开空" : "Open short"}
           </button>
           {!ready ? (
@@ -375,11 +375,11 @@ function OrderRow({ row, mine, zh, max, onCancel, onTake }: { row: ChainOrder; m
   const depth = Math.max(8, Math.min(100, (row.margin / max) * 100));
   return (
     <div className="relative grid grid-cols-[3.6rem_minmax(0,1fr)_auto] items-center px-2 py-1 font-mono text-[12px] tabular-nums sm:grid-cols-[4.2rem_minmax(0,1fr)_4.2rem_4.6rem]">
-      <span className={`pointer-events-none absolute inset-y-1 ${row.long ? "right-[28%] bg-[#089981]/15" : "left-[18%] bg-[#f23645]/15"}`} style={{ width: `${depth * 0.35}%` }} />
-      <span className={`relative font-semibold ${row.long ? "text-[#089981]" : "text-[#f23645]"}`}>{px(row.price)}</span>
+      <span className={`pointer-events-none absolute inset-y-1 ${row.long ? "right-[28%] bg-up/15" : "left-[18%] bg-sell/15"}`} style={{ width: `${depth * 0.35}%` }} />
+      <span className={`relative font-semibold ${row.long ? "text-up" : "text-sell"}`}>{px(row.price)}</span>
       <span className="relative">{row.margin} USDT · {row.lev}×</span>
       <span className="relative hidden text-right sm:block">{(row.margin * row.lev).toFixed(2)}</span>
-      <button type="button" onClick={own ? onCancel : onTake} className={`relative ml-auto h-6 border bg-transparent px-1.5 text-[11px] ${own ? "border-ink/30 text-ink/70" : row.long ? "border-[#f23645] text-[#f23645]" : "border-[#089981] text-[#089981]"}`}>{own ? (zh ? "撤单" : "Cancel") : row.long ? (zh ? "开空" : "Short") : zh ? "开多" : "Long"}</button>
+      <button type="button" onClick={own ? onCancel : onTake} className={`relative ml-auto h-6 border bg-transparent px-1.5 text-[11px] ${own ? "border-ink/30 text-ink/70" : row.long ? "border-sell text-sell" : "border-up text-up"}`}>{own ? (zh ? "撤单" : "Cancel") : row.long ? (zh ? "开空" : "Short") : zh ? "开多" : "Long"}</button>
     </div>
   );
 }

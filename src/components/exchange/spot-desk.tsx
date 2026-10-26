@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { formatUnits } from "viem";
 import { copy } from "@/lib/copy";
 import { useExchange } from "@/lib/exchange-store";
-import { TapePoolDesk } from "@/components/exchange/tape-pool-desk";
 import {
   BSC,
   BNB_GAS_RESERVE,
@@ -40,6 +39,8 @@ import { XLAYER } from "@/lib/xlayer";
 import { currentAccount, connectKind, onAccount, onOpenLink } from "@/lib/wallet";
 import { Kline } from "@/components/exchange/kline";
 import { SignCard } from "@/components/exchange/sign-card";
+import { CoinMark } from "@/components/exchange/coin-mark";
+import { PairChevron } from "@/components/exchange/desk-chrome";
 import { LpPanel } from "@/components/exchange/lp-desk";
 import { useFeeLock } from "@/lib/fee-lock";
 import { SideRail } from "@/components/exchange/side-rail";
@@ -52,10 +53,10 @@ function sized(raw: bigint, decimals: number, pct: number, cap?: bigint): string
   return trimmed ? `${whole}.${trimmed}` : whole;
 }
 
-export function SpotDesk() {
+export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?: "bem" | "bnb" | "okb" | "btc" | "eth" | "zec" | "xau"; onMarkets?: () => void; openLp?: boolean }) {
   const lang = useExchange((s) => s.lang);
   const c = copy[lang];
-  const [book, setBook] = useState<"crypto" | "stock" | "tape">("crypto");
+  const [book, setBook] = useState<"crypto" | "stock">("crypto");
   const [pair, setPair] = useState<"bem" | "bnb" | "okb" | ErcKey>("bem");
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [amount, setAmount] = useState("");
@@ -77,13 +78,23 @@ export function SpotDesk() {
   const [openLink, setOpenLink] = useState<string | null>(null);
   const [okbBal, setOkbBal] = useState<{ okb: bigint; usdt: bigint } | null>(null);
   const [assetBal, setAssetBal] = useState<bigint | null>(null);
-  const [frame, setFrame] = useState<SpotFrame>("1m");
+  const [frame, setFrame] = useState<SpotFrame>("1h");
   const [bars, setBars] = useState<Candle[]>([]);
   const [supply, setSupply] = useState<number | null>(null);
-  const [lane, setLane] = useState<"trade" | "lp">("trade");
+  const [lane, setLane] = useState<"trade" | "lp">(openLp ? "lp" : "trade");
   const lock = useFeeLock();
 
+  useEffect(() => {
+    if (openLp) setLane("lp");
+  }, [openLp]);
   useEffect(() => onAccount(setAccount), []);
+  useEffect(() => {
+    setBook("crypto");
+    setPair(focus);
+    setAmount("");
+    setOut(null);
+    setMinOut(null);
+  }, [focus]);
   useEffect(() => onOpenLink(setOpenLink), []);
 
   useEffect(() => {
@@ -291,7 +302,6 @@ export function SpotDesk() {
     <SideRail items={([
       ["crypto", lang === "zh" ? "加密货币" : "Crypto"],
       ["stock", lang === "zh" ? "美股" : "Stocks"],
-      ["tape", "TAPE"],
       ["lp", lang === "zh" ? "流动性" : "Liquidity"],
     ] as const).map(([key, label]) => ({
       key,
@@ -301,7 +311,6 @@ export function SpotDesk() {
         if (key === "lp") { setLane("lp"); return; }
         setLane("trade");
         setBook(key);
-        if (key === "tape") return;
         const next = key === "crypto" ? "bem" : "spy";
         setPair(next);
         setAmount("");
@@ -313,7 +322,14 @@ export function SpotDesk() {
       },
     }))}>
     <section className="border border-gold bg-card shadow-plate">
-      {book === "tape" && lane === "trade" ? <TapePoolDesk /> : lane === "lp" ? <LpPanel /> : (
+      <div className="flex items-center gap-2 border-b border-gold/40 px-3 py-2">
+        <button type="button" onClick={onMarkets} className="flex items-center gap-2">
+          <CoinMark id={pair} />
+          <span className="text-lg font-medium tracking-tight">{base}/USDT</span>
+          <PairChevron />
+        </button>
+      </div>
+      {lane === "lp" ? <LpPanel /> : (
       <div className="grid gap-0 lg:grid-cols-12">
         <div className="border-b border-gold/40 p-3 lg:col-span-7 lg:border-r lg:border-b-0">
           <div className="flex items-center justify-between gap-3">
@@ -333,8 +349,9 @@ export function SpotDesk() {
                   setAssetBal(null);
                   setPrints([]);
                 }}
-                className={`min-h-8 shrink-0 border border-gold px-3 font-mono text-xs ${pair === key ? "bg-ink text-paper" : ""}`}
+                className={`inline-flex min-h-8 shrink-0 items-center gap-1.5 border border-gold px-2 font-mono text-xs ${pair === key ? "bg-ink text-paper" : ""}`}
               >
+                <CoinMark id={key} className="size-4" />
                 {key in STOCKS ? (lang === "zh" ? STOCKS[key as StockKey].zh : STOCKS[key as StockKey].en) : key === "bem" ? "BEM" : key === "bnb" ? "BNB" : key === "okb" ? "OKB" : key === "btc" ? "BTC" : key === "eth" ? "ETH" : key === "zec" ? "ZEC" : "XAU"}
               </button>
             ))}
@@ -343,40 +360,6 @@ export function SpotDesk() {
             <span className="font-mono text-4xl tabular-nums tracking-tight sm:text-5xl">{shown ?? "—"}</span>
             {shown ? <span className="font-mono text-xs tracking-widest text-gold">USDT</span> : null}
           </p>
-          <p className="mt-1 font-mono text-xs text-ink/50">
-            {stock
-              ? lang === "zh"
-                ? `Pancake ${base} / USDT · bStocks · 池费率 ${(ERC_BOOKS[pair as ErcKey].fee / 10000).toFixed(2)}% · 买到的是钱包里的代币，一枚对一股`
-                : `Pancake ${base} / USDT · bStocks · pool fee ${(ERC_BOOKS[pair as ErcKey].fee / 10000).toFixed(2)}% · a buy lands in the wallet, one token for one share`
-              : pair === "xau"
-              ? lang === "zh"
-                ? "Pancake XAUt / USDT · Tether Gold · 池费率 0.05% · 一枚对一盎司黄金"
-                : "Pancake XAUt / USDT · Tether Gold · pool fee 0.05% · one token, one troy ounce"
-              : pair === "btc"
-                ? lang === "zh"
-                  ? "Pancake BTCB / USDT · BSC · 池费率 0.01% · 买到的是钱包里的 BTCB"
-                  : "Pancake BTCB / USDT · BSC · pool fee 0.01% · a buy lands as BTCB"
-                : pair === "eth"
-                  ? lang === "zh"
-                    ? "Pancake ETH / USDT · BSC · 池费率 0.05% · 买到的是钱包里的 ETH"
-                    : "Pancake ETH / USDT · BSC · pool fee 0.05% · a buy lands as ETH"
-                  : pair === "zec"
-                    ? lang === "zh"
-                      ? "Pancake ZEC / USDT · BSC · 池费率 0.05% · 买到的是钱包里的 ZEC"
-                      : "Pancake ZEC / USDT · BSC · pool fee 0.05% · a buy lands as ZEC"
-                : pair === "okb"
-                  ? lang === "zh"
-                    ? "X Layer PotatoSwap · OKB / USDT · 买到的是钱包里的 OKB · 成交地址从池子日志读"
-                    : "X Layer PotatoSwap · OKB / USDT · a buy lands as OKB · addresses come from the pool log"
-                  : pair === "bnb"
-                    ? lang === "zh"
-                      ? "Pancake BNB / USDT · 池费率 0.01% · 买到的是钱包里的 BNB"
-                      : "Pancake BNB / USDT · pool fee 0.01% · a buy lands as BNB"
-                    : lang === "zh"
-                      ? "Pancake 池子报价 · 每秒从链上读"
-                      : "Pancake pool quote · read every second"}
-          </p>
-          <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink/80">{c.realNote}</p>
           <div className="mt-3 flex flex-wrap border border-gold">
             {(["1m", "5m", "15m", "1h", "1d"] as const).map((item) => (
               <button key={item} type="button" onClick={() => setFrame(item)} className={`min-h-9 flex-1 font-mono text-xs ${frame === item ? "bg-ink text-paper" : ""}`}>

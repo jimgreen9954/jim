@@ -45,7 +45,7 @@ export function ConnectButton() {
   if (account) {
     return (
       <span className="flex max-w-[18rem] flex-wrap items-center gap-1 sm:max-w-none sm:gap-2">
-        <span className="inline-flex min-h-8 max-w-24 items-center truncate font-mono text-xs text-ink/80 sm:min-h-11 sm:max-w-40 sm:border sm:border-gold sm:bg-card sm:px-3 sm:text-sm">{short(account)}</span>
+        <span className="inline-flex min-h-9 items-center rounded-md border border-gold bg-card px-3 font-mono text-xs text-ink/90">{short(account)}</span>
         {link ? (
           <a href={link} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center border border-gold bg-ink px-2 text-xs text-paper sm:min-h-11 sm:text-sm">
             {lang === "zh" ? "去 OKX 确认" : "Confirm in OKX"}
@@ -63,7 +63,7 @@ export function ConnectButton() {
         <button
           key={which}
           type="button"
-          className="min-h-10 border border-gold px-2 text-xs sm:min-h-11 sm:px-3 sm:text-sm"
+          className={`min-h-9 rounded-md px-3 text-sm disabled:opacity-40 ${which === "okx" ? "bg-ink text-paper" : "border border-gold text-ink/80"}`}
           disabled={busy}
           onClick={() => {
             setBusy(true);
@@ -78,7 +78,7 @@ export function ConnectButton() {
               .finally(() => setBusy(false));
           }}
         >
-          {which === "okx" ? "OKX" : lang === "zh" ? "币安" : "Binance"}
+          {which === "okx" ? (lang === "zh" ? "连接" : "Connect") : lang === "zh" ? "币安" : "Binance"}
         </button>
       ))}
       {note ? <span className="self-center text-xs text-sell">{note}</span> : null}

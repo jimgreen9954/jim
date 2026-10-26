@@ -126,14 +126,14 @@ function plainBase(market: number, amount: bigint): string {
 function BookRow({ priceLabel, sizeLabel, totalLabel, cap, value, onChange, onPick, onTake, bid, best, mine, on, busy, depth, zh }: { priceLabel: string; sizeLabel: string; totalLabel: string; cap: string; value: string; onChange: (value: string) => void; onPick: () => void; onTake: () => void; bid: boolean; best: boolean; mine: boolean; on: boolean; busy: boolean; depth: number; zh: boolean }) {
   const typed = value.trim().length > 0;
   return (
-    <form className={`relative grid min-h-[30px] grid-cols-[3.2rem_minmax(0,1fr)_auto] items-center gap-1 px-1.5 text-[12px] tabular-nums sm:grid-cols-[minmax(0,0.9fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_auto] sm:px-2 ${on ? "bg-ink/5" : best ? (bid ? "bg-[#089981]/10" : "bg-[#f23645]/10") : ""}`} onSubmit={(event) => { event.preventDefault(); onTake(); }}>
-      <span className={`pointer-events-none absolute inset-y-1 left-[11%] max-w-[31%] ${bid ? "bg-[#089981]/25" : "bg-[#f23645]/20"}`} style={{ width: `${Math.max(depth, 4)}%` }} />
-      <button type="button" onClick={onPick} className={`relative truncate text-left font-mono font-semibold ${bid ? "text-[#089981]" : "text-[#f23645]"}`}>{priceLabel}{mine ? <span className="ml-1 text-[10px] font-normal text-ink/45">{zh ? "我的" : "mine"}</span> : null}</button>
+    <form className={`relative grid min-h-[30px] grid-cols-[3.2rem_minmax(0,1fr)_auto] items-center gap-1 px-1.5 text-[12px] tabular-nums sm:grid-cols-[minmax(0,0.9fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_auto] sm:px-2 ${on ? "bg-ink/5" : best ? (bid ? "bg-up/10" : "bg-sell/10") : ""}`} onSubmit={(event) => { event.preventDefault(); onTake(); }}>
+      <span className={`pointer-events-none absolute inset-y-1 left-[11%] max-w-[31%] ${bid ? "bg-up/20" : "bg-sell/20"}`} style={{ width: `${Math.max(depth, 4)}%` }} />
+      <button type="button" onClick={onPick} className={`relative truncate text-left font-mono font-semibold ${bid ? "text-up" : "text-sell"}`}>{priceLabel}{mine ? <span className="ml-1 text-[10px] font-normal text-ink/45">{zh ? "我的" : "mine"}</span> : null}</button>
       <span className="relative truncate text-right font-mono text-ink/80 sm:text-left">{sizeLabel}</span>
       <span className="relative hidden truncate font-mono text-ink/45 sm:block">{totalLabel}</span>
       <span className="relative grid grid-cols-[3.4rem_2.6rem] justify-end gap-1 sm:grid-cols-[4.6rem_3.4rem]">
         <input value={value} placeholder={`≤${cap}`} inputMode="decimal" onChange={(event) => onChange(event.target.value)} aria-label={zh ? `这一档最多 ${cap}` : `At most ${cap}`} className="h-6 w-full border border-ink/25 bg-paper px-1 text-right font-mono text-[11px] text-ink outline-none focus:border-ink" />
-        <button type="submit" disabled={busy || !typed} className={`h-6 border bg-transparent text-[11px] font-semibold disabled:opacity-40 ${bid ? "border-[#f23645] text-[#f23645]" : "border-[#089981] text-[#089981]"}`}>{bid ? (zh ? "卖出" : "Sell") : (zh ? "买入" : "Buy")}</button>
+        <button type="submit" disabled={busy || !typed} className={`h-6 border bg-transparent text-[11px] font-semibold disabled:opacity-40 ${bid ? "border-sell text-sell" : "border-up text-up"}`}>{bid ? (zh ? "卖出" : "Sell") : (zh ? "买入" : "Buy")}</button>
       </span>
     </form>
   );
@@ -358,7 +358,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
   return (
     <SideRail items={choices.map((id) => ({
       key: String(id),
-      label: id === "circuit" ? (zh ? "电路" : "Circuits") : id === "cap" ? (zh ? "容器" : "Container") : NAMES[id],
+      label: id === "circuit" ? (zh ? "TAPELIQUID 电路" : "TAPELIQUID circuits") : id === "cap" ? (zh ? "TapeOut 容器" : "TapeOut container") : `TAPELIQUID ${NAMES[id]}`,
       on: lane === id,
       run: () => setLane(id),
     }))}>
@@ -441,7 +441,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
                 {orders.length === 0 ? <li className="px-3 py-3 text-sm text-ink/60">{zh ? "这本账上没有你的挂单。" : "You have no resting order on this book."}</li> : null}
                 {orders.map((row) => (
                   <li key={row.id.toString()} className="grid items-center gap-2 border-t border-gold/30 px-3 py-2 text-xs sm:grid-cols-[4rem_1fr_1fr_auto]">
-                    <span className={row.bid ? "text-[#089981]" : "text-[#f23645]"}>{row.bid ? (zh ? "买" : "Bid") : (zh ? "卖" : "Ask")}</span>
+                    <span className={row.bid ? "text-up" : "text-sell"}>{row.bid ? (zh ? "买" : "Bid") : (zh ? "卖" : "Ask")}</span>
                     <span className="font-mono">{moneyText(row.price, quoteUnit, okbRate)}</span>
                     <span className="font-mono">{baseText(row.market, row.left)}</span>
                     <button type="button" disabled={busy} className="min-h-9 border border-gold px-2 disabled:opacity-40" onClick={() => run(() => cancelSpot(account ?? "", row.id), zh ? "已撤单。没吃掉的退回钱包。" : "Cancelled. The rest is back in the wallet.")}>{zh ? "撤单" : "Cancel"}</button>
@@ -458,15 +458,15 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
                 <button type="button" className="col-span-2 min-h-9 text-xs text-ink/60" onClick={() => setTicketOpen(false)}>{zh ? "收起" : "Close"}</button>
               ) : (
                 <>
-                  <button type="button" className="min-h-11 bg-[#089981] text-sm text-white" onClick={() => { setSide("buy"); setTicketOpen(true); }}>{zh ? "买入" : "Buy"}</button>
-                  <button type="button" className="min-h-11 bg-[#f23645] text-sm text-white" onClick={() => { setSide("sell"); setTicketOpen(true); }}>{zh ? "卖出" : "Sell"}</button>
+                  <button type="button" className="min-h-11 bg-ink text-sm text-white" onClick={() => { setSide("buy"); setTicketOpen(true); }}>{zh ? "买入" : "Buy"}</button>
+                  <button type="button" className="min-h-11 bg-sell text-sm text-white" onClick={() => { setSide("sell"); setTicketOpen(true); }}>{zh ? "卖出" : "Sell"}</button>
                 </>
               )}
             </div>
             <div className={ticketOpen ? "mt-2 lg:mt-0" : "hidden lg:block"}>
             <div className="grid grid-cols-2 border border-gold">
-              <button type="button" onClick={() => setSide("buy")} className={`min-h-11 text-sm ${side === "buy" ? "bg-[#089981] text-white" : "text-[#089981]"}`}>{zh ? "买入" : "Buy"}</button>
-              <button type="button" onClick={() => setSide("sell")} className={`min-h-11 text-sm ${side === "sell" ? "bg-[#f23645] text-white" : "text-[#f23645]"}`}>{zh ? "卖出" : "Sell"}</button>
+              <button type="button" onClick={() => setSide("buy")} className={`min-h-11 text-sm ${side === "buy" ? "bg-ink text-white" : "text-up"}`}>{zh ? "买入" : "Buy"}</button>
+              <button type="button" onClick={() => setSide("sell")} className={`min-h-11 text-sm ${side === "sell" ? "bg-sell text-white" : "text-sell"}`}>{zh ? "卖出" : "Sell"}</button>
             </div>
             <label className="mt-3 grid gap-1 text-xs text-ink/55">
               {zh ? `价格 ${unitName}` : `Price in ${unitName}`}
@@ -498,7 +498,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
               {zh ? "两边都按钱包余额。买入切 USDT0，卖出切这种币。买方按价格付，卖方实收 99.8%。这一本订单簿的千分之二整笔进收费地址，合约里没有邀请人。永续、现货、加池、官方晶体管和官方电路，按邀请人 6%、少付 4%、收费地址 90% 拆。电路容器的开通费是协议的 BNB，不走这笔台费。" : "Both figures are the wallet. The buyer pays the price. The seller receives 99.8 percent. This book's 0.2 percent goes entirely to the fee address. Perps, spot, pools you add, official transistors, and official circuits split a referrer at 6%, 4% off, and 90%. A circuit container's open fee is protocol BNB, not this site fee."}
             </p>
             {ownHit ? <p className="mt-2 text-sm leading-6 text-sell">{zh ? `这个价会碰到你自己的${ownHit.bid ? "买单" : "卖单"} ${usdtText(ownHit.price, 4)}。同一个钱包不能互吃，点下去会被整笔拒绝。先撤掉，或改一个碰不到的价格。` : `This price reaches your own ${ownHit.bid ? "bid" : "ask"} at ${usdtText(ownHit.price, 4)}. The same wallet cannot take it. Cancel it, or move the price.`}</p> : null}
-            <button type="button" disabled={busy || Boolean(ownHit)} className={`mt-3 min-h-12 w-full text-sm text-white disabled:opacity-40 ${side === "buy" ? "bg-[#089981]" : "bg-[#f23645]"}`} onClick={() => {
+            <button type="button" disabled={busy || Boolean(ownHit)} className={`mt-3 min-h-12 w-full text-sm text-white disabled:opacity-40 ${side === "buy" ? "bg-ink" : "bg-sell"}`} onClick={() => {
               let px = 0n;
               try { px = typedUsdt(price, quoteUnit, okbRate); } catch { setBad(true); setNote(zh ? "OKB 价格还没读到，先用 USDT0。" : "The OKB price is not in yet. Use USDT0."); return; }
               run(() => placeSpot(account ?? "", market, side === "buy", px, spotBase(market, amount)), zh ? "已进订单簿。没有对手的部分继续挂着，不会消失。" : "It is on the book. Whatever did not meet another order stays there.");

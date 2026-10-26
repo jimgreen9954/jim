@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { formatUnits } from "viem";
 import { useExchange } from "@/lib/exchange-store";
 import {
   circuitLockReady,
@@ -19,15 +18,11 @@ import {
 import { FEE_TO } from "@/lib/bsc";
 import { tapeText, readTapeMine, type TapeSeat } from "@/lib/tape-mine";
 import {
-  addTapePool,
-  quoteUnits,
   readTapePool,
   removeTapePool,
   showQuote,
-  showTape,
   TAPE_POOL,
   TAPE_TERMS,
-  tapeUnits,
   type TapePosition,
 } from "@/lib/tape-pool";
 import { connectXLayer, transistorHeld, XLAYER } from "@/lib/xlayer";
@@ -51,18 +46,11 @@ export function StakeDesk() {
   const lang = useExchange((s) => s.lang);
   const zh = lang === "zh";
   const [account, setAccount] = useState<string | null>(currentAccount());
-  const [quote, setQuote] = useState<0 | 1>(0);
-  const [tapeAmt, setTapeAmt] = useState("");
-  const [quoteAmt, setQuoteAmt] = useState("");
-  const [lpTerm, setLpTerm] = useState(2);
   const [kind, setKind] = useState<0 | 1>(0);
   const [waferAmt, setWaferAmt] = useState("");
   const [waferTerm, setWaferTerm] = useState(0);
   const [nand, setNand] = useState(0n);
   const [latch, setLatch] = useState(0n);
-  const [tapeBal, setTapeBal] = useState(0n);
-  const [usdtBal, setUsdtBal] = useState(0n);
-  const [bemBal, setBemBal] = useState(0n);
   const [owned, setOwned] = useState<TapeSeat[]>([]);
   const [weight, setWeight] = useState(0n);
   const [seats, setSeats] = useState<LockSeat[]>([]);
@@ -75,7 +63,6 @@ export function StakeDesk() {
   const [note, setNote] = useState<string | null>(null);
   const [bad, setBad] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [ackLp, setAckLp] = useState(false);
   const [ackWafer, setAckWafer] = useState(false);
 
   useEffect(() => onAccount(setAccount), []);
@@ -88,9 +75,6 @@ export function StakeDesk() {
       readTapePool(account).then((row) => {
         if (dead) return;
         setLp(row.positions);
-        setTapeBal(row.tape);
-        setUsdtBal(row.usdtBal);
-        setBemBal(row.bemBal);
         setReserves({
           usdtTape: row.usdt.tape,
           usdtQuote: row.usdt.quote,
@@ -124,7 +108,6 @@ export function StakeDesk() {
   const share = weight > 0n ? Number((lockedGates * 10000n) / weight) / 100 : 0;
   const nextUnlock = [...lp.map((row) => row.unlock), ...seats.map((row) => row.unlock)].filter((ts) => ts * 1000 > Date.now()).sort((a, b) => a - b)[0];
   const now = Math.floor(Date.now() / 1000);
-  const lpUntil = sgt(now + (TAPE_TERMS[lpTerm]?.days ?? 0) * 86400);
   const waferUntil = sgt(now + (LOCK_TERMS[waferTerm]?.sec ?? 0));
   const circuitUntil = sgt(now + (LOCK_TERMS[circuitTerm]?.sec ?? 0));
   const ready = circuitLockReady();
@@ -136,8 +119,8 @@ export function StakeDesk() {
         <h2 className="font-display text-3xl italic">{zh ? "质押" : "Stake"}</h2>
         <p className="mt-2 max-w-3xl text-sm leading-relaxed">
           {zh
-            ? "三本账分开。TAPE 池是流动性，对手是 USDT0 或 BEM，期限是 90 天到 3 年。晶圆锁仓和电路锁仓分开，期限是 180 天到 5 年。时间都是新加坡时间。到期前不能提前取出。合约没有管理员。"
-            : "Three books, kept apart. The TAPE pool is liquidity against USDT0 or BEM, for 90 days to 3 years. Wafers and circuits lock apart, for 180 days to 5 years. Times are Singapore time. Nothing comes out early. The contracts have no admin."}
+            ? "晶圆锁仓和电路锁仓仍可新开。TAPE 现货在工房订单簿，这一页不再接受新的 TAPE 池加仓。已经在池里的仓位，到期后仍可在下面撤回。期限是 90 天到 3 年。时间是新加坡时间。到期前不能提前取出。合约没有管理员。"
+            : "Wafers and circuits can still be locked. TAPE spot is the workshop book, so this page takes no new TAPE pool deposits. A position already in the pool can still be withdrawn below after it expires. Terms are 90 days to 3 years. Times are Singapore time. Nothing comes out early. The contracts have no admin."}
         </p>
       </div>
       <div className="border border-sell/50 px-3 py-3 text-sm leading-6">
@@ -157,8 +140,8 @@ export function StakeDesk() {
       <p className="text-xs text-ink/60">{zh ? "下一笔解锁" : "Next unlock"} {nextUnlock ? sgt(nextUnlock) : zh ? "没有未到期的仓" : "Nothing is still locked"} · {zh ? "钱包 NAND" : "Wallet NAND"} {nand.toLocaleString("en-US")} · LATCH {latch.toLocaleString("en-US")}</p>
 
       <article className="border border-gold p-3">
-        <h3 className="font-display text-2xl italic">{zh ? "TAPE 流动性" : "TAPE liquidity"}</h3>
-        <p className="mt-1 text-xs text-ink/60">{zh ? "加池两边各扣 0.20%。和池子比例对不上的部分退回，不会送给别人。到期撤回再各扣 0.20%。" : "Adding takes 0.20% on each side. Amounts that do not match the pool ratio are returned, not given to other people. Removing takes 0.20% again."}</p>
+        <h3 className="font-display text-2xl italic">{zh ? "已有的 TAPE 池" : "Existing TAPE pool"}</h3>
+        <p className="mt-1 text-xs text-ink/60">{zh ? "工房现货已上线，不再加池。下面只列这个地址已经锁着的仓。到期才能撤回，撤回两边再各扣 0.20%。" : "The workshop book is live, so nothing new is added. This list is only what this address already locked. Removal waits for expiry and takes 0.20% on each side."}</p>
         <ul className="mt-2 max-h-64 overflow-auto border border-gold/40">
           {lp.map((row) => {
             const poolShares = row.quote === 0 ? reserves.usdtShares : reserves.bemShares;
@@ -177,30 +160,8 @@ export function StakeDesk() {
               </li>
             );
           })}
-          {account && lp.length === 0 ? <li className="px-2 py-3 text-sm text-ink/60">{zh ? "这个地址还没有 TAPE 池仓位。" : "This address has no TAPE pool position."}</li> : null}
+          {account && lp.length === 0 ? <li className="px-2 py-3 text-sm text-ink/60">{zh ? "这个地址没有还锁着的 TAPE 池仓位。新的加池已经关掉。" : "This address has no TAPE pool position still locked. New deposits are closed."}</li> : null}
         </ul>
-        <form className="mt-3 grid gap-2" onSubmit={(event) => { event.preventDefault(); if (!account) return; setBusy(true); addTapePool(account, quote, lpTerm, tapeUnits(tapeAmt), quoteUnits(quote, quoteAmt)).then(() => say(zh ? "已加进池子。到期前不能撤。" : "Added. It cannot be removed early.")).catch(fail).finally(() => setBusy(false)); }}>
-          <div className="grid grid-cols-2 border border-gold">
-            {([0, 1] as const).map((id) => <button key={id} type="button" onClick={() => setQuote(id)} className={`min-h-10 text-sm ${quote === id ? "bg-ink text-paper" : ""}`}>TAPE / {id === 0 ? "USDT0" : "BEM"}</button>)}
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <label className="text-xs">TAPE
-              <input value={tapeAmt} onChange={(event) => setTapeAmt(event.target.value)} inputMode="decimal" placeholder="TAPE" className="mt-1 min-h-11 w-full border border-gold bg-transparent px-2 font-mono outline-none" />
-              <button type="button" className="mt-1 underline" onClick={() => setTapeAmt(tapeText(tapeBal))}>{zh ? `全部 ${amt(tapeBal)}` : `All ${amt(tapeBal)}`}</button>
-            </label>
-            <label className="text-xs">{quote === 0 ? "USDT0" : "BEM"}
-              <input value={quoteAmt} onChange={(event) => setQuoteAmt(event.target.value)} inputMode="decimal" placeholder={quote === 0 ? "USDT0" : "BEM"} className="mt-1 min-h-11 w-full border border-gold bg-transparent px-2 font-mono outline-none" />
-              <button type="button" className="mt-1 underline" onClick={() => setQuoteAmt(quote === 0 ? formatUnits(usdtBal, 6) : tapeText(bemBal))}>{zh ? `全部 ${quote === 0 ? showQuote(0, usdtBal) : amt(bemBal)}` : `All ${quote === 0 ? showQuote(0, usdtBal) : amt(bemBal)}`}</button>
-            </label>
-          </div>
-          <p className="text-xs text-ink/60">{zh ? `链上可质押：TAPE ${amt(tapeBal)} · USDT0 ${showQuote(0, usdtBal)} · BEM ${amt(bemBal)}。15 秒重读。` : `Stakeable on chain: TAPE ${amt(tapeBal)} · USDT0 ${showQuote(0, usdtBal)} · BEM ${amt(bemBal)}. Reread every 15 seconds.`}</p>
-          <div className="grid grid-cols-3 gap-1 sm:grid-cols-5">
-            {TAPE_TERMS.map((row) => <button key={row.id} type="button" onClick={() => { setLpTerm(row.id); setAckLp(false); }} className={`min-h-10 border px-1 text-xs ${lpTerm === row.id ? "border-ink bg-ink text-paper" : "border-gold"}`}>{zh ? row.zh : row.en}</button>)}
-          </div>
-          <p className="border border-sell/40 px-2 py-2 text-xs leading-5">{zh ? `这一笔锁到 ${lpUntil}（新加坡）。到期前不能撤。两边各扣 0.20%，多出来的退回。` : `This stake unlocks ${lpUntil} Singapore time. It cannot be removed early. Each side pays 0.20%, and the extra is returned.`}</p>
-          <label className="flex gap-2 text-xs"><input type="checkbox" checked={ackLp} onChange={(event) => setAckLp(event.target.checked)} />{zh ? "我知道到期前取不出来" : "I know this cannot be removed early"}</label>
-          <button type="submit" disabled={busy || !account || !ackLp} className="min-h-11 bg-ink text-paper disabled:opacity-40">{zh ? "签名并质押流动性" : "Sign and stake liquidity"}</button>
-        </form>
       </article>
 
       <article className="border border-gold p-3">
@@ -316,7 +277,7 @@ export function StakeDesk() {
       <p className="break-all text-xs text-ink/50">
         <a className="underline" href={`${XLAYER.explorer}/address/${TAPE_LOCK}`} target="_blank" rel="noreferrer">{zh ? "锁仓" : "Lock"} {TAPE_LOCK}</a>
         {" · "}
-        <a className="underline" href={`${XLAYER.explorer}/address/${TAPE_POOL}`} target="_blank" rel="noreferrer">{zh ? "TAPE 池" : "TAPE pool"} {TAPE_POOL}</a>
+        <a className="underline" href={`${XLAYER.explorer}/address/${TAPE_POOL}`} target="_blank" rel="noreferrer">{zh ? "旧 TAPE 池 · 只撤回" : "Old TAPE pool · withdraw only"} {TAPE_POOL}</a>
       </p>
     </section>
   );

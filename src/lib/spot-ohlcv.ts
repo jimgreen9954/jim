@@ -1,4 +1,5 @@
 import type { Candle } from "@/lib/bem-ohlcv";
+import { geckoFetch } from "@/lib/gecko-pace";
 import { STOCKS, type StockKey } from "@/lib/stocks";
 
 export type SpotFrame = "1m" | "5m" | "15m" | "1h" | "1d";
@@ -38,9 +39,8 @@ export async function pullSpot(pair: SpotPair, frame: SpotFrame): Promise<Candle
   const pool = POOLS[pair];
   const spec = SPEC[frame];
   try {
-    const res = await fetch(
+    const res = await geckoFetch(
       `https://api.geckoterminal.com/api/v2/networks/${pool.network}/pools/${pool.pool}/ohlcv/${spec.path}?aggregate=${spec.aggregate}&limit=120&currency=usd`,
-      { headers: { accept: "application/json" }, signal: AbortSignal.timeout(8000) },
     );
     if (!res.ok) return hit?.rows ?? [];
     const body = (await res.json()) as { data?: { attributes?: { ohlcv_list?: number[][] } } };

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { formatEther, formatUnits } from "viem";
 import { bscBemBalance, BSC_BRIDGE, quoteBridge, sendBridge, type BridgeQuote } from "@/lib/bem-bridge";
+import { deskParts } from "@/lib/invite-cut";
 import { bemPrice, BSC } from "@/lib/bsc";
 import { readTapePool, TAPE_BEM } from "@/lib/tape-pool";
 import {
@@ -65,12 +66,13 @@ function sgWhen(unix: bigint): string {
   return `${text} SGT`;
 }
 
-function OfficialBridge({ account, zh, xBem }: { account: string | null; zh: boolean; xBem: bigint | null }) {
-  const [open, setOpen] = useState(false);
+export function OfficialBridge({ account, zh, xBem, startOpen = false }: { account: string | null; zh: boolean; xBem: bigint | null; startOpen?: boolean }) {
+  const [open, setOpen] = useState(startOpen);
   const [toX, setToX] = useState(true);
   const [amt, setAmt] = useState("");
   const [bscBal, setBscBal] = useState<bigint | null>(null);
   const [quote, setQuote] = useState<BridgeQuote | null>(null);
+  const [fee, setFee] = useState<bigint | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [bad, setBad] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -84,9 +86,14 @@ function OfficialBridge({ account, zh, xBem }: { account: string | null; zh: boo
   }, [open, account, busy]);
 
   useEffect(() => {
-    if (!open || !account || !amount) { setQuote(null); return; }
+    if (!open || !account || !amount) { setQuote(null); setFee(null); return; }
     let dead = false;
-    quoteBridge(toX, account, amount).then((next) => { if (!dead) setQuote(next); }).catch(() => { if (!dead) setQuote(null); });
+    deskParts(toX ? "bsc" : "xlayer", account, amount).then((parts) => {
+      if (dead) return;
+      setFee(parts.desk + parts.reward);
+      if (parts.swapIn <= 0n) { setQuote(null); return; }
+      return quoteBridge(toX, account, parts.swapIn).then((next) => { if (!dead) setQuote(next); });
+    }).catch(() => { if (!dead) { setQuote(null); setFee(null); } });
     return () => { dead = true; };
   }, [open, account, toX, amount]);
 
@@ -98,18 +105,18 @@ function OfficialBridge({ account, zh, xBem }: { account: string | null; zh: boo
       </button>
       {open ? (
         <div className="grid gap-2 border-t border-gold/30 px-3 py-3">
-          <p className="text-xs leading-5 text-ink/60">{zh ? "调用 TapeOut 已经在用的桥。BSC 锁 BEM，X Layer 铸出等量再扣桥自己的费。回来则烧掉 X Layer 的 BEM。只进当前这个钱包。本站不经手，不另收费。TAPE 不能走。" : "This calls the bridge TapeOut already runs. BSC locks BEM and X Layer mints the same amount minus the bridge's own fee. The return trip burns X Layer BEM. It arrives in this wallet. This site does not custody it and adds no fee. TAPE cannot use it."}</p>
+          <p className="text-xs leading-5 text-ink/60">{zh ? "先付台费千分之二，再走 TapeOut 的桥。BSC 锁剩下的 BEM，X Layer 铸出。回来则烧掉 X Layer 的 BEM。桥自己的费另计。台费转出后，桥没过也不退。TAPE 不能走。" : "The 0.20% site fee is paid first. The rest crosses on TapeOut's bridge. BSC locks it and X Layer mints. The return burns X Layer BEM. The bridge's own fee is separate. A fee already sent is not returned if the bridge does not finish. TAPE cannot use it."}</p>
           <div className="grid grid-cols-2 border border-gold text-sm">
             <button type="button" className={`min-h-11 ${toX ? "bg-ink text-paper" : ""}`} onClick={() => setToX(true)}>BSC → X Layer</button>
             <button type="button" className={`min-h-11 ${!toX ? "bg-ink text-paper" : ""}`} onClick={() => setToX(false)}>X Layer → BSC</button>
           </div>
           <input value={amt} onChange={(event) => setAmt(event.target.value)} inputMode="decimal" placeholder={zh ? "BEM 数量" : "BEM amount"} className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono text-sm" />
           <p className="text-xs text-ink/55">{zh ? "可转" : "Available"} {toX ? (bscBal == null ? "—" : deskText(bscBal, 8)) : (xBem == null ? "—" : deskText(xBem, 8))} BEM</p>
-          <p className="text-xs leading-5">{zh ? "这次到账" : "This quote arrives"} {quote ? deskText(quote.received, 8) : "—"} BEM · {zh ? "桥留下" : "Bridge keeps"} {quote ? deskText(quote.sent - quote.received, 8) : "—"} · {toX ? "BNB" : "OKB"} {quote ? formatEther(quote.nativeFee) : "—"}</p>
+          <p className="text-xs leading-5">{zh ? "台费" : "Fee"} 0.20% {fee == null ? "—" : deskText(fee, 8)} BEM · {zh ? "这次到账" : "Arrives"} {quote ? deskText(quote.received, 8) : "—"} · {zh ? "桥留下" : "Bridge keeps"} {quote ? deskText(quote.sent - quote.received, 8) : "—"} · {toX ? "BNB" : "OKB"} {quote ? formatEther(quote.nativeFee) : "—"}</p>
           <button type="button" disabled={busy || !account || !amount || !quote} className="min-h-12 bg-ink text-sm text-paper disabled:opacity-40" onClick={() => {
             if (!account || !amount) return;
             setBusy(true);
-            sendBridge(toX, account, amount).then(() => { setBad(false); setNote(zh ? "已提交。到账要等桥的消息，不是这一笔里立刻到。" : "Submitted. It arrives with the bridge message, not in this transaction."); }).catch(() => { setBad(true); setNote(zh ? "没有跨过去。签名留在这一页。BEM 还在原来的链上。" : "It did not cross. Stay on this page. The BEM is still on the original chain."); }).finally(() => setBusy(false));
+            sendBridge(toX, account, amount).then(() => { setBad(false); setNote(zh ? "台费已付，桥已提交。到账要等桥的消息。" : "The fee is paid and the bridge is submitted. It arrives with the bridge message."); }).catch((err) => { setBad(true); setNote(err instanceof Error && err.message === "fee-kept" ? (zh ? "台费已经转出，不退。桥没有提交。" : "The fee was sent and is not returned. The bridge was not submitted.") : (zh ? "没有跨过去。BEM 还在原来的链上。" : "It did not cross. The BEM is still on the original chain.")); }).finally(() => setBusy(false));
           }}>{toX ? (zh ? "签名转到 X Layer" : "Sign to X Layer") : (zh ? "签名转回 BSC" : "Sign back to BSC")}</button>
           <p className="break-all font-mono text-[11px] text-ink/40">
             <a className="underline" href={`${BSC.explorer}/address/${BSC_BRIDGE}`} target="_blank" rel="noreferrer">BSC {BSC_BRIDGE}</a>
@@ -464,7 +471,7 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
             <p className="text-xs text-ink/70">{zh ? "你的锁仓。到期后这一行才能取回本金。" : "Your locks. Principal can be taken from this row only after expiry."}</p>
             <LockList locks={stake?.bemLocks ?? []} zh={zh} busy={busy || !term} empty={zh ? (!account ? "登入后显示你已经质押的。" : stake && stake.bemStaked > 0n ? "本金已记上。锁仓明细这一次没列出来。" : term ? "你还没有锁仓。" : "部署之后记在这里。") : (!account ? "Shown after sign-in." : stake && stake.bemStaked > 0n ? "Principal is recorded. The lock rows missed this read." : term ? "You have no lock yet." : "Shown after deploy.")} onTake={(index) => run(() => unstakeTermBem(account ?? "", index), zh ? "到期本金已取回。" : "Expired principal is back.", "term", "stake")} />
           </div>
-          <p className="mt-2 text-sm leading-6">{zh ? "可质押是这个钱包里的 X Layer BEM。已质押是你已经锁上的本金。BSC 的 BEM 要先用下面的 TapeOut 桥转过来，本站不经手。" : "Available is the X Layer BEM in this wallet. Staked is the principal you already locked. BSC BEM has to cross on the TapeOut bridge below. This site does not custody it."}</p>
+          <p className="mt-2 text-sm leading-6">{zh ? "可质押是这个钱包里的 X Layer BEM。已质押是你已经锁上的本金。BSC 的 BEM 要先过下面的桥，过桥前收千分之二。" : "Available is the X Layer BEM in this wallet. Staked is the principal you already locked. BSC BEM crosses on the bridge below. The 0.20% fee is paid first."}</p>
           <p className="mt-2 text-sm">{zh ? "年化" : "APY"} <span className="font-mono">{bemApy === "—" ? (stake && stake.bemStakedTotal > 0n ? (zh ? "价格没读到" : "Price missed") : (zh ? "还没有质押本金，现在算不出来" : "No principal yet")) : `${bemApy}%`}</span></p>
           <p className="mt-1 text-xs leading-5">{zh ? `未分完 ${stake ? deskText(stake.tapePot, 8) : "—"} TAPE。待领 ${stake ? deskText(stake.tapeOwed, 8) : "—"} TAPE。你还没分完的奖励 ${stake ? deskText(stake.tapeSponsor, 8) : "—"} TAPE。` : `Unvested ${stake ? deskText(stake.tapePot, 8) : "—"} TAPE. Pending ${stake ? deskText(stake.tapeOwed, 8) : "—"} TAPE. Your unvested reward ${stake ? deskText(stake.tapeSponsor, 8) : "—"} TAPE.`}</p>
           <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">

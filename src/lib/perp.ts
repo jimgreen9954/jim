@@ -1,6 +1,7 @@
 import { encodeAbiParameters, encodeFunctionData, type Hex } from "viem";
 import { BSC, FEE_TO, connectBsc, pretty, readBalances, units, waitReceipt } from "@/lib/bsc";
 import { PERP_BYTECODE } from "@/lib/perp-artifact";
+import { RISK_BYTECODE } from "@/lib/risk-artifact";
 import { MARK_BYTECODE } from "@/lib/mark-artifact";
 import { getProvider } from "@/lib/wallet";
 import { XLAYER, connectXLayer } from "@/lib/xlayer";
@@ -411,8 +412,53 @@ export function savedXBemPerp(): string {
 }
 
 export function bookOf(which: Desk = desk): string {
-  if (which === "xlayer") return savedXBemPerp() || KNOWN_XPERP;
-  return BSC_REBATE;
+  return which === "xlayer" ? KNOWN_XPERP : BSC_REBATE;
+}
+
+const RISK_BSC = "tapeliquid-risk-bsc";
+const RISK_X = "tapeliquid-risk-x";
+
+export function priorBook(which: Desk): string {
+  return bookOf(which);
+}
+
+export function riskOf(which: Desk): string {
+  if (typeof window === "undefined") return "";
+  const saved = window.localStorage.getItem(which === "xlayer" ? RISK_X : RISK_BSC) ?? "";
+  return /^0x[a-fA-F0-9]{40}$/.test(saved) ? saved : "";
+}
+
+export function pickBook(which: Desk, coin: string): string {
+  if (coin === "bem") {
+    const risk = riskOf(which);
+    if (risk) return risk;
+  }
+  return bookOf(which);
+}
+
+/** Deploys the funding book. Stake, mine and the old perp are not called. */
+export async function deployRisk(from: string, which: Desk): Promise<string> {
+  if (from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("fee");
+  const was = desk;
+  desk = which;
+  try {
+    const args = encodeAbiParameters(
+      [{ type: "address" }, { type: "address" }, { type: "uint256" }],
+      [which === "xlayer" ? X_USDT : BSC.usdt, which === "xlayer" ? KNOWN_XMARK : BSC.pool, which === "xlayer" ? 1_000_000n : 10n ** 18n],
+    );
+    const hash = await send(from, undefined, (RISK_BYTECODE + args.slice(2)) as Hex, 8_000_000n);
+    const receipt = await (await client()).waitForTransactionReceipt({ hash, timeout: 180_000, pollingInterval: 2_000 });
+    const addr = receipt.contractAddress ?? "";
+    if (receipt.status !== "success" || !addr) throw new Error("revert");
+    window.localStorage.setItem(which === "xlayer" ? RISK_X : RISK_BSC, addr);
+    return addr;
+  } finally {
+    desk = was;
+  }
+}
+
+function pinned(perp: string): void {
+  if (perp.toLowerCase() !== bookOf().toLowerCase()) throw new Error("book");
 }
 
 export async function rememberXBem(address: string): Promise<string> {
@@ -541,6 +587,8 @@ export type LiveDeal = {
   eqS: bigint;
   weakL: boolean;
   weakS: boolean;
+  levL: number;
+  levS: number;
 };
 
 export type PerpView = {
@@ -689,6 +737,8 @@ export async function readPerp(perp: string, account: string | null): Promise<Pe
         eqS: eq.eqS,
         weakL: weak(eq.eqL, levL),
         weakS: weak(eq.eqS, levS),
+        levL,
+        levS,
       });
     }
     const first = liveDeals[0];
@@ -792,7 +842,116 @@ async function ensureAllowance(from: string, perp: string, amount: bigint) {
   if (desk === "bsc") await waitReceipt(hash);
 }
 
+export async function bookIsRisk(perp: string): Promise<boolean> {
+  try {
+    const on = await (await client()).readContract({
+      address: perp as Hex,
+      abi: [{ name: "riskBook", type: "function", stateMutability: "pure", inputs: [], outputs: [{ type: "bool" }] }] as const,
+      functionName: "riskBook",
+    });
+    return Boolean(on);
+  } catch {
+    return false;
+  }
+}
+
+async function pullMargin(from: string, perp: string, margin: string, lev: number) {
+  const unit = tokenUnit();
+  const amount = units(margin, tokenDecimals());
+  if (amount < unit || amount > unit * 500n) throw new Error("margin");
+  if (lev < 1 || lev > 1000) throw new Error("lev");
+  const balances = desk === "xlayer" ? { usdt: await readDeskUsdt(from) } : await readBalances(from);
+  if (balances.usdt < amount) throw new Error("usdt");
+  await ensureAllowance(from, perp, amount);
+  return amount;
+}
+
+/** Post-only on the risk book. On the live book, a crossing price is refused and the rest uses open. */
+export async function openPostPerp(from: string, perp: string, long: boolean, margin: string, lev: number, price: string): Promise<Hex> {
+  pinned(perp);
+  const amount = await pullMargin(from, perp, margin, lev);
+  const px = units(price, BSC.usdtDecimals);
+  if (px < 10n ** 16n || px > 100_000n * 10n ** 18n) throw new Error("price");
+  if (await bookIsRisk(perp)) {
+    const data = encodeFunctionData({
+      abi: [{ name: "openPost", type: "function", stateMutability: "nonpayable", inputs: [{ type: "bool" }, { type: "uint256" }, { type: "uint16" }, { type: "uint256" }], outputs: [] }] as const,
+      functionName: "openPost",
+      args: [long, amount, lev, px],
+    });
+    return send(from, perp as Hex, data);
+  }
+  const view = await readPerp(perp, null);
+  const cross = view.quotes.some((quote) => quote.long !== long && quote.price > 0n && (long ? quote.price <= px : quote.price >= px));
+  if (cross) throw new Error("cross");
+  return openPerp(from, perp, long, margin, lev, price);
+}
+
+/** One transaction on the risk book. On the live book, one signature per slice. */
+export async function openScalePerp(from: string, perp: string, long: boolean, margin: string, lev: number, start: string, end: string, count: number): Promise<Hex> {
+  pinned(perp);
+  if (count < 2 || count > 5) throw new Error("amount");
+  const amount = await pullMargin(from, perp, margin, lev);
+  const lo = units(start, BSC.usdtDecimals);
+  const hi = units(end, BSC.usdtDecimals);
+  if (await bookIsRisk(perp)) {
+    const data = encodeFunctionData({
+      abi: [{ name: "openScale", type: "function", stateMutability: "nonpayable", inputs: [{ type: "bool" }, { type: "uint256" }, { type: "uint16" }, { type: "uint256" }, { type: "uint256" }, { type: "uint8" }], outputs: [] }] as const,
+      functionName: "openScale",
+      args: [long, amount, lev, lo, hi, count],
+    });
+    return send(from, perp as Hex, data);
+  }
+  const each = Number(margin) / count;
+  if (!Number.isFinite(each) || each <= 0) throw new Error("amount");
+  let last: Hex = "0x";
+  for (let i = 0; i < count; i++) {
+    const px = Number(start) + ((Number(end) - Number(start)) * i) / (count - 1);
+    last = await openPerp(from, perp, long, String(each), lev, px.toFixed(4));
+  }
+  return last;
+}
+
+export async function openStopPerp(from: string, perp: string, long: boolean, margin: string, lev: number, trigger: string): Promise<Hex> {
+  pinned(perp);
+  if (!(await bookIsRisk(perp))) throw new Error("local");
+  const amount = await pullMargin(from, perp, margin, lev);
+  const px = units(trigger, BSC.usdtDecimals);
+  if (px < 10n ** 16n || px > 100_000n * 10n ** 18n) throw new Error("price");
+  const data = encodeFunctionData({
+    abi: [{ name: "openStop", type: "function", stateMutability: "nonpayable", inputs: [{ type: "bool" }, { type: "uint256" }, { type: "uint16" }, { type: "uint256" }], outputs: [] }] as const,
+    functionName: "openStop",
+    args: [long, amount, lev, px],
+  });
+  return send(from, perp as Hex, data);
+}
+
+export async function openTwapPerp(from: string, perp: string, long: boolean, margin: string, lev: number, slices: number, gap: number): Promise<Hex> {
+  pinned(perp);
+  if (!(await bookIsRisk(perp))) throw new Error("risk");
+  if (slices < 2 || slices > 12 || gap < 30) throw new Error("amount");
+  const amount = await pullMargin(from, perp, margin, lev);
+  const data = encodeFunctionData({
+    abi: [{ name: "openTwap", type: "function", stateMutability: "nonpayable", inputs: [{ type: "bool" }, { type: "uint256" }, { type: "uint16" }, { type: "uint8" }, { type: "uint32" }], outputs: [] }] as const,
+    functionName: "openTwap",
+    args: [long, amount, lev, slices, gap],
+  });
+  return send(from, perp as Hex, data);
+}
+
+export async function armTrailPerp(from: string, perp: string, dealId: bigint, bps: number): Promise<Hex> {
+  pinned(perp);
+  if (!(await bookIsRisk(perp))) throw new Error("local");
+  if (bps < 10 || bps > 5000) throw new Error("price");
+  const data = encodeFunctionData({
+    abi: [{ name: "armTrail", type: "function", stateMutability: "nonpayable", inputs: [{ type: "uint256" }, { type: "uint32" }], outputs: [] }] as const,
+    functionName: "armTrail",
+    args: [dealId, bps],
+  });
+  return send(from, perp as Hex, data);
+}
+
 export async function openPerp(from: string, perp: string, long: boolean, margin: string, lev: number, price: string): Promise<Hex> {
+  pinned(perp);
   const unit = tokenUnit();
   const amount = units(margin, tokenDecimals());
   const px = units(price, BSC.usdtDecimals);
@@ -811,6 +970,7 @@ export async function openPerp(from: string, perp: string, long: boolean, margin
 }
 
 export async function takePerp(from: string, perp: string, quoteId: bigint, margin: string, lev: number, priced: boolean): Promise<Hex> {
+  pinned(perp);
   const unit = tokenUnit();
   const amount = units(margin, tokenDecimals());
   if (amount < unit || amount > unit * 500n) throw new Error("margin");
@@ -827,6 +987,7 @@ export async function takePerp(from: string, perp: string, quoteId: bigint, marg
 }
 
 export async function cancelPerp(from: string, perp: string, quoteId?: bigint): Promise<Hex> {
+  pinned(perp);
   const data =
     quoteId === undefined
       ? encodeFunctionData({ abi, functionName: "cancel" })
@@ -835,6 +996,7 @@ export async function cancelPerp(from: string, perp: string, quoteId?: bigint): 
 }
 
 export async function closePerp(from: string, perp: string, dealId?: bigint): Promise<Hex> {
+  pinned(perp);
   const data =
     dealId === undefined
       ? encodeFunctionData({ abi, functionName: "close" })
@@ -843,6 +1005,7 @@ export async function closePerp(from: string, perp: string, dealId?: bigint): Pr
 }
 
 export async function liquidatePerp(from: string, perp: string, id: string | bigint): Promise<Hex> {
+  pinned(perp);
   const data =
     typeof id === "bigint"
       ? encodeFunctionData({ abi, functionName: "liquidate", args: [id] })

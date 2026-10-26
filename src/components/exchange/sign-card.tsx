@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 type Line = { k: string; v: string; href?: string };
 
 export function SignCard({
@@ -8,6 +10,7 @@ export function SignCard({
   no,
   onYes,
   onNo,
+  auto = false,
 }: {
   title: string;
   lines: Line[];
@@ -16,7 +19,14 @@ export function SignCard({
   no: string;
   onYes: () => void;
   onNo: () => void;
+  auto?: boolean;
 }) {
+  const yesRef = useRef(onYes);
+  yesRef.current = onYes;
+  useEffect(() => {
+    if (auto) yesRef.current();
+  }, [auto]);
+  if (auto) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-3 sm:items-center">
       <section className="max-h-[85vh] w-full max-w-lg overflow-auto border border-gold bg-card p-4 shadow-plate">

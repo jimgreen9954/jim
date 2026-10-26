@@ -40,6 +40,23 @@ function remember(next: string | null) {
   listeners.forEach((cb) => cb(next));
 }
 
+export async function resumeSession(): Promise<void> {
+  if (account || dropped) return;
+  const eth = okxInjected() ?? binanceInjected() ?? host().ethereum ?? null;
+  if (!eth) return;
+  try {
+    const accounts = (await eth.request({ method: "eth_accounts" })) as string[];
+    const next = accounts?.[0];
+    if (!next) return;
+    current = eth;
+    kind = eth === binanceInjected() ? "binance" : "okx";
+    remember(next);
+    eth.on?.("accountsChanged", (rows: string[]) => remember(rows?.[0] ?? null));
+  } catch {
+    /* No stored session. The connect button stays. */
+  }
+}
+
 export function rememberAccount(next: string) {
   remember(next);
 }

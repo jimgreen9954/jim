@@ -28,6 +28,19 @@ export function MineDesk() {
   const [checks, setChecks] = useState<Record<string, CircuitCheck>>({});
 
   useEffect(() => onAccount((next) => setAccount(next)), []);
+  useEffect(() => {
+    const apply = () => {
+      const named = window.location.hash.replace(/^#/, "");
+      if (named === "stake") setSheet("stake");
+      if (named === "vault" || named === "bid") setSheet("bid");
+      if (named === "ash") setSheet("ash");
+      if (named === "mine" || named === "earn" || named === "net") setSheet("claim");
+      setNetworkOpen(named === "net");
+    };
+    apply();
+    window.addEventListener("hashchange", apply);
+    return () => window.removeEventListener("hashchange", apply);
+  }, []);
 
   useEffect(() => {
     let dead = false;
@@ -74,6 +87,12 @@ export function MineDesk() {
   const pendingTape = tape?.seats.reduce((sum, row) => sum + row.pending, 0n) ?? 0n;
   const myWeight = tape?.seats.reduce((sum, row) => sum + (row.on ? BigInt(row.gates) : 0n), 0n) ?? 0n;
   const myShare = tape && tape.weight > 0n ? (tape.daily * myWeight) / tape.weight : 0n;
+  const jump = (hash: string, next: "claim" | "stake" | "ash" | "bid") => {
+    setSheet(next);
+    const url = `#${hash}`;
+    if (window.location.hash !== url) window.history.replaceState(null, "", url);
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  };
   const say = (text: string, failed = false) => { setBad(failed); setNote(text); };
 
   const termParked = tape ? (tape.termHeld > 0n ? tape.termHeld : tape.termPrincipal + tape.termReward) : 0n;
@@ -157,10 +176,10 @@ export function MineDesk() {
         ) : networkOpen ? <p className="border-t border-gold/40 px-3 py-3 text-xs text-ink/55">{zh ? "链上还没读到。失败不会写成 0。" : "The chain has not answered. A miss is not written as zero."}</p> : null}
       </article>
       <SideRail items={[
-        { key: "claim", label: zh ? "领取" : "Claim", on: sheet === "claim", run: () => setSheet("claim") },
-        { key: "stake", label: zh ? "质押" : "Stake", on: sheet === "stake", run: () => setSheet("stake") },
-        { key: "ash", label: zh ? "销毁" : "Burn", on: sheet === "ash", run: () => setSheet("ash") },
-        { key: "bid", label: zh ? "库藏" : "Reserve", on: sheet === "bid", run: () => setSheet("bid") },
+        { key: "claim", label: zh ? "领取" : "Claim", on: sheet === "claim", run: () => jump("earn", "claim") },
+        { key: "stake", label: zh ? "质押" : "Stake", on: sheet === "stake", run: () => jump("stake", "stake") },
+        { key: "ash", label: zh ? "销毁" : "Burn", on: sheet === "ash", run: () => jump("ash", "ash") },
+        { key: "bid", label: zh ? "库藏" : "Reserve", on: sheet === "bid", run: () => jump("vault", "bid") },
       ]}>
       {sheet === "stake" ? <StakeDesk /> : sheet === "ash" ? <BurnDesk /> : sheet === "bid" ? <TapeDesk account={account} zh={zh} /> : (
     <section className="grid items-start gap-4 lg:grid-cols-2">
@@ -214,7 +233,7 @@ export function MineDesk() {
           <a className="underline" href={`${BSC.explorer}/address/0xa84B8D3893De6e9922f2B29bE1e1b115845F5E72`} target="_blank" rel="noreferrer">BSC</a>
           {" · "}
           <a className="underline" href={`${XLAYER.explorer}/address/0x60e62Efa9405d6873C5deaBD4E6CC91c25363952`} target="_blank" rel="noreferrer">X Layer BEM</a>
-          <span className="mt-1 block">{zh ? "本站不经手。TAPE 没有自己的桥，所以这里没有 TAPE 跨链。" : "This site does not custody the bridge. TAPE has no bridge, so there is no TAPE transfer here."}</span>
+          <span className="mt-1 block">{zh ? "本站不经手资产。跨链另收付出金额的千分之二。TAPE 没有自己的桥。" : "This site does not custody the assets. The cross charges 0.20% of the amount. TAPE has no bridge."}</span>
         </p>
       </article>
       <article className="border border-gold bg-card px-3 py-3">
@@ -271,8 +290,8 @@ export function MineDesk() {
               <div className="min-w-0">
                 <p className="font-mono text-sm">#{row.id} · {Number(row.gates).toLocaleString("en-US")} H</p>
                 <p className="mt-1 flex flex-wrap gap-1 text-[11px]">
-                  <Hint label={<span className={`border px-1 no-underline ${checks[row.id] === "ok" ? "border-[#089981] text-[#089981]" : "border-ink/20 text-ink/55"}`}>{checks[row.id] === "ok" ? (zh ? "已核对" : "Checked") : checks[row.id] === "bad" ? (zh ? "未通过" : "Failed") : (zh ? "未核对" : "Unchecked")}</span>} text={verifyCopy(zh)} />
-                  <span className={row.on ? "text-[#089981]" : "text-ink/45"}>{row.on ? (zh ? "开工" : "Live") : (zh ? "未开工" : "Idle")}</span>
+                  <Hint label={<span className={`border px-1 no-underline ${checks[row.id] === "ok" ? "border-up text-up" : "border-ink/20 text-ink/55"}`}>{checks[row.id] === "ok" ? (zh ? "已核对" : "Checked") : checks[row.id] === "bad" ? (zh ? "未通过" : "Failed") : (zh ? "未核对" : "Unchecked")}</span>} text={verifyCopy(zh)} />
+                  <span className={row.on ? "text-up" : "text-ink/45"}>{row.on ? (zh ? "开工" : "Live") : (zh ? "未开工" : "Idle")}</span>
                 </p>
               </div>
               <div className="text-right">

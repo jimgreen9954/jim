@@ -23,7 +23,7 @@ async function readOne(rpc: string, address: Address, name: string): Promise<Fee
     const got = await client.readContract({ address, abi, functionName: "FEE_TO" });
     return { name, got, ok: got.toLowerCase() === FEE_TO.toLowerCase() };
   } catch {
-    return { name, got: null, ok: true };
+    return { name, got: null, ok: false };
   }
 }
 
@@ -37,7 +37,9 @@ export function FeeLockProvider({ children }: { children: ReactNode }) {
       readOne(BSC.rpc, GATE, "晶体管永续"),
     ]).then((rows) => {
       if (dead) return;
-      setLock({ status: rows.some((row) => row.got != null && !row.ok) ? "bad" : "ok", rows });
+      const mismatch = rows.some((row) => row.got != null && !row.ok);
+      const unread = rows.some((row) => row.got == null);
+      setLock({ status: mismatch ? "bad" : unread ? "checking" : "ok", rows });
     });
     return () => {
       dead = true;

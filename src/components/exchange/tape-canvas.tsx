@@ -354,7 +354,7 @@ export function TapeCanvas() {
         <div className="flex gap-2 overflow-x-auto px-2 pb-2 lg:block lg:overflow-visible">
           {shownTargets.map((row) => (
             <button key={row.circuits} type="button" onClick={() => setTarget(row)} className={`mb-1 w-36 shrink-0 border-l-2 px-2 py-1.5 text-left text-sm lg:w-full ${target.circuits.toLowerCase() === row.circuits.toLowerCase() ? "border-ink font-medium" : "border-transparent text-ink/55"}`}>
-              {row.ours ? "TAPELIQUID" : row.name}
+              {row.ours ? (zh ? "TAPELIQUID 电路" : "TAPELIQUID circuit") : `TapeOut · ${row.name}`}
               <span className="block text-[11px] font-normal text-ink/40">{row.chain === "bsc" ? "BSC" : "X Layer"}</span>
             </button>
           ))}
@@ -363,12 +363,7 @@ export function TapeCanvas() {
       <div className="flex min-w-0 flex-col gap-3">
         <div className="border border-gold bg-card px-3 py-3">
           <p className="text-xs tracking-widest text-gold">{zh ? "画布 · 先在浏览器里跑" : "Canvas · runs in the browser first"}</p>
-          <h2 className="font-display text-3xl italic">{zh ? `流片 ${target.name}` : `Tape ${target.name}`}</h2>
-          <p className="mt-1 text-sm leading-relaxed text-ink/80">
-            {zh
-              ? "这两格是这个钱包在当前这台晶体管合约上的余额，每 5 秒重读。换一台就换一份余额。整台处理器还剩多少，不算你的。"
-              : "These two figures are this wallet's balance on the processor you picked. Switching processors switches the balance."}
-          </p>
+          <h2 className="font-display text-3xl italic">{zh ? `流片 ${target.ours ? "TAPELIQUID" : "TapeOut"} ${target.name}` : `Tape ${target.ours ? "TAPELIQUID" : "TapeOut"} ${target.name}`}</h2>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <Hold n={held?.nand ?? null} have={held} need={needN} other={needL} name="NAND" zh={zh} account={account} err={heldErr} />
             <Hold n={held?.latch ?? null} have={held} need={needL} other={needN} name="LATCH" zh={zh} account={account} err={heldErr} />
@@ -377,11 +372,6 @@ export function TapeCanvas() {
         <div className={`border px-3 py-3 ${optimal ? "border-ink bg-foil" : "border-gold bg-card"}`}>
           <p className="text-xs tracking-widest text-gold">{zh ? "最优电路" : "Optimal sheet"}</p>
           <p className="mt-1 font-display text-2xl italic">{zh ? "(A 与 B) 或 (C 与 D)" : "(A and B) or (C and D)"}</p>
-          <p className="mt-1 text-sm leading-relaxed">
-            {zh
-              ? "4 个输入，1 个输出，3 个 NAND，不用 LATCH。两扇 NAND 只能看见 3 个输入，所以 3 扇是最少。点签名只烧这 3 个，再付这台的流片费。"
-              : "4 inputs, 1 output, 3 NAND gates, no latch. Two NAND gates can only see 3 inputs, so 3 is the minimum. Signing burns those 3, plus this processor's tape fee."}
-          </p>
           {optimal ? (
             <p className="mt-2 text-sm">{zh ? "这张已经在画布上。右边勾上「不能撤回」，再签名。" : "This sheet is on the canvas. Confirm the burn, then sign."}</p>
           ) : (

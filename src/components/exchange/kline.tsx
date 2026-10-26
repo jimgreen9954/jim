@@ -11,8 +11,8 @@ type Stroke = { kind: "line" | "zone"; a: Pt; b: Pt; color: string };
 type Drag = { i: number; mode: Grip; origin: Pt; a: Pt; b: Pt };
 
 const PAINTS = ["#2f2a26", "#b5a48e", "#efe6d8", "#f23645", "#089981", "#2962ff"];
-const UP = "#089981";
-const DOWN = "#f23645";
+const UP = "#2fbea6";
+const DOWN = "#f43f5e";
 
 const VB_W = 860;
 const PAD = { l: 8, r: 76, t: 10, b: 22 };
@@ -140,11 +140,11 @@ function OscPane({
   const y = (value: number) => top + ((100 - value) / 100) * OSC;
   return (
     <g>
-      <line x1={PAD.l} x2={VB_W - PAD.r} y1={top} y2={top} stroke="var(--color-gold)" strokeOpacity="0.35" />
+      <line x1={PAD.l} x2={VB_W - PAD.r} y1={top} y2={top} stroke="var(--color-up)" strokeOpacity="0.35" />
       {marks.map((mark) => (
-        <line key={mark} x1={PAD.l} x2={VB_W - PAD.r} y1={y(mark)} y2={y(mark)} stroke="var(--color-gold)" strokeOpacity="0.25" strokeDasharray="2 3" />
+        <line key={mark} x1={PAD.l} x2={VB_W - PAD.r} y1={y(mark)} y2={y(mark)} stroke="var(--color-up)" strokeOpacity="0.25" strokeDasharray="2 3" />
       ))}
-      <path d={pathOf(a, x, y)} fill="none" stroke="var(--color-gold)" strokeWidth="1.25" />
+      <path d={pathOf(a, x, y)} fill="none" stroke="var(--color-up)" strokeWidth="1.25" />
       {b ? <path d={pathOf(b, x, y)} fill="none" stroke="var(--color-ink)" strokeOpacity="0.7" strokeWidth="1.25" /> : null}
       <text x={PAD.l + 2} y={top + 11} fill="var(--color-ink)" fontSize="10" fontFamily="IBM Plex Mono, monospace">
         {label}
@@ -153,24 +153,45 @@ function OscPane({
   );
 }
 
+export type FramePick = { id: string; label: string };
+
 export function Kline({
   bars,
   entry = 0,
   mark = 0,
+  liq = 0,
+  tp = 0,
+  sl = 0,
   supply = null,
   lang,
   desk = "tape",
+  frames,
+  frame,
+  onFrame,
+  onPrice,
 }: {
   bars: Bar[];
   entry?: number;
   mark?: number;
+  liq?: number;
+  tp?: number;
+  sl?: number;
   supply?: number | null;
   lang: "zh" | "en";
   desk?: string;
+  frames?: FramePick[];
+  frame?: string;
+  onFrame?: (id: string) => void;
+  onPrice?: (px: number) => void;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const [py, setPy] = useState<number | null>(null);
   const [tool, setTool] = useState<Tool>("look");
+  const priceRef = useRef(onPrice);
+  priceRef.current = onPrice;
+  const crossRef = useRef(0);
+  const downRef = useRef<{ x: number; y: number } | null>(null);
+  const [draw, setDraw] = useState(false);
   const [ink, setInk] = useState<Stroke[]>([]);
   const [draft, setDraft] = useState<Pt | null>(null);
   const [picked, setPicked] = useState<number | null>(null);
@@ -274,7 +295,42 @@ export function Kline({
     return () => el.removeEventListener("wheel", onWheel);
   }, [all.length]);
 
-  if (!all.length) return null;
+  const frameBar = frames?.length && onFrame ? (
+    <div className="relative z-20 flex items-center gap-1 border-b border-gold/30 px-2 py-2">
+      <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
+        {frames.map((item) => {
+          const on = frame === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              aria-pressed={on}
+              onPointerDown={(event) => {
+                if (event.button !== 0) return;
+                onFrame(item.id);
+              }}
+              className={`h-8 shrink-0 border px-2.5 font-mono text-xs ${on ? "border-transparent bg-ink" : "border-gold/60 text-ink/80"}`}
+            >
+              {item.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  ) : null;
+
+  if (!all.length) {
+    return (
+      <div>
+        {frameBar}
+        <div className="grid min-h-72 place-items-center px-4 py-10">
+          <div className="flex flex-col items-center gap-3">
+            <img src="/mark.jpg" alt="" className="logo-dance size-16 rounded-md object-cover shadow-plate" />
+          </div>
+        </div>
+      </div>
+    );
+  }
   const viewCount = Math.min(all.length, Math.max(8, zoom));
   const maxEdge = Math.max(0, all.length - viewCount);
   const shownEdge = Math.min(Math.max(0, edge), maxEdge);
@@ -295,7 +351,7 @@ export function Kline({
   const highs = rows.map((bar) => bar.h);
   let lo = Math.min(...lows);
   let hi = Math.max(...highs);
-  for (const extra of [entry, mark]) {
+  for (const extra of [entry, mark, liq, tp, sl]) {
     if (extra > 0) {
       lo = Math.min(lo, extra);
       hi = Math.max(hi, extra);
@@ -318,18 +374,19 @@ export function Kline({
   const safeIdx = hover != null && hover >= 0 && hover < n ? hover : n - 1;
   const focus = rows[safeIdx] ?? rows[n - 1];
   const last = rows[n - 1] ?? focus;
-  const earlier = safeIdx > 0 ? rows[safeIdx - 1] : undefined;
   if (!focus || !last) return null;
-  const prev = earlier?.c ?? focus.o;
-  const chg = focus.c - prev;
   const upLast = last.c >= last.o;
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => lo + (hi - lo) * (1 - t));
   const crossY = py != null && py >= PAD.t && py <= PAD.t + PRICE_H ? py : y(focus.c);
   const crossP = hi - ((crossY - PAD.t) / PRICE_H) * span;
+  crossRef.current = crossP;
 
   const guides = [
     entry > 0 ? { p: entry, label: zh ? "开仓" : "Entry", dash: "4 3", color: "var(--color-gold)" } : null,
     mark > 0 ? { p: mark, label: zh ? "标记" : "Mark", dash: "1 3", color: "var(--color-ink)" } : null,
+    liq > 0 ? { p: liq, label: zh ? "强平" : "Liq", dash: "2 2", color: "var(--color-sell, #c23b3b)" } : null,
+    tp > 0 ? { p: tp, label: zh ? "止盈" : "TP", dash: "6 2", color: "#1b6b45" } : null,
+    sl > 0 ? { p: sl, label: zh ? "止损" : "SL", dash: "6 2", color: "var(--color-sell, #c23b3b)" } : null,
   ].filter((item): item is { p: number; label: string; dash: string; color: string } => item != null && item.p >= lo && item.p <= hi);
 
   const times = rows.some((bar) => bar.t)
@@ -404,13 +461,13 @@ export function Kline({
     return null;
   };
 
-  const lean = bias?.side === "long" ? (zh ? "看多" : "Long") : bias?.side === "short" ? (zh ? "看空" : "Short") : zh ? "不明显" : "Unclear";
-
   return (
     <div>
-      <div>
+      {frameBar}
       <div className="flex flex-col gap-2 border-b border-gold/30 px-3 py-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
+          <button type="button" onClick={() => { setDraw((on) => !on); setTool("look"); }} className={`h-8 shrink-0 px-2 text-xs ${draw ? "bg-foil text-up" : "text-ink/55"}`}>{zh ? (draw ? "收起画线" : "画线") : draw ? "Hide" : "Draw"}</button>
+          {draw ? (
           <div className="flex border border-gold/60">
             {(
               [
@@ -438,8 +495,9 @@ export function Kline({
                 )}
               </button>
             ))}
-          </div>
-          <div className="flex flex-wrap items-center gap-1">
+            </div>
+            ) : null}
+            <div className={`flex flex-wrap items-center gap-1 ${draw && tool !== "look" ? "" : "hidden"}`}>
             <button type="button" onClick={() => setInk((list) => list.slice(0, -1))} className="min-h-9 px-2 text-xs text-ink/70">
               {zh ? "撤销" : "Undo"}
             </button>
@@ -464,6 +522,8 @@ export function Kline({
             >
               {biasOn ? (zh ? "收起倾向" : "Hide") : zh ? "倾向" : "Lean"}
             </button>
+          </div>
+          <div className="flex items-center gap-1">
             <button type="button" title={zh ? "放大" : "In"} onClick={() => setZoom((value) => Math.max(8, Math.round(value * 0.7)))} className="grid size-8 place-items-center border border-gold/60 text-sm">+</button>
             <button type="button" title={zh ? "缩小" : "Out"} onClick={() => setZoom((value) => Math.min(Math.max(8, all.length), Math.round(value * 1.4)))} className="grid size-8 place-items-center border border-gold/60 text-sm">−</button>
             <button type="button" title={zh ? "最新" : "Now"} onClick={() => { setZoom(48); setEdge(0); }} className="grid size-8 place-items-center border border-gold/60">
@@ -471,7 +531,7 @@ export function Kline({
             </button>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className={`flex flex-wrap items-center gap-2 ${draw && tool !== "look" ? "" : "hidden"}`}>
           {PAINTS.map((color) => (
             <button
               key={color}
@@ -486,42 +546,9 @@ export function Kline({
               style={{ background: color }}
             />
           ))}
-          <span className="min-w-0 text-xs leading-5 text-ink/50">
-            {draft
-              ? zh
-                ? "再点一次"
-                : "Tap again"
-              : zh
-                ? "空白处左右拖。滚轮或放大缩小改柱子。"
-                : "Drag empty space. Wheel or the buttons zoom."}
-          </span>
         </div>
       </div>
-      <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-3 pt-2 font-mono text-xs tabular-nums">
-        <span className={chg >= 0 ? "text-[#089981]" : "text-[#f23645]"}>
-          {chg >= 0 ? "+" : ""}
-          {fmtPx(chg)} {fmtPct(prev ? chg / prev : 0)}
-        </span>
-        {mark > 0 ? <span>{zh ? "标记" : "Mark"} {fmtPx(mark)}</span> : null}
-        <span style={{ color: focus.c >= focus.o ? UP : DOWN }}>O {fmtPx(focus.o)} H {fmtPx(focus.h)} L {fmtPx(focus.l)} C {fmtPx(focus.c)}</span>
-        {focus.v != null ? (
-          <span>
-            V {fmtSz(focus.v)}
-            {volMa[safeIdx] != null ? ` MA20 ${fmtSz(volMa[safeIdx])} ${focus.v >= (volMa[safeIdx] ?? 0) ? (zh ? "放量" : "Up") : zh ? "缩量" : "Down"}` : ""}
-          </span>
-        ) : null}
-        {ma7[safeIdx] != null ? <span className="text-gold">MA7 {fmtPx(ma7[safeIdx])}</span> : null}
-        {ma25[safeIdx] != null ? <span className="text-ink/60">MA25 {fmtPx(ma25[safeIdx])}</span> : null}
-        <span>{zh ? "市值" : "Mkt"} {supply != null && supply > 0 ? fmtUsd(supply * focus.c) : "—"}</span>
-        <span>RSI {rsiLine[safeIdx] != null ? rsiLine[safeIdx]!.toFixed(1) : "—"}</span>
-        <span>Stoch {stochK[safeIdx] != null ? `${stochK[safeIdx]!.toFixed(1)}/${stochD[safeIdx] != null ? stochD[safeIdx]!.toFixed(1) : "—"}` : "—"}</span>
-        {focus.t && focus.t > 1e9 ? <span className="text-ink">新加坡 {clock(focus.t)}</span> : null}
-      </p>
       <div ref={plotRef} className="relative">
-      <div className="flex items-center gap-2 px-3 pb-1 text-xs">
-        <span className="font-mono tabular-nums text-ink/60">{zh ? `${viewCount} 根` : `${viewCount}`}</span>
-        {focus.t && focus.t > 1e9 ? <span className="bg-ink px-2 py-0.5 font-mono text-paper">新加坡 {clock(focus.t)}</span> : null}
-      </div>
       <svg
         ref={svgRef}
         viewBox={`0 0 ${VB_W} ${VB_H}`}
@@ -567,10 +594,16 @@ export function Kline({
             }),
           );
         }}
-        onPointerUp={() => {
+        onPointerUp={(ev) => {
+          const down = downRef.current;
+          const drawing = dragRef.current;
+          downRef.current = null;
           dragRef.current = null;
           panRef.current = null;
           setLock(null);
+          if (!drawing && down && tool === "look" && priceRef.current && Math.hypot(ev.clientX - down.x, ev.clientY - down.y) < 6 && crossRef.current > 0) {
+            priceRef.current(crossRef.current);
+          }
         }}
         onPointerCancel={() => {
           dragRef.current = null;
@@ -591,6 +624,7 @@ export function Kline({
             return;
           }
           if (tool === "look") {
+            downRef.current = { x: ev.clientX, y: ev.clientY };
             panRef.current = { x: px, edge: shownEdge };
             setLock({ lo, hi });
             setPicked(null);
@@ -610,13 +644,13 @@ export function Kline({
       >
         {ticks.map((p) => (
           <g key={p}>
-            <line x1={PAD.l} x2={VB_W - PAD.r} y1={y(p)} y2={y(p)} stroke="var(--color-gold)" strokeOpacity="0.18" />
+            <line x1={PAD.l} x2={VB_W - PAD.r} y1={y(p)} y2={y(p)} stroke="var(--color-up)" strokeOpacity="0.18" />
             <text x={VB_W - 4} y={y(p) + 3} textAnchor="end" fill="var(--color-ink)" fontSize="11" fontFamily="IBM Plex Mono, monospace">
               {fmtPx(p)}
             </text>
           </g>
         ))}
-        <line x1={PAD.l} x2={VB_W - PAD.r} y1={VOL_TOP - 6} y2={VOL_TOP - 6} stroke="var(--color-gold)" strokeOpacity="0.35" />
+        <line x1={PAD.l} x2={VB_W - PAD.r} y1={VOL_TOP - 6} y2={VOL_TOP - 6} stroke="var(--color-up)" strokeOpacity="0.35" />
         <path d={pathOf(volMa, x, (v) => VOL_TOP + VOL_H - Math.sqrt(Math.max(0, v) / maxV) * VOL_H)} fill="none" stroke="var(--color-ink)" strokeOpacity="0.7" strokeWidth="1.25" />
         <text x={VB_W - 6} y={VOL_TOP + 11} textAnchor="end" fill="var(--color-ink)" fontSize="10" fontFamily="IBM Plex Mono, monospace">
           {fmtSz(focus.v ?? last.v ?? 0)}
@@ -632,7 +666,7 @@ export function Kline({
           </g>
         ))}
         <path d={pathOf(ma25, x, y)} fill="none" stroke="var(--color-ink)" strokeOpacity="0.45" strokeWidth="1.25" />
-        <path d={pathOf(ma7, x, y)} fill="none" stroke="var(--color-gold)" strokeWidth="1.25" />
+        <path d={pathOf(ma7, x, y)} fill="none" stroke="var(--color-up)" strokeWidth="1.25" />
         {rows.map((bar, i) => {
           if (!bar || !Number.isFinite(bar.c) || !Number.isFinite(bar.o)) return null;
           const up = bar.c >= bar.o;
@@ -746,17 +780,6 @@ export function Kline({
         )}
       </svg>
       </div>
-      </div>
-      {biasOn ? (
-        <p className="px-3 py-1 text-right text-xs text-ink/55">
-          {(() => {
-            const spot = all[all.length - 1]?.c ?? 0;
-            const guess = bias && bias.price > 0 && spot > 0 && Math.abs(bias.price - spot) / spot <= 0.04 ? bias.price : 0;
-            if (!guess) return null;
-            return `${zh ? "形态备注 · 非报价 · 非建议" : "Shape note · not a quote · not advice"} · ${lean} ${fmtPx(guess)}`;
-          })()}
-        </p>
-      ) : null}
     </div>
   );
 }
