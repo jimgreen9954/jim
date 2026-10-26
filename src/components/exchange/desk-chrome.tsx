@@ -161,9 +161,10 @@ export function MarketSheet({
   ];
 
   return (
-    <div className="fixed inset-0 z-40 bg-black/50" onClick={onClose}>
+    <div className="fixed inset-x-0 bottom-0 top-[calc(env(safe-area-inset-top)+6.35rem)] z-[60]" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/50" />
       <div
-        className="pop-in absolute left-2 right-2 top-16 max-h-[min(34rem,calc(100dvh-6rem))] overflow-hidden border border-gold bg-card shadow-plate sm:left-4 sm:right-auto sm:w-[min(52rem,calc(100vw-2rem))]"
+        className="pop-in absolute left-2 right-2 top-2 max-h-[min(34rem,calc(100dvh-8rem))] overflow-hidden border border-gold bg-card shadow-plate sm:left-4 sm:right-auto sm:w-[min(52rem,calc(100vw-2rem))]"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center gap-2 border-b border-gold/40 p-2">

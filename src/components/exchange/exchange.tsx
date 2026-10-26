@@ -10,7 +10,7 @@ import { TraceChart } from "@/components/exchange/chart";
 import { DiePanel } from "@/components/exchange/die";
 import { Ticket } from "@/components/exchange/ticket";
 import { OfficialDesk } from "@/components/exchange/official-desk";
-import { DeskHome, rememberDesk, rememberLp } from "@/components/exchange/desk-home";
+import { DeskHome, rememberDesk } from "@/components/exchange/desk-home";
 import { TransistorDesk } from "@/components/exchange/transistor-desk";
 import { TapeCanvas } from "@/components/exchange/tape-canvas";
 import { ConnectButton } from "@/components/exchange/wallet-bar";
@@ -678,8 +678,6 @@ function Header({ floor, desk, shop, place, night, setNight, setFloor, setDesk, 
           {item(zh ? "现货" : "Spot", floor === "desk" && desk === "spot", () => { rememberDesk({ kind: "tape", market: 0 }); window.dispatchEvent(new CustomEvent("tape-home", { detail: "tape" })); go("desk", "spot"); setDesk("spot"); })}
           {item(zh ? "合约" : "Perps", floor === "desk" && desk === "perp", () => { rememberDesk({ kind: "perp", chain: "xlayer", coin: "tape" }); window.dispatchEvent(new CustomEvent("tape-home", { detail: "tape-perp" })); go("desk", "perp"); setDesk("perp"); })}
           {item(zh ? "赚取" : "Earn", claimOn, () => go("mine", "earn"))}
-          {item(zh ? "全网" : "Network", floor === "mine" && place === "net", () => go("mine", "net"))}
-          {item(zh ? "流动性" : "Liquidity", floor === "desk" && place === "liq", () => { rememberLp(); window.dispatchEvent(new CustomEvent("tape-lp")); go("desk", "liq"); setDesk("spot"); })}
           <BridgeDock />
           <InviteDock />
           {item(zh ? "规则" : "Rules", floor === "rules", () => go("rules", "rules"))}
