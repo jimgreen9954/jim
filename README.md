@@ -26,6 +26,9 @@ Spot fills on PancakeSwap V3 (BSC). BEM uses the 1% pool. BNB uses the 0.01% poo
 
 The rulebook is the whitepaper on the site: [/whitepaper](https://trade.yizhantoken.com/whitepaper). It wins over this file. If a rule changes, update the page and this README the same day.
 
+X: https://x.com/TAPELIQUID
+Telegram: https://t.me/+JN0c8XGQpIkxNTRh
+
 The fee address on the page, in the contracts, and here is `0x823b9F6A93Ac44Ce5A469823A336c15b6117054D`. The mark accepts a price only from the fee address. Each post moves at most 0.5 percent and waits at least 30 seconds. Settlement uses a 10-minute average. Spot is PancakeSwap on BSC, except OKB, which is PotatoSwap on X Layer. The desk fee is 0.20% of the input, on top of the pool fee. The two perpetuals are separate contracts. The wafer and tape-out are on X Layer: minting spends OKB, tape-out burns NAND and LATCH and pays the protocol fee (0.0013 OKB), not the desk fee address. One sheet stores at most 18,000 NAND or 30,000 LATCH. A larger netlist reverts and the transistors stay put. TAPE is deployed. Its mine has no admin and emits 7,200 a day from deployment, weighted by gate count. The written schedule, a start at 1,000 and one later change to 7,200, is not in that contract. The TAPE pool and the wafer and circuit lock have no admin, no upgrade, and no rescue. An add that does not match the pool ratio refunds the extra. A circuit cannot be locked twice. Official BEM still bridges at tapeout.net/bridge. This site does not custody that bridge. Official transistor and circuit spot follow the tapeout.net snapshot and settle on BSC; the extra 0.20% is paid first and is not returned if the official fill fails. Account reads balances and prices. It does not custody. Maker rewards and points have not started.
 
 ## Run

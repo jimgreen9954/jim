@@ -100,6 +100,20 @@
 .nav-item:hover, .nav-item.active { background: var(--soft); color: var(--ink); }
 .rail-gap { flex: 1; min-height: 12px; }
 a.nav-item { text-decoration: none; }
+.soc {
+  display: none;
+  align-items: center;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 12px;
+  text-decoration: none;
+  flex-shrink: 0;
+}
 .shell { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .topbar {
   height: 72px;
@@ -1399,13 +1413,15 @@ tbody tr:hover { background: var(--soft); }
   .shell { padding-top: calc(46px + env(safe-area-inset-top)); }
   .search { height: 30px; padding: 0 6px; }
   .search input, .search input::placeholder { font-size: clamp(11px, 3vw, 13px); }
-  #btn-theme, #btn-lang, .signin, .signin.out {
+  #btn-theme, #btn-lang, .signin, .signin.out, .soc {
     font-size: clamp(10px, 2.6vw, 12px);
     height: 28px;
     line-height: 28px;
     padding: 0 6px;
     max-width: 18vw;
   }
+  .rail-social { display: none; }
+  .soc { display: inline-flex; }
   .hero-meta h2 { font-size: 20px; }
   .pad { padding: 12px 12px 24px; }
   .rank { order: 0; }
@@ -1466,6 +1482,14 @@ tbody tr:hover { background: var(--soft); }
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 3h8l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v5h5M8 13h8M8 17h6"/></svg>
     <span data-i18n="navPaper">白皮书</span>
   </a>
+  <a class="nav-item rail-social" href="https://x.com/TAPELIQUID" target="_blank" rel="noreferrer">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14.7 10.3 22.4 2h-1.8l-6.7 7.2L8.6 2H2l8.1 11.1L2 22h1.8l7.1-7.6L15.4 22H22l-7.3-11.7Zm-2.5 2.7-.8-1.1L4.5 3.3h2.8l5.3 7 .8 1.1 6.9 9.3h-2.8l-5.3-7.1Z"/></svg>
+    <span>X</span>
+  </a>
+  <a class="nav-item rail-social" href="https://t.me/+JN0c8XGQpIkxNTRh" target="_blank" rel="noreferrer">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.8 4.3 18.6 20c-.2 1-.9 1.3-1.8.8l-5-3.7-2.4 2.3c-.3.3-.5.5-1 .5l.4-5.1 9.3-8.4c.4-.4-.1-.6-.6-.2L6.3 13.1 1.4 11.6c-1.1-.3-1.1-1.1.2-1.6L20.4 3.2c.9-.3 1.6.2 1.4 1.1Z"/></svg>
+    <span>Telegram</span>
+  </a>
 </aside>
 
 <div class="shell">
@@ -1479,6 +1503,8 @@ tbody tr:hover { background: var(--soft); }
       <input data-i18n-ph="searchPh" placeholder="搜索系列 / NFT / 钱包">
       <kbd>/</kbd>
     </label>
+    <a class="soc" href="https://x.com/TAPELIQUID" target="_blank" rel="noreferrer">X</a>
+    <a class="soc" href="https://t.me/+JN0c8XGQpIkxNTRh" target="_blank" rel="noreferrer">TG</a>
     <button class="theme" id="btn-lang" type="button">EN</button>
     <button class="theme" id="btn-theme" type="button">深夜</button>
     <div class="account">
