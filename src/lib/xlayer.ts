@@ -82,6 +82,30 @@ const xlayer = defineChain({
 
 const client = createPublicClient({ chain: xlayer, transport: http(XLAYER.rpc) });
 
+export const xClient = client;
+
+const xRpcs = ["https://xlayer.drpc.org", XLAYER.rpc, "https://xlayerrpc.okx.com"];
+
+export async function xRpc(body: unknown): Promise<string> {
+  let last = "rpc";
+  for (const url of xRpcs) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(8_000),
+      });
+      const json = (await res.json()) as { result?: string; error?: { message?: string } };
+      if (res.ok && json.result) return json.result;
+      last = json.error?.message || `rpc ${res.status}`;
+    } catch (err) {
+      last = err instanceof Error ? err.message : "rpc";
+    }
+  }
+  throw new Error(last);
+}
+
 export async function readDeployFee(): Promise<bigint> {
   return client.readContract({
     address: XLAYER.factory,

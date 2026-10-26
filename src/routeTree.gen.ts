@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CircuitPunkRouteImport } from './routes/circuit-punk'
 import { Route as WhitepaperRouteImport } from './routes/whitepaper'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CircuitPunkRoute = CircuitPunkRouteImport.update({
+  id: '/circuit-punk',
+  path: '/circuit-punk',
   getParentRoute: () => rootRouteImport,
 } as any)
 const WhitepaperRoute = WhitepaperRouteImport.update({
@@ -25,27 +31,31 @@ const WhitepaperRoute = WhitepaperRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/circuit-punk': typeof CircuitPunkRoute
   '/whitepaper': typeof WhitepaperRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/circuit-punk': typeof CircuitPunkRoute
   '/whitepaper': typeof WhitepaperRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/circuit-punk': typeof CircuitPunkRoute
   '/whitepaper': typeof WhitepaperRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/whitepaper'
+  fullPaths: '/' | '/circuit-punk' | '/whitepaper'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/whitepaper'
-  id: '__root__' | '/' | '/whitepaper'
+  to: '/' | '/circuit-punk' | '/whitepaper'
+  id: '__root__' | '/' | '/circuit-punk' | '/whitepaper'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CircuitPunkRoute: typeof CircuitPunkRoute
   WhitepaperRoute: typeof WhitepaperRoute
 }
 
@@ -56,6 +66,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/circuit-punk': {
+      id: '/circuit-punk'
+      path: '/circuit-punk'
+      fullPath: '/circuit-punk'
+      preLoaderRoute: typeof CircuitPunkRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/whitepaper': {
@@ -70,6 +87,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CircuitPunkRoute: CircuitPunkRoute,
   WhitepaperRoute: WhitepaperRoute,
 }
 export const routeTree = rootRouteImport

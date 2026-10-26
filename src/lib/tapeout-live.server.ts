@@ -1,4 +1,4 @@
-import type { LiveTransistor, TapeoutLive } from "./tapeout-live";
+import type { LiveTransistor, ProtocolNftFeed, TapeoutLive } from "./tapeout-live";
 
 const MARKET = "https://tapeout.net/market.json";
 const POD = "https://tapeout.net/pod/pod-stats.json";
@@ -11,7 +11,7 @@ const DEX = `https://api.dexscreener.com/latest/dex/tokens/${BEM_TOKEN}`;
 
 type Trade = { ts: number; price: string; qty: string };
 type Token = { transistors: string; tokenId: number; name: string; processor: string };
-type Bid = { transistors: string; tokenId: number; price: string; remaining: string };
+type Bid = { transistors: string; tokenId: number; price: string; remaining: string; id?: number };
 type MarketFile = {
   generatedAt?: string;
   tokens?: Token[];
@@ -115,6 +115,7 @@ type Bucket = {
   rawPrints: { ts: number; wei: bigint; qty: number }[];
   bidWei: bigint;
   bidQty: number;
+  bidId: number | null;
 };
 
 export async function loadTapeoutLive(): Promise<TapeoutLive> {
@@ -187,6 +188,7 @@ export async function loadTapeoutLive(): Promise<TapeoutLive> {
       rawPrints: [],
       bidWei: 0n,
       bidQty: 0,
+      bidId: null,
     };
     buckets.set(id, next);
     return next;
@@ -235,6 +237,7 @@ export async function loadTapeoutLive(): Promise<TapeoutLive> {
     if (price > acc.bidWei) {
       acc.bidWei = price;
       acc.bidQty = Number(rem);
+      acc.bidId = typeof bid.id === "number" ? bid.id : null;
     } else if (price === acc.bidWei) {
       acc.bidQty += Number(rem);
     }
@@ -271,6 +274,9 @@ export async function loadTapeoutLive(): Promise<TapeoutLive> {
       bidBnb,
       bidBem: bidQuote.bem,
       bidQty: acc.bidQty,
+      token: acc.id.slice(0, acc.id.lastIndexOf("-")),
+      tokenId: acc.tokenId,
+      bidId: acc.bidId,
       prints,
     });
   }
@@ -295,4 +301,62 @@ export async function loadTapeoutLive(): Promise<TapeoutLive> {
   };
   cache = { at: Date.now(), ttl: bem ? 45_000 : 8_000, data };
   return data;
+}
+
+type Sale = {
+  circuit_address?: string;
+  token_id?: string;
+  gross_wei?: string;
+  tx_hash?: string;
+  block_timestamp?: number;
+};
+type MarketOverview = { recent_sales?: Sale[]; totals_computed_at?: string };
+
+let nftCache: { at: number; data: ProtocolNftFeed } | null = null;
+
+export async function loadProtocolNfts(): Promise<ProtocolNftFeed> {
+  if (nftCache && Date.now() - nftCache.at < 60_000) return nftCache.data;
+  try {
+    const body = await grab<MarketOverview>("https://tapeout.work/api/v1/market-overview");
+    const seen = new Set<string>();
+    const circuits: ProtocolNftFeed["circuits"] = [];
+    for (const sale of body.recent_sales ?? []) {
+      const circuit = (sale.circuit_address ?? "").toLowerCase();
+      const tokenId = sale.token_id ?? "";
+      if (!/^0x[0-9a-f]{40}$/.test(circuit) || !/^\d+$/.test(tokenId)) continue;
+      const id = `${circuit}-${tokenId}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      let wei = 0n;
+      try {
+        wei = BigInt(sale.gross_wei ?? "0");
+      } catch {
+        wei = 0n;
+      }
+      circuits.push({
+        id,
+        tokenId,
+        circuit,
+        grossBnb: weiBnb(wei),
+        tx: sale.tx_hash ?? "",
+        at: Number(sale.block_timestamp) || 0,
+      });
+      if (circuits.length >= 8) break;
+    }
+    const data: ProtocolNftFeed = {
+      ok: circuits.length > 0,
+      error: circuits.length > 0 ? null : "官网这次没有带回电路成交",
+      asOf: body.totals_computed_at ?? null,
+      circuits,
+    };
+    nftCache = { at: Date.now(), data };
+    return data;
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "读不到协议电路",
+      asOf: null,
+      circuits: [],
+    };
+  }
 }
