@@ -112,11 +112,6 @@ export function LpPanel() {
   return (
     <div className="grid gap-0 lg:grid-cols-12">
       <div className="border-b border-gold/40 p-3 lg:col-span-7 lg:border-r lg:border-b-0">
-        <p className="text-sm leading-7 text-ink/80">
-          {zh
-            ? "只填一边。另一边按池子现价配平。用户和机构用同一笔签名，没有单独的大户入口。仓位在你的钱包里。TAPE 池不再接受新的加池。"
-            : "Type one side. The other matches the pool price, full range. Against BEM: BNB, BTC, gold, and the stocks on this desk. The first deposit opens a missing pool at the two USDT prices. The annualized figure uses this pool's real fees over the last few hours. The position stays in your wallet and can be removed any time. OKB is on X Layer and cannot share a pool with BEM. A large wallet uses this same signature. There is no separate institution gate. The TAPE pool does not take a new deposit."}
-        </p>
         <div className="mt-3 grid grid-cols-3">
           {(
             [
@@ -194,15 +189,9 @@ export function LpPanel() {
           <span className="block text-xs tracking-widest text-gold">{zh ? "按现价还要" : "Also, at the pool price"}</span>
           <span className="font-mono text-2xl tabular-nums">{shown ? `${shown.asset} ${zh ? book.zh : book.en}` : "—"}</span>
         </p>
-        {quote?.creating ? <p className="text-sm text-ink/70">{zh ? "这口池还没有。第一笔会先建池，再建你的仓位。" : "This pool does not exist yet. The first deposit creates it, then your position."}</p> : null}
         <p className="font-mono text-xs text-ink/70">
           {zh ? "台费" : "Fee"} {shown ? `${shown.feeQuote} ${book.quoteZh} + ${shown.feeAsset} ${zh ? book.zh : book.en}` : "—"}
-          {" · "}
-          {zh ? "千分之二，和现货同一地址" : "0.20%, same address as spot"}
         </p>
-        <button type="button" className="text-left font-mono text-xs underline decoration-gold" onClick={() => void navigator.clipboard?.writeText(FEE_TO)}>
-          {FEE_TO}
-        </button>
         {!account ? (
           <button
             type="button"

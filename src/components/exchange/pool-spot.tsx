@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { formatUnits, type Hex } from "viem";
 import { Kline, type Bar } from "@/components/exchange/kline";
 import { PairChevron } from "@/components/exchange/desk-chrome";
+import { PhoneChrome, wantedPane, type PhonePane } from "@/components/exchange/phone-desk";
 import { CoinMark } from "@/components/exchange/coin-mark";
 import { announceFill, freshEnough, readPrefs, useDeskPrefs } from "@/lib/desk-prefs";
 import { tapePoolCandles, readOpenBook, type OpenBook } from "@/lib/tape-open-candles";
@@ -9,7 +10,10 @@ import type { CandleFrame } from "@/lib/bem-ohlcv";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import { connectXLayer } from "@/lib/xlayer";
 import { useExchange } from "@/lib/exchange-store";
-import { poolAmount, poolBalances, poolText, previewPool, swapPool, type PoolQuote } from "@/lib/tape-open-swap";
+import { fmt } from "@/lib/format";
+import { TradeLog } from "@/components/exchange/trade-foot";
+import { poolAmount, poolBalances, poolText, previewPool, swapPool, buyOkbWithUsdt0, quoteUsdt0Okb, sellOkbForUsdt0, type PoolQuote } from "@/lib/tape-open-swap";
+import type { TapePair } from "@/components/exchange/desk-chrome";
 
 const FRAMES: [CandleFrame, string, string][] = [
   ["15s", "15秒", "15s"], ["1m", "1分", "1m"], ["5m", "5分", "5m"], ["15m", "15分", "15m"],
@@ -26,6 +30,7 @@ type Order = {
   kind: "limit" | "chase" | "twap";
   side: Side;
   quote: PoolQuote;
+  pair?: TapePair;
   left: string;
   price: number;
   maxPct: number;
@@ -52,8 +57,8 @@ function saveOrders(rows: Order[]) {
 
 function money(n: number): string {
   if (!(n > 0) || !Number.isFinite(n)) return "—";
-  if (n >= 1000) return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
-  if (n >= 1) return n.toLocaleString("en-US", { maximumFractionDigits: 4 });
+  if (n >= 1000) return fmt(n, 2);
+  if (n >= 1) return fmt(n, 4);
   return n.toPrecision(4);
 }
 
@@ -91,11 +96,10 @@ function slices(total: bigint, n: number, skew: number): bigint[] {
 
 type Level = { px: number; size: number; quote: number };
 
-function walk(tapeRaw: bigint, quoteRaw: bigint, quoteUsd: number, buy: boolean): Level[] {
+function walk(tapeRaw: bigint, quoteRaw: bigint, quoteDec: number, buy: boolean): Level[] {
   const tape0 = Number(formatUnits(tapeRaw, 8));
-  const quoteDec = quoteRaw > 10n ** 12n ? 18 : 8;
   const quote0 = Number(formatUnits(quoteRaw, quoteDec));
-  if (!(tape0 > 0 && quote0 > 0 && quoteUsd > 0)) return [];
+  if (!(tape0 > 0 && quote0 > 0)) return [];
   const rows: Level[] = [];
   let t = tape0;
   let q = quote0;
@@ -105,13 +109,13 @@ function walk(tapeRaw: bigint, quoteRaw: bigint, quoteUsd: number, buy: boolean)
     if (buy) {
       const net = (size * q) / (t - size);
       const paid = net / 0.998;
-      rows.push({ px: (paid * quoteUsd) / size, size, quote: paid * quoteUsd });
+      rows.push({ px: paid / size, size, quote: paid });
       t -= size;
       q += net;
     } else {
       const net = size * 0.998;
       const out = (q * net) / (t + net);
-      rows.push({ px: (out * quoteUsd) / size, size, quote: out * quoteUsd });
+      rows.push({ px: out / size, size, quote: out });
       t += net;
       q -= out;
     }
@@ -119,7 +123,12 @@ function walk(tapeRaw: bigint, quoteRaw: bigint, quoteUsd: number, buy: boolean)
   return rows;
 }
 
-export function PoolSpot({ onMarkets, onOtc }: { onMarkets: () => void; onOtc: () => void }) {
+function scaleLevel(level: Level, unit: number): Level {
+  if (!(unit > 0)) return { px: 0, size: level.size, quote: 0 };
+  return { px: level.px * unit, size: level.size, quote: level.quote * unit };
+}
+
+export function PoolSpot({ onMarkets, onOtc, pair = "usdt", onPair }: { onMarkets: () => void; onOtc: () => void; pair?: TapePair; onPair?: (next: TapePair) => void }) {
   const zh = useExchange((s) => s.lang) !== "en";
   const prefs = useDeskPrefs();
   const [account, setAccount] = useState<string | null>(currentAccount());
@@ -129,7 +138,18 @@ export function PoolSpot({ onMarkets, onOtc }: { onMarkets: () => void; onOtc: (
   const [mode, setMode] = useState<Mode>("market");
   const [menu, setMenu] = useState(false);
   const [side, setSide] = useState<Side>("buy");
-  const [quote, setQuote] = useState<PoolQuote>(0);
+  const [phone, setPhone] = useState<PhonePane>(wantedPane());
+  useEffect(() => {
+    const chart = () => setPhone("chart");
+    const trade = () => setPhone("ticket");
+    window.addEventListener("tape-chart", chart);
+    window.addEventListener("tape-trade", trade);
+    return () => {
+      window.removeEventListener("tape-chart", chart);
+      window.removeEventListener("tape-trade", trade);
+    };
+  }, []);
+  const [pairMenu, setPairMenu] = useState(false);
   const [amount, setAmount] = useState("");
   const [price, setPrice] = useState("");
   const [chase, setChase] = useState("");
@@ -145,7 +165,7 @@ export function PoolSpot({ onMarkets, onOtc }: { onMarkets: () => void; onOtc: (
   const [tab, setTab] = useState<"book" | "tape">("book");
   const [dock, setDock] = useState<"bal" | "rest" | "fills">("rest");
   const [orders, setOrders] = useState<Order[]>(() => loadOrders());
-  const [bal, setBal] = useState<{ bem: bigint; okb: bigint; tape: bigint } | null>(null);
+  const [bal, setBal] = useState<{ bem: bigint; okb: bigint; tape: bigint; usdt: bigint } | null>(null);
   const [tip, setTip] = useState<Tip | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
@@ -153,6 +173,8 @@ export function PoolSpot({ onMarkets, onOtc }: { onMarkets: () => void; onOtc: (
   const [armed, setArmed] = useState(false);
   const ordersRef = useRef(orders);
   const bookRef = useRef(book);
+  const pairRef = useRef<TapePair>(pair);
+  const midRef = useRef(0);
   const lock = useRef(false);
   ordersRef.current = orders;
   bookRef.current = book;
@@ -163,12 +185,12 @@ export function PoolSpot({ onMarkets, onOtc }: { onMarkets: () => void; onOtc: (
     let dead = false;
     const pull = () => {
       readOpenBook().then((row) => { if (!dead) setBook(row); }).catch(() => undefined);
-      tapePoolCandles(frame).then((rows) => { if (!dead) setBars(rows); }).catch(() => undefined);
+      tapePoolCandles(frame, pair).then((rows) => { if (!dead) setBars(rows); }).catch(() => undefined);
     };
     pull();
     const id = window.setInterval(pull, 12_000);
     return () => { dead = true; window.clearInterval(id); };
-  }, [frame]);
+  }, [frame, pair]);
 
   useEffect(() => {
     let dead = false;
@@ -192,24 +214,61 @@ export function PoolSpot({ onMarkets, onOtc }: { onMarkets: () => void; onOtc: (
     saveOrders(rows);
   };
 
-  const tapeReserve = quote === 0 ? book?.bemTape ?? 0n : book?.okbTape ?? 0n;
-  const quoteReserve = quote === 0 ? book?.bemQuote ?? 0n : book?.okbQuote ?? 0n;
-  const quoteUsd = quote === 0 ? book?.bemUsd ?? 0 : book?.okbUsd ?? 0;
-  const held = !bal ? 0n : side === "sell" ? bal.tape : quote === 0 ? bal.bem : bal.okb > 2_000_000_000_000_000n ? bal.okb - 2_000_000_000_000_000n : 0n;
-  const cap = side === "sell" ? held : maxBuy(tapeReserve, quoteReserve, held);
+  const active: TapePair = pair;
+  const quoteSym = active === "usdt" ? "USDT0" : active === "bem" ? "BEM" : "OKB";
+  const quoteDec = active === "usdt" ? 6 : active === "bem" ? 8 : 18;
+  const openQuote: PoolQuote = active === "okb" ? 1 : 0;
+  const tapeReserve = active === "bem" ? book?.bemTape ?? 0n : active === "okb" ? book?.okbTape ?? 0n : 0n;
+  const quoteReserve = active === "bem" ? book?.bemQuote ?? 0n : active === "okb" ? book?.okbQuote ?? 0n : 0n;
+  const buyHeld = !bal ? 0n : active === "usdt" ? bal.usdt : active === "bem" ? bal.bem : bal.okb > 2_000_000_000_000_000n ? bal.okb - 2_000_000_000_000_000n : 0n;
 
   const fillPct = (next: number) => {
     setPct(next);
-    if (cap <= 0n) return;
-    setAmount(poolText((cap * BigInt(next)) / 100n, 8));
+    if (side === "sell") {
+      if (!bal || bal.tape <= 0n) return;
+      setAmount(poolText((bal.tape * BigInt(next)) / 100n, 8));
+      return;
+    }
+    if (active === "usdt") {
+      const px = midRef.current;
+      if (!(px > 0) || buyHeld <= 0n) return;
+      const tape = BigInt(Math.floor(Number(formatUnits(buyHeld, 6)) / px * 1e8 * next / 100));
+      if (tape > 0n) setAmount(poolText(tape, 8));
+      return;
+    }
+    const room = maxBuy(tapeReserve, quoteReserve, buyHeld);
+    if (room <= 0n) return;
+    setAmount(poolText((room * BigInt(next)) / 100n, 8));
   };
 
-  const asks = useMemo(() => walk(tapeReserve, quoteReserve, quoteUsd, true), [tapeReserve, quoteReserve, quoteUsd]);
-  const bids = useMemo(() => walk(tapeReserve, quoteReserve, quoteUsd, false), [tapeReserve, quoteReserve, quoteUsd]);
+  const asks = useMemo(() => {
+    if (active !== "usdt") return walk(tapeReserve, quoteReserve, quoteDec, true);
+    const bem = walk(book?.bemTape ?? 0n, book?.bemQuote ?? 0n, 8, true).map((level) => scaleLevel(level, book?.bemUsd ?? 0));
+    const okb = walk(book?.okbTape ?? 0n, book?.okbQuote ?? 0n, 18, true).map((level) => scaleLevel(level, book?.okbUsd ?? 0));
+    return [...bem, ...okb].filter((level) => level.px > 0).sort((a, b) => a.px - b.px);
+  }, [active, tapeReserve, quoteReserve, quoteDec, book]);
+  const bids = useMemo(() => {
+    if (active !== "usdt") return walk(tapeReserve, quoteReserve, quoteDec, false);
+    const bem = walk(book?.bemTape ?? 0n, book?.bemQuote ?? 0n, 8, false).map((level) => scaleLevel(level, book?.bemUsd ?? 0));
+    const okb = walk(book?.okbTape ?? 0n, book?.okbQuote ?? 0n, 18, false).map((level) => scaleLevel(level, book?.okbUsd ?? 0));
+    return [...bem, ...okb].filter((level) => level.px > 0).sort((a, b) => b.px - a.px);
+  }, [active, tapeReserve, quoteReserve, quoteDec, book]);
   const askView = useMemo(() => [...asks].reverse(), [asks]);
   const bestAsk = asks[0]?.px ?? 0;
   const bestBid = bids[0]?.px ?? 0;
-  const mid = book?.price ?? 0;
+  const mid = active === "usdt"
+    ? book?.price ?? 0
+    : (() => {
+        const tape0 = Number(formatUnits(tapeReserve, 8));
+        const quote0 = Number(formatUnits(quoteReserve, quoteDec));
+        return tape0 > 0 && quote0 > 0 ? quote0 / tape0 : 0;
+      })();
+  pairRef.current = active;
+  midRef.current = mid;
+  const buyTapeN = active === "usdt"
+    ? (mid > 0 ? Number(formatUnits(buyHeld, 6)) / mid : 0)
+    : Number(formatUnits(maxBuy(tapeReserve, quoteReserve, buyHeld), 8));
+  const buyTapeLabel = buyTapeN > 0 ? buyTapeN.toLocaleString("en-US", { maximumFractionDigits: 4 }) : "0";
   const spread = bestAsk > 0 && bestBid > 0 ? bestAsk - bestBid : 0;
   const maxAskSz = Math.max(0.0001, ...askView.map((level) => level.size));
   const maxBidSz = Math.max(0.0001, ...bids.map((level) => level.size));
@@ -224,7 +283,7 @@ export function PoolSpot({ onMarkets, onOtc }: { onMarkets: () => void; onOtc: (
     try {
       const from = account ?? await connectXLayer();
       setAccount(from);
-      await swapPool(from, quote, true, bal.tape);
+      await swapTape(from, "sell", pairRef.current, bal.tape);
       announceFill(zh ? "零钱已卖出" : "Dust sold", "TAPE");
       setBal(await poolBalances(from as Hex));
       setNote("");
@@ -238,13 +297,57 @@ export function PoolSpot({ onMarkets, onOtc }: { onMarkets: () => void; onOtc: (
   const fail = (err: unknown) => {
     const message = err instanceof Error ? err.message : "";
     setBad(true);
-    if (message === "fee") setNote(zh ? "收费地址不对，没有签名。" : "Fee address mismatch. Not signed.");
+    if (message === "leg") setNote(zh ? "前一笔已经成交，后一笔没有。币还在这个钱包里。" : "The first leg filled. The second did not. The coin is still in this wallet.");
+    else if (message === "fee") setNote(zh ? "收费地址不对，没有签名。" : "Fee address mismatch. Not signed.");
     else if (message === "gas") setNote(zh ? "OKB 要留下手续费。" : "Keep OKB for gas.");
     else if (message === "amount") setNote(zh ? "数量不对。" : "Size is not valid.");
     else setNote(readPrefs().verboseErrors && message ? message : (zh ? "没有成交。" : "No fill."));
   };
 
-  const swapTape = async (from: string, nextSide: Side, nextQuote: PoolQuote, want: bigint) => {
+  const swapTape = async (from: string, nextSide: Side, which: TapePair, want: bigint) => {
+    if (which === "usdt") {
+      let live = bookRef.current;
+      if (!live || live.okbTape <= 0n) {
+        live = await readOpenBook();
+        bookRef.current = live;
+      }
+      const tape = live.okbTape;
+      const quoteSide = live.okbQuote;
+      if (nextSide === "sell") {
+        const okbOut = await previewPool(1, true, want);
+        if (okbOut <= 0n) throw new Error("empty");
+        await swapPool(from, 1, true, want);
+        try {
+          await sellOkbForUsdt0(from, (okbOut * 99n) / 100n);
+        } catch {
+          throw new Error("leg");
+        }
+        return;
+      }
+      let okbIn = quoteInForTape(tape, quoteSide, want);
+      const seen = await previewPool(1, false, okbIn);
+      if (seen > 0n && seen < want) okbIn = (okbIn * want) / seen + 1n;
+      const need = okbIn + 2_000_000_000_000_000n;
+      const one = await quoteUsdt0Okb("sell", 10n ** 18n);
+      if (one <= 0n || need <= 0n) throw new Error("empty");
+      let usdt = (need * one * 1000n) / (10n ** 18n * 998n);
+      if (usdt <= 0n) usdt = 1n;
+      for (let i = 0; i < 4; i++) {
+        const got = await quoteUsdt0Okb("buy", (usdt * 998n) / 1000n);
+        if (got >= need) break;
+        usdt = got > 0n ? (usdt * (need + got / 20n)) / got : usdt * 2n;
+      }
+      const bought = await buyOkbWithUsdt0(from, usdt);
+      try {
+        const spend = bought > okbIn ? okbIn : bought;
+        if (spend <= 0n) throw new Error("empty");
+        await swapPool(from, 1, false, spend);
+      } catch {
+        throw new Error("leg");
+      }
+      return;
+    }
+    const nextQuote: PoolQuote = which === "okb" ? 1 : 0;
     const live = bookRef.current;
     const tape = nextQuote === 0 ? live?.bemTape ?? 0n : live?.okbTape ?? 0n;
     const quoteSide = nextQuote === 0 ? live?.bemQuote ?? 0n : live?.okbQuote ?? 0n;
@@ -264,8 +367,7 @@ export function PoolSpot({ onMarkets, onOtc }: { onMarkets: () => void; onOtc: (
     async function run() {
       if (lock.current) return;
       const from = currentAccount();
-      const live = bookRef.current;
-      const midNow = live?.price ?? 0;
+      const midNow = midRef.current;
       if (!from || !(midNow > 0)) return;
       let list = ordersRef.current;
       const dead = list.find((order) => order.kind === "chase" && order.startMid > 0 && Math.abs(midNow - order.startMid) / order.startMid > order.maxPct / 100);
@@ -290,7 +392,7 @@ export function PoolSpot({ onMarkets, onOtc }: { onMarkets: () => void; onOtc: (
           put(list.filter((order) => order.id !== current.id));
           return;
         }
-        await swapTape(from, current.side, current.quote, size);
+        await swapTape(from, current.side, current.pair ?? (current.quote === 1 ? "okb" : "bem"), size);
         announceFill(document.documentElement.lang === "zh" ? "现货成交" : "Spot fill", "TAPE");
         const rest = left - size;
         const fresh = ordersRef.current.filter((order) => order.id !== dead?.id);
@@ -343,7 +445,7 @@ export function PoolSpot({ onMarkets, onOtc }: { onMarkets: () => void; onOtc: (
       try {
         const from = account ?? await connectXLayer();
         setAccount(from);
-        await swapTape(from, side, quote, want);
+        await swapTape(from, side, pairRef.current, want);
         announceFill(zh ? "现货成交" : "Spot fill", "TAPE");
         setAmount("");
         setBal(await poolBalances(from as Hex));
@@ -367,7 +469,8 @@ export function PoolSpot({ onMarkets, onOtc }: { onMarkets: () => void; onOtc: (
         id: `${id}-${i}`,
         kind: "limit" as const,
         side,
-        quote,
+        quote: openQuote,
+        pair: active,
         left: part.toString(),
         price: a + ((b - a) * i) / Math.max(1, n - 1),
         maxPct: 0,
@@ -388,7 +491,7 @@ export function PoolSpot({ onMarkets, onOtc }: { onMarkets: () => void; onOtc: (
       const slice = want / BigInt(n);
       if (slice <= 0n) { fail(new Error("amount")); return; }
       put([...ordersRef.current, {
-        id, kind: "twap", side, quote, left: want.toString(), price: mid, maxPct: 0, startMid: mid,
+        id, kind: "twap", side, quote: openQuote, pair: active, left: want.toString(), price: mid, maxPct: 0, startMid: mid,
         slice: slice.toString(), every, nextAt: Date.now(), jitter,
       }]);
       return;
@@ -399,7 +502,8 @@ export function PoolSpot({ onMarkets, onOtc }: { onMarkets: () => void; onOtc: (
       id,
       kind: mode === "chase" ? "chase" : "limit",
       side,
-      quote,
+      quote: openQuote,
+      pair: active,
       left: want.toString(),
       price: px,
       maxPct: Number(maxPct) > 0 ? Number(maxPct) : 1,
@@ -429,24 +533,37 @@ export function PoolSpot({ onMarkets, onOtc }: { onMarkets: () => void; onOtc: (
   const proLabel = mode === "chase" ? (zh ? "追价" : "Chase") : mode === "scale" ? (zh ? "分段" : "Scale") : mode === "twap" ? "TWAP" : (zh ? "专业" : "Pro");
 
   return (
-    <section className="overflow-hidden border border-gold bg-card">
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-gold px-3 py-2">
-        <button type="button" onClick={onMarkets} className="flex items-center gap-2">
+    <section className="phone-desk spot-split min-w-0 overflow-hidden border border-gold bg-card" data-phone={phone}>
+      <div className="relative flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-gold px-3 py-2">
+        <button type="button" onClick={() => setPairMenu((on) => !on)} className="flex min-w-0 items-center gap-2">
           <CoinMark id="tape" />
-          <span className="text-lg font-medium tracking-tight">TAPE/USDT0</span>
-          <PairChevron />
-          <span className="lev-chip rounded px-1.5 py-0.5 text-[11px]">{zh ? "现货" : "Spot"}</span>
+          <span className="truncate text-lg font-medium tracking-tight">TAPE/{quoteSym}</span>
+          <PairChevron up={pairMenu} />
+          <span className="lev-chip shrink-0 rounded px-1.5 py-0.5 text-[11px]">{zh ? "现货" : "Spot"}</span>
         </button>
-        <p className="font-mono text-sm">{money(mid)}</p>
+        {pairMenu ? (
+          <div className="absolute left-2 top-12 z-30 w-48 border border-gold bg-card shadow-plate">
+            {([
+              ["usdt", "TAPE/USDT0"],
+              ["bem", "TAPE/BEM"],
+              ["okb", "TAPE/OKB"],
+            ] as const).map(([id, label]) => (
+              <button key={id} type="button" onClick={() => { onPair?.(id); setPairMenu(false); }} className={`block h-10 w-full px-3 text-left text-sm ${active === id ? "bg-foil" : "hover:bg-foil/70"}`}>{label}</button>
+            ))}
+            <button type="button" onClick={() => { setPairMenu(false); onMarkets(); }} className="block h-10 w-full border-t border-gold/40 px-3 text-left text-sm text-ink/60">{zh ? "全部市场" : "All markets"}</button>
+          </div>
+        ) : null}
+        <p className="font-mono text-sm">{money(mid)} <span className="text-[11px] text-ink/40">{quoteSym}</span></p>
         <p className={`font-mono text-sm ${((book?.change ?? 0) < 0) ? "text-sell" : "text-up"}`}>
           {book ? `${book.change >= 0 ? "+" : ""}${(book.change * 100).toFixed(2)}%` : "—"}
         </p>
         <p className="font-mono text-sm text-ink/70">{book ? money(book.volume) : "—"}</p>
-        <button type="button" onClick={onOtc} className="ml-auto h-7 border border-gold/40 px-2 text-xs text-ink/70">OTC</button>
-        <a className="font-mono text-[11px] text-ink/40 underline" href={`https://www.oklink.com/xlayer/address/${POOL}`} target="_blank" rel="noreferrer">0x58ea…8484</a>
+        <button type="button" onClick={onOtc} className="ml-auto h-7 shrink-0 border border-gold/40 px-2 text-xs text-ink/70">OTC</button>
+        <a className="hidden max-w-[8rem] truncate font-mono text-[11px] text-ink/40 underline sm:inline" href={`https://www.oklink.com/xlayer/address/${POOL}`} target="_blank" rel="noreferrer">0x58ea…8484</a>
       </div>
-      <div className={`grid items-start ${bookCol}`}>
-        <div className="order-1 min-w-0">
+      <PhoneChrome zh={zh} pane={phone} setPane={setPhone} sheet={false} onBuy={() => { setSide("buy"); setPhone("ticket"); }} onSell={() => { setSide("sell"); setPhone("ticket"); }} />
+      <div className={`spot-grid grid min-w-0 items-start ${bookCol}`} data-phone={phone}>
+        <div className="ph-chart order-1 min-w-0">
           <Kline
             bars={bars}
             mark={mid}
@@ -455,7 +572,7 @@ export function PoolSpot({ onMarkets, onOtc }: { onMarkets: () => void; onOtc: (
             frame={frame}
             frames={FRAMES.map(([id, zhLabel, enLabel]) => ({ id, label: zh ? zhLabel : enLabel }))}
             onFrame={(id) => setFrame(id as CandleFrame)}
-            onPrice={(px) => { setMode("limit"); setPrice(px >= 1 ? px.toFixed(4) : px.toFixed(6)); }}
+            onPrice={(px) => { setMode("limit"); setPrice(px >= 1 ? px.toFixed(4) : px.toFixed(6)); setPhone("ticket"); }}
           />
           {prefs.chartPrints && book?.prints.length ? (
             <div className="flex h-5 items-center gap-px overflow-hidden px-2" aria-hidden>
@@ -465,9 +582,9 @@ export function PoolSpot({ onMarkets, onOtc }: { onMarkets: () => void; onOtc: (
             </div>
           ) : null}
         </div>
-        <div className="order-3 min-w-0 border-t border-gold xl:order-2 xl:border-t-0 xl:border-l" onMouseLeave={() => setTip(null)}>
+        <div className="ph-book order-3 min-w-0 border-t border-gold xl:order-2 xl:border-t-0 xl:border-l" onMouseLeave={() => setTip(null)}>
           <div className="flex h-9 items-center gap-3 border-b border-gold px-3 text-xs">
-            <button type="button" onClick={() => setTab("book")} className={tab === "book" ? "tab-on" : "text-ink/45"}>{zh ? "订单簿" : "Book"}</button>
+            <button type="button" onClick={() => setTab("book")} className={tab === "book" ? "tab-on" : "text-ink/45"}>{zh ? "深度" : "Depth"}</button>
             <button type="button" onClick={() => setTab("tape")} className={tab === "tape" ? "tab-on" : "text-ink/45"}>{zh ? "最新成交" : "Trades"}</button>
           </div>
           {tab === "book" ? (
@@ -477,11 +594,12 @@ export function PoolSpot({ onMarkets, onOtc }: { onMarkets: () => void; onOtc: (
                 <span className="text-right">{zh ? "数量" : "Size"}</span>
                 <span className="text-right">{zh ? "合计" : "Total"}</span>
               </div>
+              <p className="px-2 pb-1 text-[10px] text-ink/40">{zh ? "按这个池子的储备推出来的，不是别人挂着的单。" : "Drawn from this pool's reserves, not resting orders."}</p>
               <div className="max-h-[28rem] overflow-auto">
                 {askView.map((level, index) => {
                   const cum = cumFrom(askView, index, true);
                   return (
-                    <button key={`a-${index}`} type="button" onClick={() => { setMode("limit"); setSide("buy"); setPrice(level.px.toPrecision(6)); if (readPrefs().bookSetsSize) setAmount(level.size.toFixed(4)); setArmed(false); }} onMouseMove={(event) => show(event, mid > 0 ? (level.px - mid) / mid : 0, cum.tape, cum.usd)} className="relative grid w-full grid-cols-3 overflow-hidden px-2 py-[3px] text-left font-mono text-[12px] hover:bg-white/5">
+                    <button key={`a-${index}`} type="button" onClick={() => { setMode("limit"); setSide("buy"); setPrice(level.px.toPrecision(6)); if (readPrefs().bookSetsSize) setAmount(level.size.toFixed(4)); setArmed(false); setPhone("ticket"); }} onMouseMove={(event) => show(event, mid > 0 ? (level.px - mid) / mid : 0, cum.tape, cum.usd)} className="relative grid w-full grid-cols-3 overflow-hidden px-2 py-[3px] text-left font-mono text-[12px] hover:bg-white/5">
                       <span aria-hidden className={`pointer-events-none absolute inset-y-0 right-0 bg-sell/15 ${prefs.bookAnimate ? "transition-[width] duration-500" : ""}`} style={{ width: `${Math.min(100, (level.size / maxAskSz) * 100)}%` }} />
                       <span className="relative text-sell">{money(level.px)}</span>
                       <span className="relative text-right text-ink/80">{level.size.toFixed(2)}</span>
@@ -496,7 +614,7 @@ export function PoolSpot({ onMarkets, onOtc }: { onMarkets: () => void; onOtc: (
                 {bids.map((level, index) => {
                   const cum = cumFrom(bids, index, false);
                   return (
-                    <button key={`b-${index}`} type="button" onClick={() => { setMode("limit"); setSide("sell"); setPrice(level.px.toPrecision(6)); if (readPrefs().bookSetsSize) setAmount(level.size.toFixed(4)); setArmed(false); }} onMouseMove={(event) => show(event, mid > 0 ? (level.px - mid) / mid : 0, cum.tape, cum.usd)} className="relative grid w-full grid-cols-3 overflow-hidden px-2 py-[3px] text-left font-mono text-[12px] hover:bg-white/5">
+                    <button key={`b-${index}`} type="button" onClick={() => { setMode("limit"); setSide("sell"); setPrice(level.px.toPrecision(6)); if (readPrefs().bookSetsSize) setAmount(level.size.toFixed(4)); setArmed(false); setPhone("ticket"); }} onMouseMove={(event) => show(event, mid > 0 ? (level.px - mid) / mid : 0, cum.tape, cum.usd)} className="relative grid w-full grid-cols-3 overflow-hidden px-2 py-[3px] text-left font-mono text-[12px] hover:bg-white/5">
                       <span aria-hidden className={`pointer-events-none absolute inset-y-0 right-0 bg-up/15 ${prefs.bookAnimate ? "transition-[width] duration-500" : ""}`} style={{ width: `${Math.min(100, (level.size / maxBidSz) * 100)}%` }} />
                       <span className="relative text-up">{money(level.px)}</span>
                       <span className="relative text-right text-ink/80">{level.size.toFixed(2)}</span>
@@ -523,7 +641,7 @@ export function PoolSpot({ onMarkets, onOtc }: { onMarkets: () => void; onOtc: (
             </div>
           )}
         </div>
-        <div className="relative order-2 border-t border-gold p-3 xl:order-3 xl:border-t-0 xl:border-l">
+        <div className="ph-ticket relative order-2 border-t border-gold p-3 xl:order-3 xl:border-t-0 xl:border-l">
           <div className="grid grid-cols-3 gap-1">
             <button type="button" onClick={() => { setMode("market"); setMenu(false); }} className={`h-10 text-sm ${mode === "market" ? "bg-ink" : "border border-gold/40 text-ink/70"}`}>{zh ? "市价" : "Market"}</button>
             <button type="button" onClick={() => { setMode("limit"); setMenu(false); }} className={`h-10 text-sm ${mode === "limit" ? "bg-ink" : "border border-gold/40 text-ink/70"}`}>{zh ? "限价" : "Limit"}</button>
@@ -544,13 +662,26 @@ export function PoolSpot({ onMarkets, onOtc }: { onMarkets: () => void; onOtc: (
             <button type="button" onClick={() => setSide("buy")} className={`h-10 text-sm ${side === "buy" ? "bg-ink" : "quiet-buy"}`}>{zh ? "买入" : "Buy"}</button>
             <button type="button" onClick={() => setSide("sell")} className={`h-10 text-sm ${side === "sell" ? "bg-sell text-[#fff7f8]" : "quiet-sell"}`}>{zh ? "卖出" : "Sell"}</button>
           </div>
-          <div className="mt-3 flex items-center justify-between font-mono text-[11px] text-ink/55">
-            <span>{zh ? "可用" : "Available"}</span>
-            <span>{bal ? (side === "sell" ? `${poolText(held, 8)} TAPE` : `${poolText(held, quote === 0 ? 8 : 18)} ${quote === 0 ? "BEM" : "OKB"}`) : "—"}</span>
+          <p className="mt-3 font-mono text-lg tabular-nums">{mid > 0 ? money(mid) : "—"} <span className="text-xs text-ink/45">{quoteSym}</span></p>
+          <div className="mt-2 grid grid-cols-2 border border-gold/40 font-mono text-sm">
+            <p className="px-2 py-2">
+              <span className="block text-[10px] text-ink/45">{zh ? "可用" : "Available"} {quoteSym}</span>
+              {bal ? poolText(buyHeld, quoteDec) : "—"}
+              <span className="block text-[10px] text-ink/40">{zh ? "可买" : "Buys"} {buyTapeLabel} TAPE</span>
+            </p>
+            <p className="border-l border-gold/40 px-2 py-2">
+              <span className="block text-[10px] text-ink/45">{zh ? "可用" : "Available"} TAPE</span>
+              {bal ? poolText(bal.tape, 8) : "—"}
+            </p>
           </div>
-          <div className="mt-2 grid grid-cols-2 gap-1">
-            <button type="button" onClick={() => setQuote(0)} className={`h-8 text-xs ${quote === 0 ? "bg-ink" : "border border-gold/40 text-ink/60"}`}>BEM</button>
-            <button type="button" onClick={() => setQuote(1)} className={`h-8 text-xs ${quote === 1 ? "bg-ink" : "border border-gold/40 text-ink/60"}`}>OKB</button>
+          <div className="mt-2 grid grid-cols-3 gap-1">
+            {([
+              ["usdt", "USDT"],
+              ["bem", "BEM"],
+              ["okb", "OKB"],
+            ] as const).map(([id, label]) => (
+              <button key={id} type="button" onClick={() => onPair?.(id)} className={`h-8 text-xs ${active === id ? "bg-ink" : "border border-gold/40 text-ink/60"}`}>{label}</button>
+            ))}
           </div>
           {mode === "market" ? (
             <p className="mt-2 flex items-center justify-between border border-gold/40 px-2 py-2 font-mono">
@@ -560,7 +691,7 @@ export function PoolSpot({ onMarkets, onOtc }: { onMarkets: () => void; onOtc: (
           ) : null}
           {mode === "limit" ? (
             <label className="mt-2 block border border-gold/40 px-2 py-2">
-              <span className="text-[11px] text-ink/45">USDT</span>
+              <span className="text-[11px] text-ink/45">{quoteSym}</span>
               <input value={price} onChange={(event) => setPrice(event.target.value)} inputMode="decimal" className="w-full bg-transparent font-mono text-lg outline-none" />
             </label>
           ) : null}
@@ -608,9 +739,10 @@ export function PoolSpot({ onMarkets, onOtc }: { onMarkets: () => void; onOtc: (
             </button>
           ) : null}
           <button type="button" disabled={busy} onClick={() => { void submit(); }} className={`mt-3 h-11 w-full text-sm disabled:opacity-40 ${side === "buy" ? "bg-ink" : "bg-sell text-[#fff7f8]"}`}>
-            {busy ? (zh ? "等待钱包" : "Waiting") : armed ? (zh ? "再点确认" : "Tap to confirm") : mode === "twap" ? (zh ? "启用" : "Start") : side === "buy" ? (zh ? "买入 TAPE" : "Buy TAPE") : zh ? "卖出 TAPE" : "Sell TAPE"}
+            {busy ? (zh ? "等待钱包" : "Waiting") : armed ? (zh ? "再点确认" : "Tap to confirm") : mode === "twap" ? (zh ? "启用" : "Start") : side === "buy" ? (zh ? `买入 TAPE · 付 ${quoteSym}` : `Buy TAPE · pay ${quoteSym}`) : zh ? `卖出 TAPE · 收 ${quoteSym}` : `Sell TAPE · receive ${quoteSym}`}
           </button>
           {note ? <p className={`mt-2 text-xs leading-5 ${bad ? "text-sell" : "text-ink/80"}`}>{note}</p> : null}
+          <TradeLog zh={zh} />
         </div>
       </div>
       <div className="border-t border-gold">

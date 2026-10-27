@@ -1,5 +1,5 @@
 import { createPublicClient, encodeFunctionData, http, parseAbi, parseAbiItem, type Hex } from "viem";
-import { BSC, DESK_FEE_BPS, ERC_BOOKS, FEE_TO, pretty, quoteExact, readAsset, splitDeskFee, units, waitOk, waitReceipt, type ErcKey } from "@/lib/bsc";
+import { BSC, BSC_SAFE, DESK_FEE_BPS, ERC_BOOKS, pretty, quoteExact, readAsset, splitDeskFee, units, waitOk, waitReceipt, type ErcKey } from "@/lib/bsc";
 import { STOCKS, STOCK_KEYS, type StockKey } from "@/lib/stocks";
 import { ensureProvider } from "@/lib/wallet";
 import { inviteCut, referrerOf } from "@/lib/invite-cut";
@@ -406,7 +406,7 @@ async function payCut(from: string, token: Hex | null, amount: bigint) {
     else await waitOk(await send(from, token, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [to, value] })));
   };
   if (cut.reward > 0n && ref) await once(ref, cut.reward);
-  if (cut.desk > 0n) await once(FEE_TO, cut.desk);
+  if (cut.desk > 0n) await once(BSC_SAFE, cut.desk);
 }
 
 export async function quoteLp(key: LpKey, amountText: string): Promise<LpQuote> {

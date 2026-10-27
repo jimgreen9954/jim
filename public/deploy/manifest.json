@@ -1,0 +1,38 @@
+[
+  {
+    "id": "xlayer-spot",
+    "chainId": 196,
+    "safe": "0xb4D6039394c8B97C3AC3234aa07011B564Fcb88c",
+    "note": "TAPE spot book. No constructor. Fee to the X Layer safe.",
+    "bytes": 10160,
+    "createCall": "0x9b35Af71d77eaf8d7e40252370304687390A1A52",
+    "args": "0x"
+  },
+  {
+    "id": "xlayer-perp",
+    "chainId": 196,
+    "safe": "0xb4D6039394c8B97C3AC3234aa07011B564Fcb88c",
+    "note": "Perp risk book. Mark is the existing XBemMark. Fee to the X Layer safe.",
+    "bytes": 17226,
+    "createCall": "0x9b35Af71d77eaf8d7e40252370304687390A1A52",
+    "args": "0x000000000000000000000000779ded0c9e1022225f8e0630b35a9b54be713736000000000000000000000000b4b2ee90d10ecfc7ed36a58e96e03074fa8731eb00000000000000000000000000000000000000000000000000000000000f4240000000000000000000000000b4d6039394c8b97c3ac3234aa07011b564fcb88c"
+  },
+  {
+    "id": "bsc-perp",
+    "chainId": 56,
+    "safe": "0xE51C19aE6E4261Ed329CC54F1120Cf0Ae09364Bd",
+    "note": "BSC perp risk book. Mark is the existing BEM/USDT pool. Fee to the BSC safe.",
+    "bytes": 17226,
+    "createCall": "0x9b35Af71d77eaf8d7e40252370304687390A1A52",
+    "args": "0x00000000000000000000000055d398326f99059ff775485246999027b31979550000000000000000000000003098d7a051045000d68ec0360753a40c8cabea310000000000000000000000000000000000000000000000000de0b6b3a7640000000000000000000000000000e51c19ae6e4261ed329cc54f1120cf0ae09364bd"
+  },
+  {
+    "id": "bsc-gate",
+    "chainId": 56,
+    "safe": "0xE51C19aE6E4261Ed329CC54F1120Cf0Ae09364Bd",
+    "note": "BSC transistor perp. Oracle and fee are the BSC safe.",
+    "bytes": 7984,
+    "createCall": "0x9b35Af71d77eaf8d7e40252370304687390A1A52",
+    "args": "0x00000000000000000000000055d398326f99059ff775485246999027b3197955"
+  }
+]

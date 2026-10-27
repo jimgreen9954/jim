@@ -23,7 +23,7 @@ interface IPool {
 contract TapeRisk {
     IERC20 public immutable usdt;
     IPool public immutable pool;
-    address public constant FEE_TO = 0x823b9F6A93Ac44Ce5A469823A336c15b6117054D;
+    address public immutable FEE_TO;
     uint32 public constant TWAP = 600;
     uint256 public immutable MIN_MARGIN;
     uint256 public immutable MAX_MARGIN;
@@ -111,12 +111,14 @@ contract TapeRisk {
     error Bad();
     error Busy();
 
-    constructor(address usdt_, address pool_, uint256 unit_) {
+    constructor(address usdt_, address pool_, uint256 unit_, address feeTo_) {
         if (unit_ != 1 ether && unit_ != 1e6) revert Bad();
+        if (feeTo_ == address(0)) revert Bad();
         usdt = IERC20(usdt_);
         pool = IPool(pool_);
         MIN_MARGIN = unit_;
         MAX_MARGIN = unit_ * 500;
+        FEE_TO = feeTo_;
     }
 
     modifier nonReentrant() {

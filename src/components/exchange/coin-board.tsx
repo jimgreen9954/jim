@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import {
   BSC,
   connectBsc,
-  DESK_FEE_BPS,
   ERC_BOOKS,
   ercPrice,
   pretty,
@@ -17,6 +16,7 @@ import {
   type ErcKey,
 } from "@/lib/bsc";
 import { inviteCut, referrerOf } from "@/lib/invite-cut";
+import { rememberFill, TradeLog, TradeQuota } from "@/components/exchange/trade-foot";
 import { currentAccount, onAccount } from "@/lib/wallet";
 
 const NAME = { btc: "BTC", eth: "ETH", zec: "ZEC" } as const;
@@ -101,6 +101,7 @@ export function CoinBoard({ coin, lang }: { coin: "btc" | "eth" | "zec"; lang: "
         setAccount(from);
         const tx = await swapListed(from, coin as ErcKey, side, amount, floor);
         setHash(tx);
+        rememberFill(`${zh ? (side === "buy" ? "买入" : "卖出") : side} ${amount} ${symbol}`, txUrl(tx));
         setNote(zh ? "已经成交，币在这个钱包里。" : "Filled. The coin is in this wallet.");
         setBad(false);
       } catch (err) {
@@ -146,17 +147,17 @@ export function CoinBoard({ coin, lang }: { coin: "btc" | "eth" | "zec"; lang: "
             </p>
           ))}
         </div>
-        <p className="px-3 py-3 text-sm leading-6 text-ink/70">
-          {zh
-            ? `这一对在 BSC 上按 Pancake 现货成交，买到的是钱包里的 ${coin === "btc" ? "BTCB" : symbol}。BSC 上能开杠杆仓的仍是 BEM / USDT。台费千分之二。${referred ? "这个地址绑了邀请人：邀请人拿这笔台费的 6%，你少付 4%，收费地址拿 90%。" : "没绑邀请人时，台费整笔进收费地址。"}`
-            : `This pair fills on Pancake spot. A buy lands in the wallet as ${coin === "btc" ? "BTCB" : symbol}. The leveraged book on BSC is still BEM / USDT. The site fee is 0.2%.${referred ? " This address has a referrer: 6% of that fee, you pay 4% less, 90% to the fee address." : " With no referrer, the whole fee goes to the fee address."}`}
-        </p>
-      </div>
+        </div>
       <form className="border border-gold bg-card p-3" onSubmit={(event) => { event.preventDefault(); trade(); }}>
         <div className="grid grid-cols-2 border border-gold">
           <button type="button" className={`min-h-11 text-sm ${side === "buy" ? "bg-ink text-white" : "text-up"}`} onClick={() => { setSide("buy"); setAmount(""); }}>{zh ? "买入" : "Buy"}</button>
           <button type="button" className={`min-h-11 text-sm ${side === "sell" ? "bg-sell text-white" : "text-sell"}`} onClick={() => { setSide("sell"); setAmount(""); }}>{zh ? "卖出" : "Sell"}</button>
         </div>
+        <TradeQuota
+          zh={zh}
+          buy={usdt == null ? "—" : `${pretty(usdt, BSC.usdtDecimals, 2)} USDT`}
+          sell={asset == null ? "—" : `${pretty(asset, book.decimals, 4)} ${symbol}`}
+        />
         <label className="mt-3 grid gap-1 text-xs text-ink/55">
           {zh ? `付出 ${side === "buy" ? "USDT" : symbol}` : `Pay ${side === "buy" ? "USDT" : symbol}`}
           <input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono text-base" />
@@ -169,15 +170,14 @@ export function CoinBoard({ coin, lang }: { coin: "btc" | "eth" | "zec"; lang: "
         </p>
         <p className="mt-1 text-xs leading-5 text-ink/60">
           {zh ? "台费" : "Fee"} {gross > 0n ? pretty(referred ? cut.charge : gross, payDecimals, 4) : "—"} {side === "buy" ? "USDT" : symbol}
-          {referred && gross > 0n ? (zh ? ` · 邀请人 ${pretty(cut.reward, payDecimals, 4)} · 收费地址 ${pretty(cut.desk, payDecimals, 4)}` : ` · referrer ${pretty(cut.reward, payDecimals, 4)}`) : ""}
         </p>
         {over ? <p className="mt-2 text-sm text-sell">{zh ? "余额不够。" : "Not enough balance."}</p> : null}
         <button type="submit" disabled={busy || over || !amount.trim() || !floor} className={`mt-3 min-h-12 w-full text-sm text-white disabled:opacity-40 ${side === "buy" ? "bg-ink" : "bg-sell"}`}>
           {busy ? (zh ? "等待钱包" : "Waiting") : side === "buy" ? (zh ? `买入 ${symbol}` : `Buy ${symbol}`) : (zh ? `卖出 ${symbol}` : `Sell ${symbol}`)}
         </button>
         {note ? <p className={`mt-2 text-xs leading-5 ${bad ? "text-sell" : ""}`}>{note}</p> : null}
+        <TradeLog zh={zh} />
         {hash ? <a className="mt-2 block text-xs underline" href={txUrl(hash)} target="_blank" rel="noreferrer">{zh ? "链上" : "Tx"}</a> : null}
-        <p className="mt-3 text-[11px] leading-5 text-ink/45">{zh ? `台费 ${DESK_FEE_BPS / 100}% 。池子另收自己的费率，不进邀请。` : `Site fee ${DESK_FEE_BPS / 100}%. The pool fee is separate and is not referred.`}</p>
       </form>
     </section>
   );

@@ -1,5 +1,5 @@
 import { encodeAbiParameters, encodeFunctionData, type Hex } from "viem";
-import { BSC, FEE_TO, connectBsc, pretty, readBalances, units, waitReceipt } from "@/lib/bsc";
+import { BSC, BSC_SAFE, FEE_TO, XLAYER_SAFE, connectBsc, pretty, readBalances, units, waitReceipt } from "@/lib/bsc";
 import { PERP_BYTECODE } from "@/lib/perp-artifact";
 import { RISK_BYTECODE } from "@/lib/risk-artifact";
 import { MARK_BYTECODE } from "@/lib/mark-artifact";
@@ -237,13 +237,13 @@ const erc20 = [
 async function deskClient(which: Desk) {
   const { createPublicClient, http } = await import("viem");
   const rpc = which === "xlayer" ? XLAYER.rpc : BSC.rpc;
-  return createPublicClient({ transport: http(rpc) });
+  return createPublicClient({ transport: http(rpc, { timeout: 8_000 }) });
 }
 
 async function client() {
   const { createPublicClient, http } = await import("viem");
   const rpc = desk === "xlayer" ? XLAYER.rpc : BSC.rpc;
-  return createPublicClient({ transport: http(rpc) });
+  return createPublicClient({ transport: http(rpc, { timeout: 8_000 }) });
 }
 
 async function send(from: string, to: Hex | undefined, data: Hex, gasLimit?: bigint): Promise<Hex> {
@@ -438,13 +438,14 @@ export function pickBook(which: Desk, coin: string): string {
 
 /** Deploys the funding book. Stake, mine and the old perp are not called. */
 export async function deployRisk(from: string, which: Desk): Promise<string> {
-  if (from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("fee");
+  const safe = which === "xlayer" ? XLAYER_SAFE : BSC_SAFE;
+  if (from.toLowerCase() !== safe.toLowerCase() && from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("fee");
   const was = desk;
   desk = which;
   try {
     const args = encodeAbiParameters(
-      [{ type: "address" }, { type: "address" }, { type: "uint256" }],
-      [which === "xlayer" ? X_USDT : BSC.usdt, which === "xlayer" ? KNOWN_XMARK : BSC.pool, which === "xlayer" ? 1_000_000n : 10n ** 18n],
+      [{ type: "address" }, { type: "address" }, { type: "uint256" }, { type: "address" }],
+      [which === "xlayer" ? X_USDT : BSC.usdt, which === "xlayer" ? KNOWN_XMARK : BSC.pool, which === "xlayer" ? 1_000_000n : 10n ** 18n, safe],
     );
     const hash = await send(from, undefined, (RISK_BYTECODE + args.slice(2)) as Hex, 8_000_000n);
     const receipt = await (await client()).waitForTransactionReceipt({ hash, timeout: 180_000, pollingInterval: 2_000 });
@@ -1029,7 +1030,7 @@ export async function readDeskUsdt(account: string): Promise<bigint> {
 export async function readChainPurse(which: Desk, account: string): Promise<{ gas: bigint; usdt: bigint }> {
   const { createPublicClient, http } = await import("viem");
   const rpc = which === "xlayer" ? XLAYER.rpc : BSC.rpc;
-  const c = createPublicClient({ transport: http(rpc) });
+  const c = createPublicClient({ transport: http(rpc, { timeout: 8_000 }) });
   const token = which === "xlayer" ? X_USDT : BSC.usdt;
   const [gas, usdt] = await Promise.all([
     c.getBalance({ address: account as Hex }),
@@ -1062,7 +1063,7 @@ const pushAbi = [
 
 async function bscTick(): Promise<number> {
   const { createPublicClient, http } = await import("viem");
-  const c = createPublicClient({ transport: http(BSC.rpc) });
+  const c = createPublicClient({ transport: http(BSC.rpc, { timeout: 8_000 }) });
   const row = await c.readContract({ address: BSC.pool, abi: slotAbi, functionName: "slot0" });
   return row[1];
 }

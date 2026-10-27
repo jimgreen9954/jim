@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { checkCircuits, circuitShapes, connectXLayer, myCircuits, XLAYER, type CircuitCheck } from "@/lib/xlayer";
 import { claimFreshCircuit, readCircuitLocks, type CircuitSeat } from "@/lib/tape-lock";
 import { readSeatFlags, readTapePace, tapeText } from "@/lib/tape-mine";
-import { readTapePool } from "@/lib/tape-pool";
+import { readOpenBook } from "@/lib/tape-open-candles";
 import { Hint, verifyCopy } from "@/components/exchange/hint";
 import { Kline, type Bar } from "@/components/exchange/kline";
 import { currentAccount, onAccount } from "@/lib/wallet";
@@ -131,10 +131,9 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
       if (document.hidden) return;
       readListings().then((rows) => { if (!dead) { setLists(rows); setLoaded(true); setMiss(false); } }).catch(() => { if (!dead) setMiss(true); });
       readTapePace().then((next) => { if (!dead && next) setPace(next); }).catch(() => undefined);
-      readTapePool(null).then((pool) => {
-        if (dead || pool.usdt.tape <= 0n) return;
-        const px = (Number(pool.usdt.quote) / 1e6) / (Number(pool.usdt.tape) / 1e8);
-        if (Number.isFinite(px) && px > 0) setTapePx(px);
+      readOpenBook().then((book) => {
+        if (dead || !(book.price > 0)) return;
+        setTapePx(book.price);
       }).catch(() => undefined);
       readCircuitPrints().then((tape) => { if (!dead) setPrints(tape); }).catch(() => undefined);
       if (!account) {

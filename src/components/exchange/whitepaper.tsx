@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { BSC_REBATE, KNOWN_XMARK, KNOWN_XPERP, PREV_XMARK, PREV_XPERP } from "@/lib/perp";
 import { GATE } from "@/lib/gate-chain";
-import { BSC, FEE_TO } from "@/lib/bsc";
+import { BSC, BSC_SAFE, FEE_TO, XLAYER_SAFE } from "@/lib/bsc";
 import { NPM } from "@/lib/lp";
 import { OFFICIAL } from "@/lib/official-books";
 import { LOCKED_REBATE } from "@/lib/seal-rebate";
@@ -20,7 +20,7 @@ const zhBody: Section[] = [
     h: "产品",
     ps: [
       "TAPELIQUID 是以晶圆为记账单位的交易所。现货与永续在交易台。铸造、流片与晶体管合约在工房。TAPE 是唯一平台币，仅发行于 X Layer，没有第二枚。BEM 属于 TapeOut 协议官方代表。",
-      "练习记录只存在于本机浏览器，不进入任何合约。个人中心仅展示当前钱包的资产与转出。新手礼包收在个人中心内，打开后才显示规则。",
+      "练习记录只存在于本机浏览器，不进入任何合约。个人中心仅展示当前钱包的资产与转出。新手礼包不再放在页面上。",
       "没有对应合约的事项，页面不提供按钮。能够签名的规则写在前面。尚未上链的安排写在后面。",
     ],
   },
@@ -29,7 +29,7 @@ const zhBody: Section[] = [
     ps: [
       "本页是产品规则，不是审计报告，也不是收益承诺。下列合约没有升级入口。已经锁入永续的保证金，不能通过修改网页取回。没有管理员也不等于不能被攻击：合约没有经过独立审计。浅池上的标记价仍可能被带动。返佣合约的 clerk 只能取走返佣池里还没领的余额，不能动用户锁着的保证金。不通过下单函数直接转进合约的资产，谁都取不回。",
       "现货台费先付，是付出金额的 0.20%，在池子手续费之外。后面的兑换拒签或回滚，这一笔不退。回执还没读到时，同一金额不会再收一次。",
-      "永续没有保险基金，也没有自动减仓。亏到保证金大约一半，任何人都可以强平。BSC 与 X Layer 不能并成一笔。下一本若另部署，才加入这三项：资金费每 8 小时按（标记 − 指数）/ 指数结算，封顶 ±0.05%，在这一对的保证金里划；强平剩余一半进保险基金、一半给强平的人，保险只补穿仓，没有提取函数；保险不够时只减这一对的盈利方，不按排名去平别人。那一本还没部署。已经上线的合约不按这些规则扣钱。页面上的资金费图是预览。",
+      "现在交易的永续没有保险基金，也没有自动减仓。亏到保证金大约一半，任何人都可以强平。BSC 与 X Layer 不能并成一笔。下一本已经编译，还没部署。部署之后才有这三项：资金费每 8 小时按（标记 − 指数）/ 指数结算，封顶 ±0.05%，在这一对的保证金里划；强平剩余一半进保险基金、一半给强平的人，保险只补穿仓，没有提取函数；保险不够时只减这一对的盈利方，不按排名去平别人。那一本的台费进对应链的多签。已经上线的合约不按这些规则扣钱。页面上的资金费图是预览。",
       "BSC 标记价取 PancakeSwap 池约 10 分钟的时间加权均价。流动性不足时，该均价仍可能在短时间内被带动。新的 X Layer 永续不再采用收费地址写入的 BSC 价格。标记价由 Uniswap v4 的 OKB/BEM 与 Uniswap v3 的 USDT0/WOKB 合成。任何地址均可提交推进。连续推进时，单次变动不超过 0.5%，间隔不少于 30 秒。中断超过 30 分钟后，下一次推进可以采用池子即时价格。晶体管永续的标记仍仅接受收费地址写入。",
       "下单所用合约地址写死在页面中，不随本机缓存更换。保证金只进入地址一节列出的合约。",
       "练习只存在于本机浏览器，不进入上述合约。止盈与止损要求本页保持打开，并由钱包完成签名。拒签之后不会自动再次请求，需要再次提交。",
@@ -132,7 +132,7 @@ const zhBody: Section[] = [
     ps: [
       "现货买卖、永续撮合、撤单、添加流动性、撤回流动性，台费都是付出金额的 0.20%。此费用在池子手续费之外。平仓不再另收。添加流动性时两边各扣 0.20%，撤回时拿回的两边再各扣 0.20%。已转出的台费不退。现货的台费是单独一笔，先付。后面的兑换拒签或回滚，这一笔不退。回执还没读到时，页面留下哈希，同一金额不会再收一次。",
       "现货买到的币留在签名钱包。永续保证金进入用户所选链上的那一份合约。BSC 与 X Layer 不能并成一笔。",
-      `没绑邀请人时，台费整笔进入收费地址 ${FEE_TO}。绑了邀请人之后，这笔台费的 6% 付给邀请人，4% 少收交易的人，90% 进入收费地址。永续把 6% 记在合约里，按档领取。现货台费（含 BSC 的比特币、ETH、ZEC）、加池、官方晶体管和官方电路，付款时按同一比例拆开转。两条链各认各的邀请人。工房订单簿和 TAPE 池的 0.20% 写在已经部署的合约里，整笔进入收费地址，没有邀请人。电路容器的开通费是协议的 BNB，不走这笔台费。BSC 永续保证金合约是 BEM / USDT。比特币、ETH、ZEC 在永续页和 BEM 是同一类保证金合约，不是现货买入。K 线和下单和 BEM 同一套，周期从 15 秒到一年。结算本还没接上时，开仓不会发出，也不会走现货兑换，价格也不会写进 BEM 那一本。印鉴不自动减费。登记后，已撮合的永续成交仍可按新加坡周另领一半，周一 0 点至下周一 0 点，过点作废，同一笔只进一次。`,
+      `没绑邀请人时，页面先收的千分之二整笔进入该链多签。BSC 是 ${BSC_SAFE}。X Layer 是 ${XLAYER_SAFE}。绑了邀请人之后，这笔的 6% 付给邀请人，4% 少收交易的人，90% 进入该链多签。已经部署的工房订单簿、TAPE 池和现在这两本永续，合约里写死的千分之二仍进旧收费地址 ${FEE_TO}。那几份没有改率入口，这一页改不了。电路容器的开通费是协议的 BNB，不走这笔台费。BSC 永续保证金合约是 BEM / USDT。比特币、ETH、ZEC 在永续页和 BEM 是同一类保证金合约，不是现货买入。结算本还没接上时，开仓不会发出，也不会走现货兑换。印鉴不自动减费。登记后，已撮合的永续成交仍可按新加坡周另领一半，周一 0 点至下周一 0 点，过点作废，同一笔只进一次。`,
       "池子自身的手续费留给流动性提供者。Gas 付给链。",
     ],
   },
@@ -149,7 +149,7 @@ const zhBody: Section[] = [
   {
     h: "奖励",
     ps: [
-      "新手礼包不是充值入口，也不是理财。入口只在个人中心，默认收着，打开之后才能放入或领取。首页不放充值框。",
+      "新手礼包不再放在页面上，也不是充值入口。以前部署的两份奖池合约还在链上，这一页不代领，也不再放入。",
       "X Layer 上放入的是 TAPELIQUID 的 NAND。BSC 上放入的是 BEM。放入的数量记在这个地址的份额上。只有这个地址能取回还没被领走的部分。别人不能把你的整笔转走。",
       "有人按规则领取时，池子变少，每个放入地址能取回的份额一起变少。池子空了就停。再放入，才继续发。",
       "领 NAND：打开个人中心的新手礼包，点一笔保证金仍不少于 5 USDT0 的 X Layer 永续，先记下再领 10 个。一个地址最多 5 次。领 BEM：点 BSC 的 BEM 永续或晶体管永续，每笔保证金仍不少于 5 USDT，记满 11 笔领一次 0.1。现货、加池、流片都不算。开 5 美元会先扣千分之二，链上剩约 4.99，礼包不认。要被认，保证金至少开 5.02 美元。两个奖池现在有余额，够按规则发。",
@@ -170,7 +170,7 @@ const zhBody: Section[] = [
     ps: [
       "电路和 TAPE 都在 X Layer。BEM 的 BSC 与 X Layer 互转，用 TapeOut 已经上线的桥：BNB Chain 锁仓，X Layer 铸造等量；回来则在 X Layer 销毁，BSC 释放。1:1，走 LayerZero。本站不经手资产。跨出去之前先收付出金额的 0.20%，和现货同一套邀请分成。桥自己的费另计。已转出的台费不退。",
       `BSC 上的 BEM 是 ${BSC.bem}。BSC 桥是 ${BEM_BRIDGE}。X Layer 上的 BEM 是 ${X_BEM}。入口是 tapeout.net/bridge。`,
-      "TAPE 不走 BEM 的桥。TAPE 自己的 1:1 跨链合约还没有。没有合约之前，页面不提供 TAPE 跨链按钮。",
+      "TAPE 不走 BEM 的桥。TAPE 自己的 1:1 跨链合约还没有。没有合约之前，页面不提供 TAPE 跨链按钮。OKB 与 BNB 的库存合约也还没有。页面不签名，不会在一条链收币、到另一条链凭空打出。",
     ],
   },
   {
@@ -186,7 +186,7 @@ const zhBody: Section[] = [
   {
     h: "地址",
     ps: [
-      `收费 ${FEE_TO}。TAPE ${TAPE}。TAPE 挖矿 ${TAPE_MINE}。TAPE 池 0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641。晶圆锁仓 0xA28390924607F08aaD8d03F512B41b6a1c012Ace。电路锁仓 0x06c877cc158d9ca3547220f9fc156f39bce7013c。回购 0x53fa6A76ce9A3fE08698E04a4E9A674bd77a9DfF。旧回购 0x72e28d564A90eF3E76f599bC210454f5360E200C 不再使用。期限质押 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A。工房现货 ${TAPE_SPOT}。TAPELIQUID 电路 ${DEPLOYED.circuits}。TAPELIQUID 晶体管 ${DEPLOYED.transistors}。`,
+      `页面先收的台费：BSC 多签 ${BSC_SAFE}，X Layer 多签 ${XLAYER_SAFE}。已经部署的合约里写死的收费地址仍是 ${FEE_TO}。TAPE ${TAPE}。TAPE 挖矿 ${TAPE_MINE}。TAPE 池 0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641。晶圆锁仓 0xA28390924607F08aaD8d03F512B41b6a1c012Ace。电路锁仓 0x06c877cc158d9ca3547220f9fc156f39bce7013c。回购 0x53fa6A76ce9A3fE08698E04a4E9A674bd77a9DfF。旧回购 0x72e28d564A90eF3E76f599bC210454f5360E200C 不再使用。期限质押 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A。工房现货 ${TAPE_SPOT}。TAPELIQUID 电路 ${DEPLOYED.circuits}。TAPELIQUID 晶体管 ${DEPLOYED.transistors}。`,
       `BSC 永续 ${BSC_REBATE}。X Layer 永续 ${KNOWN_XPERP}。标记 ${KNOWN_XMARK}。晶体管永续 ${GATE}。流动性仓位 ${NPM}。`,
       `BSC BEM ${BSC.bem}。BSC 桥 ${BEM_BRIDGE}。X Layer BEM ${X_BEM}。TapeOut BEM 挖矿 0x7E2E0DC66a3bD9103E69b766afA62d9f7b697b46。`,
       `TapeOut 晶体管市场 ${OFFICIAL.transistorMarket}。TapeOut 电路市场 ${OFFICIAL.circuitMarket}。BEM 池 ${BSC.pool}。`,
@@ -201,7 +201,7 @@ const en: Section[] = [
     h: "Product",
     ps: [
       "TAPELIQUID is an exchange that accounts in wafers. Spot and perpetuals are on the desk. Minting, tape-out and the transistor book are in the workshop. TAPE is the only platform token. It is issued only on X Layer. BEM is the official representative of the TapeOut protocol.",
-      "Practice records remain in this browser and never enter a contract. The account page shows only the connected wallet's balances and transfers. The starter gift is inside the account page. Its rules appear only after it is opened.",
+      "Practice records remain in this browser and never enter a contract. The account page shows only the connected wallet's balances and transfers. The starter gift is no longer shown.",
       "An action without a contract has no button. Rules that can be signed are stated first. Arrangements that are not yet on chain follow.",
     ],
   },
@@ -210,7 +210,7 @@ const en: Section[] = [
     ps: [
       "This page is the product rulebook. It is not an audit and it is not a statement of expected return. The contracts below have no upgrade path. Margin already locked in a perpetual cannot be recovered by editing the website. No administrator does not mean the contracts cannot be attacked. They have not had an independent audit. A mark that reads a thin pool can still be moved. The rebate contract's clerk can take only the unclaimed balance in the rebate pool, not margin locked by users. Assets sent straight to a contract, outside an order, cannot be recovered.",
       "The spot desk fee is paid first. It is 0.20% of the amount paid, on top of the pool fee. If the later swap is rejected or reverts, that fee is not returned. While a receipt is still missing, the same amount is not charged again.",
-      "Perpetuals have no insurance fund and no auto-deleveraging. Anyone can liquidate a position after about half the margin is lost. BSC and X Layer do not net into one trade. A later book, if it is deployed separately, would add three things: funding every 8 hours at (mark − index) / index, capped at ±0.05 percent, moved inside that pair's margin; half of a liquidation remainder kept as insurance and half paid to the caller, with no withdraw function; and, only if insurance is short, a haircut of that pair's winner. It would not rank and close other users. That book is not deployed. Live contracts do not charge these rules. The funding chart is a preview.",
+      "The perpetuals trading now have no insurance fund and no auto-deleveraging. Anyone can liquidate a position after about half the margin is lost. BSC and X Layer do not net into one trade. The next book is compiled and is not deployed. After it is deployed it adds three things: funding every 8 hours at (mark − index) / index, capped at ±0.05 percent, moved inside that pair's margin; half of a liquidation remainder kept as insurance and half paid to the caller, with no withdraw function; and, only if insurance is short, a haircut of that pair's winner. It does not rank and close other users. That book's fee goes to the multisig of its chain. Live contracts do not charge these rules. The funding chart is a preview.",
       "The BSC mark is a roughly 10-minute time-weighted average of the PancakeSwap pool. Thin liquidity can still move that average for a short interval. The new X Layer perpetual does not accept a BSC price posted by the fee address. Its mark is composed from the Uniswap v4 OKB/BEM pool and the Uniswap v3 USDT0/WOKB pool. Any address may submit an update. Consecutive updates move the mark by at most 0.5 percent and must be at least 30 seconds apart. After 30 minutes without an update, the next update may adopt the spot price of the pools. The transistor perpetual still accepts a mark only from the fee address.",
       "Order contracts are fixed in the page. They are not replaced from this browser's cache. Margin is sent only to the contracts named in the address section.",
       "Practice remains in this browser and does not enter those contracts. A take-profit or stop-loss requires this page to stay open and a wallet signature. After a rejection, the wallet is not prompted again until the order is submitted again.",
@@ -314,7 +314,7 @@ const en: Section[] = [
     ps: [
       "Spot, a perpetual match, a cancel, adding liquidity, and removing liquidity all pay 0.20 percent of what is paid. That is on top of the pool fee. Closing adds nothing. Adding takes 0.20 percent from each side. Removing takes 0.20 percent from both sides that come back. A fee already sent is not returned. The spot fee is its own transaction and is paid first. If the swap is rejected or reverts, that fee stays. If the receipt has not come back, the page keeps the hash and does not charge the same amount again.",
       "A spot fill stays in the wallet that signed. Perpetual margin enters the one contract on the chain the user picked. BSC and X Layer do not net.",
-      `The desk fee goes to ${FEE_TO}.`,
+      `The fee this page collects first goes to that chain's multisig. BSC is ${BSC_SAFE}. X Layer is ${XLAYER_SAFE}.`,
       "With a referrer, 6 percent of the site fee goes to the referrer, the trader pays 4 percent less, and 90 percent goes to the fee address. This split covers perpetuals, spot desk fees, and the site fee on official transistors and circuits. The workshop book and the TAPE pools still send their whole 0.20 percent to the fee address. A seal does not cut a fee by itself. After registration, half the fee on a matched perpetual fill can be claimed once per Singapore week, Monday 00:00 to the next Monday 00:00. A missed week is gone. One fill is counted once. The claim contract reads only the current BSC perpetual, the current X Layer perpetual, and the transistor perpetual. The pool is funded separately. Only the wallet that deployed it can withdraw.",
       "The pool's own fee stays with liquidity providers. Gas is paid to the chain.",
     ],
@@ -331,7 +331,7 @@ const en: Section[] = [
   {
     h: "Rewards",
     ps: [
-      "The starter gift is not a deposit product and not a savings account. The only entry is inside Account. It stays closed until you open it. The home page has no deposit box.",
+      "The starter gift is no longer shown, and it is not a deposit product. The two reward contracts remain on chain. This page does not claim from them and does not add to them.",
       "NAND added on X Layer is TAPELIQUID NAND. BEM added on BSC is BEM. What you add is your share. Only that address can take back what has not been claimed. Nobody can take your whole amount.",
       "When someone claims under the rule, the pool shrinks, and every remaining share shrinks with it. An empty pool stops. It pays again only after someone adds more.",
       "NAND pays 10, at most five times per address. Open the starter gift and select an X Layer perpetual fill whose margin is still at least 5 USDT0. BEM pays 0.1 once after 11 selected fills on the BSC BEM perpetual or the transistor perpetual, each with margin still at least 5 USDT. Spot, liquidity, and tape-out do not count. A 5 dollar order loses 0.2 percent first, so about 4.99 remains and the gift rejects it. Open at least 5.02 dollars of margin. Both pools currently have a balance and can pay under this rule.",
@@ -352,7 +352,7 @@ const en: Section[] = [
     ps: [
       "Circuits and TAPE are on X Layer. BEM moves between BSC and X Layer on the bridge TapeOut already runs: lock on BNB Chain and mint the same amount on X Layer, or burn on X Layer and release on BSC. It is 1:1, over LayerZero. This site does not custody the assets. It charges 0.20% of the amount before the bridge. The bridge's own fee is separate. A fee already sent is not returned.",
       `BEM on BSC is ${BSC.bem}. The BSC bridge is ${BEM_BRIDGE}. BEM on X Layer is ${X_BEM}. The page is tapeout.net/bridge.`,
-      "TAPE does not use the BEM bridge. TAPE has no 1:1 bridge contract yet. Until that contract exists, there is no TAPE bridge button.",
+      "TAPE does not use the BEM bridge. TAPE has no 1:1 bridge contract yet. Until that contract exists, there is no TAPE bridge button. There is also no OKB and BNB inventory contract. The page does not sign that, and it does not take a coin on one chain and mint it on the other.",
     ],
   },
   {
@@ -369,7 +369,7 @@ const en: Section[] = [
   {
     h: "Addresses",
     ps: [
-      `Fee ${FEE_TO}. TAPE ${TAPE}. TAPE mine ${TAPE_MINE}. TAPE pool 0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641. Wafer lock 0xA28390924607F08aaD8d03F512B41b6a1c012Ace. Circuit lock 0x06c877cc158d9ca3547220f9fc156f39bce7013c. Buyback 0x53fa6A76ce9A3fE08698E04a4E9A674bd77a9DfF. Old buyback 0x72e28d564A90eF3E76f599bC210454f5360E200C is no longer used. Timed stake 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A. Workshop spot ${TAPE_SPOT}. TAPELIQUID circuits ${DEPLOYED.circuits}. TAPELIQUID transistors ${DEPLOYED.transistors}.`,
+      `The fee this page collects first: BSC multisig ${BSC_SAFE}, X Layer multisig ${XLAYER_SAFE}. Contracts already deployed still pay ${FEE_TO}, because that address is written inside them. TAPE ${TAPE}. TAPE mine ${TAPE_MINE}. TAPE pool 0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641. Wafer lock 0xA28390924607F08aaD8d03F512B41b6a1c012Ace. Circuit lock 0x06c877cc158d9ca3547220f9fc156f39bce7013c. Buyback 0x53fa6A76ce9A3fE08698E04a4E9A674bd77a9DfF. Old buyback 0x72e28d564A90eF3E76f599bC210454f5360E200C is no longer used. Timed stake 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A. Workshop spot ${TAPE_SPOT}. TAPELIQUID circuits ${DEPLOYED.circuits}. TAPELIQUID transistors ${DEPLOYED.transistors}.`,
       `BSC perpetual ${BSC_REBATE}. X Layer perpetual ${KNOWN_XPERP}. Mark ${KNOWN_XMARK}. Transistor perpetual ${GATE}. Liquidity positions ${NPM}.`,
       `BSC BEM ${BSC.bem}. BSC bridge ${BEM_BRIDGE}. X Layer BEM ${X_BEM}. TapeOut BEM mine 0x7E2E0DC66a3bD9103E69b766afA62d9f7b697b46.`,
       `TapeOut transistor market ${OFFICIAL.transistorMarket}. TapeOut circuit market ${OFFICIAL.circuitMarket}. BEM pool ${BSC.pool}.`,
@@ -511,8 +511,16 @@ export function Whitepaper() {
           </div>
         </div>
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          <a className="border border-gold/40 px-3 py-3" href={`${BSC.explorer}/address/${BSC_SAFE}`} target="_blank" rel="noreferrer">
+            <span className="block text-[11px] tracking-widest text-gold">{zh ? "BSC 多签" : "BSC multisig"}</span>
+            <span className="mt-1 block break-all font-mono text-xs">{BSC_SAFE}</span>
+          </a>
+          <a className="border border-gold/40 px-3 py-3" href={`${XLAYER.explorer}/address/${XLAYER_SAFE}`} target="_blank" rel="noreferrer">
+            <span className="block text-[11px] tracking-widest text-gold">{zh ? "X Layer 多签" : "X Layer multisig"}</span>
+            <span className="mt-1 block break-all font-mono text-xs">{XLAYER_SAFE}</span>
+          </a>
           <a className="border border-gold/40 px-3 py-3" href={`${BSC.explorer}/address/${FEE_TO}`} target="_blank" rel="noreferrer">
-            <span className="block text-[11px] tracking-widest text-gold">{zh ? "收费地址" : "Fee address"}</span>
+            <span className="block text-[11px] tracking-widest text-gold">{zh ? "已部署合约" : "Deployed contracts"}</span>
             <span className="mt-1 block break-all font-mono text-xs">{FEE_TO}</span>
           </a>
           <a className="border border-gold/40 px-3 py-3" href={`${XLAYER.explorer}/address/${TAPE}`} target="_blank" rel="noreferrer">

@@ -12,8 +12,10 @@ import { SignCard } from "@/components/exchange/sign-card";
 import { useFeeLock } from "@/lib/fee-lock";
 import { Kline } from "@/components/exchange/kline";
 import { AccountDialog, FundingBoard, LevDialog, MarginDialog, PairChevron } from "@/components/exchange/desk-chrome";
+import { PhoneChrome, wantedPane } from "@/components/exchange/phone-desk";
 import { CoinMark } from "@/components/exchange/coin-mark";
 import { announceFill, readPrefs, useDeskPrefs } from "@/lib/desk-prefs";
+import { TradeLog } from "@/components/exchange/trade-foot";
 import { nickOf, readNicks } from "@/lib/nicks";
 import { clearArm, easyBand, readArm, writeArm, type Arm } from "@/lib/stops";
 import {
@@ -46,7 +48,8 @@ import {
   type PerpView,
 } from "@/lib/perp";
 import { connectXLayer, XLAYER } from "@/lib/xlayer";
-import { TAPE_BEM, readTapePool } from "@/lib/tape-pool";
+import { TAPE_BEM } from "@/lib/tape-pool";
+import { readOpenBook } from "@/lib/tape-open-candles";
 import { peekSpotPrints } from "@/lib/tape-spot";
 import { xCap } from "@/lib/okb";
 import { SideRail } from "@/components/exchange/side-rail";
@@ -303,6 +306,9 @@ export function RealPerp({ launch, onMarkets }: {
 	const [sizePct, setSizePct] = useState(0);
 	const [orderStyle, setOrderStyle] = useState("market");
 	const [intent, setIntent] = useState<"long" | "short">("long");
+	const [marginMode, setMarginMode] = useState<"cross" | "iso">("iso");
+	const [acctMode, setAcctMode] = useState<"unified" | "port" | "manual">("manual");
+	const [phone, setPhone] = useState(wantedPane);
 	const [proOpen, setProOpen] = useState(false);
 	const [reduceOnly, setReduceOnly] = useState(false);
 	const [stopPx, setStopPx] = useState("");
@@ -353,21 +359,18 @@ export function RealPerp({ launch, onMarkets }: {
 		let dead = false;
 		setBoard([]);
 		const load = () => {
-			readTapePool(null).then((row) => {
-				const tape = Number(row.usdt.tape) / 1e8;
-				const quote = Number(row.usdt.quote) / 1e6;
-				if (dead || !(tape > 0)) return;
-				const n = quote / tape;
-				setCoinPx(n);
-				setView(coinBook(n));
+			readOpenBook().then((row) => {
+				if (dead || !(row.price > 0)) return;
+				setCoinPx(row.price);
+				setView(coinBook(row.price));
 			}).catch(() => void 0);
 			getTapeCandles({ data: frame }).then((next) => {
 				if (dead) return;
-				if (next.length > 1) {
+				if (next.length) {
 					candleCache.current.set(frame, next);
 					writeCandleBook(`${chain}:${coin}`, candleCache.current);
 				}
-				setPrices(next.length > 1 ? next : previewFrame(candleCache.current, frame));
+				setPrices(next.length ? next : previewFrame(candleCache.current, frame));
 			}).catch(() => {
 				if (!dead) setPrices(previewFrame(candleCache.current, frame));
 			});
@@ -486,20 +489,18 @@ export function RealPerp({ launch, onMarkets }: {
 	useEffect(() => {
 		if (!(chain === "bsc" && coin !== "bem")) return;
 		let dead = false;
-		setView(null);
 		setBoard([]);
-		setPrices([]);
 		const load = () => {
 			getCoinCandles({ data: {
 				coin,
 				frame
 			} }).then((next) => {
 				if (dead) return;
-				if (next.length > 1) {
+				if (next.length) {
 					candleCache.current.set(frame, next);
 					writeCandleBook(`${chain}:${coin}`, candleCache.current);
 				}
-				setPrices(next.length > 1 ? next : previewFrame(candleCache.current, frame));
+				setPrices(next.length ? next : previewFrame(candleCache.current, frame));
 			}).catch(() => {
 				if (!dead) setPrices(previewFrame(candleCache.current, frame));
 			});
@@ -522,31 +523,44 @@ export function RealPerp({ launch, onMarkets }: {
 		frame
 	]);
 	useEffect(() => {
+		const chart = () => setPhone("chart");
+		const trade = () => setPhone("ticket");
+		window.addEventListener("tape-chart", chart);
+		window.addEventListener("tape-trade", trade);
+		return () => {
+			window.removeEventListener("tape-chart", chart);
+			window.removeEventListener("tape-trade", trade);
+		};
+	}, []);
+	useEffect(() => {
 		if (!/^0x[a-fA-F0-9]{40}$/.test(perp)) return;
 		if (coin === "tape" || chain === "bsc" && coin !== "bem") return;
 		let dead = false;
+		let busy = false;
 		const load = () => {
+			if (busy) return;
+			busy = true;
 			selectDesk(chain);
-			readPerp(perp, account).then((next) => {
-				if (!dead) setView(next);
+			const book = readPerp(perp, account).then((next) => {
+				if (!dead && next) setView(next);
 			}).catch((err) => {
 				if (dead) return;
-				setView(null);
 				if ((err instanceof Error ? err.message : "") === "nochain") setNote(c.perpNoChain);
 			});
-			readBoard().then((rows) => {
+			const board = readBoard().then((rows) => {
 				if (!dead) setBoard(rows);
 			}).catch(() => void 0);
-			(chain === "xlayer" ? getXCandles({ data: frame }) : getCandles({ data: frame })).then((next) => {
+			const bars = (chain === "xlayer" ? getXCandles({ data: frame }) : getCandles({ data: frame })).then((next) => {
 				if (dead) return;
-				if (next.length > 1) {
+				if (next.length) {
 					candleCache.current.set(frame, next);
 					writeCandleBook(`${chain}:${coin}`, candleCache.current);
 				}
-				setPrices(next.length > 1 ? next : previewFrame(candleCache.current, frame));
+				setPrices(next.length ? next : previewFrame(candleCache.current, frame));
 			}).catch(() => {
 				if (!dead) setPrices(previewFrame(candleCache.current, frame));
 			});
+			void Promise.allSettled([book, board, bars]).finally(() => { busy = false; });
 		};
 		load();
 		const timer = window.setInterval(load, 12e3);
@@ -647,7 +661,7 @@ export function RealPerp({ launch, onMarkets }: {
 	const dec = chain === "xlayer" ? 6 : 18;
 	const scan = chain === "xlayer" ? XLAYER.explorer : BSC.explorer;
 	const floor = view && view.min > 0n ? Number(view.min / 10n ** BigInt(dec)) : 1;
-	const levOk = lev >= 1 && lev <= (mode === "easy" ? 20 : 1e3);
+	const levOk = lev >= 1 && lev <= 1000;
 	const marginOk = (() => {
 		const n = Number(margin);
 		return Number.isFinite(n) && n >= floor && n <= 500;
@@ -659,10 +673,15 @@ export function RealPerp({ launch, onMarkets }: {
 			return view?.mark ?? 0n;
 		}
 	})();
+	const lastClose = prices.at(-1)?.c ?? 0;
 	const alt = coin === "tape" || chain === "bsc" && coin !== "bem";
 	const riskLive = !alt && perp.toLowerCase() === (typeof window === "undefined" ? "" : (window.localStorage.getItem(chain === "xlayer" ? "tapeliquid-risk-x" : "tapeliquid-risk-bsc") ?? "")).toLowerCase() && perp.startsWith("0x");
 	const base = coin === "tape" ? "TAPE" : chain === "xlayer" || coin === "bem" ? "BEM" : coin.toUpperCase();
-	const markN = alt ? coinPx : chain === "xlayer" ? view && view.mark > 0n ? Number(formatUnits(view.mark, 18)) : 0 : live && live > 0 ? live : view && view.mark > 0n ? Number(formatUnits(view.mark, 18)) : 0;
+	const feeBlocked = lock.rows.some((row) => {
+		if (!row.got || row.ok) return false;
+		return chain === "xlayer" ? row.name.includes("X Layer") : row.name.includes("BSC 永续");
+	});
+	const markN = alt ? (coinPx || lastClose) : chain === "xlayer" ? view && view.mark > 0n ? Number(formatUnits(view.mark, 18)) : lastClose : live && live > 0 ? live : view && view.mark > 0n ? Number(formatUnits(view.mark, 18)) : lastClose;
 	const priceOk = orderStyle === "scale"
 		? Number(scaleA) > 0 && Number(scaleB) > 0
 		: orderStyle === "stop"
@@ -716,20 +735,20 @@ export function RealPerp({ launch, onMarkets }: {
 		setMargin(pct === 25 ? "1" : pct === 50 ? "5" : pct === 75 ? "10" : "25");
 	};
 	const entryN = view && view.dealEntry > 0n ? Number(formatUnits(view.dealEntry, 18)) : 0;
-	const mineOpen = view?.liveDeals.find((deal) => account && (deal.long.toLowerCase() === account.toLowerCase() || deal.short.toLowerCase() === account.toLowerCase()) && deal.id === view.myDeal);
+	const mineOpen = (view?.liveDeals ?? []).find((deal) => account && (deal.long.toLowerCase() === account.toLowerCase() || deal.short.toLowerCase() === account.toLowerCase()) && deal.id === view.myDeal);
 	const mineLev = mineOpen ? (account && mineOpen.long.toLowerCase() === account.toLowerCase() ? mineOpen.levL : mineOpen.levS) : 0;
 	const liqN = entryN > 0 && mineLev > 0 ? (account && mineOpen && mineOpen.long.toLowerCase() === account.toLowerCase() ? entryN * (1 - 0.5 / mineLev) : entryN * (1 + 0.5 / mineLev)) : 0;
 	const usedMargin = (() => {
 		if (!account || !view) return 0;
 		const me = account.toLowerCase();
-		const quotes = view.quotes.filter((quote) => quote.user.toLowerCase() === me).reduce((sum, quote) => sum + Number(formatUnits(quote.margin, dec)), 0);
-		const deals = view.liveDeals.reduce((sum, deal) => sum + (deal.long.toLowerCase() === me ? Number(formatUnits(deal.marginL, dec)) : 0) + (deal.short.toLowerCase() === me ? Number(formatUnits(deal.marginS, dec)) : 0), 0);
+		const quotes = (view.quotes ?? []).filter((quote) => quote.user.toLowerCase() === me).reduce((sum, quote) => sum + Number(formatUnits(quote.margin, dec)), 0);
+		const deals = (view.liveDeals ?? []).reduce((sum, deal) => sum + (deal.long.toLowerCase() === me ? Number(formatUnits(deal.marginL, dec)) : 0) + (deal.short.toLowerCase() === me ? Number(formatUnits(deal.marginS, dec)) : 0), 0);
 		return quotes + deals;
 	})();
 	const openPnl = (() => {
 		if (!account || !view) return 0;
 		const me = account.toLowerCase();
-		return view.liveDeals.reduce((sum, deal) => {
+		return (view.liveDeals ?? []).reduce((sum, deal) => {
 			if (deal.long.toLowerCase() === me) return sum + Number(formatUnits(deal.eqL - deal.marginL, dec));
 			if (deal.short.toLowerCase() === me) return sum + Number(formatUnits(deal.eqS - deal.marginS, dec));
 			return sum;
@@ -748,15 +767,13 @@ export function RealPerp({ launch, onMarkets }: {
 	const choose = (nextChain, nextCoin) => {
 		setMarkets(false);
 		setCoin(nextCoin);
-		if (nextCoin === "tape") {
-			setChain("xlayer");
-			return;
+		const desk = nextCoin === "tape" ? "xlayer" : nextChain;
+		if (desk !== chain) {
+			selectDesk(desk);
+			setChain(desk);
+			(desk === "xlayer" ? connectXLayer() : connectBsc()).catch(() => void 0);
 		}
-		if (nextChain === chain) return;
-		selectDesk(nextChain);
-		setChain(nextChain);
-		setPerp(pickBook(nextChain, nextCoin));
-		(nextChain === "xlayer" ? connectXLayer() : connectBsc()).catch(() => void 0);
+		if (nextCoin !== "tape") setPerp(pickBook(desk, nextCoin));
 	};
 	const proNames: Record<string, [string, string]> = {
 		post: ["只挂", "Post"],
@@ -768,14 +785,17 @@ export function RealPerp({ launch, onMarkets }: {
 	};
 	const proOn = orderStyle in proNames;
 	const proLabel = proOn ? proNames[orderStyle][lang === "zh" ? 0 : 1] : lang === "zh" ? "专业" : "Pro";
-	const posSize = !account || !view ? 0 : view.liveDeals.reduce((sum, deal) => {
+	const posSize = !account || !view ? 0 : (view.liveDeals ?? []).reduce((sum, deal) => {
 		const me = account.toLowerCase();
 		if (deal.long.toLowerCase() !== me && deal.short.toLowerCase() !== me) return sum;
 		return sum + Number(formatUnits(deal.base, 18));
 	}, 0);
+	const room = bal && markN > 0 ? Number(formatUnits(bal.usdt, dec)) * (lev || 1) / markN : 0;
+	const roomText = room > 0 ? room.toLocaleString("en-US", { maximumFractionDigits: 4 }) : "0";
 	return /* @__PURE__ */ jsxs("div", { children: [
 		/* @__PURE__ */ jsx("section", {
-			className: "overflow-hidden border border-gold bg-card",
+			className: "phone-desk overflow-hidden border border-gold bg-card",
+			"data-phone": phone,
 			children: /* @__PURE__ */ jsxs("div", {
 				className: "flex flex-col gap-3 p-0",
 				children: [
@@ -1017,11 +1037,20 @@ export function RealPerp({ launch, onMarkets }: {
 						className: "mx-3 inline-flex min-h-10 items-center justify-center bg-ink px-3 text-sm text-paper",
 						children: c.signOkx
 					}) : null,
+					/* @__PURE__ */ jsx(PhoneChrome, {
+						zh: lang === "zh",
+						perp: true,
+						pane: phone,
+						setPane: setPhone,
+						sheet: false,
+						onBuy: () => { setIntent("long"); setPhone("ticket"); },
+						onSell: () => { setIntent("short"); setPhone("ticket"); }
+					}),
 					/* @__PURE__ */ jsxs("div", {
-						className: "grid items-start xl:grid-cols-[minmax(0,1fr)_17.5rem_22rem]",
+						className: "desk-grid grid items-start xl:grid-cols-[minmax(0,1fr)_17.5rem_22rem]",
 						children: [
 							/* @__PURE__ */ jsxs("div", {
-								className: "order-1 min-w-0 xl:order-1",
+								className: "ph-chart order-1 min-w-0 xl:order-1",
 								children: [
 									/* @__PURE__ */ jsxs("div", {
 										className: "flex flex-col gap-2 px-2 pt-2",
@@ -1074,6 +1103,23 @@ export function RealPerp({ launch, onMarkets }: {
 											setLimit(px.toFixed(4));
 										}
 									}) }),
+									/* @__PURE__ */ jsxs("div", {
+										className: "grid grid-cols-2 gap-2 px-3 pb-3 xl:hidden",
+										children: [
+											/* @__PURE__ */ jsx("button", {
+												type: "button",
+												className: "h-11 bg-[#1b6b45] text-sm text-white",
+												onClick: () => { setIntent("long"); setPhone("ticket"); },
+												children: lang === "zh" ? "开多" : "Long"
+											}),
+											/* @__PURE__ */ jsx("button", {
+												type: "button",
+												className: "h-11 bg-sell text-sm text-white",
+												onClick: () => { setIntent("short"); setPhone("ticket"); },
+												children: lang === "zh" ? "开空" : "Short"
+											})
+										]
+									}),
 									/* @__PURE__ */ jsxs("details", {
 										className: "px-3 py-2 text-xs text-ink/55",
 										children: [/* @__PURE__ */ jsx("summary", {
@@ -1086,19 +1132,19 @@ export function RealPerp({ launch, onMarkets }: {
 									}),
 									!view ? /* @__PURE__ */ jsx("p", {
 										className: "px-3 py-2 text-sm text-ink/60",
-										children: lang === "zh" ? "正在读合约，读完才能开仓。" : "Reading the contract. Open waits until that finishes."
+										children: lang === "zh" ? "标记价先读公开行情。结算合约没回时，页面照样能看 K 线，不会停在空白。" : "The mark comes from the public price first. If the settlement contract is quiet, the chart still stays up."
 									}) : null,
-									lock.status === "bad" ? /* @__PURE__ */ jsx("p", {
+									lock.status === "bad" && feeBlocked ? /* @__PURE__ */ jsx("p", {
 										className: "px-3 pb-2 text-sm text-sell",
 										children: lang === "zh" ? "收费地址对不上，开仓停了。" : "The fee address does not match. Opening is stopped."
 									}) : null
 								]
 							}),
 							/* @__PURE__ */ jsxs("div", {
-								className: "order-3 min-w-0 border-t border-gold xl:order-2 xl:border-t-0 xl:border-l",
+								className: "ph-book order-3 min-w-0 border-t border-gold xl:order-2 xl:border-t-0 xl:border-l",
 								children: [/* @__PURE__ */ jsxs("div", {
 									className: "flex h-9 items-center border-b border-gold px-3 text-xs text-ink/70",
-									children: [/* @__PURE__ */ jsx("span", { children: lang === "zh" ? "订单簿" : "Book" }), account && view?.quotes.some((quote) => quote.user.toLowerCase() === account.toLowerCase()) ? /* @__PURE__ */ jsx("button", {
+									children: [/* @__PURE__ */ jsx("span", { children: lang === "zh" ? "订单簿" : "Book" }), account && (view?.quotes ?? []).some((quote) => quote.user.toLowerCase() === account.toLowerCase()) ? /* @__PURE__ */ jsx("button", {
 										type: "button",
 										className: "ml-2 underline",
 										disabled: busy,
@@ -1146,7 +1192,7 @@ export function RealPerp({ launch, onMarkets }: {
 								})]
 							}),
 							/* @__PURE__ */ jsxs("div", {
-								className: "order-2 flex min-w-0 flex-col gap-3 border-t border-gold p-3 xl:sticky xl:top-14 xl:order-3 xl:max-h-[calc(100dvh-4.5rem)] xl:overflow-y-auto xl:overscroll-contain xl:border-t-0 xl:border-l",
+								className: "ph-ticket order-2 flex min-w-0 flex-col gap-3 border-t border-gold p-3 xl:sticky xl:top-14 xl:order-3 xl:max-h-[calc(100dvh-4.5rem)] xl:overflow-y-auto xl:overscroll-contain xl:border-t-0 xl:border-l",
 								children: [
 									/* @__PURE__ */ jsx(RiskBar, {
 										zh: lang === "zh",
@@ -1161,7 +1207,7 @@ export function RealPerp({ launch, onMarkets }: {
 												type: "button",
 												onClick: () => setMarginOpen(true),
 												className: "h-8 border border-gold/50",
-												children: lang === "zh" ? "逐仓" : "Isolated"
+												children: marginMode === "cross" ? (lang === "zh" ? "全仓" : "Cross") : lang === "zh" ? "逐仓" : "Isolated"
 											}),
 											/* @__PURE__ */ jsxs("button", {
 												type: "button",
@@ -1173,11 +1219,11 @@ export function RealPerp({ launch, onMarkets }: {
 												type: "button",
 												onClick: () => setAcctOpen(true),
 												className: "h-8 border border-gold/50",
-												children: lang === "zh" ? "手动" : "Manual"
+												children: acctMode === "unified" ? (lang === "zh" ? "统一" : "Unified") : acctMode === "port" ? (lang === "zh" ? "组合" : "Portfolio") : lang === "zh" ? "手动" : "Manual"
 											})
 										]
 									}),
-									view?.liveDeals.length ? /* @__PURE__ */ jsxs("div", {
+									view?.liveDeals?.length ? /* @__PURE__ */ jsxs("div", {
 										className: "border border-gold/40 p-3",
 										children: [/* @__PURE__ */ jsxs("div", {
 											className: "flex items-center gap-2",
@@ -1215,7 +1261,7 @@ export function RealPerp({ launch, onMarkets }: {
 																named(deal.long),
 																mineLong ? lang === "zh" ? " · 我的" : " · mine" : "",
 																" · ",
-																usdtText$1(deal.eqL)
+																usdtText(deal.eqL)
 															]
 														}),
 														/* @__PURE__ */ jsxs("p", {
@@ -1226,7 +1272,7 @@ export function RealPerp({ launch, onMarkets }: {
 																named(deal.short),
 																mineShort ? lang === "zh" ? " · 我的" : " · mine" : "",
 																" · ",
-																usdtText$1(deal.eqS)
+																usdtText(deal.eqS)
 															]
 														}),
 														/* @__PURE__ */ jsxs("p", {
@@ -1304,7 +1350,7 @@ export function RealPerp({ launch, onMarkets }: {
 											waiting ? /* @__PURE__ */ jsxs("p", {
 												className: "text-sm leading-relaxed",
 												children: [
-													mine ? c.perpOther : `${c.waitQuote} · ${view?.pendingLong ? c.postLong : c.postShort} · ${usdtText$1(view?.pendingMargin ?? 0n)} USDT · ${view?.pendingLev}×`,
+													mine ? c.perpOther : `${c.waitQuote} · ${view?.pendingLong ? c.postLong : c.postShort} · ${usdtText(view?.pendingMargin ?? 0n)} USDT · ${view?.pendingLev}×`,
 													" ",
 													c.pkMiss
 												]
@@ -1334,7 +1380,7 @@ export function RealPerp({ launch, onMarkets }: {
 															children: lang === "zh" ? "保证金" : "Margin"
 														}), /* @__PURE__ */ jsxs("span", {
 															className: "font-mono",
-															children: [usdtText$1(view?.margin ?? view?.equity ?? 0n), " USDT"]
+															children: [usdtText(view?.margin ?? view?.equity ?? 0n), " USDT"]
 														})]
 													}),
 													/* @__PURE__ */ jsxs("p", {
@@ -1392,7 +1438,7 @@ export function RealPerp({ launch, onMarkets }: {
 															" · ",
 															quote.long ? c.postLong : c.postShort,
 															" · ",
-															usdtText$1(quote.margin),
+															usdtText(quote.margin),
 															" USDT · ",
 															quote.lev,
 															"×",
@@ -1588,6 +1634,12 @@ export function RealPerp({ launch, onMarkets }: {
 												<div className="grid grid-cols-2 gap-y-1 font-mono text-[11px]">
 													<span className="text-ink/45">{lang === "zh" ? "可用" : "Available"}</span>
 													<span className="text-right">{bal ? pretty(bal.usdt, dec, 2) : "—"} {chain === "xlayer" ? "USDT0" : "USDT"}</span>
+													<span className="text-ink/45">{lang === "zh" ? "可开多" : "Can long"}</span>
+													<span className="text-right">{roomText} {base}</span>
+													<span className="text-ink/45">{lang === "zh" ? "可开空" : "Can short"}</span>
+													<span className="text-right">{roomText} {base}</span>
+													<span className="text-ink/45">{lang === "zh" ? "可平" : "Can close"}</span>
+													<span className="text-right">{posSize ? posSize.toFixed(4) : "0.00"} {base}</span>
 													<span className="text-ink/45">{lang === "zh" ? "当前仓位" : "Position"}</span>
 													<span className="text-right">{posSize ? posSize.toFixed(4) : "0.00"} {base}</span>
 													<span className="text-ink/45">{lang === "zh" ? "强平价格" : "Liq. price"}</span>
@@ -1625,7 +1677,7 @@ export function RealPerp({ launch, onMarkets }: {
 												<button
 													type="button"
 													className={`min-h-12 text-paper disabled:opacity-40 ${intent === "long" ? "bg-up" : "bg-sell"}`}
-													disabled={busy || lock.status !== "ok" || !levOk || !marginOk || !priceOk || !view?.priced || Boolean(!view?.book && waiting && (intent === "long" ? view?.pendingLong : !view?.pendingLong))}
+													disabled={busy || feeBlocked || !levOk || !marginOk || !priceOk || (!alt && !view?.priced && !(markN > 0))}
 													onClick={() => {
 														if (lev > 20 && !hot) {
 															setHot(true);
@@ -1636,6 +1688,7 @@ export function RealPerp({ launch, onMarkets }: {
 												>
 													{lev > 20 && !hot ? (lang === "zh" ? "超过 20 倍，再点一次" : "Over 20×. Tap again") : waiting && view && (intent === "long" ? !view.pendingLong : view.pendingLong) ? c.pullQuote : intent === "long" ? (lang === "zh" ? "买入 / 做多" : "Buy / Long") : lang === "zh" ? "卖出 / 做空" : "Sell / Short"}
 												</button>,
+												<TradeLog zh={lang === "zh"} />,
 												card ? /* @__PURE__ */ jsx(SignCard, {
 													title: lang === "zh" ? "签名前看一眼" : "Before you sign",
 													yes: lang === "zh" ? "确认并签名" : "Confirm and sign",
@@ -1791,7 +1844,7 @@ export function RealPerp({ launch, onMarkets }: {
 					account ? /* @__PURE__ */ jsxs("p", {
 						className: "font-mono text-xs xl:col-span-12",
 						children: [
-							short$3(account),
+							short(account),
 							" · ",
 							chain === "xlayer" ? "X Layer" : "BSC",
 							bal ? ` · ${chain === "xlayer" ? "USDT0" : "USDT"} ${pretty(bal.usdt, dec, 2)} · ${chain === "xlayer" ? "OKB" : "BNB"} ${pretty(bal.bnb, 18, 4)}` : ""
@@ -1818,9 +1871,9 @@ export function RealPerp({ launch, onMarkets }: {
 						</div>
 						<div className="min-h-14 px-3 py-2 text-xs">
 							{dock === "pos" ? (
-								account && view?.liveDeals.some((deal) => deal.long.toLowerCase() === account.toLowerCase() || deal.short.toLowerCase() === account.toLowerCase()) ? (
+								account && (view?.liveDeals ?? []).some((deal) => deal.long.toLowerCase() === account.toLowerCase() || deal.short.toLowerCase() === account.toLowerCase()) ? (
 									<div className="flex flex-col gap-1 font-mono">
-										{view.liveDeals.filter((deal) => deal.long.toLowerCase() === account.toLowerCase() || deal.short.toLowerCase() === account.toLowerCase()).map((deal) => {
+										{(view?.liveDeals ?? []).filter((deal) => deal.long.toLowerCase() === account.toLowerCase() || deal.short.toLowerCase() === account.toLowerCase()).map((deal) => {
 											const mineLong = deal.long.toLowerCase() === account.toLowerCase();
 											const pnl = mineLong ? deal.eqL - deal.marginL : deal.eqS - deal.marginS;
 											const marginSide = mineLong ? deal.marginL : deal.marginS;
@@ -1842,11 +1895,11 @@ export function RealPerp({ launch, onMarkets }: {
 								<p className="font-mono text-ink/70">{bal ? `${chain === "xlayer" ? "USDT0" : "USDT"} ${pretty(bal.usdt, dec, 2)} · ${chain === "xlayer" ? "OKB" : "BNB"} ${pretty(bal.bnb, 18, 4)}` : "—"}</p>
 							) : null}
 							{dock === "ord" ? (
-								view?.quotes.some((quote) => account && quote.user.toLowerCase() === account.toLowerCase()) ? (
+								(view?.quotes ?? []).some((quote) => account && quote.user.toLowerCase() === account.toLowerCase()) ? (
 									<div className="flex flex-col gap-1 font-mono">
-										{view.quotes.filter((quote) => account && quote.user.toLowerCase() === account.toLowerCase()).map((quote) => (
+										{(view?.quotes ?? []).filter((quote) => account && quote.user.toLowerCase() === account.toLowerCase()).map((quote) => (
 											<p key={quote.id.toString()} className="flex items-center gap-3">
-												<span>#{quote.id.toString()} {quote.long ? (lang === "zh" ? "多" : "Long") : lang === "zh" ? "空" : "Short"} · {quote.price > 0n ? pxText(quote.price) : "—"} · {usdtText$1(quote.margin)}</span>
+												<span>#{quote.id.toString()} {quote.long ? (lang === "zh" ? "多" : "Long") : lang === "zh" ? "空" : "Short"} · {quote.price > 0n ? pxText(quote.price) : "—"} · {usdtText(quote.margin)}</span>
 												<button type="button" className="underline" disabled={busy} onClick={() => run((from) => cancelPerp(from, perp, quote.id), "cancel")}>{lang === "zh" ? "撤销" : "Cancel"}</button>
 											</p>
 										))}
@@ -1904,10 +1957,14 @@ export function RealPerp({ launch, onMarkets }: {
 		}) : null,
 		marginOpen ? /* @__PURE__ */ jsx(MarginDialog, {
 			zh: lang === "zh",
+			mode: marginMode,
+			onPick: setMarginMode,
 			onClose: () => setMarginOpen(false)
 		}) : null,
 		acctOpen ? /* @__PURE__ */ jsx(AccountDialog, {
 			zh: lang === "zh",
+			mode: acctMode,
+			onPick: setAcctMode,
 			onClose: () => setAcctOpen(false)
 		}) : null
 	] });

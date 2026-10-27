@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { PhoneChrome, wantedPane, type PhonePane } from "@/components/exchange/phone-desk";
 import { formatUnits } from "viem";
 import { copy } from "@/lib/copy";
 import { useExchange } from "@/lib/exchange-store";
@@ -22,6 +23,8 @@ import {
   swapBem,
   swapBnb,
   swapListed,
+  swapWithBnb,
+  quoteWithBnb,
   tokenCap,
   txUrl,
   TxPending,
@@ -37,6 +40,7 @@ import type { SpotFrame } from "@/lib/spot-ohlcv";
 import { connectX, okbAddressUrl, okbPrice, okbPrints, okbTxUrl, OKB, quoteOkb, readOkbPurse, swapOkb, xCap } from "@/lib/okb";
 import { XLAYER } from "@/lib/xlayer";
 import { currentAccount, connectKind, onAccount, onOpenLink } from "@/lib/wallet";
+import { rememberFill, TradeLog } from "@/components/exchange/trade-foot";
 import { Kline } from "@/components/exchange/kline";
 import { SignCard } from "@/components/exchange/sign-card";
 import { CoinMark } from "@/components/exchange/coin-mark";
@@ -59,6 +63,7 @@ export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?:
   const [book, setBook] = useState<"crypto" | "stock">("crypto");
   const [pair, setPair] = useState<"bem" | "bnb" | "okb" | ErcKey>("bem");
   const [side, setSide] = useState<"buy" | "sell">("buy");
+  const [unit, setUnit] = useState<"usdt" | "bnb">("usdt");
   const [amount, setAmount] = useState("");
   const [price, setPrice] = useState<string | null>(null);
   const live = useExchange((s) => s.chainBem);
@@ -82,7 +87,20 @@ export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?:
   const [bars, setBars] = useState<Candle[]>([]);
   const [supply, setSupply] = useState<number | null>(null);
   const [lane, setLane] = useState<"trade" | "lp">(openLp ? "lp" : "trade");
+  const [phone, setPhone] = useState<PhonePane>(wantedPane());
+  const [showPrints, setShowPrints] = useState(false);
   const lock = useFeeLock();
+
+  useEffect(() => {
+    const chart = () => setPhone("chart");
+    const trade = () => setPhone("ticket");
+    window.addEventListener("tape-chart", chart);
+    window.addEventListener("tape-trade", trade);
+    return () => {
+      window.removeEventListener("tape-chart", chart);
+      window.removeEventListener("tape-trade", trade);
+    };
+  }, []);
 
   useEffect(() => {
     if (openLp) setLane("lp");
@@ -155,17 +173,15 @@ export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?:
 
   useEffect(() => {
     const listed = isErcKey(pair) ? ERC_BOOKS[pair] : null;
-    const base = pair === "okb" ? OKB.wokb : pair === "bnb" ? BSC.wbnb : listed ? listed.token : BSC.bem;
+    const payingBnb = pair !== "okb" && pair !== "bnb" && unit === "bnb";
+    const baseToken = pair === "okb" ? OKB.wokb : pair === "bnb" ? BSC.wbnb : listed ? listed.token : BSC.bem;
     const baseDecimals = listed ? listed.decimals : pair === "bem" ? BSC.bemDecimals : 18;
-    const payDecimals = pair === "okb" ? OKB.usdtDecimals : BSC.usdtDecimals;
-    const tokenIn = side === "buy" ? (pair === "okb" ? OKB.usdt : BSC.usdt) : base;
-    const tokenOut = side === "buy" ? base : pair === "okb" ? OKB.usdt : BSC.usdt;
-    const decimals = side === "buy" ? payDecimals : baseDecimals;
-    const outDecimals = side === "buy" ? baseDecimals : payDecimals;
+    const payDecimals = payingBnb && side === "buy" ? 18 : pair === "okb" ? OKB.usdtDecimals : side === "buy" ? BSC.usdtDecimals : baseDecimals;
+    const outDecimals = payingBnb && side === "sell" ? 18 : side === "buy" ? baseDecimals : pair === "okb" ? OKB.usdtDecimals : BSC.usdtDecimals;
     const fee = listed ? listed.fee : pair === "bnb" ? BSC.bnbFee : BSC.fee;
     let dead = false;
     try {
-      const amountIn = units(amount || "0", decimals);
+      const amountIn = units(amount || "0", payDecimals);
       if (amountIn <= 0n) {
         setOut(null);
         setMinOut(null);
@@ -173,8 +189,12 @@ export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?:
         return;
       }
       const { swapIn } = splitDeskFee(amountIn);
-      const digits = side === "buy" ? (pair === "btc" ? 6 : pair === "bem" ? 4 : 4) : 2;
-      const quoted = pair === "okb" ? quoteOkb(side, swapIn) : quoteExact(tokenIn, tokenOut, swapIn, fee);
+      const digits = side === "buy" ? (pair === "btc" ? 6 : 4) : 4;
+      const quoted = payingBnb
+        ? quoteWithBnb(baseToken, fee, side, swapIn)
+        : pair === "okb"
+          ? quoteOkb(side, swapIn)
+          : quoteExact(side === "buy" ? BSC.usdt : baseToken, side === "buy" ? baseToken : BSC.usdt, swapIn, fee);
       quoted
         .then((value) => {
           if (!dead) {
@@ -200,7 +220,7 @@ export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?:
     return () => {
       dead = true;
     };
-  }, [amount, side, pair]);
+  }, [amount, side, pair, unit]);
 
   const fail = (err: unknown) => {
     const code = (err as { code?: number }).code;
@@ -250,8 +270,15 @@ export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?:
       const from = pair === "okb" ? account ?? (await connectX()) : account ?? (await connectBsc());
       setAccount(from);
       if (!amount.trim()) return;
-      const tx = pair === "okb" ? await swapOkb(from, side, amount, min) : pair === "bnb" ? await swapBnb(from, side, amount, min) : isErcKey(pair) ? await swapListed(from, pair, side, amount, min) : await swapBem(from, side, amount, min);
+      const payingBnb = pair !== "okb" && pair !== "bnb" && unit === "bnb";
+      const listed = isErcKey(pair) ? ERC_BOOKS[pair] : null;
+      const tx = pair === "okb"
+        ? await swapOkb(from, side, amount, min)
+        : payingBnb
+          ? await swapWithBnb(from, listed ? listed.token : BSC.bem, listed ? listed.decimals : BSC.bemDecimals, listed ? listed.fee : BSC.fee, side, amount, min)
+          : pair === "bnb" ? await swapBnb(from, side, amount, min) : isErcKey(pair) ? await swapListed(from, pair, side, amount, min) : await swapBem(from, side, amount, min);
       setHash(tx);
+      rememberFill(`${side === "buy" ? "买入" : "卖出"} ${amount} ${base}`, pair === "okb" ? okbTxUrl(tx) : txUrl(tx));
       setNote(null);
     } catch (err) {
       fail(err);
@@ -271,7 +298,20 @@ export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?:
     setAmount(sized(raw, decimals, pct, cap));
   };
 
-  const payRaw = pair === "okb"
+  const sellRaw = pair === "okb"
+    ? (okbBal && okbBal.okb > OKB.gasReserve ? okbBal.okb - OKB.gasReserve : 0n)
+    : pair === "bnb"
+      ? (balances && balances.bnb > BNB_GAS_RESERVE ? balances.bnb - BNB_GAS_RESERVE : 0n)
+      : isErcKey(pair)
+        ? (assetBal ?? 0n)
+        : (balances?.bem ?? 0n);
+  const sellDec = isErcKey(pair) ? ERC_BOOKS[pair].decimals : pair === "bem" ? BSC.bemDecimals : 18;
+  const usdtRaw = pair === "okb" ? (okbBal?.usdt ?? 0n) : (balances?.usdt ?? 0n);
+  const usdtDec = pair === "okb" ? OKB.usdtDecimals : BSC.usdtDecimals;
+  const payingBnb = pair !== "okb" && pair !== "bnb" && unit === "bnb";
+  const payRaw = payingBnb && side === "buy"
+    ? (balances && balances.bnb > BNB_GAS_RESERVE ? balances.bnb - BNB_GAS_RESERVE : 0n)
+    : pair === "okb"
     ? (side === "buy" ? (okbBal?.usdt ?? 0n) : (okbBal?.okb ?? 0n))
     : side === "buy"
       ? (balances?.usdt ?? 0n)
@@ -280,14 +320,14 @@ export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?:
         : isErcKey(pair)
           ? (assetBal ?? 0n)
           : (balances?.bem ?? 0n);
-  const payDecimals = side === "buy" ? (pair === "okb" ? OKB.usdtDecimals : BSC.usdtDecimals) : isErcKey(pair) ? ERC_BOOKS[pair].decimals : pair === "bem" ? BSC.bemDecimals : 18;
+  const payDecimals = payingBnb && side === "buy" ? 18 : side === "buy" ? (pair === "okb" ? OKB.usdtDecimals : BSC.usdtDecimals) : isErcKey(pair) ? ERC_BOOKS[pair].decimals : pair === "bem" ? BSC.bemDecimals : 18;
   const reserve = pair === "okb" ? OKB.gasReserve : BNB_GAS_RESERVE;
   const spendCap = (pair === "bnb" || pair === "okb") && side === "sell" ? (payRaw > reserve ? payRaw - reserve : 0n) : undefined;
   const spendable = spendCap ?? payRaw;
   const base = pair === "okb" ? "OKB" : pair === "bnb" ? "BNB" : pair === "bem" ? "BEM" : pair === "btc" ? "BTC" : pair === "eth" ? "ETH" : pair === "zec" ? "ZEC" : pair === "xau" ? "XAU" : pair in STOCKS ? STOCKS[pair].en : pair;
   const stock = pair in STOCKS ? STOCKS[pair as StockKey] : null;
-  const payUnit = side === "buy" ? "USDT" : base;
-  const recvUnit = side === "buy" ? base : "USDT";
+  const payUnit = payingBnb && side === "buy" ? "BNB" : side === "buy" ? "USDT" : base;
+  const recvUnit = payingBnb && side === "sell" ? "BNB" : side === "buy" ? base : "USDT";
   let typed = 0n;
   try {
     typed = amount.trim() ? units(amount, payDecimals) : 0n;
@@ -321,17 +361,21 @@ export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?:
         setPrints([]);
       },
     }))}>
-    <section className="border border-gold bg-card shadow-plate">
-      <div className="flex items-center gap-2 border-b border-gold/40 px-3 py-2">
-        <button type="button" onClick={onMarkets} className="flex items-center gap-2">
+    <section className="phone-desk spot-split min-w-0 overflow-hidden border border-gold bg-card" data-phone={phone}>
+      <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-gold px-3 py-2">
+        <button type="button" onClick={onMarkets} className="flex min-w-0 items-center gap-2">
           <CoinMark id={pair} />
-          <span className="text-lg font-medium tracking-tight">{base}/USDT</span>
+          <span className="truncate text-lg font-medium tracking-tight">{base}/USDT</span>
           <PairChevron />
+          <span className="lev-chip shrink-0 rounded px-1.5 py-0.5 text-[11px]">{lang === "zh" ? "现货" : "Spot"}</span>
         </button>
+        <p className="font-mono text-sm">{shown ? `${shown} USDT` : "—"}</p>
       </div>
       {lane === "lp" ? <LpPanel /> : (
-      <div className="grid gap-0 lg:grid-cols-12">
-        <div className="border-b border-gold/40 p-3 lg:col-span-7 lg:border-r lg:border-b-0">
+      <>
+      <PhoneChrome zh={lang === "zh"} pane={phone} setPane={setPhone} sheet={false} onBuy={() => { setSide("buy"); setPhone("ticket"); }} onSell={() => { setSide("sell"); setPhone("ticket"); }} />
+      <div className="spot-grid desk-grid grid items-start xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="ph-chart min-w-0 border-b border-gold/40 p-3 xl:border-r xl:border-b-0">
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs tracking-widest text-gold">{base} / USDT</p>
           </div>
@@ -368,7 +412,11 @@ export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?:
             ))}
           </div>
           <Kline bars={bars} lang={lang} desk="spot" supply={supply} />
-          <h2 className="mt-4 text-xs tracking-widest text-gold">{lang === "zh" ? "链上成交 · 地址是签名的钱包" : "On-chain fills · the address signed the trade"}</h2>
+          <button type="button" className="mt-3 flex h-8 w-full items-center justify-between border border-gold/40 px-2 text-xs" onClick={() => setShowPrints((on) => !on)}>
+            <span>{lang === "zh" ? "成交" : "Prints"}</span>
+            <span className="text-ink/45">{showPrints ? (lang === "zh" ? "收起" : "Hide") : prints.length}</span>
+          </button>
+          {showPrints ? (
           <div className="mt-2 overflow-x-auto">
           <div className="grid min-w-[22rem] grid-cols-[3rem_1fr_5rem_7.5rem] gap-2 font-mono text-xs text-ink/45">
             <span>{lang === "zh" ? "买卖" : "Side"}</span>
@@ -377,7 +425,7 @@ export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?:
             <span>{lang === "zh" ? "地址" : "Address"}</span>
           </div>
           <ul className="mt-2 min-w-[22rem] divide-y divide-gold/30">
-            {prints.length === 0 ? <li className="py-3 text-sm text-ink/60">{lang === "zh" ? (pair === "okb" ? "这根周期还没有池子成交。报价仍每秒从 PotatoSwap 读取。" : "这根周期还没有池子成交。报价仍每秒从 Pancake 读取。") : "No pool trades in this candle yet. The quote is still read every second."}</li> : null}
+            {prints.length === 0 ? <li className="py-3 text-sm text-ink/60">{lang === "zh" ? "还没有成交。" : "No prints yet."}</li> : null}
             {prints.map((row) => (
               <li key={row.id} className="grid grid-cols-[3rem_1fr_5rem_7.5rem] items-baseline gap-2 py-2 font-mono text-sm tabular-nums">
                 <a className={row.side === "buy" ? "text-gold" : "text-sell"} href={pair === "okb" ? okbTxUrl(row.tx) : txUrl(row.tx)} target="_blank" rel="noreferrer">
@@ -396,12 +444,13 @@ export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?:
             ))}
           </ul>
           </div>
+          ) : null}
         </div>
         <form
-          className="flex flex-col gap-3 p-3 lg:sticky lg:top-28 lg:col-span-5 lg:self-start"
+          className="ph-ticket flex min-w-0 flex-col gap-3 border-t border-gold p-3 xl:sticky xl:top-28 xl:border-t-0 xl:border-l"
           onSubmit={(event) => {
             event.preventDefault();
-            if (!account || lock.status !== "ok" || over || !amount.trim() || !out || !minOut) return;
+            if (!account || over || !amount.trim() || !out || !minOut) return;
             setCard(true);
           }}
         >
@@ -419,6 +468,27 @@ export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?:
                 {key === "buy" ? c.buy : c.sell}
               </button>
             ))}
+          </div>
+          <p className="font-mono text-2xl tabular-nums">{shown ?? "—"} <span className="text-xs tracking-widest text-gold">USDT</span></p>
+          {pair !== "okb" && pair !== "bnb" ? (
+            <div className="grid grid-cols-2 border border-gold text-sm">
+              <button type="button" className={`min-h-10 ${unit === "usdt" ? "bg-ink text-paper" : ""}`} onClick={() => { setUnit("usdt"); setAmount(""); }}>USDT</button>
+              <button type="button" className={`min-h-10 ${unit === "bnb" ? "bg-ink text-paper" : ""}`} onClick={() => { setUnit("bnb"); setAmount(""); }}>BNB</button>
+            </div>
+          ) : null}
+          <div className="grid grid-cols-3 border border-gold/40">
+            <p className="min-w-0 px-2 py-2">
+              <span className="block text-[10px] tracking-wide text-ink/45">{lang === "zh" ? "可用" : "Available"} USDT</span>
+              <span className="block truncate font-mono text-sm">{(pair === "okb" ? okbBal : balances) ? pretty(usdtRaw, usdtDec, 2) : "—"}</span>
+            </p>
+            <p className="min-w-0 border-l border-gold/40 px-2 py-2">
+              <span className="block text-[10px] tracking-wide text-ink/45">{lang === "zh" ? "可用" : "Available"} {pair === "okb" ? "OKB" : "BNB"}</span>
+              <span className="block truncate font-mono text-sm">{pair === "okb" ? (okbBal ? pretty(okbBal.okb, 18, 4) : "—") : (balances ? pretty(balances.bnb, 18, 4) : "—")}</span>
+            </p>
+            <p className="min-w-0 border-l border-gold/40 px-2 py-2">
+              <span className="block text-[10px] tracking-wide text-ink/45">{lang === "zh" ? "可用" : "Available"} {base}</span>
+              <span className="block truncate font-mono text-sm">{(pair === "okb" ? Boolean(okbBal) : Boolean(balances) || assetBal != null) ? pretty(sellRaw, sellDec, 4) : "—"}</span>
+            </p>
           </div>
           <p className="text-xs tracking-widest text-gold">{c.balTitle}</p>
           <div className="grid grid-cols-3 gap-2">
@@ -451,7 +521,7 @@ export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?:
             <span className="flex items-center justify-between text-xs tracking-widest text-gold">
               {c.pay}
               <span className="max-w-[9rem] truncate font-mono normal-case tracking-normal text-ink/70">
-                {c.ofBal} {balances ? pretty(payRaw, payDecimals, side === "buy" ? 2 : 4) : "—"} {side === "buy" ? "USDT" : base}
+                {c.ofBal} {(pair === "okb" ? okbBal : balances || assetBal != null) ? pretty(payRaw, payDecimals, side === "buy" ? 4 : 4) : "—"} {payUnit}
               </span>
             </span>
             <span className="flex items-baseline gap-2">
@@ -463,7 +533,7 @@ export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?:
                 className="w-full bg-transparent font-mono text-3xl outline-none"
                 aria-label={c.pay}
               />
-              <span className="font-mono text-sm">{side === "buy" ? "USDT" : base}</span>
+              <span className="font-mono text-sm">{payUnit}</span>
             </span>
           </label>
           <div className="grid grid-cols-4 gap-2">
@@ -486,21 +556,10 @@ export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?:
           </p>
           <p className="font-mono text-xs tabular-nums text-ink/70">
             {lang === "zh" ? "本单台费" : "Fee"} {deskFee ? pretty(deskFee.fee, payDecimals, 4) : "—"} {payUnit}
-            {lang === "zh" ? " · 绑了邀请人则这笔的 6% 给邀请人，少付 4%，90% 进收费地址" : " · with a referrer, 6% of this fee, 4% off, 90% to the fee address"}
             {" · "}
             {lang === "zh" ? "最少到账" : "Min. received"} {minOut ?? "—"} {recvUnit}
           </p>
-          {over ? <p className="text-sm text-sell">{lang === "zh" ? "余额不够，减一点数量。" : "Not enough balance. Use a smaller size."}</p> : null}
-          <p className="flex flex-wrap items-center gap-2 text-xs text-ink/70">
-            <span>{lang === "zh" ? "本单台费收款，与规则页登记地址一致" : "This order's fee. Same address as the rules page."}</span>
-            <button
-              type="button"
-              className="font-mono underline decoration-gold underline-offset-4"
-              onClick={() => void navigator.clipboard?.writeText(FEE_TO)}
-            >
-              {FEE_TO.slice(0, 6)}…{FEE_TO.slice(-4)}
-            </button>
-          </p>
+          {over ? <p className="text-sm text-sell">{lang === "zh" ? "余额不够。" : "Not enough balance."}</p> : null}
           {!account ? (
             <div className="grid grid-cols-2 gap-2">
               <button type="button" className="min-h-12 border border-gold" disabled={busy} onClick={() => void connectHere("okx")}>
@@ -511,8 +570,8 @@ export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?:
               </button>
             </div>
           ) : (
-            <button type="submit" className="min-h-12 bg-ink text-paper disabled:opacity-40" disabled={busy || over || lock.status !== "ok" || !amount.trim() || !out || !minOut}>
-              {lang === "zh" ? `签名并${side === "buy" ? "买入" : "卖出"}` : `Sign and ${side === "buy" ? "buy" : "sell"}`}
+            <button type="submit" className="min-h-12 bg-ink text-paper disabled:opacity-40" disabled={busy || over || !amount.trim() || !out || !minOut}>
+              {lang === "zh" ? `${side === "buy" ? "买入" : "卖出"} ${base} · ${side === "buy" ? "付" : "收"} ${side === "buy" ? payUnit : recvUnit}` : `${side === "buy" ? "Buy" : "Sell"} ${base} · ${side === "buy" ? "pay" : "receive"} ${side === "buy" ? payUnit : recvUnit}`}
             </button>
           )}
           {openLink ? (
@@ -521,6 +580,7 @@ export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?:
             </a>
           ) : null}
           {note ? <p className={`text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
+          <TradeLog zh={lang === "zh"} />
           {hash ? (
             <a className="text-sm underline decoration-gold underline-offset-4" href={pair === "okb" ? okbTxUrl(hash) : txUrl(hash)} target="_blank" rel="noreferrer">
               {c.walletTx}
@@ -531,15 +591,7 @@ export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?:
               title={lang === "zh" ? "签名前看一眼" : "Before you sign"}
               yes={lang === "zh" ? `签名并${side === "buy" ? "买入" : "卖出"}` : `Sign and ${side === "buy" ? "buy" : "sell"}`}
               no={lang === "zh" ? "取消" : "Cancel"}
-              warn={
-                pair === "okb"
-                  ? lang === "zh"
-                    ? "这是 X Layer 现货。钱包会切到 X Layer。不会和 BSC 的单合成一笔。台费先付，后面的兑换没完成也不退。"
-                    : "This is X Layer spot. The wallet switches to X Layer. It does not net with a BSC order. The desk fee is paid first and is not returned if the swap does not finish."
-                  : lang === "zh"
-                    ? "这是 BSC 现货。不会和 X Layer 的单合成一笔。台费先付，后面的兑换没完成也不退。"
-                    : "This is BSC spot. It does not net with an X Layer order. The desk fee is paid first and is not returned if the swap does not finish."
-              }
+              warn=""
               onNo={() => setCard(false)}
               onYes={() => {
                 if (!floor || Date.now() - quotedAt > 30_000) {
@@ -563,6 +615,7 @@ export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?:
           ) : null}
         </form>
       </div>
+      </>
       )}
     </section>
     </SideRail>

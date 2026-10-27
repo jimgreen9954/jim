@@ -253,7 +253,7 @@ async function readThroughSite(account: string | null, onHead?: (board: TapeBoar
     const head = boardFrom(await until(getTapeHead({ data: { account: account ?? "" } }), 8_000));
     onHead?.({ ...head, scanning: true, seats: [], scanOk: false });
     try {
-      return boardFrom(await until(getTapeSeats({ data: { account: account ?? "" } }), 12_000));
+      return boardFrom(await until(getTapeSeats({ data: { account: account ?? "" } }), 20_000));
     } catch {
       return { ...head, scanning: false };
     }

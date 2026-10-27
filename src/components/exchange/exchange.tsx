@@ -15,6 +15,7 @@ import { TransistorDesk } from "@/components/exchange/transistor-desk";
 import { TapeCanvas } from "@/components/exchange/tape-canvas";
 import { ConnectButton } from "@/components/exchange/wallet-bar";
 import { SettingsMenu } from "@/components/exchange/settings-menu";
+import { LocaleMenu } from "@/components/exchange/locale-menu";
 import { AccountCenter } from "@/components/exchange/account-center";
 import { TapeSpotDesk } from "@/components/exchange/tape-spot";
 import { WorkshopRisk } from "@/components/exchange/risk-calc";
@@ -23,11 +24,12 @@ import { Whitepaper } from "@/components/exchange/whitepaper";
 import { SideRail } from "@/components/exchange/side-rail";
 import { bemPrice, BSC, FEE_TO, readBalances } from "@/lib/bsc";
 import { FeeLockProvider, useFeeLock } from "@/lib/fee-lock";
-import { currentAccount, onAccount, resumeSession } from "@/lib/wallet";
+import { connectKind, currentAccount, disconnectWallet, onAccount, resumeSession } from "@/lib/wallet";
 import { CLAIM_STEPS, bindCode, claimRebate, codeText, readRebate, registerCode, X_USDT, type Desk } from "@/lib/perp";
 import { readPrefs } from "@/lib/desk-prefs";
 import { readOkb, XLAYER } from "@/lib/xlayer";
 import { formatUnits } from "viem";
+import { askChart, askTrade } from "@/components/exchange/phone-desk";
 import { OfficialBridge } from "@/components/exchange/tape-desk";
 
 type Floor = "desk" | "paper" | "shop" | "rules" | "canvas" | "me" | "mine";
@@ -41,6 +43,7 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
   const [giftOpen, setGiftOpen] = useState(false);
   const [place, setPlace] = useState("");
   const { night, setNight } = useNight();
+  const num = useExchange((s) => s.num);
   useEffect(() => {
     const apply = () => {
       const named = window.location.hash.replace(/^#/, "");
@@ -65,12 +68,12 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
   }, []);
   return (
     <FeeLockProvider>
-      <div className="min-h-screen overflow-x-hidden bg-paper text-ink">
+      <div className="min-h-screen overflow-x-hidden bg-paper text-ink" data-num={num}>
         <Crops />
         <SimClock />
         <BannerToast />
         <FuseFlash />
-        <div className="mx-auto flex min-h-screen w-full flex-col pb-10">
+        <div className="mx-auto flex min-h-screen w-full flex-col pb-24 lg:pb-10">
           <Header floor={floor} desk={desk} shop={shop} place={place} night={night} setNight={setNight} setFloor={setFloor} setDesk={setDesk} setShop={setShop} setGiftOpen={setGiftOpen} />
           {floor === "desk" ? <TradeBanner /> : null}
           <div key={`${floor}-${shop}`} className={`floor-enter flex flex-col gap-3 px-2 pt-2 sm:px-3 ${floor === "paper" ? "pb-6" : ""}`}>
@@ -107,44 +110,37 @@ function useNight() {
   return { night, setNight };
 }
 
-function ThemeButton({ night, setNight, compact = false }: { night: boolean; setNight: (next: boolean | ((on: boolean) => boolean)) => void; compact?: boolean }) {
+function ThemeButton({ night, setNight, icon = false }: { night: boolean; setNight: (next: boolean | ((on: boolean) => boolean)) => void; icon?: boolean }) {
   const lang = useExchange((s) => s.lang);
   const zh = lang === "zh";
   const label = night ? (zh ? "夜间" : "Night") : (zh ? "日间" : "Day");
   const flip = () => {
     const next = !night;
-    const apply = () => {
-      document.documentElement.classList.toggle("day", !next);
-      setNight(next);
-    };
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const vt = document as Document & { startViewTransition?: (cb: () => void) => void };
-    if (!reduced && typeof vt.startViewTransition === "function") vt.startViewTransition(apply);
-    else apply();
+    document.documentElement.classList.toggle("day", !next);
+    setNight(next);
   };
   return (
     <button
       type="button"
       aria-pressed={night}
       title={night ? (zh ? "现在是夜间。点一下换成日间。" : "Night. Switch to day.") : (zh ? "现在是日间。点一下换成夜间。" : "Day. Switch to night.")}
-      className={`inline-flex shrink-0 items-center gap-1 border border-gold text-ink ${compact ? "h-6 px-1.5 text-[11px]" : "h-8 px-2 text-xs"}`}
+      className={`inline-flex shrink-0 items-center justify-center gap-1 border border-gold text-ink ${icon ? "size-9" : "h-8 px-2 text-xs"}`}
       onClick={flip}
     >
       <span className="theme-ico" aria-hidden>
         <svg viewBox="0 0 24 24" className={night ? "theme-ico-on" : "theme-ico-off"} fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M20 14.5A7.5 7.5 0 0 1 9.5 4 7 7 0 1 0 20 14.5Z" /></svg>
         <svg viewBox="0 0 24 24" className={night ? "theme-ico-off" : "theme-ico-on"} fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="12" cy="12" r="3.5" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4" /></svg>
       </span>
-      <span>{label}</span>
+      {icon ? null : <span>{label}</span>}
     </button>
   );
 }
 
 function TerminalBar({ night, setNight }: { night: boolean; setNight: (next: boolean | ((on: boolean) => boolean)) => void }) {
   const lang = useExchange((s) => s.lang);
-  const setLang = useExchange((s) => s.setLang);
   const zh = lang === "zh";
   return (
-    <footer className="desk-bar fixed inset-x-0 bottom-0 z-30 flex h-8 items-center gap-3 overflow-x-auto border-t border-gold px-3 text-[11px] text-ink/55">
+    <footer className="desk-bar fixed inset-x-0 bottom-0 z-30 hidden h-8 items-center gap-3 overflow-x-auto border-t border-gold px-3 text-[11px] text-ink/55 lg:flex">
       <span className="inline-flex shrink-0 items-center gap-1 text-up"><span className="live-dot size-1.5 rounded-full bg-up" />{zh ? "在线" : "Live"}</span>
       <a href="#rules" className="shrink-0 hover:text-ink">{zh ? "文档" : "Docs"}</a>
       <a href="https://x.com/TAPELIQUID" target="_blank" rel="noreferrer" className="shrink-0 hover:text-ink">X</a>
@@ -152,8 +148,7 @@ function TerminalBar({ night, setNight }: { night: boolean; setNight: (next: boo
       <a href="https://github.com/jimgreen9954/jim" target="_blank" rel="noreferrer" className="shrink-0 hover:text-ink">GitHub</a>
       <a href="#rules" className="shrink-0 hover:text-ink">{zh ? "条款" : "Rules"}</a>
       <span className="ml-auto flex shrink-0 items-center gap-1">
-        <ThemeButton night={night} setNight={setNight} compact />
-        <button type="button" className="min-h-8 px-1.5" onClick={() => setLang(lang === "zh" ? "en" : "zh")}>{zh ? "EN" : "中文"}</button>
+        <ThemeButton night={night} setNight={setNight} />
       </span>
     </footer>
   );
@@ -175,7 +170,7 @@ function TradeBanner() {
         ["Markets", "All"],
       ];
   return (
-    <div className="trade-ribbon overflow-x-auto" role="status">
+    <div className="trade-ribbon hidden overflow-x-auto lg:block" role="status">
       <div className="mx-auto flex h-8 w-max min-w-full items-stretch justify-center">
         {cells.map(([key, value], index) => (
           <div key={key} className={`flex items-center gap-2 px-3.5 ${index > 0 ? "ribbon-rule" : ""}`}>
@@ -432,17 +427,12 @@ function FeeBook() {
     <div className="relative" ref={box}>
       <button type="button" aria-label={zh ? "手续费" : "Fees"} title={zh ? "台费 0.20%" : "Desk fee 0.20%"} className={`grid size-9 place-items-center rounded-md ${open ? "bg-foil" : ""}`} onClick={() => setOpen((on) => !on)}>
         <GoldMark />
+        <span className="menu-word">{zh ? "手续费" : "Fees"}</span>
       </button>
       {open ? createPortal(
         <div ref={panel} className="fixed inset-x-3 top-[calc(env(safe-area-inset-top)+3.5rem)] z-[80] max-h-[min(28rem,calc(100dvh-5rem))] overflow-y-auto border border-gold bg-paper p-3 text-sm shadow-plate sm:inset-x-auto sm:right-3 sm:w-[22rem]">
           <p className="text-sm">{zh ? "手续费" : "Fees"}</p>
           <p className="mt-1 font-mono text-xs">0.20%</p>
-          <ul className="mt-2 space-y-1 text-xs text-ink/70">
-            <li>{zh ? "没绑邀请，整笔进下面这个地址。" : "No referrer: the whole fee goes to the address below."}</li>
-            <li>{zh ? "绑了邀请：6% 给邀请人，交易少付 4%，90% 进收费地址。" : "With a referrer: 6% to them, the trader pays 4% less, 90% to the fee address."}</li>
-            <li>{zh ? "工房挂单和 TAPE 池是整笔，没有邀请分成。" : "The workshop book and the TAPE pool send the whole 0.20%. No referrer split."}</li>
-            <li>{zh ? "BEM 跨链先付千分之二，再走 TapeOut 的桥。桥自己的费另计。" : "The BEM bridge pays 0.20% first, then TapeOut's bridge. The bridge fee is separate."}</li>
-          </ul>
           <a className="mt-2 block break-all font-mono text-[11px] text-gold underline" href={`https://www.oklink.com/xlayer/address/${FEE_TO}`} target="_blank" rel="noreferrer">{FEE_TO}</a>
           <ul className="mt-3 divide-y divide-gold/30 border-y border-gold/30">
             {(rows.length ? rows : [
@@ -460,7 +450,7 @@ function FeeBook() {
               </li>
             ))}
           </ul>
-          <p className="mt-3 text-xs text-ink/55">{zh ? "最近一段：转入是收入，转出是支出。没读到不写成 0。" : "Recent window: transfers in are income, transfers out are spend. A miss is not zero."}</p>
+          <p className="mt-3 text-xs text-ink/55">{zh ? "最近" : "Recent"}</p>
           <ul className="mt-1 divide-y divide-gold/30 border-y border-gold/30">
             {flows.length === 0 ? <li className="py-2 text-xs text-ink/50">{zh ? "这段没有读到转账。" : "No transfer in this window."}</li> : flows.map((row) => (
               <li key={`${row.href}-${row.k}-${row.v}`} className="flex items-baseline justify-between gap-3 py-1.5">
@@ -511,7 +501,6 @@ function BridgeDock() {
       {open ? createPortal(
         <div ref={panel} className="fixed inset-x-3 top-[calc(env(safe-area-inset-top)+3.5rem)] z-[80] max-h-[min(32rem,calc(100dvh-5rem))] overflow-y-auto border border-gold bg-paper p-3 text-sm shadow-plate sm:inset-x-auto sm:left-3 sm:w-[24rem]">
           <OfficialBridge account={account} zh={zh} xBem={xBem} startOpen />
-          <p className="mt-2 text-xs text-ink/55">{zh ? "TAPE 没有跨链合约。这一页不能转 TAPE。" : "TAPE has no bridge. This page cannot move TAPE."}</p>
         </div>,
         document.body,
       ) : null}
@@ -594,12 +583,10 @@ function InviteDock() {
       </button>
       {open ? createPortal(
           <div ref={panel} className="fixed inset-x-3 top-[calc(env(safe-area-inset-top)+3.5rem)] z-[80] max-h-[min(32rem,calc(100dvh-5rem))] overflow-y-auto border border-gold bg-paper p-3 text-sm shadow-plate sm:inset-x-auto sm:right-3 sm:w-[22rem]">
-          <p className="mb-2 text-sm text-ink">{zh ? "邀请" : "Invite"}</p>
           <div className="grid grid-cols-2 border border-gold">
             <button type="button" className={`min-h-9 ${chain === "xlayer" ? "bg-ink text-paper" : ""}`} onClick={() => setChain("xlayer")}>X Layer</button>
             <button type="button" className={`min-h-9 ${chain === "bsc" ? "bg-ink text-paper" : ""}`} onClick={() => setChain("bsc")}>BSC</button>
           </div>
-          <p className="mt-2 text-xs leading-5 text-ink/70">{zh ? "本站手续费是付出金额的千分之二。没绑邀请人，整笔进收费地址。绑了之后，这笔手续费的 6% 付给邀请人，4% 少收交易的人，90% 进收费地址。永续、现货（含 BSC 的比特币、ETH、ZEC）、官方晶体管和官方电路都按这个比例。永续的 6% 记在合约里。其余是付款时拆开转。工房订单簿千分之二整笔进收费地址。已经部署的 TAPE 池也是整笔进收费地址，页面不再接受新的加池。这两份合约没有邀请人字段。电路容器的开通费是协议的 BNB，不走这笔台费。" : "The site fee is 0.2% of the amount paid. With no referrer, all of it goes to the fee address. With one, 6% of that fee is paid to the referrer, the trader pays 4% less, and 90% goes to the fee address. That split covers perpetuals, spot including BSC bitcoin, ETH and ZEC, official transistors, and official circuits. Perpetuals record the 6% on the contract. The workshop book sends its 0.2% entirely to the fee address. The deployed TAPE pool does the same, and this site no longer takes a new deposit into it. Those contracts have no referrer. A circuit container's open fee is protocol BNB, not this fee."}</p>
           {code ? (
             <div className="mt-2">
               <p className="font-mono">{code}</p>
@@ -639,17 +626,45 @@ function InviteDock() {
 
 function Header({ floor, desk, shop, place, night, setNight, setFloor, setDesk, setShop, setGiftOpen }: { floor: Floor; desk: DeskTab; shop: ShopTab; place: string; night: boolean; setNight: (next: boolean | ((on: boolean) => boolean)) => void; setFloor: (floor: Floor) => void; setDesk: (desk: DeskTab) => void; setShop: (shop: ShopTab) => void; setGiftOpen: (open: boolean) => void }) {
   const lang = useExchange((s) => s.lang);
-  const setLang = useExchange((s) => s.setLang);
+  const locale = useExchange((s) => s.locale);
   const reset = useExchange((s) => s.reset);
   const [arm, setArm] = useState(false);
+  const [menu, setMenu] = useState(false);
+  const [wide, setWide] = useState(true);
+  const [pane, setPane] = useState<"chart" | "ticket">("chart");
   useEffect(() => {
-    document.documentElement.lang = lang === "zh" ? "zh" : "en";
-  }, [lang]);
+    const chart = () => setPane("chart");
+    const trade = () => setPane("ticket");
+    window.addEventListener("tape-chart", chart);
+    window.addEventListener("tape-trade", trade);
+    return () => {
+      window.removeEventListener("tape-chart", chart);
+      window.removeEventListener("tape-trade", trade);
+    };
+  }, []);
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 1024px)");
+    const apply = () => setWide(query.matches);
+    apply();
+    query.addEventListener("change", apply);
+    return () => query.removeEventListener("change", apply);
+  }, []);
   useEffect(() => {
     if (!arm) return;
     const id = window.setTimeout(() => setArm(false), 2800);
     return () => window.clearTimeout(id);
   }, [arm]);
+  useEffect(() => {
+    if (!menu) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenu(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menu]);
   const go = (next: Floor, hash: string) => {
     if (window.location.pathname.startsWith("/whitepaper")) {
       window.location.assign(next === "rules" ? "/whitepaper" : `/#${hash}`);
@@ -659,6 +674,7 @@ function Header({ floor, desk, shop, place, night, setNight, setFloor, setDesk, 
     if (window.location.hash !== url) window.history.replaceState(null, "", url);
     window.dispatchEvent(new HashChangeEvent("hashchange"));
     setFloor(next);
+    setMenu(false);
   };
   const item = (label: string, on: boolean, run: () => void) => (
     <button key={label} type="button" onClick={run} className={`shrink-0 rounded-md px-2.5 py-1.5 text-sm ${on ? "bg-foil text-ink" : "text-ink/65 hover:text-ink"}`}>
@@ -667,25 +683,62 @@ function Header({ floor, desk, shop, place, night, setNight, setFloor, setDesk, 
   );
   const zh = lang === "zh";
   const claimOn = floor === "mine" && place !== "stake" && place !== "vault" && place !== "bid" && place !== "ash";
+  const home = () => { rememberDesk({ kind: "tape", market: 0 }); window.dispatchEvent(new CustomEvent("tape-home", { detail: "tape" })); go("desk", "spot"); setDesk("spot"); };
+  const perps = () => { rememberDesk({ kind: "perp", chain: "xlayer", coin: "tape" }); window.dispatchEvent(new CustomEvent("tape-home", { detail: "tape-perp" })); go("desk", "perp"); setDesk("perp"); };
+  const showChart = () => {
+    setMenu(false);
+    if (floor !== "desk") {
+      if (desk === "perp") perps();
+      else home();
+    }
+    askChart();
+  };
+  const showTrade = () => {
+    setMenu(false);
+    if (floor !== "desk") {
+      if (desk === "perp") perps();
+      else home();
+    }
+    askTrade();
+  };
+  const row = (label: string, on: boolean, run: () => void) => (
+    <button type="button" onClick={() => { setMenu(false); run(); }} className={`flex h-12 w-full items-center px-4 text-left text-[15px] ${on ? "text-ink" : "text-ink/80"}`}>{label}</button>
+  );
   return (
     <header className="desk-header sticky top-0 z-50 border-b border-gold px-2 sm:px-3 pt-[env(safe-area-inset-top)]">
-      <div className="flex h-12 items-center gap-1">
-        <button type="button" onClick={() => { rememberDesk({ kind: "tape", market: 0 }); window.dispatchEvent(new CustomEvent("tape-home", { detail: "tape" })); go("desk", "spot"); setDesk("spot"); }} className="mr-1 flex shrink-0 items-center gap-2 px-1">
+      <div className="flex h-12 items-center gap-1 lg:hidden">
+        <button type="button" aria-label={zh ? "菜单" : "Menu"} className="grid size-10 place-items-center" onClick={() => setMenu(true)}>
+          <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
+            <path d="M4 7h16M4 12h16M4 17h16" />
+          </svg>
+        </button>
+        <button type="button" onClick={home} aria-label="TAPELIQUID">
           <img src="/mark.jpg" alt="" className="size-6 rounded-sm object-cover" />
-          <span className="hidden text-[15px] font-medium tracking-tight sm:inline">TAPELIQUID</span>
+        </button>
+        <div className="ml-auto flex items-center gap-1">
+          <ConnectButton compact />
+          <ThemeButton night={night} setNight={setNight} icon />
+          <LocaleMenu />
+          {!wide ? <SettingsMenu zh={zh} /> : null}
+        </div>
+      </div>
+      <div className="hidden h-12 items-center gap-1 lg:flex">
+        <button type="button" onClick={home} className="mr-1 flex shrink-0 items-center gap-2 px-1">
+          <img src="/mark.jpg" alt="" className="size-6 rounded-sm object-cover" />
+          <span className="text-[15px] font-medium tracking-tight">TAPELIQUID</span>
         </button>
         <nav className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
-          {item(zh ? "现货" : "Spot", floor === "desk" && desk === "spot", () => { rememberDesk({ kind: "tape", market: 0 }); window.dispatchEvent(new CustomEvent("tape-home", { detail: "tape" })); go("desk", "spot"); setDesk("spot"); })}
-          {item(zh ? "合约" : "Perps", floor === "desk" && desk === "perp", () => { rememberDesk({ kind: "perp", chain: "xlayer", coin: "tape" }); window.dispatchEvent(new CustomEvent("tape-home", { detail: "tape-perp" })); go("desk", "perp"); setDesk("perp"); })}
+          {item(zh ? "现货" : "Spot", floor === "desk" && desk === "spot", home)}
+          {item(zh ? "合约" : "Perps", floor === "desk" && desk === "perp", perps)}
           {item(zh ? "赚取" : "Earn", claimOn, () => go("mine", "earn"))}
-          <BridgeDock />
-          <InviteDock />
+          {wide ? <BridgeDock /> : null}
+          {wide ? <InviteDock /> : null}
           {item(zh ? "规则" : "Rules", floor === "rules", () => go("rules", "rules"))}
         </nav>
         <div className="ml-auto flex shrink-0 items-center gap-1">
           <ConnectButton />
-          <FeeBook />
-          <SettingsMenu zh={zh} />
+          {wide ? <FeeBook /> : null}
+          {wide ? <SettingsMenu zh={zh} /> : null}
           {floor === "paper" ? (
             <button
               type="button"
@@ -705,12 +758,10 @@ function Header({ floor, desk, shop, place, night, setNight, setFloor, setDesk, 
           <button type="button" className={`min-h-9 px-1.5 text-xs ${floor === "me" ? "text-ink" : "text-ink/70"}`} onClick={() => { setGiftOpen(false); go("me", "me"); }}>
             {zh ? "资产" : "Portfolio"}
           </button>
-          <button type="button" className="min-h-9 px-1.5 text-xs text-ink/70" onClick={() => setLang(lang === "zh" ? "en" : "zh")}>
-            {zh ? "EN" : "中文"}
-          </button>
+          <LocaleMenu />
         </div>
       </div>
-      <nav className="flex items-center gap-0.5 overflow-x-auto border-t border-gold/30 py-1">
+      <nav className="hidden items-center gap-0.5 overflow-x-auto border-t border-gold/30 py-1 lg:flex">
         {item(zh ? "工房" : "Workshop", floor === "shop" && shop === "book", () => { setShop("book"); go("shop", "book"); })}
         {item(zh ? "TapeOut 合约" : "TapeOut book", floor === "shop" && shop !== "book", () => { setShop("gate"); go("shop", "gate"); })}
         {item(zh ? "流片" : "Tape-out", floor === "canvas", () => go("canvas", "canvas"))}
@@ -719,6 +770,52 @@ function Header({ floor, desk, shop, place, night, setNight, setFloor, setDesk, 
         {item(zh ? "质押" : "Stake", floor === "mine" && place === "stake", () => go("mine", "stake"))}
         {item(zh ? "销毁" : "Burn", floor === "mine" && place === "ash", () => go("mine", "ash"))}
       </nav>
+      {menu && !wide ? createPortal(
+        <div className="fixed inset-0 z-[70]">
+          <button type="button" aria-label={zh ? "关闭" : "Close"} className="absolute inset-0 bg-black/55" onClick={() => setMenu(false)} />
+          <nav className="phone-menu absolute inset-y-0 left-0 flex w-[min(16.5rem,78vw)] flex-col overflow-y-auto bg-card pb-[calc(4.5rem+env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] text-ink shadow-plate">
+            {row(zh ? "投资组合" : "Portfolio", floor === "me", () => { setGiftOpen(false); go("me", "me"); })}
+            {row(zh ? "赚取" : "Earn", claimOn, () => go("mine", "earn"))}
+            {row(zh ? "金库" : "Vault", floor === "mine" && (place === "vault" || place === "bid"), () => go("mine", "vault"))}
+            {row(zh ? "质押" : "Stake", floor === "mine" && place === "stake", () => go("mine", "stake"))}
+            <div className="px-1"><InviteDock /></div>
+            <div className="mx-4 my-2 border-t border-white/10" />
+            {row(zh ? "现货" : "Spot", floor === "desk" && desk === "spot", home)}
+            {row(zh ? "合约" : "Perps", floor === "desk" && desk === "perp", perps)}
+            <div className="px-1"><BridgeDock /></div>
+            <div className="px-1"><FeeBook /></div>
+            {row(zh ? "工房" : "Workshop", floor === "shop" && shop === "book", () => { setShop("book"); go("shop", "book"); })}
+            {row("TapeOut", floor === "shop" && shop !== "book", () => { setShop("gate"); go("shop", "gate"); })}
+            {row(zh ? "流片" : "Tape-out", floor === "canvas", () => go("canvas", "canvas"))}
+            {row(zh ? "练习" : "Practice", floor === "paper", () => go("paper", "paper"))}
+            {row(zh ? "销毁" : "Burn", floor === "mine" && place === "ash", () => go("mine", "ash"))}
+            {row(zh ? "文档" : "Docs", floor === "rules", () => go("rules", "rules"))}
+            <a className="flex h-12 items-center px-4 text-[15px] text-ink/80" href="https://x.com/TAPELIQUID" target="_blank" rel="noreferrer">{zh ? "支持 · X" : "Support · X"}</a>
+            <a className="flex h-12 items-center px-4 text-[15px] text-ink/80" href="https://t.me/+JN0c8XGQpIkxNTRh" target="_blank" rel="noreferrer">Telegram</a>
+            <button type="button" className="flex h-12 w-full items-center px-4 text-left text-[15px] text-ink" onClick={() => { const next = !night; document.documentElement.classList.toggle("day", !next); setNight(next); }}>{night ? (zh ? "换成日间" : "Switch to day") : zh ? "换成夜间" : "Switch to night"}</button>
+            <button type="button" className="flex h-12 w-full items-center px-4 text-left text-[15px] text-ink/80" onClick={() => { setMenu(false); connectKind("binance").catch(() => undefined); }}>{zh ? "币安钱包" : "Binance"}</button>
+            <button type="button" className="flex h-12 w-full items-center px-4 text-left text-[15px] text-ink/50" onClick={() => { setMenu(false); void disconnectWallet(); }}>{zh ? "退出钱包" : "Disconnect"}</button>
+          </nav>
+        </div>,
+        document.body,
+      ) : null}
+      {wide ? null : createPortal(
+        <nav className="phone-tabbar fixed inset-x-0 bottom-0 z-[45] grid grid-cols-3 border-t border-gold bg-card pt-1.5 pb-[max(0.45rem,env(safe-area-inset-bottom))] text-ink">
+          <button type="button" className={`flex flex-col items-center justify-center gap-0.5 text-[11px] ${floor === "desk" && pane === "chart" ? "text-up" : "text-ink/55"}`} onClick={showChart}>
+            <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden><path d="M4 19V5M4 19h16" /><path d="M8 15v-4M12 15V8M16 15v-6" /></svg>
+            {zh ? "市场" : "Markets"}
+          </button>
+          <button type="button" className={`flex flex-col items-center justify-center gap-0.5 text-[11px] ${floor === "desk" && pane === "ticket" ? "text-up" : "text-ink/55"}`} onClick={showTrade}>
+            <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden><circle cx="12" cy="12" r="7" /><path d="M12 8v4l2.5 2" /></svg>
+            {zh ? "交易" : "Trade"}
+          </button>
+          <button type="button" className={`flex flex-col items-center justify-center gap-0.5 text-[11px] ${floor === "me" ? "text-up" : "text-ink/55"}`} onClick={() => { setGiftOpen(false); go("me", "me"); }}>
+            <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden><circle cx="12" cy="9" r="3" /><path d="M6 19c1.2-2.4 3.2-3.5 6-3.5s4.8 1.1 6 3.5" /></svg>
+            {zh ? "账户" : "Account"}
+          </button>
+        </nav>,
+        document.body,
+      )}
     </header>
   );
 }

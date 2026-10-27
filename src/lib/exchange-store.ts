@@ -16,10 +16,12 @@ import {
   type MarketId,
   type Side,
 } from "@/lib/match-engine";
+import { applyNum, type NumStyle } from "@/lib/format";
 
 const KEY = "tapeliquid-v1";
 
 export type Lang = "zh" | "en";
+export type Locale = "zh" | "en" | "fr" | "ko" | "es";
 export type Pane = "trade" | "book" | "holds" | "die";
 export type BannerKey =
   | Fail
@@ -44,6 +46,8 @@ type Banner = { id: number; key: BannerKey };
 type Store = {
   engine: Engine;
   lang: Lang;
+  locale: Locale;
+  num: NumStyle;
   market: MarketId;
   side: Side;
   tf: 4000 | 8000 | 16000;
@@ -57,6 +61,8 @@ type Store = {
   hydrate: () => void;
   tick: (dt: number) => void;
   setLang: (lang: Lang) => void;
+  setLocale: (locale: Locale) => void;
+  setNum: (num: NumStyle) => void;
   setMarket: (market: MarketId) => void;
   setSide: (side: Side) => void;
   setTf: (tf: 4000 | 8000 | 16000) => void;
@@ -90,7 +96,7 @@ function persist(s: Store) {
   try {
     localStorage.setItem(
       KEY,
-      JSON.stringify({ v: 1, lang: s.lang, market: s.market, tf: s.tf, engine: s.engine }),
+      JSON.stringify({ v: 1, lang: s.lang, locale: s.locale, num: s.num, market: s.market, tf: s.tf, engine: s.engine }),
     );
   } catch {
     /* private mode */
@@ -120,6 +126,8 @@ function scaledFresh(engine: Engine, price: number): Engine {
 export const useExchange = create<Store>((set, get) => ({
   engine: initialEngine(),
   lang: "zh",
+  locale: "zh",
+  num: "us",
   market: "spot",
   side: "buy",
   tf: 8000,
@@ -139,6 +147,8 @@ export const useExchange = create<Store>((set, get) => ({
       }
       const data = JSON.parse(raw) as {
         lang?: Lang;
+        locale?: Locale;
+        num?: NumStyle;
         market?: MarketId;
         tf?: number;
         engine?: unknown;
@@ -148,9 +158,16 @@ export const useExchange = create<Store>((set, get) => ({
         set({ booted: true });
         return;
       }
+      const locale: Locale = data.locale === "en" || data.locale === "fr" || data.locale === "ko" || data.locale === "es" || data.locale === "zh"
+        ? data.locale
+        : data.lang === "en" ? "en" : "zh";
+      const num: NumStyle = data.num === "eu" || data.num === "plain" || data.num === "space" || data.num === "us" ? data.num : "us";
+      applyNum(num);
       set({
         engine,
-        lang: data.lang === "en" ? "en" : "zh",
+        lang: locale === "zh" ? "zh" : "en",
+        locale,
+        num,
         market: data.market === "perp" ? "perp" : "spot",
         tf: data.tf === 4000 || data.tf === 16000 ? data.tf : 8000,
         booted: true,
@@ -170,7 +187,12 @@ export const useExchange = create<Store>((set, get) => ({
       banner: liq ? shout("liq") : s.banner,
     });
   },
-  setLang: (lang) => set({ lang }),
+  setLang: (lang) => set({ lang, locale: lang }),
+  setLocale: (locale) => set({ locale, lang: locale === "zh" ? "zh" : "en" }),
+  setNum: (num) => {
+    applyNum(num);
+    set({ num });
+  },
   setMarket: (market) => set({ market }),
   setSide: (side) => set({ side }),
   setTf: (tf) => set({ tf }),
@@ -260,6 +282,8 @@ export function startPersistence() {
       s.engine.solved !== p.engine.solved ||
       s.engine.inputs !== p.engine.inputs ||
       s.lang !== p.lang ||
+      s.locale !== p.locale ||
+      s.num !== p.num ||
       s.market !== p.market ||
       s.tf !== p.tf ||
       (s.engine.clock !== p.engine.clock && s.engine.clock % 8 === 0);

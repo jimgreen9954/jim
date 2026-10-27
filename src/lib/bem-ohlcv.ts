@@ -266,7 +266,7 @@ export function stampBars<T extends Candle>(rows: T[], frame: CandleFrame): T[] 
   return rows.map((row, i) => ({ ...row, t: end - (rows.length - 1 - i) * span }));
 }
 
-const CANDLE_MEM = "tapeliquid-candle-book";
+const CANDLE_MEM = "tapeliquid-candle-book-v2";
 
 function memKey(prefix: string): string {
   return prefix.endsWith(":") ? prefix : `${prefix}:`;

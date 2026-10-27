@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { bemPrice, bnbPrice, ercPrice } from "@/lib/bsc";
 import { CoinMark } from "@/components/exchange/coin-mark";
 import { okbPrice } from "@/lib/okb";
 import { useExchange } from "@/lib/exchange-store";
 import { fundingPreview, fundClock, pct } from "@/lib/risk-rules";
-import { readTapePool, showQuote } from "@/lib/tape-pool";
+import { readOpenBook } from "@/lib/tape-open-candles";
 import { readSpotBook, usdtText } from "@/lib/tape-spot";
 import type { Desk } from "@/lib/perp";
 
@@ -16,11 +17,12 @@ export function PairChevron({ up = false }: { up?: boolean }) {
   );
 }
 
+export type TapePair = "usdt" | "bem" | "okb";
 export type SpotId = 0 | 1 | 2;
 export type PerpCoin = "bem" | "btc" | "eth" | "zec" | "tape";
 
 export type DeskView =
-  | { kind: "tape"; market: SpotId }
+  | { kind: "tape"; market: SpotId; pair?: TapePair }
   | { kind: "otc"; market: SpotId }
   | { kind: "pancake"; pair: "bem" | "bnb" | "okb" | "btc" | "eth" | "zec" | "xau" }
   | { kind: "perp"; chain: Desk; coin: PerpCoin };
@@ -39,14 +41,16 @@ type Row = {
 };
 
 const ROWS: Row[] = [
-  { id: "tape", view: { kind: "tape", market: 0 }, symbol: "TAPE-USDT0", kind: "spot", tag: "现货", where: "池子 · X Layer", pin: true },
+  { id: "tape", view: { kind: "tape", market: 0, pair: "usdt" }, symbol: "TAPE-USDT0", kind: "spot", tag: "现货", where: "池子 · X Layer", pin: true },
+  { id: "tapebem", view: { kind: "tape", market: 0, pair: "bem" }, symbol: "TAPE-BEM", kind: "spot", tag: "现货", where: "池子 · X Layer", pin: true },
+  { id: "tapeokb", view: { kind: "tape", market: 0, pair: "okb" }, symbol: "TAPE-OKB", kind: "spot", tag: "现货", where: "池子 · X Layer", pin: true },
   { id: "tapeotc", view: { kind: "otc", market: 0 }, symbol: "TAPE-USDT0", kind: "spot", tag: "OTC", where: "工房挂单", pin: true },
   { id: "bemspot", view: { kind: "pancake", pair: "bem" }, symbol: "BEM-USDT", kind: "spot", tag: "现货", where: "Pancake · BSC", pin: true },
   { id: "btcspot", view: { kind: "pancake", pair: "btc" }, symbol: "BTC-USDT", kind: "spot", tag: "现货", where: "Pancake · BSC", pin: false },
   { id: "ethspot", view: { kind: "pancake", pair: "eth" }, symbol: "ETH-USDT", kind: "spot", tag: "现货", where: "Pancake · BSC", pin: false },
   { id: "zecspot", view: { kind: "pancake", pair: "zec" }, symbol: "ZEC-USDT", kind: "spot", tag: "现货", where: "Pancake · BSC", pin: false },
-  { id: "bnbspot", view: { kind: "pancake", pair: "bnb" }, symbol: "BNB-USDT", kind: "spot", tag: "现货", where: "Pancake · BSC", pin: false },
-  { id: "okbspot", view: { kind: "pancake", pair: "okb" }, symbol: "OKB-USDT0", kind: "spot", tag: "现货", where: "Potato · X Layer", pin: false },
+  { id: "bnbspot", view: { kind: "pancake", pair: "bnb" }, symbol: "BNB-USDT", kind: "spot", tag: "现货", where: "Pancake · BSC", pin: true },
+  { id: "okbspot", view: { kind: "pancake", pair: "okb" }, symbol: "OKB-USDT0", kind: "spot", tag: "现货", where: "Potato · X Layer", pin: true },
   { id: "tapeperp", view: { kind: "perp", chain: "xlayer", coin: "tape" }, symbol: "TAPE-USDT0", kind: "perp", tag: "永续", where: "TAPE 标记 · 结算本未部署", pin: true, lev: "1000×" },
   { id: "bem", view: { kind: "perp", chain: "bsc", coin: "bem" }, symbol: "BEM-USDT", kind: "perp", tag: "永续", where: "TAPE 协议 · BSC", pin: true, lev: "1000×" },
   { id: "bemx", view: { kind: "perp", chain: "xlayer", coin: "bem" }, symbol: "BEM-USDT0", kind: "perp", tag: "永续", where: "TAPE 协议 · X Layer", pin: true, lev: "1000×" },
@@ -94,17 +98,14 @@ export function MarketSheet({
     const write = (id: string, text: string) => {
       if (!dead && text) setPx((prev) => ({ ...prev, [id]: text }));
     };
-    readTapePool(null)
+    readOpenBook()
       .then((row) => {
-        const tape = Number(row.usdt.tape) / 1e8;
-        const quote = Number(row.usdt.quote) / 1e6;
-        if (dead) return;
-        if (tape > 0 && quote > 0) {
-          const text = (quote / tape).toLocaleString("en-US", { maximumFractionDigits: quote / tape >= 1 ? 4 : 6 });
-          write("tape", text);
-          write("tapeperp", text);
-        }
-        setPool(showQuote(0, row.usdt.quote));
+        if (dead || !(row.price > 0)) return;
+        const text = row.price.toLocaleString("en-US", { maximumFractionDigits: row.price >= 1 ? 4 : 6 });
+        write("tape", text);
+        write("tapeperp", text);
+        const depth = Number(row.bemTape + row.okbTape) / 1e8;
+        if (depth > 0) setPool(`${depth.toLocaleString("en-US", { maximumFractionDigits: 0 })} TAPE`);
       })
       .catch(() => undefined);
     readSpotBook(0)
@@ -161,17 +162,16 @@ export function MarketSheet({
   ];
 
   return (
-    <div className="fixed inset-x-0 bottom-0 top-[calc(env(safe-area-inset-top)+6.35rem)] z-[60]" onClick={onClose}>
+    <div className="fixed inset-x-0 bottom-[calc(3.4rem+env(safe-area-inset-bottom))] top-[var(--desk-top)] z-[80] xl:bottom-0" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50" />
       <div
-        className="pop-in absolute left-2 right-2 top-2 max-h-[min(34rem,calc(100dvh-8rem))] overflow-hidden border border-gold bg-card shadow-plate sm:left-4 sm:right-auto sm:w-[min(52rem,calc(100vw-2rem))]"
+        className="pop-in absolute inset-x-0 top-0 flex h-full flex-col overflow-hidden border border-gold bg-card shadow-plate sm:inset-x-4 sm:top-2 sm:h-auto sm:max-h-[min(36rem,calc(100dvh-8rem))]"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center gap-2 border-b border-gold/40 p-2">
           <label className="flex min-w-0 flex-1 items-center gap-2 border border-gold/50 px-2">
             <span className="text-ink/40">⌕</span>
             <input
-              autoFocus
               value={q}
               onChange={(event) => setQ(event.target.value)}
               placeholder={zh ? "搜索" : "Search"}
@@ -189,14 +189,15 @@ export function MarketSheet({
             </button>
           ))}
         </div>
-        <div className="max-h-[24rem] overflow-auto">
-          <table className="w-full min-w-[36rem] text-left text-xs">
+        <div className="min-h-0 flex-1 overflow-auto">
+          <p className="px-3 pt-2 text-[11px] text-ink/45">{zh ? "先看代币。搜索只在你输入以后才筛选。价格来自池子或报价，读不到是横线，不填假数。" : "Tokens are listed first. Search only filters after you type. Prices come from the pool or the quote. A dash is a missed read, not a made-up number."}</p>
+          <table className="w-full text-left text-xs">
             <thead className="sticky top-0 bg-card text-ink/45">
               <tr>
                 <th className="px-3 py-2 font-normal">{zh ? "市场" : "Market"}</th>
                 <th className="px-2 py-2 font-normal">{zh ? "最新" : "Last"}</th>
-                <th className="px-2 py-2 font-normal">{zh ? "8小时资金" : "8h funding"}</th>
-                <th className="px-2 py-2 font-normal">{zh ? "这一本" : "Book"}</th>
+                <th className="hidden px-2 py-2 font-normal sm:table-cell">{zh ? "8小时资金" : "8h funding"}</th>
+                <th className="hidden px-2 py-2 font-normal sm:table-cell">{zh ? "这一本" : "Book"}</th>
               </tr>
             </thead>
             <tbody>
@@ -213,8 +214,8 @@ export function MarketSheet({
                     </span>
                   </td>
                   <td className="px-2 py-2 font-mono">{px[row.id] || (row.id === "bemx" ? px.bem : "") || "—"}</td>
-                  <td className="px-2 py-2 font-mono text-ink/55">{row.kind === "perp" ? (zh ? "不收" : "None") : "—"}</td>
-                  <td className="px-2 py-2 text-ink/60">
+                  <td className="hidden px-2 py-2 font-mono text-ink/55 sm:table-cell">{row.kind === "perp" ? (zh ? "不收" : "None") : "—"}</td>
+                  <td className="hidden px-2 py-2 text-ink/60 sm:table-cell">
                     {row.where}
                     {row.id === "tape" && pool ? <span className="ml-2 font-mono text-ink/40">{zh ? "池" : "Pool"} {pool}</span> : null}
                   </td>
@@ -248,8 +249,8 @@ export function LevDialog({
   onClose: () => void;
 }) {
   const [n, setN] = useState(lev >= 1 ? lev : 3);
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onMouseDown={onClose}>
+  return createPortal(
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-black/60 p-4" onMouseDown={onClose}>
       <div className="pop-in w-full max-w-md border border-gold bg-card p-4" onMouseDown={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h3 className="text-base">{zh ? "调整杠杆" : "Leverage"}</h3>
@@ -265,53 +266,61 @@ export function LevDialog({
         </button>
         {n > 20 ? <p className="mt-2 border border-sell/50 px-2 py-2 text-xs text-sell">{zh ? "超过 20 倍，开仓时还要再确认一次。" : "Over 20× asks again before the order."}</p> : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
-export function MarginDialog({ zh, onClose }: { zh: boolean; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onMouseDown={onClose}>
+export function MarginDialog({ zh, mode = "iso", onPick, onClose }: { zh: boolean; mode?: "cross" | "iso"; onPick?: (next: "cross" | "iso") => void; onClose: () => void }) {
+  return createPortal(
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-black/60 p-4" onMouseDown={onClose}>
       <div className="pop-in w-full max-w-lg border border-gold bg-card p-5" onMouseDown={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h3 className="text-base">{zh ? "保证金模式" : "Margin mode"}</h3>
           <button type="button" onClick={onClose} className="grid size-8 place-items-center text-lg text-ink/50">×</button>
         </div>
-        <div className="mt-4 flex items-start gap-3 border border-gold/40 px-3 py-3 opacity-45">
-          <span className="mt-0.5 size-4 shrink-0 rounded-sm border border-gold" />
-          <span className="text-sm">{zh ? "全仓" : "Cross"}</span>
-        </div>
-        <div className="mt-2 flex items-start gap-3 border border-up px-3 py-3">
-          <span className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-sm bg-up text-[10px] text-paper">✓</span>
-          <span className="text-sm">{zh ? "逐仓" : "Isolated"}</span>
-        </div>
-        <button type="button" className="mt-4 h-11 w-full bg-up text-sm text-paper" onClick={onClose}>{zh ? "继续用逐仓" : "Keep isolated"}</button>
+        {([
+          ["cross", zh ? "全仓" : "Cross", zh ? "盈亏算在这个钱包的可用余额上。这一本链上结算仍是逐仓，选中只改这一页的记账。" : "PnL is marked against the wallet. This book's chain settlement is still isolated."],
+          ["iso", zh ? "逐仓" : "Isolated", zh ? "只拿这一张单的保证金去算强平。" : "Only this order's margin is used for liquidation."],
+        ] as const).map(([id, label, hint]) => (
+          <button key={id} type="button" onClick={() => onPick?.(id)} className={`mt-2 flex w-full items-start gap-3 border px-3 py-3 text-left ${mode === id ? "border-up" : "border-gold/40"}`}>
+            <span className={`mt-0.5 grid size-4 shrink-0 place-items-center rounded-sm text-[10px] ${mode === id ? "bg-up text-paper" : "border border-gold"}`}>{mode === id ? "✓" : ""}</span>
+            <span>
+              <span className="block text-sm">{label}</span>
+              <span className="mt-1 block text-xs leading-5 text-ink/55">{hint}</span>
+            </span>
+          </button>
+        ))}
+        <button type="button" className="mt-4 h-11 w-full bg-up text-sm text-paper" onClick={onClose}>{zh ? "好" : "Done"}</button>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
-export function AccountDialog({ zh, onClose }: { zh: boolean; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onMouseDown={onClose}>
+export function AccountDialog({ zh, mode = "manual", onPick, onClose }: { zh: boolean; mode?: "unified" | "port" | "manual"; onPick?: (next: "unified" | "port" | "manual") => void; onClose: () => void }) {
+  return createPortal(
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-black/60 p-4" onMouseDown={onClose}>
       <div className="pop-in w-full max-w-lg border border-gold bg-card p-5" onMouseDown={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h3 className="text-base">{zh ? "账户类型" : "Account type"}</h3>
           <button type="button" onClick={onClose} className="grid size-8 place-items-center text-lg text-ink/50">×</button>
         </div>
         {([
-          [zh ? "统一账户" : "Unified", false],
-          [zh ? "投资组合保证金" : "Portfolio margin", false],
-          [zh ? "手动" : "Manual", true],
-        ] as const).map(([label, on]) => (
-          <div key={label} className={`mt-2 flex items-start gap-3 border px-3 py-3 ${on ? "border-up" : "border-gold/40 opacity-45"}`}>
-            <span className={`mt-0.5 grid size-4 shrink-0 place-items-center rounded-sm text-[10px] ${on ? "bg-up text-paper" : "border border-gold"}`}>{on ? "✓" : ""}</span>
+          ["unified", zh ? "统一账户" : "Unified"],
+          ["port", zh ? "投资组合保证金" : "Portfolio margin"],
+          ["manual", zh ? "手动" : "Manual"],
+        ] as const).map(([id, label]) => (
+          <button key={id} type="button" onClick={() => onPick?.(id)} className={`mt-2 flex w-full items-start gap-3 border px-3 py-3 text-left ${mode === id ? "border-up" : "border-gold/40"}`}>
+            <span className={`mt-0.5 grid size-4 shrink-0 place-items-center rounded-sm text-[10px] ${mode === id ? "bg-up text-paper" : "border border-gold"}`}>{mode === id ? "✓" : ""}</span>
             <span className="text-sm">{label}</span>
-          </div>
+          </button>
         ))}
-        <button type="button" className="mt-4 h-11 w-full bg-up text-sm text-paper" onClick={onClose}>{zh ? "继续" : "Continue"}</button>
+        <p className="mt-3 text-xs leading-5 text-ink/50">{zh ? "链上这一本按逐仓签名。统一账户和投资组合保证金先记在这一页。" : "This book still signs isolated margin. Unified and portfolio margin are kept on this page."}</p>
+        <button type="button" className="mt-4 h-11 w-full bg-up text-sm text-paper" onClick={onClose}>{zh ? "好" : "Done"}</button>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

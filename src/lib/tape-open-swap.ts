@@ -1,11 +1,15 @@
 import { createPublicClient, encodeFunctionData, formatUnits, http, parseAbi, parseUnits, type Hex } from "viem";
-import { FEE_TO, TxPending } from "@/lib/bsc";
+import { FEE_TO, TxPending, XLAYER_SAFE } from "@/lib/bsc";
+import { deskParts } from "@/lib/invite-cut";
 import { ensureProvider } from "@/lib/wallet";
 import { XLAYER } from "@/lib/xlayer";
 
 export const OPEN_POOL = "0x58eaD5b41Cfd3627791D439402dd65571c286484" as const;
 const TAPE = "0x8f2d517D3d62019CD8D7F08ae178Be05BBb6EBE3" as const;
 const BEM = "0x60e62Efa9405d6873C5deaBD4E6CC91c25363952" as const;
+const USDT = "0x779Ded0c9e1022225f8E0630b35a9b54bE713736" as const;
+const ROUTER = "0x881fB2f98c13d521009464e7D1CBf16E1b394e8E" as const;
+const WOKB = "0xe538905cf8410324e03A5A23C1c177a474D59b2b" as const;
 const OKB_RESERVE = 2_000_000_000_000_000n;
 
 const client = createPublicClient({ transport: http(XLAYER.rpc, { timeout: 12_000 }) });
@@ -18,6 +22,12 @@ const erc20 = parseAbi([
   "function balanceOf(address) view returns (uint256)",
   "function allowance(address,address) view returns (uint256)",
   "function approve(address,uint256) returns (bool)",
+  "function transfer(address,uint256) returns (bool)",
+]);
+const v2 = parseAbi([
+  "function getAmountsOut(uint256 amountIn, address[] path) view returns (uint256[] amounts)",
+  "function swapExactTokensForETH(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline) returns (uint256[] amounts)",
+  "function swapExactETHForTokens(uint256 amountOutMin, address[] path, address to, uint256 deadline) payable returns (uint256[] amounts)",
 ]);
 
 export type PoolQuote = 0 | 1;
@@ -48,13 +58,14 @@ async function wait(hash: Hex) {
   }
 }
 
-export async function poolBalances(owner: Hex): Promise<{ bem: bigint; okb: bigint; tape: bigint }> {
-  const [bem, okb, tape] = await Promise.all([
+export async function poolBalances(owner: Hex): Promise<{ bem: bigint; okb: bigint; tape: bigint; usdt: bigint }> {
+  const [bem, okb, tape, usdt] = await Promise.all([
     client.readContract({ address: BEM, abi: erc20, functionName: "balanceOf", args: [owner] }),
     client.getBalance({ address: owner }),
     client.readContract({ address: TAPE, abi: erc20, functionName: "balanceOf", args: [owner] }),
+    client.readContract({ address: USDT, abi: erc20, functionName: "balanceOf", args: [owner] }),
   ]);
-  return { bem, okb, tape };
+  return { bem, okb, tape, usdt };
 }
 
 export async function previewPool(quote: PoolQuote, tapeIn: boolean, amountIn: bigint): Promise<bigint> {
@@ -108,4 +119,58 @@ export async function swapPool(from: string, quote: PoolQuote, tapeIn: boolean, 
   );
   await wait(hash);
   return hash;
+}
+
+async function approveToken(from: string, token: Hex, need: bigint) {
+  const allowance = await client.readContract({ address: token, abi: erc20, functionName: "allowance", args: [from as Hex, ROUTER] });
+  if (allowance >= need) return;
+  if (allowance > 0n) await wait(await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [ROUTER, 0n] })));
+  await wait(await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [ROUTER, need] })));
+}
+
+/** USDT0 on X Layer. This is the balance the ticket shows, not the other USDT. */
+export async function quoteUsdt0Okb(side: "buy" | "sell", amountIn: bigint): Promise<bigint> {
+  if (amountIn <= 0n) return 0n;
+  const path = side === "buy" ? [USDT, WOKB] : [WOKB, USDT];
+  const amounts = await client.readContract({ address: ROUTER, abi: v2, functionName: "getAmountsOut", args: [amountIn, path] });
+  return amounts[amounts.length - 1] ?? 0n;
+}
+
+export async function buyOkbWithUsdt0(from: string, usdtIn: bigint): Promise<bigint> {
+  const parts = await deskParts("xlayer", from, usdtIn);
+  if (parts.swapIn <= 0n) throw new Error("amount");
+  const out = await quoteUsdt0Okb("buy", parts.swapIn);
+  if (out <= 0n) throw new Error("empty");
+  if (parts.reward > 0n && parts.referrer) {
+    await wait(await send(from, USDT, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [parts.referrer, parts.reward] })));
+  }
+  if (parts.desk > 0n) {
+    await wait(await send(from, USDT, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [XLAYER_SAFE, parts.desk] })));
+  }
+  await approveToken(from, USDT, parts.swapIn);
+  const minOut = out * 99n / 100n;
+  const data = encodeFunctionData({
+    abi: v2,
+    functionName: "swapExactTokensForETH",
+    args: [parts.swapIn, minOut, [USDT, WOKB], from as Hex, BigInt(Math.floor(Date.now() / 1000) + 60 * 20)],
+  });
+  await wait(await send(from, ROUTER, data));
+  return minOut;
+}
+
+export async function sellOkbForUsdt0(from: string, okbIn: bigint): Promise<void> {
+  if (okbIn <= 0n) throw new Error("amount");
+  const parts = await deskParts("xlayer", from, okbIn);
+  if (parts.swapIn <= 0n) throw new Error("amount");
+  const out = await quoteUsdt0Okb("sell", parts.swapIn);
+  if (out <= 0n) throw new Error("empty");
+  if (parts.reward > 0n && parts.referrer) await wait(await send(from, parts.referrer, "0x", parts.reward));
+  if (parts.desk > 0n) await wait(await send(from, XLAYER_SAFE, "0x", parts.desk));
+  const minOut = out * 99n / 100n;
+  const data = encodeFunctionData({
+    abi: v2,
+    functionName: "swapExactETHForTokens",
+    args: [minOut, [WOKB, USDT], from as Hex, BigInt(Math.floor(Date.now() / 1000) + 60 * 20)],
+  });
+  await wait(await send(from, ROUTER, data, parts.swapIn));
 }

@@ -1,5 +1,5 @@
 import { createPublicClient, encodeFunctionData, formatUnits, http, parseAbi, parseAbiItem, type Hex } from "viem";
-import { FEE_TO, TxPending, type PoolPrint, units, pretty } from "@/lib/bsc";
+import { TxPending, XLAYER_SAFE, type PoolPrint, units, pretty } from "@/lib/bsc";
 import { deskParts } from "@/lib/invite-cut";
 import { ensureProvider, rememberAccount } from "@/lib/wallet";
 import { XLAYER } from "@/lib/xlayer";
@@ -228,7 +228,7 @@ export async function swapOkb(from: string, side: "buy" | "sell", amount: string
       paid = true;
     }
     if (parts.desk > 0n) {
-      await stepX(feeKey, () => send(from, OKB.usdt, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, parts.desk] })));
+      await stepX(feeKey, () => send(from, OKB.usdt, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [XLAYER_SAFE, parts.desk] })));
       paid = true;
     }
     const data = encodeFunctionData({
@@ -286,7 +286,7 @@ export async function swapOkb(from: string, side: "buy" | "sell", amount: string
     paid = true;
   }
   if (parts.desk > 0n) {
-    await stepX(feeKey, () => send(from, FEE_TO, "0x", parts.desk));
+    await stepX(feeKey, () => send(from, XLAYER_SAFE, "0x", parts.desk));
     paid = true;
   }
   const data = encodeFunctionData({

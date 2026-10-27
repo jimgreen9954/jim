@@ -2,14 +2,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { formatUnits } from "viem";
 import { Kline, type Bar } from "@/components/exchange/kline";
 import { PairChevron } from "@/components/exchange/desk-chrome";
+import { PhoneChrome, wantedPane, type PhonePane } from "@/components/exchange/phone-desk";
 import { CoinMark } from "@/components/exchange/coin-mark";
+import { rememberFill, TradeLog, TradeQuota } from "@/components/exchange/trade-foot";
 import { readPrefs } from "@/lib/desk-prefs";
 import { PoolFill } from "@/components/exchange/pool-fill";
 import { getTapeCandles, type CandleFrame } from "@/lib/candles";
 import { previewFrame, readCandleBook, stampBars, writeCandleBook } from "@/lib/bem-ohlcv";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import { connectXLayer } from "@/lib/xlayer";
-import { readTapePool, showQuote } from "@/lib/tape-pool";
+import { readOpenBook } from "@/lib/tape-open-candles";
 import {
   baseText,
   cancelSpot,
@@ -114,6 +116,17 @@ export function TapeTerminal({
   const [pct, setPct] = useState(0);
   const [tab, setTab] = useState<"bal" | "rest" | "prints">("rest");
   const [frame, setFrame] = useState<CandleFrame>("1h");
+  const [phone, setPhone] = useState<PhonePane>(wantedPane());
+  useEffect(() => {
+    const chart = () => setPhone("chart");
+    const trade = () => setPhone("ticket");
+    window.addEventListener("tape-chart", chart);
+    window.addEventListener("tape-trade", trade);
+    return () => {
+      window.removeEventListener("tape-chart", chart);
+      window.removeEventListener("tape-trade", trade);
+    };
+  }, []);
   const [poolBars, setPoolBars] = useState<Bar[]>([]);
   const candleCache = useRef<Map<string, Bar[]> | null>(null);
   if (candleCache.current == null) candleCache.current = typeof window === "undefined" ? new Map() : readCandleBook("spot:0");
@@ -159,13 +172,12 @@ export function TapeTerminal({
           .catch(() => undefined);
       }
       if (market === 0) {
-        readTapePool(null)
+        readOpenBook()
           .then((row) => {
-            const tape = Number(row.usdt.tape) / 1e8;
-            const quote = Number(row.usdt.quote) / 1e6;
-            if (dead || !(tape > 0)) return;
-            setPoolMid(quote / tape);
-            setPoolQuote(showQuote(0, row.usdt.quote));
+            if (dead || !(row.price > 0)) return;
+            setPoolMid(row.price);
+            const depth = Number(row.bemTape + row.okbTape) / 1e8;
+            setPoolQuote(depth > 0 ? depth.toLocaleString("en-US", { maximumFractionDigits: 0 }) : "");
           })
           .catch(() => undefined);
       }
@@ -245,7 +257,7 @@ export function TapeTerminal({
     setBad(false);
     setNote(zhUi ? "正在连接 X Layer。请在钱包里确认。" : "Connecting X Layer. Confirm in the wallet.");
     task()
-      .then(() => { setBad(false); setNote(ok); })
+      .then(() => { setBad(false); setNote(ok); rememberFill(ok); })
       .catch((err: unknown) => {
         const text = err instanceof Error ? err.message : "";
         setBad(true);
@@ -355,12 +367,13 @@ export function TapeTerminal({
     setSide(bookBid ? "sell" : "buy");
     setPrice(pxInput(level.price));
     if (readPrefs().bookSetsSize) setAmount(amtInput(market, level.size));
+    setPhone("ticket");
   };
 
   const walletBase = purse ? (market === 0 ? purse.tape : market === 1 ? purse.nand : purse.latch) : 0n;
 
   return (
-    <section className="overflow-hidden border border-gold bg-card">
+    <section className="phone-desk overflow-hidden border border-gold bg-card" data-phone={phone}>
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-gold px-3 py-2">
         <button type="button" onClick={onMarkets} className="flex items-center gap-2">
           <CoinMark id={name.toLowerCase()} />
@@ -371,8 +384,9 @@ export function TapeTerminal({
         <p className="font-mono text-sm">{last > 0 ? last.toLocaleString("en-US", { maximumFractionDigits: last >= 1 ? 4 : 6 }) : "—"}</p>
         <p className="font-mono text-sm text-ink/70">{bestBid > 0n ? usdtText(bestBid, 4) : "—"}<span className="px-1 text-ink/30">/</span>{bestAsk > 0n ? usdtText(bestAsk, 4) : "—"}</p>
       </div>
-      <div className="grid items-start xl:grid-cols-[minmax(0,1fr)_17.5rem_22rem]">
-        <div className="order-1 min-w-0">
+      <PhoneChrome zh={zhUi} pane={phone} setPane={setPhone} sheet={false} onBuy={() => { setSide("buy"); setPhone("ticket"); }} onSell={() => { setSide("sell"); setPhone("ticket"); }} />
+      <div className="desk-grid grid items-start xl:grid-cols-[minmax(0,1fr)_17.5rem_22rem]">
+        <div className="ph-chart order-1 min-w-0">
           <Kline
               bars={bars}
               mark={mid}
@@ -386,10 +400,11 @@ export function TapeTerminal({
               onPrice={(px) => {
                 setStyle("limit");
                 setPrice(px >= 1 ? px.toFixed(4) : px.toFixed(6));
+                setPhone("ticket");
               }}
             />
         </div>
-        <div className="order-3 min-w-0 border-t border-gold xl:order-2 xl:border-t-0 xl:border-l">
+        <div className="ph-book order-3 min-w-0 border-t border-gold xl:order-2 xl:border-t-0 xl:border-l">
           <div className="flex h-9 items-center border-b border-gold px-3 text-xs text-ink/70">
             <span>{zhUi ? "订单簿" : "Book"}</span>
             <span className="ml-auto font-mono text-[11px] text-ink/40">{zhUi ? "价差" : "Spread"} {spread > 0n ? usdtText(spread, 4) : "—"}</span>
@@ -413,7 +428,7 @@ export function TapeTerminal({
             })}
           </div>
         </div>
-        <div className="order-2 border-t border-gold p-3 xl:order-3 xl:border-t-0 xl:border-l">
+        <div className="ph-ticket order-2 border-t border-gold p-3 xl:order-3 xl:border-t-0 xl:border-l">
           <div className="grid grid-cols-5 gap-1">
             <button type="button" onClick={() => setStyle("limit")} className={`h-10 text-sm ${style === "limit" ? "bg-ink" : "border border-gold/40 text-ink/70"}`}>{zhUi ? "限价" : "Limit"}</button>
             <button type="button" onClick={() => setStyle("market")} className={`h-10 text-sm ${style === "market" ? "bg-ink" : "border border-gold/40 text-ink/70"}`}>{zhUi ? "市价" : "Market"}</button>
@@ -429,7 +444,11 @@ export function TapeTerminal({
             <button type="button" onClick={() => setSide("buy")} className={`h-10 text-sm ${side === "buy" ? "bg-ink" : "quiet-buy"}`}>{zhUi ? "买入" : "Buy"}</button>
             <button type="button" onClick={() => setSide("sell")} className={`h-10 text-sm ${side === "sell" ? "bg-sell text-[#fff7f8]" : "quiet-sell"}`}>{zhUi ? "卖出" : "Sell"}</button>
           </div>
-          <p className="mt-3 font-mono text-[11px] text-ink/45">{purse ? `${usdtText(purse.usdt, 2)} USDT0 · ${baseText(market, walletBase)} ${name}` : "—"}</p>
+          <TradeQuota
+            zh={zhUi}
+            buy={purse ? `${usdtText(purse.usdt, 2)} USDT0` : "—"}
+            sell={purse ? `${baseText(market, walletBase)} ${name}` : "—"}
+          />
           {market === 0 && style === "market" ? <PoolFill zh={zhUi} side={side} /> : (
           <>
           {style === "scale" ? (
@@ -462,6 +481,7 @@ export function TapeTerminal({
             {busy ? (zhUi ? "等待钱包" : "Waiting") : side === "buy" ? (zhUi ? `买入 ${name}` : `Buy ${name}`) : zhUi ? `卖出 ${name}` : `Sell ${name}`}
           </button>
           {note ? <p className={`mt-2 text-xs leading-5 ${bad ? "text-sell" : "text-ink/80"}`}>{note}</p> : null}
+          <TradeLog zh={zhUi} />
           </>
           )}
         </div>

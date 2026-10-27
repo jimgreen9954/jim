@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { TradeLog, TradeQuota } from "@/components/exchange/trade-foot";
 import { useExchange } from "@/lib/exchange-store";
 import { connectXLayer, XLAYER } from "@/lib/xlayer";
 import { currentAccount, onAccount } from "@/lib/wallet";
@@ -225,6 +226,11 @@ export function TapePoolDesk() {
             </button>
           ))}
         </div>
+        <TradeQuota
+          zh={zh}
+          buy={`${showQuote(quote, balQuote)} ${unit}`}
+          sell={`${showTape(balTape)} TAPE`}
+        />
         <p className="text-xs text-ink/60">
           {zh ? `钱包 TAPE ${showTape(balTape)} · ${unit} ${showQuote(quote, balQuote)}` : `Wallet TAPE ${showTape(balTape)} · ${unit} ${showQuote(quote, balQuote)}`}
         </p>
@@ -276,6 +282,7 @@ export function TapePoolDesk() {
           </button>
         )}
         {note ? <p className={`break-all text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
+        <TradeLog zh={zh} />
         <p className="text-xs text-ink/50">{zh ? `开盘线 ${OPEN_USDT.toString()} 最小单位，也就是 5,000 USDT0。` : "The gate is 5,000 USDT0."}</p>
       </form>
     </div>

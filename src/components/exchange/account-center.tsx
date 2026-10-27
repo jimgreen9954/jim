@@ -12,7 +12,7 @@ import { currentAccount, getProvider, onAccount } from "@/lib/wallet";
 import { connectXLayer, transferCircuit, transferTransistor, XLAYER } from "@/lib/xlayer";
 import { LOCK_TERMS, readLocks, type LockSeat } from "@/lib/tape-lock";
 import { readTapePool, showQuote, showTape, TAPE_BEM, TAPE_TERMS, TAPE_TOKEN, TAPE_USDT, type TapePosition } from "@/lib/tape-pool";
-import { GiftDeploy, NewbieGift } from "@/components/exchange/newbie-gift";
+import { readOpenBook } from "@/lib/tape-open-candles";
 import { PayDesk } from "@/components/exchange/pay-desk";
 import { tapeText } from "@/lib/tape-mine";
 
@@ -99,7 +99,6 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
   const [bad, setBad] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sendKey, setSendKey] = useState<string | null>(null);
-  const [gift, setGift] = useState(giftOpen);
   const [pulse, setPulse] = useState(0);
   const [freshing, setFreshing] = useState(false);
   const [freshAt, setFreshAt] = useState("");
@@ -112,11 +111,6 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
   const [holdTick, setHoldTick] = useState(0);
 
   useEffect(() => onAccount(setAccount), []);
-  useEffect(() => {
-    if (!giftOpen) return;
-    setGift(true);
-    document.getElementById("starter-gift")?.scrollIntoView({ block: "start" });
-  }, [giftOpen]);
 
   const pull = (who: string) => {
     setFreshing(true);
@@ -197,7 +191,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
     const load = async () => {
       const mine = ++flight;
       const keys = Object.keys(ERC_BOOKS) as ErcKey[];
-      const [bal, purse, bemRaw, bnbRaw, okbRaw, ercBal, pool] = await Promise.all([
+      const [bal, purse, bemRaw, bnbRaw, okbRaw, ercBal, pool, mark] = await Promise.all([
         readBalances(account).catch(() => null),
         readOkbPurse(account).catch(() => null),
         bemPrice().catch(() => ""),
@@ -205,6 +199,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
         okbPrice().catch(() => ""),
         Promise.all(keys.map((key) => readAsset(account, ERC_BOOKS[key].token).catch(() => 0n))),
         readTapePool(account).catch(() => null),
+        readOpenBook().catch(() => null),
       ]);
       if (dead || mine !== flight) return;
       const bnbUsd = num(bnbRaw);
@@ -224,11 +219,11 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
         add({ key: "okb", name: "OKB", qty: qtyOf(purse.okb, 18, 6), px: okbRaw ? `${okbRaw} USDT` : "—", usd: Number(formatEther(purse.okb)) * num(okbRaw), chain: "xlayer", kind: "native", decimals: 18, raw: purse.okb });
         add({ key: "xusdt", name: zh ? "X Layer USDT" : "X Layer USDT", qty: qtyOf(purse.usdt, 18, 2), px: "1 USDT", usd: Number(formatUnits(purse.usdt, 18)), chain: "xlayer", kind: "erc20", token: OKB.usdt, decimals: 18, raw: purse.usdt });
       }
-      const tapePx = pool && pool.usdt.tape > 0n && pool.usdt.quote > 0n ? Number(formatUnits(pool.usdt.quote, 6)) / Number(formatUnits(pool.usdt.tape, 8)) : 0;
+      const tapePx = mark && mark.price > 0 ? mark.price : 0;
       if (pool) {
         add({ key: "tape", name: "TAPE", qty: qtyOf(pool.tape, 8, 4), px: tapePx > 0 ? `${tapePx.toFixed(4)} USDT` : "—", usd: tapePx > 0 ? Number(formatUnits(pool.tape, 8)) * tapePx : null, chain: "xlayer", kind: "erc20", token: TAPE_TOKEN, decimals: 8, raw: pool.tape });
         add({ key: "usdt0", name: "USDT0", qty: qtyOf(pool.usdtBal, 6, 2), px: "1 USDT", usd: Number(formatUnits(pool.usdtBal, 6)), chain: "xlayer", kind: "erc20", token: TAPE_USDT, decimals: 6, raw: pool.usdtBal });
-        const xbemUsd = tapePx > 0 && pool.bem.quote > 0n && pool.bem.tape > 0n ? (Number(formatUnits(pool.bem.tape, 8)) / Number(formatUnits(pool.bem.quote, 8))) * tapePx : Number.NaN;
+        const xbemUsd = bemUsd;
         add({ key: "xbem", name: zh ? "X Layer BEM" : "X Layer BEM", qty: qtyOf(pool.bemBal, 8, 4), px: Number.isFinite(xbemUsd) ? `${xbemUsd.toFixed(4)} USDT` : "—", usd: Number.isFinite(xbemUsd) ? Number(formatUnits(pool.bemBal, 8)) * xbemUsd : null, chain: "xlayer", kind: "erc20", token: TAPE_BEM, decimals: 8, raw: pool.bemBal });
         for (const pos of pool.positions) {
           if (typeof pos.shares !== "bigint") continue;
@@ -547,18 +542,6 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
           <p className="border-t border-gold/30 pt-2"><span className="text-ink/50">{zh ? "永续" : "Perps"} </span>{perp}</p>
         </div>
       </div>
-
-      <section id="starter-gift" className="border border-gold">
-        <button type="button" className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left" onClick={() => setGift((open) => !open)}>
-          <span>
-            <span className="block text-[11px] tracking-[0.22em] text-gold">{zh ? "新手礼包" : "Starter gift"}</span>
-            <span className="mt-1 block text-sm">{zh ? "只认永续里已经撮合、你这一边保证金不少于 5 美元的成交。现货不会出现。" : "Only a matched perpetual fill with at least 5 dollars of your margin. Spot does not appear."}</span>
-          </span>
-          <span className="shrink-0 text-xs text-ink/50">{gift ? (zh ? "收起" : "Close") : (zh ? "打开" : "Open")}</span>
-        </button>
-        <GiftDeploy account={account} zh={zh} />
-        {gift && account ? <NewbieGift account={account} zh={zh} pulse={pulse} /> : null}
-      </section>
 
       <div className="border border-gold">
         <button type="button" className="flex w-full items-center justify-between px-4 py-3 text-left" onClick={() => setHoldOpen((open) => !open)}>

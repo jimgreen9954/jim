@@ -63,6 +63,7 @@ export function SettingsMenu({ zh }: { zh: boolean }) {
           <path d="M4 16h3M11 16h9" />
           <circle cx="9" cy="16" r="2" />
         </svg>
+        <span className="menu-word">{zh ? "设置" : "Settings"}</span>
       </button>
       {open ? createPortal(
         <div ref={panel} className="pop-in fixed right-2 top-[calc(env(safe-area-inset-top)+3.25rem)] z-[80] max-h-[min(32rem,calc(100dvh-5rem))] w-[min(20rem,calc(100vw-1rem))] overflow-auto rounded-2xl border border-gold/40 bg-card p-4 shadow-plate sm:right-3">

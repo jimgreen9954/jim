@@ -1,5 +1,5 @@
 import { encodeAbiParameters, encodeFunctionData, formatUnits, parseAbi, parseUnits, type Hex } from "viem";
-import { BSC, FEE_TO, connectBsc, readBalances } from "@/lib/bsc";
+import { BSC, BSC_SAFE, FEE_TO, connectBsc, readBalances } from "@/lib/bsc";
 import { GATE_BYTECODE } from "@/lib/gate-artifact";
 import { getProvider } from "@/lib/wallet";
 
@@ -48,7 +48,7 @@ export function gateAddress(): string {
 }
 
 export async function deployFixedGate(from: string): Promise<string> {
-  if (from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("oracle");
+  if (from.toLowerCase() !== BSC_SAFE.toLowerCase() && from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("oracle");
   const existing = window.localStorage.getItem(HOLD) ?? "";
   if (/^0x[a-fA-F0-9]{40}$/.test(existing)) return existing;
   const args = encodeAbiParameters([{ type: "address" }], [USDT]);

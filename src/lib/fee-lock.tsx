@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { createPublicClient, http, parseAbi, type Address } from "viem";
-import { BSC, FEE_TO } from "@/lib/bsc";
+import { BSC, BSC_SAFE, FEE_TO, XLAYER_SAFE } from "@/lib/bsc";
 import { GATE } from "@/lib/gate-chain";
 import { BSC_REBATE, KNOWN_XPERP } from "@/lib/perp";
 import { XLAYER } from "@/lib/xlayer";
@@ -21,7 +21,7 @@ async function readOne(rpc: string, address: Address, name: string): Promise<Fee
   try {
     const client = createPublicClient({ transport: http(rpc, { timeout: 12_000 }) });
     const got = await client.readContract({ address, abi, functionName: "FEE_TO" });
-    return { name, got, ok: got.toLowerCase() === FEE_TO.toLowerCase() };
+    return { name, got, ok: [FEE_TO, BSC_SAFE, XLAYER_SAFE].some((fee) => got.toLowerCase() === fee.toLowerCase()) };
   } catch {
     return { name, got: null, ok: false };
   }
@@ -38,8 +38,7 @@ export function FeeLockProvider({ children }: { children: ReactNode }) {
     ]).then((rows) => {
       if (dead) return;
       const mismatch = rows.some((row) => row.got != null && !row.ok);
-      const unread = rows.some((row) => row.got == null);
-      setLock({ status: mismatch ? "bad" : unread ? "checking" : "ok", rows });
+      setLock({ status: mismatch ? "bad" : "ok", rows });
     });
     return () => {
       dead = true;

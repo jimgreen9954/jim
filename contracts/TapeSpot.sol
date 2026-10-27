@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.26;
+pragma solidity ^0.8.26;
 
 interface IERC20 {
     function transfer(address, uint256) external returns (bool);
@@ -23,7 +23,7 @@ contract TapeSpot {
     IERC20 public constant TAPE = IERC20(0x8f2d517D3d62019CD8D7F08ae178Be05BBb6EBE3);
     IERC1155 public constant WAFER = IERC1155(0x3FA393d3081AcCff9E7989619B688235F6d3EE3F);
     IERC721 public constant CIRCUIT = IERC721(0x69F663931209096037474d7C20402232E5C762cA);
-    address public constant FEE = 0x823b9F6A93Ac44Ce5A469823A336c15b6117054D;
+    address public constant FEE = 0xb4D6039394c8B97C3AC3234aa07011B564Fcb88c;
     uint256 public constant FEE_BPS = 20;
     uint256 public constant TAPE_UNIT = 100_000_000;
 

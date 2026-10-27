@@ -1,5 +1,5 @@
 import { createPublicClient, encodeFunctionData, http, pad, parseAbi, type Hex } from "viem";
-import { BSC, FEE_TO, connectBsc } from "@/lib/bsc";
+import { BSC, BSC_SAFE, connectBsc, XLAYER_SAFE } from "@/lib/bsc";
 import { deskParts } from "@/lib/invite-cut";
 import { TAPE_BEM } from "@/lib/tape-pool";
 import { getProvider } from "@/lib/wallet";
@@ -71,7 +71,7 @@ export async function sendBridge(toX: boolean, from: string, amount: bigint): Pr
     if (!hash) throw new Error("fee");
   };
   if (parts.reward > 0n && parts.referrer) await pay(parts.referrer, parts.reward);
-  if (parts.desk > 0n) await pay(FEE_TO, parts.desk);
+  if (parts.desk > 0n) await pay(toX ? BSC_SAFE : XLAYER_SAFE, parts.desk);
   const allowance = toX
     ? await bsc.readContract({ address: BSC.bem, abi: erc20, functionName: "allowance", args: [from as Hex, BSC_BRIDGE] })
     : cross;

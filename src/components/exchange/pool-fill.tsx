@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Hex } from "viem";
 import { connectXLayer } from "@/lib/xlayer";
 import { currentAccount } from "@/lib/wallet";
+import { rememberFill, TradeLog, TradeQuota } from "@/components/exchange/trade-foot";
 import { poolAmount, poolBalances, poolText, previewPool, swapPool, type PoolQuote } from "@/lib/tape-open-swap";
 
 export function PoolFill({ zh, side }: { zh: boolean; side: "buy" | "sell" }) {
@@ -63,6 +64,7 @@ export function PoolFill({ zh, side }: { zh: boolean; side: "buy" | "sell" }) {
       const amountIn = poolAmount(amount, decimals);
       if (amountIn <= 0n || amountIn > held) throw new Error("amount");
       await swapPool(from, quote, tapeIn, amountIn);
+      rememberFill(`${zh ? (side === "buy" ? "买入" : "卖出") : side} ${amount} ${unit}`);
       setAmount("");
       setOut("");
       setBal(await poolBalances(from as Hex));
@@ -81,6 +83,11 @@ export function PoolFill({ zh, side }: { zh: boolean; side: "buy" | "sell" }) {
         <button type="button" onClick={() => setQuote(0)} className={`h-9 text-sm ${quote === 0 ? "bg-ink" : "border border-gold/40 text-ink/70"}`}>BEM</button>
         <button type="button" onClick={() => setQuote(1)} className={`h-9 text-sm ${quote === 1 ? "bg-ink" : "border border-gold/40 text-ink/70"}`}>OKB</button>
       </div>
+      <TradeQuota
+        zh={zh}
+        buy={bal ? `${poolText(quote === 0 ? bal.bem : bal.okb > 2_000_000_000_000_000n ? bal.okb - 2_000_000_000_000_000n : 0n, quote === 0 ? 8 : 18)} ${quote === 0 ? "BEM" : "OKB"}` : "—"}
+        sell={bal ? `${poolText(bal.tape, 8)} TAPE` : "—"}
+      />
       <label className="mt-2 block border border-gold/40 px-2 py-2">
         <span className="text-[11px] text-ink/45">{unit}</span>
         <input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" className="w-full bg-transparent font-mono text-xl outline-none" />
@@ -95,6 +102,7 @@ export function PoolFill({ zh, side }: { zh: boolean; side: "buy" | "sell" }) {
         {busy ? (zh ? "等待钱包" : "Waiting") : side === "buy" ? (zh ? "买入 TAPE" : "Buy TAPE") : zh ? "卖出 TAPE" : "Sell TAPE"}
       </button>
       {note ? <p className={`mt-2 text-xs ${bad ? "text-sell" : ""}`}>{note}</p> : null}
+      <TradeLog zh={zh} />
     </div>
   );
 }

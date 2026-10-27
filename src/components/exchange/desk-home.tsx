@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { Component, type ReactNode, useEffect, useState } from "react";
 import { MarketSheet, type DeskView } from "@/components/exchange/desk-chrome";
+import { ArriveHint } from "@/components/exchange/phone-desk";
 import { RealPerp } from "@/components/exchange/real-perp";
 import { SpotDesk } from "@/components/exchange/spot-desk";
 import { PoolSpot } from "@/components/exchange/pool-spot";
@@ -37,6 +38,7 @@ export function DeskHome({ desk, onDesk }: { desk: "spot" | "perp"; onDesk: (nex
       wantLp = false;
       setView(next);
       setLp(false);
+      setOpen(false);
     };
     const onLp = () => {
       const next: DeskView = { kind: "pancake", pair: "bem" };
@@ -47,11 +49,17 @@ export function DeskHome({ desk, onDesk }: { desk: "spot" | "perp"; onDesk: (nex
     };
     window.addEventListener("tape-home", onHome);
     window.addEventListener("tape-lp", onLp);
+    const onMarkets = () => {
+      setSheet(desk === "perp" ? "perp" : "spot");
+      setOpen(true);
+    };
+    window.addEventListener("tape-markets", onMarkets);
     return () => {
       window.removeEventListener("tape-home", onHome);
       window.removeEventListener("tape-lp", onLp);
+      window.removeEventListener("tape-markets", onMarkets);
     };
-  }, []);
+  }, [desk]);
 
   const pick = (next: DeskView) => {
     held = next;
@@ -67,6 +75,7 @@ export function DeskHome({ desk, onDesk }: { desk: "spot" | "perp"; onDesk: (nex
       window.dispatchEvent(new HashChangeEvent("hashchange"));
     }
     onDesk(side);
+    window.dispatchEvent(new CustomEvent("tape-chart"));
   };
 
   const showPerp = desk === "perp" || view.kind === "perp";
@@ -77,15 +86,24 @@ export function DeskHome({ desk, onDesk }: { desk: "spot" | "perp"; onDesk: (nex
 
   return (
     <>
+      <ArriveHint zh={zh} />
       {showPerp ? (
+        <DeskGuard key={`${launch.chain}-${launch.coin}`} reset={`${launch.chain}-${launch.coin}`}>
         <RealPerp
           key={`${launch.chain}-${launch.coin}`}
           launch={{ chain: launch.chain, coin: launch.coin }}
           onMarkets={() => { setSheet("perp"); setOpen(true); }}
         />
+        </DeskGuard>
       ) : null}
       {pool ? (
         <PoolSpot
+          pair={view.kind === "tape" ? view.pair ?? "usdt" : "usdt"}
+          onPair={(next) => {
+            const picked: DeskView = { kind: "tape", market: 0, pair: next };
+            held = picked;
+            setView(picked);
+          }}
           onMarkets={() => { setSheet("spot"); setOpen(true); }}
           onOtc={() => setView({ kind: "otc", market: 0 })}
         />
@@ -103,4 +121,23 @@ export function DeskHome({ desk, onDesk }: { desk: "spot" | "perp"; onDesk: (nex
       {open ? <MarketSheet zh={zh} initial={sheet} onClose={() => setOpen(false)} onPick={pick} /> : null}
     </>
   );
+}
+
+class DeskGuard extends Component<{ children: ReactNode; reset: string }, { bad: boolean }> {
+  state = { bad: false };
+  static getDerivedStateFromError() {
+    return { bad: true };
+  }
+  componentDidUpdate(prev: { reset: string }) {
+    if (prev.reset !== this.props.reset && this.state.bad) this.setState({ bad: false });
+  }
+  render() {
+    if (!this.state.bad) return this.props.children;
+    return (
+      <section className="border border-gold bg-card px-4 py-8">
+        <p className="text-sm">这一张合约没有打开。行情还在，页面不再停在空白。</p>
+        <button type="button" className="mt-3 h-10 bg-ink px-3 text-sm" onClick={() => this.setState({ bad: false })}>再打开</button>
+      </section>
+    );
+  }
 }

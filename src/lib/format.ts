@@ -1,9 +1,23 @@
+export type NumStyle = "us" | "eu" | "plain" | "space";
+
+let numStyle: NumStyle = "us";
+
+export function applyNum(next: NumStyle) {
+  numStyle = next;
+}
+
+export function currentNum(): NumStyle {
+  return numStyle;
+}
+
 export function fmt(n: number, d: number): string {
   if (!Number.isFinite(n)) return "—";
   const neg = n < 0;
   const [a, b] = Math.abs(n).toFixed(d).split(".");
-  const whole = (a ?? "0").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return `${neg ? "-" : ""}${whole}${b ? `.${b}` : ""}`;
+  const group = numStyle === "us" ? "," : numStyle === "eu" ? "." : numStyle === "space" ? " " : "";
+  const dec = numStyle === "us" ? "." : ",";
+  const whole = group ? (a ?? "0").replace(/\B(?=(\d{3})+(?!\d))/g, group) : (a ?? "0");
+  return `${neg ? "-" : ""}${whole}${b ? `${dec}${b}` : ""}`;
 }
 
 export function fmtPx(n: number): string {

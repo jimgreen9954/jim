@@ -3,6 +3,7 @@ import { SideRail } from "@/components/exchange/side-rail";
 import { formatUnits } from "viem";
 import { XLAYER } from "@/lib/xlayer";
 import { quoteOkb } from "@/lib/okb";
+import { rememberFill, TradeLog } from "@/components/exchange/trade-foot";
 import { Hint } from "@/components/exchange/hint";
 import { TapeCircuits } from "@/components/exchange/tape-circuits";
 import { ContainerDesk } from "@/components/exchange/capacitor-desk";
@@ -278,6 +279,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
       } else setSpot(spotAddress());
       setBad(false);
       setNote(ok);
+      rememberFill(ok);
     }).catch((err: unknown) => {
       const parts: string[] = [];
       let cur: unknown = err;
@@ -415,7 +417,6 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
               <Stat k={<Hint label={zh ? "成交" : "Prints"} text={zh ? "从最新的区块往回读。NAND、LATCH、TAPE 分开算。读到的笔数和金额先显示，更早的还在补。" : "Reads backward from the newest block. NAND, LATCH and TAPE are counted apart. Counts already found stay on screen while older blocks are still being read."} />} v={reading && traded.n === 0 ? (zh ? "正在读" : "Reading") : `${traded.n}${zh ? " 笔" : ""}`} s={reading && traded.n === 0 ? (zh ? `已回读 ${readMin} 分钟` : `${readMin} min read`) : `${baseText(market, traded.base)} ${name} · ${moneyText(traded.quote, quoteUnit, okbRate)} ${unitName}`} />
               <Stat k={<Hint label={zh ? "已收手续费" : "Fees read"} text={zh ? "这些成交里已经扣下的千分之二，进收费地址。卖方实收 99.8%。" : "The 0.2 percent already taken on these prints. Sellers receive 99.8 percent."} />} v={`${moneyText(traded.fee, quoteUnit, okbRate)} ${unitName}`} s={zh ? "只算已经读到的成交" : "Of the prints read"} />
             </div>
-            <p className="px-3 py-2 text-[11px] leading-5 text-ink/50">{zh ? "点左边价格，这一档会填进右边下单栏。指定成交在每一行右侧，格子里先空着，提示是这一档的上限。不填数量，按钮不会亮。" : "The price fills the ticket on the right. Direct fill sits at the end of the row. The box starts empty and shows that level's cap. The button stays off until you type a size."}</p>
           </article>
           <article className="mt-3 border border-gold bg-card">
             <div className="grid grid-cols-2 border-b border-gold">
@@ -493,10 +494,6 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
             </div>
             <Quote zh={zh} market={market} side={side} price={price} amount={amount} unit={quoteUnit} rate={okbRate} />
             <Plan zh={zh} market={market} side={side} price={price} amount={amount} asks={asks} bids={bids} purse={purse} name={name} unit={quoteUnit} rate={okbRate} />
-            {quoteUnit === "okb" ? <p className="mt-2 text-xs leading-5 text-ink/70">{(() => { try { return zh ? `钱包要签的是 ${usdtText(typedUsdt(price, "okb", okbRate), 4)} USDT0。OKB 只是池子折算，池子一动这个数就变。` : `The wallet signs ${usdtText(typedUsdt(price, "okb", okbRate), 4)} USDT0. OKB is only a pool conversion.`; } catch { return zh ? "还没读到 OKB 池子价，这一笔不会按 OKB 签。" : "No OKB pool price yet. This order will not be signed in OKB."; } })()}</p> : null}
-            <p className="mt-2 text-xs leading-5 text-ink/60">
-              {zh ? "两边都按钱包余额。买入切 USDT0，卖出切这种币。买方按价格付，卖方实收 99.8%。这一本订单簿的千分之二整笔进收费地址，合约里没有邀请人。永续、现货、加池、官方晶体管和官方电路，按邀请人 6%、少付 4%、收费地址 90% 拆。电路容器的开通费是协议的 BNB，不走这笔台费。" : "Both figures are the wallet. The buyer pays the price. The seller receives 99.8 percent. This book's 0.2 percent goes entirely to the fee address. Perps, spot, pools you add, official transistors, and official circuits split a referrer at 6%, 4% off, and 90%. A circuit container's open fee is protocol BNB, not this site fee."}
-            </p>
             {ownHit ? <p className="mt-2 text-sm leading-6 text-sell">{zh ? `这个价会碰到你自己的${ownHit.bid ? "买单" : "卖单"} ${usdtText(ownHit.price, 4)}。同一个钱包不能互吃，点下去会被整笔拒绝。先撤掉，或改一个碰不到的价格。` : `This price reaches your own ${ownHit.bid ? "bid" : "ask"} at ${usdtText(ownHit.price, 4)}. The same wallet cannot take it. Cancel it, or move the price.`}</p> : null}
             <button type="button" disabled={busy || Boolean(ownHit)} className={`mt-3 min-h-12 w-full text-sm text-white disabled:opacity-40 ${side === "buy" ? "bg-ink" : "bg-sell"}`} onClick={() => {
               let px = 0n;
@@ -505,6 +502,7 @@ export function TapeSpotDesk({ zh, lanes }: { zh: boolean; lanes?: readonly (Spo
             }}>
               {side === "buy" ? (zh ? `买入 ${name}` : `Buy ${name}`) : (zh ? `卖出 ${name}` : `Sell ${name}`)}
             </button>
+            <TradeLog zh={zh} />
             </div>
           </div>
         </div>

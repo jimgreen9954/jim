@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { formatEther, formatUnits } from "viem";
 import { bscBemBalance, BSC_BRIDGE, quoteBridge, sendBridge, type BridgeQuote } from "@/lib/bem-bridge";
 import { deskParts } from "@/lib/invite-cut";
-import { bemPrice, BSC } from "@/lib/bsc";
-import { readTapePool, TAPE_BEM } from "@/lib/tape-pool";
+import { bemPrice, BSC, quoteExact } from "@/lib/bsc";
+import { quoteOkb } from "@/lib/okb";
+import { TAPE_BEM } from "@/lib/tape-pool";
+import { readOpenBook } from "@/lib/tape-open-candles";
 import {
   deployDesk,
   deskAddress,
@@ -66,6 +68,57 @@ function sgWhen(unix: bigint): string {
   return `${text} SGT`;
 }
 
+function GasDesk({ account, zh }: { account: string | null; zh: boolean }) {
+  const [toBnb, setToBnb] = useState(true);
+  const [amt, setAmt] = useState("");
+  const [rate, setRate] = useState(0);
+  const [note, setNote] = useState("");
+  const [bad, setBad] = useState(false);
+  const amount = /^[0-9]*\.?[0-9]+$/.test(amt.trim()) ? Number(amt.trim()) : 0;
+  const net = amount > 0 ? amount * 0.998 : 0;
+  const out = toBnb ? net * rate : rate > 0 ? net / rate : 0;
+  const fee = amount > 0 ? amount * 0.002 : 0;
+  const pay = toBnb ? "OKB" : "BNB";
+  const get = toBnb ? "BNB" : "OKB";
+
+  useEffect(() => {
+    let dead = false;
+    Promise.all([
+      quoteOkb("sell", 10n ** 18n).catch(() => 0n),
+      quoteExact(BSC.wbnb, BSC.usdt, 10n ** 18n, BSC.bnbFee).catch(() => 0n),
+    ]).then(([okbRaw, bnbRaw]) => {
+      if (dead) return;
+      const okbUsd = Number(formatUnits(okbRaw, 6));
+      const bnbUsd = Number(formatUnits(bnbRaw, 18));
+      setRate(okbUsd > 0 && bnbUsd > 0 ? okbUsd / bnbUsd : 0);
+    }).catch(() => { if (!dead) setRate(0); });
+    return () => { dead = true; };
+  }, []);
+
+  const cut = (n: number) => (n > 0 ? n.toLocaleString("en-US", { maximumFractionDigits: 6 }) : "—");
+
+  return (
+    <div className="mt-3 grid gap-2 border border-gold/40 px-3 py-3">
+      <p className="text-sm">{zh ? "OKB 与 BNB" : "OKB and BNB"}</p>
+      <p className="font-mono text-xs text-ink/60">{zh ? "1 OKB ≈" : "1 OKB ≈"} {rate > 0 ? rate.toLocaleString("en-US", { maximumFractionDigits: 6 }) : "—"} BNB · {zh ? "台费 0.20%" : "Fee 0.20%"}</p>
+      <div className="grid grid-cols-2 border border-gold text-sm">
+        <button type="button" className={`min-h-11 ${toBnb ? "bg-ink text-paper" : ""}`} onClick={() => setToBnb(true)}>OKB → BNB</button>
+        <button type="button" className={`min-h-11 ${!toBnb ? "bg-ink text-paper" : ""}`} onClick={() => setToBnb(false)}>BNB → OKB</button>
+      </div>
+      <input value={amt} onChange={(event) => setAmt(event.target.value)} inputMode="decimal" placeholder={pay} className="min-h-11 border border-gold/50 bg-transparent px-2 font-mono text-sm" />
+      <p className="font-mono text-xs text-ink/70">{zh ? "台费" : "Fee"} {cut(fee)} {pay} · {zh ? "到账约" : "About"} {cut(out)} {get}</p>
+      <button
+        type="button"
+        disabled
+        className="min-h-11 border border-gold/40 text-sm text-ink/50"
+      >
+        {zh ? "两边库存还没部署，这一笔不会签名" : "No inventory is deployed, so this does not sign"}
+      </button>
+      {note ? <p className={`text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
+    </div>
+  );
+}
+
 export function OfficialBridge({ account, zh, xBem, startOpen = false }: { account: string | null; zh: boolean; xBem: bigint | null; startOpen?: boolean }) {
   const [open, setOpen] = useState(startOpen);
   const [toX, setToX] = useState(true);
@@ -105,7 +158,6 @@ export function OfficialBridge({ account, zh, xBem, startOpen = false }: { accou
       </button>
       {open ? (
         <div className="grid gap-2 border-t border-gold/30 px-3 py-3">
-          <p className="text-xs leading-5 text-ink/60">{zh ? "先付台费千分之二，再走 TapeOut 的桥。BSC 锁剩下的 BEM，X Layer 铸出。回来则烧掉 X Layer 的 BEM。桥自己的费另计。台费转出后，桥没过也不退。TAPE 不能走。" : "The 0.20% site fee is paid first. The rest crosses on TapeOut's bridge. BSC locks it and X Layer mints. The return burns X Layer BEM. The bridge's own fee is separate. A fee already sent is not returned if the bridge does not finish. TAPE cannot use it."}</p>
           <div className="grid grid-cols-2 border border-gold text-sm">
             <button type="button" className={`min-h-11 ${toX ? "bg-ink text-paper" : ""}`} onClick={() => setToX(true)}>BSC → X Layer</button>
             <button type="button" className={`min-h-11 ${!toX ? "bg-ink text-paper" : ""}`} onClick={() => setToX(false)}>X Layer → BSC</button>
@@ -113,7 +165,7 @@ export function OfficialBridge({ account, zh, xBem, startOpen = false }: { accou
           <input value={amt} onChange={(event) => setAmt(event.target.value)} inputMode="decimal" placeholder={zh ? "BEM 数量" : "BEM amount"} className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono text-sm" />
           <p className="text-xs text-ink/55">{zh ? "可转" : "Available"} {toX ? (bscBal == null ? "—" : deskText(bscBal, 8)) : (xBem == null ? "—" : deskText(xBem, 8))} BEM</p>
           <p className="text-xs leading-5">{zh ? "台费" : "Fee"} 0.20% {fee == null ? "—" : deskText(fee, 8)} BEM · {zh ? "这次到账" : "Arrives"} {quote ? deskText(quote.received, 8) : "—"} · {zh ? "桥留下" : "Bridge keeps"} {quote ? deskText(quote.sent - quote.received, 8) : "—"} · {toX ? "BNB" : "OKB"} {quote ? formatEther(quote.nativeFee) : "—"}</p>
-          <button type="button" disabled={busy || !account || !amount || !quote} className="min-h-12 bg-ink text-sm text-paper disabled:opacity-40" onClick={() => {
+          <button type="button" disabled={busy || !account || !amount} className="min-h-12 bg-ink text-sm text-paper disabled:opacity-40" onClick={() => {
             if (!account || !amount) return;
             setBusy(true);
             sendBridge(toX, account, amount).then(() => { setBad(false); setNote(zh ? "台费已付，桥已提交。到账要等桥的消息。" : "The fee is paid and the bridge is submitted. It arrives with the bridge message."); }).catch((err) => { setBad(true); setNote(err instanceof Error && err.message === "fee-kept" ? (zh ? "台费已经转出，不退。桥没有提交。" : "The fee was sent and is not returned. The bridge was not submitted.") : (zh ? "没有跨过去。BEM 还在原来的链上。" : "It did not cross. The BEM is still on the original chain.")); }).finally(() => setBusy(false));
@@ -126,6 +178,7 @@ export function OfficialBridge({ account, zh, xBem, startOpen = false }: { accou
           {note ? <p className={`text-sm leading-6 ${bad ? "text-sell" : ""}`}>{note}</p> : null}
         </div>
       ) : null}
+      <GasDesk account={account} zh={zh} />
     </div>
   );
 }
@@ -212,9 +265,8 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
       if (term) {
         readTerm(account).then((next) => { if (!dead && next) { setStake(next); setStakeMiss(false); } }).catch(() => { if (!dead) setStakeMiss(true); });
       }
-      readTapePool(null).then((pool) => {
-        if (dead) return;
-        setTapePx(pool.usdt.tape > 0n ? Number(pool.usdt.quote) * 100 / Number(pool.usdt.tape) : null);
+      readOpenBook().then((book) => {
+        if (!dead && book.price > 0) setTapePx(book.price);
       }).catch(() => { if (!dead) setTapePx(null); });
       bemPrice().then((text) => { if (!dead) setBemPx(Number(text.replace(/,/g, "")) || null); }).catch(() => { if (!dead) setBemPx(null); });
     };
@@ -344,70 +396,13 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
 
   return (
     <section className="grid gap-3">
-      <article className="border border-gold bg-card px-3 py-4 sm:px-4">
-        <p className="text-[11px] tracking-[0.22em] text-gold">{zh ? "回购" : "Buyback"}</p>
-        <h2 className="mt-1 font-display text-3xl italic leading-tight sm:text-4xl">1 TAPE = 0.1 USDT0</h2>
-        <dl className="mt-3 grid gap-3 text-sm leading-6">
-          <div>
-            <dt className="text-[11px] tracking-[0.16em] text-gold">{zh ? "回收价" : "Price"}</dt>
-            <dd>{zh ? "1 枚整数 TAPE 结算 0.1 USDT0。价格写在合约中，不随现货变动。不足 1 枚不予接受。" : "One whole TAPE settles for 0.1 USDT0. The price is in the contract and does not follow the spot market. Less than one TAPE is not accepted."}</dd>
-          </div>
-          <div>
-            <dt className="text-[11px] tracking-[0.16em] text-gold">{zh ? "谁能充" : "Who can fund"}</dt>
-            <dd>{zh ? "只有买方地址可以充入 X Layer 的 USDT0，也只有这个地址可以取回还没花掉的 USDT0 和已经买到的 TAPE。其他地址不能在这里充 USDT0。" : "Only the buyer address can deposit X Layer USDT0. Only that address can withdraw USDT0 that has not been spent, and the TAPE it has bought. No other address can deposit USDT0 here."}</dd>
-          </div>
-          <div>
-            <dt className="text-[11px] tracking-[0.16em] text-gold">{zh ? "用户" : "Sellers"}</dt>
-            <dd>{zh ? "只能卖出整数枚 TAPE。卖出当时收到 USDT0，不能把已卖出的 TAPE 取回。池子里的 USDT0 不够，这一笔整单失败，不会先收 TAPE。这份合约不加池。" : "A seller can only sell whole TAPE. USDT0 is paid in that same transaction. Sold TAPE cannot be taken back. If the USDT0 cannot cover the order, the whole order fails and no TAPE is taken. This contract does not add liquidity."}</dd>
-          </div>
-        </dl>
-        <p className="mt-2 break-all font-mono text-[11px] text-ink/50">{zh ? "买方" : "Buyer"} {TAPE_BUYER}</p>
-        {!desk ? (
-          <>
-            <p className="mt-3 text-sm leading-6">{zh ? "新回购还没部署。只有上面这个地址能充 USDT0 和取回剩余。下面的质押不靠这份合约，现在就能看。" : "The new buyback is not deployed yet. Only the address above can deposit USDT0 and take back what is left. Stake below does not use this contract and can be read now."}</p>
-            <button type="button" disabled={busy} className="mt-3 min-h-12 w-full bg-ink text-sm text-paper disabled:opacity-40 sm:w-auto sm:px-6" onClick={deploy}>{zh ? "部署回购合约" : "Deploy the buyback"}</button>
-          </>
-        ) : (
-          <>
-        <p className="mt-1 break-all font-mono text-[11px] text-ink/50">
-          <a className="underline" href={`${XLAYER.explorer}/address/${desk}`} target="_blank" rel="noreferrer">{desk}</a>
-        </p>
-        <p className="mt-3 text-sm">{zh ? "池子可付" : "Pool can pay"} <span className="font-mono">{row ? deskText(row.usdtPool, 6, 2) : "—"} USDT0</span> · {zh ? "最多再收" : "Room for"} <span className="font-mono">{row ? maxTape.toLocaleString("en-US") : "—"} TAPE</span></p>
-        {miss ? <p className="mt-1 text-xs text-ink/55">{zh ? "这一次没读到。不写成 0。" : "This read missed. It is not shown as zero."}</p> : null}
-        <div className="mt-3 grid gap-3 lg:grid-cols-2">
-          <label className="grid gap-1 text-xs text-ink/55">
-            {zh ? "卖出整数枚，每枚到账 0.1 USDT0" : "Sell whole TAPE, 0.1 USDT0 each"}
-            <input value={sellAmt} onChange={(event) => setSellAmt(event.target.value)} inputMode="numeric" placeholder="1" className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono text-base text-ink" />
-            <span>{zh ? "钱包" : "Wallet"} {row ? deskText(row.tapeBal, 8) : "—"} TAPE · {zh ? "到账" : "You get"} {/^[1-9]\d*$/.test(sellAmt.trim()) ? (Number(sellAmt.trim()) * 0.1).toLocaleString("en-US", { maximumFractionDigits: 1 }) : "—"} USDT0</span>
-            <button type="button" disabled={busy} className="min-h-12 bg-ink text-sm text-paper disabled:opacity-40" onClick={() => run(() => sellTape(account ?? "", wholeTape(sellAmt)), zh ? "已换成 USDT0。" : "Sold for USDT0.", "desk")}>{zh ? "卖出" : "Sell"}</button>
-          </label>
-          {account?.toLowerCase() === TAPE_BUYER.toLowerCase() ? (
-          <label className="grid gap-1 text-xs text-ink/55">
-            {zh ? "买方充入 USDT0。别人没有这一格。" : "Buyer deposits USDT0. Others do not get this form."}
-            <input value={usdtAmt} onChange={(event) => setUsdtAmt(event.target.value)} inputMode="decimal" placeholder="100" className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono text-base text-ink" />
-            <span>{zh ? "钱包" : "Wallet"} {row ? deskText(row.usdtBal, 6, 2) : "—"} · {zh ? "可取回" : "Unspent"} {row ? deskText(row.usdtLeft, 6, 2) : "—"} USDT0 · {zh ? "已买到" : "Bought"} {row ? deskText(row.tapeOwed, 8) : "—"} TAPE</span>
-            <p className="leading-5">{zh ? "只有这个地址能充，也只有这个地址能取回没花掉的 USDT0 和买到的 TAPE。充入要签两笔：第一笔授权，币还在钱包；第二笔才充入。" : "Only this address can deposit, and only this address can take back unspent USDT0 and bought TAPE. Two signatures: approve first, the coins stay in the wallet; the second deposits."}</p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <button type="button" disabled={busy || !row || row.usdtBal === 0n} className="min-h-12 border border-gold px-1 text-sm disabled:opacity-40" onClick={() => setUsdtAmt(row ? formatUnits(row.usdtBal, 6) : "")}>{zh ? "全部" : "All"}</button>
-              <button type="button" disabled={busy} className="min-h-12 bg-ink px-1 text-sm text-paper disabled:opacity-40" onClick={() => run(() => fundUsdt(account ?? "", units(usdtAmt, 6)), zh ? "USDT0 已充入。池子要等这一页重新读到才变。" : "USDT0 is in. The pool changes when this page reads it again.", "desk")}>{zh ? "充入" : "Add"}</button>
-              <button type="button" disabled={busy || !row || row.usdtLeft === 0n} className="min-h-12 border border-gold px-1 text-sm disabled:opacity-40" onClick={() => run(() => withdrawUsdt(account ?? "", row?.usdtLeft ?? 0n), zh ? "没花掉的 USDT0 已取回。" : "Unspent USDT0 is back.", "desk")}>{zh ? "取 USDT0" : "Take USDT0"}</button>
-              <button type="button" disabled={busy || !row || row.tapeOwed === 0n} className="min-h-12 border border-gold px-1 text-sm disabled:opacity-40" onClick={() => run(() => withdrawBought(account ?? "", row?.tapeOwed ?? 0n), zh ? "买到的 TAPE 已取回。" : "Bought TAPE is back.", "desk")}>{zh ? "取 TAPE" : "Take TAPE"}</button>
-            </div>
-          </label>
-          ) : (
-          <p className="text-sm leading-6">{zh ? "这里不能充 USDT0。只能卖出左边的整数枚 TAPE，卖出当时收到 USDT0。充入和取回剩余 USDT0，只属于上面的买方地址。" : "USDT0 cannot be deposited here. Sell whole TAPE on the left and receive USDT0 in that transaction. Depositing and withdrawing the remaining USDT0 belong only to the buyer address above."}</p>
-          )}
-        </div>
-          </>
-        )}
-      </article>
       {!term ? (
         <article className="border border-gold bg-card px-3 py-4 sm:px-4">
           <h3 className="font-display text-2xl italic">{zh ? "期限质押还没部署" : "Timed stake is not deployed"}</h3>
           <p className="mt-2 text-sm leading-6">
             {zh
-              ? "六档写死：三个月、六个月、九个月、一年、两年、三年。到期才能取本金，奖励可以先领。和上面的回购不是同一份合约。上面那份旧质押没有期限，页面不再往那里存。点一次部署。Gas Limit 填 5000000。部署完把地址发我写进页面。"
-              : "Six terms are fixed: 3, 6 and 9 months, then 1, 2 and 3 years. Principal waits until expiry. Rewards can be claimed earlier. This is not the buyback contract. The old stake had no lock, and this page no longer deposits there. Deploy once. Set Gas Limit to 5000000, then send me the address to hardcode."}
+              ? "六档写死：三个月、六个月、九个月、一年、两年、三年。到期才能取本金，奖励可以先领。"
+              : "Six terms are fixed: 3, 6 and 9 months, then 1, 2 and 3 years. Principal waits until expiry. Rewards can be claimed earlier."}
           </p>
           <button type="button" disabled={busy} className="mt-3 min-h-12 w-full bg-ink text-sm text-paper disabled:opacity-40 sm:w-auto sm:px-6" onClick={deployLocks}>{zh ? "部署期限质押" : "Deploy timed stake"}</button>
         </article>

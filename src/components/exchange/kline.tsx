@@ -323,9 +323,9 @@ export function Kline({
     return (
       <div>
         {frameBar}
-        <div className="grid min-h-72 place-items-center px-4 py-10">
-          <div className="flex flex-col items-center gap-3">
-            <img src="/mark.jpg" alt="" className="logo-dance size-16 rounded-md object-cover shadow-plate" />
+        <div className="grid min-h-52 place-items-center px-4 py-8">
+          <div className="logo-sea" aria-hidden>
+            <img src="/mark.jpg" alt="" />
           </div>
         </div>
       </div>

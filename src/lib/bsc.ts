@@ -44,6 +44,8 @@ export const BSC = {
 };
 
 export const FEE_TO = "0x823b9F6A93Ac44Ce5A469823A336c15b6117054D" as const;
+export const BSC_SAFE = "0xE51C19aE6E4261Ed329CC54F1120Cf0Ae09364Bd" as const;
+export const XLAYER_SAFE = "0xb4D6039394c8B97C3AC3234aa07011B564Fcb88c" as const;
 export const DESK_FEE_BPS = 20;
 export const BNB_GAS_RESERVE = 3_000_000_000_000_000n;
 
@@ -444,7 +446,7 @@ async function payDeskToken(from: string, token: Hex, parts: DeskParts, feeKey: 
     await step(`${feeKey}:ref`, () => send(from, token, data));
   }
   if (parts.desk > 0n) {
-    const data = encodeFunctionData({ abi: erc20, functionName: "transfer", args: [FEE_TO, parts.desk] });
+    const data = encodeFunctionData({ abi: erc20, functionName: "transfer", args: [BSC_SAFE, parts.desk] });
     await step(feeKey, () => send(from, token, data));
   }
   return true;
@@ -453,7 +455,7 @@ async function payDeskToken(from: string, token: Hex, parts: DeskParts, feeKey: 
 async function payDeskNative(from: string, parts: DeskParts, feeKey: string): Promise<boolean> {
   if (parts.reward <= 0n && parts.desk <= 0n) return false;
   if (parts.reward > 0n && parts.referrer) await step(`${feeKey}:ref`, () => send(from, parts.referrer as Hex, "0x", parts.reward));
-  if (parts.desk > 0n) await step(feeKey, () => send(from, FEE_TO, "0x", parts.desk));
+  if (parts.desk > 0n) await step(feeKey, () => send(from, BSC_SAFE, "0x", parts.desk));
   return true;
 }
 
@@ -638,6 +640,136 @@ export async function swapBnb(from: string, side: "buy" | "sell", amount: string
     if (paid) throw new Error("fee-kept");
     throw err;
   }
+}
+
+const HOP_FEES = [100, 500, 2500, 10000] as const;
+
+async function bestBnbFee(token: Hex, side: "buy" | "sell", amountIn: bigint, hint: number): Promise<{ out: bigint; fee: number } | null> {
+  const tried = new Set<number>();
+  for (const fee of [hint, ...HOP_FEES]) {
+    if (tried.has(fee)) continue;
+    tried.add(fee);
+    try {
+      const out = side === "buy"
+        ? await quoteExact(BSC.wbnb, token, amountIn, fee)
+        : await quoteExact(token, BSC.wbnb, amountIn, fee);
+      if (out > 0n) return { out, fee };
+    } catch {
+      /* this fee has no pool */
+    }
+  }
+  return null;
+}
+
+/** Buy or sell a BSC token paying or receiving BNB. Direct pool if there is one, otherwise through USDT. */
+export async function quoteWithBnb(token: Hex, feeHint: number, side: "buy" | "sell", amountIn: bigint): Promise<bigint> {
+  if (amountIn <= 0n || token.toLowerCase() === BSC.wbnb.toLowerCase()) return 0n;
+  const direct = await bestBnbFee(token, side, amountIn, feeHint);
+  if (direct) return direct.out;
+  if (side === "buy") {
+    const usdt = await quoteExact(BSC.wbnb, BSC.usdt, amountIn, BSC.bnbFee);
+    return quoteExact(BSC.usdt, token, usdt, feeHint);
+  }
+  const usdt = await quoteExact(token, BSC.usdt, amountIn, feeHint);
+  return quoteExact(BSC.usdt, BSC.wbnb, usdt, BSC.bnbFee);
+}
+
+export async function swapWithBnb(from: string, token: Hex, decimals: number, feeHint: number, side: "buy" | "sell", amount: string, floor?: bigint): Promise<Hex> {
+  const owner = from as Hex;
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20);
+  if (side === "buy") {
+    const amountIn = units(amount, 18);
+    if (amountIn <= 0n) throw new Error("amount");
+    const parts = await deskParts("bsc", from, amountIn);
+    const swapIn = parts.swapIn;
+    if (swapIn <= 0n) throw new Error("amount");
+    const direct = await bestBnbFee(token, "buy", swapIn, feeHint);
+    const quoted = direct?.out ?? await quoteWithBnb(token, feeHint, "buy", swapIn);
+    const minOut = boundMin(quoted, floor);
+    const who = from.toLowerCase();
+    const swapKey = `tl-swap:${who}:bnb-in:${token}:${amountIn}`;
+    const feeKey = `tl-fee:${who}:bnb-in:${token}:${amountIn}`;
+    const already = await resumeSwap(swapKey);
+    if (already) return already;
+    const paid = await payDeskNative(from, parts, feeKey);
+    try {
+      const deposit = encodeFunctionData({ abi: wbnbAbi, functionName: "deposit" });
+      await step(`tl-wrap:${who}:${swapIn}`, () => send(from, BSC.wbnb, deposit, swapIn));
+      await approveIfNeeded(from, BSC.wbnb, swapIn);
+      if (direct) {
+        const data = encodeFunctionData({
+          abi: routerAbi,
+          functionName: "exactInputSingle",
+          args: [{ tokenIn: BSC.wbnb, tokenOut: token, fee: direct.fee, recipient: owner, deadline, amountIn: swapIn, amountOutMinimum: minOut, sqrtPriceLimitX96: 0n }],
+        });
+        return finishSwap(from, data, paid, swapKey, feeKey);
+      }
+      const usdtOut = await quoteExact(BSC.wbnb, BSC.usdt, swapIn, BSC.bnbFee);
+      const leg = encodeFunctionData({
+        abi: routerAbi,
+        functionName: "exactInputSingle",
+        args: [{ tokenIn: BSC.wbnb, tokenOut: BSC.usdt, fee: BSC.bnbFee, recipient: owner, deadline, amountIn: swapIn, amountOutMinimum: (usdtOut * 99n) / 100n, sqrtPriceLimitX96: 0n }],
+      });
+      const first = await finishSwap(from, leg, paid, `${swapKey}:usdt`, feeKey);
+      await client.waitForTransactionReceipt({ hash: first, timeout: 60_000 });
+      const usdtBal = await client.readContract({ address: BSC.usdt, abi: erc20, functionName: "balanceOf", args: [owner] });
+      const spend = usdtBal > usdtOut ? usdtOut : usdtBal;
+      await approveIfNeeded(from, BSC.usdt, spend);
+      const data = encodeFunctionData({
+        abi: routerAbi,
+        functionName: "exactInputSingle",
+        args: [{ tokenIn: BSC.usdt, tokenOut: token, fee: feeHint, recipient: owner, deadline, amountIn: spend, amountOutMinimum: minOut, sqrtPriceLimitX96: 0n }],
+      });
+      return finishSwap(from, data, false, swapKey, feeKey);
+    } catch (err) {
+      if (paid && !(err instanceof TxPending)) throw new Error("fee-kept");
+      throw err;
+    }
+  }
+  const amountIn = units(amount, decimals);
+  if (amountIn <= 0n) throw new Error("amount");
+  const parts = await deskParts("bsc", from, amountIn);
+  const swapIn = parts.swapIn;
+  if (swapIn <= 0n) throw new Error("amount");
+  const direct = await bestBnbFee(token, "sell", swapIn, feeHint);
+  const quoted = direct?.out ?? await quoteWithBnb(token, feeHint, "sell", swapIn);
+  const minOut = boundMin(quoted, floor);
+  const who = from.toLowerCase();
+  const swapKey = `tl-swap:${who}:bnb-out:${token}:${amountIn}`;
+  const feeKey = `tl-fee:${who}:bnb-out:${token}:${amountIn}`;
+  const already = await resumeSwap(swapKey);
+  if (already) return already;
+  await approveIfNeeded(from, token, swapIn);
+  const paid = await payDeskToken(from, token, parts, feeKey);
+  if (direct) {
+    const data = encodeFunctionData({
+      abi: routerAbi,
+      functionName: "exactInputSingle",
+      args: [{ tokenIn: token, tokenOut: BSC.wbnb, fee: direct.fee, recipient: BSC.router, deadline, amountIn: swapIn, amountOutMinimum: minOut, sqrtPriceLimitX96: 0n }],
+    });
+    const unwrap = encodeFunctionData({ abi: routerAbi, functionName: "unwrapWETH9", args: [minOut, owner] });
+    const packed = encodeFunctionData({ abi: routerAbi, functionName: "multicall", args: [[data, unwrap]] });
+    return finishSwap(from, packed, paid, swapKey, feeKey);
+  }
+  const data = encodeFunctionData({
+    abi: routerAbi,
+    functionName: "exactInputSingle",
+    args: [{ tokenIn: token, tokenOut: BSC.usdt, fee: feeHint, recipient: owner, deadline, amountIn: swapIn, amountOutMinimum: 1n, sqrtPriceLimitX96: 0n }],
+  });
+  const first = await finishSwap(from, data, paid, `${swapKey}:usdt`, feeKey);
+  await client.waitForTransactionReceipt({ hash: first, timeout: 60_000 });
+  const usdtBal = await client.readContract({ address: BSC.usdt, abi: erc20, functionName: "balanceOf", args: [owner] });
+  const spend = usdtBal > quoted ? quoted : usdtBal;
+  await approveIfNeeded(from, BSC.usdt, spend);
+  const bnbOut = await quoteExact(BSC.usdt, BSC.wbnb, spend, BSC.bnbFee);
+  const leg = encodeFunctionData({
+    abi: routerAbi,
+    functionName: "exactInputSingle",
+    args: [{ tokenIn: BSC.usdt, tokenOut: BSC.wbnb, fee: BSC.bnbFee, recipient: BSC.router, deadline, amountIn: spend, amountOutMinimum: (bnbOut * 99n) / 100n, sqrtPriceLimitX96: 0n }],
+  });
+  const unwrap = encodeFunctionData({ abi: routerAbi, functionName: "unwrapWETH9", args: [(bnbOut * 99n) / 100n, owner] });
+  const packed = encodeFunctionData({ abi: routerAbi, functionName: "multicall", args: [[leg, unwrap]] });
+  return finishSwap(from, packed, false, swapKey, feeKey);
 }
 
 export function txUrl(hash: string): string {

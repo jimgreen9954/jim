@@ -2,13 +2,12 @@ import { useEffect, useState, type ReactNode } from "react";
 import { BSC } from "@/lib/bsc";
 import { useExchange } from "@/lib/exchange-store";
 import { bemText, claimPod, getPodMiners, POD, readPodPending, readPodStats, type PodStats } from "@/lib/pod";
-import { claimTape, openTape, readTapeMine, TAPE, TAPE_BOOK, TAPE_MINE, tapeEra, tapeText, type TapeBoard } from "@/lib/tape-mine";
+import { claimTape, readTapeMine, TAPE, TAPE_BOOK, TAPE_MINE, tapeEra, tapeText, type TapeBoard } from "@/lib/tape-mine";
 import { currentAccount, onAccount } from "@/lib/wallet";
-import { checkCircuits, connectXLayer, XLAYER, type CircuitCheck } from "@/lib/xlayer";
+import { connectXLayer, XLAYER } from "@/lib/xlayer";
 import { StakeDesk } from "@/components/exchange/stake-desk";
 import { BurnDesk } from "@/components/exchange/burn-desk";
 import { TapeDesk } from "@/components/exchange/tape-desk";
-import { Hint, verifyCopy } from "@/components/exchange/hint";
 import { SideRail } from "@/components/exchange/side-rail";
 
 export function MineDesk() {
@@ -25,7 +24,7 @@ export function MineDesk() {
   const [busy, setBusy] = useState(false);
   const [sheet, setSheet] = useState<"claim" | "stake" | "ash" | "bid">("claim");
   const [networkOpen, setNetworkOpen] = useState(false);
-  const [checks, setChecks] = useState<Record<string, CircuitCheck>>({});
+  const [picked, setPicked] = useState<Record<string, boolean>>({});
 
   useEffect(() => onAccount((next) => setAccount(next)), []);
   useEffect(() => {
@@ -84,7 +83,9 @@ export function MineDesk() {
   }, [account]);
 
   const pendingBem = miners.reduce((sum, row) => sum + row.pending, 0n);
-  const pendingTape = tape?.seats.reduce((sum, row) => sum + row.pending, 0n) ?? 0n;
+  const pendingTape = tape?.seats.reduce((sum, row) => sum + (row.on ? row.pending : 0n), 0n) ?? 0n;
+  const liveSeats = (tape?.seats ?? []).filter((row) => row.on && row.pending > 0n);
+  const chosen = liveSeats.filter((row) => picked[row.id] !== false);
   const myWeight = tape?.seats.reduce((sum, row) => sum + (row.on ? BigInt(row.gates) : 0n), 0n) ?? 0n;
   const myShare = tape && tape.weight > 0n ? (tape.daily * myWeight) / tape.weight : 0n;
   const jump = (hash: string, next: "claim" | "stake" | "ash" | "bid") => {
@@ -183,7 +184,7 @@ export function MineDesk() {
       ]}>
       {sheet === "stake" ? <StakeDesk /> : sheet === "ash" ? <BurnDesk /> : sheet === "bid" ? <TapeDesk account={account} zh={zh} /> : (
     <section className="grid items-start gap-4 lg:grid-cols-2">
-      <article className="border border-gold bg-card px-3 py-3">
+      <article className="order-2 border border-gold bg-card px-3 py-3">
         <p className="text-xs tracking-widest text-gold">BSC · tapeout.net</p>
         <h2 className="font-display text-3xl italic">{zh ? "领 TapeOut BEM" : "Claim TapeOut BEM"}</h2>
         <p className="mt-2 text-sm leading-relaxed">
@@ -236,13 +237,13 @@ export function MineDesk() {
           <span className="mt-1 block">{zh ? "本站不经手资产。跨链另收付出金额的千分之二。TAPE 没有自己的桥。" : "This site does not custody the assets. The cross charges 0.20% of the amount. TAPE has no bridge."}</span>
         </p>
       </article>
-      <article className="border border-gold bg-card px-3 py-3">
+      <article className="order-1 min-w-0 overflow-hidden border border-gold bg-card px-3 py-3">
         <p className="text-xs tracking-widest text-gold">X Layer · TAPELIQUID</p>
         <h2 className="font-display text-3xl italic">{zh ? "领 TAPE" : "Claim TAPE"}</h2>
         <p className="mt-2 text-sm leading-relaxed">
           {zh
-            ? "流片和开工是两笔。电路在钱包里，只说明流片成功。没点「开工」的排在最上面，不签就不会挖，也没有待领。开工不用再付 0.0013 OKB。"
-            : "Tape-out and opening are two signatures. A circuit in the wallet only means tape-out succeeded. Ones not opened yet sit at the top. They do not mine, and nothing is claimable, until you open them. Opening does not charge another 0.0013 OKB."}
+            ? "这里只列出已经开工、而且有待领的矿机。有收入就是已经在挖，不再做一键验证。勾上要领的几台，分开签。"
+            : "Only miners already running and holding a reward are listed. A reward means it is already mining. Pick the ones to claim."}
         </p>
         <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
           <Cell k={zh ? "今天排放" : "Daily emission"} v={tape ? `${amount(tape.daily)} TAPE` : "—"} />
@@ -256,47 +257,25 @@ export function MineDesk() {
         <p className="mt-1 font-mono text-xs text-ink/70">
           {account && tape
             ? (zh
-              ? `名下 ${tape.seats.length} · 开工 ${tape.seats.filter((row) => row.on).length} · 未开工 ${tape.seats.filter((row) => !row.on).length} · 已核对 ${tape.seats.filter((row) => checks[row.id] === "ok").length}`
-              : `Held ${tape.seats.length} · live ${tape.seats.filter((row) => row.on).length} · idle ${tape.seats.filter((row) => !row.on).length} · checked ${tape.seats.filter((row) => checks[row.id] === "ok").length}`)
+              ? `可领 ${liveSeats.length} 台 · 已选 ${chosen.length}`
+              : `${liveSeats.length} paying · ${chosen.length} selected`)
             : "—"}
         </p>
-        <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-          <button
-            type="button"
-            disabled={busy || !tape?.seats.length}
-            className="min-h-11 border border-ink bg-ink px-3 text-sm text-paper disabled:opacity-40"
-            onClick={() => {
-              if (!tape?.seats.length) return;
-              setBusy(true);
-              setBad(false);
-              checkCircuits(tape.seats.map((row) => row.id))
-                .then((next) => {
-                  setChecks((prev) => ({ ...prev, ...next }));
-                  const ok = Object.values(next).filter((row) => row === "ok").length;
-                  say(zh ? `已核对 ${ok} / ${Object.keys(next).length}。不签名，权重仍按门数。` : `Checked ${ok} / ${Object.keys(next).length}. No signature. Weight stays the gate count.`);
-                })
-                .catch(() => say(zh ? "这一次没跑完。电路还在，可以再点一次。" : "The check did not finish. The circuits are still there.", true))
-                .finally(() => setBusy(false));
-            }}
-          >
-            {zh ? "一键验证" : "Verify"}
-          </button>
-          <p className="text-xs leading-5 text-ink/50">{zh ? "用每张电路自己的 eval 在链上跑输入。不签名，不扣 OKB。矿机没有验证位，核对不改权重。" : "Each circuit's own eval, on chain. No signature and no OKB. The mine has no verify bit, so weight does not change."}</p>
-        </div>
-        <p className="mt-1 text-xs text-ink/50">{tapeErr ? tapeErr : tape?.scanning ? (zh ? "排放已经读到。正在对这个地址名下的全部电路。" : "Emission is in. Matching every circuit held by this address.") : !tape?.scanOk ? (zh ? "排放读到了，电路名单这次没扫全。刷新再试，不要把空名单当成没有电路。" : "Emission is in. The circuit list did not finish. Refresh before treating an empty list as none.") : account && tape ? (zh ? `钱包 ${amount(tape.balance)} TAPE · 日排放写死 7,200` : `Wallet ${amount(tape.balance)} TAPE · 7,200 a day, fixed`) : (zh ? "连上 X Layer 后读这个地址的电路" : "Connect on X Layer to read this address")}</p>
+        <p className="mt-1 text-xs text-ink/50">{tapeErr ? tapeErr : tape?.scanning ? (zh ? "正在对这个地址名下已经开工的矿机。" : "Matching the miners already running for this address.") : !tape?.scanOk ? (zh ? "电路名单这次没扫全。刷新再试，不要把空名单当成没有矿机。" : "The circuit list did not finish. Refresh before treating an empty list as none.") : account && tape ? (zh ? `钱包 ${amount(tape.balance)} TAPE` : `Wallet ${amount(tape.balance)} TAPE`) : (zh ? "连上 X Layer 后读这个地址的矿机" : "Connect on X Layer to read this address")}</p>
         <ul className="mt-2 max-h-72 overflow-auto border border-gold/40">
-          {(tape?.seats ?? []).map((row) => (
-            <li key={row.id} className="flex items-center justify-between gap-3 border-t border-gold/30 px-2 py-2">
-              <div className="min-w-0">
-                <p className="font-mono text-sm">#{row.id} · {Number(row.gates).toLocaleString("en-US")} H</p>
-                <p className="mt-1 flex flex-wrap gap-1 text-[11px]">
-                  <Hint label={<span className={`border px-1 no-underline ${checks[row.id] === "ok" ? "border-up text-up" : "border-ink/20 text-ink/55"}`}>{checks[row.id] === "ok" ? (zh ? "已核对" : "Checked") : checks[row.id] === "bad" ? (zh ? "未通过" : "Failed") : (zh ? "未核对" : "Unchecked")}</span>} text={verifyCopy(zh)} />
-                  <span className={row.on ? "text-up" : "text-ink/45"}>{row.on ? (zh ? "开工" : "Live") : (zh ? "未开工" : "Idle")}</span>
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="font-mono text-xs">{amount(row.pending)} TAPE</p>
-                {row.on ? <p className="font-mono text-[11px] text-ink/50">{row.share}</p> : (
+          {liveSeats.map((row) => {
+            const on = picked[row.id] !== false;
+            return (
+              <li key={row.id} className="flex items-center justify-between gap-3 border-t border-gold/30 px-2 py-2">
+                <label className="flex min-w-0 items-center gap-2">
+                  <input type="checkbox" checked={on} onChange={() => setPicked((prev) => ({ ...prev, [row.id]: !on }))} />
+                  <span className="min-w-0">
+                    <span className="block font-mono text-sm">#{row.id} · {Number(row.gates).toLocaleString("en-US")} H</span>
+                    <span className="text-[11px] text-up">{zh ? "已开工 · 有收入" : "Mining · paying"}</span>
+                  </span>
+                </label>
+                <div className="text-right">
+                  <p className="font-mono text-xs">{amount(row.pending)} TAPE</p>
                   <button
                     type="button"
                     disabled={busy}
@@ -304,20 +283,22 @@ export function MineDesk() {
                     onClick={() => {
                       if (!account) return;
                       setBusy(true);
-                      openTape(account, BigInt(row.id))
-                        .then(() => readTapeMine(account).then(setTape))
-                        .then(() => say(zh ? `#${row.id} 已开工。权重按门数。` : `#${row.id} is open. Weight is the gate count.`))
-                        .catch(() => say(zh ? "开工没有完成。电路还在。" : "Open did not finish. The circuit is still there.", true))
+                      claimTape(account, [BigInt(row.id)])
+                        .then(() => {
+                          say(zh ? `#${row.id} 已领到这个钱包。` : `#${row.id} is in this wallet.`);
+                          readTapeMine(account).then((next) => setTape(next)).catch(() => undefined);
+                        })
+                        .catch(() => say(zh ? "这一台没有领走。" : "This miner was not claimed.", true))
                         .finally(() => setBusy(false));
                     }}
                   >
-                    {zh ? "开工" : "Open"}
+                    {zh ? "只领这台" : "This one"}
                   </button>
-                )}
-              </div>
-            </li>
-          ))}
-          {account && tape?.scanOk && tape.seats.length === 0 ? <li className="px-2 py-3 text-sm text-ink/60">{zh ? "这个地址名下没有电路。锁进质押的电路不在这张表，去质押页看。" : "This address holds no circuit. A staked circuit is not on this list. See Stake."}</li> : null}
+                </div>
+              </li>
+            );
+          })}
+          {account && tape?.scanOk && liveSeats.length === 0 ? <li className="px-2 py-3 text-sm text-ink/60">{zh ? "这个地址没有已经开工、还带着待领的矿机。" : "This address has no running miner with a reward waiting."}</li> : null}
         </ul>
         <div className="mt-3 grid grid-cols-2 gap-2">
           {!account ? (
@@ -327,11 +308,11 @@ export function MineDesk() {
           ) : (
             <button
               type="button"
-              disabled={busy || pendingTape === 0n}
+              disabled={busy || chosen.length === 0}
               className="col-span-2 min-h-12 bg-ink font-display text-2xl italic text-paper disabled:opacity-40"
               onClick={() => {
                 setBusy(true);
-                claimTape(account, (tape?.seats ?? []).filter((row) => row.on && row.pending > 0n).map((row) => BigInt(row.id)))
+                claimTape(account, chosen.map((row) => BigInt(row.id)))
                   .then(() => {
                     say(zh ? "TAPE 已领到这个钱包。名单随后再对。" : "TAPE is in this wallet. The list refreshes after.");
                     readTapeMine(account).then((row) => setTape(row)).catch(() => undefined);
@@ -350,16 +331,15 @@ export function MineDesk() {
                   .finally(() => setBusy(false));
               }}
             >
-              {zh ? "签名领取 TAPE" : "Sign and claim TAPE"}
+              {zh ? `签名领取 ${chosen.length} 台` : `Sign and claim ${chosen.length}`}
             </button>
           )}
         </div>
-        {account && pendingTape === 0n ? <p className="mt-2 text-xs text-ink/60">{zh ? "没有待领。未开工的电路先点「开工」。已经质押的电路，TAPE 在锁仓里，去质押页点「入账」。" : "Nothing is pending. Open a circuit that is off. Staked circuits keep their TAPE in the lock. Book it on Stake."}</p> : null}
+        {account && tape?.scanOk && liveSeats.length === 0 ? <p className="mt-2 text-xs text-ink/60">{zh ? "没有待领。没开工的矿机不在这张表。" : "Nothing is pending. A miner that is not running is not on this list."}</p> : null}
         {note ? <p className={`mt-2 text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
-        <p className="mt-2 break-all text-xs text-ink/50">
-          <a className="underline" href={`${XLAYER.explorer}/address/${TAPE}`} target="_blank" rel="noreferrer">TAPE {TAPE}</a>
-          <br />
-          <a className="underline" href={`${XLAYER.explorer}/address/${TAPE_MINE}`} target="_blank" rel="noreferrer">Mine {TAPE_MINE}</a>
+        <p className="mt-2 min-w-0 max-w-full overflow-hidden text-xs text-ink/50">
+          <a className="block max-w-full truncate underline" title={TAPE} href={`${XLAYER.explorer}/address/${TAPE}`} target="_blank" rel="noreferrer">TAPE {TAPE}</a>
+          <a className="mt-1 block max-w-full truncate underline" title={TAPE_MINE} href={`${XLAYER.explorer}/address/${TAPE_MINE}`} target="_blank" rel="noreferrer">Mine {TAPE_MINE}</a>
         </p>
       </article>
     </section>
@@ -395,9 +375,9 @@ function amount(value: bigint): string {
 
 function Cell({ k, v }: { k: string; v: string }) {
   return (
-    <div className="border border-gold/40 px-2 py-2">
+    <div className="min-w-0 overflow-hidden border border-gold/40 px-2 py-2">
       <dt className="text-xs text-ink/50">{k}</dt>
-      <dd className="mt-1 font-mono text-sm">{v}</dd>
+      <dd className="mt-1 break-all font-mono text-sm">{v}</dd>
     </div>
   );
 }

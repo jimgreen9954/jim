@@ -1,6 +1,6 @@
 import { createPublicClient, encodeFunctionData, formatUnits, http, parseAbi, parseAbiItem, parseUnits, type Hex } from "viem";
 import { TAPE_SPOT_BYTECODE } from "@/lib/tape-spot-artifact";
-import { FEE_TO } from "@/lib/bsc";
+import { FEE_TO, XLAYER_SAFE } from "@/lib/bsc";
 import { TAPE_TOKEN, TAPE_USDT } from "@/lib/tape-pool";
 import { getProvider } from "@/lib/wallet";
 import { DEPLOYED, connectXLayer, XLAYER } from "@/lib/xlayer";
@@ -45,11 +45,12 @@ const client = createPublicClient({ transport: http(XLAYER.rpc) });
 export type SpotMarket = 0 | 1 | 2;
 
 export function spotAddress(): Hex | null {
-  const fixed = TAPE_SPOT as string;
-  if (/^0x[a-fA-F0-9]{40}$/.test(fixed)) return fixed as Hex;
-  if (typeof window === "undefined") return null;
-  const saved = window.localStorage.getItem(KEY) ?? "";
-  return /^0x[a-fA-F0-9]{40}$/.test(saved) ? saved as Hex : null;
+  if (typeof window !== "undefined") {
+    const saved = window.localStorage.getItem(KEY) ?? "";
+    if (/^0x[a-fA-F0-9]{40}$/.test(saved)) return saved as Hex;
+  }
+  if (/^0x[a-fA-F0-9]{40}$/.test(TAPE_SPOT)) return TAPE_SPOT;
+  return null;
 }
 
 export async function spotReady(): Promise<boolean> {
@@ -338,12 +339,11 @@ async function call(from: string, data: Hex) {
 }
 
 export async function deploySpot(from: string): Promise<string> {
-  if (from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("onlyfee");
+  if (from.toLowerCase() !== XLAYER_SAFE.toLowerCase() && from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("onlyfee");
   const hash = await send(from, undefined, TAPE_SPOT_BYTECODE);
   const receipt = await client.getTransactionReceipt({ hash });
   const landed = receipt.contractAddress ?? "";
   if (!landed) throw new Error("revert");
-  if (TAPE_SPOT && landed.toLowerCase() !== TAPE_SPOT.toLowerCase()) throw new Error("nonce");
   window.localStorage.setItem(KEY, landed);
   window.localStorage.setItem(BLOCK_KEY, receipt.blockNumber.toString());
   return landed;

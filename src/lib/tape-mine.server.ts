@@ -208,15 +208,17 @@ async function ownerCensus(last: number): Promise<Census> {
   censusFlight = (async () => {
     const ids: number[] = [];
     for (let id = 1; id <= last && ids.length < 8000; id += 1) ids.push(id);
-    const calls = ids.flatMap((id) => [
-      { address: CIRCUITS, abi: circuitAbi, functionName: "ownerOf" as const, args: [BigInt(id)] as const },
-      { address: MINE, abi: mineAbi, functionName: "seat" as const, args: [BigInt(id)] as const },
-    ]);
-    const owned: { status: string; result?: unknown }[] = [];
-    for (let i = 0; i < calls.length; i += 240) {
-      const part = await client.multicall({ contracts: calls.slice(i, i + 240) as never, allowFailure: true, batchSize: 1024 });
-      owned.push(...(part as { status: string; result?: unknown }[]));
-    }
+    const chunks: number[][] = [];
+    for (let i = 0; i < ids.length; i += 400) chunks.push(ids.slice(i, i + 400));
+    const parts = await Promise.all(chunks.map((slice) => client.multicall({
+      contracts: slice.flatMap((id) => [
+        { address: CIRCUITS, abi: circuitAbi, functionName: "ownerOf" as const, args: [BigInt(id)] as const },
+        { address: MINE, abi: mineAbi, functionName: "seat" as const, args: [BigInt(id)] as const },
+      ]),
+      allowFailure: true,
+      batchSize: 1024,
+    })));
+    const owned = parts.flat() as { status: string; result?: unknown }[];
     const owners = new Map<string, number[]>();
     let open = 0;
     let staked = 0;

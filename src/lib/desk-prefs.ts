@@ -146,4 +146,5 @@ export function announceFill(title: string, body: string) {
   if (prefs.notifyFill && typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
     try { new Notification(title, { body }); } catch { /* the toggle still stands */ }
   }
+  void import("@/components/exchange/trade-foot").then((mod) => mod.rememberFill(`${title} ${body}`.trim())).catch(() => undefined);
 }

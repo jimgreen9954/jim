@@ -1,5 +1,5 @@
 import { createPublicClient, encodeFunctionData, http, parseAbi, type Hex } from "viem";
-import { BSC, DESK_FEE_BPS, FEE_TO, TxPending, connectBsc, waitOk, waitReceipt } from "@/lib/bsc";
+import { BSC, BSC_SAFE, DESK_FEE_BPS, TxPending, connectBsc, waitOk, waitReceipt } from "@/lib/bsc";
 import { OFFICIAL } from "@/lib/official-books";
 import type { CircuitSigned } from "@/lib/circuit-board";
 import { getProvider } from "@/lib/wallet";
@@ -57,7 +57,7 @@ async function payFee(from: string, notional: bigint): Promise<void> {
     }
   };
   if (parts.reward > 0n && parts.referrer) await pay(parts.referrer, parts.reward);
-  if (parts.desk > 0n) await pay(FEE_TO, parts.desk);
+  if (parts.desk > 0n) await pay(BSC_SAFE, parts.desk);
 }
 
 async function finishPaid(hash: Hex): Promise<Hex> {

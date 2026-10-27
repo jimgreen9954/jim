@@ -22,7 +22,7 @@ function short(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
-export function ConnectButton() {
+export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
   const lang = useExchange((s) => s.lang);
   const c = copy[lang];
   const [account, setAccount] = useState<string | null>(currentAccount());
@@ -44,17 +44,34 @@ export function ConnectButton() {
   }
   if (account) {
     return (
-      <span className="flex max-w-[18rem] flex-wrap items-center gap-1 sm:max-w-none sm:gap-2">
-        <span className="inline-flex min-h-9 items-center rounded-md border border-gold bg-card px-3 font-mono text-xs text-ink/90">{short(account)}</span>
-        {link ? (
+      <span className={`flex items-center gap-1 ${compact ? "max-w-[6.2rem]" : "max-w-[18rem] flex-wrap sm:max-w-none sm:gap-2"}`}>
+        <span className={`inline-flex min-h-9 items-center rounded-md border border-gold bg-card px-3 font-mono text-xs text-ink/90 ${compact ? "max-w-full truncate px-2" : ""}`}>{short(account)}</span>
+        {compact ? null : link ? (
           <a href={link} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center border border-gold bg-ink px-2 text-xs text-paper sm:min-h-11 sm:text-sm">
             {lang === "zh" ? "去 OKX 确认" : "Confirm in OKX"}
           </a>
         ) : null}
+        {compact ? null : (
         <button type="button" className="min-h-8 shrink-0 px-1 text-xs text-ink/50 sm:min-h-11 sm:border sm:border-gold sm:px-3 sm:text-ink" onClick={() => void disconnectWallet()}>
           {lang === "zh" ? "退出" : "Out"}
         </button>
+        )}
       </span>
+    );
+  }
+  if (compact) {
+    return (
+      <button
+        type="button"
+        className="h-8 rounded-md border border-gold px-3 text-xs disabled:opacity-40"
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          connectKind("okx").catch(() => undefined).finally(() => setBusy(false));
+        }}
+      >
+        {lang === "zh" ? "连接" : "Connect"}
+      </button>
     );
   }
   return (

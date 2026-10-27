@@ -91,19 +91,22 @@ function kick() {
         let from = cursor > 0n ? cursor + 1n : OPEN_BLOCK;
         if (from < OPEN_BLOCK) from = OPEN_BLOCK;
         if (from > tip) {
-          await new Promise((resolve) => setTimeout(resolve, 12_000));
+          await new Promise((resolve) => setTimeout(resolve, 20_000));
           continue;
         }
         const want = from + 7999n > tip ? tip : from + 7999n;
         const got = await readWindow(from, want);
         const seen = new Map<string, number>();
+        const nowSec = Math.floor(Date.now() / 1000);
         for (const log of got.logs) {
           if (!("args" in log) || log.blockNumber == null || log.transactionHash == null) continue;
           const args = log.args as { sender?: string; quote?: number | bigint; tapeIn?: boolean; amountIn?: bigint; amountOut?: bigint };
           if (!args.sender || args.amountIn == null || args.amountOut == null || args.quote == null) continue;
           const key = log.blockNumber.toString();
-          if (!seen.has(key)) seen.set(key, await stamp(log.blockNumber));
-          const t = seen.get(key) ?? 0;
+          if (!seen.has(key)) {
+            seen.set(key, seen.size < 3 ? await stamp(log.blockNumber) : nowSec);
+          }
+          const t = seen.get(key) ?? nowSec;
           if (!t) continue;
           const id = `${log.transactionHash}:${args.amountIn}`;
           if (prints.some((row) => `${row.tx}:${row.amountIn}` === id)) continue;
@@ -120,51 +123,73 @@ function kick() {
         prints.sort((a, b) => a.t - b.t);
         cursor = got.to;
         store();
+        await new Promise((resolve) => setTimeout(resolve, 15_000));
       } catch {
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+        await new Promise((resolve) => setTimeout(resolve, 6_000));
       }
     }
   })();
 }
 
-function usdOf(row: Print, bemUsd: number, okbUsd: number): number {
-  const quoteUsd = row.quote === 0 ? bemUsd : okbUsd;
-  if (!(quoteUsd > 0)) return 0;
+function quotePx(row: Print): number {
   const quoteDec = row.quote === 0 ? 8 : 18;
   const quoteAmt = Number(formatUnits(BigInt(row.tapeIn ? row.amountOut : row.amountIn), quoteDec));
   const tapeAmt = Number(formatUnits(BigInt(row.tapeIn ? row.amountIn : row.amountOut), 8));
-  return tapeAmt > 0 ? (quoteAmt * quoteUsd) / tapeAmt : 0;
+  return tapeAmt > 0 && quoteAmt > 0 ? quoteAmt / tapeAmt : 0;
 }
 
-function fold(frame: CandleFrame, price: number, bemUsd: number, okbUsd: number): Candle[] {
-  if (!(price > 0)) return [];
+function dollarMark(bem: readonly bigint[], okb: readonly bigint[], bemUsd: number, okbUsd: number): number {
+  let tape = 0;
+  let usd = 0;
+  if (bemUsd > 0 && bem[0] > 0n && bem[1] > 0n) {
+    tape += Number(formatUnits(bem[0], 8));
+    usd += Number(formatUnits(bem[1], 8)) * bemUsd;
+  }
+  if (okbUsd > 0 && okb[0] > 0n && okb[1] > 0n) {
+    tape += Number(formatUnits(okb[0], 8));
+    usd += Number(formatUnits(okb[1], 18)) * okbUsd;
+  }
+  return tape > 0 && usd > 0 ? usd / tape : 0;
+}
+
+export type TapeSpot = "usdt" | "bem" | "okb";
+
+function usdOf(row: Print, bemUsd: number, okbUsd: number): number {
+  return pairPx(row, "usdt", bemUsd, okbUsd);
+}
+
+function pairPx(row: Print, pair: TapeSpot, bemUsd: number, okbUsd: number): number {
+  const px = quotePx(row);
+  if (!(px > 0)) return 0;
+  if (pair === "bem") return row.quote === 0 ? px : 0;
+  if (pair === "okb") return row.quote === 1 ? px : 0;
+  const unit = row.quote === 0 ? bemUsd : okbUsd;
+  return unit > 0 ? px * unit : 0;
+}
+
+function fold(frame: CandleFrame, price: number, pair: TapeSpot, bemUsd: number, okbUsd: number): Candle[] {
   const span = SPAN[frame] || 3600;
   const now = Math.floor(Date.now() / 1000);
-  const start = Math.floor(Math.max(openAt > 0 ? openAt : now, now - span * 119) / span) * span;
-  const bars: Candle[] = [];
-  for (let t = start; t <= now; t += span) bars.push({ t, o: price, h: price, l: price, c: price, v: 0 });
+  const groups = new Map<number, Candle>();
   for (const row of prints) {
-    if (row.t < start) continue;
+    const px = pairPx(row, pair, bemUsd, okbUsd);
+    if (!(px > 0) || !(row.t > 0)) continue;
     const bucket = Math.floor(row.t / span) * span;
-    const bar = bars.find((item) => item.t === bucket);
-    const px = usdOf(row, bemUsd, okbUsd);
-    if (!bar || !(px > 0)) continue;
-    if ((bar.v ?? 0) === 0) bar.o = px;
-    bar.h = Math.max(bar.h, px);
-    bar.l = Math.min(bar.l, px);
-    bar.c = px;
     const quoteDec = row.quote === 0 ? 8 : 18;
     const quoteUsd = row.quote === 0 ? bemUsd : okbUsd;
     const quoteAmt = Number(formatUnits(BigInt(row.tapeIn ? row.amountOut : row.amountIn), quoteDec));
-    bar.v = (bar.v ?? 0) + quoteAmt * quoteUsd;
+    const vol = Number.isFinite(quoteAmt * quoteUsd) ? quoteAmt * quoteUsd : 0;
+    const prev = groups.get(bucket);
+    if (!prev) groups.set(bucket, { t: bucket, o: px, h: px, l: px, c: px, v: vol });
+    else groups.set(bucket, { t: bucket, o: prev.o, c: px, h: Math.max(prev.h, px), l: Math.min(prev.l, px), v: (prev.v ?? 0) + vol });
   }
-  const last = bars.at(-1);
-  if (last) {
-    last.c = price;
-    last.h = Math.max(last.h, price);
-    last.l = Math.min(last.l, price);
+  if (price > 0) {
+    const bucket = Math.floor(now / span) * span;
+    const prev = groups.get(bucket);
+    if (!prev) groups.set(bucket, { t: bucket, o: price, h: price, l: price, c: price, v: 0 });
+    else groups.set(bucket, { t: bucket, o: prev.o, c: price, h: Math.max(prev.h, price), l: Math.min(prev.l, price), v: prev.v ?? 0 });
   }
-  return bars;
+  return [...groups.values()].sort((a, b) => (a.t ?? 0) - (b.t ?? 0));
 }
 
 export type OpenPrint = {
@@ -201,12 +226,8 @@ export async function readOpenBook(): Promise<OpenBook> {
     quoteOkb("sell", 10n ** 18n).catch(() => 0n),
   ]);
   const okbPx = Number(formatUnits(okbRaw, 6));
-  const bemQuote = bemPx > 0 ? bemPx : okbPx > 0 && okb[0] > 0n && bem[0] > 0n && bem[1] > 0n
-    ? okbPx * (Number(formatUnits(okb[1], 18)) / Number(formatUnits(okb[0], 8))) / (Number(formatUnits(bem[1], 8)) / Number(formatUnits(bem[0], 8)))
-    : 0;
-  const tape = Number(formatUnits(bem[0] + okb[0], 8));
-  const usd = Number(formatUnits(bem[1], 8)) * bemQuote + Number(formatUnits(okb[1], 18)) * okbPx;
-  const price = tape > 0 && usd > 0 ? usd / tape : 0;
+  const bemQuote = bemPx > 0 ? bemPx : 0;
+  const price = dollarMark(bem, okb, bemQuote, okbPx);
   const now = Math.floor(Date.now() / 1000);
   let volume = 0;
   let open = 0;
@@ -251,7 +272,7 @@ async function bemUsd(): Promise<number> {
 }
 
 /** Candles from the open TAPE pool, not a Gecko listing of the old lock. */
-export async function tapePoolCandles(frame: CandleFrame): Promise<Candle[]> {
+export async function tapePoolCandles(frame: CandleFrame, pair: TapeSpot = "usdt"): Promise<Candle[]> {
   kick();
   const [bem, okb, bemPx, okbRaw] = await Promise.all([
     official.readContract({ address: POOL, abi: poolAbi, functionName: "bemPool" }),
@@ -260,11 +281,10 @@ export async function tapePoolCandles(frame: CandleFrame): Promise<Candle[]> {
     quoteOkb("sell", 10n ** 18n).catch(() => 0n),
   ]);
   const okbPx = Number(formatUnits(okbRaw, 6));
-  const bemQuote = bemPx > 0 ? bemPx : okbPx > 0 && okb[0] > 0n && bem[0] > 0n && bem[1] > 0n
-    ? okbPx * (Number(formatUnits(okb[1], 18)) / Number(formatUnits(okb[0], 8))) / (Number(formatUnits(bem[1], 8)) / Number(formatUnits(bem[0], 8)))
-    : 0;
-  const tape = Number(formatUnits(bem[0] + okb[0], 8));
-  const usd = Number(formatUnits(bem[1], 8)) * bemQuote + Number(formatUnits(okb[1], 18)) * okbPx;
-  const price = tape > 0 && usd > 0 ? usd / tape : 0;
-  return fold(frame, price, bemQuote, okbPx);
+  const bemQuote = bemPx > 0 ? bemPx : 0;
+  const price = dollarMark(bem, okb, bemQuote, okbPx);
+  const bemMid = bem[0] > 0n && bem[1] > 0n ? Number(formatUnits(bem[1], 8)) / Number(formatUnits(bem[0], 8)) : 0;
+  const okbMid = okb[0] > 0n && okb[1] > 0n ? Number(formatUnits(okb[1], 18)) / Number(formatUnits(okb[0], 8)) : 0;
+  const mark = pair === "bem" ? bemMid : pair === "okb" ? okbMid : price;
+  return fold(frame, mark, pair, bemQuote, okbPx);
 }

@@ -12,7 +12,7 @@ interface IERC20 {
 /// There is no owner and no way to change the poster.
 contract GatePerp {
     IERC20 public immutable usdt;
-    address public constant FEE_TO = 0x823b9F6A93Ac44Ce5A469823A336c15b6117054D;
+    address public constant FEE_TO = 0xE51C19aE6E4261Ed329CC54F1120Cf0Ae09364Bd;
     address public constant ORACLE = FEE_TO;
     uint32 public constant WINDOW = 600;
     uint32 public constant STALE = 1800;
