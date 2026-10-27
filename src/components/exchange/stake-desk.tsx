@@ -139,9 +139,8 @@ export function StakeDesk() {
       </dl>
       <p className="text-xs text-ink/60">{zh ? "下一笔解锁" : "Next unlock"} {nextUnlock ? sgt(nextUnlock) : zh ? "没有未到期的仓" : "Nothing is still locked"} · {zh ? "钱包 NAND" : "Wallet NAND"} {nand.toLocaleString("en-US")} · LATCH {latch.toLocaleString("en-US")}</p>
 
-      <article className="border border-gold p-3">
-        <h3 className="font-display text-2xl italic">{zh ? "已有的 TAPE 池" : "Existing TAPE pool"}</h3>
-        <p className="mt-1 text-xs text-ink/60">{zh ? "工房现货已上线，不再加池。下面只列这个地址已经锁着的仓。到期才能撤回，撤回两边再各扣 0.20%。" : "The workshop book is live, so nothing new is added. This list is only what this address already locked. Removal waits for expiry and takes 0.20% on each side."}</p>
+      <details className="border border-gold/40 p-3">
+        <summary className="cursor-pointer text-sm">{zh ? "以前的池子质押" : "Earlier pool stake"}</summary>
         <ul className="mt-2 max-h-64 overflow-auto border border-gold/40">
           {lp.map((row) => {
             const poolShares = row.quote === 0 ? reserves.usdtShares : reserves.bemShares;
@@ -162,7 +161,7 @@ export function StakeDesk() {
           })}
           {account && lp.length === 0 ? <li className="px-2 py-3 text-sm text-ink/60">{zh ? "这个地址没有还锁着的 TAPE 池仓位。新的加池已经关掉。" : "This address has no TAPE pool position still locked. New deposits are closed."}</li> : null}
         </ul>
-      </article>
+      </details>
 
       <article className="border border-gold p-3">
         <h3 className="font-display text-2xl italic">{zh ? "晶圆" : "Wafers"}</h3>

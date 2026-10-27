@@ -6,7 +6,7 @@ export const TAPE_POOL = "0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641" as const;
 export const TAPE_TOKEN = "0x8f2d517D3d62019CD8D7F08ae178Be05BBb6EBE3" as const;
 export const TAPE_USDT = "0x779Ded0c9e1022225f8E0630b35a9b54bE713736" as const;
 export const TAPE_BEM = "0x60e62Efa9405d6873C5deaBD4E6CC91c25363952" as const;
-export const TAPE_FEE = "0x823b9F6A93Ac44Ce5A469823A336c15b6117054D" as const;
+export const TAPE_FEE = "0xb4D6039394c8B97C3AC3234aa07011B564Fcb88c" as const;
 export const OPEN_USDT = 5_000n * 10n ** 6n;
 
 export const TAPE_TERMS = [

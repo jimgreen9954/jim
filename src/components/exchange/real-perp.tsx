@@ -675,7 +675,7 @@ export function RealPerp({ launch, onMarkets }: {
 	})();
 	const lastClose = prices.at(-1)?.c ?? 0;
 	const alt = coin === "tape" || chain === "bsc" && coin !== "bem";
-	const riskLive = !alt && perp.toLowerCase() === (typeof window === "undefined" ? "" : (window.localStorage.getItem(chain === "xlayer" ? "tapeliquid-risk-x" : "tapeliquid-risk-bsc") ?? "")).toLowerCase() && perp.startsWith("0x");
+	const riskLive = !alt && /^0x[a-fA-F0-9]{40}$/.test(perp) && perp.toLowerCase() === bookOf(chain).toLowerCase();
 	const base = coin === "tape" ? "TAPE" : chain === "xlayer" || coin === "bem" ? "BEM" : coin.toUpperCase();
 	const feeBlocked = lock.rows.some((row) => {
 		if (!row.got || row.ok) return false;

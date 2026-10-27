@@ -419,7 +419,7 @@ export const copy: Record<Lang, Copy> = {
     realNote: "现货在 PancakeSwap V3 成交。本台另收 0.20%，于签名时转入收费地址。资产在签名前留在钱包。",
     paperNote: "本页为练习。成交只记录在本机浏览器，清除记录不触及合约。",
     perpWarn:
-      "保证金为 BSC 的 USDT，锁入本合约，金额为 1 至 500。杠杆上限 1000 倍。亏损达到保证金约一半时，任何地址均可强平。没有保险基金，没有自动减仓。标记价为 PancakeSwap 池约 10 分钟均价，不以最后一笔成交清算。没有资金费。撮合与撤单各收保证金的 0.20%。没有管理员，未经审计。订单簿无对手时，签名只构成挂单，不会立即成交。",
+      "保证金为 BSC 的 USDT，锁入本合约，金额为 1 至 500。杠杆上限 1000 倍。亏损达到保证金约一半时，任何地址均可强平。资金费每 8 小时在这一对里结算，单次不超过 ±0.05%。强平剩下一半进保险基金，不能提取。保险不够时只减这一对的浮盈。标记价为 PancakeSwap 池约 10 分钟均价，不以最后一笔成交清算。撮合与撤单各收保证金的 0.20%，进 BSC 多签。没有管理员，未经审计。订单簿无对手时，签名只构成挂单，不会立即成交。",
     postLong: "开多",
     postShort: "开空",
     pullQuote: "接下这一边",
@@ -451,7 +451,7 @@ export const copy: Record<Lang, Copy> = {
     sharedBook: "BSC 全站只用这一份合约。任何人、任何时候开的单都在这里，打开就能看到，点吃单就能接。",
     sharedBookX: "X Layer 全站只用这一份合约。用 X Layer 的 USDT0 开的单都在这里，打开就能看到，点吃单就能接。",
     perpWarnX:
-      "保证金为 X Layer 的 USDT0，锁入本合约。Gas 使用 OKB。金额为 1 至 500。杠杆上限 1000 倍。亏损达到保证金约一半时，任何地址均可强平。没有保险基金，没有自动减仓。新标记读取 X Layer 的 OKB/BEM 与 USDT0/WOKB，连续更新单次不超过 0.5%，间隔不少于 30 秒，不引用 BSC 价格。没有资金费。不能与 BSC 仓位合并。订单簿无对手时，签名只构成挂单。",
+      "保证金为 X Layer 的 USDT0，锁入本合约。Gas 使用 OKB。金额为 1 至 500。杠杆上限 1000 倍。亏损达到保证金约一半时，任何地址均可强平。资金费每 8 小时在这一对里结算，单次不超过 ±0.05%。强平剩下一半进保险基金，不能提取。保险不够时只减这一对的浮盈。标记读取 X Layer 的 OKB/BEM 与 USDT0/WOKB。不能与 BSC 仓位合并。撮合与撤单各收保证金的 0.20%，进 X Layer 多签。订单簿无对手时，签名只构成挂单。",
     perpStepsX: "三步：钱包停在 X Layer，里面有 USDT0，再留一点 OKB 当 gas。选一档，点开多或开空。另一个 X Layer 钱包接反方向才成交。",
     perpAddrX: "X Layer 永续合约",
     xOpen: "X Layer 的全站合约还没写进页面。部署一次，把地址发我，我锁给所有人。在那之前，别人看不到你的单。",
@@ -723,7 +723,7 @@ export const copy: Record<Lang, Copy> = {
     realNote: "Spot settles on PancakeSwap V3. This desk charges 0.20%, transferred to the fee address when you sign. Assets remain in the wallet until then.",
     paperNote: "This page is practice. Fills are stored in this browser. Clearing them does not touch a contract.",
     perpWarn:
-      "Margin is BSC USDT, locked in this contract, from 1 to 500. Leverage is capped at 1,000×. When about half the margin is lost, any address may liquidate. There is no insurance fund and no auto-deleveraging. The mark is a roughly 10-minute PancakeSwap average. The last trade is not used for liquidation. There is no funding fee. A match and a cancellation each charge 0.20% of margin. There is no administrator and no audit. If the book has no counterparty, a signature only posts an order.",
+      "Margin is BSC USDT, locked in this contract, from 1 to 500. Leverage is capped at 1,000×. When about half the margin is lost, any address may liquidate. Funding settles inside the pair every 8 hours, capped at ±0.05%. Half of a liquidation remainder enters the insurance fund and cannot be withdrawn. If insurance is short, only that pair's profit is cut. The mark is a roughly 10-minute PancakeSwap average. The last trade is not used for liquidation. A match and a cancellation each charge 0.20% of margin, paid to the BSC multisig. There is no administrator and no audit. If the book has no counterparty, a signature only posts an order.",
     postLong: "Long",
     postShort: "Short",
     pullQuote: "Take this side",
@@ -755,7 +755,7 @@ export const copy: Record<Lang, Copy> = {
     sharedBook: "The whole site uses this one BSC contract. Anyone can see every order here and take it.",
     sharedBookX: "The whole site uses this one X Layer contract. Orders posted in USDT0 are here, and anyone can take them.",
     perpWarnX:
-      "Margin is X Layer USDT0, locked in this contract. Gas is OKB. Size is from 1 to 500. Leverage is capped at 1,000×. When about half the margin is lost, any address may liquidate. There is no insurance fund and no auto-deleveraging. The new mark reads the X Layer OKB/BEM and USDT0/WOKB pools. A consecutive update is at most 0.5 percent and at least 30 seconds apart. It does not reference BSC. There is no funding fee. It does not net with a BSC position. If the book has no counterparty, a signature only posts an order.",
+      "Margin is X Layer USDT0, locked in this contract. Gas is OKB. Size is from 1 to 500. Leverage is capped at 1,000×. When about half the margin is lost, any address may liquidate. Funding settles inside the pair every 8 hours, capped at ±0.05%. Half of a liquidation remainder enters the insurance fund and cannot be withdrawn. If insurance is short, only that pair's profit is cut. The mark reads the X Layer OKB/BEM and USDT0/WOKB pools. It does not net with a BSC position. A match and a cancellation each charge 0.20% of margin, paid to the X Layer multisig. If the book has no counterparty, a signature only posts an order.",
     perpStepsX: "Three steps: be on X Layer with USDT0 and a little OKB for gas, pick a size, then long or short. It fills only when another X Layer wallet takes the other side.",
     perpAddrX: "X Layer perp",
     xOpen: "The shared X Layer contract is not written into the page yet. Deploy once and send me the address. Until then, other people cannot see your order.",

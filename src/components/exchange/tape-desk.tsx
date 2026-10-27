@@ -24,15 +24,20 @@ import {
   asTerm,
   claimTermBem,
   claimTermTape,
+  claimOldBem,
+  claimOldTape,
   deployTerm,
   fundTermBem,
   fundTermTape,
+  OLD_TERM,
   readTerm,
   stakeTermBem,
   stakeTermTape,
   termAddress,
   unstakeTermBem,
   unstakeTermTape,
+  unstakeOldBem,
+  unstakeOldTape,
   withdrawTermBem,
   withdrawTermTape,
   type TermLock,
@@ -233,6 +238,7 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
   const [term, setTerm] = useState<string | null>(() => termAddress());
   const [row, setRow] = useState<DeskState | null>(null);
   const [stake, setStake] = useState<TermState | null>(null);
+  const [oldStake, setOldStake] = useState<TermState | null>(null);
   const [miss, setMiss] = useState(false);
   const [stakeMiss, setStakeMiss] = useState(false);
   const [tapePx, setTapePx] = useState<number | null>(null);
@@ -262,6 +268,7 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
       if (desk) {
         readDesk(account).then((next) => { if (!dead && next) { setRow(next); setMiss(false); } }).catch(() => { if (!dead) setMiss(true); });
       }
+      readTerm(account, OLD_TERM).then((next) => { if (!dead && next) setOldStake(next); }).catch(() => undefined);
       if (term) {
         readTerm(account).then((next) => { if (!dead && next) { setStake(next); setStakeMiss(false); } }).catch(() => { if (!dead) setStakeMiss(true); });
       }
@@ -293,6 +300,8 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
         } else {
           const next = await readTerm(account);
           if (next) setStake(next);
+          const old = await readTerm(account, OLD_TERM);
+          if (old) setOldStake(old);
         }
       })
       .catch((err: unknown) => {
@@ -412,6 +421,22 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
           <a className="underline" href={`${XLAYER.explorer}/address/${term}`} target="_blank" rel="noreferrer">{term}</a>
         </p>
       )}
+      <details className="border border-gold/40 bg-card px-3 py-2">
+        <summary className="cursor-pointer text-sm">{zh ? "以前的质押" : "Earlier stake"}</summary>
+        <p className="mt-2 break-all font-mono text-[11px] text-ink/50">{OLD_TERM}</p>
+        <div className="mt-2 grid gap-3 lg:grid-cols-2">
+          <div>
+            <p className="text-xs text-ink/60">{zh ? "TAPE 本金。到期才能取回。" : "TAPE principal. Take it only after the date."}</p>
+            <LockList locks={oldStake?.tapeLocks ?? []} zh={zh} busy={busy} empty={zh ? "没有以前的 TAPE 锁仓。" : "No earlier TAPE lock."} onTake={(index) => run(() => unstakeOldTape(account ?? "", index), zh ? "到期本金已取回。" : "Expired principal is back.", "term", "stake")} />
+            <button type="button" disabled={busy || !oldStake || oldStake.bemOwed === 0n} className="mt-2 h-10 border border-gold px-3 text-sm disabled:opacity-40" onClick={() => run(() => claimOldBem(account ?? ""), zh ? "BEM 已领取。" : "BEM claimed.", "term", "stake")}>{zh ? "领以前的 BEM" : "Claim earlier BEM"}</button>
+          </div>
+          <div>
+            <p className="text-xs text-ink/60">{zh ? "BEM 本金。到期才能取回。" : "BEM principal. Take it only after the date."}</p>
+            <LockList locks={oldStake?.bemLocks ?? []} zh={zh} busy={busy} empty={zh ? "没有以前的 BEM 锁仓。" : "No earlier BEM lock."} onTake={(index) => run(() => unstakeOldBem(account ?? "", index), zh ? "到期本金已取回。" : "Expired principal is back.", "term", "stake")} />
+            <button type="button" disabled={busy || !oldStake || oldStake.tapeOwed === 0n} className="mt-2 h-10 border border-gold px-3 text-sm disabled:opacity-40" onClick={() => run(() => claimOldTape(account ?? ""), zh ? "TAPE 已领取。" : "TAPE claimed.", "term", "stake")}>{zh ? "领以前的 TAPE" : "Claim earlier TAPE"}</button>
+          </div>
+        </div>
+      </details>
       <div className="grid gap-3 lg:grid-cols-2">
         <article className="border border-gold bg-card px-3 py-4 sm:px-4">
           <h3 className="font-display text-2xl italic">{zh ? "质押 TAPE，领 BEM" : "Stake TAPE, earn BEM"}</h3>

@@ -22,7 +22,7 @@ import { WorkshopRisk } from "@/components/exchange/risk-calc";
 import { MineDesk } from "@/components/exchange/mine-desk";
 import { Whitepaper } from "@/components/exchange/whitepaper";
 import { SideRail } from "@/components/exchange/side-rail";
-import { bemPrice, BSC, FEE_TO, readBalances } from "@/lib/bsc";
+import { bemPrice, BSC, BSC_SAFE, XLAYER_SAFE, readBalances } from "@/lib/bsc";
 import { FeeLockProvider, useFeeLock } from "@/lib/fee-lock";
 import { connectKind, currentAccount, disconnectWallet, onAccount, resumeSession } from "@/lib/wallet";
 import { CLAIM_STEPS, bindCode, claimRebate, codeText, readRebate, registerCode, X_USDT, type Desk } from "@/lib/perp";
@@ -312,16 +312,16 @@ async function tokenBalance(rpc: string, token: string, holder: string): Promise
 const TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
 async function recentFees(): Promise<{ side: "in" | "out"; k: string; v: string; href: string }[]> {
-  const fee = FEE_TO.slice(2).toLowerCase().padStart(64, "0");
   const books = [
-    { rpc: BSC.rpc, token: BSC.usdt, dec: 18, k: "USDT", scan: BSC.explorer },
-    { rpc: BSC.rpc, token: BSC.bem, dec: 8, k: "BEM", scan: BSC.explorer },
-    { rpc: XLAYER.rpc, token: X_USDT, dec: 6, k: "USDT0", scan: XLAYER.explorer },
-    { rpc: XLAYER.rpc, token: TAPE, dec: 8, k: "TAPE", scan: XLAYER.explorer },
-    { rpc: XLAYER.rpc, token: BEM_X, dec: 8, k: "BEM", scan: XLAYER.explorer },
+    { rpc: BSC.rpc, token: BSC.usdt, dec: 18, k: "USDT", scan: BSC.explorer, who: BSC_SAFE },
+    { rpc: BSC.rpc, token: BSC.bem, dec: 8, k: "BEM", scan: BSC.explorer, who: BSC_SAFE },
+    { rpc: XLAYER.rpc, token: X_USDT, dec: 6, k: "USDT0", scan: XLAYER.explorer, who: XLAYER_SAFE },
+    { rpc: XLAYER.rpc, token: TAPE, dec: 8, k: "TAPE", scan: XLAYER.explorer, who: XLAYER_SAFE },
+    { rpc: XLAYER.rpc, token: BEM_X, dec: 8, k: "BEM", scan: XLAYER.explorer, who: XLAYER_SAFE },
   ];
   const rows: { side: "in" | "out"; k: string; v: string; href: string; block: number }[] = [];
   for (const book of books) {
+    const fee = book.who.slice(2).toLowerCase().padStart(64, "0");
     try {
     const head = await fetch(book.rpc, {
       method: "POST",
@@ -397,11 +397,11 @@ function FeeBook() {
     let dead = false;
     const load = async () => {
       const [bsc, okb, usdt0, tape, bem] = await Promise.all([
-        readBalances(FEE_TO).catch(() => null),
-        readOkb(FEE_TO).catch(() => null),
-        tokenBalance(XLAYER.rpc, X_USDT, FEE_TO).catch(() => null),
-        tokenBalance(XLAYER.rpc, TAPE, FEE_TO).catch(() => null),
-        tokenBalance(XLAYER.rpc, BEM_X, FEE_TO).catch(() => null),
+        readBalances(BSC_SAFE).catch(() => null),
+        readOkb(XLAYER_SAFE).catch(() => null),
+        tokenBalance(XLAYER.rpc, X_USDT, XLAYER_SAFE).catch(() => null),
+        tokenBalance(XLAYER.rpc, TAPE, XLAYER_SAFE).catch(() => null),
+        tokenBalance(XLAYER.rpc, BEM_X, XLAYER_SAFE).catch(() => null),
       ]);
       if (dead) return;
       const show = (amount: bigint | null, decimals: number) => amount == null ? "—" : trimAmount(formatUnits(amount, decimals));
@@ -433,7 +433,8 @@ function FeeBook() {
         <div ref={panel} className="fixed inset-x-3 top-[calc(env(safe-area-inset-top)+3.5rem)] z-[80] max-h-[min(28rem,calc(100dvh-5rem))] overflow-y-auto border border-gold bg-paper p-3 text-sm shadow-plate sm:inset-x-auto sm:right-3 sm:w-[22rem]">
           <p className="text-sm">{zh ? "手续费" : "Fees"}</p>
           <p className="mt-1 font-mono text-xs">0.20%</p>
-          <a className="mt-2 block break-all font-mono text-[11px] text-gold underline" href={`https://www.oklink.com/xlayer/address/${FEE_TO}`} target="_blank" rel="noreferrer">{FEE_TO}</a>
+          <a className="mt-2 block break-all font-mono text-[11px] text-gold underline" href={`${BSC.explorer}/address/${BSC_SAFE}`} target="_blank" rel="noreferrer">{zh ? "BSC" : "BSC"} {BSC_SAFE}</a>
+          <a className="mt-1 block break-all font-mono text-[11px] text-gold underline" href={`${XLAYER.explorer}/address/${XLAYER_SAFE}`} target="_blank" rel="noreferrer">{zh ? "X Layer" : "X Layer"} {XLAYER_SAFE}</a>
           <ul className="mt-3 divide-y divide-gold/30 border-y border-gold/30">
             {(rows.length ? rows : [
               { k: "BNB", v: "…" },

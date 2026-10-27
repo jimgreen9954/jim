@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BSC_REBATE, KNOWN_XMARK, KNOWN_XPERP, PREV_XMARK, PREV_XPERP } from "@/lib/perp";
+import { BSC_REBATE, KNOWN_XMARK, KNOWN_XPERP, PREV_BSC, PREV_XMARK, PREV_XPERP } from "@/lib/perp";
 import { GATE } from "@/lib/gate-chain";
 import { BSC, BSC_SAFE, FEE_TO, XLAYER_SAFE } from "@/lib/bsc";
 import { NPM } from "@/lib/lp";
@@ -29,7 +29,7 @@ const zhBody: Section[] = [
     ps: [
       "本页是产品规则，不是审计报告，也不是收益承诺。下列合约没有升级入口。已经锁入永续的保证金，不能通过修改网页取回。没有管理员也不等于不能被攻击：合约没有经过独立审计。浅池上的标记价仍可能被带动。返佣合约的 clerk 只能取走返佣池里还没领的余额，不能动用户锁着的保证金。不通过下单函数直接转进合约的资产，谁都取不回。",
       "现货台费先付，是付出金额的 0.20%，在池子手续费之外。后面的兑换拒签或回滚，这一笔不退。回执还没读到时，同一金额不会再收一次。",
-      "现在交易的永续没有保险基金，也没有自动减仓。亏到保证金大约一半，任何人都可以强平。BSC 与 X Layer 不能并成一笔。下一本已经编译，还没部署。部署之后才有这三项：资金费每 8 小时按（标记 − 指数）/ 指数结算，封顶 ±0.05%，在这一对的保证金里划；强平剩余一半进保险基金、一半给强平的人，保险只补穿仓，没有提取函数；保险不够时只减这一对的盈利方，不按排名去平别人。那一本的台费进对应链的多签。已经上线的合约不按这些规则扣钱。页面上的资金费图是预览。",
+      "现在交易的 BEM 永续有资金费、保险基金和自动减仓。资金费每 8 小时在这一对的保证金里结算，封顶 ±0.05%。强平剩余一半进保险基金、一半给强平的人，保险不能提取。保险不够时只减这一对的盈利方。台费进对应链的多签。比特币、ETH、ZEC 的结算本没接上时，确认不签名。",
       "BSC 标记价取 PancakeSwap 池约 10 分钟的时间加权均价。流动性不足时，该均价仍可能在短时间内被带动。新的 X Layer 永续不再采用收费地址写入的 BSC 价格。标记价由 Uniswap v4 的 OKB/BEM 与 Uniswap v3 的 USDT0/WOKB 合成。任何地址均可提交推进。连续推进时，单次变动不超过 0.5%，间隔不少于 30 秒。中断超过 30 分钟后，下一次推进可以采用池子即时价格。晶体管永续的标记仍仅接受收费地址写入。",
       "下单所用合约地址写死在页面中，不随本机缓存更换。保证金只进入地址一节列出的合约。",
       "练习只存在于本机浏览器，不进入上述合约。止盈与止损要求本页保持打开，并由钱包完成签名。拒签之后不会自动再次请求，需要再次提交。",
@@ -40,7 +40,7 @@ const zhBody: Section[] = [
     h: "交易台",
     ps: [
       "现货在签名的钱包里成交。BSC 上的交易对走 PancakeSwap。OKB 走 X Layer 的 PotatoSwap。买到的币留在这个钱包。台费是付出金额的 0.20%，在池子手续费之外，单独付一笔，先付。后面的兑换拒签或回滚，这一笔不退。回执还没读到时，同一金额不会再收一次。",
-      "永续有两本，不能并成一笔。BSC 的保证金是 USDT。X Layer 的保证金是 USDT0。保证金锁进你所选链上的那一份合约，平台不经手。没有保险基金，也没有自动减仓。亏到保证金大约一半，任何人都可以强平。没有资金费。交易页把 TAPE 现货放在第一位，因为它的订单簿和池子已经在 X Layer 上。点交易对可以在现货和合约之间换。TAPE 现货、以及 TAPE 协议的 BEM 永续，钉在列表最上面。比特币、ETH、ZEC 仍是和 BEM 同一类的保证金单。结算本没接上时，确认不签名。",
+      "永续有两本，不能并成一笔。BSC 的保证金是 USDT。X Layer 的保证金是 USDT0。保证金锁进你所选链上的那一份合约，平台不经手。现在交易的 BEM 永续有资金费、保险基金和自动减仓。资金费每 8 小时在这一对的保证金里结算，单次不超过 ±0.05%。强平剩下一半进保险基金，一半给调用的人，保险基金不能提取。保险不够时，只减这一对赢家的浮盈，不平别人。亏到保证金大约一半，任何人都可以强平。比特币、ETH、ZEC 仍是和 BEM 同一类的保证金单。这三口的结算本没接上时，确认不签名。",
       `BSC 的 BEM 永续以 PancakeSwap 池约 10 分钟均价为标记，不以最后一笔成交强平。流动性不足时，该均价仍可能在短时间内被带动。新的 X Layer 永续读取 X Layer 上的 OKB/BEM 与 USDT0/WOKB，不再引用 BSC 价格。任何地址均可调用推进。连续推进时，单次不超过 0.5%，间隔不少于 30 秒。页面现在使用 ${KNOWN_XPERP}，标记是 ${KNOWN_XMARK}。旧合约 ${PREV_XPERP} 仍保留既有仓位，标记仍是 ${PREV_XMARK}。`,
       "推荐只作用于永续。有推荐人时，交易者少付永续台费的 4%，推荐人记 6%，其余进入收费地址。现货和流动性不参与。",
     ],
@@ -132,14 +132,14 @@ const zhBody: Section[] = [
     ps: [
       "现货买卖、永续撮合、撤单、添加流动性、撤回流动性，台费都是付出金额的 0.20%。此费用在池子手续费之外。平仓不再另收。添加流动性时两边各扣 0.20%，撤回时拿回的两边再各扣 0.20%。已转出的台费不退。现货的台费是单独一笔，先付。后面的兑换拒签或回滚，这一笔不退。回执还没读到时，页面留下哈希，同一金额不会再收一次。",
       "现货买到的币留在签名钱包。永续保证金进入用户所选链上的那一份合约。BSC 与 X Layer 不能并成一笔。",
-      `没绑邀请人时，页面先收的千分之二整笔进入该链多签。BSC 是 ${BSC_SAFE}。X Layer 是 ${XLAYER_SAFE}。绑了邀请人之后，这笔的 6% 付给邀请人，4% 少收交易的人，90% 进入该链多签。已经部署的工房订单簿、TAPE 池和现在这两本永续，合约里写死的千分之二仍进旧收费地址 ${FEE_TO}。那几份没有改率入口，这一页改不了。电路容器的开通费是协议的 BNB，不走这笔台费。BSC 永续保证金合约是 BEM / USDT。比特币、ETH、ZEC 在永续页和 BEM 是同一类保证金合约，不是现货买入。结算本还没接上时，开仓不会发出，也不会走现货兑换。印鉴不自动减费。登记后，已撮合的永续成交仍可按新加坡周另领一半，周一 0 点至下周一 0 点，过点作废，同一笔只进一次。`,
+      `没绑邀请人时，页面先收的千分之二整笔进入该链多签。BSC 是 ${BSC_SAFE}。X Layer 是 ${XLAYER_SAFE}。绑了邀请人之后，这笔的 6% 付给邀请人，4% 少收交易的人，90% 进入该链多签。现在的现货订单簿和两本永续，合约里的千分之二进该链多签。以前的订单簿、TAPE 池和上一本永续仍进 ${FEE_TO}。印鉴减费仍认上一本永续和上一本晶体管，新本的成交还领不了。电路容器的开通费是协议的 BNB，不走这笔台费。比特币、ETH、ZEC 在永续页和 BEM 是同一类保证金合约，不是现货买入。这三口的结算本没接上时，开仓不会发出。`,
       "池子自身的手续费留给流动性提供者。Gas 付给链。",
     ],
   },
   {
     h: "永续",
     ps: [
-      `现在交易的 X Layer 永续是 ${KNOWN_XPERP}，标记是 ${KNOWN_XMARK}。标记读 X Layer 的 OKB/BEM 与 USDT0/WOKB，当前结算价约 36.09。连续推进单次不超过 0.5%，间隔不少于 30 秒。旧合约 ${PREV_XPERP} 的仓位还在，结算价仍约 27.38，不再接受新开仓。晶体管永续是 0x798637b6d18cE053D69CfC0B08Ead105de352c11。六个标的里，第一个已经写入，另外五个还要收费地址各写一次。写过一次就不再停。三份都没有管理员。写价地址和台费地址都是收费地址，写死。撮合和撤单各收保证金的 0.20%，打进收费地址。有推荐人时，交易者少付这笔的 4%，推荐人记 6%。`,
+      `现在交易的 X Layer 永续是 ${KNOWN_XPERP}。标记读池子，约能读出。旧合约 ${PREV_XPERP} 的仓位还在，不再接受新开仓。BSC 永续是 ${BSC_REBATE}，上一本是 ${PREV_BSC}。晶体管永续是 ${GATE}。标记从空开始，第一笔要 BSC 多签写入。三本新合约的千分之二进该链多签。没有管理员。`,
       "同一份标记只挂这一本 X Layer 永续。BSC 上的 BEM 永续读 Pancake 池子的均价，不读这份标记。浅池仍可能在短时间里影响那条均价。",
       "BSC 永续页上，BEM、比特币、ETH、ZEC 是同一张合约台，四张都标 BSC · 永续，不是现货买入。K 线同一套：15 秒、1 分、5 分、15 分、1 小时、4 小时、1 日、1 周、1 月、3 月、一年，带成交量和 RSI。下单也同一张：开多、开空、保证金、杠杆、止盈止损。标记各读自己那口 Pancake 池大约 10 分钟均价，不是最后一笔。比特币、ETH、ZEC 的结算本还没接上。确认不会签名，USDT 不会扣，也不会去买现货，更不会把这三口的价格写进 BEM 那一本。",
       "TAPE 是 TAPELIQUID 的唯一平台币。只有这一枚，没有第二枚。矿池没有管理员，也不能改排放。",
@@ -186,7 +186,7 @@ const zhBody: Section[] = [
   {
     h: "地址",
     ps: [
-      `页面先收的台费：BSC 多签 ${BSC_SAFE}，X Layer 多签 ${XLAYER_SAFE}。已经部署的合约里写死的收费地址仍是 ${FEE_TO}。TAPE ${TAPE}。TAPE 挖矿 ${TAPE_MINE}。TAPE 池 0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641。晶圆锁仓 0xA28390924607F08aaD8d03F512B41b6a1c012Ace。电路锁仓 0x06c877cc158d9ca3547220f9fc156f39bce7013c。回购 0x53fa6A76ce9A3fE08698E04a4E9A674bd77a9DfF。旧回购 0x72e28d564A90eF3E76f599bC210454f5360E200C 不再使用。期限质押 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A。工房现货 ${TAPE_SPOT}。TAPELIQUID 电路 ${DEPLOYED.circuits}。TAPELIQUID 晶体管 ${DEPLOYED.transistors}。`,
+      `页面先收的台费，以及现在的现货和永续合约里的千分之二：BSC 多签 ${BSC_SAFE}，X Layer 多签 ${XLAYER_SAFE}。以前的池子和上一本永续仍进 ${FEE_TO}。TAPE ${TAPE}。TAPE 挖矿 ${TAPE_MINE}。TAPE 池 0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641。晶圆锁仓 0xA28390924607F08aaD8d03F512B41b6a1c012Ace。电路锁仓 0x06c877cc158d9ca3547220f9fc156f39bce7013c。回购 0x53fa6A76ce9A3fE08698E04a4E9A674bd77a9DfF。期限质押 0x9D603A45321a3aDbFcAD0E49Fd944Cc281Baa833。以前的锁仓 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A。现货 ${TAPE_SPOT}。上一本现货 0x154E82c6a2ac121906D29af0EE81131E93B57860 不再挂新单。TAPELIQUID 电路 ${DEPLOYED.circuits}。TAPELIQUID 晶体管 ${DEPLOYED.transistors}。`,
       `BSC 永续 ${BSC_REBATE}。X Layer 永续 ${KNOWN_XPERP}。标记 ${KNOWN_XMARK}。晶体管永续 ${GATE}。流动性仓位 ${NPM}。`,
       `BSC BEM ${BSC.bem}。BSC 桥 ${BEM_BRIDGE}。X Layer BEM ${X_BEM}。TapeOut BEM 挖矿 0x7E2E0DC66a3bD9103E69b766afA62d9f7b697b46。`,
       `TapeOut 晶体管市场 ${OFFICIAL.transistorMarket}。TapeOut 电路市场 ${OFFICIAL.circuitMarket}。BEM 池 ${BSC.pool}。`,
@@ -210,7 +210,7 @@ const en: Section[] = [
     ps: [
       "This page is the product rulebook. It is not an audit and it is not a statement of expected return. The contracts below have no upgrade path. Margin already locked in a perpetual cannot be recovered by editing the website. No administrator does not mean the contracts cannot be attacked. They have not had an independent audit. A mark that reads a thin pool can still be moved. The rebate contract's clerk can take only the unclaimed balance in the rebate pool, not margin locked by users. Assets sent straight to a contract, outside an order, cannot be recovered.",
       "The spot desk fee is paid first. It is 0.20% of the amount paid, on top of the pool fee. If the later swap is rejected or reverts, that fee is not returned. While a receipt is still missing, the same amount is not charged again.",
-      "The perpetuals trading now have no insurance fund and no auto-deleveraging. Anyone can liquidate a position after about half the margin is lost. BSC and X Layer do not net into one trade. The next book is compiled and is not deployed. After it is deployed it adds three things: funding every 8 hours at (mark − index) / index, capped at ±0.05 percent, moved inside that pair's margin; half of a liquidation remainder kept as insurance and half paid to the caller, with no withdraw function; and, only if insurance is short, a haircut of that pair's winner. It does not rank and close other users. That book's fee goes to the multisig of its chain. Live contracts do not charge these rules. The funding chart is a preview.",
+      "The BEM perpetuals trading now charge funding, keep an insurance fund, and can auto-delever one pair. Funding settles every 8 hours inside that pair's margin, capped at ±0.05 percent. Half of a liquidation remainder is kept as insurance and cannot be withdrawn. The other half is paid to the caller. Only if insurance is short, that pair's winner is haircut. It does not close other users. Anyone can liquidate a position after about half the margin is lost. BSC and X Layer do not net into one trade. Fees on these books go to the multisig of that chain. Bitcoin, ETH and ZEC still do not sign until a settlement book is attached.",
       "The BSC mark is a roughly 10-minute time-weighted average of the PancakeSwap pool. Thin liquidity can still move that average for a short interval. The new X Layer perpetual does not accept a BSC price posted by the fee address. Its mark is composed from the Uniswap v4 OKB/BEM pool and the Uniswap v3 USDT0/WOKB pool. Any address may submit an update. Consecutive updates move the mark by at most 0.5 percent and must be at least 30 seconds apart. After 30 minutes without an update, the next update may adopt the spot price of the pools. The transistor perpetual still accepts a mark only from the fee address.",
       "Order contracts are fixed in the page. They are not replaced from this browser's cache. Margin is sent only to the contracts named in the address section.",
       "Practice remains in this browser and does not enter those contracts. A take-profit or stop-loss requires this page to stay open and a wallet signature. After a rejection, the wallet is not prompted again until the order is submitted again.",
@@ -221,7 +221,7 @@ const en: Section[] = [
     h: "Desk",
     ps: [
       "Spot settles in the wallet that signed. BSC pairs use PancakeSwap. OKB uses PotatoSwap on X Layer. The coins you buy stay in that wallet. The desk fee is 0.20% of what you pay, on top of the pool fee, and it is a separate payment made first. If the swap is rejected or reverts, that fee stays. If the receipt has not come back, the same amount is not charged again.",
-      "There are two perpetual books. They do not net. BSC margin is USDT. X Layer margin is USDT0. Margin is locked in the one contract on the chain you picked. The platform does not hold it. There is no insurance fund and no auto-deleveraging. At about half the margin lost, anyone can liquidate. There is no funding fee. The trade page puts TAPE spot first, because its order book and pool are already on X Layer. The pair list switches between spot and perps. TAPE spot and the BEM perpetual of the TAPE protocol stay pinned. Bitcoin, ETH and ZEC stay the same kind of margin ticket as BEM. Until a settlement book is attached, confirm does not sign.",
+      "There are two perpetual books. They do not net. BSC margin is USDT. X Layer margin is USDT0. Margin is locked in the one contract on the chain you picked. The platform does not hold it. The live BEM books charge funding, keep insurance, and can haircut one pair. At about half the margin lost, anyone can liquidate. Bitcoin, ETH and ZEC stay the same kind of margin ticket as BEM. Until a settlement book is attached, confirm does not sign.",
       `The BSC BEM perpetual uses a roughly 10-minute PancakeSwap average as its mark. The last trade is not used for liquidation. Thin liquidity can still move that average for a short interval. The new X Layer perpetual reads the OKB/BEM and USDT0/WOKB pools on X Layer. It does not reference the BSC price. Any address may submit an update. Each consecutive update is at most 0.5 percent and at least 30 seconds apart. The page now uses ${KNOWN_XPERP}. Its mark is ${KNOWN_XMARK}. The previous contract ${PREV_XPERP} keeps existing positions, and its mark remains ${PREV_XMARK}.`,
       "Referrals apply to every site fee this page sends, not only perpetuals. The site fee is 0.20% of the amount paid. With a referrer, 6% of that fee goes to the referrer, the trader pays 4% less, and 90% goes to the fee address. Perpetuals record the 6% on the contract. Spot, including BSC bitcoin, ETH and ZEC, liquidity, official transistors, and official circuits split the same way when paid. The workshop book and the TAPE pools send their 0.20% entirely to the fee address. Those deployed contracts have no referrer field. A circuit container's open fee is protocol BNB, not this site fee. The BSC perpetual is BEM / USDT. Bitcoin, ETH and ZEC on the perpetual page are the same kind of margin contract as BEM, not a spot buy. Their desk and chart are the same as BEM: the same timeframes from 15 seconds through one year, volume and RSI, and the same ticket for long, short, margin, leverage and stops. Until that pair's settlement book is attached, confirm does not sign, does not take USDT, and does not buy spot. Their prices are not written into the BEM book.",
     ],
@@ -322,7 +322,7 @@ const en: Section[] = [
   {
     h: "Perpetuals",
     ps: [
-      `The live X Layer perpetual is ${KNOWN_XPERP}. Its mark is ${KNOWN_XMARK}. The mark reads the X Layer OKB/BEM and USDT0/WOKB pools. The settlement price is about 36.09. A consecutive update is at most 0.5 percent and at least 30 seconds apart. Positions on the previous contract ${PREV_XPERP} remain there, still near 27.38, and that book takes no new positions. The transistor perpetual is 0x798637b6d18cE053D69CfC0B08Ead105de352c11. The first of the six markets is posted. The other five still need one post each from the fee address. One post is enough, and it does not stop later. None of the three has an admin. The posting address and the fee address are the same, and both are fixed. A match and a cancel each take 0.20 percent of the margin and send it to the fee address. With a referrer, the trader pays 4 percent less of that fee and the referrer is credited 6 percent.`,
+      `The live X Layer perpetual is ${KNOWN_XPERP}. Positions on ${PREV_XPERP} remain there and that book takes no new positions. The BSC perpetual is ${BSC_REBATE}. The previous one is ${PREV_BSC}. The transistor perpetual is ${GATE}. Its marks start empty. The BSC multisig posts the first price. The 0.20 percent on these three goes to the multisig of that chain. None has an admin.`,
       "This mark has one X Layer perpetual. The BEM perpetual on BSC reads the Pancake pool average. It does not read this mark. A thin pool can still move that average for a short time.",
       "TAPE is the only platform token of TAPELIQUID. There is one token, not a second. The mine has no admin, and the emission cannot be changed.",
       "The rebate contract has a clerk. The clerk can withdraw the rebate pool. Not every contract is without an admin.",
@@ -369,7 +369,7 @@ const en: Section[] = [
   {
     h: "Addresses",
     ps: [
-      `The fee this page collects first: BSC multisig ${BSC_SAFE}, X Layer multisig ${XLAYER_SAFE}. Contracts already deployed still pay ${FEE_TO}, because that address is written inside them. TAPE ${TAPE}. TAPE mine ${TAPE_MINE}. TAPE pool 0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641. Wafer lock 0xA28390924607F08aaD8d03F512B41b6a1c012Ace. Circuit lock 0x06c877cc158d9ca3547220f9fc156f39bce7013c. Buyback 0x53fa6A76ce9A3fE08698E04a4E9A674bd77a9DfF. Old buyback 0x72e28d564A90eF3E76f599bC210454f5360E200C is no longer used. Timed stake 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A. Workshop spot ${TAPE_SPOT}. TAPELIQUID circuits ${DEPLOYED.circuits}. TAPELIQUID transistors ${DEPLOYED.transistors}.`,
+      `The fee this page collects, and the 0.20 percent inside the live spot and perpetual contracts: BSC multisig ${BSC_SAFE}, X Layer multisig ${XLAYER_SAFE}. The previous pool and the previous perpetual still pay ${FEE_TO}. TAPE ${TAPE}. TAPE mine ${TAPE_MINE}. TAPE pool 0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641. Wafer lock 0xA28390924607F08aaD8d03F512B41b6a1c012Ace. Circuit lock 0x06c877cc158d9ca3547220f9fc156f39bce7013c. Buyback 0x53fa6A76ce9A3fE08698E04a4E9A674bd77a9DfF. Timed stake 0x9D603A45321a3aDbFcAD0E49Fd944Cc281Baa833. Earlier locks 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A. Spot ${TAPE_SPOT}. The previous spot 0x154E82c6a2ac121906D29af0EE81131E93B57860 takes no new orders. TAPELIQUID circuits ${DEPLOYED.circuits}. TAPELIQUID transistors ${DEPLOYED.transistors}.`,
       `BSC perpetual ${BSC_REBATE}. X Layer perpetual ${KNOWN_XPERP}. Mark ${KNOWN_XMARK}. Transistor perpetual ${GATE}. Liquidity positions ${NPM}.`,
       `BSC BEM ${BSC.bem}. BSC bridge ${BEM_BRIDGE}. X Layer BEM ${X_BEM}. TapeOut BEM mine 0x7E2E0DC66a3bD9103E69b766afA62d9f7b697b46.`,
       `TapeOut transistor market ${OFFICIAL.transistorMarket}. TapeOut circuit market ${OFFICIAL.circuitMarket}. BEM pool ${BSC.pool}.`,
@@ -419,7 +419,7 @@ const nowZh = [
   ["总供应", "只随领取增加。10 万枚开盘种子没有另铸"],
   ["TAPE 池", "0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641，没有管理员。不再新加。已有仓到期可撤。流通仍减池中余额"],
   ["锁仓", "0xA28390924607F08aaD8d03F512B41b6a1c012Ace，没有管理员"],
-  ["期限质押", "0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A，没有管理员"],
+  ["期限质押", "0x9D603A45321a3aDbFcAD0E49Fd944Cc281Baa833。以前的锁仓 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A，只取不存"],
   ["还不能签", "TAPE 跨链"],
 ];
 
@@ -431,7 +431,7 @@ const nowEn = [
   ["Supply", "Grows only when claimed. The 100,000 seed was not minted"],
   ["TAPE pool", "0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641, no admin. No new deposits. Existing positions withdraw at expiry. Circulating supply still subtracts the pool"],
   ["Lock", "0xA28390924607F08aaD8d03F512B41b6a1c012Ace, no admin"],
-  ["Timed stake", "0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A, no admin"],
+  ["Timed stake", "0x9D603A45321a3aDbFcAD0E49Fd944Cc281Baa833. Earlier locks stay at 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A and can only be withdrawn"],
   ["Not signable yet", "A TAPE bridge"],
 ];
 export function Whitepaper() {
@@ -520,7 +520,7 @@ export function Whitepaper() {
             <span className="mt-1 block break-all font-mono text-xs">{XLAYER_SAFE}</span>
           </a>
           <a className="border border-gold/40 px-3 py-3" href={`${BSC.explorer}/address/${FEE_TO}`} target="_blank" rel="noreferrer">
-            <span className="block text-[11px] tracking-widest text-gold">{zh ? "已部署合约" : "Deployed contracts"}</span>
+            <span className="block text-[11px] tracking-widest text-gold">{zh ? "旧合约仍进" : "Older contracts"}</span>
             <span className="mt-1 block break-all font-mono text-xs">{FEE_TO}</span>
           </a>
           <a className="border border-gold/40 px-3 py-3" href={`${XLAYER.explorer}/address/${TAPE}`} target="_blank" rel="noreferrer">

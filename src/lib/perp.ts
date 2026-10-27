@@ -1,5 +1,6 @@
 import { encodeAbiParameters, encodeFunctionData, type Hex } from "viem";
 import { BSC, BSC_SAFE, FEE_TO, XLAYER_SAFE, connectBsc, pretty, readBalances, units, waitReceipt } from "@/lib/bsc";
+import { CREATE_CALL, createCallData, createdAddress } from "@/lib/create-call";
 import { PERP_BYTECODE } from "@/lib/perp-artifact";
 import { RISK_BYTECODE } from "@/lib/risk-artifact";
 import { MARK_BYTECODE } from "@/lib/mark-artifact";
@@ -50,10 +51,11 @@ function tokenUnit(): bigint {
   return 10n ** BigInt(tokenDecimals());
 }
 export const KNOWN_PERP = "0xB98D14333a93D49a4E05478d002FC3944D88A3b7";
-export const BSC_REBATE = "0xce3511b6e909c9694826cfd5dbe434d457920eba";
-export const KNOWN_XPERP = "0xCAC69F02c06bfCa3bFDb1eaF1F4a60e17e718081";
+export const BSC_REBATE = "0xdA4aA9E0aaad6F91835cD19345D49a8fcA8d019A";
+export const PREV_BSC = "0xce3511b6e909c9694826cfd5dbe434d457920eba";
+export const KNOWN_XPERP = "0xE8Ed0fE7a7aaEF822b2e5Ce9679ccACcF3aEFF56";
 export const KNOWN_XMARK = "0xb4B2ee90D10ECfC7ed36A58e96e03074fA8731Eb";
-export const PREV_XPERP = "0xF771BECD373af1d062169E42AB7b3B1fadE2b11b";
+export const PREV_XPERP = "0xCAC69F02c06bfCa3bFDb1eaF1F4a60e17e718081";
 export const PREV_XMARK = "0xba5234cd46ec5eB0DFdf4ac329FF42EB3062B4eA";
 export const NEXT_XMARK = KNOWN_XMARK;
 export const BOARD = [KNOWN_PERP];
@@ -447,10 +449,10 @@ export async function deployRisk(from: string, which: Desk): Promise<string> {
       [{ type: "address" }, { type: "address" }, { type: "uint256" }, { type: "address" }],
       [which === "xlayer" ? X_USDT : BSC.usdt, which === "xlayer" ? KNOWN_XMARK : BSC.pool, which === "xlayer" ? 1_000_000n : 10n ** 18n, safe],
     );
-    const hash = await send(from, undefined, (RISK_BYTECODE + args.slice(2)) as Hex, 8_000_000n);
+    const hash = await send(from, CREATE_CALL, createCallData((RISK_BYTECODE + args.slice(2)) as Hex), 8_000_000n);
     const receipt = await (await client()).waitForTransactionReceipt({ hash, timeout: 180_000, pollingInterval: 2_000 });
-    const addr = receipt.contractAddress ?? "";
-    if (receipt.status !== "success" || !addr) throw new Error("revert");
+    const addr = receipt.status === "success" ? createdAddress(receipt.logs) : "";
+    if (!addr) throw new Error("revert");
     window.localStorage.setItem(which === "xlayer" ? RISK_X : RISK_BSC, addr);
     return addr;
   } finally {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BSC, FEE_TO, txUrl } from "@/lib/bsc";
+import { BSC, BSC_SAFE, txUrl } from "@/lib/bsc";
 import { addLp, formatLp, listLp, LP_BEM, LP_CRYPTO, LP_STOCKS, poolYield, quoteLp, removeLp, type LpKey, type LpPosition, type LpQuote, type LpYield } from "@/lib/lp";
 import { useExchange } from "@/lib/exchange-store";
 import { connectKind, currentAccount, onAccount } from "@/lib/wallet";
@@ -252,7 +252,7 @@ export function LpPanel() {
               { k: zh ? "池子" : "Pool", v: `${zh ? book.zh : book.en} / ${book.quoteZh}`, href: book.pool === "0x0000000000000000000000000000000000000000" ? undefined : `${BSC.explorer}/address/${book.pool}` },
               { k: zh ? "放入" : "Deposit", v: `${shown.quote} ${book.quoteZh} + ${shown.asset} ${zh ? book.zh : book.en}` },
               { k: zh ? "台费" : "Fee", v: `${shown.feeQuote} ${book.quoteZh} + ${shown.feeAsset} ${zh ? book.zh : book.en}` },
-              { k: zh ? "收费地址" : "Fee address", v: FEE_TO, href: `${BSC.explorer}/address/${FEE_TO}` },
+              { k: zh ? "收费地址" : "Fee address", v: BSC_SAFE, href: `${BSC.explorer}/address/${BSC_SAFE}` },
               { k: zh ? "范围" : "Range", v: zh ? "全区间" : "Full range" },
               { k: zh ? "凭证" : "Receipt", v: zh ? "留在这个钱包" : "Stays in this wallet" },
             ]}

@@ -1,7 +1,7 @@
 import { createPublicClient, http, type Hex } from "viem";
 
-const XPERP = "0xCAC69F02c06bfCa3bFDb1eaF1F4a60e17e718081";
-const GATE = "0x798637b6d18cE053D69CfC0B08Ead105de352c11";
+const XPERP = "0xE8Ed0fE7a7aaEF822b2e5Ce9679ccACcF3aEFF56";
+const GATE = "0x2b909Ecc36a24D3dD3695a38B11Cb40302454899";
 const abi = [{ name: "referrerOf", type: "function", stateMutability: "view", inputs: [{ type: "address" }], outputs: [{ type: "address" }] }] as const;
 const bsc = createPublicClient({ transport: http("https://bsc-dataseed.binance.org") });
 const xlayer = createPublicClient({ transport: http("https://rpc.xlayer.tech") });

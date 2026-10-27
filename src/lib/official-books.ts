@@ -4,7 +4,7 @@ import { createServerFn } from "@tanstack/react-start";
 export const OFFICIAL = {
   transistorMarket: "0xA6a80C1919a8326022d7c601a488888C13aA16E4",
   circuitMarket: "0x6feEbbEbC07BcB90bd1Ac8b0CF9BaA4f0fF2B46f",
-  feeTo: "0x823b9F6A93Ac44Ce5A469823A336c15b6117054D",
+  feeTo: "0xE51C19aE6E4261Ed329CC54F1120Cf0Ae09364Bd",
   feeBps: 20,
   chips: [
     { name: "TapeOut", transistors: "0xCC42ba5De07f01B472a5b14cF45aBcCA79Eb8087" },

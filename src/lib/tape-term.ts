@@ -1,11 +1,14 @@
 import { createPublicClient, encodeFunctionData, http, parseAbi, type Hex } from "viem";
 import { TAPE_TERM_BYTECODE } from "@/lib/tape-term-artifact";
+import { CREATE_CALL, createCallData, createdAddress } from "@/lib/create-call";
+import { XLAYER_SAFE, FEE_TO } from "@/lib/bsc";
 import { TAPE_BEM, TAPE_TOKEN } from "@/lib/tape-pool";
 import { getProvider } from "@/lib/wallet";
 import { connectXLayer, XLAYER } from "@/lib/xlayer";
 
-/** Deployed timed stake. Creation bytecode matches contracts/TapeTerm.sol. No admin. */
-export const TAPE_TERM = "0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A" as const;
+/** The live old book. New deposits do not use it. */
+export const OLD_TERM = "0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A" as const;
+export const TAPE_TERM = "0x9D603A45321a3aDbFcAD0E49Fd944Cc281Baa833" as const;
 
 const KEY = "tapeliquid-term";
 const abi = parseAbi([
@@ -42,11 +45,7 @@ export const TERM_IDS = [0, 1, 2, 3, 4, 5] as const;
 export type TermId = (typeof TERM_IDS)[number];
 
 export function termAddress(): Hex | null {
-  const fixed = TAPE_TERM as string;
-  if (/^0x[a-fA-F0-9]{40}$/.test(fixed)) return fixed as Hex;
-  if (typeof window === "undefined") return null;
-  const saved = window.localStorage.getItem(KEY) ?? "";
-  return /^0x[a-fA-F0-9]{40}$/.test(saved) ? saved as Hex : null;
+  return TAPE_TERM;
 }
 
 export type TermLock = {
@@ -90,8 +89,8 @@ async function locksOf(term: Hex, who: Hex, countName: "tapeLockCount" | "bemLoc
   }));
 }
 
-export async function readTerm(account: string | null): Promise<TermState | null> {
-  const term = termAddress();
+export async function readTerm(account: string | null, which?: Hex): Promise<TermState | null> {
+  const term = which ?? termAddress();
   if (!term) return null;
   const who = (account ?? "0x0000000000000000000000000000000000000000") as Hex;
   const [tapeBal, bemBal, tapeSeat, bemSeat, tapePot, bemPot, bemSponsor, tapeSponsor, tapeLocks, bemLocks] = await Promise.all([
@@ -146,19 +145,24 @@ async function approve(from: string, token: Hex, amount: bigint) {
   await send(from, token, data);
 }
 
-async function call(from: string, data: Hex) {
-  const term = termAddress();
-  if (!term) throw new Error("term");
+async function callOn(from: string, term: Hex, data: Hex) {
   await probe(from, term, data);
   return send(from, term, data);
 }
 
+async function call(from: string, data: Hex) {
+  const term = termAddress();
+  if (!term) throw new Error("term");
+  return callOn(from, term, data);
+}
+
 export async function deployTerm(from: string): Promise<string> {
-  const hash = await send(from, undefined, TAPE_TERM_BYTECODE);
+  if (from.toLowerCase() !== XLAYER_SAFE.toLowerCase() && from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("onlyfee");
+  const hash = await send(from, CREATE_CALL, createCallData(TAPE_TERM_BYTECODE));
   const receipt = await client.getTransactionReceipt({ hash });
-  if (!receipt.contractAddress) throw new Error("revert");
-  window.localStorage.setItem(KEY, receipt.contractAddress);
-  return receipt.contractAddress;
+  const landed = createdAddress(receipt.logs);
+  window.localStorage.setItem(KEY, landed);
+  return landed;
 }
 
 export function asTerm(id: number): TermId {
@@ -172,6 +176,18 @@ export async function stakeTermTape(from: string, amount: bigint, term: TermId) 
 }
 export async function unstakeTermTape(from: string, index: number) {
   return call(from, encodeFunctionData({ abi, functionName: "unstakeTape", args: [BigInt(index)] }));
+}
+export async function unstakeOldTape(from: string, index: number) {
+  return callOn(from, OLD_TERM, encodeFunctionData({ abi, functionName: "unstakeTape", args: [BigInt(index)] }));
+}
+export async function unstakeOldBem(from: string, index: number) {
+  return callOn(from, OLD_TERM, encodeFunctionData({ abi, functionName: "unstakeBem", args: [BigInt(index)] }));
+}
+export async function claimOldBem(from: string) {
+  return callOn(from, OLD_TERM, encodeFunctionData({ abi, functionName: "claimBem" }));
+}
+export async function claimOldTape(from: string) {
+  return callOn(from, OLD_TERM, encodeFunctionData({ abi, functionName: "claimTape" }));
 }
 export async function claimTermBem(from: string) {
   return call(from, encodeFunctionData({ abi, functionName: "claimBem" }));

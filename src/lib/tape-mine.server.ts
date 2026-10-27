@@ -32,6 +32,7 @@ const termAbi = parseAbi([
   "function bemStakePot() view returns (uint256 staked, uint256 pot)",
 ]);
 const TAPE_TERM = "0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A" as const;
+const TAPE_TERM_NEW = "0x9D603A45321a3aDbFcAD0E49Fd944Cc281Baa833" as const;
 
 function pair(value: unknown): readonly [bigint, bigint] {
   if (Array.isArray(value)) return [typeof value[0] === "bigint" ? value[0] : 0n, typeof value[1] === "bigint" ? value[1] : 0n];
@@ -123,6 +124,22 @@ async function headOf(account: string | null) {
   if (cap !== CAP) throw new Error("cap");
   const start = head[3] as bigint;
   const next = head[4] as bigint;
+  let termPrincipal = pair(head[9])[0];
+  let termReward = pair(head[10])[1];
+  let termHeld = head[11] as bigint;
+  try {
+    const more = await client.multicall({
+      contracts: [
+        { address: TAPE_TERM_NEW, abi: termAbi, functionName: "tapeStakePot" },
+        { address: TAPE_TERM_NEW, abi: termAbi, functionName: "bemStakePot" },
+        { address: TAPE, abi: tokenAbi, functionName: "balanceOf", args: [TAPE_TERM_NEW] },
+      ],
+      allowFailure: true,
+    });
+    if (more[0].status === "success") termPrincipal += pair(more[0].result)[0];
+    if (more[1].status === "success") termReward += pair(more[1].result)[1];
+    if (more[2].status === "success" && typeof more[2].result === "bigint") termHeld += more[2].result;
+  } catch { /* new book */ }
   return {
     supply: head[0] as bigint,
     cap,
@@ -135,10 +152,10 @@ async function headOf(account: string | null) {
     pooled: head[6] as bigint,
     circuitHeld: head[7] as bigint,
     waferHeld: head[8] as bigint,
-    termPrincipal: pair(head[9])[0],
-    termReward: pair(head[10])[1],
-    termHeld: head[11] as bigint,
-    locked: (head[7] as bigint) + (head[8] as bigint) + ((head[11] as bigint) > 0n ? (head[11] as bigint) : pair(head[9])[0] + pair(head[10])[1]),
+    termPrincipal,
+    termReward,
+    termHeld,
+    locked: (head[7] as bigint) + (head[8] as bigint) + (termHeld > 0n ? termHeld : termPrincipal + termReward),
   };
 }
 

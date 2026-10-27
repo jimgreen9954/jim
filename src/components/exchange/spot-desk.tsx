@@ -12,7 +12,8 @@ import {
   DESK_FEE_BPS,
   ERC_BOOKS,
   ercPrice,
-  FEE_TO,
+  BSC_SAFE,
+  XLAYER_SAFE,
   isErcKey,
   pretty,
   quoteExact,
@@ -609,7 +610,7 @@ export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?:
                 { k: lang === "zh" ? "池子约得" : "Pool estimate", v: `${out ?? "—"} ${recvUnit}` },
                 { k: lang === "zh" ? "台费，打入收费地址" : "Desk fee, to the fee address", v: `${deskFee ? pretty(deskFee.fee, payDecimals, 4) : "—"} ${payUnit}` },
                 { k: lang === "zh" ? "滑点 1% 内最少到账" : "Minimum within 1% slippage", v: `${minOut ?? "—"} ${recvUnit}` },
-                { k: lang === "zh" ? "收费地址" : "Fee address", v: FEE_TO, href: pair === "okb" ? `${XLAYER.explorer}/address/${FEE_TO}` : `${BSC.explorer}/address/${FEE_TO}` },
+                { k: lang === "zh" ? "收费地址" : "Fee address", v: pair === "okb" ? XLAYER_SAFE : BSC_SAFE, href: pair === "okb" ? `${XLAYER.explorer}/address/${XLAYER_SAFE}` : `${BSC.explorer}/address/${BSC_SAFE}` },
               ]}
             />
           ) : null}

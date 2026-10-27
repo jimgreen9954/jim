@@ -1,13 +1,14 @@
 import { createPublicClient, encodeFunctionData, formatUnits, http, parseAbi, parseAbiItem, parseUnits, type Hex } from "viem";
 import { TAPE_SPOT_BYTECODE } from "@/lib/tape-spot-artifact";
 import { FEE_TO, XLAYER_SAFE } from "@/lib/bsc";
+import { CREATE_CALL, createCallData, createdAddress } from "@/lib/create-call";
 import { TAPE_TOKEN, TAPE_USDT } from "@/lib/tape-pool";
 import { getProvider } from "@/lib/wallet";
 import { DEPLOYED, connectXLayer, XLAYER } from "@/lib/xlayer";
 
 /** X Layer order book. Creation bytecode matches contracts/TapeSpot.sol. No admin. */
-export const TAPE_SPOT = "0x154E82c6a2ac121906D29af0EE81131E93B57860" as const;
-export const SPOT_FEE = FEE_TO;
+export const TAPE_SPOT = "0x68F66fAf7b29E30D0740934F81EB266F6ff17428" as const;
+export const SPOT_FEE = XLAYER_SAFE;
 
 const KEY = "tapeliquid-spot";
 const BLOCK_KEY = "tapeliquid-spot-block";
@@ -45,10 +46,6 @@ const client = createPublicClient({ transport: http(XLAYER.rpc) });
 export type SpotMarket = 0 | 1 | 2;
 
 export function spotAddress(): Hex | null {
-  if (typeof window !== "undefined") {
-    const saved = window.localStorage.getItem(KEY) ?? "";
-    if (/^0x[a-fA-F0-9]{40}$/.test(saved)) return saved as Hex;
-  }
   if (/^0x[a-fA-F0-9]{40}$/.test(TAPE_SPOT)) return TAPE_SPOT;
   return null;
 }
@@ -340,10 +337,9 @@ async function call(from: string, data: Hex) {
 
 export async function deploySpot(from: string): Promise<string> {
   if (from.toLowerCase() !== XLAYER_SAFE.toLowerCase() && from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("onlyfee");
-  const hash = await send(from, undefined, TAPE_SPOT_BYTECODE);
+  const hash = await send(from, CREATE_CALL, createCallData(TAPE_SPOT_BYTECODE));
   const receipt = await client.getTransactionReceipt({ hash });
-  const landed = receipt.contractAddress ?? "";
-  if (!landed) throw new Error("revert");
+  const landed = createdAddress(receipt.logs);
   window.localStorage.setItem(KEY, landed);
   window.localStorage.setItem(BLOCK_KEY, receipt.blockNumber.toString());
   return landed;

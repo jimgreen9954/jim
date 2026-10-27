@@ -13,8 +13,7 @@ import {
   type Hex,
 } from "viem";
 import { BSC, connectBsc } from "@/lib/bsc";
-import { GATE } from "@/lib/gate-chain";
-import { BSC_REBATE, KNOWN_XPERP, X_USDT } from "@/lib/perp";
+import { X_USDT } from "@/lib/perp";
 import { SEAL_REBATE_BYTECODE } from "@/lib/seal-rebate-artifact";
 import { getProvider } from "@/lib/wallet";
 import { DEPLOYED, connectXLayer, sealIds, XLAYER } from "@/lib/xlayer";
@@ -70,9 +69,9 @@ function client(chain: RebateChain) {
   return chain === "xlayer" ? xClient : bscClient;
 }
 
-const CLAIM_X = KNOWN_XPERP as Hex;
-const CLAIM_BSC = BSC_REBATE as Hex;
-const CLAIM_GATE = GATE as Hex;
+const CLAIM_X = "0xCAC69F02c06bfCa3bFDb1eaF1F4a60e17e718081" as Hex;
+const CLAIM_BSC = "0xce3511b6e909c9694826cfd5dbe434d457920eba" as Hex;
+const CLAIM_GATE = "0x798637b6d18cE053D69CfC0B08Ead105de352c11" as Hex;
 
 function books(chain: RebateChain): { address: Hex; gate: boolean }[] {
   if (chain === "xlayer") return [{ address: CLAIM_X, gate: false }];

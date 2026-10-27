@@ -1,4 +1,4 @@
-import { BSC, FEE_TO } from "@/lib/bsc";
+import { BSC, BSC_SAFE, XLAYER_SAFE } from "@/lib/bsc";
 import { GATE } from "@/lib/gate-chain";
 import { BSC_REBATE, KNOWN_XMARK, KNOWN_XPERP, X_USDT } from "@/lib/perp";
 import { DEPLOYED, XLAYER } from "@/lib/xlayer";
@@ -23,7 +23,8 @@ const rows: Row[] = [
   { name: "BEM", chain: "BSC", address: BSC.bem, href: bsc(BSC.bem) },
   { name: "USDT", chain: "BSC", address: BSC.usdt, href: bsc(BSC.usdt) },
   { name: "USDT0", chain: "X Layer", address: X_USDT, href: xlayer(X_USDT) },
-  { name: "收费地址", chain: "BSC · X Layer", address: FEE_TO, href: bsc(FEE_TO) },
+  { name: "BSC 收费", chain: "BSC", address: BSC_SAFE, href: bsc(BSC_SAFE) },
+  { name: "X Layer 收费", chain: "X Layer", address: XLAYER_SAFE, href: xlayer(XLAYER_SAFE) },
 ];
 
 export function AddressBook({ lang }: { lang: "zh" | "en" }) {
@@ -45,8 +46,8 @@ export function AddressBook({ lang }: { lang: "zh" | "en" }) {
       </ul>
       <p className="border-t border-gold/40 px-3 py-2 text-xs leading-6 text-ink/60">
         {lang === "zh"
-          ? "收费地址在 BSC 和 X Layer 上是同一个。现货台费和三本永续的千分之二都进这里。"
-          : "The fee address is the same on BSC and X Layer. Spot fees and the 0.2% from the three perpetuals go here."}
+          ? "BSC 的台费进 BSC 多签。X Layer 的台费进 X Layer 多签。两条不是同一个地址。"
+          : "BSC fees go to the BSC multisig. X Layer fees go to the X Layer multisig. They are not the same address."}
       </p>
     </section>
   );
@@ -60,7 +61,8 @@ function enName(name: string): string {
     晶体管永续: "Transistor perpetual",
     电路: "Circuits",
     晶体管: "Transistors",
-    收费地址: "Fee address",
+    "BSC 收费": "BSC fee",
+    "X Layer 收费": "X Layer fee",
   };
   return map[name] ?? name;
 }

@@ -1,12 +1,13 @@
 import { encodeAbiParameters, encodeFunctionData, formatUnits, parseAbi, parseUnits, type Hex } from "viem";
 import { BSC, BSC_SAFE, FEE_TO, connectBsc, readBalances } from "@/lib/bsc";
 import { GATE_BYTECODE } from "@/lib/gate-artifact";
+import { CREATE_CALL, createCallData, createdAddress } from "@/lib/create-call";
 import { getProvider } from "@/lib/wallet";
 
 const KEY = "tapeliquid-gate-perp";
 const FIXED = "tapeliquid-gate-fixed";
 const HOLD = "tapeliquid-gate-hold";
-export const GATE = "0x798637b6d18cE053D69CfC0B08Ead105de352c11";
+export const GATE = "0x2b909Ecc36a24D3dD3695a38B11Cb40302454899";
 const USDT = BSC.usdt;
 
 const abi = parseAbi([
@@ -52,11 +53,11 @@ export async function deployFixedGate(from: string): Promise<string> {
   const existing = window.localStorage.getItem(HOLD) ?? "";
   if (/^0x[a-fA-F0-9]{40}$/.test(existing)) return existing;
   const args = encodeAbiParameters([{ type: "address" }], [USDT]);
-  const data = (GATE_BYTECODE + args.slice(2)) as Hex;
-  const hash = await send(from, undefined, data, 8_000_000n);
+  const data = createCallData((GATE_BYTECODE + args.slice(2)) as Hex);
+  const hash = await send(from, CREATE_CALL, data, 8_000_000n);
   const receipt = await (await client()).getTransactionReceipt({ hash });
-  const addr = receipt.contractAddress ?? "";
-  if (receipt.status !== "success" || !addr) throw new Error("revert");
+  const addr = receipt.status === "success" ? createdAddress(receipt.logs) : "";
+  if (!addr) throw new Error("revert");
   window.localStorage.setItem(HOLD, addr);
   window.localStorage.setItem(FIXED, addr);
   return addr;
