@@ -1484,14 +1484,38 @@ export function bootCpunk(
       .map((desk) => `${DESK_LABEL[desk]} ${card.stats[desk]}`)
       .join(" · ");
     const guide = document.createElement("p");
-    guide.textContent = "用同一个钱包去 app.tapeliquid.net 交易，台费按这张卡返还。锁卡合约上线前还不能领取。";
-    const link = document.createElement("a");
-    link.className = "forge-go";
-    link.href = "https://app.tapeliquid.net";
-    link.target = "_blank";
-    link.rel = "noopener";
-    link.textContent = "去交易所确认身份";
-    view.append(swatch, title, mats, fee, stats, guide, link);
+    const passKey = card.ids.join(",");
+    let saved = "";
+    try {
+      saved = localStorage.getItem("tape-forge-pass") ?? "";
+    } catch {
+      saved = "";
+    }
+    if (saved === passKey) {
+      guide.textContent = "这张卡已确定。现在可以用同一个钱包去交易所确认身份，然后开始交易。台费减免每个自然月领一次，次月 1 日 0 点到 8 日 0 点（新加坡时间）内领取，过了就不能补。奖金池先到先得，谁都可以充，项目方也可以充。链上锁卡合约上线前，这个确定只记在这台浏览器，还不能领取。";
+      const link = document.createElement("a");
+      link.className = "forge-go";
+      link.href = "https://app.tapeliquid.net/";
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.textContent = "去交易所确认身份";
+      view.append(swatch, title, mats, fee, stats, guide, link);
+    } else {
+      guide.textContent = "先点确定。确定之后，才可以去交易所确认身份并开始交易。";
+      const confirm = document.createElement("button");
+      confirm.type = "button";
+      confirm.className = "forge-go";
+      confirm.textContent = "确定这张卡";
+      confirm.addEventListener("click", () => {
+        try {
+          localStorage.setItem("tape-forge-pass", passKey);
+        } catch {
+          guide.textContent = "这台浏览器没有记下。换一台之后要重新确定。";
+        }
+        paintForge();
+      }, { signal });
+      view.append(swatch, title, mats, fee, stats, guide, confirm);
+    }
     forgeOut.append(view);
   };
   forgeInput?.addEventListener("input", paintForge, { signal });

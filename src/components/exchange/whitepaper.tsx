@@ -139,10 +139,10 @@ const zhBody: Section[] = [
   {
     h: "合成卡",
     ps: [
-      "Circuit Punk 只在 nft.tapeliquid.net 合成，不在交易所合成。材料准备锁进合约，不销毁，七天后可拆回。锁卡合约上线前，市场页只显示结果，不能领取减免。一个钱包只认最高的一张，不能叠加。",
-      "铜片：2 张普通，类型不同。在 app.tapeliquid.net 交易，全场台费 0.16%，主属性 0.14%。银盖：3 张，至少 1 张少见，至少 2 种衬底。全场 0.12%，主属性 0.10%。金线：3 张，至少 1 张稀有，类型各不相同。全场 0.08%，主属性 0.06%。极紫外：1 张传说加任意 2 张，或 1 张史诗加 3 张少见及以上。全场 0.06%，主属性 0.04%，带绿边。仿极紫外：20 张普通，类型不能完全相同，全站最多 50 张。全场 0.08%，没有主属性再减。",
-      "主属性按材料算。衬底加成现货，金属层加成永续，键合成加成电路，对准加成发射。分数最高的一项是主属性，只有这一边走到更低的费率。基准仍是付出金额的 0.20%。池子手续费不动。",
-      "nft.tapeliquid.net 上买卖 Circuit Punk 仍只收合约里写死的 0.2%，不加版权费，合成卡也不减这笔。去 app.tapeliquid.net 用同一个钱包确认身份后，按上面的费率计算应返还的台费。锁卡合约上线前还不能领取。",
+      "Circuit Punk 只在 nft.tapeliquid.net 合成，不在交易所合成。先在市场页凑齐并点确定，然后才去 app.tapeliquid.net 确认身份，确认之后才开始交易。材料准备锁进合约，不销毁，七天后可拆回。锁卡合约上线前，页面上的确定只记在这台浏览器，不能领取。一个钱包只认最高的一张，不能叠加。",
+      "铜片：2 张普通，类型不同。全场台费 0.16%，主属性 0.14%。银盖：3 张，至少 1 张少见，至少 2 种衬底。全场 0.12%，主属性 0.10%。金线：3 张，至少 1 张稀有，类型各不相同。全场 0.08%，主属性 0.06%。极紫外：1 张传说加任意 2 张，或 1 张史诗加 3 张少见及以上。全场 0.06%，主属性 0.04%，带绿边。仿极紫外：20 张普通，类型不能完全相同，全站最多 50 张。全场 0.08%，没有主属性再减。",
+      "主属性按材料算。衬底加成现货，金属层加成永续，键合成加成电路，对准加成发射。分数最高的一项是主属性，只有这一边走到更低的费率。基准仍是付出金额的 0.20%。池子手续费不动。nft.tapeliquid.net 上买卖 Circuit Punk 仍只收合约里写死的 0.2%，不加版权费，合成卡也不减这笔。",
+      "交易之后，台费减免每个自然月领一次。新加坡时间，次月 1 日 0 点起到 8 日 0 点止，共 7 天。过了 8 日 0 点，这一月不能再领，也不能补。同一钱包同一月只领一次。奖金池先到先得，池子空了就停。任何地址都可以往奖金池充，项目方也可以充。没在 nft.tapeliquid.net 完成合成并确定的钱包，交易所不认。",
     ],
   },
   {
@@ -331,10 +331,10 @@ const en: Section[] = [
   {
     h: "Crafted card",
     ps: [
-      "Circuit Punk cards are crafted only at nft.tapeliquid.net, not on the exchange. The pieces are meant to lock in a contract, not burn, and can be taken back after seven days. Until that lock is deployed, the market only shows the result and nothing can be claimed. One wallet is recognized for its highest card, and cards do not stack.",
-      "Copper is two commons of different types. Trading at app.tapeliquid.net then pays 0.16 percent on every desk, or 0.14 percent on the card's main desk. Silver is three pieces, at least one uncommon, and at least two substrates: 0.12 percent, or 0.10 on the main desk. Gold is three pieces, at least one rare, each a different type: 0.08 percent, or 0.06 on the main desk. Extreme ultraviolet is one legend plus any two, or one epic plus three pieces that are uncommon or better: 0.06 percent, or 0.04 on the main desk, with a green edge. Faux extreme ultraviolet is twenty commons that are not all the same type, capped at fifty cards: 0.08 percent, with no further main-desk cut.",
-      "The main desk is the highest of the four scores. Substrate lifts spot, metal lifts perpetuals, bond lifts circuits, and alignment lifts launch. The desk fee starts at 0.20 percent of what is paid. The pool fee does not move.",
-      "Buying or selling a Circuit Punk at nft.tapeliquid.net still pays only the 0.2 percent written in that contract. There is no extra royalty, and the card does not cut that sale. The same wallet confirms the card at app.tapeliquid.net, and the desk fee is rebated down to the rate above. Nothing can be claimed until the lock contract is deployed.",
+      "Circuit Punk cards are crafted only at nft.tapeliquid.net, not on the exchange. Finish the craft there and confirm it before the same wallet confirms identity at app.tapeliquid.net and starts trading. The pieces are meant to lock in a contract, not burn, and can be taken back after seven days. Until that lock is deployed, the confirm button is stored only in this browser and nothing can be claimed. One wallet is recognized for its highest card, and cards do not stack.",
+      "Copper is two commons of different types: 0.16 percent on every desk, or 0.14 percent on the card's main desk. Silver is three pieces, at least one uncommon, and at least two substrates: 0.12 percent, or 0.10 on the main desk. Gold is three pieces, at least one rare, each a different type: 0.08 percent, or 0.06 on the main desk. Extreme ultraviolet is one legend plus any two, or one epic plus three pieces that are uncommon or better: 0.06 percent, or 0.04 on the main desk, with a green edge. Faux extreme ultraviolet is twenty commons that are not all the same type, capped at fifty cards: 0.08 percent, with no further main-desk cut.",
+      "The main desk is the highest of the four scores. Substrate lifts spot, metal lifts perpetuals, bond lifts circuits, and alignment lifts launch. The desk fee starts at 0.20 percent of what is paid. The pool fee does not move. Buying or selling a Circuit Punk at nft.tapeliquid.net still pays only the 0.2 percent written in that contract. There is no extra royalty, and the card does not cut that sale.",
+      "After trading, the desk-fee rebate is claimed once each calendar month. The window is the first seven days of the next month, Singapore time, from 00:00 on the 1st until 00:00 on the 8th. After that the month is gone and cannot be claimed later. One wallet claims a month once. The pool pays first come, first served, and stops when it is empty. Any address can fund the pool, including the project. A wallet that has not finished and confirmed a craft at nft.tapeliquid.net is not recognized.",
     ],
   },
   {
@@ -411,7 +411,7 @@ const specZh = [
   ["一张流片", "18,000 NAND，或 30,000 LATCH。更大写不进链"],
   ["电路何时在", "回执成功就在链上。页面名单稍后才显示"],
   ["电路现货", "按张。卖方实收 99.8%。日产能价是估算，没开工不是到账"],
-  ["合成卡", "在 app.tapeliquid.net 交易才减台费。铜片 0.16/0.14，银盖 0.12/0.10，金线 0.08/0.06，极紫外 0.06/0.04，仿极紫外 0.08。NFT 成交不减"],
+  ["合成卡", "先在 nft.tapeliquid.net 确定。再去 app.tapeliquid.net 交易。每月领一次，次月 7 天内，先到先得。铜片 0.16/0.14，银盖 0.12/0.10，金线 0.08/0.06，极紫外 0.06/0.04，仿极紫外 0.08"],
 ];
 
 const specEn = [
@@ -428,7 +428,7 @@ const specEn = [
   ["One tape-out", "18,000 NAND, or 30,000 LATCH. Larger than that does not fit"],
   ["When the circuit exists", "On chain when the receipt succeeds. The page list shows it later"],
   ["Circuit spot", "Sold whole. The seller receives 99.8 percent. The day price is an estimate, not a receipt"],
-  ["Crafted card", "The desk fee falls only when trading at app.tapeliquid.net. Copper 0.16/0.14, silver 0.12/0.10, gold 0.08/0.06, EUV 0.06/0.04, faux 0.08. NFT sales do not fall"],
+  ["Crafted card", "Confirm at nft.tapeliquid.net first, then trade at app.tapeliquid.net. Claim once a month, within the first 7 days, first come first served. Copper 0.16/0.14, silver 0.12/0.10, gold 0.08/0.06, EUV 0.06/0.04, faux 0.08"],
 ];
 
 const nowZh = [
