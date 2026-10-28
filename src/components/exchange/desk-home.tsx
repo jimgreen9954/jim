@@ -1,8 +1,10 @@
-import { Component, lazy, Suspense, type ReactNode, useEffect, useState } from "react";
+import { Component, lazy, Suspense, type ReactNode, useEffect, useRef, useState } from "react";
 import { ArriveHint } from "@/components/exchange/phone-desk";
 import { PoolSpot } from "@/components/exchange/pool-spot";
+import { RedGift } from "@/components/exchange/red-gift";
 import { useExchange } from "@/lib/exchange-store";
 import type { DeskView } from "@/components/exchange/desk-chrome";
+import { currentAccount, onAccount } from "@/lib/wallet";
 
 const MarketSheet = lazy(() => import("@/components/exchange/desk-chrome").then((mod) => ({ default: mod.MarketSheet })));
 
@@ -134,6 +136,82 @@ export function DeskHome({ desk, onDesk }: { desk: "spot" | "perp"; onDesk: (nex
         </Suspense>
       ) : null}
     </>
+  );
+}
+
+export function RedPocket() {
+  const zh = useExchange((s) => s.lang) === "zh";
+  const [open, setOpen] = useState(false);
+  const [account, setAccount] = useState<string | null>(currentAccount());
+  useEffect(() => onAccount(setAccount), []);
+  return (
+    <>
+      <PacketMark zh={zh} onOpen={() => setOpen(true)} />
+      {open ? (
+        <div className="fixed inset-0 z-[90] overflow-y-auto bg-black/80 px-3 py-8" onClick={() => setOpen(false)}>
+          <div className="mx-auto max-w-md" onClick={(event) => event.stopPropagation()}>
+            <RedGift account={account} zh={zh} forceOpen />
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function PacketMark({ zh, onOpen }: { zh: boolean; onOpen: () => void }) {
+  const [at, setAt] = useState(() => {
+    try {
+      const raw = localStorage.getItem("tl-pouch-pos");
+      if (raw) {
+        const saved = JSON.parse(raw) as { x?: number; y?: number };
+        if (typeof saved.x === "number" && typeof saved.y === "number") return { x: saved.x, y: saved.y };
+      }
+    } catch { /* ignore */ }
+    return { x: 8, y: 58 };
+  });
+  const drag = useRef<{ x: number; y: number; px: number; py: number; moved: boolean } | null>(null);
+
+  const place = (x: number, y: number) => ({
+    x: Math.min(Math.max(4, x), Math.max(4, window.innerWidth - 40)),
+    y: Math.min(Math.max(4, y), Math.max(4, window.innerHeight - 40)),
+  });
+
+  return (
+    <button
+      type="button"
+      aria-label={zh ? "红包锦囊" : "Red packet"}
+      className="fixed z-[80] h-8 w-8 touch-none"
+      style={{ left: at.x, top: at.y }}
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        drag.current = { x: at.x, y: at.y, px: event.clientX, py: event.clientY, moved: false };
+      }}
+      onPointerMove={(event) => {
+        const hold = drag.current;
+        if (!hold) return;
+        const dx = event.clientX - hold.px;
+        const dy = event.clientY - hold.py;
+        if (Math.abs(dx) + Math.abs(dy) > 4) hold.moved = true;
+        setAt(place(hold.x + dx, hold.y + dy));
+      }}
+      onPointerUp={() => {
+        const hold = drag.current;
+        drag.current = null;
+        if (!hold) return;
+        if (!hold.moved) onOpen();
+        else setAt((now) => {
+          try { localStorage.setItem("tl-pouch-pos", JSON.stringify(now)); } catch { /* ignore */ }
+          return now;
+        });
+      }}
+    >
+      <svg viewBox="0 0 32 36" className="h-8 w-8 drop-shadow" aria-hidden="true">
+        <rect x="4" y="8" width="24" height="24" rx="2" fill="#8c1c1c" />
+        <path d="M4 16h24" stroke="#e6c36a" strokeWidth="2" />
+        <path d="M16 8v24" stroke="#e6c36a" strokeWidth="2" />
+        <path d="M8 8c3-5 13-5 16 0" fill="#6e1212" stroke="#e6c36a" strokeWidth="1.4" />
+      </svg>
+    </button>
   );
 }
 

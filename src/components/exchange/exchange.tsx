@@ -4,7 +4,7 @@ import { copy } from "@/lib/copy";
 import { startPersistence, useExchange } from "@/lib/exchange-store";
 import { fmtPct, fmtPx, fmtUsd } from "@/lib/format";
 import { equity, sessionChange } from "@/lib/match-engine";
-import { DeskHome, rememberDesk } from "@/components/exchange/desk-home";
+import { DeskHome, RedPocket, rememberDesk } from "@/components/exchange/desk-home";
 import { ConnectButton } from "@/components/exchange/wallet-bar";
 import { SettingsMenu } from "@/components/exchange/settings-menu";
 import { LocaleMenu } from "@/components/exchange/locale-menu";
@@ -107,6 +107,7 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
           </div>
         </div>
         <TerminalBar night={night} setNight={setNight} />
+        <RedPocket />
       </div>
     </FeeLockProvider>
   );

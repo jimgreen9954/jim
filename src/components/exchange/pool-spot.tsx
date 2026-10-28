@@ -378,7 +378,7 @@ export function PoolSpot({ onMarkets, onOtc, onJump, pair = "usdt", onPair }: { 
       if (nextSide === "sell") {
         setNote(zh ? "第一笔是池子付 OKB。签完后下一笔才换成 USDT0。" : "The first signature pays OKB. The next one turns it into USDT0.");
         await sellTapeForUsdt0(from, want);
-        markDeskFill("xlayer");
+        markDeskFill("xlayer", from, "spot", Number(formatUnits(want, 8)) * (midRef.current || 0));
         setNote("");
         return;
       }
@@ -403,7 +403,7 @@ export function PoolSpot({ onMarkets, onOtc, onJump, pair = "usdt", onPair }: { 
       } catch {
         throw new Error("leg");
       }
-      markDeskFill("xlayer");
+      markDeskFill("xlayer", from, "spot", Number(formatUnits(usdt, 6)));
       return;
     }
     const nextQuote: PoolQuote = which === "okb" ? 1 : 0;
@@ -412,14 +412,14 @@ export function PoolSpot({ onMarkets, onOtc, onJump, pair = "usdt", onPair }: { 
     const quoteSide = nextQuote === 0 ? live?.bemQuote ?? 0n : live?.okbQuote ?? 0n;
     if (nextSide === "sell") {
       await swapPool(from, nextQuote, true, want);
-      markDeskFill("xlayer");
+      markDeskFill("xlayer", from, "spot", Number(formatUnits(want, 8)) * (midRef.current || 0));
       return;
     }
     let amountIn = quoteInForTape(tape, quoteSide, want);
     const out = await previewPool(nextQuote, false, amountIn);
     if (out > 0n && out < want) amountIn = (amountIn * want) / out + 1n;
     await swapPool(from, nextQuote, false, amountIn);
-    markDeskFill("xlayer");
+    markDeskFill("xlayer", from, "spot", Number(formatUnits(want, 8)) * (midRef.current || 0));
   };
 
   useEffect(() => {

@@ -41,6 +41,7 @@ import type { SpotFrame } from "@/lib/spot-ohlcv";
 import { connectX, okbAddressUrl, okbPrice, okbPrints, okbTxUrl, OKB, quoteOkb, readOkbPurse, swapOkb, xCap } from "@/lib/okb";
 import { XLAYER } from "@/lib/xlayer";
 import { currentAccount, connectKind, onAccount, onOpenLink } from "@/lib/wallet";
+import { markDeskFill } from "@/lib/red-packet";
 import { rememberFill, TradeLog } from "@/components/exchange/trade-foot";
 import { Kline } from "@/components/exchange/kline";
 import { CoinMark } from "@/components/exchange/coin-mark";
@@ -317,11 +318,16 @@ export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?:
     if (!nextAmount.trim()) throw new Error("amount");
     const paying = nextPair !== "okb" && nextPair !== "bnb" && nextUnit === "bnb";
     const listed = isErcKey(nextPair) ? ERC_BOOKS[nextPair] : null;
-    return nextPair === "okb"
-      ? swapOkb(from, nextSide, nextAmount, min)
+    const tx = nextPair === "okb"
+      ? await swapOkb(from, nextSide, nextAmount, min)
       : paying
-        ? swapWithBnb(from, listed ? listed.token : BSC.bem, listed ? listed.decimals : BSC.bemDecimals, listed ? listed.fee : BSC.fee, nextSide, nextAmount, min)
-        : nextPair === "bnb" ? swapBnb(from, nextSide, nextAmount, min) : isErcKey(nextPair) ? swapListed(from, nextPair, nextSide, nextAmount, min) : swapBem(from, nextSide, nextAmount, min);
+        ? await swapWithBnb(from, listed ? listed.token : BSC.bem, listed ? listed.decimals : BSC.bemDecimals, listed ? listed.fee : BSC.fee, nextSide, nextAmount, min)
+        : nextPair === "bnb" ? await swapBnb(from, nextSide, nextAmount, min) : isErcKey(nextPair) ? await swapListed(from, nextPair, nextSide, nextAmount, min) : await swapBem(from, nextSide, nextAmount, min);
+    const n = Number(nextAmount);
+    const px = Number(price);
+    const usd = nextUnit === "usdt" && nextSide === "buy" ? n : px > 0 ? n * px : 0;
+    markDeskFill(nextPair === "okb" ? "xlayer" : "bsc", from, "spot", usd);
+    return tx;
   };
 
   const max = (pct: number) => {

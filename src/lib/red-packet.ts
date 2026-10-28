@@ -1,6 +1,7 @@
 import {
   concat,
   createPublicClient,
+  decodeEventLog,
   encodeAbiParameters,
   encodeFunctionData,
   formatUnits,
@@ -84,12 +85,50 @@ export function sgDay(ts = Math.floor(Date.now() / 1000)): number {
   return Math.floor((ts + 8 * 3600) / 86400);
 }
 
-export function markDeskFill(chain: GiftChain) {
+export function markDeskFill(chain: GiftChain, account?: string, leg?: "spot" | "perp", usd?: number) {
   try {
     localStorage.setItem(`tl-red-fill:${chain}:${sgDay()}`, "1");
+    if (account && leg && usd && usd > 0) addDeskVolume(chain, account, leg, usd);
   } catch {
     /* ignore */
   }
+}
+
+export function addDeskVolume(chain: GiftChain, account: string, leg: "spot" | "perp", usd: number) {
+  if (!account || !(usd > 0)) return;
+  const prev = readDeskVolume(chain, account);
+  prev[leg] = Math.round((prev[leg] + usd) * 100) / 100;
+  localStorage.setItem(volKey(chain, account), JSON.stringify(prev));
+}
+
+export function readDeskVolume(chain: GiftChain, account: string | null): { spot: number; perp: number } {
+  if (!account) return { spot: 0, perp: 0 };
+  try {
+    const raw = localStorage.getItem(volKey(chain, account));
+    if (!raw) return { spot: 0, perp: 0 };
+    const parsed = JSON.parse(raw) as { spot?: number; perp?: number };
+    return { spot: Number(parsed.spot) || 0, perp: Number(parsed.perp) || 0 };
+  } catch {
+    return { spot: 0, perp: 0 };
+  }
+}
+
+function volKey(chain: GiftChain, account: string) {
+  return `tl-red-vol:${chain}:${sgDay()}:${account.toLowerCase()}`;
+}
+
+export function needUsd(raw: bigint): number {
+  return Number(raw) / 1e6;
+}
+
+export function meetsVolume(gate: number, spotNeed: bigint, perpNeed: bigint, vol: { spot: number; perp: number }): boolean {
+  const spot = needUsd(spotNeed);
+  const perp = needUsd(perpNeed);
+  if (spot <= 0 && perp <= 0) return false;
+  const spotOk = spot <= 0 || vol.spot + 1e-9 >= spot;
+  const perpOk = perp <= 0 || vol.perp + 1e-9 >= perp;
+  if (gate === 1) return spotOk && perpOk;
+  return (spot > 0 && vol.spot + 1e-9 >= spot) || (perp > 0 && vol.perp + 1e-9 >= perp);
 }
 
 export function filledToday(chain: GiftChain): boolean {
@@ -163,9 +202,14 @@ export type RedRule = {
   hi: bigint;
   packetsLeft: bigint;
   dayCap: bigint;
+  spotNeed: bigint;
+  perpNeed: bigint;
+  gate: number;
+  credit: bigint;
   claimedToday: bigint;
   balance: bigint;
   lastDay: bigint;
+  ready: boolean;
   asset: GiftAsset | null;
 };
 
@@ -180,9 +224,14 @@ const emptyAsset = (chain: GiftChain): RedRule => ({
   hi: 0n,
   packetsLeft: 0n,
   dayCap: 0n,
+  spotNeed: 0n,
+  perpNeed: 0n,
+  gate: 0,
+  credit: 0n,
   claimedToday: 0n,
   balance: 0n,
   lastDay: 0n,
+  ready: false,
   asset: null,
 });
 
@@ -190,7 +239,8 @@ export async function readRed(chain: GiftChain, account: string | null): Promise
   if (!(await redCode(chain))) return emptyAsset(chain);
   const pool = RED_PACKET[chain];
   const c = client(chain);
-  const [token, mode, fixedAmt, lo, hi, packetsLeft, dayCap, claimedToday, lastDay] = await Promise.all([
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  const [token, mode, fixedAmt, lo, hi, packetsLeft, dayCap, claimedToday, lastDay, ready, spotNeed, perpNeed, gate, credit] = await Promise.all([
     c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "token" }),
     c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "mode" }),
     c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "fixedAmt" }),
@@ -198,12 +248,19 @@ export async function readRed(chain: GiftChain, account: string | null): Promise
     c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "hi" }),
     c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "packetsLeft" }),
     c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "dayCap" }),
-    c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "claimedToday" }),
+    c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "claimsToday", args: [now] }),
     account
       ? c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "lastDay", args: [account as Hex] })
       : Promise.resolve(0n),
+    c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "ready" }),
+    c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "spotNeed" }),
+    c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "perpNeed" }),
+    c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "gate" }),
+    account
+      ? c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "credit", args: [account as Hex] })
+      : Promise.resolve(0n),
   ]);
-  const asset = GIFT_ASSETS[chain].find((row) => row.token.toLowerCase() === token.toLowerCase()) ?? null;
+  const asset = ready ? GIFT_ASSETS[chain].find((row) => row.token.toLowerCase() === token.toLowerCase()) ?? null : null;
   const balance = token === ZERO
     ? await c.getBalance({ address: pool })
     : await c.readContract({ address: token, abi: erc20, functionName: "balanceOf", args: [pool] });
@@ -218,9 +275,14 @@ export async function readRed(chain: GiftChain, account: string | null): Promise
     hi,
     packetsLeft,
     dayCap,
+    spotNeed,
+    perpNeed,
+    gate: Number(gate),
+    credit,
     claimedToday,
     balance,
     lastDay,
+    ready,
     asset,
   };
 }
@@ -252,11 +314,40 @@ export async function fundRed(chain: GiftChain, from: string, text: string, asse
   return hash;
 }
 
-export async function claimRed(chain: GiftChain, from: string): Promise<Hex> {
-  const hash = await send(chain, from, RED_PACKET[chain], encodeFunctionData({ abi: RED_PACKET_ABI, functionName: "claim" }));
+export async function withdrawRed(chain: GiftChain, from: string, text: string, asset: GiftAsset): Promise<Hex> {
+  const amount = parseUnits(text.trim(), asset.decimals);
+  if (amount <= 0n) throw new Error("amount");
+  const hash = await send(chain, from, RED_PACKET[chain], encodeFunctionData({ abi: RED_PACKET_ABI, functionName: "withdraw", args: [amount] }));
   await wait(chain, hash);
-  rememberClaim();
   return hash;
+}
+
+export async function claimRed(chain: GiftChain, from: string): Promise<{ hash: Hex; amount: bigint }> {
+  const day = sgDay();
+  const [here, other] = await Promise.all([
+    readRed(chain, from),
+    readRed(chain === "xlayer" ? "bsc" : "xlayer", from),
+  ]);
+  if (here.lastDay === BigInt(day) || other.lastDay === BigInt(day) || claimedHere()) throw new Error("day");
+  const hash = await send(chain, from, RED_PACKET[chain], encodeFunctionData({ abi: RED_PACKET_ABI, functionName: "claim" }));
+  let receipt;
+  try {
+    receipt = await client(chain).waitForTransactionReceipt({ hash, timeout: 120_000 });
+  } catch {
+    throw new TxPending(hash);
+  }
+  if (receipt.status !== "success") throw new Error("revert");
+  rememberClaim();
+  let amount = 0n;
+  for (const log of receipt.logs) {
+    try {
+      const parsed = decodeEventLog({ abi: RED_PACKET_ABI, data: log.data, topics: log.topics });
+      if (parsed.eventName === "Claimed") amount = parsed.args.amount;
+    } catch {
+      /* not this event */
+    }
+  }
+  return { hash, amount };
 }
 
 export async function setRedRule(
@@ -269,6 +360,9 @@ export async function setRedRule(
   hiText: string,
   packets: string,
   dayCap: string,
+  spotText: string,
+  perpText: string,
+  gate: number,
 ): Promise<Hex> {
   const fixedAmt = parseUnits(fixedText.trim() || "0", asset.decimals);
   const lo = parseUnits(loText.trim() || "0", asset.decimals);
@@ -280,7 +374,18 @@ export async function setRedRule(
     encodeFunctionData({
       abi: RED_PACKET_ABI,
       functionName: "setRule",
-      args: [asset.token, mode, fixedAmt, lo, hi, BigInt(packets.trim() || "0"), BigInt(dayCap.trim() || "0")],
+      args: [
+        asset.token,
+        mode,
+        fixedAmt,
+        lo,
+        hi,
+        BigInt(packets.trim() || "0"),
+        BigInt(dayCap.trim() || "0"),
+        parseUnits(spotText.trim() || "0", 6),
+        parseUnits(perpText.trim() || "0", 6),
+        gate,
+      ],
     }),
   );
   await wait(chain, hash);
