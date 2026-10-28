@@ -1,11 +1,14 @@
-import { Component, type ReactNode, useEffect, useState } from "react";
-import { MarketSheet, type DeskView } from "@/components/exchange/desk-chrome";
+import { Component, lazy, Suspense, type ReactNode, useEffect, useState } from "react";
 import { ArriveHint } from "@/components/exchange/phone-desk";
-import { RealPerp } from "@/components/exchange/real-perp";
-import { SpotDesk } from "@/components/exchange/spot-desk";
 import { PoolSpot } from "@/components/exchange/pool-spot";
-import { TapeTerminal } from "@/components/exchange/tape-terminal";
 import { useExchange } from "@/lib/exchange-store";
+import type { DeskView } from "@/components/exchange/desk-chrome";
+
+const MarketSheet = lazy(() => import("@/components/exchange/desk-chrome").then((mod) => ({ default: mod.MarketSheet })));
+
+const RealPerp = lazy(() => import("@/components/exchange/real-perp").then((mod) => ({ default: mod.RealPerp })));
+const SpotDesk = lazy(() => import("@/components/exchange/spot-desk").then((mod) => ({ default: mod.SpotDesk })));
+const TapeTerminal = lazy(() => import("@/components/exchange/tape-terminal").then((mod) => ({ default: mod.TapeTerminal })));
 
 let held: DeskView = { kind: "tape", market: 0 };
 let wantLp = false;
@@ -32,7 +35,7 @@ export function DeskHome({ desk, onDesk }: { desk: "spot" | "perp"; onDesk: (nex
     const onHome = (event: Event) => {
       const detail = (event as CustomEvent<string>).detail;
       const next: DeskView = detail === "tape-perp" || detail === "perp"
-        ? { kind: "perp", chain: "xlayer", coin: "tape" }
+        ? (held.kind === "perp" ? held : { kind: "perp", chain: "xlayer", coin: "bem" })
         : { kind: "tape", market: 0 };
       held = next;
       wantLp = false;
@@ -82,12 +85,13 @@ export function DeskHome({ desk, onDesk }: { desk: "spot" | "perp"; onDesk: (nex
   const pool = !showPerp && view.kind === "tape" && view.market === 0;
   const book = !showPerp && (view.kind === "otc" || (view.kind === "tape" && view.market !== 0));
   const showCake = !showPerp && view.kind === "pancake";
-  const launch = view.kind === "perp" ? view : { kind: "perp" as const, chain: "xlayer" as const, coin: "tape" as const };
+  const launch = view.kind === "perp" ? view : { kind: "perp" as const, chain: "bsc" as const, coin: "bem" as const };
 
   return (
     <>
       <ArriveHint zh={zh} />
       {showPerp ? (
+        <Suspense fallback={null}>
         <DeskGuard key={`${launch.chain}-${launch.coin}`} reset={`${launch.chain}-${launch.coin}`}>
         <RealPerp
           key={`${launch.chain}-${launch.coin}`}
@@ -95,6 +99,7 @@ export function DeskHome({ desk, onDesk }: { desk: "spot" | "perp"; onDesk: (nex
           onMarkets={() => { setSheet("perp"); setOpen(true); }}
         />
         </DeskGuard>
+        </Suspense>
       ) : null}
       {pool ? (
         <PoolSpot
@@ -106,19 +111,28 @@ export function DeskHome({ desk, onDesk }: { desk: "spot" | "perp"; onDesk: (nex
           }}
           onMarkets={() => { setSheet("spot"); setOpen(true); }}
           onOtc={() => setView({ kind: "otc", market: 0 })}
+          onJump={pick}
         />
       ) : null}
       {book ? (
+        <Suspense fallback={null}>
         <TapeTerminal
           market={view.kind === "otc" || view.kind === "tape" ? view.market : 0}
           otc={view.kind === "otc"}
           onMarkets={() => { setSheet("spot"); setOpen(true); }}
         />
+        </Suspense>
       ) : null}
       {showCake ? (
+        <Suspense fallback={null}>
         <SpotDesk focus={view.kind === "pancake" ? view.pair : "bem"} openLp={lp} onMarkets={() => { setSheet("spot"); setOpen(true); }} />
+        </Suspense>
       ) : null}
-      {open ? <MarketSheet zh={zh} initial={sheet} onClose={() => setOpen(false)} onPick={pick} /> : null}
+      {open ? (
+        <Suspense fallback={null}>
+          <MarketSheet zh={zh} initial={sheet} onClose={() => setOpen(false)} onPick={pick} />
+        </Suspense>
+      ) : null}
     </>
   );
 }
@@ -135,7 +149,6 @@ class DeskGuard extends Component<{ children: ReactNode; reset: string }, { bad:
     if (!this.state.bad) return this.props.children;
     return (
       <section className="border border-gold bg-card px-4 py-8">
-        <p className="text-sm">这一张合约没有打开。行情还在，页面不再停在空白。</p>
         <button type="button" className="mt-3 h-10 bg-ink px-3 text-sm" onClick={() => this.setState({ bad: false })}>再打开</button>
       </section>
     );

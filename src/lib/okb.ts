@@ -228,7 +228,17 @@ export async function swapOkb(from: string, side: "buy" | "sell", amount: string
       paid = true;
     }
     if (parts.desk > 0n) {
-      await stepX(feeKey, () => send(from, OKB.usdt, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [XLAYER_SAFE, parts.desk] })));
+      let routed = false;
+      try {
+        const { routeDeskFee } = await import("@/lib/card-pool");
+        routed = await routeDeskFee("xlayer", from, parts.desk, 0);
+      } catch (err) {
+        if (err instanceof TxPending) throw err;
+        routed = false;
+      }
+      if (!routed) {
+        await stepX(feeKey, () => send(from, OKB.usdt, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [XLAYER_SAFE, parts.desk] })));
+      }
       paid = true;
     }
     const data = encodeFunctionData({

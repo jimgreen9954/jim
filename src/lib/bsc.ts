@@ -43,9 +43,9 @@ export const BSC = {
   slippageBps: 100,
 };
 
-export const FEE_TO = "0x823b9F6A93Ac44Ce5A469823A336c15b6117054D" as const;
-export const BSC_SAFE = "0xE51C19aE6E4261Ed329CC54F1120Cf0Ae09364Bd" as const;
-export const XLAYER_SAFE = "0xb4D6039394c8B97C3AC3234aa07011B564Fcb88c" as const;
+import { FEE_TO, BSC_SAFE, XLAYER_SAFE, TxPending } from "@/lib/chain-marks";
+
+export { FEE_TO, BSC_SAFE, XLAYER_SAFE, TxPending };
 export const DESK_FEE_BPS = 20;
 export const BNB_GAS_RESERVE = 3_000_000_000_000_000n;
 
@@ -108,16 +108,6 @@ export async function waitReceipt(hash: Hex) {
     }
   }
   throw last instanceof Error ? last : new Error("receipt");
-}
-
-/** Sent, but no receipt yet. The hash is the only thing that may be retried. */
-export class TxPending extends Error {
-  hash: Hex;
-  paid = false;
-  constructor(hash: Hex) {
-    super("pending");
-    this.hash = hash;
-  }
 }
 
 export async function waitOk(hash: Hex) {
@@ -446,8 +436,20 @@ async function payDeskToken(from: string, token: Hex, parts: DeskParts, feeKey: 
     await step(`${feeKey}:ref`, () => send(from, token, data));
   }
   if (parts.desk > 0n) {
-    const data = encodeFunctionData({ abi: erc20, functionName: "transfer", args: [BSC_SAFE, parts.desk] });
-    await step(feeKey, () => send(from, token, data));
+    let routed = false;
+    if (token.toLowerCase() === BSC.usdt.toLowerCase()) {
+      try {
+        const { routeDeskFee } = await import("@/lib/card-pool");
+        routed = await routeDeskFee("bsc", from, parts.desk, 0);
+      } catch (err) {
+        if (err instanceof TxPending) throw err;
+        routed = false;
+      }
+    }
+    if (!routed) {
+      const data = encodeFunctionData({ abi: erc20, functionName: "transfer", args: [BSC_SAFE, parts.desk] });
+      await step(feeKey, () => send(from, token, data));
+    }
   }
   return true;
 }

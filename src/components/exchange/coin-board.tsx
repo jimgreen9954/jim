@@ -17,6 +17,7 @@ import {
 } from "@/lib/bsc";
 import { inviteCut, referrerOf } from "@/lib/invite-cut";
 import { rememberFill, TradeLog, TradeQuota } from "@/components/exchange/trade-foot";
+import { markDeskFill } from "@/lib/red-packet";
 import { currentAccount, onAccount } from "@/lib/wallet";
 
 const NAME = { btc: "BTC", eth: "ETH", zec: "ZEC" } as const;
@@ -101,6 +102,7 @@ export function CoinBoard({ coin, lang }: { coin: "btc" | "eth" | "zec"; lang: "
         setAccount(from);
         const tx = await swapListed(from, coin as ErcKey, side, amount, floor);
         setHash(tx);
+        markDeskFill("bsc");
         rememberFill(`${zh ? (side === "buy" ? "买入" : "卖出") : side} ${amount} ${symbol}`, txUrl(tx));
         setNote(zh ? "已经成交，币在这个钱包里。" : "Filled. The coin is in this wallet.");
         setBad(false);

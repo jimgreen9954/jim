@@ -14,6 +14,8 @@ import { LOCK_TERMS, readLocks, type LockSeat } from "@/lib/tape-lock";
 import { readTapePool, showQuote, showTape, TAPE_BEM, TAPE_TERMS, TAPE_TOKEN, TAPE_USDT, type TapePosition } from "@/lib/tape-pool";
 import { readOpenBook } from "@/lib/tape-open-candles";
 import { PayDesk } from "@/components/exchange/pay-desk";
+import { FeePass } from "@/components/exchange/fee-pass";
+import { RedGift } from "@/components/exchange/red-gift";
 import { tapeText } from "@/lib/tape-mine";
 
 function money(n: number): string {
@@ -542,6 +544,8 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
           <p className="border-t border-gold/30 pt-2"><span className="text-ink/50">{zh ? "永续" : "Perps"} </span>{perp}</p>
         </div>
       </div>
+      <FeePass account={account} zh={zh} />
+      <RedGift account={account} zh={zh} />
 
       <div className="border border-gold">
         <button type="button" className="flex w-full items-center justify-between px-4 py-3 text-left" onClick={() => setHoldOpen((open) => !open)}>

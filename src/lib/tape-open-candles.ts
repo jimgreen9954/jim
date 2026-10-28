@@ -79,7 +79,10 @@ async function readWindow(from: bigint, to: bigint): Promise<{ logs: Awaited<Ret
 function kick() {
   if (scanning) return;
   scanning = true;
-  void (async () => {
+  setTimeout(() => { void scanLogs(); }, 2000);
+}
+
+async function scanLogs() {
     restore();
     if (!openAt) {
       openAt = await stamp(OPEN_BLOCK);
@@ -128,7 +131,6 @@ function kick() {
         await new Promise((resolve) => setTimeout(resolve, 6_000));
       }
     }
-  })();
 }
 
 function quotePx(row: Print): number {
@@ -215,17 +217,43 @@ export type OpenBook = {
   prints: OpenPrint[];
 };
 
+type Snap = { bem: readonly [bigint, bigint, bigint]; okb: readonly [bigint, bigint, bigint]; bemPx: number; okbPx: number; at: number };
+let snap: Snap | null = null;
+let snapFlight: Promise<Snap> | null = null;
+
+async function poolSnap(): Promise<Snap> {
+  if (snap && Date.now() - snap.at < 8_000) return snap;
+  if (snapFlight) return snapFlight;
+  snapFlight = (async () => {
+    const bemUsdSoon = Promise.race([
+      bemUsd(),
+      new Promise<number>((resolve) => setTimeout(() => resolve(snap?.bemPx ?? 0), 450)),
+    ]);
+    const [bem, okb, okbRaw, bemPx] = await Promise.all([
+      official.readContract({ address: POOL, abi: poolAbi, functionName: "bemPool" }),
+      official.readContract({ address: POOL, abi: poolAbi, functionName: "okbPool" }),
+      quoteOkb("sell", 10n ** 18n).catch(() => 0n),
+      bemUsdSoon,
+    ]);
+    const next: Snap = { bem, okb, bemPx: bemPx > 0 ? bemPx : snap?.bemPx ?? 0, okbPx: Number(formatUnits(okbRaw, 6)), at: Date.now() };
+    snap = next;
+    if (!(bemPx > 0)) {
+      void bemUsd().then((n) => {
+        if (n > 0 && snap) snap = { ...snap, bemPx: n, at: Date.now() };
+      });
+    }
+    return next;
+  })().finally(() => {
+    snapFlight = null;
+  });
+  return snapFlight;
+}
+
 /** Reserves, dollar mid, and the swaps already read. The book is this pool, not the workshop. */
 export async function readOpenBook(): Promise<OpenBook> {
   kick();
   restore();
-  const [bem, okb, bemPx, okbRaw] = await Promise.all([
-    official.readContract({ address: POOL, abi: poolAbi, functionName: "bemPool" }),
-    official.readContract({ address: POOL, abi: poolAbi, functionName: "okbPool" }),
-    bemUsd(),
-    quoteOkb("sell", 10n ** 18n).catch(() => 0n),
-  ]);
-  const okbPx = Number(formatUnits(okbRaw, 6));
+  const { bem, okb, bemPx, okbPx } = await poolSnap();
   const bemQuote = bemPx > 0 ? bemPx : 0;
   const price = dollarMark(bem, okb, bemQuote, okbPx);
   const now = Math.floor(Date.now() / 1000);
@@ -274,13 +302,7 @@ async function bemUsd(): Promise<number> {
 /** Candles from the open TAPE pool, not a Gecko listing of the old lock. */
 export async function tapePoolCandles(frame: CandleFrame, pair: TapeSpot = "usdt"): Promise<Candle[]> {
   kick();
-  const [bem, okb, bemPx, okbRaw] = await Promise.all([
-    official.readContract({ address: POOL, abi: poolAbi, functionName: "bemPool" }),
-    official.readContract({ address: POOL, abi: poolAbi, functionName: "okbPool" }),
-    bemUsd(),
-    quoteOkb("sell", 10n ** 18n).catch(() => 0n),
-  ]);
-  const okbPx = Number(formatUnits(okbRaw, 6));
+  const { bem, okb, bemPx, okbPx } = await poolSnap();
   const bemQuote = bemPx > 0 ? bemPx : 0;
   const price = dollarMark(bem, okb, bemQuote, okbPx);
   const bemMid = bem[0] > 0n && bem[1] > 0n ? Number(formatUnits(bem[1], 8)) / Number(formatUnits(bem[0], 8)) : 0;

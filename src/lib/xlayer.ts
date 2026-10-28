@@ -10,12 +10,10 @@ import {
   type Hex,
 } from "viem";
 
+import { XLAYER as X_BASE } from "@/lib/chain-marks";
+
 export const XLAYER = {
-  chainId: 196,
-  hex: "0xc4",
-  name: "X Layer",
-  rpc: "https://rpc.xlayer.tech",
-  explorer: "https://www.oklink.com/xlayer",
+  ...X_BASE,
   factory: "0x1f09daefa827f02cbb40967cc91b259763760761" as const,
   create: "https://tapeout.net/#create/xlayer",
   supply: 2_100_000n,

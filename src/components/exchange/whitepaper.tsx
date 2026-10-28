@@ -20,7 +20,7 @@ const zhBody: Section[] = [
     h: "产品",
     ps: [
       "TAPELIQUID 是以晶圆为记账单位的交易所。现货与永续在交易台。铸造、流片与晶体管合约在工房。TAPE 是唯一平台币，仅发行于 X Layer，没有第二枚。BEM 属于 TapeOut 协议官方代表。",
-      "练习记录只存在于本机浏览器，不进入任何合约。个人中心仅展示当前钱包的资产与转出。新手礼包不再放在页面上。",
+      "练习记录只存在于本机浏览器，不进入任何合约。个人中心仅展示当前钱包的资产与转出。新手礼包在个人中心，默认收着。",
       "没有对应合约的事项，页面不提供按钮。能够签名的规则写在前面。尚未上链的安排写在后面。",
     ],
   },
@@ -149,11 +149,11 @@ const zhBody: Section[] = [
   {
     h: "奖励",
     ps: [
-      "新手礼包不再放在页面上，也不是充值入口。以前部署的两份奖池合约还在链上，这一页不代领，也不再放入。",
-      "X Layer 上放入的是 TAPELIQUID 的 NAND。BSC 上放入的是 BEM。放入的数量记在这个地址的份额上。只有这个地址能取回还没被领走的部分。别人不能把你的整笔转走。",
-      "有人按规则领取时，池子变少，每个放入地址能取回的份额一起变少。池子空了就停。再放入，才继续发。",
-      "领 NAND：打开个人中心的新手礼包，点一笔保证金仍不少于 5 USDT0 的 X Layer 永续，先记下再领 10 个。一个地址最多 5 次。领 BEM：点 BSC 的 BEM 永续或晶体管永续，每笔保证金仍不少于 5 USDT，记满 11 笔领一次 0.1。现货、加池、流片都不算。开 5 美元会先扣千分之二，链上剩约 4.99，礼包不认。要被认，保证金至少开 5.02 美元。两个奖池现在有余额，够按规则发。",
-      "NAND 礼包在 X Layer，地址 0x5374DFfD3186FfEDAC46Cc6c9545B9e9e2CEF45b，认现在这笔 X Layer 永续。池子里有 10,000 个 NAND。BEM 礼包在 BSC，地址 0xa29f86319E66DAdF1e30548bcC593fa91CBB7278，认 BSC 的 BEM 永续和现在这笔晶体管合约。池子里有 4 个 BEM。两份都没有管理员。放进去的只有原地址能取回还没被领走的部分。",
+      "新手礼包在个人中心，默认收着，打开才进。每天只能参加一次，BSC 和 X Layer 算同一天。领过一条，另一条当天关掉。有资格却当天不领，过了新加坡时间 0 点作废，第二天重新计算，不把昨天没领的加进去。",
+      "两本红包池谁都可以充，谁都可以领。充进去的不能再取回，只能被领走。领什么、怎么发，只有部署者能改。X Layer 的部署者是该链多签，可选 OKB、TAPE、X Layer 的 BEM、USDT0。BSC 的部署者是该链多签，可选 BNB、BEM、USDT、比特币、黄金、标普 500、ETH。用户看不到改规则的那一页。",
+      "玩法三档，写进合约。固定：每个红包同一个数量。随机：在部署者写的最少和最多之间取一个。拼手气：这一轮份数由部署者定，最后一份拿走剩余，前面每一份不超过当时人均的两倍。每天最多几人也可以写，0 是不限。池子不够这一份就停。再充入，才继续。",
+      "页面在本机记下当天的现货或合约成交之后才放开领取。换浏览器或清掉记录，要再成交一次。合约本身不读那笔成交，只认新加坡时间的一天一次、当日人数上限和池子余额。直接对合约发交易的人，可以不经过页面的成交记录。领到的时候页面弹出红包，并出财神祝贺。",
+      "以前的 NAND 礼包仍在 X Layer 0x5374DFfD3186FfEDAC46Cc6c9545B9e9e2CEF45b，BEM 礼包仍在 BSC 0xa29f86319E66DAdF1e30548bcC593fa91CBB7278。这一页不再代领，也不再往那两份里放。",
     ],
   },
   {
@@ -201,7 +201,7 @@ const en: Section[] = [
     h: "Product",
     ps: [
       "TAPELIQUID is an exchange that accounts in wafers. Spot and perpetuals are on the desk. Minting, tape-out and the transistor book are in the workshop. TAPE is the only platform token. It is issued only on X Layer. BEM is the official representative of the TapeOut protocol.",
-      "Practice records remain in this browser and never enter a contract. The account page shows only the connected wallet's balances and transfers. The starter gift is no longer shown.",
+      "Practice records remain in this browser and never enter a contract. The account page shows only the connected wallet's balances and transfers. The starter gift sits in the account page and stays closed until opened.",
       "An action without a contract has no button. Rules that can be signed are stated first. Arrangements that are not yet on chain follow.",
     ],
   },
@@ -331,11 +331,11 @@ const en: Section[] = [
   {
     h: "Rewards",
     ps: [
-      "The starter gift is no longer shown, and it is not a deposit product. The two reward contracts remain on chain. This page does not claim from them and does not add to them.",
-      "NAND added on X Layer is TAPELIQUID NAND. BEM added on BSC is BEM. What you add is your share. Only that address can take back what has not been claimed. Nobody can take your whole amount.",
-      "When someone claims under the rule, the pool shrinks, and every remaining share shrinks with it. An empty pool stops. It pays again only after someone adds more.",
-      "NAND pays 10, at most five times per address. Open the starter gift and select an X Layer perpetual fill whose margin is still at least 5 USDT0. BEM pays 0.1 once after 11 selected fills on the BSC BEM perpetual or the transistor perpetual, each with margin still at least 5 USDT. Spot, liquidity, and tape-out do not count. A 5 dollar order loses 0.2 percent first, so about 4.99 remains and the gift rejects it. Open at least 5.02 dollars of margin. Both pools currently have a balance and can pay under this rule.",
-      "The NAND gift is on X Layer at 0x5374DFfD3186FfEDAC46Cc6c9545B9e9e2CEF45b. It reads the current X Layer perpetual. The pool holds 10,000 NAND. The BEM gift is on BSC at 0xa29f86319E66DAdF1e30548bcC593fa91CBB7278. It reads the BSC BEM perpetual and the current transistor book. The pool holds 4 BEM. Neither has an admin. Only the address that added funds can take back what has not been claimed.",
+      "The starter gift is on the account page, closed until opened. One claim per Singapore day, and BSC and X Layer share that day. After one chain is claimed, the other stays shut. An unused day expires at midnight and does not carry over.",
+      "Anyone may fund either pool, and anyone may claim. A deposit cannot be taken back. Only the deployer can change the asset and the game. On X Layer that is the chain multisig, choosing OKB, TAPE, X Layer BEM, or USDT0. On BSC it is that chain's multisig, choosing BNB, BEM, USDT, bitcoin, gold, the S&P 500 token, or ETH. Users do not see the rule form.",
+      "Three games are in the contract. Fixed pays the same amount. Random pays between the deployer's minimum and maximum. Lucky uses the deployer's packet count: the last packet takes the remainder, and each earlier packet is at most twice the average then. A daily headcount can be set. Zero means no cap. If the pool cannot cover the packet, it stops until someone funds it.",
+      "The page unlocks a claim after it has recorded a spot or perpetual fill on that chain in this browser. A new browser needs another fill. The contract does not read that fill. It only enforces one claim per Singapore day, the daily cap, and the pool balance. A transaction sent straight to the contract can skip the page's fill record. A successful claim opens a red packet and a fortune figure.",
+      "The old NAND gift remains on X Layer at 0x5374DFfD3186FfEDAC46Cc6c9545B9e9e2CEF45b. The old BEM gift remains on BSC at 0xa29f86319E66DAdF1e30548bcC593fa91CBB7278. This page no longer claims from them or adds to them.",
     ],
   },
   {

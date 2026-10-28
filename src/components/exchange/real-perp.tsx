@@ -15,6 +15,7 @@ import { AccountDialog, FundingBoard, LevDialog, MarginDialog, PairChevron } fro
 import { PhoneChrome, wantedPane } from "@/components/exchange/phone-desk";
 import { CoinMark } from "@/components/exchange/coin-mark";
 import { announceFill, readPrefs, useDeskPrefs } from "@/lib/desk-prefs";
+import { markDeskFill } from "@/lib/red-packet";
 import { TradeLog } from "@/components/exchange/trade-foot";
 import { nickOf, readNicks } from "@/lib/nicks";
 import { clearArm, easyBand, readArm, writeArm, type Arm } from "@/lib/stops";
@@ -32,7 +33,12 @@ import {
   openStopPerp,
   openTwapPerp,
   armTrailPerp,
-  pokeXBem,
+  readStops,
+  readTwaps,
+  fireStopPerp,
+  cancelStopPerp,
+  pokeTwapPerp,
+  cancelTwapPerp,
   pxText,
   readChainPurse,
   readPerp,
@@ -53,7 +59,7 @@ import { readOpenBook } from "@/lib/tape-open-candles";
 import { peekSpotPrints } from "@/lib/tape-spot";
 import { xCap } from "@/lib/okb";
 import { SideRail } from "@/components/exchange/side-rail";
-import { RiskBar } from "@/components/exchange/risk-bar";
+import { fundingPreview, pct } from "@/lib/risk-rules";
 
 function short(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
@@ -196,18 +202,19 @@ function DeskLadder({
     const depth = Math.max(8, Math.min(100, (row.margin / depthOf) * 100));
     const cum = (takeLong ? askCum : bidCum).get(`${row.perp}-${row.quote.id}`) ?? row.margin;
     return (
-      <div key={`${row.perp}-${row.quote.id}`} className="relative grid grid-cols-[2.2rem_minmax(0,1fr)_auto] items-center gap-2 border-t border-gold/20 px-2 py-2 text-sm">
-        <span className="pointer-events-none absolute inset-y-0 right-0" style={{ width: `${depth}%`, background: takeLong ? "rgba(242,54,69,0.14)" : "rgba(8,153,129,0.14)" }} />
-        <span className={`relative ${takeLong ? "text-sell" : "text-[#1b6b45]"}`}>{takeLong ? (zh ? "空" : "S") : zh ? "多" : "L"}</span>
-        <button type="button" className="relative min-w-0 text-left font-mono tabular-nums" onClick={() => row.px > 0 && onPrice(row.px)}>
+      <div key={`${row.perp}-${row.quote.id}`} className="book-line relative grid grid-cols-[2.2rem_minmax(0,1fr)_auto] items-center gap-2 border-t border-gold/20 px-2 py-2 text-sm">
+        <span className="book-side pointer-events-none absolute inset-y-0 right-0" style={{ width: `${depth}%`, background: takeLong ? "rgba(242,54,69,0.14)" : "rgba(8,153,129,0.14)" }} />
+        <span className={`book-side relative ${takeLong ? "text-sell" : "text-[#1b6b45]"}`}>{takeLong ? (zh ? "空" : "S") : zh ? "多" : "L"}</span>
+        <button type="button" className="relative flex min-w-0 items-center justify-between text-left font-mono tabular-nums xl:block" onClick={() => row.px > 0 && onPrice(row.px)}>
           <span className={takeLong ? "text-sell" : "text-[#1b6b45]"}>{row.limit > 0 ? row.px.toFixed(4) : zh ? "随标记" : "At mark"}</span>
-          {pct != null ? <span className="ml-2 text-xs text-ink/45">{pct > 0 ? "+" : ""}{pct.toFixed(1)}%</span> : null}
-          <span className="mt-0.5 block truncate text-xs text-ink/60" onClick={(event) => { event.stopPropagation(); onSize(row.margin); }}>
+          <span className="book-size ml-2 font-mono text-[11px] xl:hidden">{row.size > 0 ? row.size.toFixed(4) : row.margin.toFixed(2)}</span>
+          {pct != null ? <span className="book-meta ml-2 text-xs text-ink/45">{pct > 0 ? "+" : ""}{pct.toFixed(1)}%</span> : null}
+          <span className="book-meta mt-0.5 block truncate text-xs text-ink/60" onClick={(event) => { event.stopPropagation(); onSize(row.margin); }}>
             {row.margin.toFixed(2)} USDT · Σ {cum.toFixed(2)} · {row.quote.lev}× · {row.size.toFixed(2)} {unit}
             {away(row) ? (zh ? " · 偏离" : " · far") : ""}
           </span>
         </button>
-        <span className="relative flex flex-col items-end gap-1">
+        <span className="book-who relative flex flex-col items-end gap-1">
           {mine ? (
             <button type="button" disabled={busy} onClick={() => onCancel(row.perp, row.quote)} className="min-h-8 border border-gold px-2 text-xs">
               {zh ? "撤单" : "Cancel"}
@@ -226,32 +233,29 @@ function DeskLadder({
   };
   return (
     <div className="border-t border-gold/30">
-      <p className="px-2 pt-2 font-mono text-xs text-ink/60">
+      <p className="book-meta px-2 pt-2 font-mono text-xs text-ink/60">
         {zh ? "卖一" : "Ask"} {bestAsk > 0 ? bestAsk.toFixed(4) : "—"}
         {" · "}
         {zh ? "买一" : "Bid"} {bestBid > 0 ? bestBid.toFixed(4) : "—"}
         {spread > 0 ? ` · ${zh ? "价差" : "Spread"} ${((spread / Math.max(mark, bestBid)) * 100).toFixed(2)}%` : ""}
       </p>
-      <div className="flex gap-1 px-2 pb-1">
+      <div className="book-meta flex gap-1 px-2 pb-1">
         {[0, 0.01, 0.1, 1].map((step) => (
           <button key={step} type="button" onClick={() => setTick(step)} className={`h-6 px-2 font-mono text-[10px] ${tick === step ? "bg-ink" : "border border-gold/30 text-ink/50"}`}>{step === 0 ? (zh ? "逐笔" : "Tick") : step}</button>
         ))}
       </div>
-      <div className="grid grid-cols-[2.2rem_minmax(0,1fr)_auto] gap-2 px-2 py-1 text-xs text-ink/50">
+      <div className="book-head grid grid-cols-[2.2rem_minmax(0,1fr)_auto] gap-2 px-2 py-1 text-xs text-ink/50">
         <span>{zh ? "方向" : "Side"}</span>
         <span>{zh ? "价格 · 保证金 · 倍数" : "Price · margin · leverage"}</span>
         <span className="text-right">{zh ? "对手" : "Who"}</span>
       </div>
-      {asks.length === 0 && bids.length === 0 ? <p className="px-2 py-3 text-sm text-ink/60">{zh ? "还没有人挂单。" : "Nobody has a quote yet."}</p> : null}
-      {asks.length === 0 && bids.length > 0 ? <p className="px-2 py-1 text-xs text-ink/40">{zh ? "卖盘空" : "No asks"}</p> : null}
       {askRows.map((row) => line(row, true))}
-      <p className="my-1 flex items-center gap-3 px-2 font-mono text-sm">
+      <p className="book-mid my-1 flex items-center gap-3 px-2 font-mono text-sm">
         <span className="h-px flex-1 bg-gold/40" />
         <button type="button" className="font-mono" onClick={() => onPrice(bestBid > 0 && bestAsk > 0 ? (bestBid + bestAsk) / 2 : mark)}>{bestBid > 0 && bestAsk > 0 ? ((bestBid + bestAsk) / 2).toFixed(4) : mark > 0 ? mark.toFixed(4) : "—"}</button>
         <span className="h-px flex-1 bg-gold/40" />
       </p>
       {bidRows.map((row) => line(row, false))}
-      {bids.length === 0 && asks.length > 0 ? <p className="px-2 py-1 text-xs text-ink/40">{zh ? "买盘空" : "No bids"}</p> : null}
       {farCount > 0 && nearAsks.length + nearBids.length > 0 ? (
         <button type="button" className="min-h-9 w-full text-xs text-ink/60" onClick={() => setShowFar((value) => !value)}>
           {showFar ? (zh ? "收起偏离的单" : "Hide far quotes") : zh ? `偏离标记价 ${farCount} 张` : `${farCount} far from the mark`}
@@ -308,7 +312,7 @@ export function RealPerp({ launch, onMarkets }: {
 	const [intent, setIntent] = useState<"long" | "short">("long");
 	const [marginMode, setMarginMode] = useState<"cross" | "iso">("iso");
 	const [acctMode, setAcctMode] = useState<"unified" | "port" | "manual">("manual");
-	const [phone, setPhone] = useState(wantedPane);
+	const [phone, setPhone] = useState(() => (typeof window !== "undefined" && window.matchMedia("(max-width: 1279px)").matches ? "ticket" : wantedPane()));
 	const [proOpen, setProOpen] = useState(false);
 	const [reduceOnly, setReduceOnly] = useState(false);
 	const [stopPx, setStopPx] = useState("");
@@ -321,6 +325,8 @@ export function RealPerp({ launch, onMarkets }: {
 	const [slipBps, setSlipBps] = useState(50);
 	const [dock, setDock] = useState<"bal" | "pos" | "ord" | "twap" | "chase" | "fill" | "fund" | "hist">("pos");
 	const [fills, setFills] = useState<{ t: number; kind: string; hash: string }[]>(() => readFills());
+	const [stops, setStops] = useState<{ id: bigint; user: string; long: boolean; margin: bigint; lev: number; trigger: bigint }[]>([]);
+	const [twaps, setTwaps] = useState<{ id: bigint; user: string; long: boolean; each: bigint; lev: number; left: number }[]>([]);
 	const [ticketMore, setTicketMore] = useState(false);
 	const [limit, setLimit] = useState("");
 	const [board, setBoard] = useState([]);
@@ -577,16 +583,22 @@ export function RealPerp({ launch, onMarkets }: {
 		coin
 	]);
 	useEffect(() => {
-		if (chain !== "xlayer" || !account) return;
-		const id = window.setInterval(() => {
-			pokeXBem(account).catch(() => void 0);
-		}, 35e3);
-		return () => window.clearInterval(id);
-	}, [
-		chain,
-		account,
-		xbem
-	]);
+		if (!/^0x[a-fA-F0-9]{40}$/.test(perp)) return;
+		let dead = false;
+		const pull = () => {
+			Promise.all([readStops(perp), readTwaps(perp)]).then(([nextStops, nextTwaps]) => {
+				if (dead) return;
+				setStops(nextStops);
+				setTwaps(nextTwaps);
+			}).catch(() => undefined);
+		};
+		pull();
+		const id = window.setInterval(pull, 12_000);
+		return () => {
+			dead = true;
+			window.clearInterval(id);
+		};
+	}, [perp, hash]);
 	const fail = (err) => {
 		const code = err.code;
 		const message = err instanceof Error ? err.message : "";
@@ -594,7 +606,7 @@ export function RealPerp({ launch, onMarkets }: {
 		else if (message === "usdt") setNote(chain === "xlayer" ? c.perpNeedX : c.perpNeedUsdt);
 		else if (message === "nochain") setNote(c.perpNoChain);
 		else if (message === "oracle") setNote(lang === "zh" ? "只有收费地址能写标记价。" : "Only the fee address can post the mark.");
-		else if (chain === "xlayer" && /revert|execution|Bad/i.test(message)) setNote(lang === "zh" ? "没开成。结算价已经作废。用收费地址部署修好的一份，并写入一次。" : "It did not open. The settlement price has expired. The fee address deploys the fixed book and posts once.");
+		else if (chain === "xlayer" && /revert|execution|Bad/i.test(message)) setNote(lang === "zh" ? "没开成。" : "It did not open.");
 		else if (code === 4001) setNote(c.walletReject);
 		else if (/RPC|publicnode|Archive|Invalid param/i.test(message)) setNote(c.rpcWait);
 		else if (message === "amount") setNote(lang === "zh" ? "数量不对。先看保证金和价格有没有填上。" : "That amount is not valid. Check the margin and the price.");
@@ -602,7 +614,8 @@ export function RealPerp({ launch, onMarkets }: {
 		else if (message === "slip") setNote(lang === "zh" ? "对手价超出滑点，市价没有发出。" : "The other side is outside the slippage. The market order was not sent.");
 		else if (message === "cross") setNote(lang === "zh" ? "这个价会马上碰到对手单。只挂单不会发出。" : "That price would hit a resting quote. The post-only order was not sent.");
 		else if (message === "flat") setNote(lang === "zh" ? "没有可减的仓。" : "There is no position to reduce.");
-		else if (message === "risk") setNote(lang === "zh" ? "拆单在风险本上。先由收费地址部署。" : "TWAP is on the risk book. The fee address deploys it first.");
+		else if (message === "book") setNote(lang === "zh" ? "不是这一本合约，没有发出。" : "That is not this book. Nothing was sent.");
+		else if (message === "risk") setNote(lang === "zh" ? "这一笔没有发出。" : "That order was not sent.");
 		else if (message === "local") setNote(lang === "zh" ? "这本合约没有链上止损。" : "This contract has no on-chain stop.");
 		else if (message === "code") setNote(lang === "zh" ? "推荐码用 1 到 16 个英文字，汉字最多 5 个。" : "Use 1 to 16 English characters, or up to 5 Chinese characters.");
 		else if (message === "taken") setNote(c.rebateTaken);
@@ -644,6 +657,7 @@ export function RealPerp({ launch, onMarkets }: {
 				setHash(result);
 				setFills(pushFill(kind || "tx", result));
 				announceFill(lang === "zh" ? "合约回执" : "Perp receipt", result.slice(0, 10));
+				if (kind !== "cancel") markDeskFill(chain === "bsc" ? "bsc" : "xlayer");
 			}
 			setNote(null);
 		} catch (err) {
@@ -681,7 +695,10 @@ export function RealPerp({ launch, onMarkets }: {
 		if (!row.got || row.ok) return false;
 		return chain === "xlayer" ? row.name.includes("X Layer") : row.name.includes("BSC 永续");
 	});
-	const markN = alt ? (coinPx || lastClose) : chain === "xlayer" ? view && view.mark > 0n ? Number(formatUnits(view.mark, 18)) : lastClose : live && live > 0 ? live : view && view.mark > 0n ? Number(formatUnits(view.mark, 18)) : lastClose;
+	const settle = !alt && view && view.mark > 0n ? Number(formatUnits(view.mark, 18)) : 0;
+	const poolPx = lastClose > 0 ? lastClose : coinPx;
+	const markFar = chain === "xlayer" && !alt && settle > 0 && poolPx > 0 && Math.abs(settle - poolPx) / poolPx > 0.08;
+	const markN = alt ? (coinPx || lastClose) : markFar ? poolPx : chain === "xlayer" ? (settle || poolPx) : live && live > 0 ? live : settle || poolPx;
 	const priceOk = orderStyle === "scale"
 		? Number(scaleA) > 0 && Number(scaleB) > 0
 		: orderStyle === "stop"
@@ -694,8 +711,10 @@ export function RealPerp({ launch, onMarkets }: {
 						? Number(trailPct) > 0 && Number(trailPct) < 50
 				: (orderStyle === "limit" || orderStyle === "post") && !limit.trim()
 					? false
-					: alt ? markN > 0 || Boolean(limit.trim()) : ticketPx >= 10n ** 16n && ticketPx <= 100000n * 10n ** 18n;
+					: markN > 0 || (ticketPx >= 10n ** 16n && ticketPx <= 100000n * 10n ** 18n);
 	const ticket = plan(margin, levOk ? lev : 1, ticketPx);
+	const quotePx = (orderStyle === "limit" || orderStyle === "post") && Number(limit) > 0 ? Number(limit) : markN;
+	const quoteLiq = quotePx > 0 && lev > 0 ? (intent === "long" ? quotePx * (1 - 0.5 / lev) : quotePx * (1 + 0.5 / lev)) : 0;
 	const liqMove = levOk ? Math.max(.05, Math.round(5e3 / lev) / 100).toFixed(2) : null;
 	let need = 0n;
 	try {
@@ -760,6 +779,8 @@ export function RealPerp({ launch, onMarkets }: {
 		setLevText(String(nextLev));
 	};
 	const lastBar = prices.at(-1);
+	const fundNow = fundingPreview(markN, lastBar?.c || markN);
+	const fundText = fundNow ? pct(fundNow.capped) : "—";
 	const openBar = prices[0];
 	const drift = lastBar && openBar && openBar.o > 0 ? (lastBar.c - openBar.o) / openBar.o : 0;
 	const bookVol = prices.reduce((sum, bar) => sum + (bar.v && Number.isFinite(bar.v) ? bar.v : 0), 0);
@@ -799,95 +820,6 @@ export function RealPerp({ launch, onMarkets }: {
 			children: /* @__PURE__ */ jsxs("div", {
 				className: "flex flex-col gap-3 p-0",
 				children: [
-					chain === "xlayer" && !/^0x[a-fA-F0-9]{40}$/.test("0xCAC69F02c06bfCa3bFDb1eaF1F4a60e17e718081") ? /* @__PURE__ */ jsx("p", {
-						className: "px-3 pt-3 text-sm leading-relaxed",
-						children: c.xOpen
-					}) : null,
-					chain === "xlayer" && !/^0x[a-fA-F0-9]{40}$/.test("0xCAC69F02c06bfCa3bFDb1eaF1F4a60e17e718081") && !xbem ? /* @__PURE__ */ jsxs("div", {
-						className: "grid gap-2 p-3",
-						children: [
-							/* @__PURE__ */ jsx("button", {
-								type: "button",
-								className: "min-h-12 bg-ink px-3 text-sm text-paper disabled:opacity-40",
-								disabled: busy,
-								onClick: () => {
-									setBusy(true);
-									setBad(false);
-									const steps = [
-										c.deployX1,
-										c.deployX2,
-										c.deployX3
-									];
-									setDeployNote(lang === "zh" ? "正在连接 X Layer 钱包。请在钱包中确认，确认窗不在本页。" : "Connecting the X Layer wallet. Confirm the request in the wallet. It does not appear on this page.");
-									setNote(steps[0]);
-									(async () => {
-										try {
-											selectDesk("xlayer");
-											const from = account ?? await connectXLayer();
-											setAccount(from);
-											if (from.toLowerCase() !== "0x823b9F6A93Ac44Ce5A469823A336c15b6117054D".toLowerCase()) {
-												setBad(true);
-												setDeployNote(lang === "zh" ? `当前钱包为 ${from.slice(0, 6)}…${from.slice(-4)}。部署须使用收费地址 ${FEE_TO.slice(0, 6)}…${FEE_TO.slice(-4)}。` : `Connected ${from.slice(0, 6)}…${from.slice(-4)}. Deployment requires the fee address.`);
-												return;
-											}
-											const addr = await deployXLayer(from, (step) => {
-												setNote(steps[step - 1]);
-												setDeployNote(steps[step - 1]);
-											});
-											setPerp(addr);
-											setXbem(addr);
-											setDeployNote(addr);
-											setNote(addr);
-										} catch (err) {
-											fail(err);
-											const message = err instanceof Error ? err.message : "";
-											setDeployNote(message === "oracle" ? lang === "zh" ? "只有收费地址可以部署本合约。" : "Only the fee address can deploy this contract." : lang === "zh" ? `部署未完成。${message.slice(0, 80) || "若钱包未弹出，请切换至 X Layer 后重试。"}` : `Deployment did not finish. ${message.slice(0, 80)}`);
-										} finally {
-											setBusy(false);
-										}
-									})();
-								},
-								children: busy ? lang === "zh" ? "等待钱包确认" : "Waiting for the wallet" : lang === "zh" ? "部署读 X Layer 池子的新永续" : "Deploy the book that reads the X Layer pools"
-							}),
-							deployNote ? /* @__PURE__ */ jsx("p", {
-								className: `text-sm leading-6 ${bad ? "text-sell" : ""}`,
-								children: deployNote
-							}) : /* @__PURE__ */ jsx("p", {
-								className: "text-sm leading-6 text-ink/70",
-								children: lang === "zh" ? "若已经部署过，把永续地址贴在下面。本机记得之后，部署按钮会收起。" : "If it is already deployed, paste the perpetual address. Once this device remembers it, the deploy button goes away."
-							}),
-							/* @__PURE__ */ jsxs("div", {
-								className: "grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]",
-								children: [/* @__PURE__ */ jsx("input", {
-									value: pasted,
-									onChange: (event) => setPasted(event.target.value),
-									placeholder: "0x",
-									className: "min-h-12 border border-gold bg-transparent px-2 font-mono text-sm"
-								}), /* @__PURE__ */ jsx("button", {
-									type: "button",
-									className: "min-h-12 border border-gold px-4 text-sm disabled:opacity-40",
-									disabled: busy,
-									onClick: () => {
-										setBusy(true);
-										setBad(false);
-										setDeployNote(lang === "zh" ? "正在核对链上合约。" : "Checking the contract.");
-										rememberXBem(pasted).then((addr) => {
-											setXbem(addr);
-											setPerp(addr);
-											setChain("xlayer");
-											selectDesk("xlayer");
-											setBad(false);
-											setDeployNote(addr);
-										}).catch(() => {
-											setBad(true);
-											setDeployNote(lang === "zh" ? "这个地址不是可用的永续合约。" : "That address is not a usable perpetual.");
-										}).finally(() => setBusy(false));
-									},
-									children: lang === "zh" ? "使用已部署的地址" : "Use the deployed address"
-								})]
-							})
-						]
-					}) : null,
 					/* @__PURE__ */ jsxs("div", {
 						className: "flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-gold px-3 py-2",
 						children: [
@@ -910,33 +842,9 @@ export function RealPerp({ launch, onMarkets }: {
 										children: lang === "zh" ? "永续 · 保证金" : "Perpetual · margin"
 									}), [
 										[
-											"xlayer",
-											"tape",
-											"TAPE-USDT0",
-											"X Layer"
-										],
-										[
 											"bsc",
 											"bem",
 											"BEM-USDT",
-											"BSC"
-										],
-										[
-											"bsc",
-											"btc",
-											"BTC-USDT",
-											"BSC"
-										],
-										[
-											"bsc",
-											"eth",
-											"ETH-USDT",
-											"BSC"
-										],
-										[
-											"bsc",
-											"zec",
-											"ZEC-USDT",
 											"BSC"
 										],
 										[
@@ -970,14 +878,14 @@ export function RealPerp({ launch, onMarkets }: {
 								}), markN > 0 ? pxTextN(markN) : "—"]
 							}),
 							/* @__PURE__ */ jsxs("p", {
-								className: "font-mono text-sm",
+								className: "font-mono text-sm ph-hide",
 								children: [/* @__PURE__ */ jsx("span", {
 									className: "mr-2 text-[11px] text-ink/45",
 									children: lang === "zh" ? "预言机" : "Oracle"
 								}), lastBar ? pxTextN(lastBar.c) : "—"]
 							}),
 							/* @__PURE__ */ jsxs("p", {
-								className: "font-mono text-sm",
+								className: "font-mono text-sm ph-hide",
 								children: [/* @__PURE__ */ jsx("span", {
 									className: "mr-2 text-[11px] text-ink/45",
 									children: lang === "zh" ? "溢价" : "Premium"
@@ -991,35 +899,35 @@ export function RealPerp({ launch, onMarkets }: {
 								}), lastBar ? `${drift >= 0 ? "+" : ""}${(drift * 100).toFixed(2)}%` : "—"]
 							}),
 							/* @__PURE__ */ jsxs("p", {
-								className: "font-mono text-sm",
+								className: "font-mono text-sm ph-hide",
 								children: [/* @__PURE__ */ jsx("span", {
 									className: "mr-2 text-[11px] text-ink/45",
 									children: lang === "zh" ? "高 / 低" : "High / low"
 								}), prices.length ? `${Math.max(...prices.map((bar) => bar.h)).toFixed(4)} / ${Math.min(...prices.map((bar) => bar.l)).toFixed(4)}` : "—"]
 							}),
 							/* @__PURE__ */ jsxs("p", {
-								className: "font-mono text-sm",
+								className: "font-mono text-sm ph-hide",
 								children: [/* @__PURE__ */ jsx("span", {
 									className: "mr-2 text-[11px] text-ink/45",
 									children: lang === "zh" ? "24小时成交量" : "24h volume"
 								}), bookVol > 0 ? bookVol.toLocaleString("en-US", { maximumFractionDigits: 2 }) : "—"]
 							}),
 							/* @__PURE__ */ jsxs("p", {
-								className: "font-mono text-sm",
+								className: "font-mono text-sm ph-hide",
 								children: [/* @__PURE__ */ jsx("span", {
 									className: "mr-2 text-[11px] text-ink/45",
 									children: lang === "zh" ? "合约持仓量" : "Open interest"
 								}), view?.liveDeals?.length ? view.liveDeals.reduce((sum, deal) => sum + Number(formatUnits(deal.base, 18)) * (markN || 0), 0).toLocaleString("en-US", { maximumFractionDigits: 2 }) : "—"]
 							}),
 							/* @__PURE__ */ jsxs("p", {
-								className: "font-mono text-sm",
+								className: "font-mono text-sm ph-hide",
 								children: [/* @__PURE__ */ jsx("span", {
 									className: "mr-2 text-[11px] text-ink/45",
 									children: lang === "zh" ? "资金费 / 倒计时" : "Funding"
-								}), riskLive ? (lang === "zh" ? "本内结算" : "On this book") : lang === "zh" ? "不收" : "None", " · ", fundClock(lang === "zh")]
+								}), fundText, " · ", fundClock(lang === "zh")]
 							}),
 							/* @__PURE__ */ jsxs("p", {
-								className: "text-[11px] text-ink/45",
+								className: "ph-hide text-[11px] text-ink/45",
 								children: [chain === "xlayer" ? lang === "zh" ? "逐仓 · USDT0" : "Isolated · USDT0" : lang === "zh" ? "逐仓 · USDT" : "Isolated · USDT", !alt && /^0x[a-fA-F0-9]{40}$/.test(perp) ? /* @__PURE__ */ jsxs(Fragment, { children: [" · ", /* @__PURE__ */ jsx("a", {
 									className: "underline",
 									href: `${scan}/address/${perp}`,
@@ -1027,6 +935,13 @@ export function RealPerp({ launch, onMarkets }: {
 									rel: "noreferrer",
 									children: lang === "zh" ? "合约" : "Contract"
 								})] }) : null]
+							}),
+							/* @__PURE__ */ jsx("button", {
+								type: "button",
+								className: "ml-auto grid size-9 place-items-center xl:hidden",
+								onClick: () => setPhone(phone === "chart" ? "ticket" : "chart"),
+								"aria-label": lang === "zh" ? "图表" : "Chart",
+								children: /* @__PURE__ */ jsx(PairChevron, { up: phone === "chart" })
 							})
 						]
 					}),
@@ -1037,15 +952,7 @@ export function RealPerp({ launch, onMarkets }: {
 						className: "mx-3 inline-flex min-h-10 items-center justify-center bg-ink px-3 text-sm text-paper",
 						children: c.signOkx
 					}) : null,
-					/* @__PURE__ */ jsx(PhoneChrome, {
-						zh: lang === "zh",
-						perp: true,
-						pane: phone,
-						setPane: setPhone,
-						sheet: false,
-						onBuy: () => { setIntent("long"); setPhone("ticket"); },
-						onSell: () => { setIntent("short"); setPhone("ticket"); }
-					}),
+					null,
 					/* @__PURE__ */ jsxs("div", {
 						className: "desk-grid grid items-start xl:grid-cols-[minmax(0,1fr)_17.5rem_22rem]",
 						children: [
@@ -1120,20 +1027,6 @@ export function RealPerp({ launch, onMarkets }: {
 											})
 										]
 									}),
-									/* @__PURE__ */ jsxs("details", {
-										className: "px-3 py-2 text-xs text-ink/55",
-										children: [/* @__PURE__ */ jsx("summary", {
-											className: "min-h-8 cursor-pointer",
-											children: lang === "zh" ? "风险" : "Risk"
-										}), /* @__PURE__ */ jsx("p", {
-											className: "mt-1 leading-5",
-											children: chain === "xlayer" ? c.perpWarnX : c.perpWarn
-										})]
-									}),
-									!view ? /* @__PURE__ */ jsx("p", {
-										className: "px-3 py-2 text-sm text-ink/60",
-										children: lang === "zh" ? "标记价先读公开行情。结算合约没回时，页面照样能看 K 线，不会停在空白。" : "The mark comes from the public price first. If the settlement contract is quiet, the chart still stays up."
-									}) : null,
 									lock.status === "bad" && feeBlocked ? /* @__PURE__ */ jsx("p", {
 										className: "px-3 pb-2 text-sm text-sell",
 										children: lang === "zh" ? "收费地址对不上，开仓停了。" : "The fee address does not match. Opening is stopped."
@@ -1143,7 +1036,7 @@ export function RealPerp({ launch, onMarkets }: {
 							/* @__PURE__ */ jsxs("div", {
 								className: "ph-book order-3 min-w-0 border-t border-gold xl:order-2 xl:border-t-0 xl:border-l",
 								children: [/* @__PURE__ */ jsxs("div", {
-									className: "flex h-9 items-center border-b border-gold px-3 text-xs text-ink/70",
+									className: "book-meta flex h-9 items-center border-b border-gold px-3 text-xs text-ink/70",
 									children: [/* @__PURE__ */ jsx("span", { children: lang === "zh" ? "订单簿" : "Book" }), account && (view?.quotes ?? []).some((quote) => quote.user.toLowerCase() === account.toLowerCase()) ? /* @__PURE__ */ jsx("button", {
 										type: "button",
 										className: "ml-2 underline",
@@ -1159,6 +1052,9 @@ export function RealPerp({ launch, onMarkets }: {
 										className: "ml-auto font-mono text-ink/40",
 										children: lang === "zh" ? "价差" : "Spread"
 									})]
+								}), /* @__PURE__ */ jsx("div", {
+									className: "flex justify-between px-1.5 pt-1 text-[10px] text-ink/45 xl:hidden",
+									children: /* @__PURE__ */ jsxs(Fragment, { children: [/* @__PURE__ */ jsx("span", { children: lang === "zh" ? "价格" : "Price" }), /* @__PURE__ */ jsx("span", { children: lang === "zh" ? `数量 (${base})` : `Size (${base})` })] })
 								}), /* @__PURE__ */ jsx(DeskLadder, {
 									rows: board,
 									mark: markN,
@@ -1194,14 +1090,8 @@ export function RealPerp({ launch, onMarkets }: {
 							/* @__PURE__ */ jsxs("div", {
 								className: "ph-ticket order-2 flex min-w-0 flex-col gap-3 border-t border-gold p-3 xl:sticky xl:top-14 xl:order-3 xl:max-h-[calc(100dvh-4.5rem)] xl:overflow-y-auto xl:overscroll-contain xl:border-t-0 xl:border-l",
 								children: [
-									/* @__PURE__ */ jsx(RiskBar, {
-										zh: lang === "zh",
-										chain,
-										coin,
-										onUse: setPerp
-									}),
 									/* @__PURE__ */ jsxs("div", {
-										className: "grid grid-cols-3 gap-1 text-xs",
+										className: "hidden grid-cols-3 gap-1 text-xs xl:grid",
 										children: [
 											/* @__PURE__ */ jsx("button", {
 												type: "button",
@@ -1224,7 +1114,7 @@ export function RealPerp({ launch, onMarkets }: {
 										]
 									}),
 									view?.liveDeals?.length ? /* @__PURE__ */ jsxs("div", {
-										className: "border border-gold/40 p-3",
+										className: "hidden border border-gold/40 p-3 xl:block",
 										children: [/* @__PURE__ */ jsxs("div", {
 											className: "flex items-center gap-2",
 											children: [/* @__PURE__ */ jsx("p", {
@@ -1412,7 +1302,7 @@ export function RealPerp({ launch, onMarkets }: {
 												]
 											}) : null,
 											view?.book ? /* @__PURE__ */ jsxs(Fragment, { children: [/* @__PURE__ */ jsxs("div", {
-												className: "grid grid-cols-2 gap-2",
+												className: "hidden grid-cols-2 gap-2 xl:grid",
 												children: [/* @__PURE__ */ jsx("button", {
 													type: "button",
 													onClick: () => setSheet("book"),
@@ -1460,9 +1350,34 @@ export function RealPerp({ launch, onMarkets }: {
 											}, String(quote.id)))] }) : null] }) : null,
 											(view?.book ? sheet === "book" : !inDeal && !mine) ? /* @__PURE__ */ jsxs(Fragment, { children: [
 <>
-												<div className="relative flex items-end gap-5 border-b border-gold/30 pb-2 text-sm">
+												<div className="grid grid-cols-3 gap-1 xl:hidden">
+													<button type="button" onClick={() => setProOpen((on) => !on)} className="flex h-9 items-center justify-center gap-1 border border-gold/40 text-sm">
+														{orderStyle === "market" ? (lang === "zh" ? "市价" : "Market") : orderStyle === "limit" ? (lang === "zh" ? "限价" : "Limit") : proLabel}
+														<PairChevron up={proOpen} />
+													</button>
+													<button type="button" onClick={() => setMarginOpen(true)} className="h-9 border border-gold/40 text-sm">{marginMode === "cross" ? (lang === "zh" ? "全仓" : "Cross") : lang === "zh" ? "逐仓" : "Isolated"}</button>
+													<button type="button" onClick={() => setLevOpen(true)} className="h-9 border border-up/40 font-mono text-sm">{lev}×</button>
+												</div>
+												{proOpen ? (
+													<div className="fixed inset-0 z-50 xl:hidden" onClick={() => setProOpen(false)}>
+													<div className="sheet-up absolute inset-x-0 bottom-0 max-h-[78dvh] overflow-auto border-t border-gold bg-card px-3 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3" onClick={(event) => event.stopPropagation()}>
+															<div className="mx-auto mb-2 h-1 w-10 rounded-full bg-ink/20" />
+															<div className="mb-2 flex items-center">
+																<p className="text-sm">{lang === "zh" ? "订单类型" : "Order type"}</p>
+																<button type="button" className="ml-auto px-2 text-lg" onClick={() => setProOpen(false)}>×</button>
+															</div>
+															{([["market", "市价", "Market", "按当前标记价挂出"], ["limit", "限价", "Limit", "到了你填的价格才挂出"], ["scale", "分段订单", "Scale", "在两个价格之间拆开"], ["stop", "止损市价", "Stop", "标记价碰到触发价才挂出"], ["post", "只挂", "Post", "会立刻成交的价格不挂"], ["trail", "移动止损", "Trail", "从最好的价格回撤后再平"], ["twap", "TWAP", "TWAP", "按间隔拆成几笔"]] as const).map(([id, zhLabel, enLabel, hint]) => (
+																<button key={id} type="button" onClick={() => { setOrderStyle(id); setProOpen(false); }} className={`flex w-full flex-col py-2 text-left ${orderStyle === id ? "text-up" : ""}`}>
+																	<span className="text-sm">{lang === "zh" ? zhLabel : enLabel}</span>
+																	<span className="text-[11px] text-ink/45">{hint}</span>
+																</button>
+															))}
+														</div>
+													</div>
+												) : null}
+												<div className="relative hidden items-end gap-5 border-b border-gold/30 pb-2 text-sm xl:flex">
 													<button type="button" onClick={() => { setOrderStyle("market"); setProOpen(false); }} className={orderStyle === "market" ? "tab-on" : "text-ink/45"}>{lang === "zh" ? "市价" : "Market"}</button>
-													<button type="button" onClick={() => { setOrderStyle("limit"); setProOpen(false); if (!limit.trim() && markN > 0) setLimit(markN.toFixed(4)); }} className={orderStyle === "limit" ? "tab-on" : "text-ink/45"}>{lang === "zh" ? "限价" : "Limit"}</button>
+													<button type="button" onClick={() => { setOrderStyle("limit"); setProOpen(false); }} className={orderStyle === "limit" ? "tab-on" : "text-ink/45"}>{lang === "zh" ? "限价" : "Limit"}</button>
 													<button type="button" onClick={() => setProOpen((on) => !on)} className={`inline-flex items-center gap-1 ${proOn ? "tab-on" : "text-ink/45"}`}>
 														{proLabel}
 														<PairChevron up={proOpen} />
@@ -1479,10 +1394,15 @@ export function RealPerp({ launch, onMarkets }: {
 													<button type="button" onClick={() => setIntent("long")} className={`h-10 text-sm ${intent === "long" ? "bg-up text-paper" : "border border-gold/40 text-ink/55"}`}>{lang === "zh" ? "买入 / 做多" : "Buy / Long"}</button>
 													<button type="button" onClick={() => setIntent("short")} className={`h-10 text-sm ${intent === "short" ? "bg-sell text-paper" : "border border-gold/40 text-ink/55"}`}>{lang === "zh" ? "卖出 / 做空" : "Sell / Short"}</button>
 												</div>
+												<p className="flex justify-between text-xs xl:hidden">
+													<span className="text-ink/45">{lang === "zh" ? "可用" : "Available"}</span>
+													<span className="font-mono">{bal ? pretty(bal.usdt, dec, 2) : "0.00"} {chain === "xlayer" ? "USDT0" : "USDT"}</span>
+												</p>
 												{orderStyle === "limit" || orderStyle === "post" ? (
-													<label className="block border border-gold/40 px-3 py-2">
-														<span className="block text-[11px] text-ink/45">{lang === "zh" ? "价格" : "Price"}</span>
-														<input value={limit} onChange={(event) => setLimit(event.target.value)} inputMode="decimal" className="w-full bg-transparent font-mono text-xl outline-none" />
+													<label className="relative flex items-center gap-2 border border-gold/40 px-3 py-2">
+														<span className="shrink-0 text-[11px] text-ink/45">{lang === "zh" ? "价格" : "Price"}</span>
+														<input value={limit} onChange={(event) => setLimit(event.target.value)} inputMode="decimal" className="w-full bg-transparent font-mono text-base outline-none" />
+														{!limit.trim() ? <span className="pointer-events-none absolute inset-y-0 right-2 flex max-w-[70%] items-center truncate font-mono text-[11px] text-ink/40">{lang === "zh" ? "输入限价" : "Limit"}{markN > 0 ? ` ${markN.toFixed(4)}` : ""}</span> : null}
 													</label>
 												) : null}
 												{orderStyle === "trail" ? (
@@ -1494,7 +1414,7 @@ export function RealPerp({ launch, onMarkets }: {
 												{orderStyle === "stop" ? (
 													<label className="block border border-gold/40 px-3 py-2">
 														<span className="block text-[11px] text-ink/45">{lang === "zh" ? "触发价" : "Trigger"}</span>
-														<input value={stopPx} onChange={(event) => setStopPx(event.target.value)} inputMode="decimal" className="w-full bg-transparent font-mono text-xl outline-none" />
+														<input value={stopPx} onChange={(event) => setStopPx(event.target.value)} inputMode="decimal" placeholder={lang === "zh" ? "输入触发价" : "Trigger"} className="w-full bg-transparent font-mono text-xl outline-none placeholder:text-ink/35" />
 													</label>
 												) : null}
 												{orderStyle === "scale" ? (
@@ -1510,22 +1430,33 @@ export function RealPerp({ launch, onMarkets }: {
 														<input value={String(twapGap)} onChange={(event) => setTwapGap(Math.max(30, Number(event.target.value) || 30))} inputMode="numeric" className="h-10 border border-gold/40 bg-transparent px-2 font-mono outline-none" />
 													</div>
 												) : null}
-												<label className="block border border-gold/40 px-3 py-2">
-													<span className="block text-[11px] text-ink/45">{lang === "zh" ? "保证金" : "Margin"} USDT</span>
-													<input value={margin} onChange={(event) => { setSizePct(0); setMargin(event.target.value); }} inputMode="decimal" className="w-full bg-transparent font-mono text-2xl outline-none" />
+												<label className="flex items-center gap-2 border border-gold/40 px-3 py-2">
+													<span className="shrink-0 text-[11px] text-ink/45">{lang === "zh" ? "数量" : "Size"}</span>
+													<input value={margin} onChange={(event) => { setSizePct(0); setMargin(event.target.value); }} inputMode="decimal" placeholder={lang === "zh" ? "保证金" : "Margin"} className="w-full bg-transparent font-mono text-base outline-none placeholder:text-ink/35" />
+													<span className="shrink-0 font-mono text-xs text-ink/55">{chain === "xlayer" ? "USDT0" : "USDT"}</span>
 												</label>
-												<div className="grid grid-cols-4 gap-1">
+												<div className="hidden grid-cols-4 gap-1 xl:grid">
 													{[25, 50, 75, 100].map((pct) => (
 														<button key={pct} type="button" onClick={() => fillMargin(pct)} className={`h-8 border font-mono text-xs ${sizePct === pct ? "border-transparent bg-ink" : "border-gold/40 text-ink/70"}`}>{pct}%</button>
 													))}
 												</div>
-												<button type="button" onClick={() => setReduceOnly((on) => !on)} className={`h-8 text-sm ${reduceOnly ? "bg-ink" : "border border-gold/40 text-ink/70"}`}>{lang === "zh" ? "只减仓" : "Reduce"}</button>
-												<div className="grid grid-cols-4 gap-1">
+												<div className="flex items-center gap-2 xl:hidden">
+													<input type="range" min={0} max={100} value={sizePct} onChange={(event) => fillMargin(Number(event.target.value))} className="touch-range w-full" />
+													<span className="w-10 shrink-0 text-right font-mono text-xs">{sizePct}%</span>
+												</div>
+												<label className="flex items-center gap-2 text-sm">
+													<input type="checkbox" checked={reduceOnly} onChange={() => setReduceOnly((on) => !on)} />
+													{lang === "zh" ? "只减仓" : "Reduce only"}
+												</label>
+												<label className="flex items-center gap-2 text-sm">
+													<input type="checkbox" checked={ticketMore} onChange={() => setTicketMore((on) => !on)} />
+													{lang === "zh" ? "止盈/止损" : "TP / SL"}
+												</label>
+												<div className="hidden grid-cols-4 gap-1 xl:grid">
 													{[10, 50, 100, 0].map((bps) => (
 														<button key={bps} type="button" onClick={() => setSlipBps(bps)} className={`h-8 font-mono text-[11px] ${slipBps === bps ? "bg-ink" : "border border-gold/40 text-ink/70"}`}>{bps === 0 ? (lang === "zh" ? "滑点关" : "Slip off") : `${bps / 100}%`}</button>
 													))}
 												</div>
-												<button type="button" className="h-8 text-left text-xs text-ink/55" onClick={() => setTicketMore((on) => !on)}>{ticketMore ? (lang === "zh" ? "收起止盈止损" : "Hide stops") : (lang === "zh" ? "止盈止损" : "Stops")}</button>
 											</>,
 												ticketMore ? /* @__PURE__ */ jsxs("div", {
 													className: "border border-gold/40 p-3",
@@ -1554,7 +1485,8 @@ export function RealPerp({ launch, onMarkets }: {
 																	value: tpText,
 																	onChange: (event) => setTpText(event.target.value),
 																	inputMode: "decimal",
-																	className: "w-full bg-transparent font-mono text-xl outline-none"
+																	placeholder: lang === "zh" ? "止盈价格" : "Take profit",
+																	className: "w-full bg-transparent font-mono text-xl outline-none placeholder:text-ink/35"
 																})]
 															}), /* @__PURE__ */ jsxs("label", {
 																className: "border border-gold/40 px-2 py-2",
@@ -1565,7 +1497,8 @@ export function RealPerp({ launch, onMarkets }: {
 																	value: slText,
 																	onChange: (event) => setSlText(event.target.value),
 																	inputMode: "decimal",
-																	className: "w-full bg-transparent font-mono text-xl outline-none"
+																	placeholder: lang === "zh" ? "止损价格" : "Stop loss",
+																	className: "w-full bg-transparent font-mono text-xl outline-none placeholder:text-ink/35"
 																})]
 															})]
 														}), /* @__PURE__ */ jsx(StopReadout, {
@@ -1634,27 +1567,25 @@ export function RealPerp({ launch, onMarkets }: {
 												<div className="grid grid-cols-2 gap-y-1 font-mono text-[11px]">
 													<span className="text-ink/45">{lang === "zh" ? "可用" : "Available"}</span>
 													<span className="text-right">{bal ? pretty(bal.usdt, dec, 2) : "—"} {chain === "xlayer" ? "USDT0" : "USDT"}</span>
-													<span className="text-ink/45">{lang === "zh" ? "可开多" : "Can long"}</span>
-													<span className="text-right">{roomText} {base}</span>
-													<span className="text-ink/45">{lang === "zh" ? "可开空" : "Can short"}</span>
-													<span className="text-right">{roomText} {base}</span>
-													<span className="text-ink/45">{lang === "zh" ? "可平" : "Can close"}</span>
-													<span className="text-right">{posSize ? posSize.toFixed(4) : "0.00"} {base}</span>
-													<span className="text-ink/45">{lang === "zh" ? "当前仓位" : "Position"}</span>
-													<span className="text-right">{posSize ? posSize.toFixed(4) : "0.00"} {base}</span>
+													<span className="ph-stat text-ink/45">{lang === "zh" ? "可开多" : "Can long"}</span>
+													<span className="ph-stat text-right">{roomText} {base}</span>
+													<span className="ph-stat text-ink/45">{lang === "zh" ? "可开空" : "Can short"}</span>
+													<span className="ph-stat text-right">{roomText} {base}</span>
+													<span className="ph-stat text-ink/45">{lang === "zh" ? "可平" : "Can close"}</span>
+													<span className="ph-stat text-right">{posSize ? posSize.toFixed(4) : "0.00"} {base}</span>
+													<span className="ph-stat text-ink/45">{lang === "zh" ? "当前仓位" : "Position"}</span>
+													<span className="ph-stat text-right">{posSize ? posSize.toFixed(4) : "0.00"} {base}</span>
 													<span className="text-ink/45">{lang === "zh" ? "强平价格" : "Liq. price"}</span>
-													<span className="text-right">{liqN > 0 ? liqN.toFixed(4) : liqMove ? `${liqMove}%` : "—"}</span>
+													<span className="text-right">{liqN > 0 ? liqN.toFixed(4) : quoteLiq > 0 ? quoteLiq.toFixed(4) : "—"}</span>
 													<span className="text-ink/45">{lang === "zh" ? "订单价值" : "Order value"}</span>
 													<span className="text-right">{ticket ? ticket.notional.toFixed(2) : "—"}</span>
 													<span className="text-ink/45">{lang === "zh" ? "所需保证金" : "Margin"}</span>
 													<span className="text-right">{marginOk ? margin : "—"}</span>
-													<span className="text-ink/45">{lang === "zh" ? "费用" : "Fee"}</span>
-													<span className="text-right">0.20% / 0.20%</span>
+													<span className="ph-stat text-ink/45">{lang === "zh" ? "费用" : "Fee"}</span>
+													<span className="ph-stat text-right">0.20% / 0.20%</span>
+													<span className="text-ink/45">{lang === "zh" ? "滑点" : "Slippage"}</span>
+													<span className="text-right">Est {slipBps === 0 ? "0%" : `${(slipBps / 100).toFixed(2)}%`} / Max 1.00%</span>
 												</div>,
-												levOk && lev >= 100 && liqMove && prefs.showWarnings ? /* @__PURE__ */ jsx("p", {
-													className: "text-sm text-sell",
-													children: lang === "zh" ? `${lev} 倍。标记价反向大约 ${liqMove}%，保证金大约亏掉一半，仓可以被强平。` : `${lev}×. A mark move of about ${liqMove}% can take half the margin and liquidate.`
-												}) : null,
 												!levOk || !marginOk ? /* @__PURE__ */ jsx("p", {
 													className: "text-sm text-sell",
 													children: !levOk ? c.levCap : `${floor}–500 USDT`
@@ -1679,29 +1610,30 @@ export function RealPerp({ launch, onMarkets }: {
 													className={`min-h-12 text-paper disabled:opacity-40 ${intent === "long" ? "bg-up" : "bg-sell"}`}
 													disabled={busy || feeBlocked || !levOk || !marginOk || !priceOk || (!alt && !view?.priced && !(markN > 0))}
 													onClick={() => {
-														if (lev > 20 && !hot) {
-															setHot(true);
+														if (alt) {
+															setBad(true);
+															setNote(lang === "zh" ? "这一张还没有结算合约，签名不会发出。BEM 永续可以开。" : "This contract has no settlement book, so nothing is signed. BEM perpetuals can open.");
 															return;
 														}
 														setCard(intent);
 													}}
 												>
-													{lev > 20 && !hot ? (lang === "zh" ? "超过 20 倍，再点一次" : "Over 20×. Tap again") : waiting && view && (intent === "long" ? !view.pendingLong : view.pendingLong) ? c.pullQuote : intent === "long" ? (lang === "zh" ? "买入 / 做多" : "Buy / Long") : lang === "zh" ? "卖出 / 做空" : "Sell / Short"}
+													{waiting && view && (intent === "long" ? !view.pendingLong : view.pendingLong) ? c.pullQuote : intent === "long" ? (lang === "zh" ? "买入 / 做多" : "Buy / Long") : lang === "zh" ? "卖出 / 做空" : "Sell / Short"}
 												</button>,
+												note ? <p className={`text-xs ${bad ? "text-sell" : "text-ink/70"}`}>{note}</p> : null,
 												<TradeLog zh={lang === "zh"} />,
 												card ? /* @__PURE__ */ jsx(SignCard, {
 													title: lang === "zh" ? "签名前看一眼" : "Before you sign",
 													yes: lang === "zh" ? "确认并签名" : "Confirm and sign",
 													no: lang === "zh" ? "取消" : "Cancel",
 													auto: !prefs.orderConfirm,
-													warn: prefs.showWarnings ? (coin === "tape" ? lang === "zh" ? "TAPE 永续的结算本还没部署。确认不会签名，也不会扣 USDT。要成交去「现货」。" : "The TAPE perpetual settlement book is not deployed. Confirm does not sign and does not take USDT. Fills are on Spot." : alt ? lang === "zh" ? "这一张单和 BEM 相同。这条交易对的结算合约还没接上，确认不会签名，USDT 也不会扣，也不会去买现货。" : "This ticket matches BEM. This pair's settlement contract is not attached, so confirm does not sign, does not take USDT, and does not buy spot." : board.length === 0 ? lang === "zh" ? "簿上没有别人的单。签下去只是把保证金挂进合约，不会马上成交。想先看盈亏，去模拟。" : "Nobody else is on the book. Signing only posts margin into the contract. It does not fill. Use the paper book if you want to see PnL first." : lang === "zh" ? "两链不能合成一笔。钱包不在这条链时，签名前会切过去。" : "The two chains do not net. If the wallet is on the other chain, it switches before the signature.") : "",
+													warn: "",
 													onNo: () => setCard(null),
 													onYes: () => {
 														const long = card === "long";
 														setCard(null);
 														if (alt) {
 															setBad(false);
-															setNote(coin === "tape" ? lang === "zh" ? "TAPE 永续结算本还没部署。没有签名，USDT 没动。现货可以下单。" : "The TAPE perpetual book is not deployed. Nothing was signed and no USDT moved. Spot can still be ordered." : lang === "zh" ? `${base} 和 BEM 是同一张合约单。结算本还没接上，没有签名，USDT 没动。` : `${base} uses the same ticket as BEM. The settlement book is not attached, so nothing was signed and no USDT moved.`);
 															return;
 														}
 														run(async (from) => {
@@ -1783,33 +1715,12 @@ export function RealPerp({ launch, onMarkets }: {
 													},
 													lines: [
 														{
-															k: lang === "zh" ? "链" : "Chain",
-															v: chain === "xlayer" ? "X Layer · 196" : "BNB Smart Chain · 56"
-														},
-														{
-															k: lang === "zh" ? "合约" : "Contract",
-															v: coin === "tape" ? lang === "zh" ? "TAPE 永续 · 结算本未部署" : "TAPE perpetual · book not deployed" : alt ? lang === "zh" ? "与 BEM 同一类永续，结算本未接入" : "Same perpetual as BEM. Settlement book not attached." : perp,
-															href: alt ? void 0 : `${scan}/address/${perp}`
-														},
-														{
-															k: lang === "zh" ? "钱去哪" : "Where funds go",
-															v: chain === "xlayer" ? lang === "zh" ? "保证金是 USDT0，锁进这份 X Layer 合约。千分之二进收费地址。" : "Margin is USDT0, locked in this X Layer contract. 0.2% goes to the fee address." : lang === "zh" ? "保证金是 BSC 的 USDT，锁进这份合约。千分之二进收费地址。" : "Margin is BSC USDT, locked in this contract. 0.2% goes to the fee address."
-														},
-														{
 															k: lang === "zh" ? "保证金" : "Margin",
 															v: `${margin || "—"} ${chain === "xlayer" ? "USDT0" : "USDT"} · ${lev || "—"}×`
 														},
 														{
 															k: lang === "zh" ? "本单手续费" : "Fee",
 															v: `${marginOk ? (Number(margin) * .002).toFixed(4) : "—"} ${chain === "xlayer" ? "USDT0" : "USDT"}`
-														},
-														{
-															k: lang === "zh" ? "标记价" : "Mark",
-															v: chain === "xlayer" ? lang === "zh" ? `标记读取 X Layer 的 OKB/BEM 与 USDT0/WOKB。${riskLive ? "资金费在多空之间结算。强平的一成进保险基金，不能提取。不够时只减另一笔浮盈。" : "没有资金费。没有保险基金。没有自动减仓。"}` : riskLive ? "Funding settles between the two sides. Insurance cannot be withdrawn. ADL takes profit only." : "No funding. No insurance fund. No auto-deleveraging." : lang === "zh" ? `Pancake 池大约 10 分钟均价。${riskLive ? "资金费在多空之间结算。强平的一成进保险基金，不能提取。不够时只减另一笔浮盈。" : "没有资金费。没有保险基金，没有自动减仓。"}` : riskLive ? "Funding settles between the two sides. Insurance cannot be withdrawn. ADL takes profit only." : "No funding. No insurance fund. No auto-deleveraging."
-														},
-														{
-															k: lang === "zh" ? "强平" : "Liquidation",
-															v: liqMove ? lang === "zh" ? `反向大约 ${liqMove}%，保证金亏一半就可以被强平` : `About ${liqMove}% the wrong way and half the margin can be liquidated` : "—"
 														}
 													]
 												}) : null
@@ -1906,7 +1817,30 @@ export function RealPerp({ launch, onMarkets }: {
 									</div>
 								) : <p className="text-ink/45">{lang === "zh" ? "没有未成交的委托" : "No open orders"}</p>
 							) : null}
-							{dock === "twap" ? <p className="text-ink/45">{lang === "zh" ? "还没有 TWAP" : "No TWAPs"}</p> : null}
+							{stops.some((row) => account && row.user.toLowerCase() === account.toLowerCase()) ? (
+								<div className="mt-2 flex flex-col gap-1 font-mono">
+									{stops.filter((row) => account && row.user.toLowerCase() === account.toLowerCase()).map((row) => (
+										<p key={`s-${row.id.toString()}`} className="flex items-center gap-3">
+											<span>{lang === "zh" ? "止损" : "Stop"} #{row.id.toString()} {row.long ? (lang === "zh" ? "多" : "Long") : lang === "zh" ? "空" : "Short"} · {pxText(row.trigger)} · {usdtText(row.margin)}</span>
+											<button type="button" className="underline" disabled={busy} onClick={() => run((from) => fireStopPerp(from, perp, row.id))}>{lang === "zh" ? "触发" : "Fire"}</button>
+											<button type="button" className="underline" disabled={busy} onClick={() => run((from) => cancelStopPerp(from, perp, row.id), "cancel")}>{lang === "zh" ? "撤销" : "Cancel"}</button>
+										</p>
+									))}
+								</div>
+							) : null}
+							{dock === "twap" ? (
+								twaps.some((row) => account && row.user.toLowerCase() === account.toLowerCase()) ? (
+									<div className="flex flex-col gap-1 font-mono">
+										{twaps.filter((row) => account && row.user.toLowerCase() === account.toLowerCase()).map((row) => (
+											<p key={row.id.toString()} className="flex items-center gap-3">
+												<span>#{row.id.toString()} {row.long ? (lang === "zh" ? "多" : "Long") : lang === "zh" ? "空" : "Short"} · {row.left} · {usdtText(row.each)}</span>
+												<button type="button" className="underline" disabled={busy} onClick={() => run((from) => pokeTwapPerp(from, perp, row.id))}>{lang === "zh" ? "推进一步" : "Poke"}</button>
+												<button type="button" className="underline" disabled={busy} onClick={() => run((from) => cancelTwapPerp(from, perp, row.id), "cancel")}>{lang === "zh" ? "撤销" : "Cancel"}</button>
+											</p>
+										))}
+									</div>
+								) : <p className="text-ink/45">{lang === "zh" ? "还没有 TWAP" : "No TWAPs"}</p>
+							) : null}
 							{dock === "chase" ? <p className="text-ink/45">{lang === "zh" ? "还没有追价" : "No chase"}</p> : null}
 							{dock === "fill" ? (
 								fills.length ? (
@@ -1927,7 +1861,7 @@ export function RealPerp({ launch, onMarkets }: {
 								) : <p className="text-ink/45">{lang === "zh" ? "尚无历史订单" : "No order history"}</p>
 							) : null}
 							{dock === "fund" ? (
-								<p className="font-mono text-ink/70">{riskLive ? (lang === "zh" ? "本内结算" : "On this book") : lang === "zh" ? "不收" : "None"} · {fundClock(lang === "zh")}</p>
+								<p className="font-mono text-ink/70">{fundText} · {fundClock(lang === "zh")}</p>
 							) : null}
 						</div>
 					</div>,

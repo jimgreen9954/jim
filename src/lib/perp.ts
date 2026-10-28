@@ -430,11 +430,7 @@ export function riskOf(which: Desk): string {
   return /^0x[a-fA-F0-9]{40}$/.test(saved) ? saved : "";
 }
 
-export function pickBook(which: Desk, coin: string): string {
-  if (coin === "bem") {
-    const risk = riskOf(which);
-    if (risk) return risk;
-  }
+export function pickBook(which: Desk, _coin: string): string {
   return bookOf(which);
 }
 
@@ -1074,22 +1070,61 @@ const pokeAbi = [
   { name: "poke", type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
 ] as const;
 
-export async function pokeXBem(from: string): Promise<void> {
-  const saved = typeof window === "undefined" ? "" : window.localStorage.getItem(XBEM_MARK_KEY) ?? "";
-  const mark = /^0x[a-fA-F0-9]{40}$/.test(saved) ? saved : KNOWN_XMARK;
-  const was = desk;
-  desk = "xlayer";
+export async function readStops(perp: string): Promise<{ id: bigint; user: string; long: boolean; margin: bigint; lev: number; trigger: bigint }[]> {
+  const c = await client();
+  const addr = perp as Hex;
+  let next = 0n;
   try {
-    const data = encodeFunctionData({ abi: pokeAbi, functionName: "poke" });
-    await send(from, mark as Hex, data, 400_000n);
-  } finally {
-    desk = was;
+    next = await c.readContract({ address: addr, abi: [{ name: "nextStop", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] }] as const, functionName: "nextStop" });
+  } catch {
+    return [];
   }
+  const stopAbi = [{ name: "stops", type: "function", stateMutability: "view", inputs: [{ type: "uint256" }], outputs: [{ type: "address" }, { type: "bool" }, { type: "uint96" }, { type: "uint16" }, { type: "uint128" }, { type: "bool" }] }] as const;
+  const rows = [];
+  const start = next > 12n ? next - 11n : 1n;
+  for (let id = next; id >= start && id > 0n; id -= 1n) {
+    const row = await c.readContract({ address: addr, abi: stopAbi, functionName: "stops", args: [id] });
+    if (!row[5]) continue;
+    rows.push({ id, user: row[0], long: row[1], margin: row[2], lev: Number(row[3]), trigger: row[4] });
+  }
+  return rows;
 }
 
-export async function pushMark(from: string): Promise<void> {
-  await pokeXBem(from);
+export async function readTwaps(perp: string): Promise<{ id: bigint; user: string; long: boolean; each: bigint; lev: number; left: number }[]> {
+  const c = await client();
+  const addr = perp as Hex;
+  let next = 0n;
+  try {
+    next = await c.readContract({ address: addr, abi: [{ name: "nextTwap", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] }] as const, functionName: "nextTwap" });
+  } catch {
+    return [];
+  }
+  const twapAbi = [{ name: "twaps", type: "function", stateMutability: "view", inputs: [{ type: "uint256" }], outputs: [{ type: "address" }, { type: "bool" }, { type: "uint96" }, { type: "uint16" }, { type: "uint8" }, { type: "uint32" }, { type: "uint32" }, { type: "bool" }] }] as const;
+  const rows = [];
+  const start = next > 8n ? next - 7n : 1n;
+  for (let id = next; id >= start && id > 0n; id -= 1n) {
+    const row = await c.readContract({ address: addr, abi: twapAbi, functionName: "twaps", args: [id] });
+    if (!row[7] || row[4] === 0) continue;
+    rows.push({ id, user: row[0], long: row[1], each: row[2], lev: Number(row[3]), left: Number(row[4]) });
+  }
+  return rows;
 }
+
+async function riskCall(from: string, perp: string, name: "fireStop" | "cancelStop" | "pokeTwap" | "cancelTwap" | "pokeTrail", id: bigint): Promise<Hex> {
+  pinned(perp);
+  const data = encodeFunctionData({
+    abi: [{ name, type: "function", stateMutability: "nonpayable", inputs: [{ type: "uint256" }], outputs: [] }] as const,
+    functionName: name,
+    args: [id],
+  });
+  return send(from, perp as Hex, data);
+}
+
+export const fireStopPerp = (from: string, perp: string, id: bigint) => riskCall(from, perp, "fireStop", id);
+export const cancelStopPerp = (from: string, perp: string, id: bigint) => riskCall(from, perp, "cancelStop", id);
+export const pokeTwapPerp = (from: string, perp: string, id: bigint) => riskCall(from, perp, "pokeTwap", id);
+export const cancelTwapPerp = (from: string, perp: string, id: bigint) => riskCall(from, perp, "cancelTwap", id);
+export const pokeTrailPerp = (from: string, perp: string, id: bigint) => riskCall(from, perp, "pokeTrail", id);
 
 export async function deployXLayer(from: string, onStep?: (step: 1 | 2 | 3) => void): Promise<string> {
   if (from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("oracle");

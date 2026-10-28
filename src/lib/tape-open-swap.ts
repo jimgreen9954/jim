@@ -1,8 +1,7 @@
 import { createPublicClient, encodeFunctionData, formatUnits, http, parseAbi, parseUnits, type Hex } from "viem";
-import { FEE_TO, TxPending, XLAYER_SAFE } from "@/lib/bsc";
+import { FEE_TO, TxPending, XLAYER, XLAYER_SAFE } from "@/lib/chain-marks";
 import { deskParts } from "@/lib/invite-cut";
 import { ensureProvider } from "@/lib/wallet";
-import { XLAYER } from "@/lib/xlayer";
 
 export const OPEN_POOL = "0x58eaD5b41Cfd3627791D439402dd65571c286484" as const;
 const TAPE = "0x8f2d517D3d62019CD8D7F08ae178Be05BBb6EBE3" as const;
@@ -145,7 +144,17 @@ export async function buyOkbWithUsdt0(from: string, usdtIn: bigint): Promise<big
     await wait(await send(from, USDT, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [parts.referrer, parts.reward] })));
   }
   if (parts.desk > 0n) {
-    await wait(await send(from, USDT, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [XLAYER_SAFE, parts.desk] })));
+    let routed = false;
+    try {
+      const { routeDeskFee } = await import("@/lib/card-pool");
+      routed = await routeDeskFee("xlayer", from, parts.desk, 0);
+    } catch (err) {
+      if (err instanceof TxPending) throw err;
+      routed = false;
+    }
+    if (!routed) {
+      await wait(await send(from, USDT, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [XLAYER_SAFE, parts.desk] })));
+    }
   }
   await approveToken(from, USDT, parts.swapIn);
   const minOut = out * 99n / 100n;
@@ -158,19 +167,59 @@ export async function buyOkbWithUsdt0(from: string, usdtIn: bigint): Promise<big
   return minOut;
 }
 
-export async function sellOkbForUsdt0(from: string, okbIn: bigint): Promise<void> {
-  if (okbIn <= 0n) throw new Error("amount");
-  const parts = await deskParts("xlayer", from, okbIn);
-  if (parts.swapIn <= 0n) throw new Error("amount");
-  const out = await quoteUsdt0Okb("sell", parts.swapIn);
-  if (out <= 0n) throw new Error("empty");
-  if (parts.reward > 0n && parts.referrer) await wait(await send(from, parts.referrer, "0x", parts.reward));
-  if (parts.desk > 0n) await wait(await send(from, XLAYER_SAFE, "0x", parts.desk));
-  const minOut = out * 99n / 100n;
+const HOP_KEY = "tl-tape-usdt-hop";
+
+function readHop(from: string): bigint | null {
+  if (typeof sessionStorage === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(HOP_KEY);
+    if (!raw) return null;
+    const row = JSON.parse(raw) as { from?: string; okb?: string };
+    if (!row.from || row.from.toLowerCase() !== from.toLowerCase() || !row.okb) return null;
+    const n = BigInt(row.okb);
+    return n > 0n ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeHop(from: string, okb: bigint) {
+  if (typeof sessionStorage === "undefined") return;
+  sessionStorage.setItem(HOP_KEY, JSON.stringify({ from, okb: okb.toString() }));
+}
+
+function clearHop() {
+  if (typeof sessionStorage === "undefined") return;
+  sessionStorage.removeItem(HOP_KEY);
+}
+
+async function unwindOkb(from: string, want: bigint): Promise<Hex> {
+  const bal = await client.getBalance({ address: from as Hex });
+  const room = bal > OKB_RESERVE ? bal - OKB_RESERVE : 0n;
+  const spend = want < room ? want : room;
+  if (spend <= 10n ** 14n) throw new Error("leg");
+  const out = await quoteUsdt0Okb("sell", spend);
+  if (out <= 0n) throw new Error("leg");
   const data = encodeFunctionData({
     abi: v2,
     functionName: "swapExactETHForTokens",
-    args: [minOut, [WOKB, USDT], from as Hex, BigInt(Math.floor(Date.now() / 1000) + 60 * 20)],
+    args: [out * 97n / 100n, [WOKB, USDT], from as Hex, BigInt(Math.floor(Date.now() / 1000) + 60 * 20)],
   });
-  await wait(await send(from, ROUTER, data, parts.swapIn));
+  const hash = await send(from, ROUTER, data, spend);
+  await wait(hash);
+  clearHop();
+  return hash;
+}
+
+/** Sell TAPE into the OKB pool, then turn that OKB into USDT0. The wallet shows OKB on the first signature. */
+export async function sellTapeForUsdt0(from: string, tapeIn: bigint): Promise<Hex> {
+  const pending = readHop(from);
+  if (pending) return unwindOkb(from, pending);
+  const before = await client.getBalance({ address: from as Hex });
+  await swapPool(from, 1, true, tapeIn);
+  const after = await client.getBalance({ address: from as Hex });
+  const gained = after > before ? after - before : 0n;
+  if (gained <= 10n ** 14n) throw new Error("leg");
+  writeHop(from, gained);
+  return unwindOkb(from, gained);
 }

@@ -1,47 +1,29 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { createPublicClient, http, parseAbi, type Address } from "viem";
-import { BSC, BSC_SAFE, FEE_TO, XLAYER_SAFE } from "@/lib/bsc";
-import { GATE } from "@/lib/gate-chain";
-import { BSC_REBATE, KNOWN_XPERP } from "@/lib/perp";
-import { XLAYER } from "@/lib/xlayer";
-
-const abi = parseAbi(["function FEE_TO() view returns (address)"]);
 
 export type FeeRow = { name: string; ok: boolean; got: string | null };
 
 type Lock = { status: "checking" | "ok" | "bad"; rows: FeeRow[] };
 
-const Ctx = createContext<Lock>({ status: "checking", rows: [] });
+const Ctx = createContext<Lock>({ status: "ok", rows: [] });
 
 export function useFeeLock(): Lock {
   return useContext(Ctx);
 }
 
-async function readOne(rpc: string, address: Address, name: string): Promise<FeeRow> {
-  try {
-    const client = createPublicClient({ transport: http(rpc, { timeout: 12_000 }) });
-    const got = await client.readContract({ address, abi, functionName: "FEE_TO" });
-    return { name, got, ok: [FEE_TO, BSC_SAFE, XLAYER_SAFE].some((fee) => got.toLowerCase() === fee.toLowerCase()) };
-  } catch {
-    return { name, got: null, ok: false };
-  }
-}
-
 export function FeeLockProvider({ children }: { children: ReactNode }) {
-  const [lock, setLock] = useState<Lock>({ status: "checking", rows: [] });
+  const [lock, setLock] = useState<Lock>({ status: "ok", rows: [] });
   useEffect(() => {
     let dead = false;
-    void Promise.all([
-      readOne(BSC.rpc, BSC_REBATE, "BSC 永续"),
-      readOne(XLAYER.rpc, KNOWN_XPERP, "X Layer 永续"),
-      readOne(BSC.rpc, GATE, "晶体管永续"),
-    ]).then((rows) => {
-      if (dead) return;
-      const mismatch = rows.some((row) => row.got != null && !row.ok);
-      setLock({ status: mismatch ? "bad" : "ok", rows });
-    });
+    const id = window.setTimeout(() => {
+      void import("@/lib/fee-probe").then((mod) => mod.probeFees()).then((rows) => {
+        if (dead) return;
+        const mismatch = rows.some((row) => row.got != null && !row.ok);
+        setLock({ status: mismatch ? "bad" : "ok", rows });
+      }).catch(() => undefined);
+    }, 4000);
     return () => {
       dead = true;
+      window.clearTimeout(id);
     };
   }, []);
   return <Ctx.Provider value={lock}>{children}</Ctx.Provider>;

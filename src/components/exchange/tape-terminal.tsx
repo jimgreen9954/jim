@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatUnits } from "viem";
 import { Kline, type Bar } from "@/components/exchange/kline";
-import { PairChevron } from "@/components/exchange/desk-chrome";
+import { PairChevron } from "@/components/exchange/pair-chevron";
 import { PhoneChrome, wantedPane, type PhonePane } from "@/components/exchange/phone-desk";
 import { CoinMark } from "@/components/exchange/coin-mark";
 import { rememberFill, TradeLog, TradeQuota } from "@/components/exchange/trade-foot";
@@ -373,7 +373,7 @@ export function TapeTerminal({
   const walletBase = purse ? (market === 0 ? purse.tape : market === 1 ? purse.nand : purse.latch) : 0n;
 
   return (
-    <section className="phone-desk overflow-hidden border border-gold bg-card" data-phone={phone}>
+    <section className="phone-desk spot-split overflow-hidden border border-gold bg-card" data-phone={phone}>
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-gold px-3 py-2">
         <button type="button" onClick={onMarkets} className="flex items-center gap-2">
           <CoinMark id={name.toLowerCase()} />
@@ -385,7 +385,7 @@ export function TapeTerminal({
         <p className="font-mono text-sm text-ink/70">{bestBid > 0n ? usdtText(bestBid, 4) : "—"}<span className="px-1 text-ink/30">/</span>{bestAsk > 0n ? usdtText(bestAsk, 4) : "—"}</p>
       </div>
       <PhoneChrome zh={zhUi} pane={phone} setPane={setPhone} sheet={false} onBuy={() => { setSide("buy"); setPhone("ticket"); }} onSell={() => { setSide("sell"); setPhone("ticket"); }} />
-      <div className="desk-grid grid items-start xl:grid-cols-[minmax(0,1fr)_17.5rem_22rem]">
+      <div className="spot-grid grid items-start xl:grid-cols-[minmax(0,1fr)_17.5rem_22rem]">
         <div className="ph-chart order-1 min-w-0">
           <Kline
               bars={bars}
@@ -414,7 +414,7 @@ export function TapeTerminal({
             <span className="text-right">{zhUi ? "数量" : "Size"} {name}</span>
             <span className="text-right">{zhUi ? "合计" : "Total"}</span>
           </div>
-          <div className="max-h-[28rem] overflow-auto">
+          <div className="book-scroll max-h-[28rem] overflow-auto">
             {askView.map((level, index) => {
               let cum = 0n;
               for (let i = askView.length - 1; i >= index; i--) cum += quoteOf(market, askView[i]);

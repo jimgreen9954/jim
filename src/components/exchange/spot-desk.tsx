@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PhoneChrome, wantedPane, type PhonePane } from "@/components/exchange/phone-desk";
 import { formatUnits } from "viem";
 import { copy } from "@/lib/copy";
@@ -43,12 +43,38 @@ import { XLAYER } from "@/lib/xlayer";
 import { currentAccount, connectKind, onAccount, onOpenLink } from "@/lib/wallet";
 import { rememberFill, TradeLog } from "@/components/exchange/trade-foot";
 import { Kline } from "@/components/exchange/kline";
-import { SignCard } from "@/components/exchange/sign-card";
 import { CoinMark } from "@/components/exchange/coin-mark";
-import { PairChevron } from "@/components/exchange/desk-chrome";
+import { PairChevron } from "@/components/exchange/pair-chevron";
 import { LpPanel } from "@/components/exchange/lp-desk";
 import { useFeeLock } from "@/lib/fee-lock";
 import { SideRail } from "@/components/exchange/side-rail";
+
+type SpotRest = { id: string; pair: "bem" | "bnb" | "okb" | ErcKey; side: "buy" | "sell"; amount: string; limit: number; unit: "usdt" | "bnb" };
+const REST_KEY = "tape-spot-rest";
+
+function readSpotRest(): SpotRest[] {
+  try {
+    const rows = JSON.parse(localStorage.getItem(REST_KEY) || "[]") as SpotRest[];
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeSpotRest(rows: SpotRest[]) {
+  localStorage.setItem(REST_KEY, JSON.stringify(rows));
+}
+
+function limitMin(nextSide: "buy" | "sell", qty: string, px: number, nextPair: SpotRest["pair"], nextUnit: "usdt" | "bnb"): bigint | undefined {
+  const n = Number(qty);
+  if (!(px > 0) || !(n > 0) || (nextUnit === "bnb" && nextSide === "buy")) return undefined;
+  const listed = isErcKey(nextPair) ? ERC_BOOKS[nextPair] : null;
+  const baseDec = listed ? listed.decimals : nextPair === "bem" ? BSC.bemDecimals : 18;
+  const usdtDec = nextPair === "okb" ? OKB.usdtDecimals : BSC.usdtDecimals;
+  const raw = nextSide === "buy" ? n / px : n * px;
+  if (!(raw > 0) || !Number.isFinite(raw)) return undefined;
+  try { return units(raw.toFixed(8), nextSide === "buy" ? baseDec : usdtDec); } catch { return undefined; }
+}
 
 function sized(raw: bigint, decimals: number, pct: number, cap?: bigint): string {
   let cut = (raw * BigInt(pct)) / 100n;
@@ -89,7 +115,11 @@ export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?:
   const [supply, setSupply] = useState<number | null>(null);
   const [lane, setLane] = useState<"trade" | "lp">(openLp ? "lp" : "trade");
   const [phone, setPhone] = useState<PhonePane>(wantedPane());
-  const [showPrints, setShowPrints] = useState(false);
+  const [mode, setMode] = useState<"market" | "limit">("market");
+  const [limitPx, setLimitPx] = useState("");
+  const [rests, setRests] = useState<SpotRest[]>(() => readSpotRest());
+  const midRef = useRef(0);
+  const busyRef = useRef(false);
   const lock = useFeeLock();
 
   useEffect(() => {
@@ -263,29 +293,35 @@ export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?:
     }
   };
 
-  const trade = async (min: bigint) => {
+  const trade = async (min?: bigint) => {
     setBusy(true);
+    busyRef.current = true;
     setBad(false);
     setNote(c.walletBusy);
     try {
-      const from = pair === "okb" ? account ?? (await connectX()) : account ?? (await connectBsc());
-      setAccount(from);
-      if (!amount.trim()) return;
-      const payingBnb = pair !== "okb" && pair !== "bnb" && unit === "bnb";
-      const listed = isErcKey(pair) ? ERC_BOOKS[pair] : null;
-      const tx = pair === "okb"
-        ? await swapOkb(from, side, amount, min)
-        : payingBnb
-          ? await swapWithBnb(from, listed ? listed.token : BSC.bem, listed ? listed.decimals : BSC.bemDecimals, listed ? listed.fee : BSC.fee, side, amount, min)
-          : pair === "bnb" ? await swapBnb(from, side, amount, min) : isErcKey(pair) ? await swapListed(from, pair, side, amount, min) : await swapBem(from, side, amount, min);
+      const tx = await place(side, amount, unit, min, pair);
       setHash(tx);
       rememberFill(`${side === "buy" ? "买入" : "卖出"} ${amount} ${base}`, pair === "okb" ? okbTxUrl(tx) : txUrl(tx));
       setNote(null);
     } catch (err) {
       fail(err);
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
+  };
+
+  const place = async (nextSide: "buy" | "sell", nextAmount: string, nextUnit: "usdt" | "bnb", min: bigint | undefined, nextPair: typeof pair) => {
+    const from = nextPair === "okb" ? account ?? (await connectX()) : account ?? (await connectBsc());
+    setAccount(from);
+    if (!nextAmount.trim()) throw new Error("amount");
+    const paying = nextPair !== "okb" && nextPair !== "bnb" && nextUnit === "bnb";
+    const listed = isErcKey(nextPair) ? ERC_BOOKS[nextPair] : null;
+    return nextPair === "okb"
+      ? swapOkb(from, nextSide, nextAmount, min)
+      : paying
+        ? swapWithBnb(from, listed ? listed.token : BSC.bem, listed ? listed.decimals : BSC.bemDecimals, listed ? listed.fee : BSC.fee, nextSide, nextAmount, min)
+        : nextPair === "bnb" ? swapBnb(from, nextSide, nextAmount, min) : isErcKey(nextPair) ? swapListed(from, nextPair, nextSide, nextAmount, min) : swapBem(from, nextSide, nextAmount, min);
   };
 
   const max = (pct: number) => {
@@ -338,6 +374,47 @@ export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?:
   const deskFee = typed > 0n ? splitDeskFee(typed) : null;
   const over = (pair === "okb" ? Boolean(okbBal) : isErcKey(pair) ? (side === "sell" ? assetBal != null : Boolean(balances)) : Boolean(balances)) && typed > spendable;
   const pcts = [25, 50, 75, 100];
+  const midN = Number(String(shown ?? price ?? "").replace(/,/g, "")) || bars.at(-1)?.c || 0;
+  const openC = bars[0]?.o || bars[0]?.c || 0;
+  const change = openC > 0 && midN > 0 ? (midN - openC) / openC : 0;
+  const tapeRows = prints.flatMap((row) => {
+    const size = Number(String(row.bem).replace(/,/g, ""));
+    const usd = Number(String(row.usdt).replace(/,/g, ""));
+    if (!(size > 0) || !(usd > 0)) return [];
+    return [{ tx: row.tx, px: usd / size, size, usd, side: row.side }];
+  });
+  const asks = tapeRows.filter((row) => row.side === "sell").slice(0, 12);
+  const bids = tapeRows.filter((row) => row.side === "buy").slice(0, 12);
+  midRef.current = midN;
+  const mineRests = rests.filter((row) => row.pair === pair);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (busyRef.current) return;
+      const mid = midRef.current;
+      if (!(mid > 0)) return;
+      const hit = readSpotRest().find((row) => row.pair === pair && (row.side === "buy" ? mid <= row.limit : mid >= row.limit));
+      if (!hit) return;
+      busyRef.current = true;
+      setBusy(true);
+      setBad(false);
+      place(hit.side, hit.amount, hit.unit, limitMin(hit.side, hit.amount, hit.limit, hit.pair, hit.unit), hit.pair)
+        .then((tx) => {
+          const left = readSpotRest().filter((row) => row.id !== hit.id);
+          writeSpotRest(left);
+          setRests(left);
+          setHash(tx);
+          rememberFill(`${hit.side === "buy" ? "买入" : "卖出"} ${hit.amount}`, hit.pair === "okb" ? okbTxUrl(tx) : txUrl(tx));
+          setNote(null);
+        })
+        .catch(fail)
+        .finally(() => {
+          busyRef.current = false;
+          setBusy(false);
+        });
+    }, 4_000);
+    return () => window.clearInterval(id);
+  }, [pair, account]);
 
   return (
     <SideRail items={([
@@ -370,251 +447,137 @@ export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?:
           <PairChevron />
           <span className="lev-chip shrink-0 rounded px-1.5 py-0.5 text-[11px]">{lang === "zh" ? "现货" : "Spot"}</span>
         </button>
-        <p className="font-mono text-sm">{shown ? `${shown} USDT` : "—"}</p>
+        <p className="font-mono text-sm">{midN > 0 ? midN.toLocaleString("en-US", { maximumFractionDigits: 4 }) : "—"} <span className="text-[11px] text-ink/40">USDT</span></p>
+        <p className={`font-mono text-sm ${change < 0 ? "text-sell" : "text-up"}`}>{midN > 0 ? `${change >= 0 ? "+" : ""}${(change * 100).toFixed(2)}%` : "—"}</p>
       </div>
       {lane === "lp" ? <LpPanel /> : (
       <>
       <PhoneChrome zh={lang === "zh"} pane={phone} setPane={setPhone} sheet={false} onBuy={() => { setSide("buy"); setPhone("ticket"); }} onSell={() => { setSide("sell"); setPhone("ticket"); }} />
-      <div className="spot-grid desk-grid grid items-start xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="ph-chart min-w-0 border-b border-gold/40 p-3 xl:border-r xl:border-b-0">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs tracking-widest text-gold">{base} / USDT</p>
-          </div>
-          <div className="mt-2 flex gap-1 overflow-x-auto">
-            {(book === "crypto" ? (["bem", "bnb", "okb", "btc", "eth", "zec", "xau"] as const) : STOCK_KEYS).map((key) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => {
-                  setPair(key);
-                  setAmount("");
-                  setOut(null);
-                  setMinOut(null);
-                  setPrice(null);
-                  setAssetBal(null);
-                  setPrints([]);
-                }}
-                className={`inline-flex min-h-8 shrink-0 items-center gap-1.5 border border-gold px-2 font-mono text-xs ${pair === key ? "bg-ink text-paper" : ""}`}
-              >
-                <CoinMark id={key} className="size-4" />
-                {key in STOCKS ? (lang === "zh" ? STOCKS[key as StockKey].zh : STOCKS[key as StockKey].en) : key === "bem" ? "BEM" : key === "bnb" ? "BNB" : key === "okb" ? "OKB" : key === "btc" ? "BTC" : key === "eth" ? "ETH" : key === "zec" ? "ZEC" : "XAU"}
-              </button>
-            ))}
-          </div>
-          <p className="mt-3 flex items-baseline gap-2 leading-none">
-            <span className="font-mono text-4xl tabular-nums tracking-tight sm:text-5xl">{shown ?? "—"}</span>
-            {shown ? <span className="font-mono text-xs tracking-widest text-gold">USDT</span> : null}
-          </p>
-          <div className="mt-3 flex flex-wrap border border-gold">
-            {(["1m", "5m", "15m", "1h", "1d"] as const).map((item) => (
-              <button key={item} type="button" onClick={() => setFrame(item)} className={`min-h-9 flex-1 font-mono text-xs ${frame === item ? "bg-ink text-paper" : ""}`}>
-                {item === "1d" ? (lang === "zh" ? "1日" : "1d") : item}
-              </button>
-            ))}
-          </div>
-          <Kline bars={bars} lang={lang} desk="spot" supply={supply} />
-          <button type="button" className="mt-3 flex h-8 w-full items-center justify-between border border-gold/40 px-2 text-xs" onClick={() => setShowPrints((on) => !on)}>
-            <span>{lang === "zh" ? "成交" : "Prints"}</span>
-            <span className="text-ink/45">{showPrints ? (lang === "zh" ? "收起" : "Hide") : prints.length}</span>
-          </button>
-          {showPrints ? (
-          <div className="mt-2 overflow-x-auto">
-          <div className="grid min-w-[22rem] grid-cols-[3rem_1fr_5rem_7.5rem] gap-2 font-mono text-xs text-ink/45">
-            <span>{lang === "zh" ? "买卖" : "Side"}</span>
-            <span>{base}</span>
-            <span>USDT</span>
-            <span>{lang === "zh" ? "地址" : "Address"}</span>
-          </div>
-          <ul className="mt-2 min-w-[22rem] divide-y divide-gold/30">
-            {prints.length === 0 ? <li className="py-3 text-sm text-ink/60">{lang === "zh" ? "还没有成交。" : "No prints yet."}</li> : null}
-            {prints.map((row) => (
-              <li key={row.id} className="grid grid-cols-[3rem_1fr_5rem_7.5rem] items-baseline gap-2 py-2 font-mono text-sm tabular-nums">
-                <a className={row.side === "buy" ? "text-gold" : "text-sell"} href={pair === "okb" ? okbTxUrl(row.tx) : txUrl(row.tx)} target="_blank" rel="noreferrer">
-                  {row.side === "buy" ? c.buy : c.sell}
-                </a>
-                <span className="min-w-0 truncate">{row.bem} {base}</span>
-                <span className="text-ink/70">{row.usdt}</span>
-                {row.who ? (
-                  <a className="truncate text-xs underline decoration-gold underline-offset-4" href={pair === "okb" ? okbAddressUrl(row.who) : `${BSC.explorer}/address/${row.who}`} target="_blank" rel="noreferrer">
-                    {row.who.slice(0, 6)}…{row.who.slice(-4)}
-                  </a>
-                ) : (
-                  <span className="text-xs text-ink/40">—</span>
-                )}
-              </li>
-            ))}
-          </ul>
-          </div>
-          ) : null}
+      <div className={`spot-grid grid min-w-0 items-start xl:grid-cols-[minmax(0,1fr)_18rem_20rem]`} data-phone={phone}>
+        <div className="ph-chart order-1 min-w-0">
+          <Kline
+            bars={bars}
+            mark={midN}
+            lang={lang}
+            desk="spot"
+            frame={frame}
+            frames={([
+              ["1m", "1分", "1m"],
+              ["5m", "5分", "5m"],
+              ["15m", "15分", "15m"],
+              ["1h", "1时", "1h"],
+              ["1d", "1日", "1d"],
+            ] as const).map(([id, zhLabel, enLabel]) => ({ id, label: lang === "zh" ? zhLabel : enLabel }))}
+            onFrame={(id) => setFrame(id as SpotFrame)}
+            onPrice={(px) => { setMode("limit"); setLimitPx(px >= 1 ? px.toFixed(4) : px.toFixed(6)); setPhone("ticket"); }}
+          />
         </div>
-        <form
-          className="ph-ticket flex min-w-0 flex-col gap-3 border-t border-gold p-3 xl:sticky xl:top-28 xl:border-t-0 xl:border-l"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!account || over || !amount.trim() || !out || !minOut) return;
-            setCard(true);
-          }}
-        >
-          <p className="font-mono text-xs text-ink/70">
-            {account ? `${lang === "zh" ? "已连接" : "Connected"} ${account.slice(0, 6)}…${account.slice(-4)}` : lang === "zh" ? "未连接" : "Not connected"}
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            {(["buy", "sell"] as const).map((key) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setSide(key)}
-                className={`min-h-12 border border-gold ${side === key ? "bg-ink text-paper" : "bg-card"}`}
-              >
-                {key === "buy" ? c.buy : c.sell}
+        <div className="ph-book order-3 min-w-0 border-t border-gold xl:order-2 xl:border-t-0 xl:border-l">
+          <div className="flex h-9 items-center gap-3 border-b border-gold px-3 text-xs">
+            <span className="tab-on">{lang === "zh" ? "最新成交" : "Trades"}</span>
+          </div>
+          <div className="spot-book px-2 py-1 text-[10px] text-ink/40">
+            <span>{lang === "zh" ? "价格" : "Price"}</span>
+            <span className="text-right">{base}</span>
+            <span className="text-right">USDT</span>
+          </div>
+          <div className="book-scroll max-h-[28rem] overflow-auto">
+            {asks.map((level) => (
+              <button key={`a-${level.tx}`} type="button" onClick={() => { setMode("limit"); setSide("buy"); setLimitPx(level.px >= 1 ? level.px.toFixed(4) : level.px.toFixed(6)); setPhone("ticket"); }} className="spot-book w-full px-2 py-[3px] text-left font-mono text-[12px]">
+                <span className="text-sell">{level.px >= 1 ? level.px.toFixed(4) : level.px.toFixed(6)}</span>
+                <span className="text-right text-ink/80">{level.size.toFixed(4)}</span>
+                <span className="text-right text-ink/45">{level.usd.toFixed(2)}</span>
+              </button>
+            ))}
+            <p className="border-y border-gold/30 px-2 py-1 font-mono text-sm">{midN > 0 ? midN.toLocaleString("en-US", { maximumFractionDigits: 4 }) : "—"}</p>
+            {bids.map((level) => (
+              <button key={`b-${level.tx}`} type="button" onClick={() => { setMode("limit"); setSide("sell"); setLimitPx(level.px >= 1 ? level.px.toFixed(4) : level.px.toFixed(6)); setPhone("ticket"); }} className="spot-book w-full px-2 py-[3px] text-left font-mono text-[12px]">
+                <span className="text-up">{level.px >= 1 ? level.px.toFixed(4) : level.px.toFixed(6)}</span>
+                <span className="text-right text-ink/80">{level.size.toFixed(4)}</span>
+                <span className="text-right text-ink/45">{level.usd.toFixed(2)}</span>
               </button>
             ))}
           </div>
-          <p className="font-mono text-2xl tabular-nums">{shown ?? "—"} <span className="text-xs tracking-widest text-gold">USDT</span></p>
+        </div>
+        <div className="ph-ticket relative order-2 border-t border-gold p-3 xl:order-3 xl:border-t-0 xl:border-l">
+          <div className="grid grid-cols-2 gap-1">
+            <button type="button" onClick={() => setMode("market")} className={`h-10 text-sm ${mode === "market" ? "bg-ink" : "border border-gold/40 text-ink/70"}`}>{lang === "zh" ? "市价" : "Market"}</button>
+            <button type="button" onClick={() => setMode("limit")} className={`h-10 text-sm ${mode === "limit" ? "bg-ink" : "border border-gold/40 text-ink/70"}`}>{lang === "zh" ? "限价" : "Limit"}</button>
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-1">
+            <button type="button" onClick={() => setSide("buy")} className={`h-10 text-sm ${side === "buy" ? "bg-ink" : "quiet-buy"}`}>{lang === "zh" ? "买入" : "Buy"}</button>
+            <button type="button" onClick={() => setSide("sell")} className={`h-10 text-sm ${side === "sell" ? "bg-sell text-[#fff7f8]" : "quiet-sell"}`}>{lang === "zh" ? "卖出" : "Sell"}</button>
+          </div>
+          <p className="mt-3 font-mono text-lg tabular-nums">{midN > 0 ? midN.toLocaleString("en-US", { maximumFractionDigits: 4 }) : "—"} <span className="text-xs text-ink/45">USDT</span></p>
+          <div className="mt-2 grid grid-cols-2 border border-gold/40 font-mono text-sm">
+            <p className="px-2 py-2">
+              <span className="block text-[10px] text-ink/45">{lang === "zh" ? "可用" : "Available"} {payUnit}</span>
+              {pretty(spendable, payDecimals, 4)}
+            </p>
+            <p className="border-l border-gold/40 px-2 py-2">
+              <span className="block text-[10px] text-ink/45">{lang === "zh" ? "约得" : "About"} {recvUnit}</span>
+              {out ?? "—"}
+            </p>
+          </div>
           {pair !== "okb" && pair !== "bnb" ? (
-            <div className="grid grid-cols-2 border border-gold text-sm">
-              <button type="button" className={`min-h-10 ${unit === "usdt" ? "bg-ink text-paper" : ""}`} onClick={() => { setUnit("usdt"); setAmount(""); }}>USDT</button>
-              <button type="button" className={`min-h-10 ${unit === "bnb" ? "bg-ink text-paper" : ""}`} onClick={() => { setUnit("bnb"); setAmount(""); }}>BNB</button>
+            <div className="mt-2 grid grid-cols-2 gap-1">
+              <button type="button" onClick={() => setUnit("usdt")} className={`h-8 text-xs ${unit === "usdt" ? "bg-ink" : "border border-gold/40 text-ink/60"}`}>USDT</button>
+              <button type="button" onClick={() => setUnit("bnb")} className={`h-8 text-xs ${unit === "bnb" ? "bg-ink" : "border border-gold/40 text-ink/60"}`}>BNB</button>
             </div>
           ) : null}
-          <div className="grid grid-cols-3 border border-gold/40">
-            <p className="min-w-0 px-2 py-2">
-              <span className="block text-[10px] tracking-wide text-ink/45">{lang === "zh" ? "可用" : "Available"} USDT</span>
-              <span className="block truncate font-mono text-sm">{(pair === "okb" ? okbBal : balances) ? pretty(usdtRaw, usdtDec, 2) : "—"}</span>
-            </p>
-            <p className="min-w-0 border-l border-gold/40 px-2 py-2">
-              <span className="block text-[10px] tracking-wide text-ink/45">{lang === "zh" ? "可用" : "Available"} {pair === "okb" ? "OKB" : "BNB"}</span>
-              <span className="block truncate font-mono text-sm">{pair === "okb" ? (okbBal ? pretty(okbBal.okb, 18, 4) : "—") : (balances ? pretty(balances.bnb, 18, 4) : "—")}</span>
-            </p>
-            <p className="min-w-0 border-l border-gold/40 px-2 py-2">
-              <span className="block text-[10px] tracking-wide text-ink/45">{lang === "zh" ? "可用" : "Available"} {base}</span>
-              <span className="block truncate font-mono text-sm">{(pair === "okb" ? Boolean(okbBal) : Boolean(balances) || assetBal != null) ? pretty(sellRaw, sellDec, 4) : "—"}</span>
-            </p>
-          </div>
-          <p className="text-xs tracking-widest text-gold">{c.balTitle}</p>
-          <div className="grid grid-cols-3 gap-2">
-            {(
-              pair === "okb"
-                ? ([
-                    ["OKB", okbBal ? pretty(okbBal.okb, 18, 4) : "—"],
-                    ["USDT", okbBal ? pretty(okbBal.usdt, OKB.usdtDecimals, 2) : "—"],
-                    ["链", "X Layer"],
-                  ] as const)
-                : isErcKey(pair)
-                  ? ([
-                      [base, assetBal != null ? pretty(assetBal, ERC_BOOKS[pair].decimals, 4) : "—"],
-                      ["USDT", balances ? pretty(balances.usdt, BSC.usdtDecimals, 2) : "—"],
-                      ["BNB", balances ? pretty(balances.bnb, 18, 4) : "—"],
-                    ] as const)
-                : ([
-                    ["BEM", balances ? pretty(balances.bem, BSC.bemDecimals, 4) : "—"],
-                    ["USDT", balances ? pretty(balances.usdt, BSC.usdtDecimals, 2) : "—"],
-                    ["BNB", balances ? pretty(balances.bnb, 18, 4) : "—"],
-                  ] as const)
-            ).map(([name, value]) => (
-              <p key={name} className="border border-gold/40 px-2 py-2">
-                <span className="block text-xs tracking-widest text-gold">{name}</span>
-                <span className="block truncate font-mono text-sm tabular-nums">{value}</span>
-              </p>
-            ))}
-          </div>
-          <label className="border border-gold/40 px-3 py-2">
-            <span className="flex items-center justify-between text-xs tracking-widest text-gold">
-              {c.pay}
-              <span className="max-w-[9rem] truncate font-mono normal-case tracking-normal text-ink/70">
-                {c.ofBal} {(pair === "okb" ? okbBal : balances || assetBal != null) ? pretty(payRaw, payDecimals, side === "buy" ? 4 : 4) : "—"} {payUnit}
-              </span>
-            </span>
-            <span className="flex items-baseline gap-2">
-              <input
-                value={amount}
-                onChange={(event) => setAmount(event.target.value)}
-                inputMode="decimal"
-                placeholder="0"
-                className="w-full bg-transparent font-mono text-3xl outline-none"
-                aria-label={c.pay}
-              />
-              <span className="font-mono text-sm">{payUnit}</span>
-            </span>
-          </label>
-          <div className="grid grid-cols-4 gap-2">
-            {pcts.map((pct) => (
-              <button
-                key={pct}
-                type="button"
-                onClick={() => max(pct)}
-                className={`min-h-11 border border-gold font-mono text-sm ${amount && amount === sized(payRaw, payDecimals, pct, spendCap) ? "bg-ink text-paper" : ""}`}
-              >
-                {pct}%
-              </button>
-            ))}
-          </div>
-          <p className="border border-gold/40 px-3 py-2">
-            <span className="block text-xs tracking-widest text-gold">{c.receive}</span>
-            <span className="font-mono text-2xl tabular-nums">
-              {out ?? "—"} {recvUnit}
-            </span>
-          </p>
-          <p className="font-mono text-xs tabular-nums text-ink/70">
-            {lang === "zh" ? "本单台费" : "Fee"} {deskFee ? pretty(deskFee.fee, payDecimals, 4) : "—"} {payUnit}
-            {" · "}
-            {lang === "zh" ? "最少到账" : "Min. received"} {minOut ?? "—"} {recvUnit}
-          </p>
-          {over ? <p className="text-sm text-sell">{lang === "zh" ? "余额不够。" : "Not enough balance."}</p> : null}
-          {!account ? (
-            <div className="grid grid-cols-2 gap-2">
-              <button type="button" className="min-h-12 border border-gold" disabled={busy} onClick={() => void connectHere("okx")}>
-                {lang === "zh" ? "用 OKX 连接" : "Connect OKX"}
-              </button>
-              <button type="button" className="min-h-12 border border-gold" disabled={busy} onClick={() => void connectHere("binance")}>
-                {lang === "zh" ? "用币安连接" : "Connect Binance"}
-              </button>
-            </div>
+          {mode === "limit" ? (
+            <label className="relative mt-2 block border border-gold/40 px-2 py-2">
+              <span className="text-[11px] text-ink/45">{lang === "zh" ? "限价" : "Limit"}</span>
+              <input value={limitPx} onChange={(event) => setLimitPx(event.target.value)} inputMode="decimal" className="w-full bg-transparent font-mono text-lg outline-none" />
+              {!limitPx.trim() ? <span className="pointer-events-none absolute bottom-2 right-2 max-w-[75%] truncate font-mono text-[11px] text-ink/40">{lang === "zh" ? "输入限价" : "Limit"}{midN > 0 ? ` ${midN >= 1 ? midN.toFixed(4) : midN.toFixed(6)}` : ""}</span> : null}
+            </label>
           ) : (
-            <button type="submit" className="min-h-12 bg-ink text-paper disabled:opacity-40" disabled={busy || over || !amount.trim() || !out || !minOut}>
-              {lang === "zh" ? `${side === "buy" ? "买入" : "卖出"} ${base} · ${side === "buy" ? "付" : "收"} ${side === "buy" ? payUnit : recvUnit}` : `${side === "buy" ? "Buy" : "Sell"} ${base} · ${side === "buy" ? "pay" : "receive"} ${side === "buy" ? payUnit : recvUnit}`}
-            </button>
+            <p className="mt-2 flex items-center justify-between border border-gold/40 px-2 py-2 font-mono">
+              <span className="text-[11px] text-ink/45">{lang === "zh" ? "价格" : "Price"}</span>
+              <span>{midN > 0 ? midN.toLocaleString("en-US", { maximumFractionDigits: 4 }) : "—"}</span>
+            </p>
           )}
-          {openLink ? (
-            <a className="inline-flex min-h-11 items-center justify-center border border-gold bg-ink px-3 text-paper" href={openLink} target="_blank" rel="noreferrer">
-              {lang === "zh" ? "没弹出的话，点这里打开 OKX" : "If nothing opened, open OKX"}
-            </a>
-          ) : null}
-          {note ? <p className={`text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
+          <label className="mt-2 block border border-gold/40 px-2 py-2">
+            <span className="text-[11px] text-ink/45">{side === "buy" ? payUnit : base}</span>
+            <input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" className="w-full bg-transparent font-mono text-lg outline-none" />
+          </label>
+          <div className="mt-1 grid grid-cols-4 gap-1">
+            {pcts.map((pct) => (
+              <button key={pct} type="button" onClick={() => max(pct)} className="h-7 border border-gold/30 font-mono text-[11px] text-ink/60">{pct}%</button>
+            ))}
+          </div>
+          <button type="button" className={`mt-3 h-11 w-full text-sm disabled:opacity-40 ${side === "buy" ? "bg-ink" : "bg-sell text-[#fff7f8]"}`} disabled={busy || over || !amount.trim()} onClick={() => {
+            if (mode === "limit") {
+              const px = Number(limitPx);
+              if (!(px > 0)) return;
+              const crossed = midN > 0 && (side === "buy" ? midN <= px : midN >= px);
+              if (!crossed) {
+                const row: SpotRest = { id: `${Date.now()}`, pair, side, amount, limit: px, unit };
+                const next = [row, ...readSpotRest()].slice(0, 24);
+                writeSpotRest(next);
+                setRests(next);
+                setAmount("");
+                return;
+              }
+              void trade(limitMin(side, amount, px, pair, unit) ?? floor ?? undefined);
+              return;
+            }
+            void trade(floor ?? undefined);
+          }}>
+            {busy ? (lang === "zh" ? "等待钱包" : "Waiting") : lang === "zh" ? `${side === "buy" ? "买入" : "卖出"} ${base} · ${side === "buy" ? "付" : "收"} ${side === "buy" ? payUnit : recvUnit}` : `${side === "buy" ? "Buy" : "Sell"} ${base}`}
+          </button>
+          {note ? <p className={`mt-2 text-xs ${bad ? "text-sell" : ""}`}>{note}</p> : null}
+          {mineRests.map((row) => (
+            <p key={row.id} className="mt-1 flex items-center justify-between font-mono text-[11px]">
+              <span>{row.side === "buy" ? (lang === "zh" ? "买" : "Buy") : lang === "zh" ? "卖" : "Sell"} {row.amount} @ {row.limit}</span>
+              <button type="button" className="underline" onClick={() => { const left = readSpotRest().filter((item) => item.id !== row.id); writeSpotRest(left); setRests(left); }}>{lang === "zh" ? "撤销" : "Cancel"}</button>
+            </p>
+          ))}
           <TradeLog zh={lang === "zh"} />
           {hash ? (
-            <a className="text-sm underline decoration-gold underline-offset-4" href={pair === "okb" ? okbTxUrl(hash) : txUrl(hash)} target="_blank" rel="noreferrer">
-              {c.walletTx}
-            </a>
+            <a className="mt-2 block text-xs underline" href={pair === "okb" ? okbTxUrl(hash) : txUrl(hash)} target="_blank" rel="noreferrer">{c.walletTx}</a>
           ) : null}
-          {card ? (
-            <SignCard
-              title={lang === "zh" ? "签名前看一眼" : "Before you sign"}
-              yes={lang === "zh" ? `签名并${side === "buy" ? "买入" : "卖出"}` : `Sign and ${side === "buy" ? "buy" : "sell"}`}
-              no={lang === "zh" ? "取消" : "Cancel"}
-              warn=""
-              onNo={() => setCard(false)}
-              onYes={() => {
-                if (!floor || Date.now() - quotedAt > 30_000) {
-                  setCard(false);
-                  setBad(true);
-                  setNote(lang === "zh" ? "报价超过 30 秒，已经作废。看新的最少到账再签。" : "The quote is older than 30 seconds. Read the new minimum, then sign.");
-                  return;
-                }
-                const min = floor;
-                setCard(false);
-                void trade(min);
-              }}
-              lines={[
-                { k: lang === "zh" ? "这一笔" : "This order", v: `${side === "buy" ? (lang === "zh" ? "买入" : "Buy") : lang === "zh" ? "卖出" : "Sell"} ${amount} ${payUnit}` },
-                { k: lang === "zh" ? "池子约得" : "Pool estimate", v: `${out ?? "—"} ${recvUnit}` },
-                { k: lang === "zh" ? "台费，打入收费地址" : "Desk fee, to the fee address", v: `${deskFee ? pretty(deskFee.fee, payDecimals, 4) : "—"} ${payUnit}` },
-                { k: lang === "zh" ? "滑点 1% 内最少到账" : "Minimum within 1% slippage", v: `${minOut ?? "—"} ${recvUnit}` },
-                { k: lang === "zh" ? "收费地址" : "Fee address", v: pair === "okb" ? XLAYER_SAFE : BSC_SAFE, href: pair === "okb" ? `${XLAYER.explorer}/address/${XLAYER_SAFE}` : `${BSC.explorer}/address/${BSC_SAFE}` },
-              ]}
-            />
-          ) : null}
-        </form>
+        </div>
       </div>
       </>
       )}
