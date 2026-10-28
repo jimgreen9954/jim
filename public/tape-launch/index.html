@@ -2137,7 +2137,10 @@ tbody tr:hover { background: var(--soft); }
           <p class="by" id="cp-forge-best">连接钱包后，这里显示你现在手里最高的一张。</p>
           <div class="forge-owned" id="cp-forge-owned"></div>
           <h4 class="forge-step">2. 材料</h4>
-          <p class="by">已选的编号写在下面。空格或逗号分开。同一张不能用两次。</p>
+          <details class="fold">
+            <summary>说明</summary>
+            <p class="by">已选的编号写在下面。空格或逗号分开。同一张不能用两次。点「说明」可以看这组为什么是这张卡、台费怎么返还、什么时候能领。</p>
+          </details>
           <label for="cp-forge-ids">编号</label>
           <input id="cp-forge-ids" inputmode="numeric" placeholder="点上面的卡，或输入例如 12 340">
           <div class="hold-ids" id="cp-forge-picks"></div>
