@@ -279,6 +279,16 @@ a.nav-item { text-decoration: none; }
   color: #e7edf6;
 }
 .cp-banner h2, .cp-banner .by, .cp-banner p { color: #e7edf6; }
+.cp-banner .desk-pass {
+  color: #1a140c;
+  background: #f7f1e4;
+  border-color: #e0b15a;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.55;
+  max-width: 640px;
+}
+.cp-banner .desk-pass .forge-go { margin-top: 10px; }
 .cp-banner .by { color: #c9d4e3; font-size: 14px; line-height: 1.5; max-width: 640px; }
 .cp-banner .head-slot { align-self: flex-end; }
 .cp-kicker { color: var(--gold); font-size: 12px; font-weight: 800; letter-spacing: .16em; display: flex; align-items: center; gap: 8px; }
@@ -941,6 +951,36 @@ td.right, th.right { text-align: right; }
 .forge-result .swatch { height: 64px; border-radius: 12px; }
 .forge-result h4 { margin: 10px 0 4px; font-size: 20px; }
 .forge-result p { color: var(--muted); font-size: 13px; line-height: 1.5; margin-top: 4px; }
+.craft-face {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(140px, .7fr);
+  gap: 12px;
+  margin-top: 8px;
+  padding: 14px;
+  border-radius: 18px;
+  min-height: 220px;
+  color: #f7f1e4;
+}
+.craft-photos { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 8px; align-content: center; }
+.craft-photos img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  image-rendering: pixelated;
+  border-radius: 12px;
+  background: #111;
+  border: 2px solid rgba(255,255,255,.45);
+}
+.craft-photos span {
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: rgba(0,0,0,.28);
+  font-weight: 800;
+}
+.craft-face h4 { margin: 0; font-size: 34px; line-height: 1.1; color: #fff; }
+.craft-face p { margin: 8px 0 0; color: #f7f1e4; font-size: 14px; line-height: 1.45; }
+@media (max-width: 640px) { .craft-face { grid-template-columns: 1fr; } .craft-face h4 { font-size: 28px; } }
 .forge-go {
   display: inline-flex;
   align-items: center;
@@ -1947,7 +1987,9 @@ tbody tr:hover { background: var(--soft); }
           <div>
             <p class="cp-kicker">火热交易中</p>
             <h2>Circuit Punk</h2>
-            <p class="desk-pass">先在本站完成合成并点确定。确定之后，才去 app.tapeliquid.net 确认身份，然后开始交易。每个自然月的台费减免领一次，必须在次月前 7 天内领取，过了就不能补。奖金池先到先得，谁都可以充，项目方也可以充。</p>
+            <div class="desk-pass">先去合成页，选自己的编号。凑齐后点「合成」，会生成一张卡。
+              <button class="forge-go" type="button" onclick="switchPage('forge')">打开合成</button>
+            </div>
             <details class="fold">
               <summary>介绍</summary>
               <p class="by">Circuit Punk 是本市场的创始收藏，第一套，也是唯一一套。它依照 TapeOut 的 TAP-721 草案发行：在 ERC-721 的图像之外，每一枚另附一份 tapnet/1 网表及其 SHA-256。本收藏现处于 L0，网表可以核对，但尚未流片。肖像致敬比特币与 BEM 的早期参与者，包括 Hal Finney、Adam Back、Jameson Lopp，以及 BEM 的早期持有人。肖像是纪念，不构成投资建议。</p>
@@ -1985,7 +2027,9 @@ tbody tr:hover { background: var(--soft); }
           <div>
             <p class="cp-kicker">火热交易中</p>
             <h2>Circuit Punk</h2>
-            <p class="desk-pass">先在本站完成合成并点确定。确定之后，才去 app.tapeliquid.net 确认身份，然后开始交易。每个自然月的台费减免领一次，必须在次月前 7 天内领取，过了就不能补。奖金池先到先得，谁都可以充，项目方也可以充。</p>
+            <div class="desk-pass">先去合成页，选自己的编号。凑齐后点「合成」，会生成一张卡。
+              <button class="forge-go" type="button" onclick="switchPage('forge')">打开合成</button>
+            </div>
             <details class="fold">
               <summary>介绍</summary>
               <p class="by">Circuit Punk 是本市场的创始收藏，第一套，也是唯一一套。它依照 TapeOut 的 TAP-721 草案发行：在 ERC-721 的图像之外，每一枚另附一份 tapnet/1 网表及其 SHA-256。本收藏现处于 L0，网表可以核对，但尚未流片。肖像致敬比特币与 BEM 的早期参与者，包括 Hal Finney、Adam Back、Jameson Lopp，以及 BEM 的早期持有人。肖像是纪念，不构成投资建议。</p>
@@ -1993,7 +2037,9 @@ tbody tr:hover { background: var(--soft); }
             </details>
           </div>
         </div>
-        <p class="desk-pass">先在本站完成合成并点确定。确定之后，才去 app.tapeliquid.net 确认身份，然后开始交易。每个自然月的台费减免领一次，必须在次月前 7 天内领取，过了就不能补。奖金池先到先得，谁都可以充，项目方也可以充。</p>
+        <div class="desk-pass">先去合成页，选自己的编号。凑齐后点「合成」，会生成一张卡。
+          <button class="forge-go" type="button" onclick="switchPage('forge')">打开合成</button>
+        </div>
         <button class="buy ghost" type="button" onclick="switchPage('forge')" style="max-width:280px">打开合成</button>
         <div class="cp-layout">
           <aside class="cp-mint">

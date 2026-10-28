@@ -1468,21 +1468,37 @@ export function bootCpunk(
     const card = made.card;
     const view = document.createElement("div");
     view.className = "forge-result";
-    if (card.edge) view.style.boxShadow = `inset 0 0 0 2px ${card.edge}`;
-    const swatch = document.createElement("div");
-    swatch.className = "swatch";
-    swatch.style.background = card.color;
+    const face = document.createElement("div");
+    face.className = "craft-face";
+    face.style.background = `linear-gradient(145deg, ${card.color}, #120c18 78%)`;
+    if (card.edge) face.style.boxShadow = `inset 0 0 0 3px ${card.edge}`;
+    const photos = document.createElement("div");
+    photos.className = "craft-photos";
+    for (const id of card.ids.slice(0, 6)) {
+      const img = document.createElement("img");
+      img.alt = `Circuit Punk ${id}`;
+      img.src = `/api/circuit-punk/${id}.png`;
+      photos.append(img);
+    }
+    if (card.ids.length > 6) {
+      const more = document.createElement("span");
+      more.textContent = `+${card.ids.length - 6}`;
+      photos.append(more);
+    }
+    const side = document.createElement("div");
     const title = document.createElement("h4");
     title.textContent = card.name;
     const mats = document.createElement("p");
-    mats.textContent = `材料 ${card.ids.map((id) => `#${id} ${punkSheet(id).tier}`).join("、")}`;
+    mats.textContent = card.ids.map((id) => `#${id}`).join(" ");
     const fee = document.createElement("p");
-    const main = card.main ? `主属性是${DESK_LABEL[card.main]}，这一边 ${(card.feeMain / 100).toFixed(2)}%。` : "没有主属性再减。";
-    fee.textContent = `全场台费 ${(card.feeAll / 100).toFixed(2)}%。${main}`;
+    const main = card.main ? `主属性 ${DESK_LABEL[card.main]} ${(card.feeMain / 100).toFixed(2)}%` : "没有主属性再减";
+    fee.textContent = `全场 ${(card.feeAll / 100).toFixed(2)}% · ${main}`;
     const stats = document.createElement("p");
     stats.textContent = (Object.keys(DESK_LABEL) as (keyof typeof DESK_LABEL)[])
       .map((desk) => `${DESK_LABEL[desk]} ${card.stats[desk]}`)
       .join(" · ");
+    side.append(title, mats, fee, stats);
+    face.append(photos, side);
     const guide = document.createElement("p");
     const passKey = card.ids.join(",");
     let saved = "";
@@ -1492,29 +1508,29 @@ export function bootCpunk(
       saved = "";
     }
     if (saved === passKey) {
-      guide.textContent = "这张卡已确定。现在可以用同一个钱包去交易所确认身份，然后开始交易。台费减免每个自然月领一次，次月 1 日 0 点到 8 日 0 点（新加坡时间）内领取，过了就不能补。奖金池先到先得，谁都可以充，项目方也可以充。链上锁卡合约上线前，这个确定只记在这台浏览器，还不能领取。";
+      guide.textContent = "已合成。这些编号要锁定，锁着不能转。拆开后 48 小时不能转，这组编号 30 天内不能再合成。锁卡合约上线前，这张卡先记在这台浏览器。现在可以去交易所确认身份。";
       const link = document.createElement("a");
       link.className = "forge-go";
       link.href = "https://app.tapeliquid.net/";
       link.target = "_blank";
       link.rel = "noopener";
       link.textContent = "去交易所确认身份";
-      view.append(swatch, title, mats, fee, stats, guide, link);
+      view.append(face, guide, link);
     } else {
-      guide.textContent = "先点确定。确定之后，才可以去交易所确认身份并开始交易。";
+      guide.textContent = "这张卡可以合成。点下面生成，并准备锁定这些编号。";
       const confirm = document.createElement("button");
       confirm.type = "button";
       confirm.className = "forge-go";
-      confirm.textContent = "确定这张卡";
+      confirm.textContent = "合成";
       confirm.addEventListener("click", () => {
         try {
           localStorage.setItem("tape-forge-pass", passKey);
         } catch {
-          guide.textContent = "这台浏览器没有记下。换一台之后要重新确定。";
+          guide.textContent = "这台浏览器没有记下。换一台之后要重新合成。";
         }
         paintForge();
       }, { signal });
-      view.append(swatch, title, mats, fee, stats, guide, confirm);
+      view.append(face, guide, confirm);
     }
     forgeOut.append(view);
   };
