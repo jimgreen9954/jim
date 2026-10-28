@@ -1525,7 +1525,7 @@ export function bootCpunk(
       para(`这张是${card.name}。${rule}`),
       para(`交易所台费基准是付出金额的 0.20%。这张卡全场按 ${(card.feeAll / 100).toFixed(2)}% 计算应返还。${mainCut}`),
       para(`四项分数是 ${scores}。衬底加现货，金属层加永续，键合加电路，对准加发射。最高的一项才是主属性。`),
-      para("先点「合成」。合成之后，用同一个钱包去 app.tapeliquid.net 确认身份，然后才开始交易。交易产生的台费减免每个自然月领一次。新加坡时间，次月 1 日 0 点到 8 日 0 点内领取，过了不能补。奖金池先到先得，谁都可以充，项目方也可以充。"),
+      para("交易之后，台费减免每个自然月领一次。新加坡时间，次月 1 日 0 点到 8 日 0 点内领取，过了不能补。奖金池先到先得，谁都可以充，项目方也可以充。页面显示出已合成之后，才去交易所确认身份。"),
       para("nft.tapeliquid.net 上买卖仍只收 0.2%，这张卡不减这笔，也不加版权费。拆开后有 48 小时解冻，这 48 小时不能转。拆出来的编号 30 天内不能再合成。锁卡合约上线前，这次合成只记在这台浏览器，链上还没锁，也还不能领取。"),
     );
     const passKey = card.ids.join(",");
@@ -1536,13 +1536,20 @@ export function bootCpunk(
       saved = "";
     }
     if (saved === passKey) {
+      const badge = document.createElement("p");
+      badge.className = "craft-done";
+      badge.textContent = "已合成";
+      side.append(badge);
+      const prompt = document.createElement("p");
+      prompt.className = "desk-pass";
+      prompt.textContent = "已合成。现在用同一个钱包去 app.tapeliquid.net 确认身份，然后开始交易。";
       const link = document.createElement("a");
       link.className = "forge-go";
       link.href = "https://app.tapeliquid.net/";
       link.target = "_blank";
       link.rel = "noopener";
       link.textContent = "去交易所确认身份";
-      view.append(face, fold, link);
+      view.append(face, prompt, link, fold);
     } else {
       const confirm = document.createElement("button");
       confirm.type = "button";
