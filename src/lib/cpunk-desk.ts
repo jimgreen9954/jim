@@ -516,6 +516,7 @@ export function bootCpunk(
       idsBox?.replaceChildren();
       box?.replaceChildren();
       mine?.replaceChildren();
+      host.querySelector("#cp-forge-picks")?.replaceChildren();
       return;
     }
     if (countNode) countNode.textContent = "…";
@@ -608,6 +609,27 @@ export function bootCpunk(
           : count > 0n
             ? "链上有藏品，编号还在读。也可以直接把编号填进上面再点挂出。"
             : "这个钱包还没有可挂的 Circuit Punk。";
+      const forgePicks = host.querySelector("#cp-forge-picks");
+      if (forgePicks) {
+        const chosen = new Set((host.querySelector<HTMLInputElement>("#cp-forge-ids")?.value ?? "").split(/[^\d]+/).filter(Boolean).map(Number));
+        forgePicks.replaceChildren();
+        for (const id of held) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.dataset.id = String(id);
+          button.textContent = `#${id}`;
+          if (chosen.has(id)) button.classList.add("on");
+          button.addEventListener("click", () => {
+            const input = host.querySelector<HTMLInputElement>("#cp-forge-ids");
+            const current = (input?.value ?? "").split(/[^\d]+/).filter(Boolean).map(Number);
+            const next = current.includes(id) ? current.filter((n) => n !== id) : [...current, id];
+            if (input) input.value = next.join(" ");
+            button.classList.toggle("on", next.includes(id));
+            paintForge();
+          }, { signal });
+          forgePicks.append(button);
+        }
+      }
     };
     void readCpunkWallet(address as `0x${string}`, (ids, count) => draw(ids, count, ids.length >= Number(count)))
       .then((row) => {
@@ -1342,23 +1364,58 @@ export function bootCpunk(
   const paintForge = () => {
     if (!forgeOut) return;
     const ids = (forgeInput?.value ?? "").split(/[^\d]+/).filter(Boolean).map(Number);
+    host.querySelectorAll<HTMLButtonElement>("#cp-forge-picks button").forEach((button) => {
+      button.classList.toggle("on", ids.includes(Number(button.dataset.id)));
+    });
+    forgeOut.replaceChildren();
     if (!ids.length) {
-      forgeOut.textContent = "输入编号后看能合成哪一张。";
+      const empty = document.createElement("p");
+      empty.className = "hint";
+      empty.style.textAlign = "left";
+      empty.textContent = "点持有的编号，或输入编号。合成结果会出现在这里。";
+      forgeOut.append(empty);
       return;
     }
     const made = forge(ids);
     if (!made.ok) {
-      forgeOut.textContent = made.reason;
+      const fail = document.createElement("p");
+      fail.className = "hint";
+      fail.style.textAlign = "left";
+      fail.textContent = made.reason;
+      forgeOut.append(fail);
       return;
     }
     const card = made.card;
-    const main = card.main ? `主属性是${DESK_LABEL[card.main]}，这一边台费 ${(card.feeMain / 100).toFixed(2)}%。` : "没有主属性再减。";
-    const stats = (Object.keys(DESK_LABEL) as (keyof typeof DESK_LABEL)[])
+    const view = document.createElement("div");
+    view.className = "forge-result";
+    if (card.edge) view.style.boxShadow = `inset 0 0 0 2px ${card.edge}`;
+    const swatch = document.createElement("div");
+    swatch.className = "swatch";
+    swatch.style.background = card.color;
+    const title = document.createElement("h4");
+    title.textContent = card.name;
+    const mats = document.createElement("p");
+    mats.textContent = `材料 ${card.ids.map((id) => `#${id}`).join(" ")}`;
+    const fee = document.createElement("p");
+    const main = card.main ? `主属性是${DESK_LABEL[card.main]}，这一边 ${(card.feeMain / 100).toFixed(2)}%。` : "没有主属性再减。";
+    fee.textContent = `全场台费 ${(card.feeAll / 100).toFixed(2)}%。${main}`;
+    const stats = document.createElement("p");
+    stats.textContent = (Object.keys(DESK_LABEL) as (keyof typeof DESK_LABEL)[])
       .map((desk) => `${DESK_LABEL[desk]} ${card.stats[desk]}`)
-      .join("，");
-    forgeOut.textContent = `${card.name}。全场台费 ${(card.feeAll / 100).toFixed(2)}%。${main}${stats}。颜色 ${card.color}${card.edge ? `，边 ${card.edge}` : ""}。`;
+      .join(" · ");
+    const guide = document.createElement("p");
+    guide.textContent = "减免不在这个市场。用同一个钱包去交易所确认身份，现货、永续、电路、发射的台费按这张卡返还。这里买卖 Circuit Punk 仍只收 0.2%，不加版权费。锁卡合约上线前，交易所还不能领取，这里只显示结果。";
+    const link = document.createElement("a");
+    link.className = "forge-go";
+    link.href = "https://app.tapeliquid.net";
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.textContent = "去交易所确认身份";
+    view.append(swatch, title, mats, fee, stats, guide, link);
+    forgeOut.append(view);
   };
   forgeInput?.addEventListener("input", paintForge, { signal });
+  paintForge();
   let holdersStarted = false;
   const startHolders = () => {
     if (holdersStarted || signal.aborted) return;

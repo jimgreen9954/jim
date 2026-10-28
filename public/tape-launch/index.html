@@ -900,6 +900,31 @@ td.right, th.right { text-align: right; }
   width: 100%; height: 40px; margin-top: 6px; border: 1px solid var(--line); border-radius: 12px;
   background: var(--bg); color: var(--ink); padding: 0 12px;
 }
+.forge-board .hold-ids { margin-top: 8px; }
+.forge-board .hold-ids button.on { background: var(--ink); color: var(--bg); }
+.forge-result {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 12px;
+  background: var(--bg);
+}
+.forge-result .swatch { height: 64px; border-radius: 12px; }
+.forge-result h4 { margin: 10px 0 4px; font-size: 20px; }
+.forge-result p { color: var(--muted); font-size: 13px; line-height: 1.5; margin-top: 4px; }
+.forge-go {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 10px;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font-weight: 700;
+  font-size: 14px;
+  text-decoration: none;
+}
 @media (max-width: 980px) { .forge-grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 640px) { .forge-grid { grid-template-columns: 1fr; } }
 .trait-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; text-align: left; }
@@ -1925,7 +1950,7 @@ tbody tr:hover { background: var(--soft); }
         </div>
         <section class="forge-board" id="cp-forge">
           <h3>合成</h3>
-          <p class="by">用不同的 Circuit Punk 合成。材料锁进合约，不销毁，七天后可拆回。一个钱包只认最高的一张，不能叠加。只减本站 0.20% 的台费，池子费用不动。锁卡合约上线前，这里只预览，成交仍收 0.20%。版权费不另加：这套合约的成交已经收 0.2% 市场费，不能再加一笔。现货、永续、电路、发射也不加版权费。</p>
+          <p class="by">自己选编号合成。点下面持有的编号，或直接输入。材料准备锁进合约，不销毁，七天后可拆回。一个钱包只认最高的一张。这张卡不减本市场的成交费。Circuit Punk 买卖仍只收合约里已经写死的 0.2%，没有版权费入口，不能再加一笔。减免在交易所。</p>
           <div class="forge-grid">
             <article class="forge-card">
               <i class="forge-swatch" style="background:#B87333"></i>
@@ -1959,9 +1984,12 @@ tbody tr:hover { background: var(--soft); }
             </article>
           </div>
           <p class="by" style="margin-top:12px">稳定看衬底，加成现货。传导看金属层，加成永续。接合看键合，加成电路。精度看对准，加成发射。封装再加一点。分数最高的一项是主属性，只有这一边走到更低的费率。</p>
-          <label for="cp-forge-ids">预览编号，用空格或逗号分开</label>
+          <label>选择编号</label>
+          <p class="by">连上钱包后点你持有的编号，再点一次取消。也可以自己输入任意编号，空格或逗号分开。</p>
+          <div class="hold-ids" id="cp-forge-picks"></div>
+          <label for="cp-forge-ids">编号</label>
           <input id="cp-forge-ids" inputmode="numeric" placeholder="例如 12 340">
-          <p class="hint" id="cp-forge-out" style="text-align:left">输入编号后看能合成哪一张。</p>
+          <div id="cp-forge-out"></div>
         </section>
         <div class="cp-layout">
           <aside class="cp-mint">
