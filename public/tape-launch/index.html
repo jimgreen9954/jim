@@ -898,7 +898,7 @@ td.right, th.right { text-align: right; }
   background: var(--card);
   padding: 14px;
 }
-.forge-board h3 { font-size: 16px; margin: 0 0 6px; }
+.forge-board #cp-forge-go { width: 100%; max-width: 320px; margin: 8px 0; }
 .forge-board .by { color: var(--muted); font-size: 13px; line-height: 1.55; margin: 0 0 12px; }
 .desk-pass {
   margin: 10px 0 14px;
@@ -2125,7 +2125,9 @@ tbody tr:hover { background: var(--soft); }
       <div class="pad">
         <section class="forge-board" id="cp-forge">
           <h3>合成</h3>
-          <p class="desk-pass">先在这一页完成合成并点确定。确定之后，才去 app.tapeliquid.net 确认身份，然后开始交易。铜片 0.16%/0.14%，银盖 0.12%/0.10%，金线 0.08%/0.06%，极紫外 0.06%/0.04%，仿极紫外 0.08%。每个自然月领一次，次月前 7 天内领取，过了就不能补。奖金池先到先得，谁都可以充，项目方也可以充。本市场买卖不减。</p>
+          <button class="buy" id="cp-forge-go" type="button">用我持有的合成</button>
+          <p class="hint" id="cp-forge-go-msg" style="text-align:left">连上钱包后点这一下。能凑齐就会直接出卡。</p>
+          <div id="cp-forge-out"></div>
           <details class="fold">
             <summary>介绍</summary>
             <p class="by">只在这一页选你自己的 Circuit Punk。点卡加入材料，再点一次拿下。也可以自己输入编号。合成会把这些编号锁进合约，不销毁，锁着不能转。拆开之后有 48 小时解冻，这 48 小时不能转。拆出来的编号 30 天内不能再合成，别的编号不受影响。一个钱包只认最高的一张。这张卡不减本市场成交费。买卖仍只收 0.2%，不能再加版权费。减免只在交易所。</p>
@@ -2180,8 +2182,6 @@ tbody tr:hover { background: var(--soft); }
           </div>
           <p class="by" style="margin-top:12px">稳定看衬底，加成现货。传导看金属层，加成永续。接合看键合，加成电路。精度看对准，加成发射。封装再加一点。分数最高的一项是主属性，只有这一边走到更低的费率。</p>
           </details>
-          <h4 class="forge-step">4. 合成结果</h4>
-          <div id="cp-forge-out"></div>
         </section>
       </div>
     </div>

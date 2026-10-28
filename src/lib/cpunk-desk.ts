@@ -242,6 +242,7 @@ export function bootCpunk(
   askWallet: (openSheet: boolean) => void,
   openPage: (id: string) => void,
 ): () => void {
+  let heldForForge: number[] = [];
   const abi = parseAbi([
     "function publicMinted() view returns (uint32)",
     "function supply() view returns (uint32)",
@@ -521,7 +522,8 @@ export function bootCpunk(
       const mineNote = host.querySelector("#cp-forge-mine");
       const bestNote = host.querySelector("#cp-forge-best");
       if (mineNote) mineNote.textContent = "连接钱包后，这里列出你持有的卡。";
-      if (bestNote) bestNote.textContent = "连接钱包后，这里显示你现在手里最高的一张。";
+      if (bestNote) bestNote.textContent = "连接钱包后，点上面的「用我持有的合成」。";
+      heldForForge = [];
       return;
     }
     if (countNode) countNode.textContent = "…";
@@ -1399,6 +1401,7 @@ export function bootCpunk(
   const forgeOut = host.querySelector("#cp-forge-out");
   const tierRank = (tier: string) => (tier === "传说" ? 5 : tier === "史诗" ? 4 : tier === "稀有" ? 3 : tier === "少见" ? 2 : 1);
   const paintHeld = (ids: number[]) => {
+    heldForForge = ids;
     const node = host.querySelector("#cp-forge-best");
     if (!node) return;
     node.replaceChildren();
@@ -1408,20 +1411,17 @@ export function bootCpunk(
     }
     const card = bestHeld(ids);
     if (!card) {
-      node.textContent = `你有 ${ids.length} 张。按现有配方还凑不齐。`;
+      node.textContent = `你有 ${ids.length} 张。还凑不齐。铜片只要两张类型不同的普通。`;
       return;
     }
     const line = document.createElement("span");
-    line.textContent = `你手里最高是${card.name}，材料 ${card.ids.map((id) => `#${id}`).join(" ")}。全场 ${(card.feeAll / 100).toFixed(2)}%。`;
+    line.textContent = `可以合成${card.name}。点上面的按钮，或点这里直接合成。`;
     const use = document.createElement("button");
     use.type = "button";
     use.className = "forge-go";
     use.style.marginLeft = "8px";
-    use.textContent = "用这组";
-    use.addEventListener("click", () => {
-      if (forgeInput) forgeInput.value = card.ids.join(" ");
-      paintForge();
-    }, { signal });
+    use.textContent = "合成";
+    use.addEventListener("click", () => commitForge(card.ids), { signal });
     node.append(line, use);
   };
   const paintForge = () => {
@@ -1536,6 +1536,30 @@ export function bootCpunk(
   };
   forgeInput?.addEventListener("input", paintForge, { signal });
   paintForge();
+  const commitForge = (ids: number[]) => {
+    if (forgeInput) forgeInput.value = ids.join(" ");
+    try {
+      localStorage.setItem("tape-forge-pass", ids.join(","));
+    } catch {
+      /* this browser did not store it */
+    }
+    paintForge();
+    host.querySelector("#cp-forge-out")?.scrollIntoView({ block: "nearest" });
+  };
+  host.querySelector("#cp-forge-go")?.addEventListener("click", () => {
+    const msg = host.querySelector("#cp-forge-go-msg");
+    if (!heldForForge.length) {
+      if (msg) msg.textContent = "先连接持有 Circuit Punk 的钱包。";
+      return;
+    }
+    const card = bestHeld(heldForForge);
+    if (!card) {
+      if (msg) msg.textContent = "这组持有凑不齐。铜片要两张类型不同的普通。";
+      return;
+    }
+    commitForge(card.ids);
+    if (msg) msg.textContent = `已合成${card.name}。卡在下面。`;
+  }, { signal });
   let holdersStarted = false;
   const startHolders = () => {
     if (holdersStarted || signal.aborted) return;
