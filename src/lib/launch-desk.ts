@@ -238,11 +238,31 @@ export function bootLaunch(host: HTMLElement): () => void {
     host.querySelectorAll(".page").forEach((node) => node.classList.remove("active"));
     host.querySelector("#page-" + next)?.classList.add("active");
     host.querySelectorAll(".nav-item").forEach((node) => node.classList.remove("active"));
-    host.querySelector(`.nav-item[data-page="${next}"]`)?.classList.add("active");
+    host.querySelectorAll(`.nav-item[data-page="${next}"]`).forEach((node) => node.classList.add("active"));
+    const drawer = host.querySelector<HTMLElement>("#nav-drawer");
+    const shade = host.querySelector<HTMLElement>("#nav-shade");
+    if (drawer) drawer.hidden = true;
+    if (shade) shade.hidden = true;
     const scroller = host.querySelector(".content");
     if (scroller) scroller.scrollTop = 0;
   };
   (window as unknown as { switchPage?: (id: string) => void }).switchPage = open;
+  host.querySelector("#nav-menu")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const drawer = host.querySelector<HTMLElement>("#nav-drawer");
+    const shade = host.querySelector<HTMLElement>("#nav-shade");
+    if (!drawer || !shade) return;
+    const show = drawer.hidden;
+    drawer.hidden = !show;
+    shade.hidden = !show;
+  }, opt);
+  host.querySelector("#nav-shade")?.addEventListener("click", () => {
+    const drawer = host.querySelector<HTMLElement>("#nav-drawer");
+    const shade = host.querySelector<HTMLElement>("#nav-shade");
+    if (drawer) drawer.hidden = true;
+    if (shade) shade.hidden = true;
+  }, opt);
   host.addEventListener("click", (event) => {
     const button = (event.target as HTMLElement).closest("button");
     if (!button || !host.contains(button)) return;

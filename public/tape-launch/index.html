@@ -902,6 +902,21 @@ td.right, th.right { text-align: right; }
 }
 .forge-board .hold-ids { margin-top: 8px; }
 .forge-board .hold-ids button.on { background: var(--ink); color: var(--bg); }
+.forge-step { font-size: 14px; margin: 16px 0 6px; }
+.forge-owned { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.forge-tile {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  padding: 6px;
+  text-align: left;
+  color: inherit;
+}
+.forge-tile.on { box-shadow: inset 0 0 0 2px var(--ink); }
+.forge-tile img { width: 100%; aspect-ratio: 1; border-radius: 8px; object-fit: cover; background: #070b12; display: block; }
+.forge-tile b, .forge-tile small { display: block; }
+.forge-tile b { margin-top: 6px; font-size: 13px; }
+.forge-tile small { color: var(--muted); font-size: 11px; }
 .forge-result {
   margin-top: 12px;
   border: 1px solid var(--line);
@@ -1497,9 +1512,11 @@ tbody tr:hover { background: var(--soft); }
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
-    flex: 0 0 32px;
+    position: relative;
+    z-index: 2;
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
     border: 1px solid var(--line);
     border-radius: 8px;
     background: var(--card);
@@ -1578,6 +1595,9 @@ tbody tr:hover { background: var(--soft); }
   <button class="nav-item nav-more" data-page="activity" onclick="switchPage('activity')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 7h14M5 12h14M5 17h9"/></svg><span data-i18n="navActivity">动态</span>
   </button>
+  <button class="nav-item nav-more" data-page="forge" onclick="switchPage('forge')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg><span>合成</span>
+  </button>
   <button class="nav-item nav-main" data-page="assets" onclick="switchPage('assets')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M7 15h4"/></svg><span data-i18n="navAssets">资产</span>
   </button>
@@ -1597,6 +1617,9 @@ tbody tr:hover { background: var(--soft); }
 </aside>
 <div class="nav-shade" id="nav-shade" hidden></div>
 <nav class="nav-drawer" id="nav-drawer" hidden>
+  <button class="nav-item nav-more" data-page="forge" type="button" onclick="switchPage('forge')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg><span>合成</span>
+  </button>
   <button class="nav-item nav-more" data-page="market" type="button" onclick="switchPage('market')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg><span data-i18n="navMarket">系列</span>
   </button>
@@ -1948,49 +1971,8 @@ tbody tr:hover { background: var(--soft); }
             <p class="by">一次挂一张。编号和价格写在下面的框里。可以按 BEM 标价，也可以按 TAPE 标价。成交按 1 BEM 对 1000 TAPE，两边一起付。手续费 0.2%，卖家实收 99.8%。转账不另收费。</p>
           </div>
         </div>
-        <section class="forge-board" id="cp-forge">
-          <h3>合成</h3>
-          <p class="by">自己选编号合成。点下面持有的编号，或直接输入。材料准备锁进合约，不销毁，七天后可拆回。一个钱包只认最高的一张。这张卡不减本市场的成交费。Circuit Punk 买卖仍只收合约里已经写死的 0.2%，没有版权费入口，不能再加一笔。减免在交易所。</p>
-          <div class="forge-grid">
-            <article class="forge-card">
-              <i class="forge-swatch" style="background:#B87333"></i>
-              <b>铜片</b>
-              <p>2 张普通，类型不同。</p>
-              <p>全场 0.16%。主属性 0.14%。</p>
-            </article>
-            <article class="forge-card">
-              <i class="forge-swatch" style="background:#D5D8DE"></i>
-              <b>银盖</b>
-              <p>3 张。至少 1 张少见，至少 2 种衬底。</p>
-              <p>全场 0.12%。主属性 0.10%。</p>
-            </article>
-            <article class="forge-card">
-              <i class="forge-swatch" style="background:#E0B15A"></i>
-              <b>金线</b>
-              <p>3 张。至少 1 张稀有，类型各不相同。</p>
-              <p>全场 0.08%。主属性 0.06%。</p>
-            </article>
-            <article class="forge-card">
-              <i class="forge-swatch" style="background:#6E5CFF;box-shadow:0 0 0 2px #3DDEA2"></i>
-              <b>极紫外</b>
-              <p>1 张传说加任意 2 张，或 1 张史诗加 3 张少见及以上。带绿边。</p>
-              <p>全场 0.06%。主属性 0.04%。</p>
-            </article>
-            <article class="forge-card">
-              <i class="forge-swatch" style="background:#6E5CFF"></i>
-              <b>仿极紫外</b>
-              <p>20 张普通，类型不能完全相同。全站最多 50 张。没有绿边。</p>
-              <p>全场 0.08%。没有主属性再减。</p>
-            </article>
-          </div>
-          <p class="by" style="margin-top:12px">稳定看衬底，加成现货。传导看金属层，加成永续。接合看键合，加成电路。精度看对准，加成发射。封装再加一点。分数最高的一项是主属性，只有这一边走到更低的费率。</p>
-          <label>选择编号</label>
-          <p class="by">连上钱包后点你持有的编号，再点一次取消。也可以自己输入任意编号，空格或逗号分开。</p>
-          <div class="hold-ids" id="cp-forge-picks"></div>
-          <label for="cp-forge-ids">编号</label>
-          <input id="cp-forge-ids" inputmode="numeric" placeholder="例如 12 340">
-          <div id="cp-forge-out"></div>
-        </section>
+        <p class="by">合成已经单独一页。左上角菜单里点「合成」，看你自己的卡和配方进度。</p>
+        <button class="buy ghost" type="button" onclick="switchPage('forge')" style="max-width:280px">打开合成</button>
         <div class="cp-layout">
           <aside class="cp-mint">
             <h3>挂出你的一张</h3>
@@ -2068,6 +2050,65 @@ tbody tr:hover { background: var(--soft); }
             </div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <div id="page-forge" class="page">
+      <div class="pad">
+        <section class="forge-board" id="cp-forge">
+          <h3>合成</h3>
+          <p class="by">只在这一页选你自己的 Circuit Punk。点卡加入材料，再点一次拿下。也可以自己输入编号。材料准备锁进合约，不销毁，七天后可拆回。一个钱包只认最高的一张。这张卡不减本市场成交费。买卖仍只收 0.2%，不能再加版权费。减免去交易所。</p>
+          <h4 class="forge-step">1. 你的卡</h4>
+          <p class="hint" id="cp-forge-mine" style="text-align:left">连接钱包后，这里列出你持有的卡。</p>
+          <p class="by" id="cp-forge-best">连接钱包后，这里显示你现在手里最高的一张。</p>
+          <div class="forge-owned" id="cp-forge-owned"></div>
+          <h4 class="forge-step">2. 材料</h4>
+          <p class="by">已选的编号写在下面。空格或逗号分开。同一张不能用两次。</p>
+          <label for="cp-forge-ids">编号</label>
+          <input id="cp-forge-ids" inputmode="numeric" placeholder="点上面的卡，或输入例如 12 340">
+          <div class="hold-ids" id="cp-forge-picks"></div>
+          <h4 class="forge-step">3. 配方进度</h4>
+          <div class="forge-grid">
+            <article class="forge-card">
+              <i class="forge-swatch" style="background:#B87333"></i>
+              <b>铜片</b>
+              <p>2 张普通，类型不同。</p>
+              <p>全场 0.16%。主属性 0.14%。</p>
+              <p id="cp-gap-copper">还没选。</p>
+            </article>
+            <article class="forge-card">
+              <i class="forge-swatch" style="background:#D5D8DE"></i>
+              <b>银盖</b>
+              <p>3 张。至少 1 张少见，至少 2 种衬底。</p>
+              <p>全场 0.12%。主属性 0.10%。</p>
+              <p id="cp-gap-silver">还没选。</p>
+            </article>
+            <article class="forge-card">
+              <i class="forge-swatch" style="background:#E0B15A"></i>
+              <b>金线</b>
+              <p>3 张。至少 1 张稀有，类型各不相同。</p>
+              <p>全场 0.08%。主属性 0.06%。</p>
+              <p id="cp-gap-gold">还没选。</p>
+            </article>
+            <article class="forge-card">
+              <i class="forge-swatch" style="background:#6E5CFF;box-shadow:0 0 0 2px #3DDEA2"></i>
+              <b>极紫外</b>
+              <p>1 张传说加任意 2 张，或 1 张史诗加 3 张少见及以上。带绿边。</p>
+              <p>全场 0.06%。主属性 0.04%。</p>
+              <p id="cp-gap-euv">还没选。</p>
+            </article>
+            <article class="forge-card">
+              <i class="forge-swatch" style="background:#6E5CFF"></i>
+              <b>仿极紫外</b>
+              <p>20 张普通，类型不能完全相同。全站最多 50 张。没有绿边。</p>
+              <p>全场 0.08%。没有主属性再减。</p>
+              <p id="cp-gap-faux">还没选。</p>
+            </article>
+          </div>
+          <p class="by" style="margin-top:12px">稳定看衬底，加成现货。传导看金属层，加成永续。接合看键合，加成电路。精度看对准，加成发射。封装再加一点。分数最高的一项是主属性，只有这一边走到更低的费率。</p>
+          <h4 class="forge-step">4. 合成结果</h4>
+          <div id="cp-forge-out"></div>
+        </section>
       </div>
     </div>
 

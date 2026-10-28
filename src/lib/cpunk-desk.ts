@@ -4,7 +4,7 @@ import { showMintWin } from "@/lib/mint-win";
 import { TAPE_BEM, TAPE_TOKEN } from "@/lib/tape-pool";
 import { currentAccount, getProvider, onAccount } from "@/lib/wallet";
 import { filterPunks, punkSheet, traitFacets, type PunkSort, type TraitKey } from "@/lib/circuit-punk";
-import { DESK_LABEL, forge } from "@/lib/punk-card";
+import { DESK_LABEL, bestHeld, forge } from "@/lib/punk-card";
 import { onLang } from "@/lib/locale";
 import { connectXLayer, xClient } from "@/lib/xlayer";
 
@@ -517,6 +517,11 @@ export function bootCpunk(
       box?.replaceChildren();
       mine?.replaceChildren();
       host.querySelector("#cp-forge-picks")?.replaceChildren();
+      host.querySelector("#cp-forge-owned")?.replaceChildren();
+      const mineNote = host.querySelector("#cp-forge-mine");
+      const bestNote = host.querySelector("#cp-forge-best");
+      if (mineNote) mineNote.textContent = "连接钱包后，这里列出你持有的卡。";
+      if (bestNote) bestNote.textContent = "连接钱包后，这里显示你现在手里最高的一张。";
       return;
     }
     if (countNode) countNode.textContent = "…";
@@ -610,26 +615,57 @@ export function bootCpunk(
             ? "链上有藏品，编号还在读。也可以直接把编号填进上面再点挂出。"
             : "这个钱包还没有可挂的 Circuit Punk。";
       const forgePicks = host.querySelector("#cp-forge-picks");
+      const forgeOwned = host.querySelector("#cp-forge-owned");
+      const forgeMine = host.querySelector("#cp-forge-mine");
+      const chosen = new Set((host.querySelector<HTMLInputElement>("#cp-forge-ids")?.value ?? "").split(/[^\d]+/).filter(Boolean).map(Number));
+      const toggleForge = (id: number) => {
+        const input = host.querySelector<HTMLInputElement>("#cp-forge-ids");
+        const current = (input?.value ?? "").split(/[^\d]+/).filter(Boolean).map(Number);
+        const next = current.includes(id) ? current.filter((n) => n !== id) : [...current, id];
+        if (input) input.value = next.join(" ");
+        paintForge();
+      };
+      if (forgeMine) {
+        forgeMine.textContent = held.length
+          ? `你有 ${held.length} 张。点一张加入材料，再点一次拿下。${held.length > 80 ? "先显示 80 张，其余直接输入编号。" : ""}`
+          : count > 0n
+            ? "编号还在读。也可以直接把编号填进下面。"
+            : "这个钱包还没有 Circuit Punk。编号仍可以自己输入。";
+      }
+      const shownHeld = held.slice(0, 80);
       if (forgePicks) {
-        const chosen = new Set((host.querySelector<HTMLInputElement>("#cp-forge-ids")?.value ?? "").split(/[^\d]+/).filter(Boolean).map(Number));
         forgePicks.replaceChildren();
-        for (const id of held) {
+        for (const id of shownHeld) {
           const button = document.createElement("button");
           button.type = "button";
           button.dataset.id = String(id);
           button.textContent = `#${id}`;
           if (chosen.has(id)) button.classList.add("on");
-          button.addEventListener("click", () => {
-            const input = host.querySelector<HTMLInputElement>("#cp-forge-ids");
-            const current = (input?.value ?? "").split(/[^\d]+/).filter(Boolean).map(Number);
-            const next = current.includes(id) ? current.filter((n) => n !== id) : [...current, id];
-            if (input) input.value = next.join(" ");
-            button.classList.toggle("on", next.includes(id));
-            paintForge();
-          }, { signal });
+          button.addEventListener("click", () => toggleForge(id), { signal });
           forgePicks.append(button);
         }
       }
+      if (forgeOwned) {
+        forgeOwned.replaceChildren();
+        for (const id of shownHeld) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = chosen.has(id) ? "forge-tile on" : "forge-tile";
+          button.dataset.id = String(id);
+          const img = document.createElement("img");
+          img.alt = `Circuit Punk ${id}`;
+          img.src = `/api/circuit-punk/${id}.png`;
+          const title = document.createElement("b");
+          const info = punkSheet(id);
+          title.textContent = `#${id}`;
+          const meta = document.createElement("small");
+          meta.textContent = `${info.tier} · ${info.traits[0]?.value ?? ""}`;
+          button.append(img, title, meta);
+          button.addEventListener("click", () => toggleForge(id), { signal });
+          forgeOwned.append(button);
+        }
+      }
+      paintHeld(held);
     };
     void readCpunkWallet(address as `0x${string}`, (ids, count) => draw(ids, count, ids.length >= Number(count)))
       .then((row) => {
@@ -1361,27 +1397,71 @@ export function bootCpunk(
   const tradePage = host.querySelector("#page-trade");
   const forgeInput = host.querySelector<HTMLInputElement>("#cp-forge-ids");
   const forgeOut = host.querySelector("#cp-forge-out");
+  const tierRank = (tier: string) => (tier === "传说" ? 5 : tier === "史诗" ? 4 : tier === "稀有" ? 3 : tier === "少见" ? 2 : 1);
+  const paintHeld = (ids: number[]) => {
+    const node = host.querySelector("#cp-forge-best");
+    if (!node) return;
+    node.replaceChildren();
+    if (!ids.length) {
+      node.textContent = "这个钱包还没有可以合成的卡。";
+      return;
+    }
+    const card = bestHeld(ids);
+    if (!card) {
+      node.textContent = `你有 ${ids.length} 张。按现有配方还凑不齐。`;
+      return;
+    }
+    const line = document.createElement("span");
+    line.textContent = `你手里最高是${card.name}，材料 ${card.ids.map((id) => `#${id}`).join(" ")}。全场 ${(card.feeAll / 100).toFixed(2)}%。`;
+    const use = document.createElement("button");
+    use.type = "button";
+    use.className = "forge-go";
+    use.style.marginLeft = "8px";
+    use.textContent = "用这组";
+    use.addEventListener("click", () => {
+      if (forgeInput) forgeInput.value = card.ids.join(" ");
+      paintForge();
+    }, { signal });
+    node.append(line, use);
+  };
   const paintForge = () => {
     if (!forgeOut) return;
     const ids = (forgeInput?.value ?? "").split(/[^\d]+/).filter(Boolean).map(Number);
-    host.querySelectorAll<HTMLButtonElement>("#cp-forge-picks button").forEach((button) => {
+    host.querySelectorAll<HTMLButtonElement>("#cp-forge-picks button, #cp-forge-owned button").forEach((button) => {
       button.classList.toggle("on", ids.includes(Number(button.dataset.id)));
     });
+    const sheets = ids.map((id) => punkSheet(id));
+    const trait = (id: number, key: string) => punkSheet(id).traits.find((cell) => cell.key === key)?.value ?? "";
+    const commons = sheets.filter((row) => row.tier === "普通");
+    const commonTypes = new Set(commons.map((row) => row.traits.find((cell) => cell.key === "类型")?.value));
+    const types = new Set(ids.map((id) => trait(id, "类型")));
+    const subs = new Set(ids.map((id) => trait(id, "衬底")));
+    const at = (tier: number) => sheets.filter((row) => tierRank(row.tier) >= tier).length;
+    const made = ids.length ? forge(ids) : null;
+    const ready = (kind: string) => made?.ok === true && made.card.kind === kind;
+    const say = (name: string, text: string) => {
+      const node = host.querySelector(`#cp-gap-${name}`);
+      if (node) node.textContent = !ids.length ? "还没选。" : ready(name) ? "已凑齐。" : text;
+    };
+    say("copper", `普通 ${commons.length}/2，类型 ${commonTypes.size}/2。要刚好 2 张，而且类型不同。`);
+    say("silver", `少见及以上 ${at(2)}/1，衬底 ${subs.size}/2。要刚好 3 张。`);
+    say("gold", `稀有及以上 ${at(3)}/1，类型 ${types.size}/3。要刚好 3 张，类型各不相同。`);
+    say("euv", `传说 ${sheets.filter((row) => row.tier === "传说").length}/1 加任意 2 张，或史诗 ${sheets.filter((row) => row.tier === "史诗").length}/1 加少见及以上共 4 张。`);
+    say("faux", `普通 ${commons.length}/20，类型 ${commonTypes.size} 种。二十张不能是同一种。`);
     forgeOut.replaceChildren();
     if (!ids.length) {
       const empty = document.createElement("p");
       empty.className = "hint";
       empty.style.textAlign = "left";
-      empty.textContent = "点持有的编号，或输入编号。合成结果会出现在这里。";
+      empty.textContent = "先点你的卡，或输入编号。凑齐后结果出现在这里。";
       forgeOut.append(empty);
       return;
     }
-    const made = forge(ids);
-    if (!made.ok) {
+    if (!made || !made.ok) {
       const fail = document.createElement("p");
       fail.className = "hint";
       fail.style.textAlign = "left";
-      fail.textContent = made.reason;
+      fail.textContent = made && !made.ok ? made.reason : "这组还不能合成。";
       forgeOut.append(fail);
       return;
     }
@@ -1395,7 +1475,7 @@ export function bootCpunk(
     const title = document.createElement("h4");
     title.textContent = card.name;
     const mats = document.createElement("p");
-    mats.textContent = `材料 ${card.ids.map((id) => `#${id}`).join(" ")}`;
+    mats.textContent = `材料 ${card.ids.map((id) => `#${id} ${punkSheet(id).tier}`).join("、")}`;
     const fee = document.createElement("p");
     const main = card.main ? `主属性是${DESK_LABEL[card.main]}，这一边 ${(card.feeMain / 100).toFixed(2)}%。` : "没有主属性再减。";
     fee.textContent = `全场台费 ${(card.feeAll / 100).toFixed(2)}%。${main}`;
