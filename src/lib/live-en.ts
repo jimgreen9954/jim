@@ -1,0 +1,567 @@
+import { onLang, uiLang } from "@/lib/locale";
+
+const EXACT: Record<string, string> = {
+  "我的挂单": "My listings",
+  "先连接钱包，这里显示你的挂单。": "Connect a wallet to see your listings.",
+  "你还没有挂单。": "You have no listings.",
+  "连上钱包后，这里只放你挂着的，方便撤单。": "After you connect, your listings show here so you can cancel them.",
+  "持有的在资产里看。": "Holdings are on the Assets page.",
+  "USDT 可用": "USDT available",
+  "BNB 可用": "BNB available",
+  "OKB 可用": "OKB available",
+  "BEM 可用": "BEM available",
+  "TAPE 可用": "TAPE available",
+  "系列": "Collections",
+  "代币": "Tokens",
+  "发射": "Launch",
+  "正在铸造": "Mint",
+  "铸造": "Mint",
+  "市场": "Market",
+  "动态": "Activity",
+  "转账": "Send",
+  "填数量和接收地址，点签名转出。钱包会再问一次。地址填错取不回。": "Enter the amount and the recipient, then sign. The wallet asks once more. A wrong address is gone.",
+  "还在等钱包确认。如果窗口已经关掉，刷新页面再转。": "Still waiting for the wallet. If that window is gone, refresh and send again.",
+  "接收地址要是 0x 开头的 42 位。": "The recipient must be a 42-character 0x address.",
+  "这是你自己的地址。在钱包里确认才会转出。": "This is your own address. It sends only after you confirm in the wallet.",
+  "在钱包里确认这笔转账。": "Confirm this transfer in the wallet.",
+  "连接钱包后显示可转余额。": "Connect a wallet to see what can be sent.",
+  "填全部": "All",
+  "接收地址": "Recipient",
+  "我核对过地址和数量。不勾不能转。": "I checked the address and the amount. It cannot be sent until this is ticked.",
+  "签名转出": "Sign and send",
+  "白皮书": "Paper",
+  "深夜": "Dark",
+  "白天": "Light",
+  "登录": "Log in",
+  "退出": "Log out",
+  "全部": "All",
+  "芯片": "Chips",
+  "艺术": "Art",
+  "1天": "1D",
+  "7天": "7D",
+  "30天": "30D",
+  "1 TAPE + 0.001 BEM": "1 TAPE + 0.001 BEM",
+  "铸造中": "Minting",
+  "交易": "Trade",
+  "地板": "Floor",
+  "PFP": "PFP",
+  "发射、铸造、市场是三页。点左上角标志去铸造，挂单在市场。": "Launch, mint, and market are separate pages. The mark at the top left opens mint. Listings live in the market.",
+  "去铸造": "Mint",
+  "去市场": "Market",
+  "点开看挂单": "Show listings",
+  "收起挂单": "Hide listings",
+  "更多挂单": "More listings",
+  "创世电路 NFT": "Genesis circuits",
+  "在售": "For sale",
+  "翻全部": "Browse all",
+  "上一页": "Prev",
+  "下一页": "Next",
+  "官方晶体管": "Official transistors",
+  "协议电路 NFT": "Protocol circuits",
+  "兑换": "Swap",
+  "没有池子": "No pool",
+  "池子未开": "Pool closed",
+  "X Layer 上没有 BEM 对 USDT 的池。点了也不会发交易。": "There is no BEM/USDT pool on X Layer. This will not send a trade.",
+  "没有 TAPE 对 OKB 的池。点了也不会发交易。": "There is no TAPE/OKB pool. This will not send a trade.",
+  "报价来自官方 TAPE 池。流动性很小。": "Quote is the official TAPE pool. Liquidity is thin.",
+  "OKB / TAPE 走 Uniswap v4，手续费 15%。": "OKB / TAPE trades on Uniswap v4. The fee is 15%.",
+  "官方池的 BEM 一边还没有存货，池子也没开。点了也不会发交易。": "The official pool has no BEM on that side, and it is not open. This will not send a trade.",
+  "这条没有池子，没有发出去。": "There is no pool for this pair. Nothing was sent.",
+  "切换计价币": "Switch the quote token",
+  "读取中": "Loading",
+  "点此用 USDT 换 BEM": "Swap USDT for BEM",
+  "点此用 OKB 换 BEM": "Swap OKB for BEM",
+  "流动性小": "Thin liquidity",
+  "用 X Layer USDT 换 TAPE": "Swap X Layer USDT for TAPE",
+  "热门系列": "Trending",
+  "这个分类下没有系列": "Nothing in this category",
+  "今日涨幅": "Top movers",
+  "过去 24 小时地板价变化最大": "Biggest floor move in 24 hours",
+  "地板价": "Floor",
+  "筛选": "Filters",
+  "分类": "Category",
+  "链": "Chain",
+  "成交额": "Volume",
+  "笔数": "Sales",
+  "买入": "Buy",
+  "卖出": "Sell",
+  "支付": "You pay",
+  "收到": "You receive",
+  "报价读取中": "Loading quote",
+  "成交发给官方池子。取消就等于没换。": "The swap is sent to the official pool. Cancel means no trade.",
+  "BEM 跨链": "Bridge BEM",
+  "数量（BEM）": "Amount (BEM)",
+  "手续费读取中": "Loading fee",
+  "跨过去": "Bridge",
+  "TapeOut 官方 1:1 桥。OKB 和 TAPE 没有这条桥，不会假装跨过去。": "Official TapeOut 1:1 bridge. OKB and TAPE have no bridge here, and none is invented.",
+  "链上成交": "On-chain trades",
+  "晶体管": "Transistor",
+  "最新价 BNB": "Last BNB",
+  "最高买价 BNB": "Best bid BNB",
+  "买量": "Bid size",
+  "24小时量 BNB": "24h volume BNB",
+  "正在读取 tapeout.net…": "Reading tapeout.net…",
+  "只铸造。挂单和成交在市场页。公开价 1 TAPE + 0.001 BEM。": "Mint only. Listings and sales are on the market page. Public price is 1 TAPE + 0.001 BEM.",
+  "Circuit Punk 是本市场的创始收藏，第一套，也是唯一一套。它依照 TapeOut 的 TAP-721 草案发行：在 ERC-721 的图像之外，每一枚另附一份 tapnet/1 网表及其 SHA-256。本收藏现处于 L0，网表可以核对，但尚未流片。肖像致敬比特币与 BEM 的早期参与者，包括 Hal Finney、Adam Back、Jameson Lopp，以及 BEM 的早期持有人。肖像是纪念，不构成投资建议。": "Circuit Punk is the founding collection of this market, the first set and the only one. It is issued under TapeOut's TAP-721 draft: beside the ERC-721 image, each token carries a tapnet/1 netlist and its SHA-256. The collection is at L0. The netlist can be checked, and it has not been taped out. The portraits honor early participants in Bitcoin and in BEM, including Hal Finney, Adam Back, Jameson Lopp, and the early holders of BEM. A portrait is a memorial. This is not investment advice.",
+  "每枚收藏按 TapeOut 的 TAP-721 草案写。图像之外是一份 tapnet/1 网表和它的 SHA-256。Circuit Punk 目前是 L0，可以核对，还不是链上接口，也不假装已经流片。": "Each collectible is written to the TapeOut TAP-721 draft. Beside the image is a tapnet/1 netlist and its SHA-256. Circuit Punk is at L0: the file can be checked. It is not the on-chain interface, and it is not a tape-out.",
+  "Circuit Punk 已上链": "Circuit Punk is on-chain",
+  "去铸造 Circuit Punk": "Mint Circuit Punk",
+  "Circuit Punk 已经在 X Layer，合约 0xB5ac1dddc158a639D4499aad2d8F393989D4bD34。不要用这个名字再创建一次。": "Circuit Punk is already on X Layer at 0xB5ac1dddc158a639D4499aad2d8F393989D4bD34. Do not create that name again.",
+  "Circuit Punk 一万张按种类比例生成。每种晶粒的属性和权重都不一样。": "All 10,000 Circuit Punks follow the type mix. Each die has its own traits and weights.",
+  "Circuit Punk 不用再创建。这里只签一个新项目，私钥不会经过这个页面。": "Circuit Punk does not need to be created again. This only signs a new project. The key never touches this page.",
+  "我的 Circuit Punk": "My Circuit Punks",
+  "没有符合这些属性的 Circuit Punk。": "No Circuit Punk matches these traits.",
+  "这个钱包还没有可挂的 Circuit Punk。": "This wallet has no Circuit Punk to list.",
+  "这个地址还没有 Circuit Punk。": "This address has no Circuit Punk.",
+  "Circuit Punk 这次没读到，没有写成 0。": "Circuit Punk did not load. It was not shown as zero.",
+  "向比特币早期写作者 Hal Finney、Adam Back、Jameson Lopp 致敬，也向早期 BEM 持有人致敬。公开头像收成 24×24 的电路肖像，留给后来的人看来时的路。这是纪念，不是背书。": "A memorial to the early Bitcoin writers Hal Finney, Adam Back, and Jameson Lopp, and to the early BEM holders. Public avatars reduced to 24×24 circuit portraits, kept so a later reader can see the road. A memorial, not an endorsement.",
+  "一次一张，一个钱包最多十次。挂单和成交在市场页。每次 1 TAPE + 0.001 BEM。": "One each time, ten times a wallet. Listings and sales are on the market page. Each mint is 1 TAPE + 0.001 BEM.",
+  "一次一张。一个钱包最多十次。正在读取合约。": "One each time. Ten times a wallet. Reading the contract.",
+  "一次一张。每次 1 TAPE + 0.001 BEM。一个钱包最多十次。": "One each time. Each mint is 1 TAPE + 0.001 BEM. Ten times a wallet.",
+  "每次需要 <b>1 TAPE</b> 和 <b>0.001 BEM</b>": "Each mint needs <b>1 TAPE</b> and <b>0.001 BEM</b>",
+  "每次需要": "Each mint needs",
+  "正在读下一张。这次付 1 TAPE 和 0.001 BEM。": "Reading the next one. This mint pays 1 TAPE and 0.001 BEM.",
+  "铸造这一张": "Mint this one",
+  "连上钱包后，这里写明还能铸几次。铸完会刷新。持有的在资产里看。": "After you connect, the remaining mints show here. They refresh after a mint. Holdings are on Assets.",
+  "正在读下一张。一次一张。": "Reading the next one. One at a time.",
+  "先授权 1 TAPE 和 0.001 BEM。": "Approve 1 TAPE and 0.001 BEM first.",
+  "一次只能铸一张。": "Only one per mint.",
+  "持有": "Held",
+  "正在读取合约。": "Reading the contract.",
+  "数量，最多 10": "Quantity, up to 10",
+  "连上钱包后，上面显示 TAPE、BEM 和已铸到的张数。铸完会刷新。": "After you connect, TAPE, BEM, and minted count show above. They refresh after a mint.",
+  "去市场交易": "Go to market",
+  "另开发射": "Launch another",
+  "我铸到的": "Minted by me",
+  "市场交易": "Market",
+  "挂单可以按 BEM 标价，也可以按 TAPE 标价。成交按 1 BEM 对 1000 TAPE，两边一起付。手续费 0.2%。": "List in BEM or in TAPE. A sale pays both, at 1 BEM to 1000 TAPE. Fee 0.2%.",
+  "一次挂一张。编号和价格写在下面的框里。可以按 BEM 标价，也可以按 TAPE 标价。成交按 1 BEM 对 1000 TAPE，两边一起付。手续费 0.2%。": "List one at a time. Type the number and the price in the boxes below. Quote in BEM or TAPE. A sale pays both, at 1 BEM to 1000 TAPE. Fee 0.2%.",
+  "一次一张。编号和价格都可以在这里改。": "One at a time. Type the number and the price here.",
+  "在这里输入编号，例如 7001": "Type the number here, for example 7001",
+  "在这里输入价格": "Type the price here",
+  "挂出你的一张": "List one of yours",
+  "编号": "Token ID",
+  "用哪种标价": "Quote unit",
+  "价格（BEM）": "Price (BEM)",
+  "价格（TAPE）": "Price (TAPE)",
+  "买家付 0.002 BEM，同时付 2 TAPE。": "The buyer pays 0.002 BEM and also 2 TAPE.",
+  "按 TAPE 标价。买家同时付对应的 BEM，1 BEM = 1000 TAPE。": "Quoted in TAPE. The buyer also pays the matching BEM. 1 BEM = 1000 TAPE.",
+  "按 BEM 标价。买家同时付 1000 倍 TAPE。": "Quoted in BEM. The buyer also pays 1000 times that in TAPE.",
+  "现在按 TAPE 标价。买家同时付对应的 BEM。": "Now quoted in TAPE. The buyer also pays the matching BEM.",
+  "现在按 BEM 标价。买家同时付 1000 倍的 TAPE。": "Now quoted in BEM. The buyer also pays 1000 times that in TAPE.",
+  "连接钱包后，点下面的编号就能挂。": "Connect a wallet, then tap an ID below to fill the form.",
+  "挂出": "List",
+  "成交在这份合约里。先连钱包。": "Sales settle in this contract. Connect a wallet first.",
+  "物品": "Items",
+  "挂单": "Listings",
+  "正在看物品。没选属性时按稀有度排。": "Browsing items. With no trait selected, rarest come first.",
+  "打开": "Open",
+  "隐藏": "Hide",
+  "稀有在前": "Rarest first",
+  "稀有在后": "Rarest last",
+  "按编号": "By ID",
+  "价高在前": "Highest price",
+  "价低在前": "Lowest price",
+  "持有地址": "Holders",
+  "正在按编号核对每个地址。": "Checking each holder by token ID.",
+  "标注": "Label",
+  "地址": "Address",
+  "张数": "Count",
+  "交易记录": "Trades",
+  "正在读链上的铸造、挂单和成交。": "Reading mints, listings, and sales from the chain.",
+  "正在读链上的真实挂单和成交。": "Reading real listings and sales from the chain.",
+  "这段还没有挂单或成交。": "No listings or sales in this range yet.",
+  "不用再创建。铸造在「正在铸造」，买卖在「市场」。这里只留给以后另开的项目。": "Do not create it again. Mint is under Minting, trading is under Market. This page is only for a future project.",
+  "TAPE 对": "TAPE pair",
+  "也可": "Or",
+  "OKB 或 BEM": "OKB or BEM",
+  "单人上限": "Per wallet",
+  "10 次": "10 mints",
+  "另开一个项目": "Start another project",
+  "名称": "Name",
+  "符号": "Symbol",
+  "总量": "Supply",
+  "预留": "Reserve",
+  "发射代币": "Launch token",
+  "只用 OKB": "OKB only",
+  "只用 BEM": "BEM only",
+  "铸造倍数": "Mint multiple",
+  "公开铸造价 1 TAPE + 0.001 BEM": "Public mint price 1 TAPE + 0.001 BEM",
+  "二级市场只用这次发射的代币。TAPE + BEM 两边一起付，不能只改一边。": "Secondary sales use only the launch token. TAPE + BEM are paid together. One side cannot be changed alone.",
+  "批量生成属性": "Generate traits",
+  "上传图片": "Upload art",
+  "自己的 Key": "Your own key",
+  "平台默认": "Platform default",
+  "朋克": "Punk",
+  "真实": "Photo",
+  "生成这 4 张": "Generate these 4",
+  "上传的图按顺序套到预览上。平台默认和自己的 Key 都是真出图，每次最多 4 张。": "Uploads are applied to the preview in order. Platform default and your own key both really generate images, 4 at a time.",
+  "铸造规则": "Mint rules",
+  "创建": "Create",
+  "工厂": "Factory",
+  "X Layer 上这份地址已写死。没有管理员，不能升级，也不能把金库转走。页面不再另签一份工厂。": "This X Layer address is fixed. There is no admin, no upgrade, and no way to pull the vault. This page will not deploy another factory.",
+  "正在读取 tapeout.net 的成交…": "Reading tapeout.net sales…",
+  "换背景": "Change background",
+  "换头像": "Change avatar",
+  "改名字": "Rename",
+  "未连接钱包": "Wallet not connected",
+  "连接钱包": "Connect wallet",
+  "去掉头像": "Remove avatar",
+  "去掉背景": "Remove background",
+  "余额": "Balance",
+  "晶体管持仓": "Transistor holdings",
+  "连接钱包后，这里显示张数、编号和图片。": "Connect a wallet to see the count, IDs, and images.",
+  "链上资产": "On-chain assets",
+  "余额来自这个钱包地址在 BSC 和 X Layer 上的链上数据，不是欧易交易所账户。": "Balances are this address on BSC and X Layer, not an OKX exchange account.",
+  "买下": "Buy",
+  "撤单": "Cancel listing",
+  "关闭": "Close",
+  "数量": "Amount",
+  "买单价格（BNB）": "Bid (BNB)",
+  "用 BNB 挂买单": "Place a BNB bid",
+  "卖给当前最高买价": "Sell into the best bid",
+  "在 tapeout.net 打开这颗": "Open this one on tapeout.net",
+  "创世电路": "Genesis circuit",
+  "挂单价格（BNB）": "List price (BNB)",
+  "用钱包买下": "Buy with wallet",
+  "挂到官方市场": "List on the official market",
+  "在 BscScan 看这枚": "View on BscScan",
+  "协议电路": "Protocol circuit",
+  "钱包": "Wallet",
+  "未连接": "Not connected",
+  "登录后可以退出，也可以切换 BSC 和 X Layer。铸造 Circuit Punk 要停在 X Layer。手机用 OKX App 打开这个页面最稳。": "After login you can log out or switch BSC and X Layer. Circuit Punk minting stays on X Layer. On a phone, open this page in the OKX app.",
+  "浏览器钱包": "Browser wallet",
+  "币安钱包": "Binance Wallet",
+  "挂单价（OKB）": "List price (OKB)",
+  "在本站挂出": "List here",
+  "在本站成交": "Buy here",
+  "MINT 成功": "Minted",
+  "恭喜，这枚已经属于你。": "It is yours.",
+  "收下": "Done",
+  "输入编号": "Token ID",
+  "搜地址或编号": "Search address or ID",
+  "例如 7001": "e.g. 7001",
+  "类型": "Type",
+  "稀有度": "Rarity",
+  "衬底": "Substrate",
+  "金属层": "Metal",
+  "对准": "Align",
+  "键合": "Bond",
+  "封装": "Package",
+  "属性": "Trait",
+  "取值": "Value",
+  "存世": "Supply",
+  "占比": "Share",
+  "持有人": "Holder",
+  "你": "You",
+  "TapeOut 协议创始人": "TapeOut founder",
+  "火星人": "Martian",
+  "TAPE NFT 官方": "TAPE NFT official",
+  "93.bitmap": "93.bitmap",
+  "0x杨杨｜tapeout": "0x Yangyang | tapeout",
+  "LOYAL路遥": "LOYAL",
+  "基金会TapeOutCF": "TapeOut Foundation",
+  "星帅": "Xing Shuai",
+  "茹花小姐": "Ruhua",
+  "周红衣": "Zhou Hongyi",
+  "Yasimin雅思敏": "Yasimin",
+  "橙子": "Chengzi",
+  "OnlyEason | TapeOut": "OnlyEason | TapeOut",
+  "ywweb3": "ywweb3",
+  "电路持有": "Circuit holder",
+  "公开铸造": "Public mint",
+  "预留持有": "Reserve holder",
+  "链上持有": "On-chain holder",
+  "铸造结束了": "Mint closed",
+  "火热交易中": "Trading live",
+  "点开即可交易": "Open to trade",
+  "去交易": "Trade",
+  "专业市场": "Pro market",
+  "待领": "Pending",
+  "没有挂单": "Not listed",
+  "下一张铸造": "Next to mint",
+  "这个属性下还没有挂单。": "No listings with these traits.",
+  "全部属性": "All traits",
+  "点编号填进上面，再点挂出。": "Tap an ID to fill it in, then list.",
+  "先连接钱包，再点你持有的编号。": "Connect a wallet, then tap an ID you hold.",
+  "正在准备挂单。": "Preparing the listing.",
+  "等钱包确认这笔挂单。": "Confirm the listing in the wallet.",
+  "先点你持有的编号。": "Tap an ID you hold first.",
+  "这张不在当前钱包里。": "This token is not in the connected wallet.",
+  "价格至少 0.0001 BEM，或 0.1 TAPE。": "Minimum price is 0.0001 BEM, or 0.1 TAPE.",
+  "先批准 BEM 和 TAPE，再买。": "Approve BEM and TAPE, then buy.",
+  "已经撤单。": "Listing cancelled.",
+  "状态": "Status",
+  "已收盘": "Closed",
+  "已公开铸出": "Public minted",
+  "还剩": "Left",
+  "还没有人挂单。": "No listings yet.",
+  "还没有可看的物品。": "Nothing to show yet.",
+  "持有地址这次没读完。刷新后再对一次。": "Holders did not finish loading. Refresh to try again.",
+  "Circuit Punk，符号 CPUNK，是本站的创世 NFT，也是向中本聪的一揖。它是第一套 Circuit Punk，也只此一套。合约 0xB5ac1dddc158a639D4499aad2d8F393989D4bD34。总量一万，预留七千，公开三千，公开价锁在 1 TAPE 加 0.001 BEM。TapeCode 一号火星人 @bitcoin2themars 领 51–150。8855 号、TapeOut 创始人 @Blonskr 领 1–50。空投已直接到账。370–379 记给 93.bitmap，地址 0x8EC346D8a7156776aDFacbA5ddDB2fF9B308cB50；380–389 记给 0x杨杨｜tapeout，地址 0xA11E739adF417ffe34e1EBa75dF2031499192B66；390–399 记给 LOYAL路遥，地址 0x2b067593B4f9B0D26564C83F20E91b5D0e286Dc6；400–409 记给基金会 TapeOutCF，地址 0x04B649076a11819EF7AdA36e02DD55e0923550Ee；410–419 记给星帅，地址 0x876c3500883C072d6EA447E6e7C8F097AA7c7bC0；420–429 记给茹花小姐，地址 0x75c186Ede5D0691d66BC932FD04F8E149d1F5fA5。430–439 记给 Sussiie，地址 0xB8bD12503918476a2785CF1617A0FAf13aad771C。440–449 记给周红衣，地址 0x94e8c5822ff10be48713adae49af7acdb390eeb4。450–459 记给 Yasimin雅思敏，地址 0x072925B5375063A3c6ADc37D4611FF6ce5558f10。460–469 记给橙子，地址 0xdC352A37a53F5D45A9A6Fb44D8076a475884BA91。470–479 记给 OnlyEason | TapeOut，地址 0x1aeb3c9eC1EfA74aD7a543DBd02769C18Cd50119。480–489 记给 ywweb3，地址 0x42445b49e961De2C071EA20f73db769987303D64。490–499 记给 Ch!cken(TapeOut薄🐔版)，地址 0x98Ce75463917E5fd1470675c6F133a38F7167712。500–509 记给肖战羊，地址 0x4569f6d72aa0cd0b7c3434eac2a00cbfa261c7e4。十四个地址各 10 张，已经直接到账。剩下 1471 张，510–999 和 6020–7000，留给基金会以后的新计划。图片地址已经写死。改名就不是这一款。本站不再另开第二套。TapeOut 上已经流片的创世电路仍走官网市场，不是这一款。": "Circuit Punk, symbol CPUNK, is this site's genesis NFT and a bow to Satoshi. It is the first Circuit Punk and the only one. Contract 0xB5ac1dddc158a639D4499aad2d8F393989D4bD34. Supply 10,000, reserve 7,000, public 3,000, price locked at 1 TAPE plus 0.001 BEM. TapeCode #1, the Martian @bitcoin2themars, holds 51–150. #8855, TapeOut founder @Blonskr, holds 1–50. The airdrop of 130 is already in the registered wallets. 370–379 are assigned to 93.bitmap at 0x8EC346D8a7156776aDFacbA5ddDB2fF9B308cB50, 380–389 to 0x Yangyang | tapeout at 0xA11E739adF417ffe34e1EBa75dF2031499192B66, 390–399 to LOYAL at 0x2b067593B4f9B0D26564C83F20E91b5D0e286Dc6, and 400–409 to the TapeOut Foundation at 0x04B649076a11819EF7AdA36e02DD55e0923550Ee, and 410–419 to Xing Shuai at 0x876c3500883C072d6EA447E6e7C8F097AA7c7bC0, and 420–429 to Ruhua at 0x75c186Ede5D0691d66BC932FD04F8E149d1F5fA5, 430–439 to Sussiie at 0xB8bD12503918476a2785CF1617A0FAf13aad771C, 440–449 to Zhou Hongyi at 0x94e8c5822ff10be48713adae49af7acdb390eeb4, 450–459 to Yasimin at 0x072925B5375063A3c6ADc37D4611FF6ce5558f10, 460–469 to Chengzi at 0xdC352A37a53F5D45A9A6Fb44D8076a475884BA91, and 470–479 to OnlyEason | TapeOut at 0x1aeb3c9eC1EfA74aD7a543DBd02769C18Cd50119, and 480–489 to ywweb3 at 0x42445b49e961De2C071EA20f73db769987303D64, 490–499 to Ch!cken(TapeOut薄🐔版) at 0x98Ce75463917E5fd1470675c6F133a38F7167712, and 500–509 to Xiao Zhanyang at 0x4569f6d72aa0cd0b7c3434eac2a00cbfa261c7e4. Ten each, fourteen addresses. Those 140 are already credited. The remaining 1,471, IDs 510–999 and 6020–7000, stay with the foundation for a later plan. Image URLs are fixed. A rename would be a different drop. This site will not open a second set. Genesis circuits already taped out on TapeOut still trade on the official market. They are not this drop.",
+  "公开价锁定 1 TAPE 对 0.001 BEM。倍数只能是整数，价格按这个比例放大，不能单独改一边。也可以改用 OKB 或只用 BEM 发射：单位锁死，同样只能填整数倍数。用哪种代币发射，公开铸造和二级交易就只用哪种。预留从总量里划出，不参与公开铸造，不能超过总量。单人最多铸造 10 次。总量由项目方自定。创建时按总量批量生成芯片属性和稀有度，同一项目里属性组合不重复。图片可以自己上传，也可以用自己的 Key 或平台默认生成，风格分朋克和真实。": "The public price is locked at 1 TAPE to 0.001 BEM. The multiple must be an integer and scales both sides. One side cannot be changed alone. A drop can instead use OKB, or BEM only. The unit is then locked, and only an integer multiple is allowed. Public mint and secondary sales use only that token. Reserve is taken from supply, is not publicly mintable, and cannot exceed supply. A wallet can mint at most 10 times. Supply is chosen by the project. Traits and rarity are generated for the whole supply at creation, with no repeated combo. Art can be uploaded, generated with your key, or generated by the platform, punk or photo.",
+  "每枚 NFT 按 TAP-721 草案，除图片外还带一份 tapnet 网表和 SHA-256，来源可以对照。标准还在社区审核，这里只出可核验的预览，不假装已经流片上链。": "Each NFT follows the TAP-721 draft. Besides the image it carries a tapnet netlist and a SHA-256, so the source can be checked. The standard is still in community review. This is a verifiable preview, not a claim that it has taped out on-chain.",
+  "发射前，项目方必须先放入价值 3 美元的 OKB，这笔进金库。创建另付 1 TAPE + 0.01 枚发射代币：1 TAPE 直接销毁，0.01 锁进该项目金库。OKB 发射锁的是 0.01 OKB，BEM 或 TAPE 对发射锁的是 0.01 BEM。": "Before launch the project must deposit OKB worth 3 dollars. It goes to the vault. Creating also costs 1 TAPE plus 0.01 of the launch token. The 1 TAPE is burned. The 0.01 is locked in that project's vault. An OKB launch locks 0.01 OKB. A BEM or TAPE-pair launch locks 0.01 BEM.",
+  "铸造收进来的，是这次发射的那种代币，创建时就分成三份。30% 在售罄收盘后项目方可以领取。40% 没有提取函数。收盘后，本合约里低于铸造价 2 倍、挂满 1 天的 NFT，可以被这 40% 买下并销毁。收盘时把这 40% 记成基数。每天最多花掉基数的九十分之一，当天没花完也不结转。90 天都有人来买，这 40% 可以花完，一天花不空。一天的上限小于一张合格挂单时，这张单就买不了。项目方自己的地址不能卖给它。进金库的 OKB 种子和锁进去的 0.01 不参与回购。另一个地址仍可能慢慢卖，所以一天封顶。": "Mint proceeds are the launch token, split in three at creation. 30% can be claimed by the project after the sale closes. 40% has no withdraw function. After close, an NFT listed here below 2× mint for a full day can be bought with that 40% and burned. At close, that 40% is the base. Each day can spend at most one-ninetieth of the base. Unused budget does not roll over. If buyers come all 90 days, the 40% can be spent out, but never in one day. If a day's cap is smaller than one qualifying listing, that listing cannot be bought. The project's own address cannot sell into it. The OKB seed and the locked 0.01 are not used for buyback. Another address could still sell slowly, which is why the day is capped.",
+  "最后 30% 不是按天发。售罄满 90 天，并且连续 3 天都有不低于 2 倍、已经挂满 1 天的挂单，同时没有低于 2 倍的挂单，项目方一次领完。满 90 天之后连续 3 天做不到，这份钱永久不能领。之后任何人可以调用 tick：记成一天、烧掉当天那一份，或买下一张低于两倍的单，调用者拿这次支出的 5%，从当天九十分之一里出。当天预算用完就不再付。网页不保管私钥。账上的 BEM 或 TAPE 直接销毁；OKB 则一半买 BEM、一半买 TAPE，买到就销毁，直到花完。两倍看的是本合约挂单，不是同一笔交易里的现货价。别人若连续三天挂一张回购当天买不掉的低价单，这 30% 会被判负。": "The last 30% is not paid daily. Ninety days after selling out, if listings at or above 2× have been up for a full day on three days in a row, and none are below 2×, the project claims it all at once. If those three days never happen after day 90, that balance can never be claimed. Anyone may then call tick: mark a day, burn that day's share, or buy one listing below 2×. The caller receives 5% of that spend, taken from the day's ninetieth. Nothing is paid once the day's budget is gone. This site does not hold a private key. BEM or TAPE in the account is burned directly. OKB buys half BEM and half TAPE, and whatever is bought is burned, until the balance is gone. The 2× test uses listings on this contract, not a spot price inside the same transaction. If someone lists a low offer the buyback cannot fill for three days running, this 30% is forfeited.",
+  "本站二级成交收 0.2%。平台那一半给收费地址。TAPE、BEM 或 OKB 的另一半留在这个项目合约里，没有提取函数，也不在成交当中拿去买别的币。这份已部署的字节码不会把 TAPE 那一半转进销毁地址。OKX 和 tapeout.net 上的成交不经过这份合约。创建调用已部署的工厂，会扣进金库的 OKB。": "Secondary sales on this site take 0.2%. Half of that goes to the fee address. The other half of the TAPE, BEM, or OKB stays in the project contract, with no withdraw function, and is not used mid-trade to buy another token. This deployed bytecode does not send the TAPE half to a burn address. Trades on OKX and tapeout.net do not pass through this contract. Creating a project calls the deployed factory and deposits the OKB into the vault.",
+};
+
+const LINES: [RegExp, string][] = [
+  [/^#(\d+) 已挂出。在「挂单」里，排在市场最前。$/, "#$1 is listed, at the front of the market."],
+  [/^你挂着 (\d+) 张。点撤单即可取消。$/, "$1 of yours are listed. Tap cancel to take one down."],
+  [/^还没有读到挂单。合约里托管的会补进来。$/, "No listings read yet. Escrowed tokens will fill in."],
+  [/^在售 (\d+) 张排在最前，后面是(.+)，(.+)。$/, "$1 for sale first, then $2, $3."],
+  [/^钱包里 (\d+) 张。另有 (\d+) 张挂单中。$/, "$1 in the wallet. $2 listed."],
+  [/^钱包里 (\d+) 张。$/, "$1 in the wallet."],
+  [/^持有 (\d+) 张，正在核对编号 (\d+)\/(\d+)。$/, "Holding $1. Checking IDs $2/$3."],
+  [/^持有 (\d+) 张。$/, "Holding $1."],
+  [/^另有 (\d+) 张挂单中。$/, "$1 listed."],
+  [/^挂单中 (.+)。市场的「挂单」里能看到。$/, "Listed $1. They show under Listings."],
+  [/^已填入 #(\d+)。填好价格再点挂出。$/, "#$1 filled in. Set a price, then list."],
+  [/^#(\d+) 挂单中$/, "#$1 listed"],
+  [/^稀有度 (.+)，一万张里排第 (\d+)。最稀有的是(.+)「(.+)」，存世 (\d+) 张，占 (.+)%。$/, "Rarity $1, rank $2 of 10,000. Rarest trait is $3 “$4”, $5 exist, $6%."],
+  [/^持有 (.+)$/, "Held by $1"],
+  [/^这张还没铸出。$/, "This one is not minted yet."],
+  [/^买下付 (.+) BEM 和 (.+) TAPE$/, "Buy for $1 BEM and $2 TAPE"],
+  [/^付 (.+) BEM \+ (.+) TAPE$/, "Pay $1 BEM + $2 TAPE"],
+  [/^在售 (.+) BEM \+ (.+) TAPE$/, "For sale $1 BEM + $2 TAPE"],
+  [/^价位 (\d+) · 在售 (.+) BEM \+ (.+) TAPE$/, "Price rank $1 · for sale $2 BEM + $3 TAPE"],
+  [/^挂出 #(\d+) · (.+) BEM \+ (.+) TAPE · (.+)$/, "Listed #$1 · $2 BEM + $3 TAPE · $4"],
+  [/^买下 #(\d+) · (.+) BEM \+ (.+) TAPE · (.+)$/, "Bought #$1 · $2 BEM + $3 TAPE · $4"],
+  [/^撤单 #(\d+)$/, "Cancelled #$1"],
+  [/^铸造 #(\d+) → (.+)$/, "Minted #$1 → $2"],
+  [/^恭喜，Circuit Punk #(\d+) 属于你了。$/, "Circuit Punk #$1 is yours."],
+  [/^已核对 (\d+) \/ (\d+) 张。标注地址里已出现 (\d+) 个。$/, "Checked $1 / $2. $3 labeled addresses have appeared."],
+  [/^共 (\d+) 个持有地址。每页 30 个，标注地址在最前。$/, "$1 holders. 30 per page. Labeled addresses come first."],
+  [/^(\d+) 待领$/, "$1 pending"],
+  [/^正在核对 (\d+) 张的持有地址。$/, "Checking holders for $1 tokens."],
+  [/^没选属性时，按稀有度从高到低排。$/, "No trait selected. Rarest first."],
+  [/^只看挂单，现在 (\d+) 张。$/, "Listings only, $1 now."],
+  [/^按属性筛中 (\d+) 张，稀有的在前。$/, "$1 match these traits, rarest first."],
+  [/^正在看物品。$/, "Browsing items."],
+  [/^只看挂单。$/, "Listings only."],
+  [/^稀有的在前$/, "rarest first"],
+  [/^稀有的在后$/, "rarest last"],
+  [/^按编号排$/, "by ID"],
+  [/^价格从高到低$/, "highest price first"],
+  [/^价格从低到高$/, "lowest price first"],
+  [/^挂单 (\d+) 张，价格从高到低。$/, "$1 listings, highest price first."],
+  [/^挂单 (\d+) 张，价格从低到高。$/, "$1 listings, lowest price first."],
+  [/^在售 (\d+) 张按价格从高到低排在前面。没挂单的在后面。$/, "$1 for sale, highest price first. Unlisted ones follow."],
+  [/^在售 (\d+) 张按价格从低到高排在前面。没挂单的在后面。$/, "$1 for sale, lowest price first. Unlisted ones follow."],
+  [/^钱包里 (\d+) 张。点编号填进上面的转账。另有 (\d+) 张挂单中。$/, "$1 in this wallet. Tap an ID to fill the transfer above. $2 listed."],
+  [/^钱包里 (\d+) 张。点编号填进上面的转账。$/, "$1 in this wallet. Tap an ID to fill the transfer above."],
+  [/^已填入 #(\d+)。填接收地址后点签名转出。$/, "Filled #$1. Enter the recipient, then sign."],
+  [/^这张挂单中，先撤单才能转。$/, "This one is listed. Cancel it before sending."],
+  [/^一次一张。每次 1 TAPE \+ 0\.001 BEM。下一张是 #(\d+|—)。一个钱包最多十次。这个钱包已铸 (\d+) 次，还能 (\d+) 次。$/, "One at a time. Each mint is 1 TAPE + 0.001 BEM. Next is #$1. Ten times a wallet. This wallet has minted $2, $3 left."],
+  [/^一次一张。每次 1 TAPE \+ 0\.001 BEM。下一张是 #(\d+|—)。一个钱包最多十次。连上钱包后显示还能铸几次。$/, "One at a time. Each mint is 1 TAPE + 0.001 BEM. Next is #$1. Ten times a wallet. Connect to see how many are left."],
+  [/^等钱包确认。这一张铸完，这个钱包还剩 (\d+) 次。$/, "Confirm in the wallet. After this one, $1 mints left."],
+  [/^官方池大约 (.+) BEM 对 (.+) TAPE。池子没开或没有存货，不会放行。$/, "The official pool holds about $1 BEM against $2 TAPE. It will not trade while closed or empty."],
+  [/^官方池大约 (.+) BEM 对 (.+) TAPE。流动性很小。$/, "The official pool holds about $1 BEM against $2 TAPE. Liquidity is thin."],
+  [/^官方池大约 (.+) USDT 对 (.+) TAPE。未到 5,000 USDT 不会放行。流动性很小。$/, "The official pool holds about $1 USDT against $2 TAPE. It stays closed under 5,000 USDT. Liquidity is thin."],
+  [/^官方池大约 (.+) USDT 对 (.+) TAPE。流动性很小。$/, "The official pool holds about $1 USDT against $2 TAPE. Liquidity is thin."],
+];
+
+const GLOSS: [string, string][] = [
+  ["极紫外晶粒", "EUV die"],
+  ["键合巨像", "Bond colossus"],
+  ["报废晶粒", "Scrap die"],
+  ["晶圆人像", "Wafer portrait"],
+  ["吉祥晶粒", "Mascot die"],
+  ["对准标记", "Align mark"],
+  ["缺陷图样", "Defect pattern"],
+  ["纪念版图", "Memorial layout"],
+  ["轻掺杂硅", "Lightly doped Si"],
+  ["中掺杂硅", "Medium doped Si"],
+  ["重掺杂硅", "Heavily doped Si"],
+  ["本征硅", "Intrinsic Si"],
+  ["氧化层", "Oxide"],
+  ["氮化镓", "GaN"],
+  ["碳化硅", "SiC"],
+  ["极紫外", "EUV"],
+  ["报废硅", "Scrap Si"],
+  ["厚铜", "Thick copper"],
+  ["无金属", "No metal"],
+  ["铝互连", "Aluminum"],
+  ["铜互连", "Copper"],
+  ["金互连", "Gold"],
+  ["钴盖帽", "Cobalt cap"],
+  ["紫光刻胶", "Purple resist"],
+  ["钨栓塞", "Tungsten plug"],
+  ["绿胶", "Green resist"],
+  ["高顶盖帽", "Tall cap"],
+  ["键合点", "Bond pad"],
+  ["遮光层", "Shutter"],
+  ["经典遮光", "Classic shutter"],
+  ["牛角框", "Horn rim"],
+  ["眼罩", "Eye patch"],
+  ["三维眼镜", "3D glasses"],
+  ["激光对准", "Laser align"],
+  ["钝化", "Passivation"],
+  ["引线", "Wire"],
+  ["探针", "Probe"],
+  ["针孔", "Pinhole"],
+  ["金属胡须", "Metal whisker"],
+  ["开槽", "Groove"],
+  ["金凸点", "Gold bump"],
+  ["崩边", "Chipped edge"],
+  ["裸片", "Bare die"],
+  ["陶瓷盖", "Ceramic lid"],
+  ["传说", "Legendary"],
+  ["史诗", "Epic"],
+  ["稀有度", "Rarity"],
+  ["稀有", "Rare"],
+  ["少见", "Uncommon"],
+  ["普通", "Common"],
+  ["电路朋克", "Circuit Punk"],
+  ["正在铸造", "Minting"],
+  ["未挂单", "Not listed"],
+  ["挂单中", "Listed"],
+  ["下一张铸造", "Next to mint"],
+  ["没有挂单", "Not listed"],
+  ["类型", "Type"],
+  ["衬底", "Substrate"],
+  ["金属层", "Metal"],
+  ["对准", "Align"],
+  ["键合", "Bond"],
+  ["封装", "Package"],
+  ["持有人", "Holder"],
+  ["创始人", "Founder"],
+  ["火星人", "Martian"],
+  ["官方", "Official"],
+  ["挂单", "listing"],
+  ["成交", "sale"],
+  ["铸造", "mint"],
+  ["钱包", "wallet"],
+  ["属性", "trait"],
+  ["编号", "ID"],
+  ["张", ""],
+  ["第 ", "rank "],
+];
+
+const originals = new WeakMap<Text, string>();
+const attrOriginal = new WeakMap<Element, Record<string, string>>();
+let applying = false;
+
+export function englishOf(text: string): string {
+  const trim = text.trim();
+  if (!trim) return text;
+  if (EXACT[trim]) return text.replace(trim, EXACT[trim]);
+  for (const [re, next] of LINES) {
+    if (re.test(trim)) return text.replace(trim, trim.replace(re, next));
+  }
+  let out = text;
+  for (const [zh, en] of GLOSS) out = out.split(zh).join(en);
+  return out;
+}
+
+const toEn = englishOf;
+
+function renderText(node: Text) {
+  const current = node.nodeValue ?? "";
+  const saved = originals.get(node);
+  if (saved != null && current !== saved && current !== toEn(saved)) originals.delete(node);
+  if (uiLang() === "zh") {
+    const zh = originals.get(node);
+    if (zh && current === toEn(zh)) node.nodeValue = zh;
+    return;
+  }
+  const source = originals.get(node) ?? current;
+  if (!/[\u4e00-\u9fff]/.test(source)) return;
+  originals.set(node, source);
+  const next = toEn(source);
+  if (next !== current) node.nodeValue = next;
+}
+
+function renderAttrs(el: Element) {
+  const names = ["placeholder", "aria-label", "title", "alt"] as const;
+  let saved = attrOriginal.get(el);
+  if (uiLang() === "zh") {
+    if (!saved) return;
+    for (const name of names) {
+      if (saved[name] != null) el.setAttribute(name, saved[name]);
+    }
+    return;
+  }
+  if (!saved) saved = {};
+  for (const name of names) {
+    const value = el.getAttribute(name);
+    if (value == null) continue;
+    if (saved[name] == null) {
+      if (!/[\u4e00-\u9fff]/.test(value)) continue;
+      saved[name] = value;
+    }
+    const next = toEn(saved[name]);
+    if (next !== value) el.setAttribute(name, next);
+  }
+  if (Object.keys(saved).length) attrOriginal.set(el, saved);
+}
+
+export function localize(root: ParentNode) {
+  if (applying) return;
+  applying = true;
+  try {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let node = walker.nextNode();
+    while (node) {
+      const parent = (node as Text).parentElement;
+      if (parent && !parent.closest("script, style")) renderText(node as Text);
+      node = walker.nextNode();
+    }
+    if (root instanceof Element) renderAttrs(root);
+    root.querySelectorAll<Element>("[placeholder],[aria-label],[title],[alt]").forEach(renderAttrs);
+  } finally {
+    applying = false;
+  }
+}
+
+export function watchEnglish(root: HTMLElement): () => void {
+  let timer = 0;
+  const pending = new Set<Node>();
+  const flush = () => {
+    timer = 0;
+    if (uiLang() !== "en") {
+      pending.clear();
+      return;
+    }
+    const nodes = [...pending];
+    pending.clear();
+    if (applying) return;
+    applying = true;
+    try {
+      for (const node of nodes) {
+        if (!node.isConnected && node !== root) continue;
+        if (node.nodeType === Node.TEXT_NODE) renderText(node as Text);
+        else if (node instanceof Element) {
+          renderAttrs(node);
+          const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+          let child = walker.nextNode();
+          while (child) {
+            renderText(child as Text);
+            child = walker.nextNode();
+          }
+        }
+      }
+    } finally {
+      applying = false;
+    }
+  };
+  const obs = new MutationObserver((records) => {
+    if (applying || uiLang() !== "en") return;
+    for (const record of records) {
+      if (record.type === "characterData" && record.target.nodeType === Node.TEXT_NODE) pending.add(record.target);
+      for (const added of record.addedNodes) pending.add(added);
+      if (record.type === "attributes" && record.target instanceof Element) pending.add(record.target);
+    }
+    if (!timer) timer = window.setTimeout(flush, 40);
+  });
+  obs.observe(root, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["placeholder", "aria-label", "title", "alt"] });
+  const stopLang = onLang(() => localize(root));
+  localize(root);
+  return () => {
+    obs.disconnect();
+    stopLang();
+    if (timer) window.clearTimeout(timer);
+  };
+}

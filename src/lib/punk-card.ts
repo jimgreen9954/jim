@@ -2,6 +2,8 @@ import { punk } from "@/lib/circuit-punk";
 
 export const DESK_FEE_BPS = 20;
 export const FAUX_CAP = 50;
+export const THAW_HOURS = 48;
+export const RECRAFT_DAYS = 30;
 export const UNLOCK_DAYS = 7;
 
 export type CardKind = "copper" | "silver" | "gold" | "euv" | "faux";

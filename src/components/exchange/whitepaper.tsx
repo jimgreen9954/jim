@@ -137,6 +137,16 @@ const zhBody: Section[] = [
     ],
   },
   {
+    h: "合成卡",
+    ps: [
+      "Circuit Punk 只在 nft.tapeliquid.net 合成，不在交易所合成。先在市场页凑齐并点确定，然后才去 app.tapeliquid.net 确认身份，确认之后才开始交易。合成把材料锁进合约，不销毁，锁着不能转。拆开之后有 48 小时解冻期，这 48 小时不能转。拆出来的编号 30 天内不能再拿去合成，别的编号不受影响。锁卡合约上线前，页面上的确定只记在这台浏览器，不能领取。一个钱包只认最高的一张，不能叠加。",
+      "铜片：2 张普通，类型不同。全场台费 0.16%，主属性 0.14%。银盖：3 张，至少 1 张少见，至少 2 种衬底。全场 0.12%，主属性 0.10%。金线：3 张，至少 1 张稀有，类型各不相同。全场 0.08%，主属性 0.06%。极紫外：1 张传说加任意 2 张，或 1 张史诗加 3 张少见及以上。全场 0.06%，主属性 0.04%，带绿边。仿极紫外：20 张普通，类型不能完全相同，全站最多 50 张。全场 0.08%，没有主属性再减。",
+      "主属性按材料算。衬底加成现货，金属层加成永续，键合成加成电路，对准加成发射。分数最高的一项是主属性，只有这一边走到更低的费率。基准仍是付出金额的 0.20%。池子手续费不动。nft.tapeliquid.net 上买卖 Circuit Punk 仍只收合约里写死的 0.2%，不加版权费，合成卡也不减这笔。",
+      "交易之后，台费减免每个自然月领一次。新加坡时间，次月 1 日 0 点起到 8 日 0 点止，共 7 天。过了 8 日 0 点，这一月不能再领，也不能补。同一钱包同一月只领一次。奖金池先到先得，池子空了就停。任何地址都可以往奖金池充，项目方也可以充。",
+      "个人中心只做确认身份和领取，不在交易所合成，也不改下单。下单仍收 0.20%。用户签 tapeliquid-fee-pass。页面读 X Layer 上 Circuit Punk 0xB5ac1dddc158a639D4499aad2d8F393989D4bD34 里这个钱包持有的编号，只认最高的一张。浏览器里的确定跨站读不到，不能当作凭证。锁卡合约上线后只认锁住的那一组。返还等于该月已付台费乘以（20 减这张卡的基点）再除以 20。主属性那一台用更低的基点，其他台用全场基点。池子手续费、Gas 和 NFT 市场的 0.2% 不算。奖金池合约上线前只显示应返还，领取不能转出。",
+    ],
+  },
+  {
     h: "永续",
     ps: [
       `现在交易的 X Layer 永续是 ${KNOWN_XPERP}。标记读池子，约能读出。旧合约 ${PREV_XPERP} 的仓位还在，不再接受新开仓。BSC 永续是 ${BSC_REBATE}，上一本是 ${PREV_BSC}。晶体管永续是 ${GATE}。标记从空开始，第一笔要 BSC 多签写入。三本新合约的千分之二进该链多签。没有管理员。`,
@@ -320,6 +330,16 @@ const en: Section[] = [
     ],
   },
   {
+    h: "Crafted card",
+    ps: [
+      "Circuit Punk cards are crafted only at nft.tapeliquid.net, not on the exchange. Finish the craft there and confirm it before the same wallet confirms identity at app.tapeliquid.net and starts trading. Crafting locks the pieces in a contract. They are not burned, and they cannot be transferred while locked. After a split there is a 48-hour thaw, and those pieces cannot be transferred during it. The split ids cannot be crafted again for 30 days. Other ids are not affected. Until that lock is deployed, the confirm button is stored only in this browser and nothing can be claimed. One wallet is recognized for its highest card, and cards do not stack.",
+      "Copper is two commons of different types: 0.16 percent on every desk, or 0.14 percent on the card's main desk. Silver is three pieces, at least one uncommon, and at least two substrates: 0.12 percent, or 0.10 on the main desk. Gold is three pieces, at least one rare, each a different type: 0.08 percent, or 0.06 on the main desk. Extreme ultraviolet is one legend plus any two, or one epic plus three pieces that are uncommon or better: 0.06 percent, or 0.04 on the main desk, with a green edge. Faux extreme ultraviolet is twenty commons that are not all the same type, capped at fifty cards: 0.08 percent, with no further main-desk cut.",
+      "The main desk is the highest of the four scores. Substrate lifts spot, metal lifts perpetuals, bond lifts circuits, and alignment lifts launch. The desk fee starts at 0.20 percent of what is paid. The pool fee does not move. Buying or selling a Circuit Punk at nft.tapeliquid.net still pays only the 0.2 percent written in that contract. There is no extra royalty, and the card does not cut that sale.",
+      "After trading, the desk-fee rebate is claimed once each calendar month. The window is the first seven days of the next month, Singapore time, from 00:00 on the 1st until 00:00 on the 8th. After that the month is gone and cannot be claimed later. One wallet claims a month once. The pool pays first come, first served, and stops when it is empty. Any address can fund the pool, including the project.",
+      "The account page only confirms identity and shows the claim. It does not craft, and it does not change an order. Orders still pay 0.20 percent. The wallet signs tapeliquid-fee-pass. The page reads the Circuit Punk ids held by that wallet at 0xB5ac1dddc158a639D4499aad2d8F393989D4bD34 on X Layer and keeps only the highest card. A confirm stored in the NFT site's browser cannot be read here and is not proof. After the lock contract is deployed, only the locked set counts. The rebate is the desk fee paid that month times (20 minus the card's basis points) divided by 20. The main desk uses the lower basis points. Other desks use the card-wide basis points. Pool fees, gas, and the NFT market's 0.2 percent do not count. Until the pool contract is deployed, the account page shows the amount and must not send it.",
+    ],
+  },
+  {
     h: "Perpetuals",
     ps: [
       `The live X Layer perpetual is ${KNOWN_XPERP}. Positions on ${PREV_XPERP} remain there and that book takes no new positions. The BSC perpetual is ${BSC_REBATE}. The previous one is ${PREV_BSC}. The transistor perpetual is ${GATE}. Its marks start empty. The BSC multisig posts the first price. The 0.20 percent on these three goes to the multisig of that chain. None has an admin.`,
@@ -393,6 +413,7 @@ const specZh = [
   ["一张流片", "18,000 NAND，或 30,000 LATCH。更大写不进链"],
   ["电路何时在", "回执成功就在链上。页面名单稍后才显示"],
   ["电路现货", "按张。卖方实收 99.8%。日产能价是估算，没开工不是到账"],
+  ["合成卡", "先在 nft.tapeliquid.net 确定。再去 app.tapeliquid.net 交易。每月领一次，次月 7 天内，先到先得。铜片 0.16/0.14，银盖 0.12/0.10，金线 0.08/0.06，极紫外 0.06/0.04，仿极紫外 0.08"],
 ];
 
 const specEn = [
@@ -409,6 +430,7 @@ const specEn = [
   ["One tape-out", "18,000 NAND, or 30,000 LATCH. Larger than that does not fit"],
   ["When the circuit exists", "On chain when the receipt succeeds. The page list shows it later"],
   ["Circuit spot", "Sold whole. The seller receives 99.8 percent. The day price is an estimate, not a receipt"],
+  ["Crafted card", "Confirm at nft.tapeliquid.net first, then trade at app.tapeliquid.net. Claim once a month, within the first 7 days, first come first served. Copper 0.16/0.14, silver 0.12/0.10, gold 0.08/0.06, EUV 0.06/0.04, faux 0.08"],
 ];
 
 const nowZh = [
@@ -441,7 +463,9 @@ export function Whitepaper() {
   const [on, setOn] = useState(0);
   const jump = (i: number) => {
     setOn(i);
-    document.getElementById(`paper-${i}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const node = document.getElementById(`paper-${i}`);
+    if (node instanceof HTMLDetailsElement) node.open = true;
+    node?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
   return (
     <div className="lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] lg:items-start">
@@ -459,11 +483,14 @@ export function Whitepaper() {
       <article className="min-w-0 overflow-x-hidden px-3 py-5 sm:px-6 lg:px-10">
         <p className="text-[11px] tracking-[0.22em] text-gold">TAPELIQUID</p>
         <h2 className="mt-2 max-w-3xl font-display text-3xl leading-tight sm:text-5xl">{zh ? "从这里开始使用 TAPELIQUID" : "Start here with TAPELIQUID"}</h2>
-        <p className="mt-4 max-w-2xl text-sm leading-7 text-ink/75">
-          {zh
-            ? "先看清平台币、晶体管和电路，再做第一笔。说明只写已经能签名的规则。页面和合约不一致时，以这一页和链上合约为准。"
-            : "Read the platform coin, the transistors, and the circuits before the first order. This page only states rules you can sign. If a screen disagrees with a contract, this page and the contract win."}
-        </p>
+        <details className="mt-4 max-w-2xl">
+          <summary className="cursor-pointer text-sm font-medium">{zh ? "说明" : "Guide"}</summary>
+          <p className="mt-3 text-sm leading-7 text-ink/75">
+            {zh
+              ? "先看清平台币、晶体管和电路，再做第一笔。说明只写已经能签名的规则。页面和合约不一致时，以这一页和链上合约为准。"
+              : "Read the platform coin, the transistors, and the circuits before the first order. This page only states rules you can sign. If a screen disagrees with a contract, this page and the contract win."}
+          </p>
+        </details>
         <div className="mt-6 grid border border-gold/40 sm:grid-cols-3">
           {[
             ["01", zh ? "第一次使用" : "First visit", zh ? "TAPE、NAND、LATCH 和电路各是什么" : "What TAPE, NAND, LATCH, and a circuit are", 0],
@@ -477,11 +504,14 @@ export function Whitepaper() {
             </button>
           ))}
         </div>
-        <p className="mt-4 border border-gold/30 bg-card px-4 py-3 text-sm leading-6">
-          {zh
-            ? "TAPE 是唯一平台币，只在 X Layer。NAND 与 LATCH 是晶体管。电路按张交易，写明输入、输出和门数。BEM 属于 TapeOut 协议官方代表。"
-            : "TAPE is the only platform coin, and only on X Layer. NAND and LATCH are the transistors. A circuit trades as one piece, with its inputs, outputs, and gates. BEM is the official representative of the TapeOut protocol."}
-        </p>
+        <details className="mt-4">
+          <summary className="cursor-pointer text-sm font-medium">{zh ? "介绍" : "About"}</summary>
+          <p className="mt-3 border border-gold/30 bg-card px-4 py-3 text-sm leading-6">
+            {zh
+              ? "TAPE 是唯一平台币，只在 X Layer。NAND 与 LATCH 是晶体管。电路按张交易，写明输入、输出和门数。BEM 属于 TapeOut 协议官方代表。"
+              : "TAPE is the only platform coin, and only on X Layer. NAND and LATCH are the transistors. A circuit trades as one piece, with its inputs, outputs, and gates. BEM is the official representative of the TapeOut protocol."}
+          </p>
+        </details>
         <div id="paper-now" className="mt-8 grid scroll-mt-24 gap-4">
           <div className="overflow-x-auto border border-gold/30">
           <table className="w-full text-left text-sm">
@@ -532,15 +562,17 @@ export function Whitepaper() {
             <span className="mt-1 block break-all font-mono text-xs">{TAPE_MINE}</span>
           </a>
         </div>
-        <div className="mt-10 flex flex-col gap-12">
+        <div className="mt-10 flex flex-col gap-3">
           {sections.map((section, i) => (
-            <section key={section.h} id={`paper-${i}`} className="scroll-mt-24">
-              <p className="font-mono text-[11px] text-gold">{String(i + 1).padStart(2, "0")} / {section.h}</p>
-              <h3 className="mt-2 font-display text-2xl leading-none sm:text-3xl">{section.h}</h3>
+            <details key={section.h} id={`paper-${i}`} className="scroll-mt-24 border-t border-gold/30 pt-3">
+              <summary className="cursor-pointer">
+                <span className="font-mono text-[11px] text-gold">{String(i + 1).padStart(2, "0")} / {section.h}</span>
+                <span className="mt-2 block font-display text-2xl leading-none sm:text-3xl">{section.h}</span>
+              </summary>
               {section.ps.map((p) => (
                 <p key={p.slice(0, 48)} className="mt-3 max-w-3xl text-sm leading-7 text-ink/85">{p}</p>
               ))}
-            </section>
+            </details>
           ))}
         </div>
       </article>

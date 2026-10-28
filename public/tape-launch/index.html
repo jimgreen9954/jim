@@ -1,0 +1,2469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TAPE NFT 市场</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+:root {
+  --bg: #f4efe4;
+  --ink: #1a140c;
+  --muted: #6d6256;
+  --line: rgba(168, 118, 32, .42);
+  --soft: #efe4cc;
+  --blue: #9a6410;
+  --green: #0c8f5e;
+  --red: #d23b4a;
+  --card: #fffdf8;
+  --gold: #a87412;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+.tape-root {
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: Inter, system-ui, sans-serif;
+  color-scheme: light;
+  position: relative;
+}
+.tape-root button, .tape-root input { font-family: inherit; }
+.tape-root button { cursor: pointer; }
+.rail {
+  flex: 0 0 188px;
+  width: 188px;
+  min-width: 188px;
+  max-width: 188px;
+  border-right: 1px solid var(--line);
+  background: var(--card);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 12px 10px;
+  gap: 4px;
+  z-index: 30;
+  overflow-x: hidden;
+  overflow-y: auto;
+  transition: flex-basis .16s ease, max-width .16s ease, width .16s ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .rail:hover { box-shadow: none; }
+}
+.brand {
+  position: relative;
+  width: 100%;
+  height: auto;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 0 4px;
+  margin-bottom: 8px;
+  overflow: visible;
+}
+.brand .name { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.05; min-width: 0; }
+.brand .name b { font-size: 13px; letter-spacing: -.2px; }
+.brand .name small { font-size: 10px; color: var(--muted); font-weight: 700; }
+.brand .mark { width: 44px; height: 44px; border-radius: 10px; object-fit: contain; background: #fff; display: block; }
+.gold-crown {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  object-fit: contain;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,.45));
+}
+.brand .gold-crown, .top-logo .gold-crown { width: 22px; height: 18px; top: -6px; right: -4px; }
+.brand b { font-size: 16px; letter-spacing: -.3px; white-space: nowrap; opacity: 1; }
+.nav-item {
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 12px;
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 15px;
+  white-space: nowrap;
+  background: transparent;
+  border: 0;
+}
+.nav-item svg { width: 22px; height: 22px; flex-shrink: 0; }
+.nav-item span { opacity: 1; }
+.nav-item:hover, .nav-item.active { background: var(--soft); color: var(--ink); }
+.rail-gap { flex: 1; min-height: 12px; }
+a.nav-item { text-decoration: none; }
+.soc {
+  display: none;
+  align-items: center;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 12px;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.shell { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.topbar {
+  height: 72px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 20px 0 16px;
+  border-bottom: 1px solid transparent;
+  flex-shrink: 0;
+}
+.search {
+  flex: 1;
+  min-width: 0;
+  max-width: 760px;
+  margin: 0 auto;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px 0 14px;
+  background: var(--card);
+}
+.search svg { width: 18px; height: 18px; color: var(--muted); flex-shrink: 0; }
+.search input {
+  flex: 1;
+  border: 0;
+  outline: 0;
+  font-size: 15px;
+  background: transparent;
+  color: var(--ink);
+  min-width: 0;
+}
+.search kbd {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 2px 7px;
+  font-size: 12px;
+  color: var(--muted);
+  font-family: inherit;
+}
+.signin {
+  font-weight: 600;
+  font-size: 15px;
+  padding: 8px 8px;
+  border: 0;
+  background: transparent;
+  flex-shrink: 0;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.signin:hover { color: var(--blue); }
+.signin.out { color: var(--red); }
+.top-logo {
+  position: relative;
+  display: none;
+  width: auto;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  flex-shrink: 0;
+  overflow: visible;
+  align-items: center;
+  gap: 8px;
+}
+.top-logo .mark { width: 40px; height: 40px; border-radius: 8px; object-fit: contain; background: #fff; display: block; }
+.top-logo .name { display: none; flex-direction: column; align-items: flex-start; line-height: 1.05; }
+.top-logo .name b { font-size: 12px; }
+.top-logo .name small { font-size: 9px; color: var(--muted); font-weight: 700; }
+.account { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+.content { flex: 1; min-height: 0; overflow: auto; }
+.page { display: none; }
+.page.active { display: block; }
+.pad { padding: 8px 24px 48px; }
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 0 16px;
+}
+.chip {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.chip.on, .seg button.on, .fbtn.on { background: var(--gold); color: #1a1206; border-color: var(--gold); }
+.grow { flex: 1; }
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  height: 36px;
+}
+.seg button { padding: 0 12px; font-weight: 600; font-size: 14px; }
+.discover {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 28px;
+  align-items: start;
+}
+.hero { position: relative; }
+.hero .minting {
+  position: absolute; left: 10px; top: 10px; z-index: 2;
+  background: var(--gold); color: #1a1206;
+  font-size: 12px; font-weight: 800; letter-spacing: .12em;
+  padding: 4px 8px; border-radius: 999px; line-height: 1.2;
+}
+.cp-hero { position: relative; width: min(280px, 100%); border-radius: 16px; overflow: hidden; border: 1px solid var(--gold); cursor: pointer; line-height: 0; background: #101820; }
+.cp-hero .face { width: 100%; height: 280px; image-rendering: pixelated; background: #638596; object-fit: contain; display: block; }
+.cp-hero .gold-crown { width: 56px; height: 44px; top: 8px; right: 8px; }
+.head-slot { position: relative; width: 120px; height: 120px; flex: none; }
+.head-slot .face { width: 120px; height: 120px; image-rendering: pixelated; background: #638596; border: 2px solid var(--gold); display: block; border-radius: 12px; }
+.head-slot .gold-crown { width: 34px; height: 26px; top: -8px; right: -6px; }
+.av-hit .gold-crown { width: 22px; height: 18px; top: 2px; right: 2px; }
+.profile-row .av-hit { overflow: hidden; }
+.profile-row .name-hit, #assets-name { position: relative; z-index: 2; }
+.stats-row { display: flex; gap: 8px; margin: 14px 0 8px; padding: 0; }
+.stats-row > div { min-width: 0; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+.stats-row b { display: block; font-size: 13px; line-height: 1.2; }
+.stats-row span { color: var(--muted); font-size: 11px; }
+.my-lists { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin: 0 0 14px; }
+.my-list {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+}
+.my-list img { width: 44px; height: 44px; image-rendering: pixelated; background: #638596; border-radius: 8px; }
+.my-list b { font-size: 13px; line-height: 1.3; }
+.my-list small { display: block; color: var(--muted); font-size: 12px; font-weight: 600; }
+.my-list .buy { width: auto; height: 32px; margin: 0; padding: 0 12px; }
+.gold-seal {
+  width: 36px; height: 36px; flex-shrink: 0; border-radius: 10px;
+  background: #070b12 url("/tape-launch/gold.svg") center / cover no-repeat;
+  box-shadow: 0 0 0 1px #e0b15a, 0 0 16px rgba(224,177,90,.35);
+}
+.brand { border: 0; background: transparent; color: inherit; text-align: left; }
+.cp-banner {
+  display: flex; gap: 18px; align-items: flex-end;
+  padding: 22px; border: 1px solid var(--line); border-radius: 16px;
+  background:
+    radial-gradient(480px 160px at 0% 100%, rgba(224,177,90,.28), transparent 70%),
+    #1a2430;
+  color: #e7edf6;
+}
+.cp-banner h2, .cp-banner .by, .cp-banner p { color: #e7edf6; }
+.cp-banner .desk-pass {
+  color: #1a140c;
+  background: #f7f1e4;
+  border-color: #e0b15a;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.55;
+  max-width: 640px;
+}
+.cp-banner .desk-pass .forge-go { margin-top: 10px; }
+.cp-banner .by { color: #c9d4e3; font-size: 14px; line-height: 1.5; max-width: 640px; }
+.cp-banner .head-slot { align-self: flex-end; }
+.cp-kicker { color: var(--gold); font-size: 12px; font-weight: 800; letter-spacing: .16em; display: flex; align-items: center; gap: 8px; }
+.cp-banner h2 { font-size: 36px; letter-spacing: -.4px; margin: 4px 0; }
+.cp-stats { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0; }
+.cp-layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 18px; align-items: start; }
+#page-mint .cp-layout { grid-template-columns: minmax(0, 520px); }
+.cp-mint { border: 1px solid var(--line); border-radius: 16px; padding: 16px; background: var(--card); }
+.cp-mint h3 { font-size: 16px; margin: 12px 0 6px; }
+.cp-cost { margin: 10px 0 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--soft); font-size: 14px; }
+.cp-cost b { color: var(--gold); }
+.cp-mint label { display: block; font-size: 13px; font-weight: 600; margin: 12px 0 6px; }
+.cp-mint input {
+  width: 100%; height: 44px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--bg); color: var(--ink); padding: 0 12px; font-size: 16px;
+}
+.cp-card .pic { height: auto; background: #638596; }
+.cp-card img { width: 100%; aspect-ratio: 1; display: block; image-rendering: pixelated; }
+.cp-sheet { width: min(560px, 100%); max-height: min(88vh, 860px); overflow: auto; }
+.cp-sheet img { width: min(240px, 100%); image-rendering: pixelated; background: #638596; }
+.cp-filters { display: grid; gap: 8px; margin: 0 0 12px; }
+#cp-filter-toggle { display: none; }
+@media (min-width: 861px) {
+  #cp-filters.collapsed { display: grid; }
+}
+.facet { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.facet > b { width: 64px; font-size: 12px; flex: none; }
+.trait-mini { display: grid; gap: 2px; margin-top: 8px; }
+.trait-mini div { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; line-height: 1.35; }
+.trait-mini dt { color: var(--muted); }
+.trait-mini dd { margin: 0; text-align: right; }
+.trait-mini i { color: var(--muted); font-style: normal; margin-left: 4px; }
+.rank-badge {
+  position: absolute; left: 8px; top: 8px; z-index: 2;
+  height: 22px; padding: 0 7px; border-radius: 999px;
+  background: #e0b15a; color: #1a1206; font-size: 11px; font-weight: 800;
+}
+.facet .chip { height: 28px; padding: 0 8px; font-size: 12px; }
+.trait-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
+.trait-table th, .trait-table td { border-bottom: 1px solid var(--line); padding: 7px 4px; text-align: left; }
+.trait-table .right { text-align: right; }
+.cp-bals { margin: 14px 0; }
+.cp-bals button { cursor: default; }
+.cp-owned { margin-top: 8px; }
+.cp-jump { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.cp-jump .buy, .cp-jump .ghost-btn { width: auto; margin: 0; padding: 0 14px; height: 40px; }
+.hero img {
+  width: 100%;
+  height: 280px;
+  object-fit: contain;
+  display: block;
+}
+.hero-meta {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+.hero-meta h2 { font-size: 22px; letter-spacing: -.4px; line-height: 1.2; }
+.hero-meta .by { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.stats {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.stat {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 14px;
+  min-width: 108px;
+}
+.stat b { display: block; font-size: 15px; color: var(--ink); }
+.stat span { display: block; font-size: 11px; letter-spacing: .04em; color: var(--muted); margin-bottom: 2px; }
+.rank { position: sticky; top: 0; }
+.rank-head, .rank-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+.rank-head {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  padding: 4px 8px 10px;
+}
+.rank-row {
+  padding: 8px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+.rank-row:hover { background: var(--soft); }
+.who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.who img, .av {
+  width: 40px; height: 40px; border-radius: 10px; object-fit: cover; flex-shrink: 0; background: #111;
+}
+.av {
+  display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 13px;
+}
+.who .nm { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 4px; }
+.who .nm em { font-style: normal; color: var(--blue); font-size: 12px; }
+.floor { text-align: right; font-weight: 600; font-size: 14px; }
+.floor small { display: block; font-weight: 600; font-size: 12px; }
+.up { color: var(--green); }
+.down { color: var(--red); }
+.block { margin-top: 28px; }
+.block h3 { font-size: 22px; letter-spacing: -.3px; }
+.block .sub { color: var(--muted); font-size: 14px; margin: 2px 0 14px; }
+.token-grid, .card-grid, .mover-grid, .item-grid {
+  display: grid;
+  gap: 12px;
+}
+.token-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.card-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.mover-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.item-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.token, .mini, .item {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+}
+.token, .mini { padding: 12px; display: flex; gap: 12px; align-items: center; cursor: pointer; }
+.token:hover, .mini:hover, .item:hover { box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+.token .meta, .mini .meta { min-width: 0; flex: 1; }
+.token .meta b, .mini .meta b { display: block; font-size: 14px; }
+.token .meta span, .mini .meta span { color: var(--muted); font-size: 13px; }
+.mini img { width: 40px; height: 40px; border-radius: 10px; object-fit: cover; flex-shrink: 0; }
+.spark { width: 72px; height: 32px; flex-shrink: 0; }
+.mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+}
+.mover {
+  position: relative;
+  height: 132px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #111 center / cover no-repeat;
+  color: #fff;
+  cursor: pointer;
+}
+button.mover { width: 100%; border: 0; padding: 0; text-align: left; font: inherit; color: #fff; }
+.mover.shift { background-position: left center; }
+.mover.alt { background-position: 70% 40%; }
+.mover .cap {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 28px 14px 12px;
+  background: linear-gradient(transparent, rgba(0,0,0,.75));
+}
+.mover .cap b { display: block; }
+.mover .cap span { font-size: 13px; opacity: .9; }
+.layout {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  min-height: 100%;
+}
+.filters {
+  border-right: 1px solid var(--line);
+  padding: 18px 16px 32px;
+}
+.filters h4 { font-size: 16px; margin-bottom: 12px; }
+.fgroup { display: flex; flex-direction: column; gap: 8px; margin-bottom: 22px; }
+.fbtn {
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  text-align: left;
+  padding: 0 12px;
+  font-weight: 600;
+  font-size: 14px;
+  background: var(--card);
+  color: var(--ink);
+}
+.fbtn.on { background: var(--gold); color: #1a1206; border-color: var(--gold); }
+.filters .label {
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 700;
+  margin: 8px 0;
+}
+.chain {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; font-weight: 600; padding: 6px 0;
+}
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--blue); display: inline-block; }
+.table-wrap { padding: 16px 8px 40px 0; }
+.tabs { display: flex; gap: 8px; padding: 0 16px 12px; align-items: center; }
+.tab {
+  height: 36px; padding: 0 12px; border-radius: 10px; font-weight: 600; font-size: 14px; color: var(--ink);
+}
+.tab.on { background: var(--soft); color: var(--ink); }
+table { width: 100%; border-collapse: collapse; }
+th {
+  text-align: left; font-size: 12px; color: var(--muted); font-weight: 700;
+  letter-spacing: .04em; padding: 8px 12px; border-bottom: 1px solid var(--line);
+}
+td { padding: 12px; border-bottom: 1px solid var(--line); font-size: 14px; font-weight: 600; }
+tr:hover td { background: var(--soft); }
+td.right, th.right { text-align: right; }
+.namecell { display: flex; align-items: center; gap: 12px; }
+.item { overflow: hidden; cursor: pointer; }
+.item .pic {
+  position: relative;
+  height: 200px;
+  background: #111 url("/tape-launch/mascot.png") left center / cover no-repeat;
+}
+.item .pic.p2 { background-position: left center; }
+.item .pic.p3 { background-position: 80% 20%; }
+.item .body { padding: 12px; }
+.item .body .nm { font-weight: 600; }
+.item .body .px { margin-top: 8px; font-weight: 700; }
+.item .body .px span { display: block; font-size: 12px; color: var(--muted); font-weight: 600; }
+.buy {
+  margin-top: 10px; width: 100%; height: 40px; border-radius: 12px;
+  background: var(--blue); color: #fff; font-weight: 700; border: 0;
+}
+.buy:hover { background: #1868b7; }
+.buy.ghost { background: var(--card); color: var(--ink); border: 1px solid var(--line); }
+.feed { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.feed-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 140px 120px;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  align-items: center;
+  font-size: 14px;
+}
+.feed-row:last-child { border-bottom: 0; }
+.cp-log .feed-row { grid-template-columns: 1fr; color: inherit; text-decoration: none; }
+.tag { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 800; background: var(--soft); }
+.tag.founder { background: #e0b15a; color: #1a1206; }
+.tag.mars { background: #c4554a; color: #fff; }
+.tag.official { background: #3ddea2; color: #06281c; }
+.tag.bitmap { background: #7aa2ff; color: #07101f; }
+.tag.yang { background: #d7b4ff; color: #1a1024; }
+.tag.loyal { background: #f0b90b; color: #1a140c; }
+.tag.foundation { background: #e7edf6; color: #121820; }
+.tag.xing { background: #9ad7ff; color: #06202c; }
+.tag.ruhua { background: #f4a4c0; color: #2a1020; }
+.tag.sussiie { background: #c9b6ff; color: #1a1030; }
+.tag.zhou { background: #ffb089; color: #2a1408; }
+.tag.yasi { background: #b7e4c7; color: #10281c; }
+.tag.cheng { background: #ffd166; color: #2a1c04; }
+.tag.eason { background: #8fd3ff; color: #06202c; }
+.tag.role { background: var(--soft); color: var(--ink); border: 1px solid var(--line); }
+.tag.wait { background: transparent; color: var(--muted); border: 1px solid var(--line); font-weight: 700; }
+.tag.you { background: var(--ink); color: var(--bg); }
+.pill {
+  display: inline-flex; align-items: center; height: 26px; padding: 0 8px;
+  border-radius: 8px; background: var(--soft); font-size: 12px; font-weight: 700;
+}
+.profile-banner {
+  height: 88px;
+  background: #0d1721 url("/tape-launch/mascot.png") center 40% / cover no-repeat;
+  border-radius: 16px;
+  overflow: hidden;
+}
+.profile-row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 0 4px 4px;
+  position: relative;
+  z-index: 1;
+}
+.profile-row > div {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  min-width: 0;
+}
+.profile-row .av-hit {
+  position: relative; width: 72px; height: 72px; padding: 0; border: 0; background: var(--card);
+  border-radius: 16px; cursor: pointer;
+}
+.profile-row .av-hit > img:not(.gold-crown) {
+  width: 72px; height: 72px; border-radius: 16px; border: 3px solid var(--card); object-fit: cover; background: #111;
+  display: block;
+}
+#assets-addr { word-break: break-all; }
+.profile-actions { margin: 10px 0 0; }
+.profile-row .av-hit span {
+  position: absolute; left: 6px; right: 6px; bottom: 8px;
+  text-align: center; font-size: 11px; font-weight: 700; color: #fff;
+  background: rgba(7,16,24,.72); border-radius: 999px; padding: 2px 0;
+}
+.name-hit { background: none; border: 0; padding: 0; text-align: left; cursor: pointer; }
+.name-hit h2 { font-size: 20px; line-height: 1.2; }
+.name-hit small { display: block; color: var(--muted); font-size: 12px; font-weight: 600; }
+#profile-nick {
+  display: block; height: 40px; width: min(240px, 70vw); margin-top: 4px;
+  border: 1px solid var(--line); border-radius: 10px; padding: 0 10px; font-size: 16px;
+  background: var(--card); color: var(--ink);
+}
+#profile-nick[hidden] { display: none; }
+.profile-row h2 { font-size: 20px; line-height: 1.2; }
+.profile-row p { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.mini-clear { background: none; border: 0; padding: 0; color: var(--muted); font-size: 12px; font-weight: 700; cursor: pointer; }
+.mini-clear[hidden] { display: none; }
+.desk {
+  display: grid;
+  grid-template-columns: minmax(280px, 460px) minmax(280px, 460px);
+  justify-content: center;
+  align-items: start;
+  gap: 16px;
+  padding: 16px 16px 0;
+}
+.desk .form, .desk .swap-panel { max-width: 460px; width: 100%; margin: 0 auto; }
+.desk h3 { font-size: 18px; line-height: 1; }
+.desk .form label, .desk h3 { color: var(--ink); }
+.desk .hint { text-align: left; }
+.desk a { color: var(--blue); font-weight: 700; }
+.swap-panel {
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  padding: 8px;
+  background: var(--card);
+  box-shadow: 0 8px 28px rgba(7, 11, 18, .06);
+}
+.swap-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  height: 48px;
+  padding: 0 8px;
+  margin: 0;
+}
+.swap-head h3 { margin: 0; }
+.swap-seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--soft);
+}
+.swap-seg .fbtn {
+  height: 32px;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  text-align: center;
+  padding: 0 14px;
+  background: transparent;
+}
+.swap-seg .fbtn.on { background: var(--card); color: var(--ink); }
+.swap-stack { position: relative; display: grid; gap: 4px; }
+.swap-box {
+  display: grid;
+  grid-template-rows: 20px 52px;
+  align-content: center;
+  gap: 6px;
+  min-height: 112px;
+  padding: 16px;
+  border-radius: 20px;
+  background: var(--soft);
+}
+.swap-box .swap-k {
+  display: flex;
+  align-items: center;
+  height: 20px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+.swap-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  height: 52px;
+  gap: 12px;
+}
+.swap-panel .swap-box input,
+.swap-amt {
+  width: 100%;
+  height: 52px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 36px;
+  font-weight: 500;
+  line-height: 52px;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  outline: none;
+}
+.swap-panel .swap-box input::placeholder { color: var(--muted); }
+.swap-flip {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  transform: translate(-50%, -50%);
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  padding: 0;
+  border-radius: 12px;
+  border: 4px solid var(--card);
+  background: var(--soft);
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+}
+.swap-flip:hover { background: var(--card); }
+.swap-flip svg { display: block; }
+.tok {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px 0 4px;
+  border-radius: 999px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: none;
+  color: inherit;
+  font: inherit;
+}
+.tok[data-pick="1"] { cursor: pointer; }
+.tok[data-pick="1"]::after { content: "▾"; margin-left: 2px; color: var(--muted); font-size: 12px; }
+.tok:disabled { cursor: default; opacity: 1; color: inherit; }
+.tok-menu {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0 0;
+}
+.tok-menu[hidden] { display: none; }
+.tok-menu button { height: 32px; }
+.tok img, .tok i {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: none;
+}
+.tok i {
+  display: grid;
+  place-items: center;
+  background: #26a17b;
+  color: #fff;
+  font-style: normal;
+  font-weight: 800;
+  font-size: 14px;
+  line-height: 1;
+}
+.tok img { display: block; background: transparent; }
+.tok img[hidden], .tok i[hidden] { display: none !important; }
+.tok b { font-size: 16px; font-weight: 600; line-height: 1; }
+.swap-panel .hint {
+  min-height: 18px;
+  margin: 10px 8px 0;
+  text-align: left;
+  line-height: 1.4;
+}
+.swap-panel .swap-go {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 56px;
+  margin: 12px 0 4px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 20px;
+  background: #3ddea2;
+  color: #07140f;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1;
+  box-shadow: none;
+}
+.swap-panel .swap-go:hover {
+  background: #62e8b4;
+  transform: none;
+  box-shadow: none;
+}
+.swap-panel .swap-go:active { background: #23c98a; }
+.swap-panel .swap-go:focus-visible { outline: 2px solid #07140f; outline-offset: 2px; }
+.swap-panel .swap-go:disabled {
+  background: var(--soft);
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 1;
+}
+.swap-bals {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0 0 8px;
+}
+.swap-bals button {
+  display: grid;
+  grid-template-rows: 14px 18px 12px;
+  align-content: center;
+  justify-items: start;
+  height: 56px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--soft);
+  color: var(--ink);
+  text-align: left;
+}
+.swap-bals button[hidden] { display: none !important; }
+.swap-bals em { font-style: normal; font-size: 11px; font-weight: 600; color: var(--muted); }
+.swap-bals b {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.swap-bals small { font-size: 10px; color: var(--muted); }
+.swap-warn { color: #b8860b; }
+#ext-price {
+  width: 100%;
+  height: 40px;
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0 12px;
+  background: var(--card);
+  color: var(--ink);
+}
+#ext-price[hidden], #ext-list[hidden], #ext-list-label[hidden], #ext-buy[hidden] { display: none !important; }
+.tok i.tape { background: #3ddea2; color: #07140f; }
+.tok i.bnb { background: #f0b90b; color: #1a140c; }
+.gen-bar { display: flex; gap: 8px; align-items: center; margin: 0 0 12px; flex-wrap: wrap; }
+.gen-bar span { color: var(--muted); font-size: 13px; font-weight: 600; }
+.wallet-balances { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0 16px; }
+.bal-chip { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.bal-chip b { display: block; font-size: 16px; }
+.bal-chip span { color: var(--muted); font-size: 12px; }
+.xfer {
+  margin: 4px 0 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px;
+  background: var(--card);
+}
+.xfer label { display: block; margin: 12px 0 6px; font-size: 13px; font-weight: 700; }
+.xfer input:not([type="checkbox"]) {
+  width: 100%;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--ink);
+  padding: 0 12px;
+  font-size: 16px;
+}
+.xfer .hint { text-align: left; }
+.xfer .check { display: flex; gap: 8px; align-items: flex-start; margin-top: 12px; font-size: 13px; font-weight: 600; }
+.xfer .check input { width: 16px; height: 16px; margin-top: 2px; }
+.form {
+  max-width: 560px;
+  margin: 20px auto 0;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 22px;
+}
+.form label { display: block; font-size: 13px; font-weight: 600; color: var(--ink); margin: 12px 0 6px; }
+.form input {
+  width: 100%; height: 44px; border: 1px solid var(--line); border-radius: 12px;
+  padding: 0 12px; font-size: 15px; outline: none; background: var(--card); color: var(--ink);
+}
+.form input:focus { border-color: var(--blue); }
+.hint { color: var(--muted); font-size: 13px; text-align: center; margin-top: 10px; }
+.rules {
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0 12px;
+}
+.rules summary { height: 44px; display: flex; align-items: center; font-weight: 700; cursor: pointer; }
+.rules p { color: var(--muted); font-size: 13px; line-height: 1.6; padding-bottom: 12px; }
+.forge-board {
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  padding: 14px;
+}
+.forge-board #cp-forge-go { width: 100%; max-width: 320px; margin: 8px 0; }
+.forge-board .by { color: var(--muted); font-size: 13px; line-height: 1.55; margin: 0 0 12px; }
+.desk-pass {
+  margin: 10px 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.desk-pass a { font-weight: 700; }
+.fold { margin: 8px 0 12px; }
+.fold > summary { cursor: pointer; font-size: 13px; font-weight: 700; }
+.fold > summary::before { content: "▸ "; }
+.fold[open] > summary::before { content: "▾ "; }
+.forge-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.forge-card { border: 1px solid var(--line); border-radius: 12px; padding: 10px; background: var(--bg); min-width: 0; }
+.forge-card b { display: block; font-size: 14px; margin: 8px 0 4px; }
+.forge-card p { color: var(--muted); font-size: 12px; line-height: 1.45; }
+.forge-swatch { height: 8px; border-radius: 99px; }
+.forge-board label { display: block; margin-top: 12px; font-size: 12px; font-weight: 700; }
+.forge-board input {
+  width: 100%; height: 40px; margin-top: 6px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--bg); color: var(--ink); padding: 0 12px;
+}
+.forge-board .hold-ids { margin-top: 8px; }
+.forge-board .hold-ids button.on { background: var(--ink); color: var(--bg); }
+.forge-step { font-size: 14px; margin: 16px 0 6px; }
+.forge-owned { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.forge-tile {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  padding: 6px;
+  text-align: left;
+  color: inherit;
+}
+.forge-tile.on { box-shadow: inset 0 0 0 2px var(--ink); }
+.forge-tile img { width: 100%; aspect-ratio: 1; border-radius: 8px; object-fit: cover; background: #070b12; display: block; }
+.forge-tile b, .forge-tile small { display: block; }
+.forge-tile b { margin-top: 6px; font-size: 13px; }
+.forge-tile small { color: var(--muted); font-size: 11px; }
+.forge-result {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 12px;
+  background: var(--bg);
+}
+.forge-result .swatch { height: 64px; border-radius: 12px; }
+.forge-result h4 { margin: 10px 0 4px; font-size: 20px; }
+.forge-result p { color: var(--muted); font-size: 13px; line-height: 1.5; margin-top: 4px; }
+.craft-face {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(140px, .7fr);
+  gap: 12px;
+  margin-top: 8px;
+  padding: 14px;
+  border-radius: 18px;
+  min-height: 220px;
+  color: #f7f1e4;
+}
+.craft-photos { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 8px; align-content: center; }
+.craft-photos img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  image-rendering: pixelated;
+  border-radius: 12px;
+  background: #111;
+  border: 2px solid rgba(255,255,255,.45);
+}
+.craft-photos span {
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: rgba(0,0,0,.28);
+  font-weight: 800;
+}
+.craft-face h4 { margin: 0; font-size: 34px; line-height: 1.1; color: #fff; }
+.craft-done {
+  display: inline-block;
+  margin: 10px 0 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #3ddea2;
+  color: #06281c;
+  font-size: 13px;
+  font-weight: 800;
+}
+.craft-face p { margin: 8px 0 0; color: #f7f1e4; font-size: 14px; line-height: 1.45; }
+@media (max-width: 640px) { .craft-face { grid-template-columns: 1fr; } .craft-face h4 { font-size: 28px; } }
+.forge-go {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 10px;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font-weight: 700;
+  font-size: 14px;
+  text-decoration: none;
+}
+@media (max-width: 980px) { .forge-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px) { .forge-grid { grid-template-columns: 1fr; } }
+.trait-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; text-align: left; }
+.trait-card { border: 1px solid var(--line); border-radius: 12px; padding: 10px; background: var(--card); display: flex; gap: 8px; align-items: center; }
+.trait-card svg, .art-slot img { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; flex-shrink: 0; display: block; }
+.art-slot { width: 48px; height: 48px; flex-shrink: 0; }
+.art-picks { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.art-picks .fbtn { height: 32px; }
+.trait-card.punk { flex-direction: column; align-items: stretch; }
+.trait-card.punk .art-slot { width: 100%; height: auto; }
+.trait-card.punk .art-slot img {
+  width: 100%; height: auto; aspect-ratio: 1;
+  image-rendering: pixelated; object-fit: contain; background: #638596; border-radius: 4px;
+}
+.trait-card.punk b { white-space: nowrap; }
+.trait-card span { display: block; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.trait-card .rare { font-weight: 700; }
+.trait-card .netlist { font-size: 11px; word-break: break-all; }
+.drop-hero {
+  height: 280px; border-radius: 16px; overflow: hidden; position: relative; color: #fff;
+  background:
+    radial-gradient(420px 180px at 80% 0%, rgba(224,177,90,.28), transparent 60%),
+    linear-gradient(160deg, #101820, #070b12 70%);
+}
+.drop-hero .shade {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,.15), rgba(0,0,0,.72));
+}
+.drop-hero .hero-body { position: absolute; left: 24px; right: 24px; bottom: 20px; }
+.drop-hero .hero-body h2 { font-size: 36px; letter-spacing: -.5px; }
+.drop-hero .hero-body .by { opacity: .9; margin: 4px 0 14px; font-size: 14px; }
+.drop-hero .stat { background: rgba(18,18,18,.72); border-color: rgba(255,255,255,.08); }
+.drop-hero .stat b { color: #fff; }
+.drop-hero .stat span { color: rgba(255,255,255,.75); }
+@media (max-width: 1100px) {
+  .discover, .layout, .token-grid, .card-grid, .mover-grid, .desk { grid-template-columns: 1fr; }
+  .item-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rank { position: static; }
+  .filters { border-right: 0; border-bottom: 1px solid var(--line); }
+}
+.tape-root[data-theme="dark"] {
+  --bg: #0e1116;
+  --card: #161b22;
+  --ink: #e8edf2;
+  --muted: #9aa4b2;
+  --line: rgba(224, 177, 90, .28);
+  --soft: #1c232d;
+  color-scheme: dark;
+}
+.tape-root[data-theme="dark"] tr:hover td { background: #1c232d; }
+.tape-root[data-theme="dark"] .buy.ghost { color: var(--ink); }
+.theme, .signin { background: var(--card); color: var(--ink); font-weight: 700; border: 1px solid var(--line); flex-shrink: 0; height: 36px; padding: 0 12px; border-radius: 999px; }
+.signin { background: transparent; border: 0; height: auto; padding: 8px; border-radius: 0; }
+.cat-item[hidden], .sheet[hidden], #filter-empty[hidden], #market-empty[hidden] { display: none !important; }
+.sheet {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+.sheet-card {
+  width: min(420px, 100%);
+  max-height: min(640px, 100%);
+  overflow: auto;
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 18px;
+}
+.sheet-card h3 { font-size: 18px; }
+.sheet-card p { color: var(--muted); font-size: 13px; margin-top: 8px; }
+.wbtn {
+  width: 100%;
+  height: 48px;
+  margin-top: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  font-weight: 700;
+}
+.wbtn img { width: 28px; height: 28px; border-radius: 8px; object-fit: cover; }
+.chain-row { display: flex; gap: 8px; margin-top: 10px; }
+.chain-row button {
+  flex: 1; height: 40px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--ink); font-weight: 700;
+}
+.chain-row button.on { background: var(--ink); color: #fff; }
+.ghost-btn {
+  margin-top: 12px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+}
+.sheet-card input {
+  width: 100%;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0 12px;
+  margin: 6px 0 10px;
+  background: var(--card);
+  color: var(--ink);
+}
+.sheet-card label { display: block; margin-top: 8px; font-size: 13px; font-weight: 600; }
+.sheet-card a { display: inline-block; margin-top: 10px; color: var(--blue); font-weight: 700; }
+#wallet-link { display: grid; gap: 8px; margin-top: 12px; }
+#wallet-link[hidden] { display: none !important; }
+#wallet-link a.buy { display: flex; align-items: center; justify-content: center; height: 44px; line-height: 1; color: #fff; text-decoration: none; }
+.deal {
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: var(--blue);
+  color: #fff;
+  font-weight: 700;
+  border: 0;
+  flex-shrink: 0;
+}
+button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
+.tape-banner {
+  position: relative;
+  min-height: 300px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #111 center/cover no-repeat;
+  color: #fff;
+  margin-bottom: 14px;
+  cursor: pointer;
+}
+#cp-banner {
+  background: #070b12 url("/tape-launch/cover.png") center / cover no-repeat;
+  margin-bottom: 18px;
+}
+#cp-banner img.logo { image-rendering: pixelated; background: #638596; }
+#cp-banner:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.tape-open { display: inline-block; margin-top: 12px; font-weight: 700; font-size: 13px; }
+#tape-fold[hidden], #tape-code-note[hidden] { display: none !important; }
+.tapeout-box { border: 1px solid var(--line); border-radius: 16px; padding: 0 14px 4px; background: var(--card); }
+.tapeout-toggle {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  background: transparent; border: 0; color: inherit; font: inherit;
+  font-size: 18px; font-weight: 800; padding: 14px 0; letter-spacing: .04em;
+}
+.tapeout-toggle em { font-style: normal; font-size: 13px; color: var(--blue); }
+#tapeout-body[hidden] { display: none !important; }
+#ext-art { width: 100%; max-height: 280px; object-fit: cover; border-radius: 12px; display: block; margin-bottom: 12px; background: #111; }
+#ext-art[hidden] { display: none !important; }
+.tapeout-box .block { margin-top: 8px; }
+.tape-banner .veil {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,.12), rgba(0,0,0,.78));
+}
+.tape-banner .body { position: relative; z-index: 1; padding: 24px; display: flex; gap: 16px; align-items: flex-end; min-height: 300px; }
+.tape-banner img.logo { width: 84px; height: 84px; border-radius: 18px; border: 3px solid #fff; object-fit: cover; background: #111; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+.tape-banner h3 { font-size: 32px; margin: 0 0 6px; letter-spacing: -0.03em; }
+.tape-banner p { margin: 0; color: rgba(255,255,255,.88); font-size: 13px; max-width: 720px; line-height: 1.45; }
+.tape-metrics { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 16px; }
+.tape-metrics b { display: block; font-size: 18px; }
+.tape-metrics span { color: rgba(255,255,255,.72); font-size: 12px; }
+.tape-tools { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; }
+.tape-tools .sub { margin: 0; flex: 1; }
+.tape-tools a, .tape-tools button { font-weight: 700; color: var(--blue); background: transparent; border: 0; padding: 0; white-space: nowrap; }
+.tape-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+.tape-card { display: block; width: 100%; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--card); color: inherit; text-decoration: none; text-align: left; font: inherit; padding: 0; }
+.tape-card:hover { border-color: var(--blue); }
+.tape-card .face {
+  position: relative;
+  aspect-ratio: 1;
+  background: #0e141c center/cover no-repeat;
+}
+.tape-card .face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tape-card .face em {
+  position: absolute; left: 8px; bottom: 8px;
+  padding: 2px 7px; border-radius: 999px;
+  background: rgba(0,0,0,.72); color: #fff;
+  font-style: normal; font-size: 12px; font-weight: 700;
+}
+.tape-card .px { padding: 10px 12px 12px; }
+.tape-card .px b { display: block; font-size: 14px; }
+.tape-card .px span { color: var(--muted); font-size: 12px; }
+@media (max-width: 1100px) { .tape-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 720px) {
+  .tape-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tape-banner h3 { font-size: 24px; }
+  .search kbd { display: none; }
+  .pad { padding: 8px 12px 32px; }
+  .topbar { gap: 8px; padding: 0 10px; }
+}
+.profile-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 0; }
+.profile-actions .buy { width: auto; padding: 0 16px; }
+.profile-banner { position: relative; cursor: pointer; }
+.cover-btn {
+  position: absolute; right: 12px; bottom: 12px;
+  height: 36px; padding: 0 12px; border-radius: 999px;
+  background: rgba(7,16,24,.72); color: #fff; border: 1px solid rgba(61,222,162,.55);
+  font-size: 13px; font-weight: 700; display: inline-flex; align-items: center; cursor: pointer;
+}
+.mint-win {
+  position: absolute; inset: 0; z-index: 80;
+  display: grid; place-items: center;
+  background: rgba(4,10,16,.62);
+  overflow: hidden;
+}
+.mint-win[hidden] { display: none !important; }
+.mint-card {
+  position: relative; z-index: 2;
+  width: min(420px, calc(100% - 32px));
+  text-align: center;
+  padding: 28px 22px 22px;
+  border-radius: 20px;
+  background: #071018;
+  color: #e7edf6;
+  border: 1px solid rgba(61,222,162,.55);
+  box-shadow: 0 0 48px rgba(61,222,162,.28);
+  animation: pop .35s ease;
+}
+.mint-kicker { letter-spacing: .28em; font-size: 12px; color: #3ddea2; font-weight: 700; }
+.mint-card h3 { font-size: 34px; letter-spacing: .06em; margin: 8px 0; }
+.mint-card p { color: #c5d2e0; }
+.mint-card .buy { margin-top: 16px; }
+.flake {
+  position: absolute; top: -16px; width: 8px; height: 14px; border-radius: 2px;
+  animation: fall linear forwards; z-index: 1;
+}
+@keyframes fall { to { transform: translateY(110vh) rotate(420deg); opacity: .15; } }
+@keyframes pop { from { transform: scale(.92); opacity: 0; } to { transform: none; opacity: 1; } }
+.tape-root {
+  background:
+    radial-gradient(1100px 480px at 8% -12%, rgba(61,222,162,.16), transparent 55%),
+    radial-gradient(800px 360px at 100% 0%, rgba(32,129,226,.14), transparent 50%),
+    var(--bg);
+}
+.tape-root::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(61,222,162,.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(61,222,162,.06) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: linear-gradient(#000, transparent 78%);
+  z-index: 0;
+}
+.shell { position: relative; z-index: 1; }
+.nav-item, .token, .tape-card, .item, .buy, .chip, .bal-chip, .stat, .rank-row {
+  transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+.nav-item.active { box-shadow: inset 0 0 0 1px rgba(61,222,162,.5); }
+.buy {
+  background: linear-gradient(180deg, #5eebc0, #14b87a);
+  color: #07140f;
+}
+.buy:hover { background: linear-gradient(180deg, #7ff3ce, #12a36d); transform: translateY(-1px); box-shadow: 0 8px 22px rgba(61,222,162,.28); }
+.token:hover, .tape-card:hover, .item:hover, .rank-row:hover {
+  transform: translateY(-3px);
+  border-color: #3ddea2;
+  box-shadow: 0 12px 28px rgba(61,222,162,.14);
+}
+.page.active { animation: rise .28s ease; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.tape-root[data-theme="dark"] {
+  --bg: #070b12;
+  --card: #101820;
+  --ink: #e7edf6;
+  --muted: #8ea0b5;
+  --line: rgba(224, 177, 90, .38);
+  --soft: #15202b;
+  --blue: #e0b15a;
+  --green: #3ddea2;
+  --red: #ff5c6c;
+  --gold: #e0b15a;
+  color-scheme: dark;
+}
+@media (max-width: 860px) {
+  .rail, .rail:hover {
+    position: fixed;
+    left: 0; right: 0; bottom: 0; top: auto;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    flex-basis: auto;
+    height: calc(62px + env(safe-area-inset-bottom));
+    flex-direction: row;
+    align-items: stretch;
+    overflow: hidden;
+    scroll-snap-type: none;
+    border-right: 0;
+    border-top: 1px solid var(--line);
+    box-shadow: 0 -8px 24px rgba(0,0,0,.12);
+    padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+    z-index: 50;
+  }
+  .rail .brand, .rail-gap { display: none; }
+  .nav-item {
+    flex: 1 1 0;
+    min-width: 0;
+    flex-direction: column;
+    justify-content: center;
+    height: auto;
+    gap: 1px;
+    padding: 2px 0;
+    font-size: 11px;
+    border-radius: 8px;
+  }
+  .nav-item span { opacity: 1; font-size: 11px; white-space: normal; line-height: 1.05; text-align: center; letter-spacing: -0.03em; }
+  .nav-item svg { width: 16px; height: 16px; }
+  .content { padding-bottom: calc(74px + env(safe-area-inset-bottom)); overflow-x: hidden; }
+  .page, .pad, .cp-layout, #cp-market-col, .cp-mint, .form { min-width: 0; max-width: 100%; }
+  #cp-market-col { display: flex; flex-direction: column; gap: 12px; }
+  #cp-log-block { order: -1; }
+  #cp-log { max-height: 240px; overflow: auto; }
+  .cp-log .feed-row { white-space: normal; overflow-wrap: anywhere; font-size: 13px; line-height: 1.4; }
+  .table-wrap { overflow-x: auto; max-width: 100%; }
+  table { min-width: 520px; }
+  .buy, #cp-mint, #cp-list, #cp-buy, #trade-bid, #trade-sell, #ext-buy, #ext-list {
+    min-height: 48px;
+    font-size: 15px;
+  }
+  .sheet, .mint-win {
+    position: fixed;
+    z-index: 80;
+    padding: 56px 12px calc(78px + env(safe-area-inset-bottom));
+  }
+  .sheet-card { max-height: 100%; }
+  .toolbar { flex-wrap: wrap; }
+  .toolbar input, #cp-find, #cp-holder-q { width: 100% !important; max-width: 100%; }
+  #assets-addr, .sub, .hint { overflow-wrap: anywhere; }
+  .nav-item span { font-size: 11px; }
+  #btn-theme, #btn-lang, .signin, .signin.out { max-width: 120px; }
+  .topbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 60;
+    height: calc(48px + env(safe-area-inset-top));
+    gap: 4px;
+    padding: env(safe-area-inset-top) 6px 0;
+    overflow: hidden;
+    background: var(--bg);
+  }
+  .shell { min-height: 100%; padding-top: calc(48px + env(safe-area-inset-top)); }
+  .search { height: 32px; min-width: 0; flex: 1 1 auto; padding: 0 8px; }
+  .search input { font-size: 13px; min-width: 0; }
+  .search input::placeholder { font-size: 12px; }
+  .search svg { width: 14px; height: 14px; }
+  #btn-theme, #btn-lang, .account { flex: 0 0 auto; }
+  .top-logo { flex: 0 0 auto; min-width: 0; }
+  #btn-theme, #btn-lang, .signin, .signin.out {
+    font-size: 12px;
+    height: 32px;
+    line-height: 32px;
+    padding: 0 8px;
+    max-width: 128px;
+  }
+  .top-logo { display: flex; gap: 0; }
+  .top-logo .mark { width: 28px; height: 28px; }
+  .top-logo .name { display: none; }
+  .cp-hero { width: min(240px, 72vw); }
+  .cp-hero .face, .hero .face { height: auto; width: 100%; aspect-ratio: 1; }
+  .cp-banner { flex-direction: column; align-items: flex-start; }
+  .cp-banner h2 { font-size: 28px; }
+  .table-wrap { overflow-x: auto; }
+  .swap-bals { grid-template-columns: 1fr 1fr; }
+  .form, .cp-mint { max-width: none; }
+  .cp-layout, .discover, .layout, .desk, .token-grid, .card-grid, .mover-grid { grid-template-columns: 1fr; }
+  .profile-banner { height: 72px; }
+  .profile-row { grid-template-columns: 64px minmax(0, 1fr); margin-top: 10px; padding: 0; gap: 10px; }
+  .profile-row .av-hit { margin-top: 0; }
+  .profile-row .av-hit, .profile-row .av-hit > img:not(.gold-crown) { width: 64px; height: 64px; }
+  .stats-row { flex-wrap: wrap; gap: 8px; }
+  .profile-row .av-hit, .profile-row .av-hit > img:not(.gold-crown) { width: 64px; height: 64px; }
+  .toolbar { flex-wrap: wrap; }
+  .hero-meta .cp-jump { flex-direction: column; }
+  .hero-meta .cp-jump .buy, .hero-meta .cp-jump .ghost-btn { width: 100%; }
+  .tape-banner .body { min-height: 0; flex-direction: column; align-items: flex-start; }
+  .rank { order: -1; }
+  #cp-filter-toggle { display: inline-flex; }
+  #cp-filters.collapsed { display: none; }
+  .cp-banner .by { -webkit-line-clamp: 2; }
+  .my-lists { grid-template-columns: 1fr; }
+  .cp-sheet { width: 100%; }
+  table { min-width: 520px; }
+  .search { flex: 1 1 auto; min-width: 0; }
+  .item-grid, .tape-grid, .trait-grid, .wallet-balances { grid-template-columns: 1fr 1fr; }
+  .feed-row { grid-template-columns: 1fr; gap: 4px; }
+  .cp-hero { width: min(240px, 72vw); }
+  .cp-hero .face { height: auto; width: 100%; aspect-ratio: 1; }
+  .drop-hero { height: auto; overflow: visible; }
+  .drop-hero .hero-body {
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    padding: 16px 14px 14px;
+  }
+  .drop-hero .hero-body h2 { font-size: 22px; line-height: 1.25; }
+  .drop-hero .hero-body .by { margin: 6px 0 10px; font-size: 13px; line-height: 1.45; }
+  .drop-hero .stat { min-width: 0; flex: 1 1 calc(50% - 8px); }
+  .tape-banner .body { min-height: 220px; padding: 16px; }
+  .form { padding: 16px; }
+  .sheet, .mint-win { position: fixed; z-index: 70; }
+  .holders { min-width: 0; width: 100%; }
+  .holders thead { display: none; }
+  .holders, .holders tbody, .holders tr, .holders td { display: block; width: 100%; }
+  .holders tr {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    margin: 0 0 8px;
+    padding: 10px 12px;
+    background: var(--card);
+  }
+  .holders td { border: 0; padding: 2px 0; text-align: left; overflow-wrap: anywhere; }
+  .holders td.right { text-align: left; }
+  .art-picks .fbtn { height: 36px; padding: 0 10px; }
+  .xfer { padding: 12px; }
+  .hold-grid { grid-template-columns: 1fr 1fr; }
+  .hold-ids { display: flex; flex-wrap: wrap; gap: 6px; }
+  .hold-ids button { min-height: 32px; }
+}
+@media (hover: none) {
+  .buy:hover, .token:hover, .tape-card:hover, .item:hover, .rank-row:hover { transform: none; box-shadow: none; }
+}
+.hold-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 12px; margin: 8px 0 18px; }
+.hold-card { display: block; width: 100%; padding: 0; border: 1px solid var(--line); border-radius: 14px; background: var(--card); text-align: left; overflow: hidden; color: inherit; }
+.hold-card img { width: 100%; aspect-ratio: 1; display: block; object-fit: contain; image-rendering: pixelated; background: #638596; }
+.hold-card b { display: block; padding: 8px 10px 0; font-size: 14px; }
+.hold-card small { display: block; padding: 2px 10px 10px; color: var(--muted); font-size: 12px; }
+.hold-ids { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+.hold-ids button, .hold-ids span { height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--soft); font-weight: 700; font-size: 13px; }
+.chain-row button.on { background: var(--gold); color: #1a1206; }
+.signin {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  border: 0;
+}
+.signin:hover { color: var(--bg); background: #2c261e; }
+.signin.out { background: transparent; color: var(--red); border: 1px solid var(--line); }
+.signin.out:hover { color: var(--red); background: transparent; }
+.tape-root[data-theme="dark"] .signin:hover { background: #f4efe4; color: #1a140c; }
+.nav-item.active { box-shadow: inset 3px 0 0 var(--green); }
+.search:focus-within { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(224,177,90,.28); }
+.chip:focus-visible, .buy:focus-visible, .nav-item:focus-visible, .fbtn:focus-visible, .signin:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+.stats-row b { font-size: 20px; letter-spacing: -.03em; }
+.stats-row > div { padding: 10px 12px; flex: 1; }
+.pad { padding: 18px 28px 64px; }
+.block { margin-top: 32px; }
+.block h3 { font-size: 22px; }
+.pad > h2, .pad > h3 { letter-spacing: -.03em; }
+.discover .cp-hero { width: min(440px, 100%); }
+.discover .cp-hero .face { height: auto; aspect-ratio: 1; }
+.hero-meta h2 { font-size: 28px; }
+.item, .token, .mini, .bal-chip, .xfer, .cp-mint { border-radius: 16px; }
+.item .pic { height: auto; aspect-ratio: 1; background-color: #638596; }
+.rank {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  padding: 8px;
+}
+.rank-head { padding: 8px 8px 6px; }
+tbody tr:hover td { background: transparent; }
+tbody tr:hover { background: var(--soft); }
+.log-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 8px; }
+.log-head h3 { font-size: 16px; margin: 0; }
+#cp-log[hidden] { display: none !important; }
+@media (max-width: 860px) {
+  .discover .cp-hero, .cp-hero { width: min(148px, 38vw); max-width: 148px; }
+  .cp-banner { padding: 12px; gap: 10px; }
+  .cp-banner h2 { font-size: 22px; }
+  .cp-banner .by { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .head-slot, .cp-banner .head-slot { width: 64px; height: 64px; }
+  .head-slot .face { width: 64px; height: 64px; }
+  .rail, .rail:hover {
+    position: fixed;
+    overflow: hidden;
+    justify-content: stretch;
+    scroll-snap-type: none;
+    height: calc(58px + env(safe-area-inset-bottom));
+  }
+  .nav-item {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto;
+    font-size: clamp(10px, 2.9vw, 12px);
+    scroll-snap-align: none;
+    padding: 1px 0;
+  }
+  .nav-item span {
+    font-size: clamp(10px, 2.9vw, 12px);
+    white-space: nowrap;
+    overflow: visible;
+    text-overflow: clip;
+    letter-spacing: 0;
+    line-height: 1.05;
+    max-width: 100%;
+  }
+  .nav-item svg { width: 14px; height: 14px; }
+  .deal {
+    font-size: clamp(12px, 3.2vw, 14px);
+    height: 30px;
+    padding: 0 8px;
+  }
+  .tape-metrics { gap: 12px; }
+  .tape-metrics b { font-size: clamp(13px, 3.6vw, 16px); }
+  .tape-metrics span, .tape-open, .cp-kicker {
+    font-size: clamp(11px, 3vw, 13px);
+    letter-spacing: 0;
+  }
+  .chip { font-size: clamp(12px, 3.2vw, 14px); }
+  .buy, #cp-mint, #cp-list { font-size: clamp(14px, 3.8vw, 16px); }
+  .topbar {
+    height: calc(46px + env(safe-area-inset-top));
+    padding: env(safe-area-inset-top) 4px 0;
+    gap: 4px;
+    overflow: hidden;
+  }
+  .shell { padding-top: calc(46px + env(safe-area-inset-top)); }
+  .search { height: 30px; padding: 0 6px; }
+  .search input, .search input::placeholder { font-size: clamp(11px, 3vw, 13px); }
+  #btn-theme, #btn-lang, .signin, .signin.out, .soc {
+    font-size: clamp(10px, 2.6vw, 12px);
+    height: 28px;
+    line-height: 28px;
+    padding: 0 6px;
+    max-width: 18vw;
+  }
+  .rail-social { display: none; }
+  .soc { display: inline-flex; }
+  .hero-meta h2 { font-size: 20px; }
+  .pad { padding: 12px 12px 24px; }
+  .rank { order: 0; }
+  .stats-row { display: grid; grid-template-columns: 1fr 1fr 1fr; }
+  .stats-row b { font-size: 16px; }
+  .hold-grid { grid-template-columns: 1fr 1fr; }
+  .block { margin-top: 22px; }
+  .chip { min-height: 34px; }
+}
+@media (hover: none) {
+  .buy:hover, .token:hover, .tape-card:hover, .item:hover, .rank-row:hover, .mini:hover { transform: none; }
+}
+.trade-switch { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.trade-switch .chip { gap: 8px; }
+.trade-switch img { width: 22px; height: 22px; border-radius: 6px; object-fit: cover; }
+@media (max-width: 860px) {
+  .trade-switch .chip { font-size: clamp(12px, 3.2vw, 14px); min-height: 36px; }
+}
+.award-hero { display: grid; grid-template-columns: minmax(0, 460px) minmax(0, 1fr); gap: 18px; align-items: start; }
+.award-hero img { width: 100%; height: auto; border-radius: 16px; border: 1px solid var(--line); background: #070b12; }
+@media (max-width: 860px) {
+  .award-hero { grid-template-columns: 1fr; }
+}
+.nav-menu, .nav-shade, .nav-drawer { display: none; }
+@media (max-width: 860px) {
+  .nav-menu {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 2;
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--card);
+    color: var(--ink);
+    padding: 0;
+  }
+  .nav-menu svg { width: 18px; height: 18px; }
+  .rail > .nav-more { display: none; }
+  .nav-shade {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 64;
+    background: rgba(0, 0, 0, .45);
+  }
+  .nav-shade[hidden], .nav-drawer[hidden] { display: none !important; }
+  .nav-drawer {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    z-index: 66;
+    top: calc(46px + env(safe-area-inset-top));
+    left: 0;
+    bottom: calc(58px + env(safe-area-inset-bottom));
+    width: min(280px, 86vw);
+    overflow: auto;
+    background: var(--card);
+    border-right: 1px solid var(--line);
+    padding: 8px;
+    gap: 4px;
+  }
+  .nav-drawer .nav-item {
+    flex: none;
+    width: 100%;
+    height: 44px;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 0 12px;
+    font-size: 15px;
+  }
+  .nav-drawer .nav-item span {
+    font-size: 15px;
+    white-space: nowrap;
+    letter-spacing: 0;
+    line-height: 1;
+  }
+  .nav-drawer .nav-item svg { width: 20px; height: 20px; }
+}
+</style>
+</head>
+<body>
+<aside class="rail">
+  <button class="brand" type="button" data-page="mint" onclick="switchPage('mint')" aria-label="TAPELIQUID NFT Marketplace">
+    <img class="mark" src="/tape-launch/logo.png" alt="">
+    <span class="name"><b>TAPELIQUID</b><small>NFT Marketplace</small></span>
+  </button>
+  <button class="nav-item nav-main active" data-page="discover" onclick="switchPage('discover')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg><span data-i18n="navDiscover">发现</span>
+  </button>
+  <button class="nav-item nav-more" data-page="market" onclick="switchPage('market')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg><span data-i18n="navMarket">系列</span>
+  </button>
+  <button class="nav-item nav-more" data-page="tokens" onclick="switchPage('tokens')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 7v10M9.5 9.5c.6-.7 1.5-1 2.5-1 1.7 0 3 1 3 2.4S13.7 13 12 13s-3 .9-3 2.3 1.3 2.2 3 2.2c1 0 1.9-.3 2.5-.9"/></svg><span data-i18n="navTokens">代币</span>
+  </button>
+  <button class="nav-item nav-more" data-page="launch" onclick="switchPage('launch')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/><path d="M5 19h14"/></svg><span data-i18n="navLaunch">发射</span>
+  </button>
+  <button class="nav-item nav-more" data-page="mint" onclick="switchPage('mint')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 12h8M12 8v8"/></svg><span data-i18n="navMint">铸造</span>
+  </button>
+  <button class="nav-item nav-main" data-page="trade" onclick="switchPage('trade')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 12h10M4 17h13"/><path d="M17 10l3 2-3 2"/></svg><span data-i18n="navTrade">交易</span>
+  </button>
+  <button class="nav-item nav-more" data-page="activity" onclick="switchPage('activity')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 7h14M5 12h14M5 17h9"/></svg><span data-i18n="navActivity">动态</span>
+  </button>
+  <button class="nav-item nav-more" data-page="forge" onclick="switchPage('forge')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg><span>合成</span>
+  </button>
+  <button class="nav-item nav-main" data-page="assets" onclick="switchPage('assets')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M7 15h4"/></svg><span data-i18n="navAssets">资产</span>
+  </button>
+  <div class="rail-gap"></div>
+  <a class="nav-item nav-more" href="/whitepaper">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 3h8l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v5h5M8 13h8M8 17h6"/></svg>
+    <span data-i18n="navPaper">白皮书</span>
+  </a>
+  <a class="nav-item rail-social" href="https://x.com/TAPELIQUID" target="_blank" rel="noreferrer">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14.7 10.3 22.4 2h-1.8l-6.7 7.2L8.6 2H2l8.1 11.1L2 22h1.8l7.1-7.6L15.4 22H22l-7.3-11.7Zm-2.5 2.7-.8-1.1L4.5 3.3h2.8l5.3 7 .8 1.1 6.9 9.3h-2.8l-5.3-7.1Z"/></svg>
+    <span>X</span>
+  </a>
+  <a class="nav-item rail-social" href="https://t.me/+JN0c8XGQpIkxNTRh" target="_blank" rel="noreferrer">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.8 4.3 18.6 20c-.2 1-.9 1.3-1.8.8l-5-3.7-2.4 2.3c-.3.3-.5.5-1 .5l.4-5.1 9.3-8.4c.4-.4-.1-.6-.6-.2L6.3 13.1 1.4 11.6c-1.1-.3-1.1-1.1.2-1.6L20.4 3.2c.9-.3 1.6.2 1.4 1.1Z"/></svg>
+    <span>Telegram</span>
+  </a>
+</aside>
+<div class="nav-shade" id="nav-shade" hidden></div>
+<nav class="nav-drawer" id="nav-drawer" hidden>
+  <button class="nav-item nav-more" data-page="forge" type="button" onclick="switchPage('forge')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg><span>合成</span>
+  </button>
+  <button class="nav-item nav-more" data-page="market" type="button" onclick="switchPage('market')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg><span data-i18n="navMarket">系列</span>
+  </button>
+  <button class="nav-item nav-more" data-page="tokens" type="button" onclick="switchPage('tokens')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 7v10M9.5 9.5c.6-.7 1.5-1 2.5-1 1.7 0 3 1 3 2.4S13.7 13 12 13s-3 .9-3 2.3 1.3 2.2 3 2.2c1 0 1.9-.3 2.5-.9"/></svg><span data-i18n="navTokens">代币</span>
+  </button>
+  <button class="nav-item nav-more" data-page="launch" type="button" onclick="switchPage('launch')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/><path d="M5 19h14"/></svg><span data-i18n="navLaunch">发射</span>
+  </button>
+  <button class="nav-item nav-more" data-page="mint" type="button" onclick="switchPage('mint')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 12h8M12 8v8"/></svg><span data-i18n="navMint">铸造</span>
+  </button>
+  <button class="nav-item nav-more" data-page="activity" type="button" onclick="switchPage('activity')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 7h14M5 12h14M5 17h9"/></svg><span data-i18n="navActivity">动态</span>
+  </button>
+  <a class="nav-item nav-more" href="/whitepaper">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 3h8l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v5h5M8 13h8M8 17h6"/></svg>
+    <span data-i18n="navPaper">白皮书</span>
+  </a>
+  <a class="nav-item" href="https://x.com/TAPELIQUID" target="_blank" rel="noreferrer">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14.7 10.3 22.4 2h-1.8l-6.7 7.2L8.6 2H2l8.1 11.1L2 22h1.8l7.1-7.6L15.4 22H22l-7.3-11.7Zm-2.5 2.7-.8-1.1L4.5 3.3h2.8l5.3 7 .8 1.1 6.9 9.3h-2.8l-5.3-7.1Z"/></svg>
+    <span>X</span>
+  </a>
+  <a class="nav-item" href="https://t.me/+JN0c8XGQpIkxNTRh" target="_blank" rel="noreferrer">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.8 4.3 18.6 20c-.2 1-.9 1.3-1.8.8l-5-3.7-2.4 2.3c-.3.3-.5.5-1 .5l.4-5.1 9.3-8.4c.4-.4-.1-.6-.6-.2L6.3 13.1 1.4 11.6c-1.1-.3-1.1-1.1.2-1.6L20.4 3.2c.9-.3 1.6.2 1.4 1.1Z"/></svg>
+    <span>Telegram</span>
+  </a>
+</nav>
+
+<div class="shell">
+  <header class="topbar">
+    <button class="nav-menu" id="nav-menu" type="button" aria-label="菜单">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+    <button class="top-logo" type="button" onclick="switchPage('mint')" aria-label="TAPELIQUID NFT Marketplace">
+      <img class="mark" src="/tape-launch/logo.png" alt="">
+      <span class="name"><b>TAPELIQUID</b><small>NFT Marketplace</small></span>
+    </button>
+    <label class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>
+      <input data-i18n-ph="searchPh" placeholder="搜索系列 / NFT / 钱包">
+      <kbd>/</kbd>
+    </label>
+    <a class="soc" href="https://x.com/TAPELIQUID" target="_blank" rel="noreferrer">X</a>
+    <a class="soc" href="https://t.me/+JN0c8XGQpIkxNTRh" target="_blank" rel="noreferrer">TG</a>
+    <button class="theme" id="btn-lang" type="button">EN</button>
+    <button class="theme" id="btn-theme" type="button">深夜</button>
+    <div class="account">
+      <button class="signin" id="btn-wallet" type="button" data-i18n="login">登录</button>
+      <button class="signin out" id="btn-logout" type="button" hidden data-i18n="logout">退出</button>
+    </div>
+  </header>
+
+  <div class="content">
+    <div id="page-discover" class="page active">
+      <div class="pad">
+        <div class="toolbar">
+          <button class="chip on" data-filter="all" type="button">全部</button>
+          <button class="chip" data-filter="chip" type="button">芯片</button>
+          <button class="chip" data-filter="art" type="button">艺术</button>
+          <button class="chip" data-filter="pfp" type="button">PFP</button>
+          <span class="grow"></span>
+          <div class="seg">
+            <button class="on" type="button">NFT</button>
+            <button type="button" onclick="switchPage('tokens')">代币</button>
+          </div>
+          <button class="chip on" data-span="vol1d" type="button">1天</button>
+          <button class="chip" data-span="vol7d" type="button">7天</button>
+          <button class="chip" data-span="vol30d" type="button">30天</button>
+        </div>
+        <div class="discover">
+          <div>
+            <div class="tape-banner" id="cp-banner" role="button" tabindex="0" onclick="switchPage('trade')">
+              <div class="veil"></div>
+              <div class="body">
+                <img class="logo" src="/tape-launch/punk-1.png" alt="Circuit Punk">
+                <div>
+                  <h3>Circuit Punk</h3>
+                  <p>X Layer · 10,000</p>
+                  <div class="tape-metrics" id="cp-hero-metrics">
+                    <div><b>—</b><span>地板价</span></div>
+                    <div><b>—</b><span>最高价</span></div>
+                    <div><b>—</b><span>在售</span></div>
+                    <div><b>10,000</b><span>总量</span></div>
+                    <div><b>火热交易中</b><span>状态</span></div>
+                  </div>
+                  <span class="tape-open">点开即可交易</span>
+                </div>
+              </div>
+            </div>
+
+            <section class="block" id="tapecode-block">
+              <div class="tape-banner" id="tape-banner" role="button" tabindex="0" aria-expanded="false">
+                <div class="veil"></div>
+                <div class="body">
+                  <img class="logo" id="tape-logo" alt="" src="/tape-launch/gold.svg">
+                  <div>
+                    <h3>TapeCode-Test1</h3>
+                    <p id="tape-desc"></p>
+                    <div class="tape-metrics" id="tape-metrics"></div>
+                    <span class="tape-open" id="tape-open">点开看挂单</span>
+                  </div>
+                </div>
+              </div>
+              <p class="sub" id="tape-code-note" hidden></p>
+              <div id="tape-fold" hidden>
+              <div class="tape-tools">
+                <span class="grow"></span>
+                <button id="tape-more" type="button" hidden>更多挂单</button>
+              </div>
+              <div class="tape-grid" id="tape-grid"></div>
+              </div>
+            </section>
+
+            <section class="block tapeout-box">
+              <button class="tapeout-toggle" id="tapeout-toggle" type="button" aria-expanded="false">
+                <span>TapeOut</span>
+                <em id="tapeout-label">打开</em>
+              </button>
+              <div id="tapeout-body" hidden>
+            <section class="block">
+              <h3 data-i18n="genesisTitle">创世电路 NFT</h3>
+              <p class="sub" id="genesis-note" hidden></p>
+              <div class="gen-bar">
+                <button class="chip" id="gen-sale" type="button" data-i18n="sale">在售</button>
+                <button class="chip on" id="gen-all" type="button" data-i18n="browse">翻全部</button>
+                <button class="chip" id="gen-prev" type="button" data-i18n="prev">上一页</button>
+                <button class="chip" id="gen-next" type="button" data-i18n="next">下一页</button>
+                <span id="genesis-page">—</span>
+              </div>
+              <div class="token-grid" id="genesis-grid"></div>
+            </section>
+
+            <section class="block">
+              <h3>官方晶体管</h3>
+              <p class="sub" id="tape-note" hidden></p>
+              <div class="token-grid" id="tape-official"></div>
+            </section>
+
+            <section class="block">
+              <h3>协议电路 NFT</h3>
+              <p class="sub" id="proto-note" hidden></p>
+              <div class="token-grid" id="proto-grid"></div>
+            </section>
+            </div>
+            </section>
+
+            <section class="block">
+              <h3>热门系列</h3>
+              <p class="sub" id="filter-empty" hidden>这个分类下没有系列</p>
+              <div class="card-grid" id="series-grid"></div>
+            </section>
+
+            <section class="block">
+              <h3>今日涨幅</h3>
+              <p class="sub">过去 24 小时地板价变化最大</p>
+              <div class="mover-grid" id="mover-grid"></div>
+            </section>
+          </div>
+
+          <aside class="rank" id="rank-rows">
+            <div class="rank-head"><span>系列</span><span>地板价</span></div>
+            <div class="rank-row" id="rank-punk">
+              <div class="who"><img alt="" src="/tape-launch/punk-1.png"><div><div class="nm">Circuit Punk</div></div></div>
+              <div class="floor">火热交易中</div>
+            </div>
+            <div class="rank-row" id="rank-tape">
+              <div class="who"><img alt="" src="/api/okx-img?u=https%3A%2F%2Fweb3.okx.com%2Fcdn%2Fnft%2F0085a0bb-6bec-42f8-b180-6c67fbba49b5.png"><div><div class="nm">TapeCode-Test1</div></div></div>
+              <div class="floor">—</div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>
+
+    <div id="page-market" class="page">
+      <div class="layout">
+        <aside class="filters">
+          <h4>筛选</h4>
+          <div class="fgroup">
+            <button class="fbtn on">系列</button>
+            <button class="fbtn" onclick="switchPage('tokens')">代币</button>
+            <button class="fbtn" onclick="switchPage('launch')">发射</button>
+          </div>
+          <div class="label">分类</div>
+          <div class="fgroup">
+            <button class="fbtn on" data-filter="all" type="button">全部</button>
+            <button class="fbtn" data-filter="chip" type="button">芯片</button>
+            <button class="fbtn" data-filter="art" type="button">艺术</button>
+            <button class="fbtn" data-filter="pfp" type="button">PFP</button>
+          </div>
+          <div class="label">链</div>
+          <div class="chain"><i class="dot"></i> X Layer</div>
+        </aside>
+        <div class="table-wrap">
+          <div class="tabs">
+            <span class="grow"></span>
+            <button class="chip on" data-span="vol1d" type="button">1天</button>
+            <button class="chip" data-span="vol7d" type="button">7天</button>
+            <button class="chip" data-span="vol30d" type="button">30天</button>
+          </div>
+          <table>
+            <thead>
+              <tr><th>系列</th><th class="right">地板价</th><th class="right">成交额</th><th class="right">笔数</th><th></th></tr>
+            </thead>
+            <tbody id="market-body"></tbody>
+          </table>
+          <div class="pad" style="padding-top:28px">
+            <p class="sub" id="market-empty" hidden>这个分类下没有系列</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="page-tokens" class="page">
+      <div class="layout">
+        <aside class="filters">
+          <h4>筛选</h4>
+          <div class="fgroup">
+            <button class="fbtn" onclick="switchPage('market')">系列</button>
+            <button class="fbtn on">代币</button>
+          </div>
+          <div class="label">链</div>
+          <div class="chain"><i class="dot" style="background:#f0b90b"></i> BSC · tapeout.net</div>
+        </aside>
+        <div class="table-wrap">
+          <div class="desk">
+            <form class="swap-panel" id="swap-form" onsubmit="return false">
+              <div class="swap-head">
+                <h3 data-i18n="swapTitle">兑换</h3>
+                <div class="swap-seg" id="swap-pair">
+                  <button type="button" class="fbtn on" data-pair="bsc-bem">BSC</button>
+                  <button type="button" class="fbtn" data-pair="xl-bem">X Layer</button>
+                  <button type="button" class="fbtn" data-pair="xl-tape">TAPE</button>
+                </div>
+              </div>
+              <div class="swap-bals" id="swap-bals">
+                <button type="button" data-fill="usdt"><em>USDT 可用</em><b id="bal-usdt">—</b><small id="bal-usdt-ch">BSC</small></button>
+                <button type="button" data-fill="bnb" id="bal-bnb-btn" hidden><em>BNB 可用</em><b id="bal-bnb">—</b><small>BSC</small></button>
+                <button type="button" data-fill="okb"><em>OKB 可用</em><b id="bal-okb">—</b><small>X Layer</small></button>
+                <button type="button" data-fill="bem"><em>BEM 可用</em><b id="bal-bem">—</b><small id="bal-bem-ch">BSC</small></button>
+                <button type="button" data-fill="tape"><em>TAPE 可用</em><b id="bal-tape">—</b><small>X Layer</small></button>
+              </div>
+              <div id="swap-side" hidden>
+                <button type="button" class="fbtn on" data-side="buy">买入</button>
+                <button type="button" class="fbtn" data-side="sell">卖出</button>
+              </div>
+              <div class="swap-stack">
+                <div class="swap-box">
+                  <div class="swap-k"><span id="swap-in-label">支付</span></div>
+                  <div class="swap-line">
+                    <input id="swap-amt" inputmode="decimal" value="1" placeholder="0" aria-label="支付数量">
+                    <button class="tok" id="swap-in-tok" type="button"><i>₮</i><img alt="" hidden><b>USDT</b></button>
+                  </div>
+                </div>
+                <button class="swap-flip" id="swap-flip" type="button" aria-label="切换方向">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v16"/><path d="M6 14l6 6 6-6"/></svg>
+                </button>
+                <div class="swap-box swap-out">
+                  <span class="swap-k" id="swap-out-label">收到</span>
+                  <div class="swap-line">
+                    <b class="swap-amt" id="swap-out-amt">—</b>
+                    <button class="tok" id="swap-out-tok" type="button"><i hidden>₮</i><img alt="" src="/tape-launch/tokens/bem.jpg"><b>BEM</b></button>
+                  </div>
+                </div>
+              </div>
+              <div class="tok-menu" id="swap-menu" hidden></div>
+              <p class="hint" id="swap-quote">报价读取中</p>
+              <p class="hint swap-warn" id="swap-liq" hidden></p>
+              <button class="buy swap-go" id="swap-go" type="button" data-i18n="swapGo">兑换</button>
+              <a id="swap-link" hidden target="_blank" rel="noopener"></a>
+              <p class="hint" id="swap-msg">成交发给官方池子。取消就等于没换。</p>
+            </form>
+            <form class="form" id="bridge-form" onsubmit="return false">
+              <h3 data-i18n="bridgeTitle">BEM 跨链</h3>
+              <div class="art-picks" id="bridge-dir">
+                <button type="button" class="fbtn on" data-dir="to-xlayer">BSC → X Layer</button>
+                <button type="button" class="fbtn" data-dir="to-bsc">X Layer → BSC</button>
+              </div>
+              <label>数量（BEM）</label>
+              <input id="bridge-amt" inputmode="decimal" value="1">
+              <p class="hint" id="bridge-quote">手续费读取中</p>
+              <button class="buy" id="bridge-go" type="button" data-i18n="bridgeGo">跨过去</button>
+              <a id="bridge-link" hidden target="_blank" rel="noopener"></a>
+              <p class="hint" id="bridge-msg">TapeOut 官方 1:1 桥。OKB 和 TAPE 没有这条桥，不会假装跨过去。</p>
+            </form>
+          </div>
+          <div class="tabs">
+            <button class="tab on">链上成交</button>
+            <span class="grow"></span>
+          </div>
+          <table>
+            <thead>
+              <tr><th>晶体管</th><th class="right">最新价 BNB</th><th class="right">最高买价 BNB</th><th class="right">买量</th><th class="right">24小时量 BNB</th><th></th></tr>
+            </thead>
+            <tbody id="tape-body">
+              <tr><td>正在读取 tapeout.net…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="page-mint" class="page">
+      <div class="pad">
+        <div class="cp-banner">
+          <div class="head-slot">
+            <img class="face" src="/tape-launch/punk-1.png" alt="Circuit Punk 1">
+            <img class="gold-crown" src="/tape-launch/crown.svg" alt="">
+          </div>
+          <div>
+            <p class="cp-kicker">火热交易中</p>
+            <h2>Circuit Punk</h2>
+            <p class="by">Circuit Punk 是本市场的创始收藏，第一套，也是唯一一套。收藏和成交在 nft.tapeliquid.net。确认身份和手续费减免在 app.tapeliquid.net。</p>
+            <details class="fold">
+              <summary>介绍</summary>
+              <p class="by">它依照 TapeOut 的 TAP-721 草案发行：在 ERC-721 的图像之外，每一枚另附一份 tapnet/1 网表及其 SHA-256。本收藏现处于 L0，网表可以核对，但尚未流片。肖像致敬比特币与 BEM 的早期参与者，包括 Hal Finney、Adam Back、Jameson Lopp，以及 BEM 的早期持有人。肖像是纪念，不构成投资建议。</p>
+              <p class="by">一次一张，一个钱包最多十次。挂单和成交在市场页。每次 1 TAPE + 0.001 BEM。</p>
+            </details>
+          </div>
+        </div>
+        <div class="desk-pass">合成放在下面。选自己的编号，凑齐后点「合成」，会生成一张卡。
+          <button class="forge-go" type="button" onclick="switchPage('forge')">打开合成</button>
+        </div>
+        <div class="cp-stats" id="cp-stats"></div>
+        <div class="swap-bals cp-bals" id="cp-bals">
+          <button type="button"><em>TAPE</em><b id="cp-bal-tape">—</b><small>X Layer</small></button>
+          <button type="button"><em>BEM</em><b id="cp-bal-bem">—</b><small>X Layer</small></button>
+          <button type="button"><em>OKB</em><b id="cp-bal-okb">—</b><small>gas</small></button>
+          <button type="button"><em>Circuit Punk</em><b id="cp-bal-punk">—</b><small>持有</small></button>
+        </div>
+        <div class="cp-layout">
+          <aside class="cp-mint">
+            <h3>铸造</h3>
+            <p class="hint" id="cp-left" style="text-align:left">一次一张。每次 1 TAPE + 0.001 BEM。一个钱包最多十次。</p>
+            <p class="cp-cost" id="cp-cost">每次需要 <b>1 TAPE</b> 和 <b>0.001 BEM</b></p>
+            <input id="cp-qty" value="1" hidden>
+            <button class="buy" id="cp-mint" type="button">火热交易中</button>
+            <p class="hint" id="cp-mint-msg" style="text-align:left">连上钱包后，这里写明还能铸几次。铸完会刷新。持有的在资产里看。</p>
+          </aside>
+        </div>
+      </div>
+    </div>
+
+    <div id="page-trade" class="page">
+      <div class="pad">
+        <div class="cp-banner">
+          <div class="head-slot">
+            <img class="face" src="/tape-launch/punk-1.png" alt="Circuit Punk 1">
+            <img class="gold-crown" src="/tape-launch/crown.svg" alt="">
+          </div>
+          <div>
+            <p class="cp-kicker">火热交易中</p>
+            <h2>Circuit Punk</h2>
+            <p class="by">Circuit Punk 是本市场的创始收藏，第一套，也是唯一一套。收藏和成交在 nft.tapeliquid.net。确认身份和手续费减免在 app.tapeliquid.net。</p>
+            <details class="fold">
+              <summary>介绍</summary>
+              <p class="by">它依照 TapeOut 的 TAP-721 草案发行：在 ERC-721 的图像之外，每一枚另附一份 tapnet/1 网表及其 SHA-256。本收藏现处于 L0，网表可以核对，但尚未流片。肖像致敬比特币与 BEM 的早期参与者，包括 Hal Finney、Adam Back、Jameson Lopp，以及 BEM 的早期持有人。肖像是纪念，不构成投资建议。</p>
+              <p class="by">一次挂一张。编号和价格写在下面的框里。可以按 BEM 标价，也可以按 TAPE 标价。成交按 1 BEM 对 1000 TAPE，两边一起付。手续费 0.2%，卖家实收 99.8%。转账不另收费。</p>
+            </details>
+          </div>
+        </div>
+        <div class="desk-pass">合成放在这里。选自己的编号，凑齐后点「合成」，会生成一张卡。
+          <button class="forge-go" type="button" onclick="switchPage('forge')">打开合成</button>
+        </div>
+        <div class="cp-layout">
+          <aside class="cp-mint">
+            <h3>挂出你的一张</h3>
+            <p class="hint" style="text-align:left">一次一张。编号和价格都可以在这里改。</p>
+            <label>编号</label>
+            <input id="cp-list-id" inputmode="numeric" placeholder="在这里输入编号，例如 7001">
+            <label>用哪种标价</label>
+            <div class="art-picks" id="cp-unit">
+              <button type="button" class="fbtn on" data-unit="bem">BEM</button>
+              <button type="button" class="fbtn" data-unit="tape">TAPE</button>
+            </div>
+            <label id="cp-px-label">价格（BEM）</label>
+            <input id="cp-list-px" inputmode="decimal" value="0.002" placeholder="在这里输入价格">
+            <p class="hint" id="cp-pair" style="text-align:left">买家付 0.002 BEM，同时付 2 TAPE。</p>
+            <p class="hint" id="cp-mine" style="text-align:left">连接钱包后，点下面的编号就能挂。</p>
+            <div class="hold-ids" id="cp-mine-row"></div>
+            <button class="buy" id="cp-list" type="button">挂出</button>
+            <p class="hint" id="cp-list-msg" style="text-align:left">成交在这份合约里。先连钱包。</p>
+            <div class="cp-jump">
+              <button class="buy ghost" type="button" onclick="switchPage('mint')">去铸造</button>
+            </div>
+          </aside>
+          <div id="cp-market-col">
+            <div id="cp-log-block">
+              <div class="log-head">
+                <h3>交易记录</h3>
+                <button class="chip" id="cp-log-toggle" type="button">隐藏</button>
+              </div>
+              <div class="feed cp-log" id="cp-log">
+                <div class="feed-row"><span>正在读链上的铸造、挂单和成交。</span></div>
+              </div>
+            </div>
+            <h3 style="font-size:16px;margin:0 0 6px">我的挂单</h3>
+            <p class="hint" id="cp-my-note" style="text-align:left;margin:0 0 8px">连上钱包后，这里只放你挂着的，方便撤单。</p>
+            <div class="my-lists" id="cp-my-lists"></div>
+            <div class="toolbar">
+              <button class="chip" id="cp-tab-items" type="button">物品</button>
+              <button class="chip on" id="cp-tab-lists" type="button">挂单</button>
+              <button class="chip" id="cp-filter-toggle" type="button">筛选</button>
+              <span class="sub" id="cp-view-note">正在看物品。没选属性时按稀有度排。</span>
+              <input id="cp-find" inputmode="numeric" placeholder="输入编号" style="height:36px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);padding:0 12px;width:120px">
+              <button class="chip" id="cp-open" type="button">打开</button>
+            </div>
+            <div id="cp-filters" class="cp-filters collapsed"></div>
+            <div class="toolbar" id="cp-sort">
+              <button class="chip" type="button" data-sort="high">价高在前</button>
+              <button class="chip on" type="button" data-sort="low">价低在前</button>
+              <button class="chip" type="button" data-sort="rare">稀有在前</button>
+              <button class="chip" type="button" data-sort="common">稀有在后</button>
+              <button class="chip" type="button" data-sort="id">按编号</button>
+            </div>
+            <div class="item-grid" id="cp-grid"></div>
+            <div class="toolbar" id="cp-pager">
+              <button class="chip" id="cp-art-prev" type="button">上一页</button>
+              <span id="cp-art-page">—</span>
+              <button class="chip" id="cp-art-next" type="button">下一页</button>
+              <label class="sub" for="cp-page-size">每页</label>
+              <input id="cp-page-size" inputmode="numeric" value="24" min="4" max="96" style="height:36px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);padding:0 12px;width:72px">
+            </div>
+            <h3 style="font-size:16px;margin:18px 0 8px">持有地址</h3>
+            <p class="sub" id="cp-holders-note">正在读取链上持有人。</p>
+            <div class="toolbar" id="cp-holder-bar">
+              <input id="cp-holder-q" placeholder="搜地址或编号" style="height:36px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);padding:0 12px;width:min(240px, 46vw)">
+              <button class="chip" id="cp-holder-prev" type="button">上一页</button>
+              <span id="cp-holder-page">—</span>
+              <button class="chip" id="cp-holder-next" type="button">下一页</button>
+            </div>
+            <div class="table-wrap">
+              <table class="holders">
+                <thead>
+                  <tr><th>标注</th><th>地址</th><th class="right">张数</th><th>编号</th></tr>
+                </thead>
+                <tbody id="cp-holders"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="page-forge" class="page">
+      <div class="pad">
+        <section class="forge-board" id="cp-forge">
+          <h3>合成</h3>
+          <button class="buy" id="cp-forge-go" type="button">用我持有的合成</button>
+          <p class="hint" id="cp-forge-go-msg" style="text-align:left">连上钱包后点这一下。能凑齐就会直接出卡。</p>
+          <div id="cp-forge-out"></div>
+          <details class="fold">
+            <summary>介绍</summary>
+            <p class="by">只在这一页选你自己的 Circuit Punk。点卡加入材料，再点一次拿下。也可以自己输入编号。合成会把这些编号锁进合约，不销毁，锁着不能转。拆开之后有 48 小时解冻，这 48 小时不能转。拆出来的编号 30 天内不能再合成，别的编号不受影响。一个钱包只认最高的一张。这张卡不减本市场成交费。买卖仍只收 0.2%，不能再加版权费。减免只在交易所。</p>
+          </details>
+          <h4 class="forge-step">1. 你的卡</h4>
+          <p class="hint" id="cp-forge-mine" style="text-align:left">连接钱包后，这里列出你持有的卡。</p>
+          <p class="by" id="cp-forge-best">连接钱包后，这里显示你现在手里最高的一张。</p>
+          <div class="forge-owned" id="cp-forge-owned"></div>
+          <h4 class="forge-step">2. 材料</h4>
+          <details class="fold">
+            <summary>说明</summary>
+            <p class="by">已选的编号写在下面。空格或逗号分开。同一张不能用两次。点「说明」可以看这组为什么是这张卡、台费怎么返还、什么时候能领。</p>
+          </details>
+          <label for="cp-forge-ids">编号</label>
+          <input id="cp-forge-ids" inputmode="numeric" placeholder="点上面的卡，或输入例如 12 340">
+          <div class="hold-ids" id="cp-forge-picks"></div>
+          <details class="fold">
+            <summary>配方说明</summary>
+          <div class="forge-grid">
+            <article class="forge-card">
+              <i class="forge-swatch" style="background:#B87333"></i>
+              <b>铜片</b>
+              <p>2 张普通，类型不同。</p>
+              <p>全场 0.16%。主属性 0.14%。</p>
+              <p id="cp-gap-copper">还没选。</p>
+            </article>
+            <article class="forge-card">
+              <i class="forge-swatch" style="background:#D5D8DE"></i>
+              <b>银盖</b>
+              <p>3 张。至少 1 张少见，至少 2 种衬底。</p>
+              <p>全场 0.12%。主属性 0.10%。</p>
+              <p id="cp-gap-silver">还没选。</p>
+            </article>
+            <article class="forge-card">
+              <i class="forge-swatch" style="background:#E0B15A"></i>
+              <b>金线</b>
+              <p>3 张。至少 1 张稀有，类型各不相同。</p>
+              <p>全场 0.08%。主属性 0.06%。</p>
+              <p id="cp-gap-gold">还没选。</p>
+            </article>
+            <article class="forge-card">
+              <i class="forge-swatch" style="background:#6E5CFF;box-shadow:0 0 0 2px #3DDEA2"></i>
+              <b>极紫外</b>
+              <p>1 张传说加任意 2 张，或 1 张史诗加 3 张少见及以上。带绿边。</p>
+              <p>全场 0.06%。主属性 0.04%。</p>
+              <p id="cp-gap-euv">还没选。</p>
+            </article>
+            <article class="forge-card">
+              <i class="forge-swatch" style="background:#6E5CFF"></i>
+              <b>仿极紫外</b>
+              <p>20 张普通，类型不能完全相同。全站最多 50 张。没有绿边。</p>
+              <p>全场 0.08%。没有主属性再减。</p>
+              <p id="cp-gap-faux">还没选。</p>
+            </article>
+          </div>
+          <p class="by" style="margin-top:12px">稳定看衬底，加成现货。传导看金属层，加成永续。接合看键合，加成电路。精度看对准，加成发射。封装再加一点。分数最高的一项是主属性，只有这一边走到更低的费率。</p>
+          </details>
+        </section>
+      </div>
+    </div>
+
+    <div id="page-launch" class="page">
+      <div class="pad">
+        <div class="drop-hero">
+          <div class="shade"></div>
+          <div class="hero-body">
+            <h2>Circuit Punk 已上链</h2>
+            <details class="fold">
+              <summary>介绍</summary>
+              <div class="by">不用再创建。铸造在「正在铸造」，买卖在「市场」。这里只留给以后另开的项目。</div>
+            </details>
+            <div class="stats">
+              <div class="stat"><span>TAPE 对</span><b>1 : 0.001 BEM</b></div>
+              <div class="stat"><span>也可</span><b>OKB 或 BEM</b></div>
+              <div class="stat"><span>单人上限</span><b>10 次</b></div>
+            </div>
+          </div>
+        </div>
+        <button class="buy" type="button" onclick="switchPage('mint')" style="max-width:560px;margin:16px auto;display:block">去铸造 Circuit Punk</button>
+        <form class="form" id="launch-form" onsubmit="return false">
+          <h3 style="font-size:20px">另开一个项目</h3>
+          <p class="hint" style="text-align:left">Circuit Punk 已经在 X Layer，合约 0xB5ac1dddc158a639D4499aad2d8F393989D4bD34。不要用这个名字再创建一次。</p>
+          <label>名称</label><input id="launch-name" maxlength="32" value="">
+          <label>符号</label><input id="launch-symbol" maxlength="16" value="">
+          <label>总量</label><input id="launch-supply" value="10000" inputmode="numeric">
+          <label>预留</label><input id="launch-reserve" value="7000" inputmode="numeric">
+          <label>发射代币</label>
+          <div class="art-picks" id="launch-quote">
+            <button type="button" class="fbtn on" data-quote="pair">TAPE + BEM</button>
+            <button type="button" class="fbtn" data-quote="okb">只用 OKB</button>
+            <button type="button" class="fbtn" data-quote="bem">只用 BEM</button>
+          </div>
+          <label>铸造倍数</label><input id="launch-mult" value="1" inputmode="numeric">
+          <p class="hint" id="launch-price">公开铸造价 1 TAPE + 0.001 BEM</p>
+          <p class="hint" id="launch-trade">二级市场只用这次发射的代币。TAPE + BEM 两边一起付，不能只改一边。</p>
+          <button class="buy ghost" id="trait-roll" type="button">批量生成属性</button>
+          <p class="hint" id="trait-sum">Circuit Punk 一万张按种类比例生成。每种晶粒的属性和权重都不一样。</p>
+          <div class="art-picks" id="art-source">
+            <button type="button" class="fbtn on" data-art="upload">上传图片</button>
+            <button type="button" class="fbtn" data-art="key">自己的 Key</button>
+            <button type="button" class="fbtn" data-art="platform">平台默认</button>
+          </div>
+          <div class="art-picks" id="art-style" hidden>
+            <button type="button" class="fbtn on" data-look="punk">朋克</button>
+            <button type="button" class="fbtn" data-look="real">真实</button>
+          </div>
+          <input id="art-key" type="password" autocomplete="off" placeholder="图片接口的 Key，只留在这台浏览器" hidden>
+          <input id="art-files" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple>
+          <button class="buy ghost" id="art-go" type="button" hidden>生成这 4 张</button>
+          <p class="hint" id="art-msg">上传的图按顺序套到预览上。平台默认和自己的 Key 都是真出图，每次最多 4 张。</p>
+          <div class="trait-grid" id="trait-grid"></div>
+          <details class="rules">
+            <summary>铸造规则</summary>
+            <p>Circuit Punk，符号 CPUNK，是本站的创世 NFT，也是向中本聪的一揖。它是第一套 Circuit Punk，也只此一套。合约 0xB5ac1dddc158a639D4499aad2d8F393989D4bD34。总量一万，预留七千，公开三千，公开价锁在 1 TAPE 加 0.001 BEM。TapeCode 一号火星人 @bitcoin2themars 领 51–150。8855 号、TapeOut 创始人 @Blonskr 领 1–50。空投已直接到账。370–379 记给 93.bitmap，地址 0x8EC346D8a7156776aDFacbA5ddDB2fF9B308cB50；380–389 记给 0x杨杨｜tapeout，地址 0xA11E739adF417ffe34e1EBa75dF2031499192B66；390–399 记给 LOYAL路遥，地址 0x2b067593B4f9B0D26564C83F20E91b5D0e286Dc6；400–409 记给基金会 TapeOutCF，地址 0x04B649076a11819EF7AdA36e02DD55e0923550Ee；410–419 记给星帅，地址 0x876c3500883C072d6EA447E6e7C8F097AA7c7bC0；420–429 记给茹花小姐，地址 0x75c186Ede5D0691d66BC932FD04F8E149d1F5fA5。430–439 记给 Sussiie，地址 0xB8bD12503918476a2785CF1617A0FAf13aad771C。440–449 记给周红衣，地址 0x94e8c5822ff10be48713adae49af7acdb390eeb4。450–459 记给 Yasimin雅思敏，地址 0x072925B5375063A3c6ADc37D4611FF6ce5558f10。460–469 记给橙子，地址 0xdC352A37a53F5D45A9A6Fb44D8076a475884BA91。470–479 记给 OnlyEason | TapeOut，地址 0x1aeb3c9eC1EfA74aD7a543DBd02769C18Cd50119。480–489 记给 ywweb3，地址 0x42445b49e961De2C071EA20f73db769987303D64。490–499 记给 Ch!cken(TapeOut薄🐔版)，地址 0x98Ce75463917E5fd1470675c6F133a38F7167712。500–509 记给肖战羊，地址 0x4569f6d72aa0cd0b7c3434eac2a00cbfa261c7e4。十四个地址各 10 张，已经直接到账。剩下 1471 张，510–999 和 6020–7000，留给基金会以后的新计划。图片地址已经写死。改名就不是这一款。本站不再另开第二套。TapeOut 上已经流片的创世电路仍走官网市场，不是这一款。</p>
+            <p>公开价锁定 1 TAPE 对 0.001 BEM。倍数只能是整数，价格按这个比例放大，不能单独改一边。也可以改用 OKB 或只用 BEM 发射：单位锁死，同样只能填整数倍数。用哪种代币发射，公开铸造和二级交易就只用哪种。预留从总量里划出，不参与公开铸造，不能超过总量。单人最多铸造 10 次。总量由项目方自定。创建时按总量批量生成芯片属性和稀有度，同一项目里属性组合不重复。图片可以自己上传，也可以用自己的 Key 或平台默认生成，风格分朋克和真实。</p>
+            <p>每枚收藏按 TapeOut 的 TAP-721 草案写。图像之外是一份 tapnet/1 网表和它的 SHA-256。Circuit Punk 目前是 L0，可以核对，还不是链上接口，也不假装已经流片。</p>
+            <p>发射前，项目方必须先放入价值 3 美元的 OKB，这笔进金库。创建另付 1 TAPE + 0.01 枚发射代币：1 TAPE 直接销毁，0.01 锁进该项目金库。OKB 发射锁的是 0.01 OKB，BEM 或 TAPE 对发射锁的是 0.01 BEM。</p>
+            <p>铸造收进来的，是这次发射的那种代币，创建时就分成三份。30% 在售罄收盘后项目方可以领取。40% 没有提取函数。收盘后，本合约里低于铸造价 2 倍、挂满 1 天的 NFT，可以被这 40% 买下并销毁。收盘时把这 40% 记成基数。每天最多花掉基数的九十分之一，当天没花完也不结转。90 天都有人来买，这 40% 可以花完，一天花不空。一天的上限小于一张合格挂单时，这张单就买不了。项目方自己的地址不能卖给它。进金库的 OKB 种子和锁进去的 0.01 不参与回购。另一个地址仍可能慢慢卖，所以一天封顶。</p>
+            <p>最后 30% 不是按天发。售罄满 90 天，并且连续 3 天都有不低于 2 倍、已经挂满 1 天的挂单，同时没有低于 2 倍的挂单，项目方一次领完。满 90 天之后连续 3 天做不到，这份钱永久不能领。之后任何人可以调用 tick：记成一天、烧掉当天那一份，或买下一张低于两倍的单，调用者拿这次支出的 5%，从当天九十分之一里出。当天预算用完就不再付。网页不保管私钥。账上的 BEM 或 TAPE 直接销毁；OKB 则一半买 BEM、一半买 TAPE，买到就销毁，直到花完。两倍看的是本合约挂单，不是同一笔交易里的现货价。别人若连续三天挂一张回购当天买不掉的低价单，这 30% 会被判负。</p>
+            <p>本站二级成交收 0.2%。平台那一半给收费地址。TAPE、BEM 或 OKB 的另一半留在这个项目合约里，没有提取函数，也不在成交当中拿去买别的币。这份已部署的字节码不会把 TAPE 那一半转进销毁地址。OKX 和 tapeout.net 上的成交不经过这份合约。创建调用已部署的工厂，会扣进金库的 OKB。</p>
+          </details>
+          <p class="hint" id="launch-base"></p>
+          <button class="buy" id="launch-create" style="margin-top:16px" type="button">创建</button>
+          <p class="hint" id="launch-create-msg">Circuit Punk 不用再创建。这里只签一个新项目，私钥不会经过这个页面。</p>
+          <div class="form" id="factory-box">
+            <h3 style="font-size:20px">工厂</h3>
+            <p class="hint">X Layer 上这份地址已写死。没有管理员，不能升级，也不能把金库转走。页面不再另签一份工厂。</p>
+            <p class="hint"><a href="https://www.oklink.com/x-layer/evm/address/0x2872E6D6AB14C5Cdb08587b437Bd16248270A04d" target="_blank" rel="noopener">0x2872E6D6AB14C5Cdb08587b437Bd16248270A04d</a></p>
+            <a id="factory-link" hidden target="_blank" rel="noopener"></a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="page-activity" class="page">
+      <div class="pad">
+        <h2 style="font-size:28px;margin:12px 0 16px" data-i18n="activity">动态</h2>
+        <div class="feed" id="tape-feed">
+          <div class="feed-row"><span>正在读取 tapeout.net 的成交…</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="page-assets" class="page">
+      <div class="pad">
+        <div class="profile-banner" id="user-banner">
+          <button class="cover-btn" id="cover-edit" type="button" data-i18n="editCover">换背景</button>
+        </div>
+        <div class="profile-row">
+          <button class="av-hit" id="avatar-edit" type="button">
+            <img id="assets-av" src="gold.svg" alt="">
+            <img class="gold-crown" src="/tape-launch/crown.svg" alt="">
+            <span data-i18n="editAvatar">换头像</span>
+          </button>
+          <div>
+            <button class="name-hit" id="name-edit" type="button">
+              <h2 id="assets-name" data-i18n="assetsTitle">资产</h2>
+              <small data-i18n="editName">改名字</small>
+            </button>
+            <input id="profile-nick" maxlength="16" hidden data-i18n-ph="nickPh" placeholder="最多 16 个字">
+            <p id="assets-addr">未连接钱包</p>
+            <div class="profile-actions">
+              <button class="buy" id="assets-login" type="button" data-i18n="loginOkx">连接钱包</button>
+              <button class="buy ghost" id="assets-logout" type="button" hidden data-i18n="logout">退出</button>
+              <button class="mini-clear" id="profile-clear" type="button" hidden data-i18n="clearAv">去掉头像</button>
+              <button class="mini-clear" id="cover-clear" type="button" hidden data-i18n="clearCover">去掉背景</button>
+            </div>
+          </div>
+        </div>
+        <input id="profile-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+        <input id="cover-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+        <p class="hint" id="profile-msg" hidden></p>
+        <div class="stats-row">
+          <div><b id="bal-native">—</b><span id="bal-label">余额</span></div>
+          <div><b id="bal-punk">—</b><span>Circuit Punk</span></div>
+          <div><b id="bal-hold">—</b><span>晶体管持仓</span></div>
+        </div>
+        <div class="xfer" id="xfer">
+          <h3 style="font-size:16px;margin:0 0 8px">转账</h3>
+          <p class="hint" id="xfer-lead">填数量和接收地址，点签名转出。钱包会再问一次。地址填错取不回。</p>
+          <div class="art-picks" id="xfer-coin">
+            <button type="button" class="fbtn on" data-coin="tape">TAPE</button>
+            <button type="button" class="fbtn" data-coin="xbem">BEM</button>
+            <button type="button" class="fbtn" data-coin="okb">OKB</button>
+            <button type="button" class="fbtn" data-coin="usdt0">USDT0</button>
+            <button type="button" class="fbtn" data-coin="bem">BSC BEM</button>
+            <button type="button" class="fbtn" data-coin="usdt">USDT</button>
+            <button type="button" class="fbtn" data-coin="bnb">BNB</button>
+            <button type="button" class="fbtn" data-coin="punk">Circuit Punk</button>
+          </div>
+          <p class="hint" id="xfer-have">连接钱包后显示可转余额。</p>
+          <label id="xfer-amt-label">数量</label>
+          <input id="xfer-amt" inputmode="decimal" placeholder="0" autocomplete="off">
+          <button class="buy ghost" id="xfer-max" type="button">填全部</button>
+          <label>接收地址</label>
+          <input id="xfer-to" placeholder="0x" autocomplete="off" spellcheck="false">
+          <button class="buy" id="xfer-go" type="button">签名转出</button>
+          <p class="hint" id="xfer-msg"></p>
+        </div>
+        <h3 style="font-size:16px;margin:4px 8px 8px">我的 Circuit Punk</h3>
+        <p class="sub" id="punk-hold-note">连接钱包后，这里显示张数、编号和图片。</p>
+        <div class="hold-ids" id="punk-hold-ids"></div>
+        <div class="hold-grid" id="punk-hold"></div>
+        <h3 data-i18n="holdings" style="font-size:16px;margin:4px 8px 8px">链上资产</h3>
+        <div class="wallet-balances" id="wallet-balances"></div>
+        <p class="sub" data-i18n="balNote">余额来自这个钱包地址在 BSC 和 X Layer 上的链上数据，不是欧易交易所账户。</p>
+        <div id="hold-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="sheet" id="cp-sheet" hidden>
+  <div class="sheet-card cp-sheet">
+    <img id="cp-sheet-img" alt="">
+    <h3 id="cp-sheet-name">Circuit Punk</h3>
+    <p id="cp-sheet-own"></p>
+    <p id="cp-sheet-px"></p>
+    <div id="cp-sheet-meta"></div>
+    <button class="buy" id="cp-buy" type="button">买下</button>
+    <button class="buy ghost" id="cp-cancel" type="button">撤单</button>
+    <p id="cp-sheet-msg"></p>
+    <button class="ghost-btn" id="cp-close" type="button">关闭</button>
+  </div>
+</div>
+<div class="sheet" id="trade-sheet" hidden>
+  <div class="sheet-card">
+    <h3 id="trade-name">晶体管</h3>
+    <p id="trade-px"></p>
+    <label>数量</label>
+    <input id="trade-qty" value="1" inputmode="numeric">
+    <label>买单价格（BNB）</label>
+    <input id="trade-price" placeholder="例如 0.05">
+    <button class="buy" id="trade-bid" type="button">用 BNB 挂买单</button>
+    <button class="buy ghost" id="trade-sell" type="button">卖给当前最高买价</button>
+    <a id="trade-link" href="https://tapeout.net/market" target="_blank" rel="noopener">在 tapeout.net 打开这颗</a>
+    <p id="trade-msg"></p>
+    <button class="ghost-btn" id="trade-close" type="button">关闭</button>
+  </div>
+</div>
+<div class="sheet" id="gen-sheet" hidden>
+  <div class="sheet-card">
+    <h3 id="gen-name">创世电路</h3>
+    <p id="gen-px"></p>
+    <label>挂单价格（BNB）</label>
+    <input id="gen-price" inputmode="decimal" placeholder="只有持有人挂单时用">
+    <button class="buy" id="gen-buy" type="button" data-i18n="genBuy">用钱包买下</button>
+    <button class="buy ghost" id="gen-list" type="button" data-i18n="genList">挂到官方市场</button>
+    <a id="gen-link" target="_blank" rel="noopener" data-i18n="genScan">在 BscScan 看这枚</a>
+    <p id="gen-msg"></p>
+    <button class="ghost-btn" id="gen-close" type="button" data-i18n="close">关闭</button>
+  </div>
+</div>
+<div class="sheet" id="proto-sheet" hidden>
+  <div class="sheet-card">
+    <h3 id="proto-name">协议电路</h3>
+    <p id="proto-px"></p>
+    <button class="buy" id="proto-buy" type="button">用钱包买下</button>
+    <a id="proto-link" target="_blank" rel="noopener">在 BscScan 看这枚</a>
+    <p id="proto-msg"></p>
+    <button class="ghost-btn" id="proto-close" type="button">关闭</button>
+  </div>
+</div>
+<div class="sheet" id="wallet-sheet" hidden>
+  <div class="sheet-card">
+    <h3 data-i18n="connectTitle">钱包</h3>
+    <p id="wallet-who">未连接</p>
+    <div class="chain-row" id="chain-row">
+      <button type="button" data-chain="56">BSC</button>
+      <button type="button" data-chain="196">X Layer</button>
+    </div>
+    <p data-i18n="connectLead">登录后可以退出，也可以在 BSC 和 X Layer 之间切换。铸造 Circuit Punk 要停在 X Layer。手机用 OKX App 打开这个页面最稳。</p>
+    <button class="wbtn" type="button" data-wallet="browser" data-i18n="browserWallet">浏览器钱包</button>
+    <button class="wbtn" type="button" data-wallet="okx">OKX Wallet</button>
+    <button class="wbtn" type="button" data-wallet="binance" data-i18n="binance">币安钱包</button>
+    <button class="wbtn" type="button" id="wallet-logout" hidden data-i18n="logout">退出</button>
+    <div id="wallet-extra"></div>
+    <div id="wallet-link" hidden></div>
+    <p id="wallet-msg"></p>
+    <button class="ghost-btn" id="wallet-close" type="button" data-i18n="close">关闭</button>
+  </div>
+</div>
+<div class="sheet" id="ext-sheet" hidden>
+  <div class="sheet-card">
+    <img id="ext-art" alt="" hidden>
+    <h3 id="ext-name">挂单</h3>
+    <p id="ext-px"></p>
+    <p id="ext-book"></p>
+    <label id="ext-list-label" hidden>挂单价（OKB）</label>
+    <input id="ext-price" hidden inputmode="decimal" value="0.01">
+    <button class="buy ghost" id="ext-list" type="button" hidden>在本站挂出</button>
+    <button class="buy" id="ext-buy" type="button">在本站成交</button>
+    <p id="ext-msg"></p>
+    <button class="ghost-btn" id="ext-close" type="button">关闭</button>
+  </div>
+</div>
+<div class="mint-win" id="mint-win" hidden>
+  <div class="mint-card">
+    <p class="mint-kicker">TAPE NFT</p>
+    <h3>MINT 成功</h3>
+    <p id="mint-line">恭喜，这枚已经属于你。</p>
+    <button class="buy" id="mint-close" type="button">收下</button>
+  </div>
+</div>
+<script>
+function closeMenu() {
+  var drawer = document.getElementById('nav-drawer');
+  var shade = document.getElementById('nav-shade');
+  if (drawer) drawer.hidden = true;
+  if (shade) shade.hidden = true;
+}
+function switchPage(id) {
+  document.querySelectorAll('.page').forEach(function (p) { p.classList.remove('active'); });
+  var page = document.getElementById('page-' + id);
+  if (page) page.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(function (n) { n.classList.remove('active'); });
+  document.querySelectorAll('.nav-item[data-page="' + id + '"]').forEach(function (n) { n.classList.add('active'); });
+  closeMenu();
+  var scroller = document.querySelector('.content');
+  if (scroller) scroller.scrollTop = 0;
+}
+document.getElementById('nav-menu').addEventListener('click', function () {
+  var drawer = document.getElementById('nav-drawer');
+  var shade = document.getElementById('nav-shade');
+  var open = drawer.hidden;
+  drawer.hidden = !open;
+  shade.hidden = !open;
+});
+document.getElementById('nav-shade').addEventListener('click', closeMenu);
+</script>
+</body>
+</html>

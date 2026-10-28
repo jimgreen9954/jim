@@ -4,6 +4,7 @@ type Eth = {
 };
 
 export type WalletKind = "okx" | "binance";
+export type DeskChain = 56 | 196;
 
 let openLink: string | null = null;
 const linkListeners = new Set<(next: string | null) => void>();
@@ -155,6 +156,8 @@ async function useInjected(eth: Eth): Promise<string> {
   if (!next) throw new Error("nowallet");
   remember(next);
   eth.on?.("accountsChanged", (rows) => remember(rows[0] ?? null));
+  eth.on?.("chainChanged", ((hex: unknown) => rememberChain(parseChainId(hex))) as (accounts: string[]) => void);
+  void refreshChain(eth);
   return next;
 }
 
@@ -265,6 +268,7 @@ export async function disconnectWallet(): Promise<void> {
   current = null;
   publishLink(null);
   remember(null);
+  rememberChain(null);
 }
 
 export async function ensureProvider(): Promise<Eth> {
@@ -282,4 +286,149 @@ export async function ensureProvider(): Promise<Eth> {
 
 export async function connectAny(): Promise<string> {
   return connectKind(kind);
+}
+
+const DESK_CHAINS: Record<DeskChain, { hex: string; add: Record<string, unknown> }> = {
+  56: {
+    hex: "0x38",
+    add: {
+      chainId: "0x38",
+      chainName: "BNB Smart Chain",
+      nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
+      rpcUrls: ["https://bsc-dataseed.binance.org"],
+      blockExplorerUrls: ["https://bscscan.com"],
+    },
+  },
+  196: {
+    hex: "0xc4",
+    add: {
+      chainId: "0xc4",
+      chainName: "X Layer",
+      nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
+      rpcUrls: ["https://rpc.xlayer.tech", "https://xlayerrpc.okx.com"],
+      blockExplorerUrls: ["https://www.oklink.com/xlayer"],
+    },
+  },
+};
+
+let chainId: number | null = null;
+const chainListeners = new Set<(next: number | null) => void>();
+
+function rememberChain(next: number | null) {
+  chainId = next != null && Number.isFinite(next) ? next : null;
+  chainListeners.forEach((cb) => cb(chainId));
+}
+
+async function refreshChain(eth: Eth) {
+  try {
+    rememberChain(parseChainId(await eth.request({ method: "eth_chainId" })));
+  } catch {
+    rememberChain(null);
+  }
+}
+
+export function currentChain(): number | null {
+  return chainId;
+}
+
+export function walletLabel(): string {
+  return kind === "binance" ? "币安" : "OKX";
+}
+
+export function onChain(cb: (next: number | null) => void): () => void {
+  chainListeners.add(cb);
+  cb(chainId);
+  return () => chainListeners.delete(cb);
+}
+
+export function parseChainId(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const text = String(value ?? "").trim().toLowerCase();
+  if (!text) return null;
+  if (text.startsWith("0x")) {
+    const parsed = Number.parseInt(text, 16);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  if (/^\d+$/.test(text)) return Number(text);
+  const parsed = Number.parseInt(text, 16);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export async function connectBrowser(): Promise<string> {
+  const okx = okxInjected();
+  if (okx) {
+    kind = "okx";
+    return useInjected(okx);
+  }
+  const binance = binanceInjected();
+  if (binance) {
+    kind = "binance";
+    return useInjected(binance);
+  }
+  const eth = host().ethereum;
+  if (!eth) throw new Error("nowallet");
+  kind = eth.isBinance ? "binance" : "okx";
+  return useInjected(eth);
+}
+
+export async function connectInjected(eth: Eth): Promise<string> {
+  return useInjected(eth);
+}
+
+export async function resumeInjected(): Promise<string | null> {
+  const okx = okxInjected();
+  const binance = binanceInjected();
+  const raw = okx ?? binance ?? host().ethereum ?? null;
+  if (!raw) return null;
+  try {
+    const accounts = (await raw.request({ method: "eth_accounts" })) as string[];
+    const next = accounts[0];
+    if (!next) return null;
+    kind = raw === binance || host().ethereum?.isBinance ? "binance" : "okx";
+    current = raw;
+    dropped = false;
+    remember(next);
+    raw.on?.("accountsChanged", (rows) => remember(rows[0] ?? null));
+    raw.on?.("chainChanged", ((hex: unknown) => rememberChain(parseChainId(hex))) as (accounts: string[]) => void);
+    await refreshChain(raw);
+    return next;
+  } catch {
+    return null;
+  }
+}
+
+function chainRejected(err: unknown): boolean {
+  const code = typeof err === "object" && err && "code" in err ? Number((err as { code?: number }).code) : 0;
+  const message = err instanceof Error ? err.message : String(err ?? "");
+  return code === 4001 || /user rejected|denied|cancel/i.test(message);
+}
+
+export async function switchDeskChain(id: DeskChain): Promise<void> {
+  const eth = current ?? okxInjected() ?? binanceInjected() ?? host().ethereum ?? null;
+  if (!eth) throw new Error("nowallet");
+  if (!current) current = eth;
+  const row = DESK_CHAINS[id];
+  const read = async () => parseChainId(await eth.request({ method: "eth_chainId" }));
+  if ((await read().catch(() => null)) === id) {
+    rememberChain(id);
+    return;
+  }
+  try {
+    await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: row.hex }] });
+  } catch (err) {
+    if (chainRejected(err)) throw err;
+    try {
+      await eth.request({ method: "wallet_addEthereumChain", params: [row.add] });
+    } catch (addErr) {
+      if (chainRejected(addErr)) throw addErr;
+    }
+  }
+  for (let i = 0; i < 10; i += 1) {
+    if ((await read().catch(() => null)) === id) {
+      rememberChain(id);
+      return;
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 300));
+  }
+  throw new Error(id === 196 ? "xlayer" : "bsc");
 }
