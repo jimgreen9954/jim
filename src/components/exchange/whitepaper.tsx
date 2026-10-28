@@ -137,6 +137,15 @@ const zhBody: Section[] = [
     ],
   },
   {
+    h: "合成卡",
+    ps: [
+      "Circuit Punk 只在 nft.tapeliquid.net 合成，不在交易所合成。材料准备锁进合约，不销毁，七天后可拆回。锁卡合约上线前，市场页只显示结果，不能领取减免。一个钱包只认最高的一张，不能叠加。",
+      "铜片：2 张普通，类型不同。在 app.tapeliquid.net 交易，全场台费 0.16%，主属性 0.14%。银盖：3 张，至少 1 张少见，至少 2 种衬底。全场 0.12%，主属性 0.10%。金线：3 张，至少 1 张稀有，类型各不相同。全场 0.08%，主属性 0.06%。极紫外：1 张传说加任意 2 张，或 1 张史诗加 3 张少见及以上。全场 0.06%，主属性 0.04%，带绿边。仿极紫外：20 张普通，类型不能完全相同，全站最多 50 张。全场 0.08%，没有主属性再减。",
+      "主属性按材料算。衬底加成现货，金属层加成永续，键合成加成电路，对准加成发射。分数最高的一项是主属性，只有这一边走到更低的费率。基准仍是付出金额的 0.20%。池子手续费不动。",
+      "nft.tapeliquid.net 上买卖 Circuit Punk 仍只收合约里写死的 0.2%，不加版权费，合成卡也不减这笔。去 app.tapeliquid.net 用同一个钱包确认身份后，按上面的费率计算应返还的台费。锁卡合约上线前还不能领取。",
+    ],
+  },
+  {
     h: "永续",
     ps: [
       `现在交易的 X Layer 永续是 ${KNOWN_XPERP}，标记是 ${KNOWN_XMARK}。标记读 X Layer 的 OKB/BEM 与 USDT0/WOKB，当前结算价约 36.09。连续推进单次不超过 0.5%，间隔不少于 30 秒。旧合约 ${PREV_XPERP} 的仓位还在，结算价仍约 27.38，不再接受新开仓。晶体管永续是 0x798637b6d18cE053D69CfC0B08Ead105de352c11。六个标的里，第一个已经写入，另外五个还要收费地址各写一次。写过一次就不再停。三份都没有管理员。写价地址和台费地址都是收费地址，写死。撮合和撤单各收保证金的 0.20%，打进收费地址。有推荐人时，交易者少付这笔的 4%，推荐人记 6%。`,
@@ -320,6 +329,15 @@ const en: Section[] = [
     ],
   },
   {
+    h: "Crafted card",
+    ps: [
+      "Circuit Punk cards are crafted only at nft.tapeliquid.net, not on the exchange. The pieces are meant to lock in a contract, not burn, and can be taken back after seven days. Until that lock is deployed, the market only shows the result and nothing can be claimed. One wallet is recognized for its highest card, and cards do not stack.",
+      "Copper is two commons of different types. Trading at app.tapeliquid.net then pays 0.16 percent on every desk, or 0.14 percent on the card's main desk. Silver is three pieces, at least one uncommon, and at least two substrates: 0.12 percent, or 0.10 on the main desk. Gold is three pieces, at least one rare, each a different type: 0.08 percent, or 0.06 on the main desk. Extreme ultraviolet is one legend plus any two, or one epic plus three pieces that are uncommon or better: 0.06 percent, or 0.04 on the main desk, with a green edge. Faux extreme ultraviolet is twenty commons that are not all the same type, capped at fifty cards: 0.08 percent, with no further main-desk cut.",
+      "The main desk is the highest of the four scores. Substrate lifts spot, metal lifts perpetuals, bond lifts circuits, and alignment lifts launch. The desk fee starts at 0.20 percent of what is paid. The pool fee does not move.",
+      "Buying or selling a Circuit Punk at nft.tapeliquid.net still pays only the 0.2 percent written in that contract. There is no extra royalty, and the card does not cut that sale. The same wallet confirms the card at app.tapeliquid.net, and the desk fee is rebated down to the rate above. Nothing can be claimed until the lock contract is deployed.",
+    ],
+  },
+  {
     h: "Perpetuals",
     ps: [
       `The live X Layer perpetual is ${KNOWN_XPERP}. Its mark is ${KNOWN_XMARK}. The mark reads the X Layer OKB/BEM and USDT0/WOKB pools. The settlement price is about 36.09. A consecutive update is at most 0.5 percent and at least 30 seconds apart. Positions on the previous contract ${PREV_XPERP} remain there, still near 27.38, and that book takes no new positions. The transistor perpetual is 0x798637b6d18cE053D69CfC0B08Ead105de352c11. The first of the six markets is posted. The other five still need one post each from the fee address. One post is enough, and it does not stop later. None of the three has an admin. The posting address and the fee address are the same, and both are fixed. A match and a cancel each take 0.20 percent of the margin and send it to the fee address. With a referrer, the trader pays 4 percent less of that fee and the referrer is credited 6 percent.`,
@@ -393,6 +411,7 @@ const specZh = [
   ["一张流片", "18,000 NAND，或 30,000 LATCH。更大写不进链"],
   ["电路何时在", "回执成功就在链上。页面名单稍后才显示"],
   ["电路现货", "按张。卖方实收 99.8%。日产能价是估算，没开工不是到账"],
+  ["合成卡", "在 app.tapeliquid.net 交易才减台费。铜片 0.16/0.14，银盖 0.12/0.10，金线 0.08/0.06，极紫外 0.06/0.04，仿极紫外 0.08。NFT 成交不减"],
 ];
 
 const specEn = [
@@ -409,6 +428,7 @@ const specEn = [
   ["One tape-out", "18,000 NAND, or 30,000 LATCH. Larger than that does not fit"],
   ["When the circuit exists", "On chain when the receipt succeeds. The page list shows it later"],
   ["Circuit spot", "Sold whole. The seller receives 99.8 percent. The day price is an estimate, not a receipt"],
+  ["Crafted card", "The desk fee falls only when trading at app.tapeliquid.net. Copper 0.16/0.14, silver 0.12/0.10, gold 0.08/0.06, EUV 0.06/0.04, faux 0.08. NFT sales do not fall"],
 ];
 
 const nowZh = [
@@ -441,7 +461,9 @@ export function Whitepaper() {
   const [on, setOn] = useState(0);
   const jump = (i: number) => {
     setOn(i);
-    document.getElementById(`paper-${i}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const node = document.getElementById(`paper-${i}`);
+    if (node instanceof HTMLDetailsElement) node.open = true;
+    node?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
   return (
     <div className="lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] lg:items-start">
@@ -459,11 +481,14 @@ export function Whitepaper() {
       <article className="min-w-0 overflow-x-hidden px-3 py-5 sm:px-6 lg:px-10">
         <p className="text-[11px] tracking-[0.22em] text-gold">TAPELIQUID</p>
         <h2 className="mt-2 max-w-3xl font-display text-3xl leading-tight sm:text-5xl">{zh ? "从这里开始使用 TAPELIQUID" : "Start here with TAPELIQUID"}</h2>
-        <p className="mt-4 max-w-2xl text-sm leading-7 text-ink/75">
-          {zh
-            ? "先看清平台币、晶体管和电路，再做第一笔。说明只写已经能签名的规则。页面和合约不一致时，以这一页和链上合约为准。"
-            : "Read the platform coin, the transistors, and the circuits before the first order. This page only states rules you can sign. If a screen disagrees with a contract, this page and the contract win."}
-        </p>
+        <details className="mt-4 max-w-2xl">
+          <summary className="cursor-pointer text-sm font-medium">{zh ? "说明" : "Guide"}</summary>
+          <p className="mt-3 text-sm leading-7 text-ink/75">
+            {zh
+              ? "先看清平台币、晶体管和电路，再做第一笔。说明只写已经能签名的规则。页面和合约不一致时，以这一页和链上合约为准。"
+              : "Read the platform coin, the transistors, and the circuits before the first order. This page only states rules you can sign. If a screen disagrees with a contract, this page and the contract win."}
+          </p>
+        </details>
         <div className="mt-6 grid border border-gold/40 sm:grid-cols-3">
           {[
             ["01", zh ? "第一次使用" : "First visit", zh ? "TAPE、NAND、LATCH 和电路各是什么" : "What TAPE, NAND, LATCH, and a circuit are", 0],
@@ -477,11 +502,14 @@ export function Whitepaper() {
             </button>
           ))}
         </div>
-        <p className="mt-4 border border-gold/30 bg-card px-4 py-3 text-sm leading-6">
-          {zh
-            ? "TAPE 是唯一平台币，只在 X Layer。NAND 与 LATCH 是晶体管。电路按张交易，写明输入、输出和门数。BEM 属于 TapeOut 协议官方代表。"
-            : "TAPE is the only platform coin, and only on X Layer. NAND and LATCH are the transistors. A circuit trades as one piece, with its inputs, outputs, and gates. BEM is the official representative of the TapeOut protocol."}
-        </p>
+        <details className="mt-4">
+          <summary className="cursor-pointer text-sm font-medium">{zh ? "介绍" : "About"}</summary>
+          <p className="mt-3 border border-gold/30 bg-card px-4 py-3 text-sm leading-6">
+            {zh
+              ? "TAPE 是唯一平台币，只在 X Layer。NAND 与 LATCH 是晶体管。电路按张交易，写明输入、输出和门数。BEM 属于 TapeOut 协议官方代表。"
+              : "TAPE is the only platform coin, and only on X Layer. NAND and LATCH are the transistors. A circuit trades as one piece, with its inputs, outputs, and gates. BEM is the official representative of the TapeOut protocol."}
+          </p>
+        </details>
         <div id="paper-now" className="mt-8 grid scroll-mt-24 gap-4">
           <div className="overflow-x-auto border border-gold/30">
           <table className="w-full text-left text-sm">
@@ -532,15 +560,17 @@ export function Whitepaper() {
             <span className="mt-1 block break-all font-mono text-xs">{TAPE_MINE}</span>
           </a>
         </div>
-        <div className="mt-10 flex flex-col gap-12">
+        <div className="mt-10 flex flex-col gap-3">
           {sections.map((section, i) => (
-            <section key={section.h} id={`paper-${i}`} className="scroll-mt-24">
-              <p className="font-mono text-[11px] text-gold">{String(i + 1).padStart(2, "0")} / {section.h}</p>
-              <h3 className="mt-2 font-display text-2xl leading-none sm:text-3xl">{section.h}</h3>
+            <details key={section.h} id={`paper-${i}`} className="scroll-mt-24 border-t border-gold/30 pt-3">
+              <summary className="cursor-pointer">
+                <span className="font-mono text-[11px] text-gold">{String(i + 1).padStart(2, "0")} / {section.h}</span>
+                <span className="mt-2 block font-display text-2xl leading-none sm:text-3xl">{section.h}</span>
+              </summary>
               {section.ps.map((p) => (
                 <p key={p.slice(0, 48)} className="mt-3 max-w-3xl text-sm leading-7 text-ink/85">{p}</p>
               ))}
-            </section>
+            </details>
           ))}
         </div>
       </article>

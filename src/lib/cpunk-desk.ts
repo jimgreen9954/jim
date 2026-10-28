@@ -1484,7 +1484,7 @@ export function bootCpunk(
       .map((desk) => `${DESK_LABEL[desk]} ${card.stats[desk]}`)
       .join(" · ");
     const guide = document.createElement("p");
-    guide.textContent = "减免不在这个市场。用同一个钱包去交易所确认身份，现货、永续、电路、发射的台费按这张卡返还。这里买卖 Circuit Punk 仍只收 0.2%，不加版权费。锁卡合约上线前，交易所还不能领取，这里只显示结果。";
+    guide.textContent = "用同一个钱包去 app.tapeliquid.net 交易，台费按这张卡返还。锁卡合约上线前还不能领取。";
     const link = document.createElement("a");
     link.className = "forge-go";
     link.href = "https://app.tapeliquid.net";
