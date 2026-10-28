@@ -14,11 +14,12 @@ function pageHtml() {
 
 const html = pageHtml();
 
-function MarketPage() {
+export function MarketPage() {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const host = ref.current;
     if (!host) return;
+    document.title = "TAPE NFT 市场";
     host.innerHTML = html;
     try {
       return bootLaunch(host);

@@ -4,6 +4,7 @@ import { showMintWin } from "@/lib/mint-win";
 import { TAPE_BEM, TAPE_TOKEN } from "@/lib/tape-pool";
 import { currentAccount, getProvider, onAccount } from "@/lib/wallet";
 import { filterPunks, punkSheet, traitFacets, type PunkSort, type TraitKey } from "@/lib/circuit-punk";
+import { DESK_LABEL, forge } from "@/lib/punk-card";
 import { onLang } from "@/lib/locale";
 import { connectXLayer, xClient } from "@/lib/xlayer";
 
@@ -1336,6 +1337,28 @@ export function bootCpunk(
   paintHolders();
   void scanHolders();
   const tradePage = host.querySelector("#page-trade");
+  const forgeInput = host.querySelector<HTMLInputElement>("#cp-forge-ids");
+  const forgeOut = host.querySelector("#cp-forge-out");
+  const paintForge = () => {
+    if (!forgeOut) return;
+    const ids = (forgeInput?.value ?? "").split(/[^\d]+/).filter(Boolean).map(Number);
+    if (!ids.length) {
+      forgeOut.textContent = "输入编号后看能合成哪一张。";
+      return;
+    }
+    const made = forge(ids);
+    if (!made.ok) {
+      forgeOut.textContent = made.reason;
+      return;
+    }
+    const card = made.card;
+    const main = card.main ? `主属性是${DESK_LABEL[card.main]}，这一边台费 ${(card.feeMain / 100).toFixed(2)}%。` : "没有主属性再减。";
+    const stats = (Object.keys(DESK_LABEL) as (keyof typeof DESK_LABEL)[])
+      .map((desk) => `${DESK_LABEL[desk]} ${card.stats[desk]}`)
+      .join("，");
+    forgeOut.textContent = `${card.name}。全场台费 ${(card.feeAll / 100).toFixed(2)}%。${main}${stats}。颜色 ${card.color}${card.edge ? `，边 ${card.edge}` : ""}。`;
+  };
+  forgeInput?.addEventListener("input", paintForge, { signal });
   let holdersStarted = false;
   const startHolders = () => {
     if (holdersStarted || signal.aborted) return;
