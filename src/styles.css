@@ -202,6 +202,28 @@ a.border-gold:hover {
     0 14px 30px -20px rgb(0 0 0 / 0.55);
 }
 
+.tl-firework {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  pointer-events: none;
+}
+.tl-spark {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  animation: tl-spark 1s ease-out forwards;
+}
+@keyframes tl-spark {
+  to {
+    transform: translate(var(--dx), var(--dy)) scale(0.2);
+    opacity: 0;
+  }
+}
+
 label:focus-within,
 input:focus,
 textarea:focus,

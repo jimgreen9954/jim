@@ -657,7 +657,7 @@ export function RealPerp({ launch, onMarkets }: {
 				setHash(result);
 				setFills(pushFill(kind || "tx", result));
 				announceFill(lang === "zh" ? "合约回执" : "Perp receipt", result.slice(0, 10));
-				if (kind !== "cancel") markDeskFill(chain === "bsc" ? "bsc" : "xlayer", from, "perp", kind === "close" || kind === "close-all" ? 0 : Number(margin) * (Number(lev) || 1));
+				if (kind !== "cancel") markDeskFill(chain === "bsc" ? "bsc" : "xlayer", from, "perp", kind === "close" || kind === "close-all" ? 0 : Number(margin) * (Number(lev) || 1), coin);
 			}
 			setNote(null);
 		} catch (err) {

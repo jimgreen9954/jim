@@ -1,10 +1,11 @@
 import { Component, lazy, Suspense, type ReactNode, useEffect, useRef, useState } from "react";
 import { ArriveHint } from "@/components/exchange/phone-desk";
 import { PoolSpot } from "@/components/exchange/pool-spot";
-import { RedGift } from "@/components/exchange/red-gift";
 import { useExchange } from "@/lib/exchange-store";
 import type { DeskView } from "@/components/exchange/desk-chrome";
 import { currentAccount, onAccount } from "@/lib/wallet";
+
+const RedGift = lazy(() => import("@/components/exchange/red-gift").then((mod) => ({ default: mod.RedGift })));
 
 const MarketSheet = lazy(() => import("@/components/exchange/desk-chrome").then((mod) => ({ default: mod.MarketSheet })));
 
@@ -143,14 +144,63 @@ export function RedPocket() {
   const zh = useExchange((s) => s.lang) === "zh";
   const [open, setOpen] = useState(false);
   const [account, setAccount] = useState<string | null>(currentAccount());
+  const [until, setUntil] = useState(0);
+  const [live, setLive] = useState(false);
   useEffect(() => onAccount(setAccount), []);
+  useEffect(() => {
+    let stop = false;
+    const look = () => {
+      void import("@/lib/red-packet").then(({ readRed }) => Promise.all([
+        readRed("xlayer", null, "official"),
+        readRed("bsc", null, "official"),
+        readRed("xlayer", null, "volunteer"),
+        readRed("bsc", null, "volunteer"),
+      ])).then((rows) => {
+        if (stop) return;
+        const next = rows.map((row) => Number(row.endsAt)).filter((t) => t * 1000 > Date.now()).sort((a, b) => a - b)[0] ?? 0;
+        setUntil(next);
+        setLive(next > 0);
+      }).catch(() => undefined);
+    };
+    let id = 0;
+    const wait = window.setTimeout(() => {
+      look();
+      id = window.setInterval(look, 20_000);
+    }, 2_500);
+    return () => {
+      stop = true;
+      window.clearTimeout(wait);
+      window.clearInterval(id);
+    };
+  }, []);
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
   return (
     <>
-      <PacketMark zh={zh} onOpen={() => setOpen(true)} />
+      <PacketMark zh={zh} live={live} until={until} onOpen={() => setOpen(true)} />
       {open ? (
-        <div className="fixed inset-0 z-[90] overflow-y-auto bg-black/80 px-3 py-8" onClick={() => setOpen(false)}>
-          <div className="mx-auto max-w-md" onClick={(event) => event.stopPropagation()}>
-            <RedGift account={account} zh={zh} forceOpen />
+        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/70 sm:items-center" onClick={() => setOpen(false)}>
+          <div className="flex max-h-[88vh] w-full max-w-md flex-col overflow-hidden bg-card text-ink shadow-plate" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 pt-3">
+              <span className="text-base text-ink">{zh ? "红包" : "Packet"}</span>
+              <button type="button" className="grid h-11 w-11 place-items-center text-2xl leading-none text-ink" aria-label={zh ? "关闭" : "Close"} onClick={() => setOpen(false)}>×</button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-4">
+              <Suspense fallback={null}>
+                <RedGift account={account} zh={zh} forceOpen onIdle={() => setOpen(false)} />
+              </Suspense>
+            </div>
           </div>
         </div>
       ) : null}
@@ -158,7 +208,15 @@ export function RedPocket() {
   );
 }
 
-function PacketMark({ zh, onOpen }: { zh: boolean; onOpen: () => void }) {
+function clock(ms: number): string {
+  const s = Math.ceil(ms / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return [h, m, sec].map((n) => String(n).padStart(2, "0")).join(":");
+}
+
+function PacketMark({ zh, live, until, onOpen }: { zh: boolean; live: boolean; until: number; onOpen: () => void }) {
   const [at, setAt] = useState(() => {
     try {
       const raw = localStorage.getItem("tl-pouch-pos");
@@ -169,18 +227,26 @@ function PacketMark({ zh, onOpen }: { zh: boolean; onOpen: () => void }) {
     } catch { /* ignore */ }
     return { x: 8, y: 58 };
   });
+  const [left, setLeft] = useState(0);
   const drag = useRef<{ x: number; y: number; px: number; py: number; moved: boolean } | null>(null);
+  useEffect(() => {
+    if (!live) return;
+    const tick = () => setLeft(Math.max(0, until * 1000 - Date.now()));
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [live, until]);
 
   const place = (x: number, y: number) => ({
-    x: Math.min(Math.max(4, x), Math.max(4, window.innerWidth - 40)),
-    y: Math.min(Math.max(4, y), Math.max(4, window.innerHeight - 40)),
+    x: Math.min(Math.max(4, x), Math.max(4, window.innerWidth - 72)),
+    y: Math.min(Math.max(4, y), Math.max(4, window.innerHeight - 56)),
   });
 
   return (
     <button
       type="button"
       aria-label={zh ? "红包锦囊" : "Red packet"}
-      className="fixed z-[80] h-8 w-8 touch-none"
+      className="fixed z-[80] w-16 touch-none active:scale-95"
       style={{ left: at.x, top: at.y }}
       onPointerDown={(event) => {
         event.currentTarget.setPointerCapture(event.pointerId);
@@ -205,12 +271,13 @@ function PacketMark({ zh, onOpen }: { zh: boolean; onOpen: () => void }) {
         });
       }}
     >
-      <svg viewBox="0 0 32 36" className="h-8 w-8 drop-shadow" aria-hidden="true">
+      <svg viewBox="0 0 32 36" className="mx-auto h-8 w-8 drop-shadow" aria-hidden="true">
         <rect x="4" y="8" width="24" height="24" rx="2" fill="#8c1c1c" />
         <path d="M4 16h24" stroke="#e6c36a" strokeWidth="2" />
         <path d="M16 8v24" stroke="#e6c36a" strokeWidth="2" />
         <path d="M8 8c3-5 13-5 16 0" fill="#6e1212" stroke="#e6c36a" strokeWidth="1.4" />
       </svg>
+      {live ? <span className="mt-0.5 block text-center font-mono text-[10px] leading-none text-[#e6c36a]">{clock(left)}</span> : null}
     </button>
   );
 }

@@ -130,7 +130,7 @@ export function FeePass({ account, zh }: { account: string | null; zh: boolean }
   return (
     <div className="border border-gold">
       <button type="button" className="flex min-h-12 w-full items-center justify-between px-4 text-left" onClick={() => setPlate((open) => !open)} aria-expanded={plate}>
-        <span className="text-[11px] tracking-[0.22em] text-gold">{zh ? "合成卡" : "Card"}</span>
+        <span className="text-[11px] tracking-[0.18em] text-gold">{zh ? "Circuit Punk 合成卡" : "Circuit Punk card"}</span>
         <span className="text-xs text-ink/50">{plate ? (zh ? "收起" : "Hide") : (zh ? "打开" : "Open")}</span>
       </button>
       {plate ? (

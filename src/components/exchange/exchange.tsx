@@ -45,15 +45,6 @@ export function Exchange({ start = "spot" }: { start?: "spot" | "paper" | "perp"
   const { night, setNight } = useNight();
   const num = useExchange((s) => s.num);
   useEffect(() => {
-    const id = "ibm-plex";
-    if (document.getElementById(id)) return;
-    const link = document.createElement("link");
-    link.id = id;
-    link.rel = "stylesheet";
-    link.href = "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap";
-    document.head.appendChild(link);
-  }, []);
-  useEffect(() => {
     let stop = () => {};
     const id = window.setTimeout(() => {
       stop = startPersistence();

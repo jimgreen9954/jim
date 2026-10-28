@@ -326,7 +326,7 @@ export function SpotDesk({ focus = "bem", onMarkets, openLp = false }: { focus?:
     const n = Number(nextAmount);
     const px = Number(price);
     const usd = nextUnit === "usdt" && nextSide === "buy" ? n : px > 0 ? n * px : 0;
-    markDeskFill(nextPair === "okb" ? "xlayer" : "bsc", from, "spot", usd);
+    markDeskFill(nextPair === "okb" ? "xlayer" : "bsc", from, "spot", usd, nextPair);
     return tx;
   };
 

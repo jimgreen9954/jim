@@ -137,7 +137,7 @@ const zhBody: Section[] = [
     ],
   },
   {
-    h: "合成卡",
+    h: "Circuit Punk 合成卡",
     ps: [
       "Circuit Punk 只在 nft.tapeliquid.net 合成，不在交易所合成。先在市场页凑齐并点确定，然后才去 app.tapeliquid.net 确认身份，确认之后才开始交易。合成把材料锁进合约，不销毁，锁着不能转。拆开之后有 48 小时解冻期，这 48 小时不能转。拆出来的编号 30 天内不能再拿去合成，别的编号不受影响。锁卡合约上线前，页面上的确定只记在这台浏览器，不能领取。一个钱包只认最高的一张，不能叠加。",
       "铜片：2 张普通，类型不同。全场台费 0.16%，主属性 0.14%。银盖：3 张，至少 1 张少见，至少 2 种衬底。全场 0.12%，主属性 0.10%。金线：3 张，至少 1 张稀有，类型各不相同。全场 0.08%，主属性 0.06%。极紫外：1 张传说加任意 2 张，或 1 张史诗加 3 张少见及以上。全场 0.06%，主属性 0.04%，带绿边。仿极紫外：20 张普通，类型不能完全相同，全站最多 50 张。全场 0.08%，没有主属性再减。",
@@ -159,10 +159,10 @@ const zhBody: Section[] = [
   {
     h: "奖励",
     ps: [
-      "红包锦囊是网页最前面的一枚小红包，按住可以拖开。轻点打开。个人中心里同一份，默认收着。每天按新加坡时间计算。当天不领，过了 0 点作废，不把昨天没领的加进去。",
-      "每条链只部署一次，以后改规则不用再部署。X Layer 红包池是 0x3064c6A0791BB71eE0C0aD22a12439485Babf2d9，部署者是该链多签。BSC 红包池是 0xb4ab0333aE516D33e832e722D64bf0F807b02118，部署者是该链多签。只有部署者能改资产和玩法。换成另一种资产时，池子里不能还留着上一种。X Layer 可选 OKB、TAPE、X Layer 的 BEM、USDT0。BSC 可选 BNB、BEM、USDT、比特币、黄金、标普 500、ETH。用户看不到改规则的那一页。",
-      "谁都可以充当前这一种资产。没被领走的，只有充进去的人能取回。别人充的取不走。领取按先充先扣，扣掉对应额度。玩法三档，写进合约。固定：每个红包同一个数量。随机：在部署者写的最少和最多之间取一个。拼手气：这一轮份数由部署者定，最后一份拿走剩余，前面每一份不超过当时人均的两倍。每天最多几人也可以写，0 是不限。池子不够这一份就停。再充入，才继续。",
-      "每本合约每个新加坡日只能领一次。页面在签名前会读两本：领过一条，另一条当天不再给签。直接对两本合约各签一次，合约各自只认自己，拦不住。成交额由这台浏览器记下，用美元计今天这个钱包签成功的现货和合约。部署者分别写两条门槛，并选择达到一样即可，或两样都要达到。0 表示这一样不要求。两样都写成 0，就不能领。合约只保存门槛，不自己去扫成交。换浏览器要重新成交。领到的时候先点开红包，漫画财神跳出来祝贺，资产进这个钱包。",
+      "红包有两本，都是同一份规则。官方创建只有该链的部署地址能开。个人创建任何人都能开。池子里还有奖金时，只有这一轮的创建者能改规则。创建时放入奖金，并选定领取时间：24 小时、一星期或一个月。时间内可以领，每个地址每个新加坡日一次。过了时间就不能再领，没领完的由放钱的人取回自己的那一份。",
+      "每条链的官方和个人各部署一次，以后改规则不用再部署。以前的红包合约不再使用。X Layer 官方是 0x2F692c676Db3433EFD7B9ba4D242F60329062F01，个人是 0x8D58e7eB93CB8832BeB35409dab5EEb5D0e59B8D。BSC 官方是 0xcd2c3FA2b9E3939591B2F328e0F01fA6fA94299b，个人是 0x2f3e30b72744D2343F5E2B6270aa16BbA59e61A9。部署者都是该链多签。换成另一种资产时，池子里不能还留着上一种。X Layer 可选 OKB、TAPE、X Layer 的 BEM。BSC 可选 BNB、BEM、比特币、黄金、标普 500、ETH。USDT 不能当任务。",
+      "谁都可以充当前这一种资产。没被领走的，只有充进去的人能取回。别人充的取不走。领取按先充先扣。玩法三档。固定：每个红包同一个数量。随机：在最少和最多之间取一个。拼手气：最后一份拿走剩余，前面每一份不超过当时人均的两倍。每天最多几人也可以写，0 是不限。池子不够这一份就停。",
+      "领取必须是普通钱包自己签。合约和代付不能领。打开的同一笔里，要按规则买入指定的币，金额取现货和合约两栏里较高的一栏。BSC 走 Pancake。X Layer 的 TAPE 和 BEM 走 TAPE 池，用 USDT0 买。OKB 走兑换路由。全场两笔至少隔三分钟。每个地址每个新加坡日一次。浏览器里的成交记录不算资格。领到的时候先点开红包，漫画财神跳出来祝贺，资产进这个钱包。",
       "以前的 NAND 礼包仍在 X Layer 0x5374DFfD3186FfEDAC46Cc6c9545B9e9e2CEF45b，BEM 礼包仍在 BSC 0xa29f86319E66DAdF1e30548bcC593fa91CBB7278。这一页不再代领，也不再往那两份里放。",
     ],
   },
@@ -200,7 +200,7 @@ const zhBody: Section[] = [
       `BSC 永续 ${BSC_REBATE}。X Layer 永续 ${KNOWN_XPERP}。标记 ${KNOWN_XMARK}。晶体管永续 ${GATE}。流动性仓位 ${NPM}。`,
       `BSC BEM ${BSC.bem}。BSC 桥 ${BEM_BRIDGE}。X Layer BEM ${X_BEM}。TapeOut BEM 挖矿 0x7E2E0DC66a3bD9103E69b766afA62d9f7b697b46。`,
       `TapeOut 晶体管市场 ${OFFICIAL.transistorMarket}。TapeOut 电路市场 ${OFFICIAL.circuitMarket}。BEM 池 ${BSC.pool}。`,
-      `X Layer 印鉴领取 ${LOCKED_REBATE.xlayer}。BSC 印鉴领取 ${LOCKED_REBATE.bsc}。X Layer 红包池 0x3064c6A0791BB71eE0C0aD22a12439485Babf2d9。BSC 红包池 0xb4ab0333aE516D33e832e722D64bf0F807b02118。`,
+      `X Layer 印鉴领取 ${LOCKED_REBATE.xlayer}。BSC 印鉴领取 ${LOCKED_REBATE.bsc}。X Layer 官方红包 0x2F692c676Db3433EFD7B9ba4D242F60329062F01。X Layer 个人红包 0x8D58e7eB93CB8832BeB35409dab5EEb5D0e59B8D。BSC 官方红包 0xcd2c3FA2b9E3939591B2F328e0F01fA6fA94299b。BSC 个人红包 0x2f3e30b72744D2343F5E2B6270aa16BbA59e61A9。以前的红包不再使用。`,
       "改规则的当天改这一页。链上合约没有改率入口的，不能用这一页把已经部署的排放改掉。",
     ],
   },
@@ -330,7 +330,7 @@ const en: Section[] = [
     ],
   },
   {
-    h: "Crafted card",
+    h: "Circuit Punk card",
     ps: [
       "Circuit Punk cards are crafted only at nft.tapeliquid.net, not on the exchange. Finish the craft there and confirm it before the same wallet confirms identity at app.tapeliquid.net and starts trading. Crafting locks the pieces in a contract. They are not burned, and they cannot be transferred while locked. After a split there is a 48-hour thaw, and those pieces cannot be transferred during it. The split ids cannot be crafted again for 30 days. Other ids are not affected. Until that lock is deployed, the confirm button is stored only in this browser and nothing can be claimed. One wallet is recognized for its highest card, and cards do not stack.",
       "Copper is two commons of different types: 0.16 percent on every desk, or 0.14 percent on the card's main desk. Silver is three pieces, at least one uncommon, and at least two substrates: 0.12 percent, or 0.10 on the main desk. Gold is three pieces, at least one rare, each a different type: 0.08 percent, or 0.06 on the main desk. Extreme ultraviolet is one legend plus any two, or one epic plus three pieces that are uncommon or better: 0.06 percent, or 0.04 on the main desk, with a green edge. Faux extreme ultraviolet is twenty commons that are not all the same type, capped at fifty cards: 0.08 percent, with no further main-desk cut.",
@@ -351,10 +351,10 @@ const en: Section[] = [
   {
     h: "Rewards",
     ps: [
-      "The red packet is a small mark in front of the site. Hold it to drag it aside. A tap opens it. The same gift on the account page stays closed until opened. The day is Singapore time. An unused day expires at midnight and does not carry over.",
-      "Each chain is deployed once. Later rule changes do not deploy again. The X Layer pool is 0x3064c6A0791BB71eE0C0aD22a12439485Babf2d9. Its deployer is that chain's multisig. The BSC pool is 0xb4ab0333aE516D33e832e722D64bf0F807b02118. Its deployer is that chain's multisig. Only the deployer can change the asset and the game. Switching assets reverts while the pool still holds the previous one. X Layer can use OKB, TAPE, X Layer BEM, or USDT0. BSC can use BNB, BEM, USDT, bitcoin, gold, the S&P 500 token, or ETH. Users do not see the rule form.",
-      "Anyone may fund the asset currently selected. Only the depositor can take back what has not been claimed. Someone else's deposit cannot be withdrawn. A claim consumes credit in the order it was funded. Three games are in the contract. Fixed pays the same amount. Random pays between the deployer's minimum and maximum. Lucky uses the deployer's packet count: the last packet takes the remainder, and each earlier packet is at most twice the average then. A daily headcount can be set. Zero means no cap. If the pool cannot cover the packet, it stops until someone funds it.",
-      "Each contract allows one claim per Singapore day. Before signing, the page reads both contracts. After one chain is claimed, it does not offer the other that day. Signing each contract directly is not stopped, because each contract only knows itself. The page sums today's signed spot and perpetual fills in this browser, in dollars. The deployer sets a spot line and a perp line, and chooses either or both. A zero line is not required. If both are zero, nobody qualifies. The contract stores the lines and does not scan fills. A new browser needs new fills. Opening the packet brings up a cartoon fortune figure, and the asset lands in this wallet.",
+      "There are two pools, with the same rules. Only that chain's deployer can open an official round. Anyone can open a personal round. While a prize is still in the pool, only that round's creator can change the rule. The creator puts the prize in and picks 24 hours, one week, or one month. A wallet can claim once per Singapore day during that window. After it ends, claims stop, and each depositor takes back only their own remainder.",
+      "Official and personal are each deployed once per chain. Later rule changes do not deploy again. The earlier red packet contracts are no longer used. X Layer official is 0x2F692c676Db3433EFD7B9ba4D242F60329062F01 and personal is 0x8D58e7eB93CB8832BeB35409dab5EEb5D0e59B8D. BSC official is 0xcd2c3FA2b9E3939591B2F328e0F01fA6fA94299b and personal is 0x2f3e30b72744D2343F5E2B6270aa16BbA59e61A9. Each deployer is that chain's multisig. Switching assets reverts while the pool still holds the previous one. X Layer can use OKB, TAPE, or X Layer BEM. BSC can use BNB, BEM, bitcoin, gold, the S&P 500 token, or ETH. USDT cannot be the task.",
+      "Anyone may fund the asset currently selected. Only the depositor can take back what has not been claimed. Someone else's deposit cannot be withdrawn. A claim consumes credit in the order it was funded. Three games are in the contract. Fixed pays the same amount. Random pays between the minimum and maximum. Lucky lets the last packet take the remainder, and each earlier packet is at most twice the average then. A daily headcount can be set. Zero means no cap. If the pool cannot cover the packet, it stops.",
+      "A claim has to be signed by an ordinary wallet. A contract or a relayer cannot claim. The same transaction must buy the named asset. The amount is the higher of the spot line and the perpetual line. BSC buys through Pancake. On X Layer, TAPE and BEM buy through the TAPE pool with USDT0. OKB buys through the exchange router. Any two claims on one contract are at least three minutes apart. Each address can claim once per Singapore day. A fill recorded in the browser does not qualify. Opening the packet brings up a cartoon fortune figure, and the asset lands in this wallet.",
       "The old NAND gift remains on X Layer at 0x5374DFfD3186FfEDAC46Cc6c9545B9e9e2CEF45b. The old BEM gift remains on BSC at 0xa29f86319E66DAdF1e30548bcC593fa91CBB7278. This page no longer claims from them or adds to them.",
     ],
   },
@@ -393,7 +393,7 @@ const en: Section[] = [
       `BSC perpetual ${BSC_REBATE}. X Layer perpetual ${KNOWN_XPERP}. Mark ${KNOWN_XMARK}. Transistor perpetual ${GATE}. Liquidity positions ${NPM}.`,
       `BSC BEM ${BSC.bem}. BSC bridge ${BEM_BRIDGE}. X Layer BEM ${X_BEM}. TapeOut BEM mine 0x7E2E0DC66a3bD9103E69b766afA62d9f7b697b46.`,
       `TapeOut transistor market ${OFFICIAL.transistorMarket}. TapeOut circuit market ${OFFICIAL.circuitMarket}. BEM pool ${BSC.pool}.`,
-      `X Layer seal claim ${LOCKED_REBATE.xlayer}. BSC seal claim ${LOCKED_REBATE.bsc}. X Layer red packet 0x3064c6A0791BB71eE0C0aD22a12439485Babf2d9. BSC red packet 0xb4ab0333aE516D33e832e722D64bf0F807b02118.`,
+      `X Layer seal claim ${LOCKED_REBATE.xlayer}. BSC seal claim ${LOCKED_REBATE.bsc}. X Layer official packet 0x2F692c676Db3433EFD7B9ba4D242F60329062F01. X Layer personal packet 0x8D58e7eB93CB8832BeB35409dab5EEb5D0e59B8D. BSC official packet 0xcd2c3FA2b9E3939591B2F328e0F01fA6fA94299b. BSC personal packet 0x2f3e30b72744D2343F5E2B6270aa16BbA59e61A9. The earlier packets are no longer used.`,
       "When a rule changes, this page changes the same day. A sentence here cannot change an emission that the deployed contract has no function to edit.",
     ],
   },
@@ -413,7 +413,7 @@ const specZh = [
   ["一张流片", "18,000 NAND，或 30,000 LATCH。更大写不进链"],
   ["电路何时在", "回执成功就在链上。页面名单稍后才显示"],
   ["电路现货", "按张。卖方实收 99.8%。日产能价是估算，没开工不是到账"],
-  ["合成卡", "先在 nft.tapeliquid.net 确定。再去 app.tapeliquid.net 交易。每月领一次，次月 7 天内，先到先得。铜片 0.16/0.14，银盖 0.12/0.10，金线 0.08/0.06，极紫外 0.06/0.04，仿极紫外 0.08"],
+  ["Circuit Punk 合成卡", "先在 nft.tapeliquid.net 确定。再去 app.tapeliquid.net 交易。每月领一次，次月 7 天内，先到先得。铜片 0.16/0.14，银盖 0.12/0.10，金线 0.08/0.06，极紫外 0.06/0.04，仿极紫外 0.08"],
 ];
 
 const specEn = [
@@ -430,7 +430,7 @@ const specEn = [
   ["One tape-out", "18,000 NAND, or 30,000 LATCH. Larger than that does not fit"],
   ["When the circuit exists", "On chain when the receipt succeeds. The page list shows it later"],
   ["Circuit spot", "Sold whole. The seller receives 99.8 percent. The day price is an estimate, not a receipt"],
-  ["Crafted card", "Confirm at nft.tapeliquid.net first, then trade at app.tapeliquid.net. Claim once a month, within the first 7 days, first come first served. Copper 0.16/0.14, silver 0.12/0.10, gold 0.08/0.06, EUV 0.06/0.04, faux 0.08"],
+  ["Circuit Punk card", "Confirm at nft.tapeliquid.net first, then trade at app.tapeliquid.net. Claim once a month, within the first 7 days, first come first served. Copper 0.16/0.14, silver 0.12/0.10, gold 0.08/0.06, EUV 0.06/0.04, faux 0.08"],
 ];
 
 const nowZh = [
