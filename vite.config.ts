@@ -61,6 +61,41 @@ function pgliteBootstrapPlugin(): Plugin {
  * and returns the 302 / completion HTML. Deployed apps do not use the popup
  * (full-page OAuth redirect), so `apply: "serve"` is enough.
  */
+function circuitPunkPlugin(): Plugin {
+  return {
+    name: "circuit-punk-images",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        const pathOnly = (req.url ?? "").split("?", 1)[0] ?? "";
+        if (!pathOnly.startsWith("/api/circuit-punk/")) {
+          next();
+          return;
+        }
+        try {
+          const mod = (await server.ssrLoadModule("/src/lib/circuit-punk-http.ts")) as {
+            serveCircuitPunk: (url: URL) => Response | null;
+          };
+          const host = String(req.headers.host ?? "127.0.0.1:8080");
+          const hit = mod.serveCircuitPunk(new URL(req.url ?? "/", `http://${host}`));
+          if (!hit) {
+            next();
+            return;
+          }
+          res.statusCode = hit.status;
+          hit.headers.forEach((value, key) => res.setHeader(key, value));
+          res.end(Buffer.from(await hit.arrayBuffer()));
+        } catch (err) {
+          console.error("[circuit-punk]", err);
+          res.statusCode = 500;
+          res.setHeader("content-type", "text/plain; charset=utf-8");
+          res.end("no");
+        }
+      });
+    },
+  };
+}
+
 function authPopupPlugin(): Plugin {
   return {
     name: "app-builder:auth-popup",
@@ -161,6 +196,7 @@ export default defineConfig(({ command, isPreview }) => ({
     pgliteBootstrapPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.
     authPopupPlugin(),
+    circuitPunkPlugin(),
     // Dev-only /__app-env, read by scripts/check-auth-invariant.mjs.
     appEnvPlugin(),
     // PWA head + ?install=1 tutorial page; runs before Start/Nitro.
