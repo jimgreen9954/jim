@@ -5,13 +5,23 @@ import { useExchange } from "@/lib/exchange-store";
 import type { DeskView } from "@/components/exchange/desk-chrome";
 import { currentAccount, onAccount } from "@/lib/wallet";
 
-const RedGift = lazy(() => import("@/components/exchange/red-gift").then((mod) => ({ default: mod.RedGift })));
+const RedGift = lazy(() =>
+  import("@/components/exchange/red-gift").then((mod) => ({ default: mod.RedGift })),
+);
 
-const MarketSheet = lazy(() => import("@/components/exchange/desk-chrome").then((mod) => ({ default: mod.MarketSheet })));
+const MarketSheet = lazy(() =>
+  import("@/components/exchange/desk-chrome").then((mod) => ({ default: mod.MarketSheet })),
+);
 
-const RealPerp = lazy(() => import("@/components/exchange/real-perp").then((mod) => ({ default: mod.RealPerp })));
-const SpotDesk = lazy(() => import("@/components/exchange/spot-desk").then((mod) => ({ default: mod.SpotDesk })));
-const TapeTerminal = lazy(() => import("@/components/exchange/tape-terminal").then((mod) => ({ default: mod.TapeTerminal })));
+const RealPerp = lazy(() =>
+  import("@/components/exchange/real-perp").then((mod) => ({ default: mod.RealPerp })),
+);
+const SpotDesk = lazy(() =>
+  import("@/components/exchange/spot-desk").then((mod) => ({ default: mod.SpotDesk })),
+);
+const TapeTerminal = lazy(() =>
+  import("@/components/exchange/tape-terminal").then((mod) => ({ default: mod.TapeTerminal })),
+);
 
 let held: DeskView = { kind: "tape", market: 0 };
 let wantLp = false;
@@ -26,7 +36,13 @@ export function rememberLp() {
   wantLp = true;
 }
 
-export function DeskHome({ desk, onDesk }: { desk: "spot" | "perp"; onDesk: (next: "spot" | "perp") => void }) {
+export function DeskHome({
+  desk,
+  onDesk,
+}: {
+  desk: "spot" | "perp";
+  onDesk: (next: "spot" | "perp") => void;
+}) {
   const lang = useExchange((s) => s.lang);
   const zh = lang === "zh";
   const [view, setView] = useState<DeskView>(held);
@@ -37,9 +53,12 @@ export function DeskHome({ desk, onDesk }: { desk: "spot" | "perp"; onDesk: (nex
   useEffect(() => {
     const onHome = (event: Event) => {
       const detail = (event as CustomEvent<string>).detail;
-      const next: DeskView = detail === "tape-perp" || detail === "perp"
-        ? (held.kind === "perp" ? held : { kind: "perp", chain: "xlayer", coin: "bem" })
-        : { kind: "tape", market: 0 };
+      const next: DeskView =
+        detail === "tape-perp" || detail === "perp"
+          ? held.kind === "perp"
+            ? held
+            : { kind: "perp", chain: "xlayer", coin: "bem" }
+          : { kind: "tape", market: 0 };
       held = next;
       wantLp = false;
       setView(next);
@@ -88,47 +107,69 @@ export function DeskHome({ desk, onDesk }: { desk: "spot" | "perp"; onDesk: (nex
   const pool = !showPerp && view.kind === "tape" && view.market === 0;
   const book = !showPerp && (view.kind === "otc" || (view.kind === "tape" && view.market !== 0));
   const showCake = !showPerp && view.kind === "pancake";
-  const launch = view.kind === "perp" ? view : { kind: "perp" as const, chain: "bsc" as const, coin: "bem" as const };
+  const launch =
+    view.kind === "perp"
+      ? view
+      : { kind: "perp" as const, chain: "bsc" as const, coin: "bem" as const };
 
   return (
     <>
       <ArriveHint zh={zh} />
       {showPerp ? (
         <Suspense fallback={null}>
-        <DeskGuard key={`${launch.chain}-${launch.coin}`} reset={`${launch.chain}-${launch.coin}`}>
-        <RealPerp
-          key={`${launch.chain}-${launch.coin}`}
-          launch={{ chain: launch.chain, coin: launch.coin }}
-          onMarkets={() => { setSheet("perp"); setOpen(true); }}
-        />
-        </DeskGuard>
+          <DeskGuard
+            key={`${launch.chain}-${launch.coin}`}
+            reset={`${launch.chain}-${launch.coin}`}
+          >
+            <RealPerp
+              key={`${launch.chain}-${launch.coin}`}
+              launch={{ chain: launch.chain, coin: launch.coin }}
+              onMarkets={() => {
+                setSheet("perp");
+                setOpen(true);
+              }}
+            />
+          </DeskGuard>
         </Suspense>
       ) : null}
       {pool ? (
         <PoolSpot
-          pair={view.kind === "tape" ? view.pair ?? "usdt" : "usdt"}
+          pair={view.kind === "tape" ? (view.pair ?? "usdt") : "usdt"}
           onPair={(next) => {
             const picked: DeskView = { kind: "tape", market: 0, pair: next };
             held = picked;
             setView(picked);
           }}
-          onMarkets={() => { setSheet("spot"); setOpen(true); }}
+          onMarkets={() => {
+            setSheet("spot");
+            setOpen(true);
+          }}
           onOtc={() => setView({ kind: "otc", market: 0 })}
           onJump={pick}
         />
       ) : null}
       {book ? (
         <Suspense fallback={null}>
-        <TapeTerminal
-          market={view.kind === "otc" || view.kind === "tape" ? view.market : 0}
-          otc={view.kind === "otc"}
-          onMarkets={() => { setSheet("spot"); setOpen(true); }}
-        />
+          <TapeTerminal
+            market={view.kind === "otc" || view.kind === "tape" ? view.market : 0}
+            otc={view.kind === "otc"}
+            onMarkets={() => {
+              setSheet("spot");
+              setOpen(true);
+            }}
+          />
         </Suspense>
       ) : null}
       {showCake ? (
         <Suspense fallback={null}>
-        <SpotDesk focus={view.kind === "pancake" ? view.pair : "bem"} openLp={lp} onMarkets={() => { setSheet("spot"); setOpen(true); }} />
+          <SpotDesk
+            focus={view.kind === "pancake" ? view.pair : "bem"}
+            openLp={lp}
+            onMarkets={() => {
+              setSheet("spot");
+              setOpen(true);
+            }}
+          />
         </Suspense>
       ) : null}
       {open ? (
@@ -150,17 +191,26 @@ export function RedPocket() {
   useEffect(() => {
     let stop = false;
     const look = () => {
-      void import("@/lib/red-packet").then(({ readRed }) => Promise.all([
-        readRed("xlayer", null, "official"),
-        readRed("bsc", null, "official"),
-        readRed("xlayer", null, "volunteer"),
-        readRed("bsc", null, "volunteer"),
-      ])).then((rows) => {
-        if (stop) return;
-        const next = rows.map((row) => Number(row.endsAt)).filter((t) => t * 1000 > Date.now()).sort((a, b) => a - b)[0] ?? 0;
-        setUntil(next);
-        setLive(next > 0);
-      }).catch(() => undefined);
+      void import("@/lib/red-packet")
+        .then(({ readRed }) =>
+          Promise.all([
+            readRed("xlayer", null, "official"),
+            readRed("bsc", null, "official"),
+            readRed("xlayer", null, "volunteer"),
+            readRed("bsc", null, "volunteer"),
+          ]),
+        )
+        .then((rows) => {
+          if (stop) return;
+          const next =
+            rows
+              .map((row) => Number(row.endsAt))
+              .filter((t) => t * 1000 > Date.now())
+              .sort((a, b) => a - b)[0] ?? 0;
+          setUntil(next);
+          setLive(next > 0);
+        })
+        .catch(() => undefined);
     };
     let id = 0;
     const wait = window.setTimeout(() => {
@@ -198,17 +248,39 @@ export function RedPocket() {
     <>
       <PacketMark zh={zh} live={live} until={until} onOpen={() => setOpen(true)} />
       {open ? (
-        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/70 sm:items-center" onClick={() => setOpen(false)}>
+        <div
+          className="fixed inset-0 z-[90] flex items-end justify-center bg-black/70 sm:items-center"
+          onClick={() => setOpen(false)}
+        >
           <div
-            className="flex w-full max-w-md flex-col overflow-hidden bg-card text-ink shadow-plate"
-            style={{ height: sheetH ? Math.min(sheetH, 720) : "92dvh", paddingBottom: "env(safe-area-inset-bottom)" }}
+            className="gift-sheet flex w-full max-w-md flex-col overflow-hidden text-ink"
+            style={{
+              height: sheetH ? Math.min(sheetH, 720) : "92dvh",
+              paddingBottom: "env(safe-area-inset-bottom)",
+            }}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex shrink-0 items-center justify-between px-4 pt-3">
-              <span className="text-base text-ink">{zh ? "红包" : "Packet"}</span>
-              <button type="button" className="grid h-11 w-11 place-items-center text-2xl leading-none text-ink" aria-label={zh ? "关闭" : "Close"} onClick={() => setOpen(false)}>×</button>
+            <div className="flex shrink-0 flex-col items-center px-4 pt-2">
+              <span className="mb-2 h-1 w-10 rounded-full bg-gold" />
+              <div className="flex w-full items-center justify-between">
+                <span className="flex items-center gap-2 text-sm tracking-[0.22em] text-ink">
+                  <span className="gift-mark" aria-hidden />
+                  {zh ? "红包" : "PACKET"}
+                </span>
+                <button
+                  type="button"
+                  className="grid h-11 w-11 place-items-center text-xl leading-none text-ink/70"
+                  aria-label={zh ? "关闭" : "Close"}
+                  onClick={() => setOpen(false)}
+                >
+                  ×
+                </button>
+              </div>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-0 pb-4" style={{ WebkitOverflowScrolling: "touch" }}>
+            <div
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-0 pb-4"
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
               <Suspense fallback={null}>
                 <RedGift account={account} zh={zh} forceOpen onIdle={() => setOpen(false)} />
               </Suspense>
@@ -238,19 +310,34 @@ function pouchBox(x: number, y: number) {
   };
 }
 
-function PacketMark({ zh, live, until, onOpen }: { zh: boolean; live: boolean; until: number; onOpen: () => void }) {
+function PacketMark({
+  zh,
+  live,
+  until,
+  onOpen,
+}: {
+  zh: boolean;
+  live: boolean;
+  until: number;
+  onOpen: () => void;
+}) {
   const [at, setAt] = useState(() => {
     try {
       const raw = localStorage.getItem("tl-pouch-pos");
       if (raw) {
         const saved = JSON.parse(raw) as { x?: number; y?: number };
-        if (typeof saved.x === "number" && typeof saved.y === "number") return { x: saved.x, y: saved.y };
+        if (typeof saved.x === "number" && typeof saved.y === "number")
+          return { x: saved.x, y: saved.y };
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     return { x: 8, y: 58 };
   });
   const [left, setLeft] = useState(0);
-  const drag = useRef<{ x: number; y: number; px: number; py: number; moved: boolean } | null>(null);
+  const drag = useRef<{ x: number; y: number; px: number; py: number; moved: boolean } | null>(
+    null,
+  );
   const tapped = useRef(0);
   useEffect(() => {
     if (!live) return;
@@ -293,7 +380,8 @@ function PacketMark({ zh, live, until, onOpen }: { zh: boolean; live: boolean; u
         const dy = event.clientY - hold.py;
         if (Math.abs(dx) + Math.abs(dy) < 18) return;
         hold.moved = true;
-        if (!event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.setPointerCapture(event.pointerId);
+        if (!event.currentTarget.hasPointerCapture(event.pointerId))
+          event.currentTarget.setPointerCapture(event.pointerId);
         setAt(pouchBox(hold.x + dx, hold.y + dy));
       }}
       onPointerUp={() => {
@@ -301,11 +389,16 @@ function PacketMark({ zh, live, until, onOpen }: { zh: boolean; live: boolean; u
         drag.current = null;
         if (!hold) return;
         if (!hold.moved) openOnce();
-        else setAt((now) => {
-          const next = pouchBox(now.x, now.y);
-          try { localStorage.setItem("tl-pouch-pos", JSON.stringify(next)); } catch { /* ignore */ }
-          return next;
-        });
+        else
+          setAt((now) => {
+            const next = pouchBox(now.x, now.y);
+            try {
+              localStorage.setItem("tl-pouch-pos", JSON.stringify(next));
+            } catch {
+              /* ignore */
+            }
+            return next;
+          });
       }}
       onPointerCancel={() => {
         drag.current = null;
@@ -321,7 +414,11 @@ function PacketMark({ zh, live, until, onOpen }: { zh: boolean; live: boolean; u
         <path d="M16 8v24" stroke="#e6c36a" strokeWidth="2" />
         <path d="M8 8c3-5 13-5 16 0" fill="#6e1212" stroke="#e6c36a" strokeWidth="1.4" />
       </svg>
-      {live ? <span className="mt-0.5 block text-center font-mono text-[10px] leading-none text-[#e6c36a]">{clock(left)}</span> : null}
+      {live ? (
+        <span className="mt-0.5 block text-center font-mono text-[10px] leading-none text-[#e6c36a]">
+          {clock(left)}
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -338,7 +435,13 @@ class DeskGuard extends Component<{ children: ReactNode; reset: string }, { bad:
     if (!this.state.bad) return this.props.children;
     return (
       <section className="border border-gold bg-card px-4 py-8">
-        <button type="button" className="mt-3 h-10 bg-ink px-3 text-sm" onClick={() => this.setState({ bad: false })}>再打开</button>
+        <button
+          type="button"
+          className="mt-3 h-10 bg-ink px-3 text-sm"
+          onClick={() => this.setState({ bad: false })}
+        >
+          再打开
+        </button>
       </section>
     );
   }

@@ -1,6 +1,20 @@
 import { useEffect, useState } from "react";
 import { BSC, BSC_SAFE, txUrl } from "@/lib/bsc";
-import { addLp, formatLp, listLp, LP_BEM, LP_CRYPTO, LP_STOCKS, poolYield, quoteLp, removeLp, type LpKey, type LpPosition, type LpQuote, type LpYield } from "@/lib/lp";
+import {
+  addLp,
+  formatLp,
+  listLp,
+  LP_BEM,
+  LP_CRYPTO,
+  LP_STOCKS,
+  poolYield,
+  quoteLp,
+  removeLp,
+  type LpKey,
+  type LpPosition,
+  type LpQuote,
+  type LpYield,
+} from "@/lib/lp";
 import { useExchange } from "@/lib/exchange-store";
 import { connectKind, currentAccount, onAccount } from "@/lib/wallet";
 import { SignCard } from "@/components/exchange/sign-card";
@@ -65,11 +79,26 @@ export function LpPanel() {
     const code = (err as { code?: number }).code;
     const message = err instanceof Error ? err.message : "";
     if (code === 4001) setNote(zh ? "你在钱包里取消了。" : "You cancelled in the wallet.");
-    else if (message === "quote") setNote(zh ? `${book.quoteZh} 不够。` : `Not enough ${book.quoteZh}.`);
-    else if (message === "asset") setNote(zh ? `${book.zh} 不够。按池子现价，两边都要有。` : `Not enough ${book.en}. Both sides are required at the pool price.`);
-    else if (message === "bnb") setNote(zh ? "BNB 不够。要留下约 0.003 付 gas。" : "Not enough BNB. Leave about 0.003 for gas.");
-    else if (message === "empty") setNote(zh ? "这口池子还没有价。" : "This pool has no price yet.");
-    else if (message === "reverted") setNote(zh ? "链上拒绝了。台费如果已经转出，不会自动退回。" : "The chain rejected it. A fee already sent is not returned.");
+    else if (message === "quote")
+      setNote(zh ? `${book.quoteZh} 不够。` : `Not enough ${book.quoteZh}.`);
+    else if (message === "asset")
+      setNote(
+        zh
+          ? `${book.zh} 不够。按池子现价，两边都要有。`
+          : `Not enough ${book.en}. Both sides are required at the pool price.`,
+      );
+    else if (message === "bnb")
+      setNote(
+        zh ? "BNB 不够。要留下约 0.003 付 gas。" : "Not enough BNB. Leave about 0.003 for gas.",
+      );
+    else if (message === "empty")
+      setNote(zh ? "这口池子还没有价。" : "This pool has no price yet.");
+    else if (message === "reverted")
+      setNote(
+        zh
+          ? "链上拒绝了。台费如果已经转出，不会自动退回。"
+          : "The chain rejected it. A fee already sent is not returned.",
+      );
     else setNote(message || (zh ? "没完成。" : "Not finished."));
     setBad(true);
   };
@@ -88,7 +117,14 @@ export function LpPanel() {
   }, [book.key]);
 
   const shown = quote ? formatLp(book, quote) : null;
-  const aprText = apy?.apr === null || apy?.apr === 0 ? "0.00" : apy && apy.apr > 9999 ? ">9999" : apy ? apy.apr.toFixed(2) : "";
+  const aprText =
+    apy?.apr === null || apy?.apr === 0
+      ? "0.00"
+      : apy && apy.apr > 9999
+        ? ">9999"
+        : apy
+          ? apy.apr.toFixed(2)
+          : "";
   const yieldLine = !apy
     ? zh
       ? "正在按链上成交算年化。"
@@ -98,16 +134,16 @@ export function LpPanel() {
         ? "这口池还没有。有成交之后，才按真实手续费算年化。"
         : "This pool does not exist yet. The annualized figure waits for a real trade."
       : apy.hours === 0
-      ? zh
-        ? "这口池的成交暂时读不到，年化先不报。"
-        : "This pool's trades could not be read. No annualized figure yet."
-      : apy.thin
         ? zh
-          ? `池子大约 ${apy.tvlUsd.toFixed(2)} USDT，不到 20，年化不报。近 ${Math.round(apy.hours)} 小时手续费 ${apy.feesUsd.toFixed(4)} USDT。`
-          : `About ${apy.tvlUsd.toFixed(2)} USDT in the pool, under 20, so no annualized figure. Fees over the last ${Math.round(apy.hours)}h: ${apy.feesUsd.toFixed(4)} USDT.`
-        : zh
-          ? `年化 ${aprText}%。近 ${Math.round(apy.hours)} 小时手续费 ${apy.feesUsd.toFixed(4)} USDT，池子大约 ${apy.tvlUsd.toFixed(0)} USDT。只算手续费，不算涨跌。`
-          : `${aprText}% annualized. Fees over the last ${Math.round(apy.hours)}h: ${apy.feesUsd.toFixed(4)} USDT. Pool about ${apy.tvlUsd.toFixed(0)} USDT. Fees only, not price change.`;
+          ? "这口池的成交暂时读不到，年化先不报。"
+          : "This pool's trades could not be read. No annualized figure yet."
+        : apy.thin
+          ? zh
+            ? `池子大约 ${apy.tvlUsd.toFixed(2)} USDT，不到 20，年化不报。近 ${Math.round(apy.hours)} 小时手续费 ${apy.feesUsd.toFixed(4)} USDT。`
+            : `About ${apy.tvlUsd.toFixed(2)} USDT in the pool, under 20, so no annualized figure. Fees over the last ${Math.round(apy.hours)}h: ${apy.feesUsd.toFixed(4)} USDT.`
+          : zh
+            ? `年化 ${aprText}%。近 ${Math.round(apy.hours)} 小时手续费 ${apy.feesUsd.toFixed(4)} USDT，池子大约 ${apy.tvlUsd.toFixed(0)} USDT。只算手续费，不算涨跌。`
+            : `${aprText}% annualized. Fees over the last ${Math.round(apy.hours)}h: ${apy.feesUsd.toFixed(4)} USDT. Pool about ${apy.tvlUsd.toFixed(0)} USDT. Fees only, not price change.`;
 
   return (
     <div className="grid gap-0 lg:grid-cols-12">
@@ -136,18 +172,36 @@ export function LpPanel() {
         </div>
         <div className={`mt-2 grid ${group === "usdt" ? "grid-cols-4" : "grid-cols-3"}`}>
           {books.map((item) => (
-            <button key={item.key} type="button" onClick={() => setKey(item.key)} className={`min-h-9 border border-gold font-mono text-xs ${book.key === item.key ? "bg-ink text-paper" : ""}`}>
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => setKey(item.key)}
+              className={`min-h-9 border border-gold font-mono text-xs ${book.key === item.key ? "bg-ink text-paper" : ""}`}
+            >
               {zh ? item.zh : item.en}
             </button>
           ))}
         </div>
         <p className="mt-3 border border-gold/40 px-3 py-2 text-sm leading-6">{yieldLine}</p>
-        <p className="mt-4 text-xs tracking-widest text-gold">{zh ? "我的流动性" : "My liquidity"}</p>
-        {rows.length === 0 ? <p className="mt-2 text-sm text-ink/60">{zh ? "这个地址在本站这些池子里还没有仓位。" : "This address has no position in these pools."}</p> : null}
+        <p className="mt-4 text-xs tracking-widest text-gold">
+          {zh ? "我的流动性" : "My liquidity"}
+        </p>
+        {rows.length === 0 ? (
+          <p className="mt-2 text-sm text-ink/60">
+            {zh
+              ? "这个地址在本站这些池子里还没有仓位。"
+              : "This address has no position in these pools."}
+          </p>
+        ) : null}
         <ul className="mt-2 flex flex-col gap-2">
           {rows.map((row) => (
-            <li key={String(row.id)} className="flex items-center justify-between gap-2 border border-gold/40 px-2 py-2">
-              <span className="font-mono text-sm">#{row.id.toString()} · {zh ? row.labelZh : row.labelEn}</span>
+            <li
+              key={String(row.id)}
+              className="flex items-center justify-between gap-2 border border-gold/40 px-2 py-2"
+            >
+              <span className="font-mono text-sm">
+                #{row.id.toString()} · {zh ? row.labelZh : row.labelEn}
+              </span>
               <button
                 type="button"
                 className="min-h-9 border border-gold px-2 text-xs"
@@ -180,17 +234,38 @@ export function LpPanel() {
           setCard(true);
         }}
       >
-        <p className="font-mono text-xs text-ink/70">{account ? `${zh ? "已连接" : "Connected"} ${account.slice(0, 6)}…${account.slice(-4)}` : zh ? "未连接" : "Not connected"}</p>
+        <p className="font-mono text-xs text-ink/70">
+          {account
+            ? `${zh ? "已连接" : "Connected"} ${account.slice(0, 6)}…${account.slice(-4)}`
+            : zh
+              ? "未连接"
+              : "Not connected"}
+        </p>
         <label className="border border-gold/40 px-3 py-2">
-          <span className="block text-xs tracking-widest text-gold">{zh ? `放入 ${book.quoteZh}` : `Pay ${book.quoteZh}`}</span>
-          <input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" placeholder="0" className="w-full bg-transparent font-mono text-3xl outline-none" />
+          <span className="block text-xs tracking-widest text-gold">
+            {zh ? `放入 ${book.quoteZh}` : `Pay ${book.quoteZh}`}
+          </span>
+          <input
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+            inputMode="decimal"
+            placeholder="0"
+            className="w-full bg-transparent font-mono text-3xl outline-none"
+          />
         </label>
         <p className="border border-gold/40 px-3 py-2">
-          <span className="block text-xs tracking-widest text-gold">{zh ? "按现价还要" : "Also, at the pool price"}</span>
-          <span className="font-mono text-2xl tabular-nums">{shown ? `${shown.asset} ${zh ? book.zh : book.en}` : "—"}</span>
+          <span className="block text-xs tracking-widest text-gold">
+            {zh ? "按现价还要" : "Also, at the pool price"}
+          </span>
+          <span className="font-mono text-2xl tabular-nums">
+            {shown ? `${shown.asset} ${zh ? book.zh : book.en}` : "—"}
+          </span>
         </p>
         <p className="font-mono text-xs text-ink/70">
-          {zh ? "台费" : "Fee"} {shown ? `${shown.feeQuote} ${book.quoteZh} + ${shown.feeAsset} ${zh ? book.zh : book.en}` : "—"}
+          {zh ? "台费" : "Fee"}{" "}
+          {shown
+            ? `${shown.feeQuote} ${book.quoteZh} + ${shown.feeAsset} ${zh ? book.zh : book.en}`
+            : "—"}
         </p>
         {!account ? (
           <button
@@ -208,13 +283,22 @@ export function LpPanel() {
             {zh ? "用 OKX 连接" : "Connect OKX"}
           </button>
         ) : (
-          <button type="submit" className="min-h-12 bg-ink text-paper disabled:opacity-40" disabled={busy || lock.status !== "ok" || !quote}>
+          <button
+            type="submit"
+            className="min-h-12 bg-ink text-paper disabled:opacity-40"
+            disabled={busy || lock.status !== "ok" || !quote}
+          >
             {zh ? "一键添加" : "Add liquidity"}
           </button>
         )}
         {note ? <p className={`text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
         {hash ? (
-          <a className="text-sm underline decoration-gold" href={txUrl(hash)} target="_blank" rel="noreferrer">
+          <a
+            className="text-sm underline decoration-gold"
+            href={txUrl(hash)}
+            target="_blank"
+            rel="noreferrer"
+          >
             {zh ? "交易" : "Transaction"}
           </a>
         ) : null}
@@ -249,10 +333,27 @@ export function LpPanel() {
                 .finally(() => setBusy(false));
             }}
             lines={[
-              { k: zh ? "池子" : "Pool", v: `${zh ? book.zh : book.en} / ${book.quoteZh}`, href: book.pool === "0x0000000000000000000000000000000000000000" ? undefined : `${BSC.explorer}/address/${book.pool}` },
-              { k: zh ? "放入" : "Deposit", v: `${shown.quote} ${book.quoteZh} + ${shown.asset} ${zh ? book.zh : book.en}` },
-              { k: zh ? "台费" : "Fee", v: `${shown.feeQuote} ${book.quoteZh} + ${shown.feeAsset} ${zh ? book.zh : book.en}` },
-              { k: zh ? "收费地址" : "Fee address", v: BSC_SAFE, href: `${BSC.explorer}/address/${BSC_SAFE}` },
+              {
+                k: zh ? "池子" : "Pool",
+                v: `${zh ? book.zh : book.en} / ${book.quoteZh}`,
+                href:
+                  book.pool === "0x0000000000000000000000000000000000000000"
+                    ? undefined
+                    : `${BSC.explorer}/address/${book.pool}`,
+              },
+              {
+                k: zh ? "放入" : "Deposit",
+                v: `${shown.quote} ${book.quoteZh} + ${shown.asset} ${zh ? book.zh : book.en}`,
+              },
+              {
+                k: zh ? "台费" : "Fee",
+                v: `${shown.feeQuote} ${book.quoteZh} + ${shown.feeAsset} ${zh ? book.zh : book.en}`,
+              },
+              {
+                k: zh ? "收费地址" : "Fee address",
+                v: BSC_SAFE,
+                href: `${BSC.explorer}/address/${BSC_SAFE}`,
+              },
               { k: zh ? "范围" : "Range", v: zh ? "全区间" : "Full range" },
               { k: zh ? "凭证" : "Receipt", v: zh ? "留在这个钱包" : "Stays in this wallet" },
             ]}

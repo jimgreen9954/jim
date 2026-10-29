@@ -25,15 +25,19 @@ export function Ticket() {
   const c = copy[lang];
 
   const touch = side === "buy" ? touchAsk(price) : touchBid(price);
-  const limitPx = draft.orderType === "limit" && Number(draft.price) > 0 ? Number(draft.price) : touch;
+  const limitPx =
+    draft.orderType === "limit" && Number(draft.price) > 0 ? Number(draft.price) : touch;
   const sizeN = Number(draft.size);
-  const taker = draft.orderType === "market" || (side === "buy" ? limitPx >= touchAsk(price) : limitPx <= touchBid(price));
+  const taker =
+    draft.orderType === "market" ||
+    (side === "buy" ? limitPx >= touchAsk(price) : limitPx <= touchBid(price));
   const rate = feeRate(taped, taker);
   const fee = Number.isFinite(sizeN) && sizeN > 0 ? limitPx * sizeN * rate : 0;
   const lev = position && position.size !== 0 ? position.leverage : draft.leverage;
   let hold = 0;
   let holdBem = false;
-  if (market === "spot" && side === "buy") hold = limitPx * (Number.isFinite(sizeN) ? sizeN : 0) + fee;
+  if (market === "spot" && side === "buy")
+    hold = limitPx * (Number.isFinite(sizeN) ? sizeN : 0) + fee;
   if (market === "spot" && side === "sell") {
     hold = Number.isFinite(sizeN) ? sizeN : 0;
     holdBem = true;
@@ -63,7 +67,9 @@ export function Ticket() {
           className={`min-h-12 border border-gold ${side === "buy" ? "bg-foil text-ink" : "bg-card text-ink"}`}
         >
           <span className="block text-sm">{c.bidSub}</span>
-          <span className="block font-display text-lg italic">{side === "buy" ? label : lang === "zh" ? "买入" : "Buy"}</span>
+          <span className="block font-display text-lg italic">
+            {side === "buy" ? label : lang === "zh" ? "买入" : "Buy"}
+          </span>
         </button>
         <button
           type="button"
@@ -71,7 +77,9 @@ export function Ticket() {
           className={`min-h-12 border border-gold ${side === "sell" ? "bg-sell text-[#f7f5f0]" : "bg-card text-sell"}`}
         >
           <span className="block text-sm">{c.askSub}</span>
-          <span className="block font-display text-lg italic">{side === "sell" ? label : lang === "zh" ? "卖出" : "Sell"}</span>
+          <span className="block font-display text-lg italic">
+            {side === "sell" ? label : lang === "zh" ? "卖出" : "Sell"}
+          </span>
         </button>
       </div>
 
@@ -105,7 +113,12 @@ export function Ticket() {
       />
       <div className="mt-2 grid grid-cols-3 gap-2">
         {[0.25, 0.5, 1].map((pct) => (
-          <button key={pct} type="button" onClick={() => applyPercent(pct)} className="min-h-11 border border-gold text-sm">
+          <button
+            key={pct}
+            type="button"
+            onClick={() => applyPercent(pct)}
+            className="min-h-11 border border-gold text-sm"
+          >
             {Math.round(pct * 100)}%
           </button>
         ))}
@@ -145,7 +158,9 @@ export function Ticket() {
               </button>
             ))}
           </div>
-          {position && position.size !== 0 ? <p className="mt-2 text-xs text-ink/70">{c.levLock}</p> : null}
+          {position && position.size !== 0 ? (
+            <p className="mt-2 text-xs text-ink/70">{c.levLock}</p>
+          ) : null}
         </div>
       ) : null}
 

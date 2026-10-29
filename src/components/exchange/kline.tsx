@@ -72,7 +72,11 @@ function rsi(rows: Bar[], n = 14): Array<number | null> {
   return out;
 }
 
-function stoch(rows: Bar[], n = 14, smooth = 3): { k: Array<number | null>; d: Array<number | null> } {
+function stoch(
+  rows: Bar[],
+  n = 14,
+  smooth = 3,
+): { k: Array<number | null>; d: Array<number | null> } {
   const k = rows.map((_, i) => {
     if (i < n - 1) return null;
     let lo = Infinity;
@@ -97,7 +101,11 @@ function stoch(rows: Bar[], n = 14, smooth = 3): { k: Array<number | null>; d: A
   return { k, d };
 }
 
-function pathOf(values: Array<number | null>, x: (i: number) => number, y: (p: number) => number): string {
+function pathOf(
+  values: Array<number | null>,
+  x: (i: number) => number,
+  y: (p: number) => number,
+): string {
   let d = "";
   values.forEach((value, i) => {
     if (value == null) return;
@@ -140,13 +148,43 @@ function OscPane({
   const y = (value: number) => top + ((100 - value) / 100) * OSC;
   return (
     <g>
-      <line x1={PAD.l} x2={VB_W - PAD.r} y1={top} y2={top} stroke="var(--color-up)" strokeOpacity="0.35" />
+      <line
+        x1={PAD.l}
+        x2={VB_W - PAD.r}
+        y1={top}
+        y2={top}
+        stroke="var(--color-up)"
+        strokeOpacity="0.35"
+      />
       {marks.map((mark) => (
-        <line key={mark} x1={PAD.l} x2={VB_W - PAD.r} y1={y(mark)} y2={y(mark)} stroke="var(--color-up)" strokeOpacity="0.25" strokeDasharray="2 3" />
+        <line
+          key={mark}
+          x1={PAD.l}
+          x2={VB_W - PAD.r}
+          y1={y(mark)}
+          y2={y(mark)}
+          stroke="var(--color-up)"
+          strokeOpacity="0.25"
+          strokeDasharray="2 3"
+        />
       ))}
       <path d={pathOf(a, x, y)} fill="none" stroke="var(--color-up)" strokeWidth="1.25" />
-      {b ? <path d={pathOf(b, x, y)} fill="none" stroke="var(--color-ink)" strokeOpacity="0.7" strokeWidth="1.25" /> : null}
-      <text x={PAD.l + 2} y={top + 11} fill="var(--color-ink)" fontSize="10" fontFamily="IBM Plex Mono, monospace">
+      {b ? (
+        <path
+          d={pathOf(b, x, y)}
+          fill="none"
+          stroke="var(--color-ink)"
+          strokeOpacity="0.7"
+          strokeWidth="1.25"
+        />
+      ) : null}
+      <text
+        x={PAD.l + 2}
+        y={top + 11}
+        fill="var(--color-ink)"
+        fontSize="10"
+        fontFamily="IBM Plex Mono, monospace"
+      >
         {label}
       </text>
     </g>
@@ -206,7 +244,16 @@ export function Kline({
   const [lock, setLock] = useState<{ lo: number; hi: number } | null>(null);
   const panRef = useRef<{ x: number; edge: number } | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const all = bars.filter((bar) => bar && Number.isFinite(bar.o) && Number.isFinite(bar.h) && Number.isFinite(bar.l) && Number.isFinite(bar.c)).slice(-300);
+  const all = bars
+    .filter(
+      (bar) =>
+        bar &&
+        Number.isFinite(bar.o) &&
+        Number.isFinite(bar.h) &&
+        Number.isFinite(bar.l) &&
+        Number.isFinite(bar.c),
+    )
+    .slice(-300);
   const lastT = all.at(-1)?.t ?? 0;
   const zh = lang === "zh";
 
@@ -251,9 +298,11 @@ export function Kline({
       readBias({
         data: {
           lang,
-          bars: bars.flatMap((bar) =>
-            bar && Number.isFinite(bar.c) ? [{ o: bar.o, h: bar.h, l: bar.l, c: bar.c }] : [],
-          ).slice(-36),
+          bars: bars
+            .flatMap((bar) =>
+              bar && Number.isFinite(bar.c) ? [{ o: bar.o, h: bar.h, l: bar.l, c: bar.c }] : [],
+            )
+            .slice(-36),
         },
       })
         .then((next) => {
@@ -295,29 +344,30 @@ export function Kline({
     return () => el.removeEventListener("wheel", onWheel);
   }, [all.length]);
 
-  const frameBar = frames?.length && onFrame ? (
-    <div className="relative z-20 flex items-center gap-1 border-b border-gold/30 px-2 py-2">
-      <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
-        {frames.map((item) => {
-          const on = frame === item.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              aria-pressed={on}
-              onPointerDown={(event) => {
-                if (event.button !== 0) return;
-                onFrame(item.id);
-              }}
-              className={`h-8 shrink-0 border px-2.5 font-mono text-xs ${on ? "border-transparent bg-ink" : "border-gold/60 text-ink/80"}`}
-            >
-              {item.label}
-            </button>
-          );
-        })}
+  const frameBar =
+    frames?.length && onFrame ? (
+      <div className="relative z-20 flex items-center gap-1 border-b border-gold/30 px-2 py-2">
+        <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
+          {frames.map((item) => {
+            const on = frame === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                aria-pressed={on}
+                onPointerDown={(event) => {
+                  if (event.button !== 0) return;
+                  onFrame(item.id);
+                }}
+                className={`h-8 shrink-0 border px-2.5 font-mono text-xs ${on ? "border-transparent bg-ink" : "border-gold/60 text-ink/80"}`}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
-    </div>
-  ) : null;
+    ) : null;
 
   if (!all.length) {
     return (
@@ -337,7 +387,9 @@ export function Kline({
   const startFloat = Math.max(0, all.length - shownEdge - viewCount);
   const start = Math.floor(startFloat);
   const slip = startFloat - start;
-  const rows = all.slice(start, Math.min(all.length, Math.ceil(startFloat + viewCount))).filter((bar) => Number.isFinite(bar?.c));
+  const rows = all
+    .slice(start, Math.min(all.length, Math.ceil(startFloat + viewCount)))
+    .filter((bar) => Number.isFinite(bar?.c));
   if (!rows.length) return null;
 
   const ma7 = sma(all, 7).slice(start, start + rows.length);
@@ -382,12 +434,23 @@ export function Kline({
   crossRef.current = crossP;
 
   const guides = [
-    entry > 0 ? { p: entry, label: zh ? "开仓" : "Entry", dash: "4 3", color: "var(--color-gold)" } : null,
-    mark > 0 ? { p: mark, label: zh ? "标记" : "Mark", dash: "1 3", color: "var(--color-ink)" } : null,
-    liq > 0 ? { p: liq, label: zh ? "强平" : "Liq", dash: "2 2", color: "var(--color-sell, #c23b3b)" } : null,
+    entry > 0
+      ? { p: entry, label: zh ? "开仓" : "Entry", dash: "4 3", color: "var(--color-gold)" }
+      : null,
+    mark > 0
+      ? { p: mark, label: zh ? "标记" : "Mark", dash: "1 3", color: "var(--color-ink)" }
+      : null,
+    liq > 0
+      ? { p: liq, label: zh ? "强平" : "Liq", dash: "2 2", color: "var(--color-sell, #c23b3b)" }
+      : null,
     tp > 0 ? { p: tp, label: zh ? "止盈" : "TP", dash: "6 2", color: "#1b6b45" } : null,
-    sl > 0 ? { p: sl, label: zh ? "止损" : "SL", dash: "6 2", color: "var(--color-sell, #c23b3b)" } : null,
-  ].filter((item): item is { p: number; label: string; dash: string; color: string } => item != null && item.p >= lo && item.p <= hi);
+    sl > 0
+      ? { p: sl, label: zh ? "止损" : "SL", dash: "6 2", color: "var(--color-sell, #c23b3b)" }
+      : null,
+  ].filter(
+    (item): item is { p: number; label: string; dash: string; color: string } =>
+      item != null && item.p >= lo && item.p <= hi,
+  );
 
   const times = rows.some((bar) => bar.t)
     ? [0, Math.floor(n / 2), n - 1].filter((value, i, all) => all.indexOf(value) === i)
@@ -413,7 +476,10 @@ export function Kline({
     const frac = n < 2 ? 0 : f - i;
     const t0 = rows[Math.max(0, i)].t ?? i;
     const t1 = rows[Math.min(n - 1, i + 1)].t ?? t0 + 1;
-    return { t: t0 + (t1 - t0) * Math.min(1, Math.max(0, frac)), p: hi - ((yy - PAD.t) / PRICE_H) * span };
+    return {
+      t: t0 + (t1 - t0) * Math.min(1, Math.max(0, frac)),
+      p: hi - ((yy - PAD.t) / PRICE_H) * span,
+    };
   };
 
   const boxOf = (ev: PointerEvent<SVGSVGElement>) => {
@@ -424,7 +490,8 @@ export function Kline({
     };
   };
 
-  const near = (px: number, yy: number, cx: number, cy: number) => (px - cx) ** 2 + (yy - cy) ** 2 < 28 ** 2;
+  const near = (px: number, yy: number, cx: number, cy: number) =>
+    (px - cx) ** 2 + (yy - cy) ** 2 < 28 ** 2;
 
   const hit = (px: number, yy: number): { i: number; mode: Grip } | null => {
     for (let i = ink.length - 1; i >= 0; i -= 1) {
@@ -466,39 +533,70 @@ export function Kline({
       {frameBar}
       <div className="flex flex-col gap-2 border-b border-gold/30 px-3 py-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <button type="button" onClick={() => { setDraw((on) => !on); setTool("look"); }} className={`h-8 shrink-0 px-2 text-xs ${draw ? "bg-foil text-up" : "text-ink/55"}`}>{zh ? (draw ? "收起画线" : "画线") : draw ? "Hide" : "Draw"}</button>
+          <button
+            type="button"
+            onClick={() => {
+              setDraw((on) => !on);
+              setTool("look");
+            }}
+            className={`h-8 shrink-0 px-2 text-xs ${draw ? "bg-foil text-up" : "text-ink/55"}`}
+          >
+            {zh ? (draw ? "收起画线" : "画线") : draw ? "Hide" : "Draw"}
+          </button>
           {draw ? (
-          <div className="flex border border-gold/60">
-            {(
-              [
-                ["look", zh ? "十字" : "Cross"],
-                ["line", zh ? "趋势" : "Trend"],
-                ["zone", zh ? "区间" : "Range"],
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                title={label}
-                onClick={() => {
-                  setTool(id);
-                  setDraft(null);
-                }}
-                className={`grid size-8 place-items-center ${tool === id ? "bg-ink text-paper" : "text-ink/70"}`}
-              >
-                {id === "look" ? (
-                  <svg viewBox="0 0 16 16" className="size-4" aria-hidden><path d="M8 1v14M1 8h14" stroke="currentColor" strokeWidth="1.4" /></svg>
-                ) : id === "line" ? (
-                  <svg viewBox="0 0 16 16" className="size-4" aria-hidden><path d="M2 13 L14 3" stroke="currentColor" strokeWidth="1.4" /><circle cx="3" cy="12" r="1.3" fill="currentColor" /><circle cx="13" cy="4" r="1.3" fill="currentColor" /></svg>
-                ) : (
-                  <svg viewBox="0 0 16 16" className="size-4" aria-hidden><rect x="2.5" y="3.5" width="11" height="9" fill="none" stroke="currentColor" strokeWidth="1.4" /></svg>
-                )}
-              </button>
-            ))}
+            <div className="flex border border-gold/60">
+              {(
+                [
+                  ["look", zh ? "十字" : "Cross"],
+                  ["line", zh ? "趋势" : "Trend"],
+                  ["zone", zh ? "区间" : "Range"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  title={label}
+                  onClick={() => {
+                    setTool(id);
+                    setDraft(null);
+                  }}
+                  className={`grid size-8 place-items-center ${tool === id ? "bg-ink text-paper" : "text-ink/70"}`}
+                >
+                  {id === "look" ? (
+                    <svg viewBox="0 0 16 16" className="size-4" aria-hidden>
+                      <path d="M8 1v14M1 8h14" stroke="currentColor" strokeWidth="1.4" />
+                    </svg>
+                  ) : id === "line" ? (
+                    <svg viewBox="0 0 16 16" className="size-4" aria-hidden>
+                      <path d="M2 13 L14 3" stroke="currentColor" strokeWidth="1.4" />
+                      <circle cx="3" cy="12" r="1.3" fill="currentColor" />
+                      <circle cx="13" cy="4" r="1.3" fill="currentColor" />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 16 16" className="size-4" aria-hidden>
+                      <rect
+                        x="2.5"
+                        y="3.5"
+                        width="11"
+                        height="9"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.4"
+                      />
+                    </svg>
+                  )}
+                </button>
+              ))}
             </div>
-            ) : null}
-            <div className={`flex flex-wrap items-center gap-1 ${draw && tool !== "look" ? "" : "hidden"}`}>
-            <button type="button" onClick={() => setInk((list) => list.slice(0, -1))} className="min-h-9 px-2 text-xs text-ink/70">
+          ) : null}
+          <div
+            className={`flex flex-wrap items-center gap-1 ${draw && tool !== "look" ? "" : "hidden"}`}
+          >
+            <button
+              type="button"
+              onClick={() => setInk((list) => list.slice(0, -1))}
+              className="min-h-9 px-2 text-xs text-ink/70"
+            >
               {zh ? "撤销" : "Undo"}
             </button>
             <button
@@ -512,7 +610,11 @@ export function Kline({
             >
               {zh ? "删除" : "Delete"}
             </button>
-            <button type="button" onClick={() => setInk([])} className="min-h-9 px-2 text-xs text-ink/70">
+            <button
+              type="button"
+              onClick={() => setInk([])}
+              className="min-h-9 px-2 text-xs text-ink/70"
+            >
               {zh ? "清空" : "Clear"}
             </button>
             <button
@@ -524,14 +626,42 @@ export function Kline({
             </button>
           </div>
           <div className="flex items-center gap-1">
-            <button type="button" title={zh ? "放大" : "In"} onClick={() => setZoom((value) => Math.max(8, Math.round(value * 0.7)))} className="grid size-8 place-items-center border border-gold/60 text-sm">+</button>
-            <button type="button" title={zh ? "缩小" : "Out"} onClick={() => setZoom((value) => Math.min(Math.max(8, all.length), Math.round(value * 1.4)))} className="grid size-8 place-items-center border border-gold/60 text-sm">−</button>
-            <button type="button" title={zh ? "最新" : "Now"} onClick={() => { setZoom(48); setEdge(0); }} className="grid size-8 place-items-center border border-gold/60">
-              <svg viewBox="0 0 16 16" className="size-4" aria-hidden><path d="M3 8h8M8 4l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.4" /></svg>
+            <button
+              type="button"
+              title={zh ? "放大" : "In"}
+              onClick={() => setZoom((value) => Math.max(8, Math.round(value * 0.7)))}
+              className="grid size-8 place-items-center border border-gold/60 text-sm"
+            >
+              +
+            </button>
+            <button
+              type="button"
+              title={zh ? "缩小" : "Out"}
+              onClick={() =>
+                setZoom((value) => Math.min(Math.max(8, all.length), Math.round(value * 1.4)))
+              }
+              className="grid size-8 place-items-center border border-gold/60 text-sm"
+            >
+              −
+            </button>
+            <button
+              type="button"
+              title={zh ? "最新" : "Now"}
+              onClick={() => {
+                setZoom(48);
+                setEdge(0);
+              }}
+              className="grid size-8 place-items-center border border-gold/60"
+            >
+              <svg viewBox="0 0 16 16" className="size-4" aria-hidden>
+                <path d="M3 8h8M8 4l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.4" />
+              </svg>
             </button>
           </div>
         </div>
-        <div className={`flex flex-wrap items-center gap-2 ${draw && tool !== "look" ? "" : "hidden"}`}>
+        <div
+          className={`flex flex-wrap items-center gap-2 ${draw && tool !== "look" ? "" : "hidden"}`}
+        >
           {PAINTS.map((color) => (
             <button
               key={color}
@@ -540,7 +670,9 @@ export function Kline({
               onClick={() => {
                 setPaint(color);
                 if (picked == null) return;
-                setInk((list) => list.map((stroke, i) => (i === picked ? { ...stroke, color } : stroke)));
+                setInk((list) =>
+                  list.map((stroke, i) => (i === picked ? { ...stroke, color } : stroke)),
+                );
               }}
               className={`size-4 ${paint === color ? "ring-2 ring-ink ring-offset-1 ring-offset-card" : ""}`}
               style={{ background: color }}
@@ -549,236 +681,393 @@ export function Kline({
         </div>
       </div>
       <div ref={plotRef} className="relative">
-      <svg
-        ref={svgRef}
-        viewBox={`0 0 ${VB_W} ${VB_H}`}
-        className="block h-auto w-full touch-none overflow-hidden"
-        overflow="hidden"
-        style={{ cursor: tool === "look" ? "grab" : "crosshair" }}
-        role="img"
-        aria-label="BEM candlestick chart"
-        onPointerLeave={() => {
-          setHover(null);
-          setPy(null);
-        }}
-        onPointerMove={(ev) => {
-          const rect = ev.currentTarget.getBoundingClientRect();
-          const px = ((ev.clientX - rect.left) / rect.width) * VB_W;
-          const panning = panRef.current;
-          if (panning) {
-            const shift = (px - panning.x) / slot;
-            setEdge(Math.min(maxEdge, Math.max(0, panning.edge + shift)));
-          }
-          const next = Math.floor((px - PAD.l) / slot + slip);
-          setHover(next >= 0 && next < n ? next : null);
-          setPy(((ev.clientY - rect.top) / rect.height) * VB_H);
-          if (panning) return;
-          const moving = dragRef.current;
-          if (!moving) return;
-          const pt = ptFrom(ev, true);
-          if (!pt) return;
-          setInk((list) =>
-            list.map((stroke, i) => {
-              if (i !== moving.i) return stroke;
-              if (moving.mode === "move") {
-                return {
-                  ...stroke,
-                  a: { t: moving.a.t + pt.t - moving.origin.t, p: moving.a.p + pt.p - moving.origin.p },
-                  b: { t: moving.b.t + pt.t - moving.origin.t, p: moving.b.p + pt.p - moving.origin.p },
-                };
-              }
-              if (moving.mode === "a") return { ...stroke, a: pt };
-              if (moving.mode === "b") return { ...stroke, b: pt };
-              if (moving.mode === "ab") return { ...stroke, a: { t: pt.t, p: stroke.a.p }, b: { t: stroke.b.t, p: pt.p } };
-              return { ...stroke, a: { t: stroke.a.t, p: pt.p }, b: { t: pt.t, p: stroke.b.p } };
-            }),
-          );
-        }}
-        onPointerUp={(ev) => {
-          const down = downRef.current;
-          const drawing = dragRef.current;
-          downRef.current = null;
-          dragRef.current = null;
-          panRef.current = null;
-          setLock(null);
-          if (!drawing && down && tool === "look" && priceRef.current && Math.hypot(ev.clientX - down.x, ev.clientY - down.y) < 6 && crossRef.current > 0) {
-            priceRef.current(crossRef.current);
-          }
-        }}
-        onPointerCancel={() => {
-          dragRef.current = null;
-          panRef.current = null;
-          setLock(null);
-        }}
-        onPointerDown={(ev) => {
-          const { px, yy } = boxOf(ev);
-          const found = draft ? null : hit(px, yy);
-          if (found) {
-            const stroke = ink[found.i];
+        <svg
+          ref={svgRef}
+          viewBox={`0 0 ${VB_W} ${VB_H}`}
+          className="block h-auto w-full touch-none overflow-hidden"
+          overflow="hidden"
+          style={{ cursor: tool === "look" ? "grab" : "crosshair" }}
+          role="img"
+          aria-label="BEM candlestick chart"
+          onPointerLeave={() => {
+            setHover(null);
+            setPy(null);
+          }}
+          onPointerMove={(ev) => {
+            const rect = ev.currentTarget.getBoundingClientRect();
+            const px = ((ev.clientX - rect.left) / rect.width) * VB_W;
+            const panning = panRef.current;
+            if (panning) {
+              const shift = (px - panning.x) / slot;
+              setEdge(Math.min(maxEdge, Math.max(0, panning.edge + shift)));
+            }
+            const next = Math.floor((px - PAD.l) / slot + slip);
+            setHover(next >= 0 && next < n ? next : null);
+            setPy(((ev.clientY - rect.top) / rect.height) * VB_H);
+            if (panning) return;
+            const moving = dragRef.current;
+            if (!moving) return;
             const pt = ptFrom(ev, true);
-            if (!stroke || !pt) return;
-            dragRef.current = { i: found.i, mode: found.mode, origin: pt, a: { ...stroke.a }, b: { ...stroke.b } };
-            setPicked(found.i);
-            setTool("look");
-            ev.currentTarget.setPointerCapture(ev.pointerId);
-            return;
-          }
-          if (tool === "look") {
-            downRef.current = { x: ev.clientX, y: ev.clientY };
-            panRef.current = { x: px, edge: shownEdge };
-            setLock({ lo, hi });
-            setPicked(null);
-            ev.currentTarget.setPointerCapture(ev.pointerId);
-            return;
-          }
-          const pt = ptFrom(ev);
-          if (!pt) return;
-          if (!draft) setDraft(pt);
-          else {
-            setInk((list) => [...list, { kind: tool, a: draft, b: pt, color: paint }]);
-            setPicked(ink.length);
-            setDraft(null);
-            setTool("look");
-          }
-        }}
-      >
-        {ticks.map((p) => (
-          <g key={p}>
-            <line x1={PAD.l} x2={VB_W - PAD.r} y1={y(p)} y2={y(p)} stroke="var(--color-up)" strokeOpacity="0.18" />
-            <text x={VB_W - 4} y={y(p) + 3} textAnchor="end" fill="var(--color-ink)" fontSize="11" fontFamily="IBM Plex Mono, monospace">
-              {fmtPx(p)}
-            </text>
-          </g>
-        ))}
-        <line x1={PAD.l} x2={VB_W - PAD.r} y1={VOL_TOP - 6} y2={VOL_TOP - 6} stroke="var(--color-up)" strokeOpacity="0.35" />
-        <path d={pathOf(volMa, x, (v) => VOL_TOP + VOL_H - Math.sqrt(Math.max(0, v) / maxV) * VOL_H)} fill="none" stroke="var(--color-ink)" strokeOpacity="0.7" strokeWidth="1.25" />
-        <text x={VB_W - 6} y={VOL_TOP + 11} textAnchor="end" fill="var(--color-ink)" fontSize="10" fontFamily="IBM Plex Mono, monospace">
-          {fmtSz(focus.v ?? last.v ?? 0)}
-        </text>
-        <OscPane top={RSI_TOP} label="RSI" a={rsiLine} b={null} x={x} marks={[30, 70]} />
-        <OscPane top={STOCH_TOP} label="Stoch" a={stochK} b={stochD} x={x} marks={[20, 80]} />
-        {guides.map((guide) => (
-          <g key={guide.label}>
-            <line x1={PAD.l} x2={VB_W - PAD.r} y1={y(guide.p)} y2={y(guide.p)} stroke={guide.color} strokeDasharray={guide.dash} strokeOpacity="0.8" />
-            <text x={PAD.l + 2} y={y(guide.p) - 3} fill={guide.color} fontSize="10" fontFamily="IBM Plex Mono, monospace">
-              {guide.label} {fmtPx(guide.p)}
-            </text>
-          </g>
-        ))}
-        <path d={pathOf(ma25, x, y)} fill="none" stroke="var(--color-ink)" strokeOpacity="0.45" strokeWidth="1.25" />
-        <path d={pathOf(ma7, x, y)} fill="none" stroke="var(--color-up)" strokeWidth="1.25" />
-        {rows.map((bar, i) => {
-          if (!bar || !Number.isFinite(bar.c) || !Number.isFinite(bar.o)) return null;
-          const up = bar.c >= bar.o;
-          const color = up ? UP : DOWN;
-          const bodyW = Math.max(2.2, slot * 0.72);
-          const left = x(i) - bodyW / 2;
-          const top = y(Math.max(bar.o, bar.c));
-          const body = Math.max(1, Math.abs(y(bar.o) - y(bar.c)));
-          const vol = bar.v ?? 0;
-          const vh = Math.sqrt(vol / maxV) * VOL_H;
-          const hot = i === safeIdx;
-          const avg = volMa[i];
-          return (
-            <g key={`${bar.t ?? i}-${i}`}>
-              <line x1={x(i)} x2={x(i)} y1={y(bar.h)} y2={y(bar.l)} stroke={color} strokeWidth="1" />
-              <rect x={left} y={top} width={bodyW} height={body} fill={color} />
-              {bar.v != null ? (
-                <rect
-                  x={left}
-                  y={VOL_TOP + VOL_H - vh}
-                  width={bodyW}
-                  height={vh}
-                  fill={color}
-                  opacity={hot ? 0.95 : avg != null && vol >= avg * 1.8 ? 0.8 : 0.4}
-                />
-              ) : null}
-            </g>
-          );
-        })}
-        {ink.map((stroke, i) => {
-          const x1 = xAt(stroke.a.t);
-          const x2 = xAt(stroke.b.t);
-          const y1 = y(stroke.a.p);
-          const y2 = y(stroke.b.p);
-          if (stroke.kind === "line") {
-            return (
+            if (!pt) return;
+            setInk((list) =>
+              list.map((stroke, i) => {
+                if (i !== moving.i) return stroke;
+                if (moving.mode === "move") {
+                  return {
+                    ...stroke,
+                    a: {
+                      t: moving.a.t + pt.t - moving.origin.t,
+                      p: moving.a.p + pt.p - moving.origin.p,
+                    },
+                    b: {
+                      t: moving.b.t + pt.t - moving.origin.t,
+                      p: moving.b.p + pt.p - moving.origin.p,
+                    },
+                  };
+                }
+                if (moving.mode === "a") return { ...stroke, a: pt };
+                if (moving.mode === "b") return { ...stroke, b: pt };
+                if (moving.mode === "ab")
+                  return {
+                    ...stroke,
+                    a: { t: pt.t, p: stroke.a.p },
+                    b: { t: stroke.b.t, p: pt.p },
+                  };
+                return { ...stroke, a: { t: stroke.a.t, p: pt.p }, b: { t: pt.t, p: stroke.b.p } };
+              }),
+            );
+          }}
+          onPointerUp={(ev) => {
+            const down = downRef.current;
+            const drawing = dragRef.current;
+            downRef.current = null;
+            dragRef.current = null;
+            panRef.current = null;
+            setLock(null);
+            if (
+              !drawing &&
+              down &&
+              tool === "look" &&
+              priceRef.current &&
+              Math.hypot(ev.clientX - down.x, ev.clientY - down.y) < 6 &&
+              crossRef.current > 0
+            ) {
+              priceRef.current(crossRef.current);
+            }
+          }}
+          onPointerCancel={() => {
+            dragRef.current = null;
+            panRef.current = null;
+            setLock(null);
+          }}
+          onPointerDown={(ev) => {
+            const { px, yy } = boxOf(ev);
+            const found = draft ? null : hit(px, yy);
+            if (found) {
+              const stroke = ink[found.i];
+              const pt = ptFrom(ev, true);
+              if (!stroke || !pt) return;
+              dragRef.current = {
+                i: found.i,
+                mode: found.mode,
+                origin: pt,
+                a: { ...stroke.a },
+                b: { ...stroke.b },
+              };
+              setPicked(found.i);
+              setTool("look");
+              ev.currentTarget.setPointerCapture(ev.pointerId);
+              return;
+            }
+            if (tool === "look") {
+              downRef.current = { x: ev.clientX, y: ev.clientY };
+              panRef.current = { x: px, edge: shownEdge };
+              setLock({ lo, hi });
+              setPicked(null);
+              ev.currentTarget.setPointerCapture(ev.pointerId);
+              return;
+            }
+            const pt = ptFrom(ev);
+            if (!pt) return;
+            if (!draft) setDraft(pt);
+            else {
+              setInk((list) => [...list, { kind: tool, a: draft, b: pt, color: paint }]);
+              setPicked(ink.length);
+              setDraft(null);
+              setTool("look");
+            }
+          }}
+        >
+          {ticks.map((p) => (
+            <g key={p}>
               <line
+                x1={PAD.l}
+                x2={VB_W - PAD.r}
+                y1={y(p)}
+                y2={y(p)}
+                stroke="var(--color-up)"
+                strokeOpacity="0.18"
+              />
+              <text
+                x={VB_W - 4}
+                y={y(p) + 3}
+                textAnchor="end"
+                fill="var(--color-ink)"
+                fontSize="11"
+                fontFamily="IBM Plex Mono, monospace"
+              >
+                {fmtPx(p)}
+              </text>
+            </g>
+          ))}
+          <line
+            x1={PAD.l}
+            x2={VB_W - PAD.r}
+            y1={VOL_TOP - 6}
+            y2={VOL_TOP - 6}
+            stroke="var(--color-up)"
+            strokeOpacity="0.35"
+          />
+          <path
+            d={pathOf(volMa, x, (v) => VOL_TOP + VOL_H - Math.sqrt(Math.max(0, v) / maxV) * VOL_H)}
+            fill="none"
+            stroke="var(--color-ink)"
+            strokeOpacity="0.7"
+            strokeWidth="1.25"
+          />
+          <text
+            x={VB_W - 6}
+            y={VOL_TOP + 11}
+            textAnchor="end"
+            fill="var(--color-ink)"
+            fontSize="10"
+            fontFamily="IBM Plex Mono, monospace"
+          >
+            {fmtSz(focus.v ?? last.v ?? 0)}
+          </text>
+          <OscPane top={RSI_TOP} label="RSI" a={rsiLine} b={null} x={x} marks={[30, 70]} />
+          <OscPane top={STOCH_TOP} label="Stoch" a={stochK} b={stochD} x={x} marks={[20, 80]} />
+          {guides.map((guide) => (
+            <g key={guide.label}>
+              <line
+                x1={PAD.l}
+                x2={VB_W - PAD.r}
+                y1={y(guide.p)}
+                y2={y(guide.p)}
+                stroke={guide.color}
+                strokeDasharray={guide.dash}
+                strokeOpacity="0.8"
+              />
+              <text
+                x={PAD.l + 2}
+                y={y(guide.p) - 3}
+                fill={guide.color}
+                fontSize="10"
+                fontFamily="IBM Plex Mono, monospace"
+              >
+                {guide.label} {fmtPx(guide.p)}
+              </text>
+            </g>
+          ))}
+          <path
+            d={pathOf(ma25, x, y)}
+            fill="none"
+            stroke="var(--color-ink)"
+            strokeOpacity="0.45"
+            strokeWidth="1.25"
+          />
+          <path d={pathOf(ma7, x, y)} fill="none" stroke="var(--color-up)" strokeWidth="1.25" />
+          {rows.map((bar, i) => {
+            if (!bar || !Number.isFinite(bar.c) || !Number.isFinite(bar.o)) return null;
+            const up = bar.c >= bar.o;
+            const color = up ? UP : DOWN;
+            const bodyW = Math.max(2.2, slot * 0.72);
+            const left = x(i) - bodyW / 2;
+            const top = y(Math.max(bar.o, bar.c));
+            const body = Math.max(1, Math.abs(y(bar.o) - y(bar.c)));
+            const vol = bar.v ?? 0;
+            const vh = Math.sqrt(vol / maxV) * VOL_H;
+            const hot = i === safeIdx;
+            const avg = volMa[i];
+            return (
+              <g key={`${bar.t ?? i}-${i}`}>
+                <line
+                  x1={x(i)}
+                  x2={x(i)}
+                  y1={y(bar.h)}
+                  y2={y(bar.l)}
+                  stroke={color}
+                  strokeWidth="1"
+                />
+                <rect x={left} y={top} width={bodyW} height={body} fill={color} />
+                {bar.v != null ? (
+                  <rect
+                    x={left}
+                    y={VOL_TOP + VOL_H - vh}
+                    width={bodyW}
+                    height={vh}
+                    fill={color}
+                    opacity={hot ? 0.95 : avg != null && vol >= avg * 1.8 ? 0.8 : 0.4}
+                  />
+                ) : null}
+              </g>
+            );
+          })}
+          {ink.map((stroke, i) => {
+            const x1 = xAt(stroke.a.t);
+            const x2 = xAt(stroke.b.t);
+            const y1 = y(stroke.a.p);
+            const y2 = y(stroke.b.p);
+            if (stroke.kind === "line") {
+              return (
+                <line
+                  key={i}
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  stroke={stroke.color}
+                  strokeWidth={i === picked ? 2.4 : 1.6}
+                />
+              );
+            }
+            return (
+              <rect
                 key={i}
-                x1={x1}
-                y1={y1}
-                x2={x2}
-                y2={y2}
+                x={Math.min(x1, x2)}
+                y={Math.min(y1, y2)}
+                width={Math.abs(x2 - x1)}
+                height={Math.abs(y2 - y1)}
+                fill={stroke.color}
+                fillOpacity="0.16"
                 stroke={stroke.color}
-                strokeWidth={i === picked ? 2.4 : 1.6}
+                strokeWidth={i === picked ? 2 : 1}
               />
             );
-          }
-          return (
-            <rect
-              key={i}
-              x={Math.min(x1, x2)}
-              y={Math.min(y1, y2)}
-              width={Math.abs(x2 - x1)}
-              height={Math.abs(y2 - y1)}
-              fill={stroke.color}
-              fillOpacity="0.16"
-              stroke={stroke.color}
-              strokeWidth={i === picked ? 2 : 1}
-            />
-          );
-        })}
-        {picked != null && ink[picked] ? (
-          <>
-            {[
-              [ink[picked].a.t, ink[picked].a.p],
-              [ink[picked].b.t, ink[picked].b.p],
-              ...(ink[picked].kind === "zone"
-                ? [
-                    [ink[picked].a.t, ink[picked].b.p],
-                    [ink[picked].b.t, ink[picked].a.p],
-                  ]
-                : []),
-            ].map(([t, p]) => (
-              <circle key={`${t}-${p}`} cx={xAt(t)} cy={y(p)} r="5" fill="var(--color-card)" stroke={ink[picked].color} strokeWidth="2" />
-            ))}
-          </>
-        ) : null}
-        {draft ? <circle cx={xAt(draft.t)} cy={y(draft.p)} r="3" fill="var(--color-gold)" /> : null}
-        {hover != null && tool === "look" ? (
-          <>
-            <line x1={x(safeIdx)} x2={x(safeIdx)} y1={PAD.t} y2={VB_H - PAD.b} stroke="var(--color-ink)" strokeOpacity="0.35" strokeDasharray="2 3" />
-            <line x1={PAD.l} x2={VB_W - PAD.r} y1={crossY} y2={crossY} stroke="var(--color-ink)" strokeOpacity="0.35" strokeDasharray="2 3" />
-          </>
-        ) : null}
-        {hover != null && rows[safeIdx]?.t && (rows[safeIdx].t as number) > 1e9 ? (
-          <g>
-            <rect x={Math.max(PAD.l, Math.min(x(safeIdx) - 107, VB_W - PAD.r - 214))} y={PAD.t + 18} width="214" height="18" fill="var(--color-ink)" />
-            <text x={Math.max(PAD.l, Math.min(x(safeIdx) - 107, VB_W - PAD.r - 214)) + 8} y={PAD.t + 31} fill="var(--color-paper)" fontSize="12" fontFamily="IBM Plex Mono, monospace">
-              {clock(rows[safeIdx].t as number)}
-            </text>
-          </g>
-        ) : null}
-        <rect x={VB_W - PAD.r + 2} y={y(mark > 0 ? mark : last.c) - 8} width={PAD.r - 4} height={16} fill={upLast ? UP : DOWN} />
-        <text x={VB_W - 6} y={y(mark > 0 ? mark : last.c) + 4} textAnchor="end" fill="var(--color-paper)" fontSize="11" fontFamily="IBM Plex Mono, monospace">
-          {fmtPx(mark > 0 ? mark : last.c)}
-        </text>
-        {hover != null ? (
-          <>
-            <rect x={VB_W - PAD.r + 2} y={crossY - 8} width={PAD.r - 4} height="16" fill="var(--color-ink)" />
-            <text x={VB_W - 6} y={crossY + 4} textAnchor="end" fill="var(--color-paper)" fontSize="11" fontFamily="IBM Plex Mono, monospace">
-              {fmtPx(crossP)}
-            </text>
-          </>
-        ) : null}
-        {times.map((i) =>
-          rows[i]?.t ? (
-            <text key={i} x={x(i)} y={VB_H - 6} textAnchor="middle" fill="var(--color-ink)" fontSize="10" fontFamily="IBM Plex Mono, monospace">
-              {clock(rows[i].t as number).slice(5, 16)}
-            </text>
-          ) : null,
-        )}
-      </svg>
+          })}
+          {picked != null && ink[picked] ? (
+            <>
+              {[
+                [ink[picked].a.t, ink[picked].a.p],
+                [ink[picked].b.t, ink[picked].b.p],
+                ...(ink[picked].kind === "zone"
+                  ? [
+                      [ink[picked].a.t, ink[picked].b.p],
+                      [ink[picked].b.t, ink[picked].a.p],
+                    ]
+                  : []),
+              ].map(([t, p]) => (
+                <circle
+                  key={`${t}-${p}`}
+                  cx={xAt(t)}
+                  cy={y(p)}
+                  r="5"
+                  fill="var(--color-card)"
+                  stroke={ink[picked].color}
+                  strokeWidth="2"
+                />
+              ))}
+            </>
+          ) : null}
+          {draft ? (
+            <circle cx={xAt(draft.t)} cy={y(draft.p)} r="3" fill="var(--color-gold)" />
+          ) : null}
+          {hover != null && tool === "look" ? (
+            <>
+              <line
+                x1={x(safeIdx)}
+                x2={x(safeIdx)}
+                y1={PAD.t}
+                y2={VB_H - PAD.b}
+                stroke="var(--color-ink)"
+                strokeOpacity="0.35"
+                strokeDasharray="2 3"
+              />
+              <line
+                x1={PAD.l}
+                x2={VB_W - PAD.r}
+                y1={crossY}
+                y2={crossY}
+                stroke="var(--color-ink)"
+                strokeOpacity="0.35"
+                strokeDasharray="2 3"
+              />
+            </>
+          ) : null}
+          {hover != null && rows[safeIdx]?.t && (rows[safeIdx].t as number) > 1e9 ? (
+            <g>
+              <rect
+                x={Math.max(PAD.l, Math.min(x(safeIdx) - 107, VB_W - PAD.r - 214))}
+                y={PAD.t + 18}
+                width="214"
+                height="18"
+                fill="var(--color-ink)"
+              />
+              <text
+                x={Math.max(PAD.l, Math.min(x(safeIdx) - 107, VB_W - PAD.r - 214)) + 8}
+                y={PAD.t + 31}
+                fill="var(--color-paper)"
+                fontSize="12"
+                fontFamily="IBM Plex Mono, monospace"
+              >
+                {clock(rows[safeIdx].t as number)}
+              </text>
+            </g>
+          ) : null}
+          <rect
+            x={VB_W - PAD.r + 2}
+            y={y(mark > 0 ? mark : last.c) - 8}
+            width={PAD.r - 4}
+            height={16}
+            fill={upLast ? UP : DOWN}
+          />
+          <text
+            x={VB_W - 6}
+            y={y(mark > 0 ? mark : last.c) + 4}
+            textAnchor="end"
+            fill="var(--color-paper)"
+            fontSize="11"
+            fontFamily="IBM Plex Mono, monospace"
+          >
+            {fmtPx(mark > 0 ? mark : last.c)}
+          </text>
+          {hover != null ? (
+            <>
+              <rect
+                x={VB_W - PAD.r + 2}
+                y={crossY - 8}
+                width={PAD.r - 4}
+                height="16"
+                fill="var(--color-ink)"
+              />
+              <text
+                x={VB_W - 6}
+                y={crossY + 4}
+                textAnchor="end"
+                fill="var(--color-paper)"
+                fontSize="11"
+                fontFamily="IBM Plex Mono, monospace"
+              >
+                {fmtPx(crossP)}
+              </text>
+            </>
+          ) : null}
+          {times.map((i) =>
+            rows[i]?.t ? (
+              <text
+                key={i}
+                x={x(i)}
+                y={VB_H - 6}
+                textAnchor="middle"
+                fill="var(--color-ink)"
+                fontSize="10"
+                fontFamily="IBM Plex Mono, monospace"
+              >
+                {clock(rows[i].t as number).slice(5, 16)}
+              </text>
+            ) : null,
+          )}
+        </svg>
       </div>
     </div>
   );

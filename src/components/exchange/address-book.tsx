@@ -19,7 +19,12 @@ const rows: Row[] = [
   { name: "标记价", chain: "X Layer", address: KNOWN_XMARK, href: xlayer(KNOWN_XMARK) },
   { name: "晶体管永续", chain: "BSC", address: GATE, href: bsc(GATE) },
   { name: "电路", chain: "X Layer", address: DEPLOYED.circuits, href: xlayer(DEPLOYED.circuits) },
-  { name: "晶体管", chain: "X Layer", address: DEPLOYED.transistors, href: xlayer(DEPLOYED.transistors) },
+  {
+    name: "晶体管",
+    chain: "X Layer",
+    address: DEPLOYED.transistors,
+    href: xlayer(DEPLOYED.transistors),
+  },
   { name: "BEM", chain: "BSC", address: BSC.bem, href: bsc(BSC.bem) },
   { name: "USDT", chain: "BSC", address: BSC.usdt, href: bsc(BSC.usdt) },
   { name: "USDT0", chain: "X Layer", address: X_USDT, href: xlayer(X_USDT) },
@@ -35,10 +40,18 @@ export function AddressBook({ lang }: { lang: "zh" | "en" }) {
       </p>
       <ul className="divide-y divide-gold/30">
         {rows.map((row) => (
-          <li key={row.name} className="grid gap-1 px-3 py-2 sm:grid-cols-[9rem_6rem_1fr] sm:items-baseline">
+          <li
+            key={row.name}
+            className="grid gap-1 px-3 py-2 sm:grid-cols-[9rem_6rem_1fr] sm:items-baseline"
+          >
             <span className="text-sm">{lang === "en" ? enName(row.name) : row.name}</span>
             <span className="font-mono text-xs text-gold">{row.chain}</span>
-            <a className="break-all font-mono text-xs underline decoration-gold underline-offset-4" href={row.href} target="_blank" rel="noreferrer">
+            <a
+              className="break-all font-mono text-xs underline decoration-gold underline-offset-4"
+              href={row.href}
+              target="_blank"
+              rel="noreferrer"
+            >
               {row.address}
             </a>
           </li>

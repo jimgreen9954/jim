@@ -15,7 +15,13 @@ export function CoinMark({ id, className = "size-6" }: { id: string; className?:
   const key = id.toLowerCase();
   const src = SRC[key];
   if (!src) {
-    return <span className={`${className} grid shrink-0 place-items-center rounded-full bg-ink text-[9px] font-medium text-paper`}>{key.slice(0, 3).toUpperCase()}</span>;
+    return (
+      <span
+        className={`${className} grid shrink-0 place-items-center rounded-full bg-ink text-[9px] font-medium text-paper`}
+      >
+        {key.slice(0, 3).toUpperCase()}
+      </span>
+    );
   }
   return <img src={src} alt="" className={`${className} shrink-0 rounded-full object-cover`} />;
 }

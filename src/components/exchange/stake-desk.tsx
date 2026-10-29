@@ -31,7 +31,10 @@ import { currentAccount, onAccount } from "@/lib/wallet";
 function sgt(ts: number): string {
   if (!Number.isFinite(ts) || ts < 1_000_000_000 || ts > 10_000_000_000) return "—";
   try {
-    return new Date(ts * 1000).toLocaleString("zh-CN", { timeZone: "Asia/Singapore", hour12: false });
+    return new Date(ts * 1000).toLocaleString("zh-CN", {
+      timeZone: "Asia/Singapore",
+      hour12: false,
+    });
   } catch {
     return "—";
   }
@@ -39,7 +42,9 @@ function sgt(ts: number): string {
 
 function amt(value: bigint): string {
   const n = Number(tapeText(value));
-  return Number.isFinite(n) ? n.toLocaleString("en-US", { maximumFractionDigits: n >= 100 ? 2 : 4 }) : tapeText(value);
+  return Number.isFinite(n)
+    ? n.toLocaleString("en-US", { maximumFractionDigits: n >= 100 ? 2 : 4 })
+    : tapeText(value);
 }
 
 export function StakeDesk() {
@@ -59,7 +64,14 @@ export function StakeDesk() {
   const [circuitTerm, setCircuitTerm] = useState(0);
   const [ackCircuit, setAckCircuit] = useState(false);
   const [lp, setLp] = useState<TapePosition[]>([]);
-  const [reserves, setReserves] = useState({ usdtTape: 0n, usdtQuote: 0n, usdtShares: 0n, bemTape: 0n, bemQuote: 0n, bemShares: 0n });
+  const [reserves, setReserves] = useState({
+    usdtTape: 0n,
+    usdtQuote: 0n,
+    usdtShares: 0n,
+    bemTape: 0n,
+    bemQuote: 0n,
+    bemShares: 0n,
+  });
   const [note, setNote] = useState<string | null>(null);
   const [bad, setBad] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -70,43 +82,107 @@ export function StakeDesk() {
   useEffect(() => {
     let dead = false;
     const pull = () => {
-      readLocks(account).then((row) => { if (!dead) { setWeight(row.weight); setSeats(row.seats); } }).catch(() => undefined);
-      readCircuitLocks(account).then((row) => { if (!dead) setFresh(row); }).catch(() => undefined);
-      readTapePool(account).then((row) => {
-        if (dead) return;
-        setLp(row.positions);
-        setReserves({
-          usdtTape: row.usdt.tape,
-          usdtQuote: row.usdt.quote,
-          usdtShares: row.usdt.shares,
-          bemTape: row.bem.tape,
-          bemQuote: row.bem.quote,
-          bemShares: row.bem.shares,
-        });
-      }).catch(() => undefined);
-      readTapeMine(account).then((row) => { if (!dead) setOwned(row.seats); }).catch(() => undefined);
-      if (account) transistorHeld(account).then((row) => { if (!dead) { setNand(row.nand); setLatch(row.latch); } }).catch(() => undefined);
+      readLocks(account)
+        .then((row) => {
+          if (!dead) {
+            setWeight(row.weight);
+            setSeats(row.seats);
+          }
+        })
+        .catch(() => undefined);
+      readCircuitLocks(account)
+        .then((row) => {
+          if (!dead) setFresh(row);
+        })
+        .catch(() => undefined);
+      readTapePool(account)
+        .then((row) => {
+          if (dead) return;
+          setLp(row.positions);
+          setReserves({
+            usdtTape: row.usdt.tape,
+            usdtQuote: row.usdt.quote,
+            usdtShares: row.usdt.shares,
+            bemTape: row.bem.tape,
+            bemQuote: row.bem.quote,
+            bemShares: row.bem.shares,
+          });
+        })
+        .catch(() => undefined);
+      readTapeMine(account)
+        .then((row) => {
+          if (!dead) setOwned(row.seats);
+        })
+        .catch(() => undefined);
+      if (account)
+        transistorHeld(account)
+          .then((row) => {
+            if (!dead) {
+              setNand(row.nand);
+              setLatch(row.latch);
+            }
+          })
+          .catch(() => undefined);
     };
     pull();
     const id = window.setInterval(pull, 60000);
-    return () => { dead = true; window.clearInterval(id); };
+    return () => {
+      dead = true;
+      window.clearInterval(id);
+    };
   }, [account]);
 
-  const say = (text: string, failed = false) => { setBad(failed); setNote(text); };
+  const say = (text: string, failed = false) => {
+    setBad(failed);
+    setNote(text);
+  };
   const fail = (error: unknown) => {
     const message = error instanceof Error ? error.message : "";
-    say(/rejected|denied/i.test(message) ? (zh ? "你取消了。" : "You cancelled.") : zh ? "没有完成。资产还在原处。" : "It did not finish. The assets stayed put.", true);
+    say(
+      /rejected|denied/i.test(message)
+        ? zh
+          ? "你取消了。"
+          : "You cancelled."
+        : zh
+          ? "没有完成。资产还在原处。"
+          : "It did not finish. The assets stayed put.",
+      true,
+    );
   };
-  const slice = (shares: bigint, total: bigint, reserve: bigint) => (typeof shares === "bigint" && total > 0n ? (shares * reserve) / total : 0n);
-  const lpTape = lp.reduce((sum, row) => sum + slice(row.shares, row.quote === 0 ? reserves.usdtShares : reserves.bemShares, row.quote === 0 ? reserves.usdtTape : reserves.bemTape), 0n);
-  const lpUsdt = lp.reduce((sum, row) => row.quote === 0 ? sum + slice(row.shares, reserves.usdtShares, reserves.usdtQuote) : sum, 0n);
-  const lpBem = lp.reduce((sum, row) => row.quote === 1 ? sum + slice(row.shares, reserves.bemShares, reserves.bemQuote) : sum, 0n);
-  const lockedNand = seats.filter((row) => row.kind === 0).reduce((sum, row) => sum + row.amount, 0n);
-  const lockedLatch = seats.filter((row) => row.kind === 1).reduce((sum, row) => sum + row.amount, 0n);
+  const slice = (shares: bigint, total: bigint, reserve: bigint) =>
+    typeof shares === "bigint" && total > 0n ? (shares * reserve) / total : 0n;
+  const lpTape = lp.reduce(
+    (sum, row) =>
+      sum +
+      slice(
+        row.shares,
+        row.quote === 0 ? reserves.usdtShares : reserves.bemShares,
+        row.quote === 0 ? reserves.usdtTape : reserves.bemTape,
+      ),
+    0n,
+  );
+  const lpUsdt = lp.reduce(
+    (sum, row) =>
+      row.quote === 0 ? sum + slice(row.shares, reserves.usdtShares, reserves.usdtQuote) : sum,
+    0n,
+  );
+  const lpBem = lp.reduce(
+    (sum, row) =>
+      row.quote === 1 ? sum + slice(row.shares, reserves.bemShares, reserves.bemQuote) : sum,
+    0n,
+  );
+  const lockedNand = seats
+    .filter((row) => row.kind === 0)
+    .reduce((sum, row) => sum + row.amount, 0n);
+  const lockedLatch = seats
+    .filter((row) => row.kind === 1)
+    .reduce((sum, row) => sum + row.amount, 0n);
   const circuits = fresh;
   const lockedGates = circuits.reduce((sum, row) => sum + row.gates, 0n);
   const share = weight > 0n ? Number((lockedGates * 10000n) / weight) / 100 : 0;
-  const nextUnlock = [...lp.map((row) => row.unlock), ...seats.map((row) => row.unlock)].filter((ts) => ts * 1000 > Date.now()).sort((a, b) => a - b)[0];
+  const nextUnlock = [...lp.map((row) => row.unlock), ...seats.map((row) => row.unlock)]
+    .filter((ts) => ts * 1000 > Date.now())
+    .sort((a, b) => a - b)[0];
   const now = Math.floor(Date.now() / 1000);
   const waferUntil = sgt(now + (LOCK_TERMS[waferTerm]?.sec ?? 0));
   const circuitUntil = sgt(now + (LOCK_TERMS[circuitTerm]?.sec ?? 0));
@@ -124,10 +200,24 @@ export function StakeDesk() {
         </p>
       </div>
       <div className="border border-sell/50 px-3 py-3 text-sm leading-6">
-        <p className="text-xs tracking-widest text-sell">{zh ? "签名前看这三句" : "Read this before you sign"}</p>
-        <p>{zh ? "到期前不能取。合约没有提前解锁，也没有人能帮你改日期。" : "Nothing comes out early. The contract has no early exit, and nobody can change the date."}</p>
-        <p>{zh ? "只签这一页写出来的池子和锁仓。转到别的地址，谁都取不回。" : "Sign only the pool and the lock shown on this page. Anything sent to another address cannot be recovered."}</p>
-        <p>{zh ? "晶圆锁上不能流片。电路锁着仍占全网算力，到期后 TAPE 和电路分开领。" : "Locked wafers cannot be taped. A locked circuit keeps its weight. After unlock, TAPE and the circuit are claimed apart."}</p>
+        <p className="text-xs tracking-widest text-sell">
+          {zh ? "签名前看这三句" : "Read this before you sign"}
+        </p>
+        <p>
+          {zh
+            ? "到期前不能取。合约没有提前解锁，也没有人能帮你改日期。"
+            : "Nothing comes out early. The contract has no early exit, and nobody can change the date."}
+        </p>
+        <p>
+          {zh
+            ? "只签这一页写出来的池子和锁仓。转到别的地址，谁都取不回。"
+            : "Sign only the pool and the lock shown on this page. Anything sent to another address cannot be recovered."}
+        </p>
+        <p>
+          {zh
+            ? "晶圆锁上不能流片。电路锁着仍占全网算力，到期后 TAPE 和电路分开领。"
+            : "Locked wafers cannot be taped. A locked circuit keeps its weight. After unlock, TAPE and the circuit are claimed apart."}
+        </p>
       </div>
       <dl className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
         <Cell k={zh ? "池中 TAPE" : "TAPE in pool"} v={amt(lpTape)} />
@@ -135,63 +225,215 @@ export function StakeDesk() {
         <Cell k={zh ? "池中 BEM" : "BEM in pool"} v={amt(lpBem)} />
         <Cell k={zh ? "锁着的 NAND" : "Locked NAND"} v={lockedNand.toLocaleString("en-US")} />
         <Cell k={zh ? "锁着的 LATCH" : "Locked LATCH"} v={lockedLatch.toLocaleString("en-US")} />
-        <Cell k={zh ? "锁着的电路 / 全网算力" : "Locked circuits / weight"} v={`${circuits.length} · ${share.toLocaleString("en-US", { maximumFractionDigits: 2 })}%`} />
+        <Cell
+          k={zh ? "锁着的电路 / 全网算力" : "Locked circuits / weight"}
+          v={`${circuits.length} · ${share.toLocaleString("en-US", { maximumFractionDigits: 2 })}%`}
+        />
       </dl>
-      <p className="text-xs text-ink/60">{zh ? "下一笔解锁" : "Next unlock"} {nextUnlock ? sgt(nextUnlock) : zh ? "没有未到期的仓" : "Nothing is still locked"} · {zh ? "钱包 NAND" : "Wallet NAND"} {nand.toLocaleString("en-US")} · LATCH {latch.toLocaleString("en-US")}</p>
+      <p className="text-xs text-ink/60">
+        {zh ? "下一笔解锁" : "Next unlock"}{" "}
+        {nextUnlock ? sgt(nextUnlock) : zh ? "没有未到期的仓" : "Nothing is still locked"} ·{" "}
+        {zh ? "钱包 NAND" : "Wallet NAND"} {nand.toLocaleString("en-US")} · LATCH{" "}
+        {latch.toLocaleString("en-US")}
+      </p>
 
       <details className="border border-gold/40 p-3">
-        <summary className="cursor-pointer text-sm">{zh ? "以前的池子质押" : "Earlier pool stake"}</summary>
+        <summary className="cursor-pointer text-sm">
+          {zh ? "以前的池子质押" : "Earlier pool stake"}
+        </summary>
         <ul className="mt-2 max-h-64 overflow-auto border border-gold/40">
           {lp.map((row) => {
             const poolShares = row.quote === 0 ? reserves.usdtShares : reserves.bemShares;
-            const tape = slice(row.shares, poolShares, row.quote === 0 ? reserves.usdtTape : reserves.bemTape);
-            const other = slice(row.shares, poolShares, row.quote === 0 ? reserves.usdtQuote : reserves.bemQuote);
+            const tape = slice(
+              row.shares,
+              poolShares,
+              row.quote === 0 ? reserves.usdtTape : reserves.bemTape,
+            );
+            const other = slice(
+              row.shares,
+              poolShares,
+              row.quote === 0 ? reserves.usdtQuote : reserves.bemQuote,
+            );
             const due = row.unlock * 1000 <= Date.now();
             const term = TAPE_TERMS[row.term];
             return (
-              <li key={row.id} className="grid gap-2 border-t border-gold/30 px-2 py-2 text-xs sm:grid-cols-[1fr_auto] sm:items-center">
+              <li
+                key={row.id}
+                className="grid gap-2 border-t border-gold/30 px-2 py-2 text-xs sm:grid-cols-[1fr_auto] sm:items-center"
+              >
                 <span className="min-w-0 break-all">
-                  <span className="block">#{row.id} TAPE/{row.quote === 0 ? "USDT0" : "BEM"}</span>
-                  <span className="mt-1 block font-mono">{amt(tape)} TAPE · {showQuote(row.quote === 0 ? 0 : 1, other)} {row.quote === 0 ? "USDT0" : "BEM"} · {zh ? term?.zh : term?.en}</span>
-                  <span className="mt-1 block font-mono text-ink/50">{sgt(row.unlock - (term?.days ?? 0) * 86400)} → {sgt(row.unlock)}</span>
+                  <span className="block">
+                    #{row.id} TAPE/{row.quote === 0 ? "USDT0" : "BEM"}
+                  </span>
+                  <span className="mt-1 block font-mono">
+                    {amt(tape)} TAPE · {showQuote(row.quote === 0 ? 0 : 1, other)}{" "}
+                    {row.quote === 0 ? "USDT0" : "BEM"} · {zh ? term?.zh : term?.en}
+                  </span>
+                  <span className="mt-1 block font-mono text-ink/50">
+                    {sgt(row.unlock - (term?.days ?? 0) * 86400)} → {sgt(row.unlock)}
+                  </span>
                 </span>
-                <button type="button" disabled={busy || !due || !account} className="min-h-8 border border-gold px-2 disabled:opacity-40" onClick={() => { if (!account) return; setBusy(true); removeTapePool(account, BigInt(row.id)).then(() => say(zh ? "流动性已撤回。" : "Liquidity removed.")).catch(fail).finally(() => setBusy(false)); }}>{due ? (zh ? "撤回" : "Remove") : (zh ? "未到期" : "Locked")}</button>
+                <button
+                  type="button"
+                  disabled={busy || !due || !account}
+                  className="min-h-8 border border-gold px-2 disabled:opacity-40"
+                  onClick={() => {
+                    if (!account) return;
+                    setBusy(true);
+                    removeTapePool(account, BigInt(row.id))
+                      .then(() => say(zh ? "流动性已撤回。" : "Liquidity removed."))
+                      .catch(fail)
+                      .finally(() => setBusy(false));
+                  }}
+                >
+                  {due ? (zh ? "撤回" : "Remove") : zh ? "未到期" : "Locked"}
+                </button>
               </li>
             );
           })}
-          {account && lp.length === 0 ? <li className="px-2 py-3 text-sm text-ink/60">{zh ? "这个地址没有还锁着的 TAPE 池仓位。新的加池已经关掉。" : "This address has no TAPE pool position still locked. New deposits are closed."}</li> : null}
+          {account && lp.length === 0 ? (
+            <li className="px-2 py-3 text-sm text-ink/60">
+              {zh
+                ? "这个地址没有还锁着的 TAPE 池仓位。新的加池已经关掉。"
+                : "This address has no TAPE pool position still locked. New deposits are closed."}
+            </li>
+          ) : null}
         </ul>
       </details>
 
       <article className="border border-gold p-3">
         <h3 className="font-display text-2xl italic">{zh ? "晶圆" : "Wafers"}</h3>
-        <p className="mt-1 text-xs text-ink/60">{zh ? "只锁 TAPELIQUID 的 NAND 和 LATCH。锁着不能流片，也不算算力。NAND 和 LATCH 分开记账。" : "Only TAPELIQUID NAND and LATCH. Locked wafers cannot be taped and do not count as weight. NAND and LATCH are separate."}</p>
+        <p className="mt-1 text-xs text-ink/60">
+          {zh
+            ? "只锁 TAPELIQUID 的 NAND 和 LATCH。锁着不能流片，也不算算力。NAND 和 LATCH 分开记账。"
+            : "Only TAPELIQUID NAND and LATCH. Locked wafers cannot be taped and do not count as weight. NAND and LATCH are separate."}
+        </p>
         <ul className="mt-2 max-h-56 overflow-auto border border-gold/40">
-          {seats.filter((row) => row.kind < 2).map((row) => {
-            const due = row.unlock * 1000 <= Date.now();
-            return (
-              <li key={row.id} className="grid gap-1 border-t border-gold/30 px-2 py-2 text-xs sm:grid-cols-[6rem_1fr_auto] sm:items-center">
-                <span>{row.kind === 0 ? "NAND" : "LATCH"} #{row.id}</span>
-                <span className="font-mono">{row.amount.toLocaleString("en-US")} · {zh ? LOCK_TERMS[row.term]?.zh : LOCK_TERMS[row.term]?.en}<span className="mt-1 block text-ink/50">{sgt(row.start)} → {sgt(row.unlock)}</span></span>
-                <button type="button" disabled={busy || !due} className="min-h-8 border border-gold px-2 disabled:opacity-40" onClick={() => { if (!account) return; setBusy(true); releaseLock(account, BigInt(row.id)).then(() => say(zh ? "晶圆已退回这个钱包。" : "The wafers are back in this wallet.")).catch(fail).finally(() => setBusy(false)); }}>{due ? (zh ? "取回" : "Release") : (zh ? "未到期" : "Locked")}</button>
-              </li>
-            );
-          })}
-          {account && seats.every((row) => row.kind === 2) ? <li className="px-2 py-3 text-sm text-ink/60">{zh ? "没有锁着的晶圆。" : "No wafers are locked."}</li> : null}
+          {seats
+            .filter((row) => row.kind < 2)
+            .map((row) => {
+              const due = row.unlock * 1000 <= Date.now();
+              return (
+                <li
+                  key={row.id}
+                  className="grid gap-1 border-t border-gold/30 px-2 py-2 text-xs sm:grid-cols-[6rem_1fr_auto] sm:items-center"
+                >
+                  <span>
+                    {row.kind === 0 ? "NAND" : "LATCH"} #{row.id}
+                  </span>
+                  <span className="font-mono">
+                    {row.amount.toLocaleString("en-US")} ·{" "}
+                    {zh ? LOCK_TERMS[row.term]?.zh : LOCK_TERMS[row.term]?.en}
+                    <span className="mt-1 block text-ink/50">
+                      {sgt(row.start)} → {sgt(row.unlock)}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    disabled={busy || !due}
+                    className="min-h-8 border border-gold px-2 disabled:opacity-40"
+                    onClick={() => {
+                      if (!account) return;
+                      setBusy(true);
+                      releaseLock(account, BigInt(row.id))
+                        .then(() =>
+                          say(zh ? "晶圆已退回这个钱包。" : "The wafers are back in this wallet."),
+                        )
+                        .catch(fail)
+                        .finally(() => setBusy(false));
+                    }}
+                  >
+                    {due ? (zh ? "取回" : "Release") : zh ? "未到期" : "Locked"}
+                  </button>
+                </li>
+              );
+            })}
+          {account && seats.every((row) => row.kind === 2) ? (
+            <li className="px-2 py-3 text-sm text-ink/60">
+              {zh ? "没有锁着的晶圆。" : "No wafers are locked."}
+            </li>
+          ) : null}
         </ul>
-        <form className="mt-3 grid gap-2" onSubmit={(event) => { event.preventDefault(); if (!account) return; setBusy(true); lockWafer(account, kind, BigInt(waferAmt || "0"), waferTerm).then(() => say(zh ? "晶圆已锁上。到期才能取回。" : "Wafers are locked until the date.")).catch(fail).finally(() => setBusy(false)); }}>
+        <form
+          className="mt-3 grid gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!account) return;
+            setBusy(true);
+            lockWafer(account, kind, BigInt(waferAmt || "0"), waferTerm)
+              .then(() =>
+                say(zh ? "晶圆已锁上。到期才能取回。" : "Wafers are locked until the date."),
+              )
+              .catch(fail)
+              .finally(() => setBusy(false));
+          }}
+        >
           <div className="grid grid-cols-2 border border-gold">
-            {([0, 1] as const).map((id) => <button key={id} type="button" onClick={() => setKind(id)} className={`min-h-10 text-sm ${kind === id ? "bg-ink text-paper" : ""}`}>{id === 0 ? "NAND" : "LATCH"}</button>)}
+            {([0, 1] as const).map((id) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setKind(id)}
+                className={`min-h-10 text-sm ${kind === id ? "bg-ink text-paper" : ""}`}
+              >
+                {id === 0 ? "NAND" : "LATCH"}
+              </button>
+            ))}
           </div>
-          <input value={waferAmt} onChange={(event) => setWaferAmt(event.target.value.replace(/[^\d]/g, ""))} inputMode="numeric" placeholder={zh ? "数量" : "Amount"} className="min-h-11 border border-gold bg-transparent px-2 font-mono outline-none" />
-          <p className="text-xs text-ink/60">{zh ? `链上可质押：NAND ${nand.toLocaleString("en-US")} · LATCH ${latch.toLocaleString("en-US")}。锁着的不算在里面。` : `Stakeable on chain: NAND ${nand.toLocaleString("en-US")} · LATCH ${latch.toLocaleString("en-US")}. Locked ones are not included.`}</p>
-          <button type="button" className="min-h-8 justify-self-start text-xs underline" onClick={() => setWaferAmt((kind === 0 ? nand : latch).toString())}>{zh ? "填入当前这种的全部" : "Fill all of this kind"}</button>
+          <input
+            value={waferAmt}
+            onChange={(event) => setWaferAmt(event.target.value.replace(/[^\d]/g, ""))}
+            inputMode="numeric"
+            placeholder={zh ? "数量" : "Amount"}
+            className="min-h-11 border border-gold bg-transparent px-2 font-mono outline-none"
+          />
+          <p className="text-xs text-ink/60">
+            {zh
+              ? `链上可质押：NAND ${nand.toLocaleString("en-US")} · LATCH ${latch.toLocaleString("en-US")}。锁着的不算在里面。`
+              : `Stakeable on chain: NAND ${nand.toLocaleString("en-US")} · LATCH ${latch.toLocaleString("en-US")}. Locked ones are not included.`}
+          </p>
+          <button
+            type="button"
+            className="min-h-8 justify-self-start text-xs underline"
+            onClick={() => setWaferAmt((kind === 0 ? nand : latch).toString())}
+          >
+            {zh ? "填入当前这种的全部" : "Fill all of this kind"}
+          </button>
           <div className="grid grid-cols-3 gap-1 sm:grid-cols-5">
-            {LOCK_TERMS.map((row) => <button key={row.id} type="button" onClick={() => { setWaferTerm(row.id); setAckWafer(false); }} className={`min-h-10 border px-1 text-xs ${waferTerm === row.id ? "border-ink bg-ink text-paper" : "border-gold"}`}>{zh ? row.zh : row.en}</button>)}
+            {LOCK_TERMS.map((row) => (
+              <button
+                key={row.id}
+                type="button"
+                onClick={() => {
+                  setWaferTerm(row.id);
+                  setAckWafer(false);
+                }}
+                className={`min-h-10 border px-1 text-xs ${waferTerm === row.id ? "border-ink bg-ink text-paper" : "border-gold"}`}
+              >
+                {zh ? row.zh : row.en}
+              </button>
+            ))}
           </div>
-          <p className="border border-sell/40 px-2 py-2 text-xs leading-5">{zh ? `NAND 或 LATCH 锁到 ${waferUntil}（新加坡）。这段时间不能流片，也不算算力。` : `These wafers stay locked until ${waferUntil} Singapore time. They cannot be taped and do not count as weight.`}</p>
-          <label className="flex gap-2 text-xs"><input type="checkbox" checked={ackWafer} onChange={(event) => setAckWafer(event.target.checked)} />{zh ? "我知道锁着不能流片" : "I know these cannot be taped while locked"}</label>
-          <button type="submit" disabled={busy || !account || !ackWafer} className="min-h-11 bg-ink text-paper disabled:opacity-40">{zh ? "签名并质押晶圆" : "Sign and stake wafers"}</button>
+          <p className="border border-sell/40 px-2 py-2 text-xs leading-5">
+            {zh
+              ? `NAND 或 LATCH 锁到 ${waferUntil}（新加坡）。这段时间不能流片，也不算算力。`
+              : `These wafers stay locked until ${waferUntil} Singapore time. They cannot be taped and do not count as weight.`}
+          </p>
+          <label className="flex gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={ackWafer}
+              onChange={(event) => setAckWafer(event.target.checked)}
+            />
+            {zh ? "我知道锁着不能流片" : "I know these cannot be taped while locked"}
+          </label>
+          <button
+            type="submit"
+            disabled={busy || !account || !ackWafer}
+            className="min-h-11 bg-ink text-paper disabled:opacity-40"
+          >
+            {zh ? "签名并质押晶圆" : "Sign and stake wafers"}
+          </button>
         </form>
       </article>
 
@@ -204,26 +446,53 @@ export function StakeDesk() {
         </p>
         {!ready ? (
           <div className="mt-2 border border-gold/40 px-2 py-2 text-xs leading-5">
-            <p>{zh ? "电路锁仓还没部署。收费地址签一笔之后，这一页才能锁电路。" : "The circuit lock is not deployed. This page can lock a circuit after the fee address signs once."}</p>
-            <button type="button" className="mt-2 min-h-11 border border-gold px-3" disabled={busy} onClick={() => {
-              setBusy(true);
-              void (async () => {
-                try {
-                  const from = account ?? (await connectXLayer());
-                  setAccount(from);
-                  if (from.toLowerCase() !== FEE_TO.toLowerCase()) {
-                    say(zh ? `只有收费地址能部署。当前是 ${from}` : `Only the fee address can deploy. This wallet is ${from}`, true);
-                    return;
+            <p>
+              {zh
+                ? "电路锁仓还没部署。收费地址签一笔之后，这一页才能锁电路。"
+                : "The circuit lock is not deployed. This page can lock a circuit after the fee address signs once."}
+            </p>
+            <button
+              type="button"
+              className="mt-2 min-h-11 border border-gold px-3"
+              disabled={busy}
+              onClick={() => {
+                setBusy(true);
+                void (async () => {
+                  try {
+                    const from = account ?? (await connectXLayer());
+                    setAccount(from);
+                    if (from.toLowerCase() !== FEE_TO.toLowerCase()) {
+                      say(
+                        zh
+                          ? `只有收费地址能部署。当前是 ${from}`
+                          : `Only the fee address can deploy. This wallet is ${from}`,
+                        true,
+                      );
+                      return;
+                    }
+                    const addr = await deployCircuitLock(from);
+                    say(
+                      zh
+                        ? `已部署 ${addr}。还没写进网页。把这串地址发我，我写上之后大家才能锁。`
+                        : `Deployed ${addr}. It is not written into the site yet. Send me this address and I will pin it.`,
+                    );
+                  } catch {
+                    say(
+                      zh
+                        ? "没有部署成。签名时把 Gas Limit 改成 3000000。"
+                        : "It did not deploy. Set Gas Limit to 3000000.",
+                      true,
+                    );
+                  } finally {
+                    setBusy(false);
                   }
-                  const addr = await deployCircuitLock(from);
-                  say(zh ? `已部署 ${addr}。还没写进网页。把这串地址发我，我写上之后大家才能锁。` : `Deployed ${addr}. It is not written into the site yet. Send me this address and I will pin it.`);
-                } catch {
-                  say(zh ? "没有部署成。签名时把 Gas Limit 改成 3000000。" : "It did not deploy. Set Gas Limit to 3000000.", true);
-                } finally {
-                  setBusy(false);
-                }
-              })();
-            }}>{zh ? "收费地址部署电路锁仓（Gas Limit 填 3000000）" : "Fee address deploys the circuit lock (Gas Limit 3000000)"}</button>
+                })();
+              }}
+            >
+              {zh
+                ? "收费地址部署电路锁仓（Gas Limit 填 3000000）"
+                : "Fee address deploys the circuit lock (Gas Limit 3000000)"}
+            </button>
           </div>
         ) : (
           <ul className="mt-2 max-h-64 overflow-auto border border-gold/40">
@@ -231,52 +500,189 @@ export function StakeDesk() {
               const due = row.unlock * 1000 <= Date.now();
               const pct = weight > 0n ? Number((row.gates * 10000n) / weight) / 100 : 0;
               return (
-                <li key={row.id} className="grid gap-1 border-t border-gold/30 px-2 py-2 text-xs sm:grid-cols-[1fr_auto] sm:items-center">
+                <li
+                  key={row.id}
+                  className="grid gap-1 border-t border-gold/30 px-2 py-2 text-xs sm:grid-cols-[1fr_auto] sm:items-center"
+                >
                   <span>
-                    #{row.circuitId} · {row.gates.toLocaleString("en-US")} {zh ? "门" : "gates"} · {pct.toLocaleString("en-US", { maximumFractionDigits: 2 })}%
-                    <span className="mt-1 block font-mono text-ink/50">{zh ? LOCK_TERMS[row.term]?.zh : LOCK_TERMS[row.term]?.en} · {sgt(row.start)} → {sgt(row.unlock)} · {zh ? "可领" : "Claimable"} {amt(row.pending)}</span>
+                    #{row.circuitId} · {row.gates.toLocaleString("en-US")} {zh ? "门" : "gates"} ·{" "}
+                    {pct.toLocaleString("en-US", { maximumFractionDigits: 2 })}%
+                    <span className="mt-1 block font-mono text-ink/50">
+                      {zh ? LOCK_TERMS[row.term]?.zh : LOCK_TERMS[row.term]?.en} · {sgt(row.start)}{" "}
+                      → {sgt(row.unlock)} · {zh ? "可领" : "Claimable"} {amt(row.pending)}
+                    </span>
                   </span>
                   <span className="flex gap-1">
-                    <button type="button" disabled={busy || !due || row.pending === 0n} className="min-h-8 border border-gold px-2 disabled:opacity-40" onClick={() => { if (!account) return; setBusy(true); claimFreshTape(account, BigInt(row.id)).then(() => say(zh ? "TAPE 已进这个钱包。电路还锁着，算力还在。" : "TAPE is in this wallet. The circuit stays locked and keeps its weight.")).catch(fail).finally(() => setBusy(false)); }}>{due ? (zh ? "领 TAPE" : "Claim TAPE") : (zh ? "未到期" : "Locked")}</button>
-                    <button type="button" disabled={busy || !due} className="min-h-8 border border-gold px-2 disabled:opacity-40" onClick={() => { if (!account) return; setBusy(true); claimFreshCircuit(account, BigInt(row.id)).then(() => say(zh ? "电路已退回。没领的 TAPE 在同一笔里进了钱包。算力已停，要再挖就去挖矿页开工。" : "The circuit is back. Unclaimed TAPE came with it. Weight has stopped. Open it on the mine page to mine again.")).catch(fail).finally(() => setBusy(false)); }}>{due ? (zh ? "领电路" : "Claim circuit") : (zh ? "未到期" : "Locked")}</button>
+                    <button
+                      type="button"
+                      disabled={busy || !due || row.pending === 0n}
+                      className="min-h-8 border border-gold px-2 disabled:opacity-40"
+                      onClick={() => {
+                        if (!account) return;
+                        setBusy(true);
+                        claimFreshTape(account, BigInt(row.id))
+                          .then(() =>
+                            say(
+                              zh
+                                ? "TAPE 已进这个钱包。电路还锁着，算力还在。"
+                                : "TAPE is in this wallet. The circuit stays locked and keeps its weight.",
+                            ),
+                          )
+                          .catch(fail)
+                          .finally(() => setBusy(false));
+                      }}
+                    >
+                      {due ? (zh ? "领 TAPE" : "Claim TAPE") : zh ? "未到期" : "Locked"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy || !due}
+                      className="min-h-8 border border-gold px-2 disabled:opacity-40"
+                      onClick={() => {
+                        if (!account) return;
+                        setBusy(true);
+                        claimFreshCircuit(account, BigInt(row.id))
+                          .then(() =>
+                            say(
+                              zh
+                                ? "电路已退回。没领的 TAPE 在同一笔里进了钱包。算力已停，要再挖就去挖矿页开工。"
+                                : "The circuit is back. Unclaimed TAPE came with it. Weight has stopped. Open it on the mine page to mine again.",
+                            ),
+                          )
+                          .catch(fail)
+                          .finally(() => setBusy(false));
+                      }}
+                    >
+                      {due ? (zh ? "领电路" : "Claim circuit") : zh ? "未到期" : "Locked"}
+                    </button>
                   </span>
                 </li>
               );
             })}
-            {account && fresh.length === 0 ? <li className="px-2 py-3 text-sm text-ink/60">{zh ? "还没有锁着的电路。" : "No circuit is locked."}</li> : null}
+            {account && fresh.length === 0 ? (
+              <li className="px-2 py-3 text-sm text-ink/60">
+                {zh ? "还没有锁着的电路。" : "No circuit is locked."}
+              </li>
+            ) : null}
           </ul>
         )}
-        <form className="mt-3 grid gap-2" onSubmit={(event) => {
-          event.preventDefault();
-          if (!account || !ready || !circuitId) return;
-          setBusy(true);
-          lockFreshCircuit(account, BigInt(circuitId), circuitTerm).then(() => say(zh ? "电路已锁上。算力记在锁仓合约上。到期才能领。" : "The circuit is locked. Its weight sits on the lock. Claims wait until the date.")).catch(fail).finally(() => setBusy(false));
-        }}>
+        <form
+          className="mt-3 grid gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!account || !ready || !circuitId) return;
+            setBusy(true);
+            lockFreshCircuit(account, BigInt(circuitId), circuitTerm)
+              .then(() =>
+                say(
+                  zh
+                    ? "电路已锁上。算力记在锁仓合约上。到期才能领。"
+                    : "The circuit is locked. Its weight sits on the lock. Claims wait until the date.",
+                ),
+              )
+              .catch(fail)
+              .finally(() => setBusy(false));
+          }}
+        >
           <ul className="max-h-48 overflow-auto border border-gold/40">
             {owned.map((row) => (
               <li key={row.id}>
-                <button type="button" disabled={!ready} onClick={() => { setCircuitId(row.id); setAckCircuit(false); }} className={`flex w-full items-center justify-between gap-2 px-2 py-2 text-left text-xs ${circuitId === row.id ? "bg-ink text-paper" : ""}`}>
-                  <span>#{row.id} · {Number(row.gates).toLocaleString("en-US")} {zh ? "门" : "gates"} · {row.on ? (zh ? "挖矿中" : "Mining") : (zh ? "未开工" : "Not open")}</span>
+                <button
+                  type="button"
+                  disabled={!ready}
+                  onClick={() => {
+                    setCircuitId(row.id);
+                    setAckCircuit(false);
+                  }}
+                  className={`flex w-full items-center justify-between gap-2 px-2 py-2 text-left text-xs ${circuitId === row.id ? "bg-ink text-paper" : ""}`}
+                >
+                  <span>
+                    #{row.id} · {Number(row.gates).toLocaleString("en-US")} {zh ? "门" : "gates"} ·{" "}
+                    {row.on ? (zh ? "挖矿中" : "Mining") : zh ? "未开工" : "Not open"}
+                  </span>
                 </button>
               </li>
             ))}
-            {account && owned.length === 0 ? <li className="px-2 py-3 text-sm text-ink/60">{zh ? "这个地址没有可锁的电路。" : "This address has no circuit it can lock."}</li> : null}
+            {account && owned.length === 0 ? (
+              <li className="px-2 py-3 text-sm text-ink/60">
+                {zh ? "这个地址没有可锁的电路。" : "This address has no circuit it can lock."}
+              </li>
+            ) : null}
           </ul>
           <div className="grid grid-cols-3 gap-1 sm:grid-cols-5">
-            {LOCK_TERMS.map((row) => <button key={row.id} type="button" onClick={() => { setCircuitTerm(row.id); setAckCircuit(false); }} className={`min-h-10 border px-1 text-xs ${circuitTerm === row.id ? "border-ink bg-ink text-paper" : "border-gold"}`}>{zh ? row.zh : row.en}</button>)}
+            {LOCK_TERMS.map((row) => (
+              <button
+                key={row.id}
+                type="button"
+                onClick={() => {
+                  setCircuitTerm(row.id);
+                  setAckCircuit(false);
+                }}
+                className={`min-h-10 border px-1 text-xs ${circuitTerm === row.id ? "border-ink bg-ink text-paper" : "border-gold"}`}
+              >
+                {zh ? row.zh : row.en}
+              </button>
+            ))}
           </div>
-          <p className="border border-sell/40 px-2 py-2 text-xs leading-5">{zh ? `锁到 ${circuitUntil}（新加坡）。到期前电路和 TAPE 都不能领。到期后两样都能领：可以只领 TAPE，电路继续留着挖；也可以领电路，没领的 TAPE 同一笔进钱包。锁上这一下，这张电路上已经记给你的 TAPE 会先打进钱包。` : `Locked until ${circuitUntil} Singapore time. Before that date neither the circuit nor the TAPE can leave. After it, both can: claim TAPE alone and the circuit keeps mining, or claim the circuit and any unclaimed TAPE comes with it. TAPE already booked to this wallet is paid out when you lock.`}</p>
-          <label className="flex gap-2 text-xs"><input type="checkbox" checked={ackCircuit} onChange={(event) => setAckCircuit(event.target.checked)} />{zh ? "我知道到期前电路和 TAPE 都领不了。到期后两样都能领。" : "I know neither the circuit nor the TAPE can leave early. After the date, both can."}</label>
-          <button type="submit" disabled={busy || !account || !ready || !ackCircuit || !circuitId} className="min-h-11 bg-ink text-paper disabled:opacity-40">{zh ? "签名并质押电路" : "Sign and stake the circuit"}</button>
+          <p className="border border-sell/40 px-2 py-2 text-xs leading-5">
+            {zh
+              ? `锁到 ${circuitUntil}（新加坡）。到期前电路和 TAPE 都不能领。到期后两样都能领：可以只领 TAPE，电路继续留着挖；也可以领电路，没领的 TAPE 同一笔进钱包。锁上这一下，这张电路上已经记给你的 TAPE 会先打进钱包。`
+              : `Locked until ${circuitUntil} Singapore time. Before that date neither the circuit nor the TAPE can leave. After it, both can: claim TAPE alone and the circuit keeps mining, or claim the circuit and any unclaimed TAPE comes with it. TAPE already booked to this wallet is paid out when you lock.`}
+          </p>
+          <label className="flex gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={ackCircuit}
+              onChange={(event) => setAckCircuit(event.target.checked)}
+            />
+            {zh
+              ? "我知道到期前电路和 TAPE 都领不了。到期后两样都能领。"
+              : "I know neither the circuit nor the TAPE can leave early. After the date, both can."}
+          </label>
+          <button
+            type="submit"
+            disabled={busy || !account || !ready || !ackCircuit || !circuitId}
+            className="min-h-11 bg-ink text-paper disabled:opacity-40"
+          >
+            {zh ? "签名并质押电路" : "Sign and stake the circuit"}
+          </button>
         </form>
       </article>
 
-      {!account ? <button type="button" className="min-h-12 bg-ink text-paper" onClick={() => { setBusy(true); connectXLayer().then(setAccount).catch(() => say(zh ? "钱包没有连上。" : "The wallet did not connect.", true)).finally(() => setBusy(false)); }}>{zh ? "连接钱包" : "Connect"}</button> : null}
+      {!account ? (
+        <button
+          type="button"
+          className="min-h-12 bg-ink text-paper"
+          onClick={() => {
+            setBusy(true);
+            connectXLayer()
+              .then(setAccount)
+              .catch(() => say(zh ? "钱包没有连上。" : "The wallet did not connect.", true))
+              .finally(() => setBusy(false));
+          }}
+        >
+          {zh ? "连接钱包" : "Connect"}
+        </button>
+      ) : null}
       {note ? <p className={`text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
       <p className="break-all text-xs text-ink/50">
-        <a className="underline" href={`${XLAYER.explorer}/address/${TAPE_LOCK}`} target="_blank" rel="noreferrer">{zh ? "锁仓" : "Lock"} {TAPE_LOCK}</a>
+        <a
+          className="underline"
+          href={`${XLAYER.explorer}/address/${TAPE_LOCK}`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          {zh ? "锁仓" : "Lock"} {TAPE_LOCK}
+        </a>
         {" · "}
-        <a className="underline" href={`${XLAYER.explorer}/address/${TAPE_POOL}`} target="_blank" rel="noreferrer">{zh ? "旧 TAPE 池 · 只撤回" : "Old TAPE pool · withdraw only"} {TAPE_POOL}</a>
+        <a
+          className="underline"
+          href={`${XLAYER.explorer}/address/${TAPE_POOL}`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          {zh ? "旧 TAPE 池 · 只撤回" : "Old TAPE pool · withdraw only"} {TAPE_POOL}
+        </a>
       </p>
     </section>
   );

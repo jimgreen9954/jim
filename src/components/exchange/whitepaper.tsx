@@ -159,8 +159,8 @@ const zhBody: Section[] = [
   {
     h: "奖励",
     ps: [
-      "每一份新红包都是一份新合约。官方创建只有该链的部署地址能看见、能开。其他人只看见个人创建，任何人都能开。发出时选定可领时间：24 小时、一星期或一个月。创建时把奖金打进这一份。同一份里，一个地址每个新加坡日只能领一次。另一份新红包不受这一次影响，可以再参加。时间过了就不能再领，没领完的由放钱的人取回自己的那一份。",
-      "点参与后，先看清是不是愿意花 OKB 或 BNB 去买这一枚币，也可以拒绝。同意之后才去交易。交易成功再点验证，验证通过才打开红包，再点领取，资产才进这个钱包。每一次点击最多弹出一次钱包。需要换链或授权时，先完成那一步，再点一次，才做下一笔。X Layer 用 OKB 计价，BSC 用 BNB 计价。必须是普通钱包自己签。合约、代付和没做这笔交易的地址都不能领。以前的红包合约不再使用。",
+      "每一份新红包都是一份新合约。官方创建只有该链的部署地址能看见、能开。其他人只看见个人创建，任何人都能开。链的切换只在红包里。发出时选定可领时间：24 小时、一星期或一个月。创建时把奖金打进这一份。卡片写明已领多少、还剩多少。已领按链上计算：读到入账时，用入账减去池中余额；读不到入账时，把这一份的领取记录加总。同一份里，一个地址每个新加坡日只能领一次。另一份新红包不受这一次影响，可以再参加。时间过了就不能再领，没领完的由放钱的人取回自己的那一份。",
+      "任务是一笔兑换，不是把钱划走。买入写成用多少 OKB 或 BNB 换回约多少这一枚币，数量按当时池子报价。卖出写成卖出约多少这一枚币、换回多少 OKB 或 BNB。点参与后先看清这笔兑换，可以同意，也可以拒绝。同意之后才去交易。交易成功再点验证。验证通过才打开红包，再点领取，资产才进这个钱包。兑换还没完成、或者还没验证通过，不能领取。每一次点击最多弹出一次钱包。需要换链或授权时，先完成那一步，再点一次，才做下一笔。X Layer 用 OKB 计价，BSC 用 BNB 计价。必须是普通钱包自己签。合约、代付和没做这笔交易的地址都不能领。以前的红包合约不再使用。",
       "以前的 NAND 礼包仍在 X Layer 0x5374DFfD3186FfEDAC46Cc6c9545B9e9e2CEF45b，BEM 礼包仍在 BSC 0xa29f86319E66DAdF1e30548bcC593fa91CBB7278。这一页不再代领，也不再往那两份里放。",
     ],
   },
@@ -349,8 +349,8 @@ const en: Section[] = [
   {
     h: "Rewards",
     ps: [
-      "Each new red packet is its own contract. Only that chain's deployer can see and open an official round. Everyone else sees personal rounds, and anyone can open one. The sender chooses 24 hours, one week, or one month. The creator puts the prize into that round. On the same round, one address can claim once per Singapore day. A later round is not blocked by that claim. After the window ends, claims stop, and each depositor takes back only their own remainder.",
-      "Joining asks whether the wallet will spend OKB or BNB to buy that coin. The user can refuse. The trade starts only after they agree. After the trade, they check it. The packet opens only when the check passes, and the asset is paid only when they claim. Each tap opens the wallet at most once. A chain switch or an approval finishes first. The next tap does the next step. X Layer is priced in OKB and BSC in BNB. The signer has to be an ordinary wallet. A contract, a relayer, or an address that did not make the trade cannot claim. The earlier red packet contracts are no longer used.",
+      "Each new red packet is its own contract. Only that chain's deployer can see and open an official round. Everyone else sees personal rounds, and anyone can open one. The chain switch stays inside the packet. The sender chooses 24 hours, one week, or one month. The creator puts the prize into that round. The card shows how much has been claimed and how much remains. Claimed is funded minus the balance still in the pool when the funding event is found. Otherwise it is the sum of claim records on that round. On the same round, one address can claim once per Singapore day. A later round is not blocked by that claim. After the window ends, claims stop, and each depositor takes back only their own remainder.",
+      "The task is a swap, not a transfer that merely leaves the wallet. A buy states how much OKB or BNB is swapped for about how much of that coin, using the pool quote. A sell states about how much of that coin is sold for how much OKB or BNB. Joining shows that swap first. The user can agree or refuse. The trade starts only after they agree. After the trade, they check it. The packet opens only when the check passes, and the asset is paid only when they claim. The packet cannot be claimed before the swap is finished and checked. Each tap opens the wallet at most once. A chain switch or an approval finishes first. The next tap does the next step. X Layer is priced in OKB and BSC in BNB. The signer has to be an ordinary wallet. A contract, a relayer, or an address that did not make the trade cannot claim. The earlier red packet contracts are no longer used.",
       "The old NAND gift remains on X Layer at 0x5374DFfD3186FfEDAC46Cc6c9545B9e9e2CEF45b. The old BEM gift remains on BSC at 0xa29f86319E66DAdF1e30548bcC593fa91CBB7278. This page no longer claims from them or adds to them.",
     ],
   },
@@ -409,7 +409,10 @@ const specZh = [
   ["一张流片", "18,000 NAND，或 30,000 LATCH。更大写不进链"],
   ["电路何时在", "回执成功就在链上。页面名单稍后才显示"],
   ["电路现货", "按张。卖方实收 99.8%。日产能价是估算，没开工不是到账"],
-  ["Circuit Punk 合成卡", "先在 nft.tapeliquid.net 确定。再去 app.tapeliquid.net 交易。每月领一次，次月 7 天内，先到先得。铜片 0.16/0.14，银盖 0.12/0.10，金线 0.08/0.06，极紫外 0.06/0.04，仿极紫外 0.08"],
+  [
+    "Circuit Punk 合成卡",
+    "先在 nft.tapeliquid.net 确定。再去 app.tapeliquid.net 交易。每月领一次，次月 7 天内，先到先得。铜片 0.16/0.14，银盖 0.12/0.10，金线 0.08/0.06，极紫外 0.06/0.04，仿极紫外 0.08",
+  ],
 ];
 
 const specEn = [
@@ -420,13 +423,25 @@ const specEn = [
   ["Split", "Verified 99%, unverified 1%. Unverified is 0 in the first week"],
   ["Desk fee", "0.20% of what is paid, on top of the pool fee"],
   ["Spot", "The workshop book is live. New TAPE pool deposits are closed"],
-  ["Pool lock", "Existing positions: 3 months, 6 months, 1 year, 2 years, 3 years. Withdraw only at expiry. No new deposits"],
-  ["Dividend lock", "3 months, 6 months, 9 months, 1 year, 2 years, 3 years. Principal only at expiry"],
+  [
+    "Pool lock",
+    "Existing positions: 3 months, 6 months, 1 year, 2 years, 3 years. Withdraw only at expiry. No new deposits",
+  ],
+  [
+    "Dividend lock",
+    "3 months, 6 months, 9 months, 1 year, 2 years, 3 years. Principal only at expiry",
+  ],
   ["Wafer and circuit lock", "6 months, 1 year, 3 years, 4 years, 5 years"],
   ["One tape-out", "18,000 NAND, or 30,000 LATCH. Larger than that does not fit"],
   ["When the circuit exists", "On chain when the receipt succeeds. The page list shows it later"],
-  ["Circuit spot", "Sold whole. The seller receives 99.8 percent. The day price is an estimate, not a receipt"],
-  ["Circuit Punk card", "Confirm at nft.tapeliquid.net first, then trade at app.tapeliquid.net. Claim once a month, within the first 7 days, first come first served. Copper 0.16/0.14, silver 0.12/0.10, gold 0.08/0.06, EUV 0.06/0.04, faux 0.08"],
+  [
+    "Circuit spot",
+    "Sold whole. The seller receives 99.8 percent. The day price is an estimate, not a receipt",
+  ],
+  [
+    "Circuit Punk card",
+    "Confirm at nft.tapeliquid.net first, then trade at app.tapeliquid.net. Claim once a month, within the first 7 days, first come first served. Copper 0.16/0.14, silver 0.12/0.10, gold 0.08/0.06, EUV 0.06/0.04, faux 0.08",
+  ],
 ];
 
 const nowZh = [
@@ -435,9 +450,15 @@ const nowZh = [
   ["现在的日排放", "7,200，从部署时起。没有 1,000 档，也没有改率入口"],
   ["现在的权重", "门数，也就是 b*。P = 1。q 不能大于 1"],
   ["总供应", "只随领取增加。10 万枚开盘种子没有另铸"],
-  ["TAPE 池", "0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641，没有管理员。不再新加。已有仓到期可撤。流通仍减池中余额"],
+  [
+    "TAPE 池",
+    "0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641，没有管理员。不再新加。已有仓到期可撤。流通仍减池中余额",
+  ],
   ["锁仓", "0xA28390924607F08aaD8d03F512B41b6a1c012Ace，没有管理员"],
-  ["期限质押", "0x9D603A45321a3aDbFcAD0E49Fd944Cc281Baa833。以前的锁仓 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A，只取不存"],
+  [
+    "期限质押",
+    "0x9D603A45321a3aDbFcAD0E49Fd944Cc281Baa833。以前的锁仓 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A，只取不存",
+  ],
   ["还不能签", "TAPE 跨链"],
 ];
 
@@ -447,9 +468,15 @@ const nowEn = [
   ["Emission today", "7,200 from deployment. There is no 1,000 tier and no switch"],
   ["Weight today", "Gate count, which is b*. P = 1. q cannot be above 1"],
   ["Supply", "Grows only when claimed. The 100,000 seed was not minted"],
-  ["TAPE pool", "0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641, no admin. No new deposits. Existing positions withdraw at expiry. Circulating supply still subtracts the pool"],
+  [
+    "TAPE pool",
+    "0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641, no admin. No new deposits. Existing positions withdraw at expiry. Circulating supply still subtracts the pool",
+  ],
   ["Lock", "0xA28390924607F08aaD8d03F512B41b6a1c012Ace, no admin"],
-  ["Timed stake", "0x9D603A45321a3aDbFcAD0E49Fd944Cc281Baa833. Earlier locks stay at 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A and can only be withdrawn"],
+  [
+    "Timed stake",
+    "0x9D603A45321a3aDbFcAD0E49Fd944Cc281Baa833. Earlier locks stay at 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A and can only be withdrawn",
+  ],
   ["Not signable yet", "A TAPE bridge"],
 ];
 export function Whitepaper() {
@@ -466,11 +493,23 @@ export function Whitepaper() {
   return (
     <div className="lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] lg:items-start">
       <aside className="border-b border-gold/40 bg-paper lg:sticky lg:top-14 lg:max-h-[calc(100dvh-4rem)] lg:overflow-y-auto lg:border-b-0 lg:border-r">
-        <p className="px-3 pt-3 text-sm font-medium sm:px-4 sm:pt-4">{zh ? "TAPELIQUID 说明" : "TAPELIQUID guide"}</p>
-        <nav className="mt-2 flex gap-1 overflow-x-auto px-2 pb-2 lg:flex-col lg:overflow-visible lg:px-0 lg:pb-6" aria-label={zh ? "目录" : "Contents"}>
+        <p className="px-3 pt-3 text-sm font-medium sm:px-4 sm:pt-4">
+          {zh ? "TAPELIQUID 说明" : "TAPELIQUID guide"}
+        </p>
+        <nav
+          className="mt-2 flex gap-1 overflow-x-auto px-2 pb-2 lg:flex-col lg:overflow-visible lg:px-0 lg:pb-6"
+          aria-label={zh ? "目录" : "Contents"}
+        >
           {sections.map((section, i) => (
-            <button key={section.h} type="button" onClick={() => jump(i)} className={`shrink-0 border-b-2 px-2 py-2 text-left text-[13px] lg:border-b-0 lg:border-l-2 lg:px-4 ${on === i ? "border-ink bg-card font-medium" : "border-transparent text-ink/60"}`}>
-              <span className="mr-1 font-mono text-[11px] text-ink/40">{String(i + 1).padStart(2, "0")}</span>
+            <button
+              key={section.h}
+              type="button"
+              onClick={() => jump(i)}
+              className={`shrink-0 border-b-2 px-2 py-2 text-left text-[13px] lg:border-b-0 lg:border-l-2 lg:px-4 ${on === i ? "border-ink bg-card font-medium" : "border-transparent text-ink/60"}`}
+            >
+              <span className="mr-1 font-mono text-[11px] text-ink/40">
+                {String(i + 1).padStart(2, "0")}
+              </span>
               {section.h}
             </button>
           ))}
@@ -478,7 +517,9 @@ export function Whitepaper() {
       </aside>
       <article className="min-w-0 overflow-x-hidden px-3 py-5 sm:px-6 lg:px-10">
         <p className="text-[11px] tracking-[0.22em] text-gold">TAPELIQUID</p>
-        <h2 className="mt-2 max-w-3xl font-display text-3xl leading-tight sm:text-5xl">{zh ? "从这里开始使用 TAPELIQUID" : "Start here with TAPELIQUID"}</h2>
+        <h2 className="mt-2 max-w-3xl font-display text-3xl leading-tight sm:text-5xl">
+          {zh ? "从这里开始使用 TAPELIQUID" : "Start here with TAPELIQUID"}
+        </h2>
         <details className="mt-4 max-w-2xl">
           <summary className="cursor-pointer text-sm font-medium">{zh ? "说明" : "Guide"}</summary>
           <p className="mt-3 text-sm leading-7 text-ink/75">
@@ -489,11 +530,37 @@ export function Whitepaper() {
         </details>
         <div className="mt-6 grid border border-gold/40 sm:grid-cols-3">
           {[
-            ["01", zh ? "第一次使用" : "First visit", zh ? "TAPE、NAND、LATCH 和电路各是什么" : "What TAPE, NAND, LATCH, and a circuit are", 0],
-            ["02", zh ? "开始交易" : "Trade", zh ? "现货盘口、永续和电路按张定价" : "The spot book, perpetuals, and circuit prices", sections.findIndex((section) => section.h === (zh ? "现货" : "Spot"))],
-            ["03", zh ? "地址与参数" : "Addresses", zh ? "收费地址、排放和现在链上的合约" : "The fee address, emission, and live contracts", sections.length],
+            [
+              "01",
+              zh ? "第一次使用" : "First visit",
+              zh ? "TAPE、NAND、LATCH 和电路各是什么" : "What TAPE, NAND, LATCH, and a circuit are",
+              0,
+            ],
+            [
+              "02",
+              zh ? "开始交易" : "Trade",
+              zh ? "现货盘口、永续和电路按张定价" : "The spot book, perpetuals, and circuit prices",
+              sections.findIndex((section) => section.h === (zh ? "现货" : "Spot")),
+            ],
+            [
+              "03",
+              zh ? "地址与参数" : "Addresses",
+              zh
+                ? "收费地址、排放和现在链上的合约"
+                : "The fee address, emission, and live contracts",
+              sections.length,
+            ],
           ].map(([n, title, line, target]) => (
-            <button key={String(n)} type="button" onClick={() => (typeof target === "number" && target >= 0 && target < sections.length ? jump(target) : document.getElementById("paper-now")?.scrollIntoView({ behavior: "smooth" }))} className="border-gold/40 px-4 py-4 text-left not-last:border-b sm:not-last:border-b-0 sm:[&:not(:last-child)]:border-r">
+            <button
+              key={String(n)}
+              type="button"
+              onClick={() =>
+                typeof target === "number" && target >= 0 && target < sections.length
+                  ? jump(target)
+                  : document.getElementById("paper-now")?.scrollIntoView({ behavior: "smooth" })
+              }
+              className="border-gold/40 px-4 py-4 text-left not-last:border-b sm:not-last:border-b-0 sm:[&:not(:last-child)]:border-r"
+            >
               <span className="font-mono text-[11px] text-gold">{n}</span>
               <span className="mt-2 block text-base font-medium">{title}</span>
               <span className="mt-1 block text-xs leading-5 text-ink/60">{line}</span>
@@ -510,63 +577,116 @@ export function Whitepaper() {
         </details>
         <div id="paper-now" className="mt-8 grid scroll-mt-24 gap-4">
           <div className="overflow-x-auto border border-gold/30">
-          <table className="w-full text-left text-sm">
-            <caption className="px-3 py-3 text-left text-xs tracking-widest text-gold">{zh ? "参数" : "Parameters"}</caption>
-            <tbody>
-              {(zh ? specZh : specEn).map(([k, v]) => (
-                <tr key={k} className="border-t border-gold/20">
-                  <th className="w-28 min-w-24 px-3 py-2 align-top font-normal text-ink/55 sm:w-36">{k}</th>
-                  <td className="break-words px-3 py-2">{v}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+            <table className="w-full text-left text-sm">
+              <caption className="px-3 py-3 text-left text-xs tracking-widest text-gold">
+                {zh ? "参数" : "Parameters"}
+              </caption>
+              <tbody>
+                {(zh ? specZh : specEn).map(([k, v]) => (
+                  <tr key={k} className="border-t border-gold/20">
+                    <th className="w-28 min-w-24 px-3 py-2 align-top font-normal text-ink/55 sm:w-36">
+                      {k}
+                    </th>
+                    <td className="break-words px-3 py-2">{v}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
           <div className="overflow-x-auto border border-gold/30">
-          <table className="w-full text-left text-sm">
-            <caption className="px-3 py-3 text-left text-xs tracking-widest text-gold">{zh ? "现在链上" : "On chain now"}</caption>
-            <tbody>
-              {(zh ? nowZh : nowEn).map(([k, v]) => (
-                <tr key={k} className="border-t border-gold/20">
-                  <th className="w-28 min-w-24 px-3 py-2 align-top font-normal text-ink/55 sm:w-36">{k}</th>
-                  <td className="break-all px-3 py-2 font-mono text-[12px] leading-5 sm:text-sm">{v}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+            <table className="w-full text-left text-sm">
+              <caption className="px-3 py-3 text-left text-xs tracking-widest text-gold">
+                {zh ? "现在链上" : "On chain now"}
+              </caption>
+              <tbody>
+                {(zh ? nowZh : nowEn).map(([k, v]) => (
+                  <tr key={k} className="border-t border-gold/20">
+                    <th className="w-28 min-w-24 px-3 py-2 align-top font-normal text-ink/55 sm:w-36">
+                      {k}
+                    </th>
+                    <td className="break-all px-3 py-2 font-mono text-[12px] leading-5 sm:text-sm">
+                      {v}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
-          <a className="border border-gold/40 px-3 py-3" href={`${BSC.explorer}/address/${BSC_SAFE}`} target="_blank" rel="noreferrer">
-            <span className="block text-[11px] tracking-widest text-gold">{zh ? "BSC 多签" : "BSC multisig"}</span>
+          <a
+            className="border border-gold/40 px-3 py-3"
+            href={`${BSC.explorer}/address/${BSC_SAFE}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <span className="block text-[11px] tracking-widest text-gold">
+              {zh ? "BSC 多签" : "BSC multisig"}
+            </span>
             <span className="mt-1 block break-all font-mono text-xs">{BSC_SAFE}</span>
           </a>
-          <a className="border border-gold/40 px-3 py-3" href={`${XLAYER.explorer}/address/${XLAYER_SAFE}`} target="_blank" rel="noreferrer">
-            <span className="block text-[11px] tracking-widest text-gold">{zh ? "X Layer 多签" : "X Layer multisig"}</span>
+          <a
+            className="border border-gold/40 px-3 py-3"
+            href={`${XLAYER.explorer}/address/${XLAYER_SAFE}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <span className="block text-[11px] tracking-widest text-gold">
+              {zh ? "X Layer 多签" : "X Layer multisig"}
+            </span>
             <span className="mt-1 block break-all font-mono text-xs">{XLAYER_SAFE}</span>
           </a>
-          <a className="border border-gold/40 px-3 py-3" href={`${BSC.explorer}/address/${FEE_TO}`} target="_blank" rel="noreferrer">
-            <span className="block text-[11px] tracking-widest text-gold">{zh ? "旧合约仍进" : "Older contracts"}</span>
+          <a
+            className="border border-gold/40 px-3 py-3"
+            href={`${BSC.explorer}/address/${FEE_TO}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <span className="block text-[11px] tracking-widest text-gold">
+              {zh ? "旧合约仍进" : "Older contracts"}
+            </span>
             <span className="mt-1 block break-all font-mono text-xs">{FEE_TO}</span>
           </a>
-          <a className="border border-gold/40 px-3 py-3" href={`${XLAYER.explorer}/address/${TAPE}`} target="_blank" rel="noreferrer">
+          <a
+            className="border border-gold/40 px-3 py-3"
+            href={`${XLAYER.explorer}/address/${TAPE}`}
+            target="_blank"
+            rel="noreferrer"
+          >
             <span className="block text-[11px] tracking-widest text-gold">TAPE</span>
             <span className="mt-1 block break-all font-mono text-xs">{TAPE}</span>
           </a>
-          <a className="border border-gold/40 px-3 py-3" href={`${XLAYER.explorer}/address/${TAPE_MINE}`} target="_blank" rel="noreferrer">
-            <span className="block text-[11px] tracking-widest text-gold">{zh ? "挖矿" : "Mine"}</span>
+          <a
+            className="border border-gold/40 px-3 py-3"
+            href={`${XLAYER.explorer}/address/${TAPE_MINE}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <span className="block text-[11px] tracking-widest text-gold">
+              {zh ? "挖矿" : "Mine"}
+            </span>
             <span className="mt-1 block break-all font-mono text-xs">{TAPE_MINE}</span>
           </a>
         </div>
         <div className="mt-10 flex flex-col gap-3">
           {sections.map((section, i) => (
-            <details key={section.h} id={`paper-${i}`} className="scroll-mt-24 border-t border-gold/30 pt-3">
+            <details
+              key={section.h}
+              id={`paper-${i}`}
+              className="scroll-mt-24 border-t border-gold/30 pt-3"
+            >
               <summary className="cursor-pointer">
-                <span className="font-mono text-[11px] text-gold">{String(i + 1).padStart(2, "0")} / {section.h}</span>
-                <span className="mt-2 block font-display text-2xl leading-none sm:text-3xl">{section.h}</span>
+                <span className="font-mono text-[11px] text-gold">
+                  {String(i + 1).padStart(2, "0")} / {section.h}
+                </span>
+                <span className="mt-2 block font-display text-2xl leading-none sm:text-3xl">
+                  {section.h}
+                </span>
               </summary>
               {section.ps.map((p) => (
-                <p key={p.slice(0, 48)} className="mt-3 max-w-3xl text-sm leading-7 text-ink/85">{p}</p>
+                <p key={p.slice(0, 48)} className="mt-3 max-w-3xl text-sm leading-7 text-ink/85">
+                  {p}
+                </p>
               ))}
             </details>
           ))}

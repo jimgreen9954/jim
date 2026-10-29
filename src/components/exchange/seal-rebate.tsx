@@ -74,7 +74,9 @@ export function SealRebateBox() {
   };
 
   const clerk = state && account && state.clerk.toLowerCase() === account.toLowerCase();
-  const onX = state ? state.circuits !== "0x0000000000000000000000000000000000000000" : chain === "xlayer";
+  const onX = state
+    ? state.circuits !== "0x0000000000000000000000000000000000000000"
+    : chain === "xlayer";
   const weekPay = rows.reduce((sum, row) => sum + row.pay, 0n);
   const unit = (symbol: string) => (symbol.toUpperCase().includes("USDT") ? "USDT" : symbol);
   const when = (ts: number) =>
@@ -112,7 +114,9 @@ export function SealRebateBox() {
         ))}
       </div>
       <p className="mt-3 break-all font-mono text-xs">{state?.address ?? LOCKED_REBATE[chain]}</p>
-      {!state ? <p className="mt-3 text-sm">{zh ? "正在读取这份合约。" : "Reading this contract."}</p> : null}
+      {!state ? (
+        <p className="mt-3 text-sm">{zh ? "正在读取这份合约。" : "Reading this contract."}</p>
+      ) : null}
       {state?.deployed === false ? (
         <button
           type="button"
@@ -122,28 +126,57 @@ export function SealRebateBox() {
               async () => {
                 await deployRebate(chain);
               },
-              zh ? "已部署。取回和 BSC 记名只认刚才签名的这个钱包。" : "Deployed. Only the wallet that just signed can withdraw or mark a BSC address.",
+              zh
+                ? "已部署。取回和 BSC 记名只认刚才签名的这个钱包。"
+                : "Deployed. Only the wallet that just signed can withdraw or mark a BSC address.",
             )
           }
           className="mt-3 min-h-12 w-full border border-gold bg-ink text-paper disabled:opacity-60"
         >
-          {busy ? (zh ? "签名中" : "Signing") : zh ? `部署${chain === "xlayer" ? " X Layer" : " BSC"} 手续费合约` : `Deploy the ${chain === "xlayer" ? "X Layer" : "BSC"} rebate`}
+          {busy
+            ? zh
+              ? "签名中"
+              : "Signing"
+            : zh
+              ? `部署${chain === "xlayer" ? " X Layer" : " BSC"} 手续费合约`
+              : `Deploy the ${chain === "xlayer" ? "X Layer" : "BSC"} rebate`}
         </button>
       ) : null}
       {state?.deployed ? (
         <>
           <p className="mt-3 text-sm">
             {zh ? "池子里" : "Pool"} {rebateText(state.balance, state.decimals, unit(state.symbol))}
-            {state.passed ? (zh ? " · 已登记" : " · registered") : zh ? " · 还没登记" : " · not registered"}
+            {state.passed
+              ? zh
+                ? " · 已登记"
+                : " · registered"
+              : zh
+                ? " · 还没登记"
+                : " · not registered"}
           </p>
-          {state.clerk ? <p className="mt-1 break-all font-mono text-xs">{zh ? "部署钱包" : "Deployer"} {state.clerk}</p> : null}
+          {state.clerk ? (
+            <p className="mt-1 break-all font-mono text-xs">
+              {zh ? "部署钱包" : "Deployer"} {state.clerk}
+            </p>
+          ) : null}
           <p className="mt-2 font-mono text-lg tabular-nums">
-            {zh ? "本周可领" : "This week"} {rebateText(weekPay, state.decimals, unit(state.symbol))}
+            {zh ? "本周可领" : "This week"}{" "}
+            {rebateText(weekPay, state.decimals, unit(state.symbol))}
           </p>
           <p className="text-xs text-ink/60">
-            {state.symbol === "USDT" ? (zh ? "单位是 USDT，已按代币小数换算。" : "Shown in USDT, converted by the token decimals.") : zh ? `链上代币是 ${state.symbol}，上面对的是 1 ${state.symbol} = 1 USDT 的个数，不是最小单位。` : `The token is ${state.symbol}. The number above is whole tokens, not raw units.`}
+            {state.symbol === "USDT"
+              ? zh
+                ? "单位是 USDT，已按代币小数换算。"
+                : "Shown in USDT, converted by the token decimals."
+              : zh
+                ? `链上代币是 ${state.symbol}，上面对的是 1 ${state.symbol} = 1 USDT 的个数，不是最小单位。`
+                : `The token is ${state.symbol}. The number above is whole tokens, not raw units.`}
           </p>
-          <p className="mt-1 text-xs text-ink/60">{zh ? "晶体管那本账没有撮合时间，不算进本周。" : "The transistor book has no match time, so it is not in this week."}</p>
+          <p className="mt-1 text-xs text-ink/60">
+            {zh
+              ? "晶体管那本账没有撮合时间，不算进本周。"
+              : "The transistor book has no match time, so it is not in this week."}
+          </p>
           <p className="mt-1 text-xs text-ink/60">
             {state.claimedThisWeek
               ? zh
@@ -153,7 +186,11 @@ export function SealRebateBox() {
                 ? `没领就过 ${when(state.resetAt)}（新加坡周一 0 点）作废。`
                 : `Unclaimed after ${when(state.resetAt)} Singapore is dropped.`}
           </p>
-          {!state.weekly ? <p className="mt-2 text-sm text-sell">{zh ? "这份领取合约不能按周领。" : "This claim contract does not pay by the week."}</p> : null}
+          {!state.weekly ? (
+            <p className="mt-2 text-sm text-sell">
+              {zh ? "这份领取合约不能按周领。" : "This claim contract does not pay by the week."}
+            </p>
+          ) : null}
           <div className="mt-3 flex gap-2">
             <input
               value={amount}
@@ -164,7 +201,9 @@ export function SealRebateBox() {
             <button
               type="button"
               disabled={busy}
-              onClick={() => run(() => fundRebate(chain, amount), zh ? "已充进领取合约。" : "Funded.")}
+              onClick={() =>
+                run(() => fundRebate(chain, amount), zh ? "已充进领取合约。" : "Funded.")
+              }
               className="min-h-11 border border-gold px-3 disabled:opacity-60"
             >
               {zh ? "充进去" : "Fund"}
@@ -173,7 +212,12 @@ export function SealRebateBox() {
               <button
                 type="button"
                 disabled={busy || state.balance === 0n}
-                onClick={() => run(() => withdrawRebate(chain, amount), zh ? "已从池子取回。" : "Withdrawn from the pool.")}
+                onClick={() =>
+                  run(
+                    () => withdrawRebate(chain, amount),
+                    zh ? "已从池子取回。" : "Withdrawn from the pool.",
+                  )
+                }
                 className="min-h-11 border border-gold px-3 disabled:opacity-60"
               >
                 {zh ? "取回" : "Withdraw"}
@@ -184,7 +228,12 @@ export function SealRebateBox() {
             <button
               type="button"
               disabled={busy}
-              onClick={() => run(() => qualifyRebate(), zh ? "三盏灯已登记，可以领了。" : "The three lamps are registered.")}
+              onClick={() =>
+                run(
+                  () => qualifyRebate(),
+                  zh ? "三盏灯已登记，可以领了。" : "The three lamps are registered.",
+                )
+              }
               className="mt-3 min-h-12 w-full border border-gold disabled:opacity-60"
             >
               {zh ? "用这三盏灯登记" : "Register these three lamps"}
@@ -201,7 +250,14 @@ export function SealRebateBox() {
               <button
                 type="button"
                 disabled={busy || !/^0x[a-fA-F0-9]{40}$/.test(mark || account || "")}
-                onClick={() => run(() => passRebate(mark || account || ""), zh ? "这个地址已记上，可以领 BSC 的一半。" : "This address is marked and can claim the BSC half.")}
+                onClick={() =>
+                  run(
+                    () => passRebate(mark || account || ""),
+                    zh
+                      ? "这个地址已记上，可以领 BSC 的一半。"
+                      : "This address is marked and can claim the BSC half.",
+                  )
+                }
                 className="min-h-12 w-full border border-gold disabled:opacity-60"
               >
                 {zh ? "签名，把这个地址记上" : "Sign and mark this address"}
@@ -211,19 +267,44 @@ export function SealRebateBox() {
           <div className="mt-3 flex flex-col gap-2">
             <button
               type="button"
-              disabled={busy || !state.passed || !state.weekly || state.claimedThisWeek || rows.length === 0 || weekPay === 0n || weekPay > state.balance}
-              onClick={() => run(() => claimRebate(chain, rows), zh ? `已领取 ${rebateText(weekPay, state.decimals, unit(state.symbol))}。` : `Claimed ${rebateText(weekPay, state.decimals, unit(state.symbol))}.`)}
+              disabled={
+                busy ||
+                !state.passed ||
+                !state.weekly ||
+                state.claimedThisWeek ||
+                rows.length === 0 ||
+                weekPay === 0n ||
+                weekPay > state.balance
+              }
+              onClick={() =>
+                run(
+                  () => claimRebate(chain, rows),
+                  zh
+                    ? `已领取 ${rebateText(weekPay, state.decimals, unit(state.symbol))}。`
+                    : `Claimed ${rebateText(weekPay, state.decimals, unit(state.symbol))}.`,
+                )
+              }
               className="min-h-12 border border-gold bg-ink px-3 text-paper disabled:opacity-60"
             >
               {zh ? "领取本周" : "Claim this week"}
             </button>
-            {weekPay > state.balance ? <p className="text-sm text-sell">{zh ? "池子里的 USDT 不够付这一周。" : "The pool does not hold enough USDT for this week."}</p> : null}
+            {weekPay > state.balance ? (
+              <p className="text-sm text-sell">
+                {zh
+                  ? "池子里的 USDT 不够付这一周。"
+                  : "The pool does not hold enough USDT for this week."}
+              </p>
+            ) : null}
             {rows.map((row) => (
               <p key={`${row.book}-${row.id.toString()}`} className="font-mono text-xs">
                 #{row.id.toString()} · {rebateText(row.pay, state.decimals, unit(state.symbol))}
               </p>
             ))}
-            {state.passed && !state.claimedThisWeek && rows.length === 0 ? <p className="text-sm">{zh ? "本周没有可领的成交。" : "No fill to claim this week."}</p> : null}
+            {state.passed && !state.claimedThisWeek && rows.length === 0 ? (
+              <p className="text-sm">
+                {zh ? "本周没有可领的成交。" : "No fill to claim this week."}
+              </p>
+            ) : null}
           </div>
         </>
       ) : null}

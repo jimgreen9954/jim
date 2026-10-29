@@ -146,7 +146,12 @@ export function WalletBar() {
           <h2 className="font-display text-2xl italic">{c.walletTitle}</h2>
           <p className="mt-1 max-w-2xl text-sm leading-relaxed text-ink/80">{c.walletNote}</p>
         </div>
-        <a className="min-h-11 underline decoration-gold underline-offset-4" href={processorUrl()} target="_blank" rel="noreferrer">
+        <a
+          className="min-h-11 underline decoration-gold underline-offset-4"
+          href={processorUrl()}
+          target="_blank"
+          rel="noreferrer"
+        >
           {c.walletCpu}
         </a>
       </header>
@@ -160,11 +165,15 @@ export function WalletBar() {
           <p className="border border-gold/40 px-3 py-2">
             <span className="block text-xs tracking-widest text-gold">{c.liveMinted}</span>
             <span className="font-mono text-lg tabular-nums">
-              {cpu ? `${Number(cpu.minted).toLocaleString("en-US")} / ${Number(cpu.cap).toLocaleString("en-US")}` : "—"}
+              {cpu
+                ? `${Number(cpu.minted).toLocaleString("en-US")} / ${Number(cpu.cap).toLocaleString("en-US")}`
+                : "—"}
             </span>
           </p>
           <p className="border border-gold/40 px-3 py-2">
-            <span className="block text-xs tracking-widest text-gold">{lang === "zh" ? "NAND 剩余" : "NAND left"}</span>
+            <span className="block text-xs tracking-widest text-gold">
+              {lang === "zh" ? "NAND 剩余" : "NAND left"}
+            </span>
             <span className="font-mono text-lg tabular-nums">
               {kinds ? Number(kinds.nandMint - kinds.nandBurn).toLocaleString("en-US") : "—"}
             </span>
@@ -179,7 +188,9 @@ export function WalletBar() {
             </span>
           </p>
           <p className="border border-gold/40 px-3 py-2">
-            <span className="block text-xs tracking-widest text-gold">{lang === "zh" ? "LATCH 剩余" : "LATCH left"}</span>
+            <span className="block text-xs tracking-widest text-gold">
+              {lang === "zh" ? "LATCH 剩余" : "LATCH left"}
+            </span>
             <span className="font-mono text-lg tabular-nums">
               {kinds ? Number(kinds.latchMint - kinds.latchBurn).toLocaleString("en-US") : "—"}
             </span>
@@ -193,14 +204,30 @@ export function WalletBar() {
           </p>
           <div className="grid grid-cols-2 gap-2">
             <p className="border border-gold/40 px-3 py-2">
-              <span className="block text-xs tracking-widest text-gold">{lang === "zh" ? "可流片 NAND" : "NAND you can tape"}</span>
-              <span className="font-mono text-3xl tabular-nums">{held ? Number(held.nand).toLocaleString("en-US") : "—"}</span>
-              <span className="mt-1 block text-xs text-ink/60">{lang === "zh" ? "这个地址的 balanceOf，5 秒重读。不是上面的剩余。" : "balanceOf for this address, every 5s. Not the supply above."}</span>
+              <span className="block text-xs tracking-widest text-gold">
+                {lang === "zh" ? "可流片 NAND" : "NAND you can tape"}
+              </span>
+              <span className="font-mono text-3xl tabular-nums">
+                {held ? Number(held.nand).toLocaleString("en-US") : "—"}
+              </span>
+              <span className="mt-1 block text-xs text-ink/60">
+                {lang === "zh"
+                  ? "这个地址的 balanceOf，5 秒重读。不是上面的剩余。"
+                  : "balanceOf for this address, every 5s. Not the supply above."}
+              </span>
             </p>
             <p className="border border-gold/40 px-3 py-2">
-              <span className="block text-xs tracking-widest text-gold">{lang === "zh" ? "可流片 LATCH" : "LATCH you can tape"}</span>
-              <span className="font-mono text-3xl tabular-nums">{held ? Number(held.latch).toLocaleString("en-US") : "—"}</span>
-              <span className="mt-1 block text-xs text-ink/60">{lang === "zh" ? "流片从这里扣，不是铸造剩余" : "Tape-out spends this, not the mint left"}</span>
+              <span className="block text-xs tracking-widest text-gold">
+                {lang === "zh" ? "可流片 LATCH" : "LATCH you can tape"}
+              </span>
+              <span className="font-mono text-3xl tabular-nums">
+                {held ? Number(held.latch).toLocaleString("en-US") : "—"}
+              </span>
+              <span className="mt-1 block text-xs text-ink/60">
+                {lang === "zh"
+                  ? "流片从这里扣，不是铸造剩余"
+                  : "Tape-out spends this, not the mint left"}
+              </span>
             </p>
           </div>
           <p className="border border-gold/40 px-3 py-2">
@@ -213,20 +240,32 @@ export function WalletBar() {
         </p>
         <div className="grid grid-cols-2 gap-2">
           {([0, 1] as const).map((id) => (
-            <button key={id} type="button" onClick={() => setKind(id)} className={`min-h-11 border border-gold ${kind === id ? "bg-ink text-paper" : ""}`}>
+            <button
+              key={id}
+              type="button"
+              onClick={() => setKind(id)}
+              className={`min-h-11 border border-gold ${kind === id ? "bg-ink text-paper" : ""}`}
+            >
               {id === 0 ? "NAND" : "LATCH"}
             </button>
           ))}
         </div>
         <div className="grid grid-cols-3 gap-2">
           {(["100", "1000", "10000"] as const).map((item) => (
-            <button key={item} type="button" onClick={() => setQtyText(item)} className={`min-h-11 border border-gold font-mono ${qtyText === item ? "bg-ink text-paper" : ""}`}>
+            <button
+              key={item}
+              type="button"
+              onClick={() => setQtyText(item)}
+              className={`min-h-11 border border-gold font-mono ${qtyText === item ? "bg-ink text-paper" : ""}`}
+            >
               {Number(item).toLocaleString("en-US")}
             </button>
           ))}
         </div>
         <label className="border border-gold/40 px-3 py-2">
-          <span className="block text-xs tracking-widest text-gold">{lang === "zh" ? "自定义数量" : "Custom amount"}</span>
+          <span className="block text-xs tracking-widest text-gold">
+            {lang === "zh" ? "自定义数量" : "Custom amount"}
+          </span>
           <input
             value={qtyText}
             onChange={(event) => setQtyText(event.target.value.replace(/[^\d]/g, ""))}
@@ -234,20 +273,46 @@ export function WalletBar() {
             className="w-full bg-transparent font-mono text-3xl outline-none"
           />
         </label>
-        {tooMany ? <p className="text-sm text-sell">{lang === "zh" ? "超过还能铸的数量。" : "More than the supply still left."}</p> : null}
+        {tooMany ? (
+          <p className="text-sm text-sell">
+            {lang === "zh" ? "超过还能铸的数量。" : "More than the supply still left."}
+          </p>
+        ) : null}
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" className="min-h-14 bg-ink px-4 font-display text-2xl italic text-paper disabled:opacity-40" disabled={busy || qty < 1n || tooMany} onClick={mint}>
-            {lang === "zh" ? `铸造 ${qty.toString()} 颗 ${label}` : `Mint ${qty.toString()} ${label}`}
+          <button
+            type="button"
+            className="min-h-14 bg-ink px-4 font-display text-2xl italic text-paper disabled:opacity-40"
+            disabled={busy || qty < 1n || tooMany}
+            onClick={mint}
+          >
+            {lang === "zh"
+              ? `铸造 ${qty.toString()} 颗 ${label}`
+              : `Mint ${qty.toString()} ${label}`}
             {cost ? ` · ${cost} OKB` : ""}
           </button>
-          <a className="inline-flex min-h-11 items-center border border-gold px-3" href={CANVAS} target="_blank" rel="noreferrer">
+          <a
+            className="inline-flex min-h-11 items-center border border-gold px-3"
+            href={CANVAS}
+            target="_blank"
+            rel="noreferrer"
+          >
             {c.openCanvas}
           </a>
-          <a className="inline-flex min-h-11 items-center border border-gold px-3" href={processorUrl()} target="_blank" rel="noreferrer">
+          <a
+            className="inline-flex min-h-11 items-center border border-gold px-3"
+            href={processorUrl()}
+            target="_blank"
+            rel="noreferrer"
+          >
             {c.walletOfficial}
           </a>
           {!account ? (
-            <button type="button" className="min-h-11 border border-gold px-3" disabled={busy} onClick={connect}>
+            <button
+              type="button"
+              className="min-h-11 border border-gold px-3"
+              disabled={busy}
+              onClick={connect}
+            >
               {c.walletConnect}
             </button>
           ) : (
@@ -256,12 +321,22 @@ export function WalletBar() {
         </div>
         {note ? <p className={`text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
         {hash ? (
-          <a className="underline decoration-gold underline-offset-4" href={txUrl(hash)} target="_blank" rel="noreferrer">
+          <a
+            className="underline decoration-gold underline-offset-4"
+            href={txUrl(hash)}
+            target="_blank"
+            rel="noreferrer"
+          >
             {c.walletTx}
           </a>
         ) : null}
         {cpu ? (
-          <a className="break-all underline decoration-gold underline-offset-4" href={processorUrl()} target="_blank" rel="noreferrer">
+          <a
+            className="break-all underline decoration-gold underline-offset-4"
+            href={processorUrl()}
+            target="_blank"
+            rel="noreferrer"
+          >
             {c.walletPrice} {cpu.price} OKB
           </a>
         ) : null}
@@ -323,9 +398,17 @@ function RecipeGrid({
       if (held && (held.nand < BigInt(n) || held.latch < BigInt(l))) {
         throw new Error("short");
       }
-      setNote(lang === "zh" ? `正在流片 ${short(n, l)}。签名之后还要等回执。回执成功，电路就在链上。` : `Taping ${short(n, l)}. After you sign, this waits for the receipt. The circuit is on chain when that receipt succeeds.`);
+      setNote(
+        lang === "zh"
+          ? `正在流片 ${short(n, l)}。签名之后还要等回执。回执成功，电路就在链上。`
+          : `Taping ${short(n, l)}. After you sign, this waits for the receipt. The circuit is on chain when that receipt succeeds.`,
+      );
       const hash = await tapeRecipe(from, n, l);
-      setNote(lang === "zh" ? `流片完成 ${short(n, l)}。电路已经在这笔交易里，但还没开工。到挖矿页对这张点「开工」，再签一笔，才会进矿机。不用再付 0.0013 OKB。` : `Taped ${short(n, l)}. The circuit is in this transaction, but it is not mining yet. Open it on the mine page with a second signature. That one does not pay another 0.0013 OKB.`);
+      setNote(
+        lang === "zh"
+          ? `流片完成 ${short(n, l)}。电路已经在这笔交易里，但还没开工。到挖矿页对这张点「开工」，再签一笔，才会进矿机。不用再付 0.0013 OKB。`
+          : `Taped ${short(n, l)}. The circuit is in this transaction, but it is not mining yet. Open it on the mine page with a second signature. That one does not pay another 0.0013 OKB.`,
+      );
       setPick(null);
       onDone(hash);
       window.open(txUrl(hash), "_blank", "noopener,noreferrer");
@@ -351,7 +434,9 @@ function RecipeGrid({
   };
   return (
     <div className="border-t border-gold/40 pt-3">
-      <h3 className="font-display text-xl italic">{lang === "zh" ? "按配方直接流片" : "Tape a recipe directly"}</h3>
+      <h3 className="font-display text-xl italic">
+        {lang === "zh" ? "按配方直接流片" : "Tape a recipe directly"}
+      </h3>
       <p className="mt-1 text-sm leading-relaxed text-ink/80">
         {lang === "zh"
           ? "要自己接线，点页顶「流片 TAPELIQUID」进画布。下面这些配方不画图，确认后直接烧掉。每次另付 0.0013 OKB。回执成功只代表电路有了编号。挖矿还要再签一笔开工，不签就不会出现在矿机里。"
@@ -374,7 +459,12 @@ function RecipeGrid({
           );
         })}
       </div>
-      <button type="button" className="mt-3 min-h-12 w-full bg-ink font-display text-xl italic text-paper disabled:opacity-40" disabled={!pick || busy} onClick={() => void go()}>
+      <button
+        type="button"
+        className="mt-3 min-h-12 w-full bg-ink font-display text-xl italic text-paper disabled:opacity-40"
+        disabled={!pick || busy}
+        onClick={() => void go()}
+      >
         {pick
           ? lang === "zh"
             ? `流片 ${pick[0]}N + ${pick[1]}L`

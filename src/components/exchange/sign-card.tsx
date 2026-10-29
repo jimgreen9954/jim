@@ -37,7 +37,12 @@ export function SignCard({
               <dt className="text-xs tracking-widest text-gold">{line.k}</dt>
               <dd className="mt-1 break-all font-mono text-sm">
                 {line.href ? (
-                  <a className="underline decoration-gold underline-offset-4" href={line.href} target="_blank" rel="noreferrer">
+                  <a
+                    className="underline decoration-gold underline-offset-4"
+                    href={line.href}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
                     {line.v}
                   </a>
                 ) : (

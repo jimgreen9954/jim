@@ -89,7 +89,13 @@ export function LiveBoard() {
             <Stat
               label={c.bemChain}
               value={data.bem ? fmtUsd(data.bem.usd) : "—"}
-              hint={data.bem?.change24 != null ? fmtPct(data.bem.change24) : data.bem ? `$${fmtInt(data.bem.vol24)}` : ""}
+              hint={
+                data.bem?.change24 != null
+                  ? fmtPct(data.bem.change24)
+                  : data.bem
+                    ? `$${fmtInt(data.bem.vol24)}`
+                    : ""
+              }
               hot={Boolean(data.bem && data.bem.change24 != null && data.bem.change24 < 0)}
             />
             <Stat label="BNB" value={data.bnbUsd ? fmtUsd(data.bnbUsd) : "—"} />
@@ -128,18 +134,24 @@ export function LiveBoard() {
           <ul className="flex flex-col gap-2 lg:hidden">
             {rows.map((row) => (
               <li key={row.id} className="border border-gold/40">
-                <button type="button" className="w-full px-2 py-2 text-left" onClick={() => toggle(row.id)}>
+                <button
+                  type="button"
+                  className="w-full px-2 py-2 text-left"
+                  onClick={() => toggle(row.id)}
+                >
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="truncate font-display text-lg italic">{row.name}</span>
                     <span className="text-xs tracking-widest text-gold">{row.kind}</span>
                   </div>
                   <p className="font-mono text-xs tabular-nums">
-                    {row.bem != null ? `${fmtFlex(row.bem)} BEM` : "—"} · {row.lastBnb != null ? fmtFlex(row.lastBnb) : "—"} BNB
-                    · {c.vol24} {fmtFlex(row.volBnb24)}
+                    {row.bem != null ? `${fmtFlex(row.bem)} BEM` : "—"} ·{" "}
+                    {row.lastBnb != null ? fmtFlex(row.lastBnb) : "—"} BNB · {c.vol24}{" "}
+                    {fmtFlex(row.volBnb24)}
                   </p>
                   {row.bidBnb != null ? (
                     <p className="font-mono text-xs tabular-nums text-gold">
-                      {c.bid} {fmtFlex(row.bidBnb)} BNB{row.bidBem != null ? ` · ${fmtFlex(row.bidBem)} BEM` : ""}
+                      {c.bid} {fmtFlex(row.bidBnb)} BNB
+                      {row.bidBem != null ? ` · ${fmtFlex(row.bidBem)} BEM` : ""}
                     </p>
                   ) : null}
                 </button>
@@ -177,10 +189,14 @@ export function LiveBoard() {
                         </button>
                       </td>
                       <td className="py-2 pr-3">{row.kind}</td>
-                      <td className="py-2 pr-3">{row.lastBnb != null ? fmtFlex(row.lastBnb) : "—"}</td>
+                      <td className="py-2 pr-3">
+                        {row.lastBnb != null ? fmtFlex(row.lastBnb) : "—"}
+                      </td>
                       <td className="py-2 pr-3">{row.bem != null ? fmtFlex(row.bem) : "—"}</td>
                       <td className="py-2 pr-3">{row.usd != null ? fmtUsd(row.usd) : "—"}</td>
-                      <td className="py-2 pr-3">{row.bidBem != null ? fmtFlex(row.bidBem) : "—"}</td>
+                      <td className="py-2 pr-3">
+                        {row.bidBem != null ? fmtFlex(row.bidBem) : "—"}
+                      </td>
                       <td className="py-2 pr-3">{fmtInt(row.trades)}</td>
                       <td className="py-2 pr-3">{fmtInt(row.qty)}</td>
                       <td className="py-2">{fmtFlex(row.volBnb24)}</td>
@@ -203,9 +219,21 @@ export function LiveBoard() {
   );
 }
 
-function ViewButton({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) {
+function ViewButton({
+  on,
+  onClick,
+  children,
+}: {
+  on: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
   return (
-    <button type="button" className={`min-h-11 border border-gold px-2 ${on ? "bg-foil" : ""}`} onClick={onClick}>
+    <button
+      type="button"
+      className={`min-h-11 border border-gold px-2 ${on ? "bg-foil" : ""}`}
+      onClick={onClick}
+    >
       {children}
     </button>
   );
@@ -217,7 +245,8 @@ function Tape({ row, c }: { row: LiveTransistor; c: Copy }) {
       {row.bidBnb != null ? (
         <p className="font-mono text-xs tabular-nums">
           {c.bid} {fmtFlex(row.bidBnb)} BNB
-          {row.bidBem != null ? ` · ${fmtFlex(row.bidBem)} BEM` : ""} · {c.bidLeft} {fmtInt(row.bidQty)}
+          {row.bidBem != null ? ` · ${fmtFlex(row.bidBem)} BEM` : ""} · {c.bidLeft}{" "}
+          {fmtInt(row.bidQty)}
         </p>
       ) : (
         <p className="text-xs text-ink/70">{c.noBid}</p>
@@ -234,7 +263,8 @@ function Tape({ row, c }: { row: LiveTransistor; c: Copy }) {
             >
               <span>{fmtTs(print.ts)}</span>
               <span>
-                {fmtFlex(print.bnb)} BNB{print.bem != null ? ` · ${fmtFlex(print.bem)} BEM` : ""} · ×{fmtInt(print.qty)}
+                {fmtFlex(print.bnb)} BNB{print.bem != null ? ` · ${fmtFlex(print.bem)} BEM` : ""} ·
+                ×{fmtInt(print.qty)}
               </span>
             </li>
           ))}
@@ -245,12 +275,26 @@ function Tape({ row, c }: { row: LiveTransistor; c: Copy }) {
   );
 }
 
-function Stat({ label, value, hint, hot }: { label: string; value: string; hint?: string; hot?: boolean }) {
+function Stat({
+  label,
+  value,
+  hint,
+  hot,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  hot?: boolean;
+}) {
   return (
     <div className="border border-gold/40 px-3 py-2">
       <p className="text-xs tracking-widest text-gold">{label}</p>
       <p className="font-mono text-lg tabular-nums">{value}</p>
-      {hint ? <p className={`font-mono text-xs tabular-nums ${hot ? "text-sell" : "text-ink/70"}`}>{hint}</p> : null}
+      {hint ? (
+        <p className={`font-mono text-xs tabular-nums ${hot ? "text-sell" : "text-ink/70"}`}>
+          {hint}
+        </p>
+      ) : null}
     </div>
   );
 }

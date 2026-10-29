@@ -10,7 +10,15 @@ import { currentAccount, onAccount } from "@/lib/wallet";
 export function ChipMark({ className, hot }: { className?: string; hot?: boolean }) {
   return (
     <svg viewBox="0 0 64 64" className={className ?? "size-12 text-gold"} aria-hidden>
-      <rect x="14" y="14" width="36" height="36" fill="var(--color-card)" stroke="currentColor" strokeWidth="1.4" />
+      <rect
+        x="14"
+        y="14"
+        width="36"
+        height="36"
+        fill="var(--color-card)"
+        stroke="currentColor"
+        strokeWidth="1.4"
+      />
       {Array.from({ length: 4 }, (_, i) => (
         <g key={i}>
           <rect x={18 + i * 8} y="6" width="3" height="8" fill="currentColor" />
@@ -60,18 +68,30 @@ export function SealStamp() {
 
   const onStamp = async () => {
     if (!account) {
-      setNote(lang === "zh" ? "先点下面的 OKX 或币安。连上之后，再点一键流片。" : "Connect OKX or Binance below, then tap tape-out.");
+      setNote(
+        lang === "zh"
+          ? "先点下面的 OKX 或币安。连上之后，再点一键流片。"
+          : "Connect OKX or Binance below, then tap tape-out.",
+      );
       return;
     }
     setBusy(true);
-    setNote(lang === "zh" ? "正在看这个钱包的 NAND 和已经亮的灯。" : "Checking NAND and lamps on this wallet.");
+    setNote(
+      lang === "zh"
+        ? "正在看这个钱包的 NAND 和已经亮的灯。"
+        : "Checking NAND and lamps on this wallet.",
+    );
     try {
       const from = account;
       const [held, have] = await Promise.all([transistorHeld(from), countSeal(from)]);
       setSealCount(have);
       const need = Math.max(0, 3 - have);
       if (need === 0) {
-        setNote(lang === "zh" ? "三盏都亮了。下面用这三盏登记。" : "All three lamps are lit. Register them below.");
+        setNote(
+          lang === "zh"
+            ? "三盏都亮了。下面用这三盏登记。"
+            : "All three lamps are lit. Register them below.",
+        );
         return;
       }
       if (held.nand < BigInt(need * 3)) {
@@ -92,7 +112,11 @@ export function SealStamp() {
         hash = await tapeSeal(from);
         setSealCount(have + i + 1);
       }
-      setNote(lang === "zh" ? "三张印鉴已在处理器上。再点下面的登记。" : "Three seals are on the processor. Register below.");
+      setNote(
+        lang === "zh"
+          ? "三张印鉴已在处理器上。再点下面的登记。"
+          : "Three seals are on the processor. Register below.",
+      );
       window.open(txUrl(hash), "_blank", "noopener,noreferrer");
     } catch (err) {
       const code = (err as { code?: number }).code;
@@ -129,7 +153,11 @@ export function SealStamp() {
       {!account ? (
         <div className="mt-3">
           <ConnectButton />
-          <p className="mt-2 text-sm">{lang === "zh" ? "先连钱包。连上之后，一键流片才会弹出签名。" : "Connect first. Tape-out asks for a signature only after that."}</p>
+          <p className="mt-2 text-sm">
+            {lang === "zh"
+              ? "先连钱包。连上之后，一键流片才会弹出签名。"
+              : "Connect first. Tape-out asks for a signature only after that."}
+          </p>
         </div>
       ) : (
         <button
@@ -138,7 +166,15 @@ export function SealStamp() {
           disabled={busy || lit >= 3}
           className="mt-3 min-h-12 w-full border border-gold bg-ink text-paper disabled:opacity-60"
         >
-          {busy ? (lang === "zh" ? "签名中" : "Signing") : lit >= 3 ? (lang === "zh" ? "三盏都亮了" : "All three lit") : c.stamp}
+          {busy
+            ? lang === "zh"
+              ? "签名中"
+              : "Signing"
+            : lit >= 3
+              ? lang === "zh"
+                ? "三盏都亮了"
+                : "All three lit"
+              : c.stamp}
         </button>
       )}
       {note ? <p className="mt-2 text-sm leading-relaxed">{note}</p> : null}
@@ -172,7 +208,9 @@ export function DiePanel() {
           <div>
             <h2 className="font-display text-3xl italic leading-none">TAPELIQUID</h2>
             <p className="mt-2 text-xs tracking-widest text-gold">{c.match}</p>
-            <p className="mt-1 font-mono text-xs tabular-nums">CLK {String(clock).padStart(6, "0")}</p>
+            <p className="mt-1 font-mono text-xs tabular-nums">
+              CLK {String(clock).padStart(6, "0")}
+            </p>
           </div>
         </div>
 
@@ -205,10 +243,20 @@ export function DiePanel() {
             </ul>
             <p className="text-ink/70">{c.demo}</p>
             <p className="flex gap-4">
-              <a className="underline decoration-gold underline-offset-4" href="https://ignix.bot/x_campaign" target="_blank" rel="noreferrer">
+              <a
+                className="underline decoration-gold underline-offset-4"
+                href="https://ignix.bot/x_campaign"
+                target="_blank"
+                rel="noreferrer"
+              >
                 {c.linkHack}
               </a>
-              <a className="underline decoration-gold underline-offset-4" href={processorUrl()} target="_blank" rel="noreferrer">
+              <a
+                className="underline decoration-gold underline-offset-4"
+                href={processorUrl()}
+                target="_blank"
+                rel="noreferrer"
+              >
                 {c.linkTape}
               </a>
             </p>
@@ -253,7 +301,11 @@ function DieFace({ clock, hot }: { clock: number; hot: boolean }) {
 
 function Pad({ on, label, onClick }: { on: boolean; label: string; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className={`min-h-11 min-w-16 border border-gold px-3 ${on ? "bg-foil" : "bg-card"}`}>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`min-h-11 min-w-16 border border-gold px-3 ${on ? "bg-foil" : "bg-card"}`}
+    >
       {label}
       <span className="ml-1 font-mono text-xs">{on ? "1" : "0"}</span>
     </button>
@@ -270,7 +322,9 @@ function SealLamps({ lit, lang }: { lit: number; lang: "zh" | "en" }) {
     <div className="mt-3 flex flex-wrap gap-4">
       {lamps.map((lamp, i) => (
         <span key={lamp.name} className="inline-flex min-h-11 items-center gap-2">
-          <span className={`inline-block size-4 rounded-full border ${lamp.ring} ${i < lit ? lamp.fill : "bg-card"}`} />
+          <span
+            className={`inline-block size-4 rounded-full border ${lamp.ring} ${i < lit ? lamp.fill : "bg-card"}`}
+          />
           <span className="text-sm">
             {lamp.name} {i < lit ? (lang === "zh" ? "亮" : "on") : lang === "zh" ? "灭" : "off"}
           </span>
@@ -283,7 +337,9 @@ function SealLamps({ lit, lang }: { lit: number; lang: "zh" | "en" }) {
 function Lamp({ on, label }: { on: boolean; label: string }) {
   return (
     <span className="inline-flex min-h-11 items-center gap-2 px-1">
-      <span className={`inline-block size-4 rounded-full border border-gold ${on ? "bg-foil" : "bg-card"}`} />
+      <span
+        className={`inline-block size-4 rounded-full border border-gold ${on ? "bg-foil" : "bg-card"}`}
+      />
       <span className="text-sm">
         {label} {on ? "1" : "0"}
       </span>

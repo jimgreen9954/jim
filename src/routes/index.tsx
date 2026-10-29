@@ -14,5 +14,3 @@ function Home() {
   const nft = typeof window === "undefined" ? serverNft : hostIsNft(window.location.hostname);
   return nft ? <MarketPage /> : <Exchange />;
 }
-
-

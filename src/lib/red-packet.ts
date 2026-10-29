@@ -195,17 +195,34 @@ export function taskAsset(chain: GiftChain, hi: bigint): GiftAsset | null {
   }
 }
 
-export function taskLine(chain: GiftChain, hi: bigint, spotNeed: bigint, perpNeed: bigint, gate: number, zh: boolean): string {
+export function taskLine(
+  chain: GiftChain,
+  hi: bigint,
+  spotNeed: bigint,
+  perpNeed: bigint,
+  gate: number,
+  zh: boolean,
+  received = "",
+): string {
   const task = taskAsset(chain, hi);
   const raw = spotNeed > perpNeed ? spotNeed : perpNeed;
   const buy = Number(formatUnits(raw, 18));
   const name = task ? (zh ? task.zh : task.en) : "";
   const verbBuy = gate !== 1;
   const unit = chain === "bsc" ? "BNB" : "OKB";
-  if (!name || !(buy > 0)) return zh ? "还没选币" : "No coin yet";
+  if (!name || !(buy > 0)) return zh ? "还没选要兑换的币" : "No coin yet";
   const shown = buy.toLocaleString("en-US", { maximumFractionDigits: 6 });
-  if (!verbBuy) return zh ? `卖出 ${name}，换回 ${unit}。卖出的币会离开你的钱包。` : `Sell ${name} for ${unit}. The coin leaves your wallet.`;
-  return zh ? `买入 ${name}，需要支付 ${shown} ${unit}。这笔钱会离开你的钱包。` : `Buy ${name}. You pay ${shown} ${unit}. The money leaves your wallet.`;
+  const got = received ? (zh ? `约 ${received} ${name}` : `about ${received} ${name}`) : name;
+  const tail = zh
+    ? "完成这笔兑换之后，才能领取红包。"
+    : "Finish this swap before the packet can be claimed.";
+  if (!verbBuy)
+    return zh
+      ? `卖出 ${got}，换回 ${shown} ${unit}。${tail}`
+      : `Sell ${got} for ${shown} ${unit}. ${tail}`;
+  return zh
+    ? `用 ${shown} ${unit} 兑换 ${got}。${tail}`
+    : `Swap ${shown} ${unit} for ${got}. ${tail}`;
 }
 
 export function addDeskVolume(chain: GiftChain, account: string, leg: "spot" | "perp", usd: number) {
@@ -372,6 +389,11 @@ function predictSpawn(chain: GiftChain, index: bigint): Hex {
   const salt = keccak256(encodeAbiParameters([{ type: "uint256" }], [index]));
   const hash = keccak256(concat(["0xff", boothOf(chain), salt, keccak256(nextInit(chain))]));
   return getAddress(`0x${hash.slice(-40)}`);
+}
+
+export async function boothReady(chain: GiftChain): Promise<boolean> {
+  const code = await client(chain).getBytecode({ address: boothOf(chain) });
+  return Boolean(code && code !== "0x");
 }
 
 export async function readSpawned(chain: GiftChain, account: string | null): Promise<RedRule[]> {
@@ -676,27 +698,40 @@ async function spotOut(zeroForOne: boolean, amountIn: bigint): Promise<bigint> {
   return (step * Q96) / sqrt;
 }
 
-async function buyMin(chain: GiftChain, hi: bigint, amountIn: bigint): Promise<bigint> {
+async function quoteBuy(chain: GiftChain, hi: bigint, amountIn: bigint): Promise<bigint> {
   const task = taskAsset(chain, hi);
-  if (!task) throw new Error("task");
-  let quoted = 0n;
-  if (chain === "xlayer" && task.id === "bem") {
-    quoted = await spotOut(false, amountIn);
-  } else if (chain === "xlayer" && task.id === "tape") {
+  if (!task || amountIn <= 0n) return 0n;
+  if (chain === "xlayer" && task.id === "bem") return spotOut(false, amountIn);
+  if (chain === "xlayer" && task.id === "tape") {
     const first = await xClient.readContract({ address: OPEN_POOL, abi: previewAbi, functionName: "previewSwap", args: [1, false, amountIn] });
-    quoted = first[1];
-  } else if (chain === "bsc") {
-    const out = task.token === ZERO ? BSC.wbnb : task.token;
-    quoted = out.toLowerCase() === BSC.usdt.toLowerCase()
-      ? await quoteExact(BSC.wbnb, BSC.usdt, amountIn, 100)
-      : await quoteWithBnb(out, swapFeeOf(chain, hi), "buy", amountIn);
-  } else {
-    const out = task.token === ZERO ? OKB.wokb : task.token;
-    const amounts = await xClient.readContract({ address: OKB.router, abi: v2QuoteAbi, functionName: "getAmountsOut", args: [amountIn, [OKB.wokb, out]] });
-    quoted = amounts[amounts.length - 1] ?? 0n;
+    return first[1];
   }
+  if (chain === "bsc") {
+    const out = task.token === ZERO ? BSC.wbnb : task.token;
+    return out.toLowerCase() === BSC.usdt.toLowerCase()
+      ? quoteExact(BSC.wbnb, BSC.usdt, amountIn, 100)
+      : quoteWithBnb(out, swapFeeOf(chain, hi), "buy", amountIn);
+  }
+  const out = task.token === ZERO ? OKB.wokb : task.token;
+  const amounts = await xClient.readContract({ address: OKB.router, abi: v2QuoteAbi, functionName: "getAmountsOut", args: [amountIn, [OKB.wokb, out]] });
+  return amounts[amounts.length - 1] ?? 0n;
+}
+
+async function buyMin(chain: GiftChain, hi: bigint, amountIn: bigint): Promise<bigint> {
+  const quoted = await quoteBuy(chain, hi, amountIn);
   if (quoted <= 0n) throw new Error("buy");
-  return quoted * 95n / 100n;
+  return (quoted * 95n) / 100n;
+}
+
+export async function buyPreview(chain: GiftChain, hi: bigint, amountIn: bigint): Promise<string> {
+  const task = taskAsset(chain, hi);
+  if (!task || amountIn <= 0n) return "";
+  try {
+    const quoted = await quoteBuy(chain, hi, amountIn);
+    return shownAmount(quoted, task.decimals);
+  } catch {
+    return "";
+  }
 }
 
 async function approveSpend(chain: GiftChain, from: string, token: Hex, spender: Hex, amount: bigint) {
@@ -951,9 +986,42 @@ function readSavedClaims(account: string): ClaimRow[] {
 }
 
 const claimedEvent = parseAbiItem("event Claimed(address indexed who, uint256 indexed day, uint256 amount)");
+const fundedEvent = parseAbiItem("event Funded(address indexed from, uint256 amount)");
 const ruleEvent = parseAbiItem("event RuleSet(address token, uint8 mode, uint256 fixedAmt, uint256 lo, uint256 hi, uint256 packets, uint256 dayCap, uint256 spotNeed, uint256 perpNeed, uint8 gate, uint256 life)");
 
 const bscLogs = createPublicClient({ transport: http("https://bsc.publicnode.com", { timeout: 20_000 }) });
+
+const claimedCache = new Map<string, { at: number; value: bigint }>();
+
+export async function readClaimed(chain: GiftChain, pool: Hex, balance: bigint): Promise<bigint> {
+  const key = `${chain}:${pool.toLowerCase()}:${balance.toString()}`;
+  const hit = claimedCache.get(key);
+  if (hit && Date.now() - hit.at < 20_000) return hit.value;
+  const live = chain === "bsc" ? bscLogs : client(chain);
+  const tip = await live.getBlockNumber();
+  const span = chain === "bsc" ? 8_000n : 20_000n;
+  let cursor = tip;
+  let claimed = 0n;
+  let funded = 0n;
+  let sawFund = false;
+  for (let i = 0; i < 8 && cursor > 0n; i++) {
+    const from = cursor > span ? cursor - span + 1n : 0n;
+    const [claims, funds] = await Promise.all([
+      live.getLogs({ address: pool, event: claimedEvent, fromBlock: from, toBlock: cursor }).catch(() => []),
+      live.getLogs({ address: pool, event: fundedEvent, fromBlock: from, toBlock: cursor }).catch(() => []),
+    ]);
+    for (const log of claims) claimed += log.args.amount ?? 0n;
+    for (const log of funds) {
+      funded += log.args.amount ?? 0n;
+      sawFund = true;
+    }
+    if (sawFund || from === 0n) break;
+    cursor = from - 1n;
+  }
+  const value = sawFund && funded >= balance ? funded - balance : claimed;
+  claimedCache.set(key, { at: Date.now(), value });
+  return value;
+}
 
 export async function readPaid(chain: GiftChain, lane: GiftLane = "official"): Promise<bigint | null> {
   try {

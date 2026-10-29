@@ -101,7 +101,11 @@ function Positions() {
             </div>
           </dl>
           <div className="mt-3 grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => close(0.5)} className="min-h-11 border border-gold">
+            <button
+              type="button"
+              onClick={() => close(0.5)}
+              className="min-h-11 border border-gold"
+            >
               {c.closeHalf}
             </button>
             <button type="button" onClick={() => close(1)} className="min-h-11 bg-ink text-paper">
@@ -119,11 +123,15 @@ function Orders() {
   const orders = useExchange((s) => s.engine.orders);
   const cancel = useExchange((s) => s.cancel);
   const c = copy[lang];
-  if (orders.length === 0) return <p className="text-sm leading-relaxed text-ink/80">{c.emptyOrd}</p>;
+  if (orders.length === 0)
+    return <p className="text-sm leading-relaxed text-ink/80">{c.emptyOrd}</p>;
   return (
     <ul className="flex flex-col gap-2">
       {orders.map((o) => (
-        <li key={o.id} className="flex items-center justify-between gap-2 border border-gold/40 px-2 py-1">
+        <li
+          key={o.id}
+          className="flex items-center justify-between gap-2 border border-gold/40 px-2 py-1"
+        >
           <div className="min-w-0 font-mono text-sm tabular-nums">
             <p className={o.side === "buy" ? "text-gold" : "text-sell"}>
               {o.market === "spot" ? c.spot : c.perp} · {o.side === "buy" ? c.bidSub : c.askSub}
@@ -132,7 +140,11 @@ function Orders() {
               {fmtSz(o.remaining)} @ {fmtPx(o.price)}
             </p>
           </div>
-          <button type="button" onClick={() => cancel(o.id)} className="min-h-11 shrink-0 border border-sell px-3 text-sell">
+          <button
+            type="button"
+            onClick={() => cancel(o.id)}
+            className="min-h-11 shrink-0 border border-sell px-3 text-sell"
+          >
             {c.cancel}
           </button>
         </li>
@@ -146,18 +158,29 @@ function Fills() {
   const fills = useExchange((s) => s.engine.fills);
   const c = copy[lang];
   const mine = fills.filter((f) => f.kind === "trade" || f.kind === "liq");
-  if (mine.length === 0) return <p className="text-sm leading-relaxed text-ink/80">{c.emptyFill}</p>;
+  if (mine.length === 0)
+    return <p className="text-sm leading-relaxed text-ink/80">{c.emptyFill}</p>;
   return (
     <ul className="flex flex-col gap-2">
       {mine.map((f) => (
-        <li key={f.id} className="flex items-baseline justify-between gap-2 font-mono text-sm tabular-nums">
-          <span className={f.kind === "liq" ? "text-sell" : f.side === "buy" ? "text-gold" : "text-sell"}>
-            {f.kind === "liq" ? c.nearFuse : f.side === "buy" ? c.bidSub : c.askSub} {f.market === "spot" ? c.spot : c.perp}
+        <li
+          key={f.id}
+          className="flex items-baseline justify-between gap-2 font-mono text-sm tabular-nums"
+        >
+          <span
+            className={
+              f.kind === "liq" ? "text-sell" : f.side === "buy" ? "text-gold" : "text-sell"
+            }
+          >
+            {f.kind === "liq" ? c.nearFuse : f.side === "buy" ? c.bidSub : c.askSub}{" "}
+            {f.market === "spot" ? c.spot : c.perp}
           </span>
           <span>
             {fmtSz(f.size)} @ {fmtPx(f.price)}
           </span>
-          <span className={f.pnl >= 0 ? "text-gold" : "text-sell"}>{f.pnl !== 0 ? fmtUsd(f.pnl) : fmtUsd(f.fee)}</span>
+          <span className={f.pnl >= 0 ? "text-gold" : "text-sell"}>
+            {f.pnl !== 0 ? fmtUsd(f.pnl) : fmtUsd(f.fee)}
+          </span>
         </li>
       ))}
     </ul>

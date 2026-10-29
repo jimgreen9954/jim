@@ -4,7 +4,13 @@ import { DepthTape } from "@/components/exchange/depth";
 import { copy } from "@/lib/copy";
 import { useExchange } from "@/lib/exchange-store";
 import { buildBook } from "@/lib/match-engine";
-import { getPaperCandles, PAPER_FRAMES, paperLabel, type Ohlc, type PaperFrame } from "@/lib/candles";
+import {
+  getPaperCandles,
+  PAPER_FRAMES,
+  paperLabel,
+  type Ohlc,
+  type PaperFrame,
+} from "@/lib/candles";
 
 export function TraceChart() {
   const live = useExchange((s) => s.chainBem);

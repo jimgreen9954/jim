@@ -27,7 +27,11 @@ export function RiskBar({
     readPerp(prior, currentAccount())
       .then((view) => {
         const me = (currentAccount() ?? "").toLowerCase();
-        setOldIds(view.liveDeals.filter((deal) => deal.long.toLowerCase() === me || deal.short.toLowerCase() === me).map((deal) => deal.id));
+        setOldIds(
+          view.liveDeals
+            .filter((deal) => deal.long.toLowerCase() === me || deal.short.toLowerCase() === me)
+            .map((deal) => deal.id),
+        );
       })
       .catch(() => setOldIds([]));
   }, [chain, coin]);
@@ -43,7 +47,15 @@ export function RiskBar({
       onUse(next);
     } catch (err) {
       const message = err instanceof Error ? err.message : "";
-      setNote(message === "fee" ? (zh ? "只有收费地址能部署。" : "Only the fee address can deploy.") : zh ? "没有部署。" : "Not deployed.");
+      setNote(
+        message === "fee"
+          ? zh
+            ? "只有收费地址能部署。"
+            : "Only the fee address can deploy."
+          : zh
+            ? "没有部署。"
+            : "Not deployed.",
+      );
     } finally {
       setBusy(false);
     }

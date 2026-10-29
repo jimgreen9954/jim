@@ -25,14 +25,28 @@ export function Book() {
       </header>
       <div className="max-h-96 overflow-auto px-1 py-1">
         {asksDesc.map((level) => (
-          <Row key={`a-${level.price}`} level={level} max={max} side="ask" mine={c.mine} onPick={() => pick(level.price, "buy")} />
+          <Row
+            key={`a-${level.price}`}
+            level={level}
+            max={max}
+            side="ask"
+            mine={c.mine}
+            onPick={() => pick(level.price, "buy")}
+          />
         ))}
         <div className="my-1 flex items-center justify-between border-y border-dashed border-gold px-2 py-2">
           <span className="text-xs tracking-widest text-gold">{c.kerf}</span>
           <span className="font-mono text-lg tabular-nums">{fmtPx(price)}</span>
         </div>
         {bids.map((level) => (
-          <Row key={`b-${level.price}`} level={level} max={max} side="bid" mine={c.mine} onPick={() => pick(level.price, "sell")} />
+          <Row
+            key={`b-${level.price}`}
+            level={level}
+            max={max}
+            side="bid"
+            mine={c.mine}
+            onPick={() => pick(level.price, "sell")}
+          />
         ))}
       </div>
     </section>
@@ -54,7 +68,11 @@ function Row({
 }) {
   const pct = Math.min(100, (level.size / max) * 100);
   return (
-    <button type="button" onClick={onPick} className="relative flex min-h-11 w-full items-center lg:min-h-8">
+    <button
+      type="button"
+      onClick={onPick}
+      className="relative flex min-h-11 w-full items-center lg:min-h-8"
+    >
       <span
         className={`absolute inset-y-1 ${side === "bid" ? "left-0 bg-foil/80" : "right-0 bg-sell/20"}`}
         style={{ width: `${pct}%` }}
