@@ -582,7 +582,7 @@ export function bootCpunk(
           card.className = "hold-card";
           const img = document.createElement("img");
           img.alt = `Circuit Punk ${id}`;
-          img.src = `/api/circuit-punk/${id}.png`;
+          img.src = `/api/circuit-punk/${id}.png?v=3`;
           const title = document.createElement("b");
           const info = punkSheet(id);
           title.textContent = `#${id} · ${info.tier}`;
@@ -664,7 +664,7 @@ export function bootCpunk(
           button.dataset.id = String(id);
           const img = document.createElement("img");
           img.alt = `Circuit Punk ${id}`;
-          img.src = `/api/circuit-punk/${id}.png`;
+          img.src = `/api/circuit-punk/${id}.png?v=3`;
           const title = document.createElement("b");
           const info = punkSheet(id);
           title.textContent = `#${id}`;
@@ -719,7 +719,7 @@ export function bootCpunk(
       line.className = "my-list";
       const img = document.createElement("img");
       img.alt = "";
-      img.src = `/api/circuit-punk/${id}.png`;
+      img.src = `/api/circuit-punk/${id}.png?v=3`;
       const label = document.createElement("b");
       label.innerHTML = `#${id}<small>${bemText(row.quote)} BEM + ${bemText(row.quote * 1000n)} TAPE</small>`;
       const button = document.createElement("button");
@@ -866,7 +866,7 @@ export function bootCpunk(
       badge.textContent = `第 ${info.rank}`;
       const img = document.createElement("img");
       img.alt = "";
-      img.src = `/api/circuit-punk/${id}.png`;
+      img.src = `/api/circuit-punk/${id}.png?v=3`;
       pic.append(badge, img);
       const body = document.createElement("div");
       body.className = "body";
@@ -908,7 +908,7 @@ export function bootCpunk(
     const buy = host.querySelector<HTMLButtonElement>("#cp-buy");
     const cancel = host.querySelector<HTMLButtonElement>("#cp-cancel");
     const name = host.querySelector("#cp-sheet-name");
-    if (img) img.src = `/api/circuit-punk/${id}.png`;
+    if (img) img.src = `/api/circuit-punk/${id}.png?v=3`;
     if (name) name.textContent = `Circuit Punk #${id}`;
     const meta = host.querySelector("#cp-sheet-meta");
     if (meta) {
@@ -1489,7 +1489,7 @@ export function bootCpunk(
     for (const id of card.ids.slice(0, 6)) {
       const img = document.createElement("img");
       img.alt = `Circuit Punk ${id}`;
-      img.src = `/api/circuit-punk/${id}.png`;
+      img.src = `/api/circuit-punk/${id}.png?v=3`;
       photos.append(img);
     }
     if (card.ids.length > 6) {

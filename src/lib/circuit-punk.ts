@@ -325,15 +325,17 @@ function chunk(type: string, data: Buffer): Buffer {
   return Buffer.concat([head, body, tail]);
 }
 
-function pngIndexed(pixels: number[], palette: string[]): Buffer {
-  const raw = Buffer.alloc(24 * 25);
-  for (let y = 0; y < 24; y += 1) {
-    raw[y * 25] = 0;
-    for (let x = 0; x < 24; x += 1) raw[y * 25 + 1 + x] = pixels[y * 24 + x];
+function pngIndexed(pixels: number[], palette: string[], scale = 1): Buffer {
+  const side = 24 * scale;
+  const raw = Buffer.alloc(side * (side + 1));
+  for (let y = 0; y < side; y += 1) {
+    raw[y * (side + 1)] = 0;
+    const sy = Math.floor(y / scale);
+    for (let x = 0; x < side; x += 1) raw[y * (side + 1) + 1 + x] = pixels[sy * 24 + Math.floor(x / scale)];
   }
   const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(24, 0);
-  ihdr.writeUInt32BE(24, 4);
+  ihdr.writeUInt32BE(side, 0);
+  ihdr.writeUInt32BE(side, 4);
   ihdr[8] = 8;
   ihdr[9] = 3;
   const plte = Buffer.alloc(palette.length * 3);
@@ -518,7 +520,7 @@ export function punkPng(id: number): Buffer {
     set(16, 21, "#e6c15a");
   }
   if (row.pack === "WLCSP") rect(6, 19, 12, 1, "#d7dde6");
-  return pngIndexed(g, PAL);
+  return pngIndexed(g, PAL, 10);
 }
 
 export function punkMeta(id: number, origin: string) {
@@ -527,7 +529,7 @@ export function punkMeta(id: number, origin: string) {
   return {
     name: `${CPUNK_NAME} #${id}`,
     description: CPUNK_BLURB,
-    image: `${root}/api/circuit-punk/${id}.png`,
+    image: `${root}/api/circuit-punk/${id}.png?v=3`,
     attributes: [
       { trait_type: "类型", value: row.type },
       { trait_type: "权重", value: row.tier },

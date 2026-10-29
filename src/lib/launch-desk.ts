@@ -549,7 +549,7 @@ export function bootLaunch(host: HTMLElement): () => void {
         slot.className = "art-slot";
         const img = document.createElement("img");
         img.alt = item.name;
-        img.src = `${prefix}/api/circuit-punk/${id}.png`;
+        img.src = `${prefix}/api/circuit-punk/${id}.png?v=3`;
         slot.append(img);
         const meta = document.createElement("div");
         const title = document.createElement("b");

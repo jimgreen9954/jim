@@ -294,7 +294,7 @@ a.nav-item { text-decoration: none; }
 .cp-kicker { color: var(--gold); font-size: 12px; font-weight: 800; letter-spacing: .16em; display: flex; align-items: center; gap: 8px; }
 .cp-banner h2 { font-size: 36px; letter-spacing: -.4px; margin: 4px 0; }
 .cp-stats { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0; }
-.cp-layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 18px; align-items: start; }
+.cp-market-title { margin: 0; font-size: 28px; letter-spacing: -.3px; }
 #page-mint .cp-layout { grid-template-columns: minmax(0, 520px); }
 .cp-mint { border: 1px solid var(--line); border-radius: 16px; padding: 16px; background: var(--card); }
 .cp-mint h3 { font-size: 16px; margin: 12px 0 6px; }
@@ -2072,6 +2072,8 @@ tbody tr:hover { background: var(--soft); }
             </div>
           </aside>
           <div id="cp-market-col">
+            <h2 class="cp-market-title">Circuit Punk</h2>
+            <p class="sub">一万张像素肖像。挂单在下面，点开能看编号和属性。</p>
             <div class="toolbar">
               <button class="chip" id="cp-tab-items" type="button">物品</button>
               <button class="chip on" id="cp-tab-lists" type="button">挂单</button>
