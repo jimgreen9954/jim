@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Tapeliquid NFT Market</title>
+<title>TAPELIQUID NFT Market</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 :root {
@@ -33,10 +33,10 @@
 .tape-root button, .tape-root input { font-family: inherit; }
 .tape-root button { cursor: pointer; }
 .rail {
-  flex: 0 0 188px;
-  width: 188px;
-  min-width: 188px;
-  max-width: 188px;
+  flex: 0 0 220px;
+  width: 220px;
+  min-width: 220px;
+  max-width: 220px;
   border-right: 1px solid var(--line);
   background: var(--card);
   display: flex;
@@ -66,7 +66,7 @@
   overflow: visible;
 }
 .brand .name { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.05; min-width: 0; }
-.brand .name b { font-size: 13px; letter-spacing: -.2px; }
+.brand .name b { font-size: 18px; font-weight: 800; letter-spacing: 0; }
 .brand .name small { font-size: 10px; color: var(--muted); font-weight: 700; }
 .brand .mark, .top-logo .mark { width: 44px; height: 44px; border-radius: 0; object-fit: contain; background: transparent; }
 .gold-crown {
@@ -185,7 +185,7 @@ a.nav-item { text-decoration: none; }
 }
 .top-logo .mark { width: 40px; height: 40px; border-radius: 0; object-fit: contain; background: transparent; display: block; }
 .top-logo .name { display: none; flex-direction: column; align-items: flex-start; line-height: 1.05; }
-.top-logo .name b { font-size: 12px; }
+.top-logo .name b { font-size: 16px; font-weight: 800; letter-spacing: 0; }
 .top-logo .name small { font-size: 9px; color: var(--muted); font-weight: 700; }
 .account { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
 .content { flex: 1; min-height: 0; overflow: auto; }
@@ -1367,9 +1367,10 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
     padding: 0 8px;
     max-width: 128px;
   }
-  .top-logo { display: flex; gap: 0; }
-  .top-logo .mark { width: 28px; height: 28px; }
-  .top-logo .name { display: none; }
+  .top-logo { display: flex; gap: 8px; }
+  .top-logo .mark { width: 32px; height: 32px; }
+  .top-logo .name { display: flex; }
+  .top-logo .name small { display: none; }
   .cp-hero { width: min(240px, 72vw); }
   .cp-hero .face, .hero .face { height: auto; width: 100%; aspect-ratio: 1; }
   .cp-banner { flex-direction: column; align-items: flex-start; }
@@ -1636,7 +1637,7 @@ tbody tr:hover { background: var(--soft); }
 <aside class="rail">
   <button class="brand" type="button" data-page="mint" onclick="switchPage('mint')" aria-label="Tapeliquid NFT Market">
     <img class="mark" src="/tape-launch/mark-hammer.png" alt="">
-    <span class="name"><b>Tapeliquid</b><small>NFT Market</small></span>
+    <span class="name"><b>TAPELIQUID</b><small>NFT Market</small></span>
   </button>
   <button class="nav-item nav-main active" data-page="discover" onclick="switchPage('discover')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg><span data-i18n="navDiscover">发现</span>
@@ -1720,7 +1721,7 @@ tbody tr:hover { background: var(--soft); }
     </button>
     <button class="top-logo" type="button" onclick="switchPage('mint')" aria-label="Tapeliquid NFT Market">
       <img class="mark" src="/tape-launch/mark-hammer.png" alt="">
-      <span class="name"><b>Tapeliquid</b><small>NFT Market</small></span>
+      <span class="name"><b>TAPELIQUID</b><small>NFT Market</small></span>
     </button>
     <label class="search">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>
