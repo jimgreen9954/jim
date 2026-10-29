@@ -528,7 +528,7 @@ td.right, th.right { text-align: right; }
   font-size: 14px;
 }
 .feed-row:last-child { border-bottom: 0; }
-.cp-log .feed-row { grid-template-columns: 1fr; color: inherit; text-decoration: none; }
+.cp-log, #cp-log { max-height: 240px; overflow: auto; }
 .tag { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 800; background: var(--soft); }
 .tag.founder { background: #e0b15a; color: #1a1206; }
 .tag.mars { background: #c4554a; color: #fff; }
@@ -1323,7 +1323,6 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
   .content { padding-bottom: calc(74px + env(safe-area-inset-bottom)); overflow-x: hidden; }
   .page, .pad, .cp-layout, #cp-market-col, .cp-mint, .form { min-width: 0; max-width: 100%; }
   #cp-market-col { display: flex; flex-direction: column; gap: 12px; }
-  #cp-log-block { order: -1; }
   #cp-log { max-height: 240px; overflow: auto; }
   .cp-log .feed-row { white-space: normal; overflow-wrap: anywhere; font-size: 13px; line-height: 1.4; }
   .table-wrap { overflow-x: auto; max-width: 100%; }
@@ -2073,18 +2072,6 @@ tbody tr:hover { background: var(--soft); }
             </div>
           </aside>
           <div id="cp-market-col">
-            <div id="cp-log-block">
-              <div class="log-head">
-                <h3>交易记录</h3>
-                <button class="chip" id="cp-log-toggle" type="button">隐藏</button>
-              </div>
-              <div class="feed cp-log" id="cp-log">
-                <div class="feed-row"><span>正在读链上的铸造、挂单和成交。</span></div>
-              </div>
-            </div>
-            <h3 style="font-size:16px;margin:0 0 6px">我的挂单</h3>
-            <p class="hint" id="cp-my-note" style="text-align:left;margin:0 0 8px">连上钱包后，这里只放你挂着的，方便撤单。</p>
-            <div class="my-lists" id="cp-my-lists"></div>
             <div class="toolbar">
               <button class="chip" id="cp-tab-items" type="button">物品</button>
               <button class="chip on" id="cp-tab-lists" type="button">挂单</button>
@@ -2109,6 +2096,18 @@ tbody tr:hover { background: var(--soft); }
               <label class="sub" for="cp-page-size">每页</label>
               <input id="cp-page-size" inputmode="numeric" value="24" min="4" max="96" style="height:36px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);padding:0 12px;width:72px">
             </div>
+            <div id="cp-log-block">
+              <div class="log-head">
+                <h3>交易记录</h3>
+                <button class="chip" id="cp-log-toggle" type="button">隐藏</button>
+              </div>
+              <div class="feed cp-log" id="cp-log">
+                <div class="feed-row"><span>正在读链上的铸造、挂单和成交。</span></div>
+              </div>
+            </div>
+            <h3 style="font-size:16px;margin:0 0 6px">我的挂单</h3>
+            <p class="hint" id="cp-my-note" style="text-align:left;margin:0 0 8px">连上钱包后，这里只放你挂着的，方便撤单。</p>
+            <div class="my-lists" id="cp-my-lists"></div>
             <h3 style="font-size:16px;margin:18px 0 8px">持有地址</h3>
             <p class="sub" id="cp-holders-note">正在读取链上持有人。</p>
             <div class="toolbar" id="cp-holder-bar">

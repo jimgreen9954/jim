@@ -435,6 +435,9 @@ export function bootCpunk(
 
   const scanHolders = async () => {
     const note = host.querySelector("#cp-holders-note");
+    holderSeen = 0;
+    holderTotal = 1;
+    paint();
     try {
       const [pub, heldReserve] = await Promise.all([
         client.readContract({ address: CPUNK, abi: ownerAbi, functionName: "publicMinted" }),
@@ -452,7 +455,8 @@ export function bootCpunk(
       }
       if (listed.size) paint();
       const reserveIds = Array.from({ length: Number(heldReserve) }, (_, index) => index + 1);
-      const ids = [...reserveIds.filter((id) => id <= 150), ...publicIds, ...reserveIds.filter((id) => id > 150)];
+      const reserveHigh = reserveIds.filter((id) => id > 150).reverse();
+      const ids = [...reserveHigh, ...publicIds, ...reserveIds.filter((id) => id <= 150)];
       const bags = new Map<string, number[]>();
       let seen = 0;
       if (note) note.textContent = "正在读取链上持有人。";
@@ -496,9 +500,13 @@ export function bootCpunk(
           });
         paintHolders();
         paint();
-        await new Promise((resolve) => window.setTimeout(resolve, 400));
+        await new Promise((resolve) => window.setTimeout(resolve, 40));
       }
+      holderSeen = holderTotal;
+      paint();
     } catch {
+      holderSeen = holderTotal;
+      paint();
       if (note) note.textContent = "持有地址这次没读完。刷新后再对一次。";
     }
   };
@@ -837,7 +845,11 @@ export function bootCpunk(
     if (!ids.length) {
       const empty = document.createElement("p");
       empty.className = "sub";
-      empty.textContent = listsOnly ? "还没有挂单，所以现在买不了。钱包里有的，在左边填编号再点挂出。" : "没有符合这些属性的 Circuit Punk。";
+      empty.textContent = listsOnly
+        ? holderSeen < holderTotal
+          ? "正在读取链上挂单。读到的会立刻出现在这里。"
+          : "还没有挂单，所以现在买不了。钱包里有的，在左边填编号再点挂出。"
+        : "没有符合这些属性的 Circuit Punk。";
       grid.append(empty);
       return;
     }
