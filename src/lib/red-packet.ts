@@ -204,8 +204,8 @@ export function taskLine(chain: GiftChain, hi: bigint, spotNeed: bigint, perpNee
   const unit = chain === "bsc" ? "BNB" : "OKB";
   if (!name || !(buy > 0)) return zh ? "还没选币" : "No coin yet";
   const shown = buy.toLocaleString("en-US", { maximumFractionDigits: 6 });
-  if (!verbBuy) return zh ? `卖出 ${name}，换回 ${unit}` : `Sell ${name} for ${unit}`;
-  return zh ? `买入 ${name}，支付 ${shown} ${unit}` : `Buy ${name}, pay ${shown} ${unit}`;
+  if (!verbBuy) return zh ? `卖出 ${name}，换回 ${unit}。卖出的币会离开你的钱包。` : `Sell ${name} for ${unit}. The coin leaves your wallet.`;
+  return zh ? `买入 ${name}，需要支付 ${shown} ${unit}。这笔钱会离开你的钱包。` : `Buy ${name}. You pay ${shown} ${unit}. The money leaves your wallet.`;
 }
 
 export function addDeskVolume(chain: GiftChain, account: string, leg: "spot" | "perp", usd: number) {
@@ -288,17 +288,23 @@ async function send(chain: GiftChain, from: string, to: Hex, data: Hex, value = 
       const again = parseChainId(await eth.request({ method: "eth_chainId" }).catch(() => null));
       if (again !== want) throw new Error(want === 196 ? "xlayer" : "bsc");
     }
+    throw new Error("switched");
   }
-  let gas: Hex | undefined;
+  let gas: Hex;
   try {
     const est = await client(chain).estimateGas({ account: from as Hex, to, data, value });
     gas = `0x${((est * 12n) / 10n).toString(16)}`;
-  } catch {
-    gas = undefined;
+  } catch (err) {
+    const text = err instanceof Error ? err.message : "";
+    if (/exceeds the balance|insufficient funds/i.test(text)) throw new Error("funds");
+    const known = ["deployer", "creator", "amount", "life", "mode", "range", "packets", "dust", "rule", "late", "empty", "day", "cap", "early", "credit", "token", "native", "bot", "pace", "task", "buy", "fee", "pull", "prize", "closed", "begun"];
+    const hit = known.find((item) => text === item || text.includes(`: ${item}`) || text.includes(`"${item}"`));
+    if (hit) throw new Error(hit);
+    throw new Error("net");
   }
   return (await eth.request({
     method: "eth_sendTransaction",
-    params: [{ from, to, data, value: `0x${value.toString(16)}`, ...(gas ? { gas } : {}) }],
+    params: [{ from, to, data, value: `0x${value.toString(16)}`, gas }],
   })) as Hex;
 }
 
@@ -402,6 +408,7 @@ export async function openAnother(
   if (!code || code === "0x") {
     const hash = await send(chain, from, FACTORY, concat([BOOTH_SALT, RED_BOOTH_BYTECODE]));
     await wait(chain, hash);
+    throw new Error("booth");
   }
   const count = await client(chain).readContract({ address: booth, abi: RED_BOOTH_ABI, functionName: "count" });
   const packet = predictSpawn(chain, count);
@@ -695,12 +702,9 @@ async function buyMin(chain: GiftChain, hi: bigint, amountIn: bigint): Promise<b
 async function approveSpend(chain: GiftChain, from: string, token: Hex, spender: Hex, amount: bigint) {
   const allowance = await client(chain).readContract({ address: token, abi: erc20, functionName: "allowance", args: [from as Hex, spender] });
   if (allowance >= amount) return;
-  if (allowance > 0n) {
-    const cleared = await send(chain, from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, 0n] }));
-    await wait(chain, cleared);
-  }
-  const hash = await send(chain, from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, amount] }));
+  const hash = await send(chain, from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, allowance > 0n ? 0n : amount] }));
   await wait(chain, hash);
+  throw new Error("approve");
 }
 
 export async function openBlock(chain: GiftChain, from: string, lane: GiftLane = "official", pool: Hex = packetOf(chain, lane)): Promise<"day" | "funds" | null> {

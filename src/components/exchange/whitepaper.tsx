@@ -159,8 +159,8 @@ const zhBody: Section[] = [
   {
     h: "奖励",
     ps: [
-      "每一份新红包都是一份新合约。官方创建只有该链的部署地址能开。个人创建任何人都能开。发出时选定可领时间：24 小时、一星期或一个月。创建时把奖金打进这一份。同一份里，一个地址每个新加坡日只能领一次。另一份新红包不受这一次影响，可以再参加。时间过了就不能再领，没领完的由放钱的人取回自己的那一份。",
-      "领取不用等待。参与时先看清是买入还是卖出，以及这条链上还剩多少。同意之后才去交易。X Layer 用 OKB 计价，BSC 用 BNB 计价。交易记在链上，验证通过才弹出红包，资产进这个钱包。必须是普通钱包自己签。合约、代付和没做这笔交易的地址都不能领。以前的红包合约不再使用。",
+      "每一份新红包都是一份新合约。官方创建只有该链的部署地址能看见、能开。其他人只看见个人创建，任何人都能开。发出时选定可领时间：24 小时、一星期或一个月。创建时把奖金打进这一份。同一份里，一个地址每个新加坡日只能领一次。另一份新红包不受这一次影响，可以再参加。时间过了就不能再领，没领完的由放钱的人取回自己的那一份。",
+      "点参与后，先看清是不是愿意花 OKB 或 BNB 去买这一枚币，也可以拒绝。同意之后才去交易。交易成功再点验证，验证通过才打开红包，再点领取，资产才进这个钱包。每一次点击最多弹出一次钱包。需要换链或授权时，先完成那一步，再点一次，才做下一笔。X Layer 用 OKB 计价，BSC 用 BNB 计价。必须是普通钱包自己签。合约、代付和没做这笔交易的地址都不能领。以前的红包合约不再使用。",
       "以前的 NAND 礼包仍在 X Layer 0x5374DFfD3186FfEDAC46Cc6c9545B9e9e2CEF45b，BEM 礼包仍在 BSC 0xa29f86319E66DAdF1e30548bcC593fa91CBB7278。这一页不再代领，也不再往那两份里放。",
     ],
   },
@@ -198,7 +198,7 @@ const zhBody: Section[] = [
       `BSC 永续 ${BSC_REBATE}。X Layer 永续 ${KNOWN_XPERP}。标记 ${KNOWN_XMARK}。晶体管永续 ${GATE}。流动性仓位 ${NPM}。`,
       `BSC BEM ${BSC.bem}。BSC 桥 ${BEM_BRIDGE}。X Layer BEM ${X_BEM}。TapeOut BEM 挖矿 0x7E2E0DC66a3bD9103E69b766afA62d9f7b697b46。`,
       `TapeOut 晶体管市场 ${OFFICIAL.transistorMarket}。TapeOut 电路市场 ${OFFICIAL.circuitMarket}。BEM 池 ${BSC.pool}。`,
-      `X Layer 印鉴领取 ${LOCKED_REBATE.xlayer}。BSC 印鉴领取 ${LOCKED_REBATE.bsc}。X Layer 官方红包 0x898cE785278304cDA46Bad088616DEDDF09c4750。X Layer 个人红包 0x4dE5f0ed87aFC44A645af8ab365600F85DD7E619。BSC 官方红包 0x8d7470dF3eCDd04F7146c33F19FdEf13615FA455。BSC 个人红包 0xd94Dd4784467008AE5aD9FD9d606E89d7E309da8。TAPE 走能成交的自有池。其他现货走能成交的兑换。合约只在本所。以前的红包不再使用。`,
+      `X Layer 印鉴领取 ${LOCKED_REBATE.xlayer}。BSC 印鉴领取 ${LOCKED_REBATE.bsc}。红包发布台 0x284Fa8819980A229622B711A52BF66bD9cDCbC2d。X Layer 已经在用，每一份从这里新开。BSC 使用同一个地址，第一次发布时放上。TAPE 走能成交的自有池。其他现货走能成交的兑换。合约只在本所。以前的红包不再使用。`,
       "改规则的当天改这一页。链上合约没有改率入口的，不能用这一页把已经部署的排放改掉。",
     ],
   },
@@ -349,8 +349,8 @@ const en: Section[] = [
   {
     h: "Rewards",
     ps: [
-      "Each new red packet is its own contract. Only that chain's deployer can open an official round. Anyone can open a personal round and choose 24 hours, one week, or one month when sending. The creator puts the prize into that round. On the same round, one address can claim once per Singapore day. A later round is not blocked by that claim. After the window ends, claims stop, and each depositor takes back only their own remainder.",
-      "There is no wait. Joining shows whether the task is a buy or a sell, and how much is available on that chain. The trade happens only after the user agrees. X Layer is priced in OKB and BSC in BNB. The trade is recorded on chain. The packet opens only after that check passes, and the asset lands in this wallet. The signer has to be an ordinary wallet. A contract, a relayer, or an address that did not make the trade cannot claim. The earlier red packet contracts are no longer used.",
+      "Each new red packet is its own contract. Only that chain's deployer can see and open an official round. Everyone else sees personal rounds, and anyone can open one. The sender chooses 24 hours, one week, or one month. The creator puts the prize into that round. On the same round, one address can claim once per Singapore day. A later round is not blocked by that claim. After the window ends, claims stop, and each depositor takes back only their own remainder.",
+      "Joining asks whether the wallet will spend OKB or BNB to buy that coin. The user can refuse. The trade starts only after they agree. After the trade, they check it. The packet opens only when the check passes, and the asset is paid only when they claim. Each tap opens the wallet at most once. A chain switch or an approval finishes first. The next tap does the next step. X Layer is priced in OKB and BSC in BNB. The signer has to be an ordinary wallet. A contract, a relayer, or an address that did not make the trade cannot claim. The earlier red packet contracts are no longer used.",
       "The old NAND gift remains on X Layer at 0x5374DFfD3186FfEDAC46Cc6c9545B9e9e2CEF45b. The old BEM gift remains on BSC at 0xa29f86319E66DAdF1e30548bcC593fa91CBB7278. This page no longer claims from them or adds to them.",
     ],
   },
@@ -389,7 +389,7 @@ const en: Section[] = [
       `BSC perpetual ${BSC_REBATE}. X Layer perpetual ${KNOWN_XPERP}. Mark ${KNOWN_XMARK}. Transistor perpetual ${GATE}. Liquidity positions ${NPM}.`,
       `BSC BEM ${BSC.bem}. BSC bridge ${BEM_BRIDGE}. X Layer BEM ${X_BEM}. TapeOut BEM mine 0x7E2E0DC66a3bD9103E69b766afA62d9f7b697b46.`,
       `TapeOut transistor market ${OFFICIAL.transistorMarket}. TapeOut circuit market ${OFFICIAL.circuitMarket}. BEM pool ${BSC.pool}.`,
-      `X Layer seal claim ${LOCKED_REBATE.xlayer}. BSC seal claim ${LOCKED_REBATE.bsc}. X Layer official packet 0x898cE785278304cDA46Bad088616DEDDF09c4750. X Layer personal packet 0x4dE5f0ed87aFC44A645af8ab365600F85DD7E619. BSC official packet 0x8d7470dF3eCDd04F7146c33F19FdEf13615FA455. BSC personal packet 0xd94Dd4784467008AE5aD9FD9d606E89d7E309da8. TAPE uses the pool that can fill. Other spot assets use a market that can fill. Perpetuals stay on this exchange. The earlier packets are no longer used.`,
+      `X Layer seal claim ${LOCKED_REBATE.xlayer}. BSC seal claim ${LOCKED_REBATE.bsc}. Red packet desk 0x284Fa8819980A229622B711A52BF66bD9cDCbC2d. X Layer already uses it, and each round is a new contract there. BSC uses the same address and places it on the first publish. TAPE uses the pool that can fill. Other spot assets use a market that can fill. Perpetuals stay on this exchange. The earlier packets are no longer used.`,
       "When a rule changes, this page changes the same day. A sentence here cannot change an emission that the deployed contract has no function to edit.",
     ],
   },
