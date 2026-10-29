@@ -19,7 +19,12 @@ export function MarketPage() {
   useLayoutEffect(() => {
     const host = ref.current;
     if (!host) return;
-    document.title = "TAPE NFT 市场";
+    document.title = "Tapeliquid NFT 交易市场";
+    const icon = document.querySelector<HTMLLinkElement>("link[rel='icon']");
+    if (icon) {
+      icon.type = "image/png";
+      icon.href = "/tape-launch/hammer.png";
+    }
     host.innerHTML = html;
     try {
       return bootLaunch(host);
