@@ -158,13 +158,17 @@ export async function buyOkbWithUsdt0(from: string, usdtIn: bigint): Promise<big
   }
   await approveToken(from, USDT, parts.swapIn);
   const minOut = out * 99n / 100n;
+  const before = await client.getBalance({ address: from as Hex });
   const data = encodeFunctionData({
     abi: v2,
     functionName: "swapExactTokensForETH",
     args: [parts.swapIn, minOut, [USDT, WOKB], from as Hex, BigInt(Math.floor(Date.now() / 1000) + 60 * 20)],
   });
   await wait(await send(from, ROUTER, data));
-  return minOut;
+  const after = await client.getBalance({ address: from as Hex });
+  const gained = after > before ? after - before : 0n;
+  if (gained <= 0n) throw new Error("empty");
+  return gained;
 }
 
 const HOP_KEY = "tl-tape-usdt-hop";

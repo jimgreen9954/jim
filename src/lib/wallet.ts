@@ -53,6 +53,8 @@ export async function resumeSession(): Promise<void> {
     kind = eth === binanceInjected() ? "binance" : "okx";
     remember(next);
     eth.on?.("accountsChanged", (rows: string[]) => remember(rows?.[0] ?? null));
+    eth.on?.("chainChanged", ((hex: unknown) => rememberChain(parseChainId(hex))) as (accounts: string[]) => void);
+    void refreshChain(eth);
   } catch {
     /* No stored session. The connect button stays. */
   }
@@ -274,9 +276,10 @@ export async function disconnectWallet(): Promise<void> {
 export async function ensureProvider(): Promise<Eth> {
   if (current) return current;
   const plugged = kind === "binance" ? binanceInjected() : okxInjected();
-  if (plugged) {
-    current = plugged;
-    return plugged;
+  const eth = plugged ?? host().ethereum ?? null;
+  if (eth) {
+    current = eth;
+    return eth;
   }
   if (kind === "binance") throw new Error("binanceapp");
   await connectOkxRemote();

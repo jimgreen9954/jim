@@ -14,33 +14,36 @@ import {
   parseUnits,
   type Hex,
 } from "viem";
-import { BSC, connectBsc, quoteExact } from "@/lib/bsc";
+import { BSC, connectBsc, quoteExact, quoteWithBnb } from "@/lib/bsc";
 import { BSC_SAFE, TxPending, XLAYER_SAFE } from "@/lib/chain-marks";
 import { OKB } from "@/lib/okb";
 import { RED_PACKET_ABI, RED_PACKET_BYTECODE } from "@/lib/red-packet-artifact";
 import { RED_OPEN_ABI, RED_OPEN_BYTECODE } from "@/lib/red-packet-open-artifact";
+import { RED_NEXT_ABI, RED_NEXT_BYTECODE } from "@/lib/red-packet-next-artifact";
+import { RED_BOOTH_ABI, RED_BOOTH_BYTECODE } from "@/lib/red-booth-artifact";
 import { STOCKS } from "@/lib/stocks";
-import { TAPE_BEM, TAPE_POOL, TAPE_TOKEN, TAPE_USDT } from "@/lib/tape-pool";
+import { TAPE_BEM, TAPE_TOKEN, TAPE_USDT } from "@/lib/tape-pool";
+import { OPEN_POOL } from "@/lib/tape-open-swap";
 import { connectXLayer } from "@/lib/xlayer";
-import { getProvider } from "@/lib/wallet";
+import { ensureProvider, parseChainId, switchDeskChain } from "@/lib/wallet";
 
 export type GiftChain = "xlayer" | "bsc";
 export type GiftLane = "official" | "volunteer";
 
 const ZERO = "0x0000000000000000000000000000000000000000" as Hex;
 const FACTORY = "0x4e59b44847b379578588920cA78FbF26c0B4956C" as Hex;
-const SALT_TEXT = new TextEncoder().encode("TAPELIQUID-red-v3");
+const SALT_TEXT = new TextEncoder().encode("TAPELIQUID-red-v8");
 const saltHex = keccak256(`0x${[...SALT_TEXT].map((b) => b.toString(16).padStart(2, "0")).join("")}`);
 
 function saltFor(lane: GiftLane): Hex {
   if (lane === "official") return saltHex;
-  const text = new TextEncoder().encode("TAPELIQUID-red-volunteer-v3");
+  const text = new TextEncoder().encode("TAPELIQUID-red-volunteer-v8");
   return keccak256(`0x${[...text].map((b) => b.toString(16).padStart(2, "0")).join("")}`);
 }
 
 const DESK = {
   bsc: { router: BSC.router, quote: BSC.usdt, wrapped: BSC.wbnb, tapePool: ZERO, tapeQuote: ZERO, tapeToken: ZERO, tapeBem: ZERO, scale: 10n ** 12n, kind: 0 },
-  xlayer: { router: OKB.router, quote: OKB.usdt, wrapped: OKB.wokb, tapePool: TAPE_POOL, tapeQuote: TAPE_USDT, tapeToken: TAPE_TOKEN, tapeBem: TAPE_BEM, scale: 1n, kind: 1 },
+  xlayer: { router: OKB.router, quote: OKB.usdt, wrapped: OKB.wokb, tapePool: OPEN_POOL, tapeQuote: TAPE_USDT, tapeToken: TAPE_TOKEN, tapeBem: TAPE_BEM, scale: 1n, kind: 1 },
 } as const;
 
 const USDT0 = "0x779Ded0c9e1022225f8E0630b35a9b54bE713736" as Hex;
@@ -194,12 +197,15 @@ export function taskAsset(chain: GiftChain, hi: bigint): GiftAsset | null {
 
 export function taskLine(chain: GiftChain, hi: bigint, spotNeed: bigint, perpNeed: bigint, gate: number, zh: boolean): string {
   const task = taskAsset(chain, hi);
-  const spot = needUsd(spotNeed);
-  const perp = needUsd(perpNeed);
-  const buy = Math.max(spot, perp);
+  const raw = spotNeed > perpNeed ? spotNeed : perpNeed;
+  const buy = Number(formatUnits(raw, 18));
   const name = task ? (zh ? task.zh : task.en) : "";
-  if (!name || !(buy > 0)) return zh ? "没有指定资产" : "No asset";
-  return zh ? `打开时买入 ${name}，至少 ${buy} USDT` : `Opening buys at least ${buy} USDT of ${name}`;
+  const verbBuy = gate !== 1;
+  const unit = chain === "bsc" ? "BNB" : "OKB";
+  if (!name || !(buy > 0)) return zh ? "还没选币" : "No coin yet";
+  const shown = buy.toLocaleString("en-US", { maximumFractionDigits: 6 });
+  if (!verbBuy) return zh ? `卖出 ${name}，换回 ${unit}` : `Sell ${name} for ${unit}`;
+  return zh ? `买入 ${name}，支付 ${shown} ${unit}` : `Buy ${name}, pay ${shown} ${unit}`;
 }
 
 export function addDeskVolume(chain: GiftChain, account: string, leg: "spot" | "perp", usd: number) {
@@ -265,24 +271,53 @@ export function claimedHere(lane: GiftLane = "official"): boolean {
 }
 
 async function send(chain: GiftChain, from: string, to: Hex, data: Hex, value = 0n): Promise<Hex> {
-  const live = chain === "xlayer" ? await connectXLayer() : await connectBsc();
-  const eth = getProvider();
-  if (!eth) throw new Error("nowallet");
-  const account = live || from;
+  const eth = await ensureProvider();
+  const want = chain === "bsc" ? 56 : 196;
+  let id: number | null = null;
+  try {
+    id = parseChainId(await eth.request({ method: "eth_chainId" }));
+  } catch {
+    id = null;
+  }
+  if (id !== want) {
+    try {
+      await switchDeskChain(want);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      if (message === "nowallet") throw err;
+      const again = parseChainId(await eth.request({ method: "eth_chainId" }).catch(() => null));
+      if (again !== want) throw new Error(want === 196 ? "xlayer" : "bsc");
+    }
+  }
+  let gas: Hex | undefined;
+  try {
+    const est = await client(chain).estimateGas({ account: from as Hex, to, data, value });
+    gas = `0x${((est * 12n) / 10n).toString(16)}`;
+  } catch {
+    gas = undefined;
+  }
   return (await eth.request({
     method: "eth_sendTransaction",
-    params: [{ from: account, to, data, value: `0x${value.toString(16)}`, chainId: chain === "bsc" ? "0x38" : "0xc4" }],
+    params: [{ from, to, data, value: `0x${value.toString(16)}`, ...(gas ? { gas } : {}) }],
   })) as Hex;
 }
 
-async function preflight(chain: GiftChain, from: string, to: Hex, data: Hex) {
+async function preflight(chain: GiftChain, from: string, to: Hex, data: Hex, value = 0n) {
+  let timer = 0;
+  const slow = new Promise<"slow">((resolve) => {
+    timer = window.setTimeout(() => resolve("slow"), 250);
+  });
+  const call = client(chain).call({ to, data, account: from as Hex, value }).then(() => "ok" as const).catch((err: unknown) => err);
   try {
-    await client(chain).call({ to, data, account: from as Hex });
-  } catch (err) {
-    const text = err instanceof Error ? err.message : "";
-    const known = ["deployer", "creator", "amount", "life", "mode", "range", "packets", "dust", "rule", "late", "empty", "day", "cap", "early", "credit", "token", "native", "bot", "pace", "task", "buy", "fee", "pull"];
-    const hit = known.find((item) => text.includes(item));
+    const which = await Promise.race([call, slow]);
+    if (which === "ok" || which === "slow") return;
+    const text = which instanceof Error ? which.message : "";
+    if (/exceeds the balance|insufficient funds/i.test(text)) throw new Error("funds");
+    const known = ["deployer", "creator", "amount", "life", "mode", "range", "packets", "dust", "rule", "late", "empty", "day", "cap", "early", "credit", "token", "native", "bot", "pace", "task", "buy", "fee", "pull", "prize", "closed"];
+    const hit = known.find((item) => text === item || text.includes(`: ${item}`) || text.includes(`"${item}"`));
     throw new Error(hit ?? "revert");
+  } finally {
+    window.clearTimeout(timer);
   }
 }
 async function wait(chain: GiftChain, hash: Hex) {
@@ -311,6 +346,82 @@ export async function deployRed(chain: GiftChain, lane: GiftLane = "official"): 
   return packetOf(chain, lane);
 }
 
+const BOOTH_SALT = keccak256(`0x${[...new TextEncoder().encode("TAPELIQUID-booth-v1")].map((b) => b.toString(16).padStart(2, "0")).join("")}`);
+
+export function boothOf(chain: GiftChain): Hex {
+  const hash = keccak256(concat(["0xff", FACTORY, BOOTH_SALT, keccak256(RED_BOOTH_BYTECODE)]));
+  return getAddress(`0x${hash.slice(-40)}`);
+}
+
+function nextInit(chain: GiftChain): Hex {
+  const cfg = DESK[chain];
+  const args = encodeAbiParameters(
+    [{ type: "address" }, { type: "address" }, { type: "address" }, { type: "address" }, { type: "address" }, { type: "address" }, { type: "address" }, { type: "uint256" }, { type: "uint8" }],
+    [cfg.router, cfg.quote, cfg.wrapped, cfg.tapePool, cfg.tapeQuote, cfg.tapeToken, cfg.tapeBem, cfg.scale, cfg.kind],
+  );
+  return `${RED_NEXT_BYTECODE}${args.slice(2)}`;
+}
+
+function predictSpawn(chain: GiftChain, index: bigint): Hex {
+  const salt = keccak256(encodeAbiParameters([{ type: "uint256" }], [index]));
+  const hash = keccak256(concat(["0xff", boothOf(chain), salt, keccak256(nextInit(chain))]));
+  return getAddress(`0x${hash.slice(-40)}`);
+}
+
+export async function readSpawned(chain: GiftChain, account: string | null): Promise<RedRule[]> {
+  const booth = boothOf(chain);
+  const code = await client(chain).getBytecode({ address: booth });
+  if (!code || code === "0x") return [];
+  const count = await client(chain).readContract({ address: booth, abi: RED_BOOTH_ABI, functionName: "count" });
+  const rows: RedRule[] = [];
+  for (let i = 0n; i < count; i++) {
+    const pool = await client(chain).readContract({ address: booth, abi: RED_BOOTH_ABI, functionName: "packets", args: [i] });
+    try {
+      const row = await readLive(chain, account, pool, "volunteer");
+      if (row.ready) rows.push(row);
+    } catch {
+      /* skip a packet that cannot be read */
+    }
+  }
+  return rows;
+}
+
+export async function openAnother(
+  chain: GiftChain,
+  from: string,
+  asset: GiftAsset,
+  eachText: string,
+  totalText: string,
+  spotText: string,
+  gate: number,
+  life: number,
+  taskHi: bigint,
+): Promise<Hex> {
+  const booth = boothOf(chain);
+  const code = await client(chain).getBytecode({ address: booth });
+  if (!code || code === "0x") {
+    const hash = await send(chain, from, FACTORY, concat([BOOTH_SALT, RED_BOOTH_BYTECODE]));
+    await wait(chain, hash);
+  }
+  const count = await client(chain).readContract({ address: booth, abi: RED_BOOTH_ABI, functionName: "count" });
+  const packet = predictSpawn(chain, count);
+  const fixedAmt = parseUnits(eachText.trim() || "0", asset.decimals);
+  const fundAmt = parseUnits(totalText.trim() || "0", asset.decimals);
+  if (fixedAmt <= 0n || fundAmt <= 0n) throw new Error("amount");
+  if (asset.token !== ZERO) await approveSpend(chain, from, asset.token, packet, fundAmt);
+  const beginData = encodeFunctionData({
+    abi: RED_NEXT_ABI,
+    functionName: "begin",
+    args: [asset.token, fixedAmt, taskHi, parseUnits(spotText.trim() || "0", 18), gate, BigInt(life), swapFeeOf(chain, taskHi), fundAmt],
+  });
+  const data = encodeFunctionData({ abi: RED_BOOTH_ABI, functionName: "open", args: [nextInit(chain), beginData] });
+  const value = asset.token === ZERO ? fundAmt : 0n;
+  await preflight(chain, from, booth, data, value);
+  const hash = await send(chain, from, booth, data, value);
+  await wait(chain, hash);
+  return packet;
+}
+
 export type RedRule = {
   chain: GiftChain;
   lane: GiftLane;
@@ -332,8 +443,10 @@ export type RedRule = {
   claimedToday: bigint;
   balance: bigint;
   lastDay: bigint;
+  tradedDay: bigint;
   ready: boolean;
   asset: GiftAsset | null;
+  legacy?: boolean;
 };
 
 const emptyAsset = (chain: GiftChain, lane: GiftLane = "official"): RedRule => ({
@@ -357,51 +470,115 @@ const emptyAsset = (chain: GiftChain, lane: GiftLane = "official"): RedRule => (
   claimedToday: 0n,
   balance: 0n,
   lastDay: 0n,
+  tradedDay: 0n,
   ready: false,
   asset: null,
 });
 
+export const OLD_PACKETS: { chain: GiftChain; lane: GiftLane; address: Hex }[] = [
+  { chain: "xlayer", lane: "official", address: "0x4E7D233227764041b18664E30cf349a322A8504E" },
+  { chain: "xlayer", lane: "volunteer", address: "0x1A0567219e796Df983Fe584d44E7245B69E72836" },
+  { chain: "bsc", lane: "official", address: "0x4F1e48B248c261fdbA6B802CdB7150b48e106A22" },
+  { chain: "bsc", lane: "volunteer", address: "0x2F0E6F04E7ABeF8140f98c5d8cCDbdc47BA94cD2" },
+];
+
+export async function readLegacy(account: string | null): Promise<RedRule[]> {
+  const rows = await Promise.all(OLD_PACKETS.map(async (slot) => {
+    const code = await client(slot.chain).getBytecode({ address: slot.address });
+    if (!code || code === "0x") return null;
+    try {
+      const row = await readLive(slot.chain, account, slot.address, slot.lane);
+      if (!row.ready || row.balance <= 0n) return null;
+      return { ...row, legacy: true };
+    } catch {
+      return null;
+    }
+  }));
+  return rows.filter((row) => row != null);
+}
+
 export async function readRed(chain: GiftChain, account: string | null, lane: GiftLane = "official"): Promise<RedRule> {
-  if (!(await redCode(chain, lane))) return emptyAsset(chain, lane);
   const pool = packetOf(chain, lane);
   try {
     return await readLive(chain, account, pool, lane);
   } catch {
-    const row = emptyAsset(chain, lane);
-    row.deployed = true;
-    return row;
+    return emptyAsset(chain, lane);
   }
 }
 
 async function readLive(chain: GiftChain, account: string | null, pool: Hex, lane: GiftLane): Promise<RedRule> {
   const c = client(chain);
   const now = BigInt(Math.floor(Date.now() / 1000));
-  const [token, mode, fixedAmt, lo, hi, packetsLeft, dayCap, claimedToday, lastDay, ready, spotNeed, perpNeed, gate, endsAt, credit] = await Promise.all([
-    c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "token" }),
-    c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "mode" }),
-    c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "fixedAmt" }),
-    c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "lo" }),
-    c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "hi" }),
-    c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "packetsLeft" }),
-    c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "dayCap" }),
-    c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "claimsToday", args: [now] }),
-    account
-      ? c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "lastDay", args: [account as Hex] })
-      : Promise.resolve(0n),
-    c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "ready" }),
-    c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "spotNeed" }),
-    c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "perpNeed" }),
-    c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "gate" }),
-    c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "endsAt" }),
-    account
-      ? c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "credit", args: [account as Hex] })
-      : Promise.resolve(0n),
-  ]);
-  const maker = lane === "volunteer"
-    ? await c.readContract({ address: pool, abi: RED_OPEN_ABI, functionName: "creator" })
-    : await c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "deployer" });
+  const who = (account ?? ZERO) as Hex;
+  const makerAbi = lane === "volunteer" ? RED_OPEN_ABI : RED_PACKET_ABI;
+  const makerName = lane === "volunteer" ? "creator" : "deployer";
+  let token: Hex = ZERO;
+  let mode = 0;
+  let fixedAmt = 0n;
+  let lo = 0n;
+  let hi = 0n;
+  let packetsLeft = 0n;
+  let dayCap = 0n;
+  let claimedToday = 0n;
+  let lastDay = 0n;
+  let tradedDay = 0n;
+  let ready = false;
+  let spotNeed = 0n;
+  let perpNeed = 0n;
+  let gate = 0;
+  let endsAt = 0n;
+  let credit = 0n;
+  let maker: Hex = ZERO;
+  try {
+    const packed = await c.multicall({
+      allowFailure: false,
+      contracts: [
+        { address: pool, abi: RED_PACKET_ABI, functionName: "token" },
+        { address: pool, abi: RED_PACKET_ABI, functionName: "mode" },
+        { address: pool, abi: RED_PACKET_ABI, functionName: "fixedAmt" },
+        { address: pool, abi: RED_PACKET_ABI, functionName: "lo" },
+        { address: pool, abi: RED_PACKET_ABI, functionName: "hi" },
+        { address: pool, abi: RED_PACKET_ABI, functionName: "packetsLeft" },
+        { address: pool, abi: RED_PACKET_ABI, functionName: "dayCap" },
+        { address: pool, abi: RED_PACKET_ABI, functionName: "claimsToday", args: [now] },
+        { address: pool, abi: RED_PACKET_ABI, functionName: "lastDay", args: [who] },
+        { address: pool, abi: RED_PACKET_ABI, functionName: "tradedDay", args: [who] },
+        { address: pool, abi: RED_PACKET_ABI, functionName: "ready" },
+        { address: pool, abi: RED_PACKET_ABI, functionName: "spotNeed" },
+        { address: pool, abi: RED_PACKET_ABI, functionName: "perpNeed" },
+        { address: pool, abi: RED_PACKET_ABI, functionName: "gate" },
+        { address: pool, abi: RED_PACKET_ABI, functionName: "endsAt" },
+        { address: pool, abi: RED_PACKET_ABI, functionName: "credit", args: [who] },
+        { address: pool, abi: makerAbi, functionName: makerName },
+      ],
+    });
+    [token, mode, fixedAmt, lo, hi, packetsLeft, dayCap, claimedToday, lastDay, tradedDay, ready, spotNeed, perpNeed, gate, endsAt, credit, maker] = packed as unknown as [Hex, number, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, boolean, bigint, bigint, number, bigint, bigint, Hex];
+  } catch {
+    const [a, b, c1, d, e, f, g, h, i, traded, j, k, l, m, n, o, p] = await Promise.all([
+      c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "token" }),
+      c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "mode" }),
+      c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "fixedAmt" }),
+      c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "lo" }),
+      c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "hi" }),
+      c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "packetsLeft" }),
+      c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "dayCap" }),
+      c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "claimsToday", args: [now] }),
+      c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "lastDay", args: [who] }),
+      c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "tradedDay", args: [who] }),
+      c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "ready" }),
+      c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "spotNeed" }),
+      c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "perpNeed" }),
+      c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "gate" }),
+      c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "endsAt" }),
+      c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "credit", args: [who] }),
+      lane === "volunteer"
+        ? c.readContract({ address: pool, abi: RED_OPEN_ABI, functionName: "creator" })
+        : c.readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "deployer" }),
+    ]);
+    token = a; mode = Number(b); fixedAmt = c1; lo = d; hi = e; packetsLeft = f; dayCap = g; claimedToday = h; lastDay = i; tradedDay = traded; ready = j; spotNeed = k; perpNeed = l; gate = Number(m); endsAt = n; credit = o; maker = p;
+  }
   const asset = ready ? GIFT_ASSETS[chain].find((row) => row.token.toLowerCase() === token.toLowerCase()) ?? null : null;
-  const balance = token === ZERO
+  const balance = !ready ? 0n : token === ZERO
     ? await c.getBalance({ address: pool })
     : await c.readContract({ address: token, abi: erc20, functionName: "balanceOf", args: [pool] });
   return {
@@ -425,6 +602,7 @@ async function readLive(chain: GiftChain, account: string | null, pool: Hex, lan
     claimedToday,
     balance,
     lastDay,
+    tradedDay,
     ready,
     asset,
   };
@@ -457,10 +635,10 @@ export async function fundRed(chain: GiftChain, from: string, text: string, asse
   return hash;
 }
 
-export async function withdrawRed(chain: GiftChain, from: string, text: string, asset: GiftAsset, lane: GiftLane = "official"): Promise<Hex> {
+export async function withdrawRed(chain: GiftChain, from: string, text: string, asset: GiftAsset, lane: GiftLane = "official", pool: Hex = packetOf(chain, lane)): Promise<Hex> {
   const amount = parseUnits(text.trim(), asset.decimals);
   if (amount <= 0n) throw new Error("amount");
-  const hash = await send(chain, from, packetOf(chain, lane), encodeFunctionData({ abi: RED_PACKET_ABI, functionName: "withdraw", args: [amount] }));
+  const hash = await send(chain, from, pool, encodeFunctionData({ abi: RED_PACKET_ABI, functionName: "withdraw", args: [amount] }));
   await wait(chain, hash);
   return hash;
 }
@@ -469,31 +647,45 @@ export function swapFeeOf(chain: GiftChain, hi: bigint): number {
   const task = taskAsset(chain, hi);
   if (chain !== "bsc" || !task) return 0;
   if (task.id === "bem") return 10000;
-  if (task.id === "bnb" || task.id === "btc" || task.id === "spy") return 100;
   if (task.id === "eth" || task.id === "xau") return 500;
-  return 2500;
+  return 100;
 }
 
 const previewAbi = parseAbi(["function previewSwap(uint8 quote, bool tapeIn, uint256 amountIn) view returns (uint256 fee, uint256 out)"]);
 const v2QuoteAbi = parseAbi(["function getAmountsOut(uint256 amountIn, address[] path) view returns (uint256[] amounts)"]);
+const spotAbi = parseAbi(["function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16, uint16, uint16, uint8, bool)"]);
+const BEM_POOL = "0x2CcF8aa17F5DF9Fb5D51C9de12135a913fF29f7A" as Hex;
+const Q96 = 1n << 96n;
+
+async function spotOut(zeroForOne: boolean, amountIn: bigint): Promise<bigint> {
+  const row = await xClient.readContract({ address: BEM_POOL, abi: spotAbi, functionName: "slot0" });
+  const sqrt = row[0];
+  if (sqrt <= 0n || amountIn <= 0n) return 0n;
+  if (zeroForOne) {
+    const step = (amountIn * sqrt) / Q96;
+    return (step * sqrt) / Q96;
+  }
+  const step = (amountIn * Q96) / sqrt;
+  return (step * Q96) / sqrt;
+}
 
 async function buyMin(chain: GiftChain, hi: bigint, amountIn: bigint): Promise<bigint> {
   const task = taskAsset(chain, hi);
   if (!task) throw new Error("task");
   let quoted = 0n;
-  if (chain === "xlayer" && (task.id === "tape" || task.id === "bem")) {
-    const first = await xClient.readContract({ address: TAPE_POOL, abi: previewAbi, functionName: "previewSwap", args: [0, false, amountIn] });
+  if (chain === "xlayer" && task.id === "bem") {
+    quoted = await spotOut(false, amountIn);
+  } else if (chain === "xlayer" && task.id === "tape") {
+    const first = await xClient.readContract({ address: OPEN_POOL, abi: previewAbi, functionName: "previewSwap", args: [1, false, amountIn] });
     quoted = first[1];
-    if (task.id === "bem") {
-      const second = await xClient.readContract({ address: TAPE_POOL, abi: previewAbi, functionName: "previewSwap", args: [1, true, quoted] });
-      quoted = second[1];
-    }
   } else if (chain === "bsc") {
     const out = task.token === ZERO ? BSC.wbnb : task.token;
-    quoted = await quoteExact(BSC.usdt, out, amountIn, swapFeeOf(chain, hi));
+    quoted = out.toLowerCase() === BSC.usdt.toLowerCase()
+      ? await quoteExact(BSC.wbnb, BSC.usdt, amountIn, 100)
+      : await quoteWithBnb(out, swapFeeOf(chain, hi), "buy", amountIn);
   } else {
     const out = task.token === ZERO ? OKB.wokb : task.token;
-    const amounts = await xClient.readContract({ address: OKB.router, abi: v2QuoteAbi, functionName: "getAmountsOut", args: [amountIn, [OKB.usdt, out]] });
+    const amounts = await xClient.readContract({ address: OKB.router, abi: v2QuoteAbi, functionName: "getAmountsOut", args: [amountIn, [OKB.wokb, out]] });
     quoted = amounts[amounts.length - 1] ?? 0n;
   }
   if (quoted <= 0n) throw new Error("buy");
@@ -511,20 +703,151 @@ async function approveSpend(chain: GiftChain, from: string, token: Hex, spender:
   await wait(chain, hash);
 }
 
-export async function claimRed(chain: GiftChain, from: string, lane: GiftLane = "official"): Promise<{ hash: Hex; amount: bigint }> {
+export async function openBlock(chain: GiftChain, from: string, lane: GiftLane = "official", pool: Hex = packetOf(chain, lane)): Promise<"day" | "funds" | null> {
+  const here = pool.toLowerCase() === packetOf(chain, lane).toLowerCase() ? await readRed(chain, from, lane) : await readLive(chain, from, pool, lane);
+  if (here.lastDay === BigInt(sgDay())) return "day";
+  const need = here.spotNeed > here.perpNeed ? here.spotNeed : here.perpNeed;
+  if (need <= 0n) return null;
+  if (here.gate === 1) return null;
+  const bal = await client(chain).getBalance({ address: from as Hex });
+  if (bal < need) return "funds";
+  return null;
+}
+
+export async function walletHold(chain: GiftChain, from: string, token: Hex): Promise<bigint> {
+  if (token === ZERO) return client(chain).getBalance({ address: from as Hex });
+  return client(chain).readContract({ address: token, abi: erc20, functionName: "balanceOf", args: [from as Hex] });
+}
+
+export async function tradedNow(chain: GiftChain, from: string, lane: GiftLane = "volunteer", pool: Hex = packetOf(chain, lane)): Promise<boolean> {
+  const day = await client(chain).readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "tradedDay", args: [from as Hex] });
+  return day === BigInt(sgDay());
+}
+
+const outQuoteAbi = parseAbi([
+  "function quoteExactOutputSingle((address tokenIn, address tokenOut, uint256 amount, uint24 fee, uint160 sqrtPriceLimitX96) params) returns (uint256 amountIn, uint160, uint32, uint256)",
+]);
+const v2InAbi = parseAbi(["function getAmountsIn(uint256 amountOut, address[] path) view returns (uint256[] amounts)"]);
+
+async function sellSearch(need: bigint, quote: (amount: bigint) => Promise<bigint>, probe = 10n ** 15n): Promise<bigint> {
+  let size = probe > 0n ? probe : 1n;
+  let probed = 0n;
+  for (let i = 0; i < 8; i++) {
+    try { probed = await quote(size); } catch { probed = 0n; }
+    if (probed > 0n) break;
+    size /= 10n;
+    if (size <= 0n) throw new Error("buy");
+  }
+  if (probed <= 0n) throw new Error("buy");
+  const guess = need * size / probed;
+  let lo = guess > 2n ? guess / 2n : 1n;
+  let hiAmt = guess > 0n ? guess * 3n : size;
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hiAmt) / 2n;
+    const out = await quote(mid);
+    if (out >= need) hiAmt = mid;
+    else lo = mid + 1n;
+  }
+  if (hiAmt <= 1n) throw new Error("buy");
+  return hiAmt * 103n / 100n;
+}
+
+async function sellAmount(chain: GiftChain, hi: bigint, need: bigint): Promise<bigint> {
+  const task = taskAsset(chain, hi);
+  if (!task || task.token === ZERO) throw new Error("task");
+  if (chain === "bsc") {
+    if (task.token.toLowerCase() === BSC.usdt.toLowerCase()) {
+      const quoted = await bscClient.readContract({
+        address: "0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997",
+        abi: outQuoteAbi,
+        functionName: "quoteExactOutputSingle",
+        args: [{ tokenIn: BSC.usdt, tokenOut: BSC.wbnb, amount: need, fee: 100, sqrtPriceLimitX96: 0n }],
+      });
+      const amountIn = quoted[0];
+      if (amountIn <= 0n) throw new Error("buy");
+      return amountIn * 103n / 100n;
+    }
+    return sellSearch(need, (amount) => quoteWithBnb(task.token, swapFeeOf(chain, hi), "sell", amount), 10n ** BigInt(task.decimals) / 100n);
+  }
+  if (chain === "xlayer" && task.id === "bem") return sellSearch(need, (amount) => spotOut(true, amount), 10n ** 6n);
+  if (task.id === "tape") {
+    return sellSearch(need, async (amount) => {
+      const row = await xClient.readContract({ address: OPEN_POOL, abi: previewAbi, functionName: "previewSwap", args: [1, true, amount] });
+      return row[1];
+    }, 10n ** 8n);
+  }
+  const amounts = await xClient.readContract({ address: OKB.router, abi: v2InAbi, functionName: "getAmountsIn", args: [need, [task.token, OKB.wokb]] });
+  const amountIn = amounts[0];
+  if (amountIn <= 0n) throw new Error("buy");
+  return amountIn * 103n / 100n;
+}
+
+function shownAmount(raw: bigint, decimals: number): string {
+  const n = Number(formatUnits(raw, decimals));
+  if (!(n > 0)) return "";
+  return n.toLocaleString("en-US", { maximumFractionDigits: 6 });
+}
+
+export async function sellPreview(chain: GiftChain, hi: bigint, need: bigint): Promise<{ sold: string; back: string }> {
+  const task = taskAsset(chain, hi);
+  if (!task || task.token === ZERO || need <= 0n) return { sold: "", back: "" };
+  const amountIn = await sellAmount(chain, hi, need);
+  let native = 0n;
+  try {
+    if (chain === "bsc") native = task.token.toLowerCase() === BSC.usdt.toLowerCase()
+      ? await quoteExact(BSC.usdt, BSC.wbnb, amountIn, 100)
+      : await quoteWithBnb(task.token, swapFeeOf(chain, hi), "sell", amountIn);
+    else if (task.id === "bem") native = await spotOut(true, amountIn);
+    else if (task.id === "tape") {
+      const row = await xClient.readContract({ address: OPEN_POOL, abi: previewAbi, functionName: "previewSwap", args: [1, true, amountIn] });
+      native = row[1];
+    } else {
+      const amounts = await xClient.readContract({ address: OKB.router, abi: v2QuoteAbi, functionName: "getAmountsOut", args: [amountIn, [task.token, OKB.wokb]] });
+      native = amounts[amounts.length - 1];
+    }
+  } catch {
+    native = 0n;
+  }
+  return { sold: shownAmount(amountIn, task.decimals), back: native > 0n ? shownAmount(native, 18) : "" };
+}
+
+export async function tradeRed(chain: GiftChain, from: string, lane: GiftLane = "volunteer", pool: Hex = packetOf(chain, lane)): Promise<Hex> {
+  const here = pool.toLowerCase() === packetOf(chain, lane).toLowerCase() ? await readRed(chain, from, lane) : await readLive(chain, from, pool, lane);
+  if (here.lastDay === BigInt(sgDay())) throw new Error("day");
+  if (await tradedNow(chain, from, lane, pool)) throw new Error("traded");
+  const need = here.spotNeed > here.perpNeed ? here.spotNeed : here.perpNeed;
+  if (need <= 0n || here.hi === 0n) throw new Error("task");
+  if (here.gate === 0) {
+    const bal = await client(chain).getBalance({ address: from as Hex });
+    if (bal < need) throw new Error("funds");
+    const minOut = await buyMin(chain, here.hi, need);
+    const data = encodeFunctionData({ abi: RED_PACKET_ABI, functionName: "trade", args: [0n, minOut] });
+    await preflight(chain, from, pool, data, need);
+    const hash = await send(chain, from, pool, data, need);
+    await wait(chain, hash);
+    return hash;
+  }
+  const amountIn = await sellAmount(chain, here.hi, need);
+  const task = taskAsset(chain, here.hi);
+  if (!task || task.token === ZERO) throw new Error("task");
+  await approveSpend(chain, from, task.token, pool, amountIn);
+  const data = encodeFunctionData({ abi: RED_PACKET_ABI, functionName: "trade", args: [amountIn, need] });
+  await preflight(chain, from, pool, data);
+  const hash = await send(chain, from, pool, data);
+  await wait(chain, hash);
+  return hash;
+}
+
+export async function claimRed(chain: GiftChain, from: string, lane: GiftLane = "volunteer", pool: Hex = packetOf(chain, lane)): Promise<{ hash: Hex; amount: bigint }> {
   const day = sgDay();
-  const here = await readRed(chain, from, lane);
+  const here = pool.toLowerCase() === packetOf(chain, lane).toLowerCase() ? await readRed(chain, from, lane) : await readLive(chain, from, pool, lane);
   if (here.lastDay === BigInt(day)) throw new Error("day");
   const need = here.spotNeed > here.perpNeed ? here.spotNeed : here.perpNeed;
   if (need <= 0n || here.hi === 0n) throw new Error("task");
-  const amountIn = need * DESK[chain].scale;
-  const minOut = await buyMin(chain, here.hi, amountIn);
-  const task = taskAsset(chain, here.hi);
-  const spend = chain === "xlayer" && (task?.id === "tape" || task?.id === "bem") ? TAPE_USDT : DESK[chain].quote;
-  await approveSpend(chain, from, spend, packetOf(chain, lane), amountIn);
-  const data = encodeFunctionData({ abi: RED_PACKET_ABI, functionName: "claim", args: [amountIn, minOut] });
-  await preflight(chain, from, packetOf(chain, lane), data);
-  const hash = await send(chain, from, packetOf(chain, lane), data);
+  if (!(await tradedNow(chain, from, lane, pool))) throw new Error("task");
+  const data = encodeFunctionData({ abi: RED_PACKET_ABI, functionName: "claim" });
+  await preflight(chain, from, pool, data);
+  const hash = await send(chain, from, pool, data);
   let receipt;
   try {
     receipt = await client(chain).waitForTransactionReceipt({ hash, timeout: 120_000 });
@@ -576,8 +899,8 @@ export async function setRedRule(
       hi,
       BigInt(packets.trim() || "0"),
       BigInt(dayCap.trim() || "0"),
-      parseUnits(spotText.trim() || "0", 6),
-      parseUnits(perpText.trim() || "0", 6),
+      parseUnits(spotText.trim() || "0", 18),
+      0n,
       gate,
       BigInt(life),
       swapFeeOf(chain, hi),

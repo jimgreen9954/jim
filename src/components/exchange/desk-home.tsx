@@ -175,15 +175,23 @@ export function RedPocket() {
   }, []);
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
     };
     window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+  const [sheetH, setSheetH] = useState<number | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const vv = window.visualViewport;
+    const fit = () => setSheetH(Math.max(280, (vv?.height ?? window.innerHeight) - 8));
+    fit();
+    vv?.addEventListener("resize", fit);
+    window.addEventListener("resize", fit);
     return () => {
-      document.body.style.overflow = prev;
-      window.removeEventListener("keydown", onKey);
+      vv?.removeEventListener("resize", fit);
+      window.removeEventListener("resize", fit);
     };
   }, [open]);
   return (
@@ -191,12 +199,16 @@ export function RedPocket() {
       <PacketMark zh={zh} live={live} until={until} onOpen={() => setOpen(true)} />
       {open ? (
         <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/70 sm:items-center" onClick={() => setOpen(false)}>
-          <div className="flex max-h-[88vh] w-full max-w-md flex-col overflow-hidden bg-card text-ink shadow-plate" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-center justify-between px-4 pt-3">
+          <div
+            className="flex w-full max-w-md flex-col overflow-hidden bg-card text-ink shadow-plate"
+            style={{ height: sheetH ? Math.min(sheetH, 720) : "92dvh", paddingBottom: "env(safe-area-inset-bottom)" }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex shrink-0 items-center justify-between px-4 pt-3">
               <span className="text-base text-ink">{zh ? "红包" : "Packet"}</span>
               <button type="button" className="grid h-11 w-11 place-items-center text-2xl leading-none text-ink" aria-label={zh ? "关闭" : "Close"} onClick={() => setOpen(false)}>×</button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-4">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-0 pb-4" style={{ WebkitOverflowScrolling: "touch" }}>
               <Suspense fallback={null}>
                 <RedGift account={account} zh={zh} forceOpen onIdle={() => setOpen(false)} />
               </Suspense>
@@ -216,6 +228,16 @@ function clock(ms: number): string {
   return [h, m, sec].map((n) => String(n).padStart(2, "0")).join(":");
 }
 
+function pouchBox(x: number, y: number) {
+  const view = window.visualViewport;
+  const w = view?.width ?? window.innerWidth;
+  const h = view?.height ?? window.innerHeight;
+  return {
+    x: Math.min(Math.max(4, x), Math.max(4, w - 72)),
+    y: Math.min(Math.max(8, y), Math.max(8, h - 108)),
+  };
+}
+
 function PacketMark({ zh, live, until, onOpen }: { zh: boolean; live: boolean; until: number; onOpen: () => void }) {
   const [at, setAt] = useState(() => {
     try {
@@ -229,6 +251,7 @@ function PacketMark({ zh, live, until, onOpen }: { zh: boolean; live: boolean; u
   });
   const [left, setLeft] = useState(0);
   const drag = useRef<{ x: number; y: number; px: number; py: number; moved: boolean } | null>(null);
+  const tapped = useRef(0);
   useEffect(() => {
     if (!live) return;
     const tick = () => setLeft(Math.max(0, until * 1000 - Date.now()));
@@ -236,11 +259,23 @@ function PacketMark({ zh, live, until, onOpen }: { zh: boolean; live: boolean; u
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
   }, [live, until]);
+  useEffect(() => {
+    const fit = () => setAt((now) => pouchBox(now.x, now.y));
+    fit();
+    window.addEventListener("resize", fit);
+    window.visualViewport?.addEventListener("resize", fit);
+    return () => {
+      window.removeEventListener("resize", fit);
+      window.visualViewport?.removeEventListener("resize", fit);
+    };
+  }, []);
 
-  const place = (x: number, y: number) => ({
-    x: Math.min(Math.max(4, x), Math.max(4, window.innerWidth - 72)),
-    y: Math.min(Math.max(4, y), Math.max(4, window.innerHeight - 56)),
-  });
+  const openOnce = () => {
+    const now = Date.now();
+    if (now - tapped.current < 500) return;
+    tapped.current = now;
+    onOpen();
+  };
 
   return (
     <button
@@ -249,26 +284,35 @@ function PacketMark({ zh, live, until, onOpen }: { zh: boolean; live: boolean; u
       className="fixed z-[80] w-16 touch-none active:scale-95"
       style={{ left: at.x, top: at.y }}
       onPointerDown={(event) => {
-        event.currentTarget.setPointerCapture(event.pointerId);
         drag.current = { x: at.x, y: at.y, px: event.clientX, py: event.clientY, moved: false };
       }}
       onPointerMove={(event) => {
         const hold = drag.current;
-        if (!hold) return;
+        if (!hold || (event.clientX === 0 && event.clientY === 0)) return;
         const dx = event.clientX - hold.px;
         const dy = event.clientY - hold.py;
-        if (Math.abs(dx) + Math.abs(dy) > 4) hold.moved = true;
-        setAt(place(hold.x + dx, hold.y + dy));
+        if (Math.abs(dx) + Math.abs(dy) < 18) return;
+        hold.moved = true;
+        if (!event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.setPointerCapture(event.pointerId);
+        setAt(pouchBox(hold.x + dx, hold.y + dy));
       }}
       onPointerUp={() => {
         const hold = drag.current;
         drag.current = null;
         if (!hold) return;
-        if (!hold.moved) onOpen();
+        if (!hold.moved) openOnce();
         else setAt((now) => {
-          try { localStorage.setItem("tl-pouch-pos", JSON.stringify(now)); } catch { /* ignore */ }
-          return now;
+          const next = pouchBox(now.x, now.y);
+          try { localStorage.setItem("tl-pouch-pos", JSON.stringify(next)); } catch { /* ignore */ }
+          return next;
         });
+      }}
+      onPointerCancel={() => {
+        drag.current = null;
+      }}
+      onClick={() => {
+        if (drag.current?.moved) return;
+        openOnce();
       }}
     >
       <svg viewBox="0 0 32 36" className="mx-auto h-8 w-8 drop-shadow" aria-hidden="true">

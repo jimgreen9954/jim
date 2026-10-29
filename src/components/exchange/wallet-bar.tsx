@@ -1,10 +1,49 @@
 import { useEffect, useState } from "react";
-import { connectKind, currentAccount, disconnectWallet, onAccount, onOpenLink } from "@/lib/wallet";
+import { connectKind, currentAccount, currentChain, disconnectWallet, onAccount, onChain, onOpenLink, switchDeskChain, type DeskChain } from "@/lib/wallet";
 import { copy } from "@/lib/copy";
 import { useExchange } from "@/lib/exchange-store";
 
 function short(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
+export function ChainSwitch({ compact = false }: { compact?: boolean }) {
+  const lang = useExchange((s) => s.lang);
+  const [id, setId] = useState<number | null>(currentChain());
+  const [busy, setBusy] = useState<DeskChain | null>(null);
+  useEffect(() => onChain(setId), []);
+  const pick = (next: DeskChain) => {
+    if (busy || id === next) return;
+    setBusy(next);
+    void switchDeskChain(next)
+      .catch(async (err: unknown) => {
+        if (!(err instanceof Error) || err.message !== "nowallet") return;
+        await connectKind("okx");
+        await switchDeskChain(next);
+      })
+      .catch(() => undefined)
+      .finally(() => setBusy(null));
+  };
+  const item = (next: DeskChain, label: string) => {
+    const on = id === next;
+    return (
+      <button
+        key={next}
+        type="button"
+        disabled={busy != null}
+        onClick={() => pick(next)}
+        className={`h-8 rounded-md px-2 text-xs disabled:opacity-40 ${on ? "bg-ink text-paper" : "text-ink/70"}`}
+      >
+        {busy === next ? "…" : label}
+      </button>
+    );
+  };
+  return (
+    <span className="inline-flex h-8 items-center rounded-md border border-gold bg-card" aria-label={lang === "zh" ? "切换链" : "Chain"}>
+      {item(56, "BSC")}
+      {item(196, compact ? "X" : "X Layer")}
+    </span>
+  );
 }
 
 export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {

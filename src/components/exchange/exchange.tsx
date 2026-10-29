@@ -5,7 +5,7 @@ import { startPersistence, useExchange } from "@/lib/exchange-store";
 import { fmtPct, fmtPx, fmtUsd } from "@/lib/format";
 import { equity, sessionChange } from "@/lib/match-engine";
 import { DeskHome, RedPocket, rememberDesk } from "@/components/exchange/desk-home";
-import { ConnectButton } from "@/components/exchange/wallet-bar";
+import { ConnectButton, ChainSwitch } from "@/components/exchange/wallet-bar";
 import { SettingsMenu } from "@/components/exchange/settings-menu";
 import { LocaleMenu } from "@/components/exchange/locale-menu";
 import { SideRail } from "@/components/exchange/side-rail";
@@ -386,6 +386,7 @@ function Header({ floor, desk, shop, place, night, setNight, setFloor, setDesk, 
           <img src="/logo-mark.png" alt="" width={24} height={24} decoding="async" className="size-6 rounded-full" />
         </button>
         <div className="ml-auto flex items-center gap-1">
+          <ChainSwitch compact />
           <ConnectButton compact />
           <ThemeButton night={night} setNight={setNight} icon />
           <LocaleMenu />
@@ -406,6 +407,7 @@ function Header({ floor, desk, shop, place, night, setNight, setFloor, setDesk, 
           {item(zh ? "规则" : "Rules", floor === "rules", () => go("rules", "rules"))}
         </nav>
         <div className="ml-auto flex shrink-0 items-center gap-1">
+          <ChainSwitch />
           <ConnectButton />
           {wide ? <Suspense fallback={null}><FeeBook /></Suspense> : null}
           {wide ? <SettingsMenu zh={zh} /> : null}

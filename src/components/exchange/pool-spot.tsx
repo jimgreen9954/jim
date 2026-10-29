@@ -120,6 +120,13 @@ function quoteInForTape(tape: bigint, quote: bigint, want: bigint): bigint {
   return (net * 10_000n + 9_979n) / 9_980n;
 }
 
+function quoteOutForTape(tape: bigint, quote: bigint, sold: bigint): bigint {
+  if (sold <= 0n || tape <= 0n || quote <= 0n) return 0n;
+  const net = (sold * 9_980n) / 10_000n;
+  if (net <= 0n) return 0n;
+  return (quote * net) / (tape + net);
+}
+
 function maxBuy(tape: bigint, quote: bigint, bal: bigint): bigint {
   if (bal <= 0n || tape <= 1n || quote <= 0n) return 0n;
   const net = (bal * 9_980n) / 10_000n;
@@ -322,14 +329,56 @@ export function PoolSpot({ onMarkets, onOtc, onJump, pair = "usdt", onPair }: { 
       })();
   pairRef.current = active;
   midRef.current = mid;
-  const sizeN = Number(amount);
-  const pxN = (mode === "limit" || mode === "scale") && Number(price) > 0 ? Number(price) : mid;
-  const notional = sizeN > 0 && pxN > 0 ? sizeN * pxN : 0;
   const buyTapeN = active === "usdt"
     ? (mid > 0 ? Number(formatUnits(buyHeld, 6)) / mid : 0)
     : Number(formatUnits(maxBuy(tapeReserve, quoteReserve, buyHeld), 8));
   const buyTapeLabel = buyTapeN > 0 ? buyTapeN.toLocaleString("en-US", { maximumFractionDigits: 4 }) : "0";
   const spread = bestAsk > 0 && bestBid > 0 ? bestAsk - bestBid : 0;
+  const [exact, setExact] = useState("");
+  useEffect(() => {
+    let dead = false;
+    const id = window.setTimeout(() => {
+      void (async () => {
+        let want = 0n;
+        try { want = poolAmount(amount, 8); } catch { if (!dead) setExact(""); return; }
+        if (want <= 0n) { if (!dead) setExact(""); return; }
+        try {
+          const live = bookRef.current;
+          if (side === "sell") {
+            if (active === "usdt") {
+              const okb = await previewPool(1, true, want);
+              const usdt = okb > 0n ? await quoteUsdt0Okb("sell", okb) : 0n;
+              if (!dead) setExact(usdt > 0n ? poolText(usdt, 6) : "");
+              return;
+            }
+            const out = quoteOutForTape(tapeReserve, quoteReserve, want);
+            if (!dead) setExact(out > 0n ? poolText(out, quoteDec) : "");
+            return;
+          }
+          if (active === "usdt") {
+            const okbIn = quoteInForTape(live?.okbTape ?? 0n, live?.okbQuote ?? 0n, want);
+            const one = await quoteUsdt0Okb("sell", 10n ** 18n);
+            if (one <= 0n) { if (!dead) setExact(""); return; }
+            let usdt = (okbIn * one * 1000n) / (10n ** 18n * 998n);
+            for (let i = 0; i < 4; i++) {
+              const got = await quoteUsdt0Okb("buy", (usdt * 998n) / 1000n);
+              if (got >= okbIn) break;
+              usdt = got > 0n ? (usdt * (okbIn + got / 20n)) / got : usdt * 2n;
+            }
+            if (!dead) setExact(usdt > 0n ? poolText(usdt, 6) : "");
+            return;
+          }
+          let amountIn = quoteInForTape(tapeReserve, quoteReserve, want);
+          const seen = await previewPool(openQuote, false, amountIn);
+          if (seen > 0n && seen < want) amountIn = (amountIn * want) / seen + 1n;
+          if (!dead) setExact(amountIn > 0n ? poolText(amountIn, quoteDec) : "");
+        } catch {
+          if (!dead) setExact("");
+        }
+      })();
+    }, 250);
+    return () => { dead = true; window.clearTimeout(id); };
+  }, [amount, side, active, tapeReserve, quoteReserve, quoteDec, openQuote]);
   const maxAskSz = Math.max(0.0001, ...askView.map((level) => level.size));
   const maxBidSz = Math.max(0.0001, ...bidView.map((level) => level.size));
   const dustTape = bal ? Number(formatUnits(bal.tape, 8)) : 0;
@@ -829,8 +878,8 @@ export function PoolSpot({ onMarkets, onOtc, onJump, pair = "usdt", onPair }: { 
             </button>
           ) : null}
           <div className="mt-2 space-y-1 font-mono text-[11px] text-ink/55">
-            <p className="flex justify-between"><span>{zh ? "订单价值" : "Order value"}</span><span>{notional > 0 ? `${money(notional)} ${quoteSym}` : "—"}</span></p>
-            <p className="flex justify-between"><span>{zh ? "费用" : "Fee"}</span><span>0.20%</span></p>
+            <p className="flex justify-between"><span>{side === "buy" ? (zh ? "实付" : "You pay") : (zh ? "实收" : "You receive")}</span><span>{exact ? `${exact} ${quoteSym}` : "—"}</span></p>
+            <p className="flex justify-between"><span>{zh ? "费用" : "Fee"}</span><span>{active === "usdt" && side === "buy" ? (zh ? "台费 0.20% + 池子 0.20%" : "Desk 0.20% + pool 0.20%") : "0.20%"}</span></p>
           </div>
           <button type="button" disabled={busy || !amount.trim()} onClick={() => { void submit(); }} className={`mt-3 h-11 w-full text-sm disabled:opacity-40 ${side === "buy" ? "bg-ink" : "bg-sell text-[#fff7f8]"}`}>
             {busy ? (zh ? "等待钱包" : "Waiting") : !amount.trim() ? (zh ? "输入数量" : "Enter size") : armed ? (zh ? "再点确认" : "Tap to confirm") : mode === "twap" ? (zh ? "启用" : "Start") : side === "buy" ? (zh ? `买入 TAPE · 付 ${quoteSym}` : `Buy TAPE · pay ${quoteSym}`) : zh ? `卖出 TAPE · 收 ${quoteSym}` : `Sell TAPE · receive ${quoteSym}`}

@@ -27,8 +27,26 @@ interface ISwapV2 {
     function swapExactTokensForETH(uint256 amountIn, uint256 amountOutMin, address[] calldata path, address to, uint256 deadline) external returns (uint256[] memory amounts);
 }
 
+interface IWrap {
+    function deposit() external payable;
+    function withdraw(uint256) external;
+}
+
+interface ISpot {
+    struct ExactInputSingleParams {
+        address tokenIn;
+        address tokenOut;
+        uint24 fee;
+        address recipient;
+        uint256 amountIn;
+        uint256 amountOutMinimum;
+        uint160 sqrtPriceLimitX96;
+    }
+    function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut);
+}
+
 interface ITape {
-    function swap(uint8 quote, bool tapeIn, uint256 amountIn, uint256 minOut) external returns (uint256 out);
+    function swap(uint8 quote, bool tapeIn, uint256 amountIn, uint256 minOut) external payable returns (uint256 out);
 }
 
 /// Official rounds. The deployer is fixed. A claim has to be a normal wallet, has to buy the named asset, and has to wait out the pace.
@@ -44,6 +62,8 @@ contract RedPacket {
     uint256 public immutable quoteScale;
     uint8 public immutable kind;
     uint256 public constant PACE = 3 minutes;
+    address internal constant BEM_SPOT = 0x4f0C28f5926AFDA16bf2506D5D9e57Ea190f9bcA;
+    uint24 internal constant BEM_FEE = 10000;
 
     address public token;
     uint8 public mode;
@@ -66,9 +86,11 @@ contract RedPacket {
     Lot[] private lots;
     uint256 private head;
     mapping(address => uint256) public lastDay;
+    mapping(address => uint256) public tradedDay;
     uint256 private entered;
 
     event Claimed(address indexed who, uint256 indexed day, uint256 amount);
+    event Traded(address indexed who, uint256 indexed day, uint8 side);
     event Funded(address indexed from, uint256 amount);
     event RuleSet(address token, uint8 mode, uint256 fixedAmt, uint256 lo, uint256 hi, uint256 packets, uint256 dayCap, uint256 spotNeed, uint256 perpNeed, uint8 gate, uint256 life);
 
@@ -117,7 +139,7 @@ contract RedPacket {
         uint256 need = spotNeed_ > perpNeed_ ? spotNeed_ : perpNeed_;
         require(need > 0, "task");
         address task = hi_ == 1 ? wrapped : address(uint160(hi_));
-        require(task != address(0) && task != quote && task != tapeQuote, "task");
+        require(task != address(0) && task != wrapped, "task");
         if (kind == 0) require(fee_ == 100 || fee_ == 500 || fee_ == 2500 || fee_ == 10000, "fee");
         token = token_;
         mode = mode_;
@@ -150,19 +172,37 @@ contract RedPacket {
         _push(msg.sender, amount);
     }
 
-    function claim(uint256 amountIn, uint256 minOut) external lock {
+    receive() external payable {}
+
+    function trade(uint256 amountIn, uint256 minOut) external payable lock {
         require(msg.sender == tx.origin, "bot");
-        require(block.timestamp >= lastClaimAt + PACE, "pace");
         require(ready, "rule");
         require(block.timestamp <= endsAt, "late");
         uint256 day = sgDay(block.timestamp);
+        require(lastDay[msg.sender] != day && tradedDay[msg.sender] != day, "day");
+        if (cursor != day) {
+            cursor = day;
+            claimedToday = 0;
+        }
+        require(dayCap == 0 || claimedToday < dayCap, "cap");
+        if (gate == 0) _buy(minOut);
+        else _sell(amountIn, minOut);
+        tradedDay[msg.sender] = day;
+        emit Traded(msg.sender, day, gate);
+    }
+
+    function claim() external lock {
+        require(msg.sender == tx.origin, "bot");
+        require(ready, "rule");
+        require(block.timestamp <= endsAt, "late");
+        uint256 day = sgDay(block.timestamp);
+        require(tradedDay[msg.sender] == day, "task");
         require(lastDay[msg.sender] != day, "day");
         if (cursor != day) {
             cursor = day;
             claimedToday = 0;
         }
         require(dayCap == 0 || claimedToday < dayCap, "cap");
-        _buy(amountIn, minOut);
         lastClaimAt = block.timestamp;
         uint256 bal = _balance();
         uint256 pay = mode == 0 ? _fixed(bal) : mode == 1 ? _range(bal) : _lucky(bal);
@@ -183,28 +223,121 @@ contract RedPacket {
         return (ts + 8 hours) / 1 days;
     }
 
-    function _buy(uint256 amountIn, uint256 minOut) internal {
+    function _mark() internal view returns (uint256) {
+        if (token == address(0)) return address(this).balance - msg.value;
+        return IERC20(token).balanceOf(address(this));
+    }
+
+    function _keep(uint256 mark) internal view {
+        uint256 nowBal = token == address(0) ? address(this).balance : IERC20(token).balanceOf(address(this));
+        require(nowBal == mark, "prize");
+    }
+
+    function _buy(uint256 minOut) internal {
+        uint256 mark = _mark();
         uint256 need = spotNeed > perpNeed ? spotNeed : perpNeed;
-        require(need > 0 && amountIn >= need * quoteScale, "task");
+        require(need > 0 && msg.value >= need, "task");
         require(minOut > 0, "buy");
         address task = hi == 1 ? wrapped : address(uint160(hi));
-        require(task != address(0) && task != quote && task != tapeQuote, "task");
-        if (tapePool != address(0) && (task == tapeToken || task == tapeBem)) {
-            _buyTape(task, amountIn, minOut);
+        require(task != address(0) && task != wrapped, "task");
+        if (msg.value > need) {
+            (bool sent, ) = msg.sender.call{value: msg.value - need}("");
+            require(sent, "refund");
+        }
+        if (tapePool != address(0) && task == tapeToken) {
+            uint256 before = IERC20(tapeToken).balanceOf(address(this));
+            ITape(tapePool).swap{value: need}(1, false, need, minOut);
+            uint256 got = IERC20(tapeToken).balanceOf(address(this)) - before;
+            require(got >= minOut, "buy");
+            _forward(tapeToken, got);
+            _keep(mark);
             return;
         }
-        _pull(quote, msg.sender, amountIn);
-        _approve(quote, router, amountIn);
-        if (kind == 0) _buyV3(task, amountIn, minOut);
-        else if (hi == 1) _buyNative(amountIn, minOut);
-        else _buyV2(task, amountIn, minOut);
+        IWrap(wrapped).deposit{value: need}();
+        if (tapeBem != address(0) && task == tapeBem) {
+            _spotBuy(task, need, minOut);
+            _keep(mark);
+            return;
+        }
+        if (tapePool != address(0) && (task == tapeToken || task == tapeBem)) {
+            _buyTape(task, need, minOut);
+            _keep(mark);
+            return;
+        }
+        _approve(wrapped, router, need);
+        if (kind == 0) _buyBsc(task, need, minOut);
+        else _buyV2(task, need, minOut);
+        _approve(wrapped, router, 0);
+        _keep(mark);
+    }
+
+    function _tier(address token) internal pure returns (uint24) {
+        if (token == 0x5ce033B2bFCa3Af30b3e8C8457DeaF776A8b695a) return 10000;
+        if (token == 0x2170Ed0880ac9A755fd29B2688956BD959F933F8) return 500;
+        if (token == 0x21cAef8A43163Eea865baeE23b9C2E327696A3bf) return 500;
+        if (token == 0x1Ba42e5193dfA8B03D15dd1B86a3113bbBEF8Eeb) return 500;
+        return 100;
+    }
+
+    function _v3(address tokenIn, address tokenOut, uint24 fee, uint256 amountIn, uint256 minOut, address recipient) internal returns (uint256) {
+        (bool ok, bytes memory data) = router.call(
+            abi.encodeCall(
+                ISwapV3.exactInputSingle,
+                (ISwapV3.ExactInputSingleParams({
+                    tokenIn: tokenIn,
+                    tokenOut: tokenOut,
+                    fee: fee,
+                    recipient: recipient,
+                    deadline: block.timestamp,
+                    amountIn: amountIn,
+                    amountOutMinimum: minOut,
+                    sqrtPriceLimitX96: 0
+                }))
+            )
+        );
+        if (!ok || data.length < 32) return 0;
+        return abi.decode(data, (uint256));
+    }
+
+    function _buyBsc(address task, uint256 amountIn, uint256 minOut) internal {
+        if (task == quote) {
+            require(_v3(wrapped, task, 100, amountIn, minOut, msg.sender) >= minOut, "buy");
+            return;
+        }
+        if (_v3(wrapped, task, _tier(task), amountIn, minOut, msg.sender) >= minOut) return;
+        uint256 usdt = _v3(wrapped, quote, 100, amountIn, 1, address(this));
+        require(usdt > 0, "buy");
+        _approve(quote, router, usdt);
+        uint256 out = _v3(quote, task, _tier(task), usdt, minOut, msg.sender);
         _approve(quote, router, 0);
+        require(out >= minOut, "buy");
+    }
+
+    function _sellBsc(address task, uint256 amountIn, uint256 minOut) internal {
+        if (task == quote) {
+            uint256 native = _v3(task, wrapped, 100, amountIn, minOut, address(this));
+            require(native >= minOut, "buy");
+            IWrap(wrapped).withdraw(native);
+            return;
+        }
+        uint256 direct = _v3(task, wrapped, _tier(task), amountIn, minOut, address(this));
+        if (direct >= minOut) {
+            IWrap(wrapped).withdraw(direct);
+            return;
+        }
+        uint256 usdt = _v3(task, quote, _tier(task), amountIn, 1, address(this));
+        require(usdt > 0, "buy");
+        _approve(quote, router, usdt);
+        uint256 out = _v3(quote, wrapped, 100, usdt, minOut, address(this));
+        _approve(quote, router, 0);
+        require(out >= minOut, "buy");
+        IWrap(wrapped).withdraw(out);
     }
 
     function _buyV3(address task, uint256 amountIn, uint256 minOut) internal {
         uint256 before = IERC20(task).balanceOf(msg.sender);
         uint256 out = ISwapV3(router).exactInputSingle(ISwapV3.ExactInputSingleParams({
-            tokenIn: quote,
+            tokenIn: wrapped,
             tokenOut: task,
             fee: swapFee,
             recipient: msg.sender,
@@ -223,16 +356,14 @@ contract RedPacket {
         require(amounts[amounts.length - 1] >= minOut && IERC20(task).balanceOf(msg.sender) >= before + minOut, "buy");
     }
 
-    function _buyNative(uint256 amountIn, uint256 minOut) internal {
-        address[] memory path = _path(wrapped);
-        uint256[] memory amounts = ISwapV2(router).swapExactTokensForETH(amountIn, minOut, path, msg.sender, block.timestamp);
-        require(amounts[amounts.length - 1] >= minOut, "buy");
-    }
-
     function _buyTape(address task, uint256 amountIn, uint256 minOut) internal {
-        _pull(tapeQuote, msg.sender, amountIn);
-        _approve(tapeQuote, tapePool, amountIn);
-        uint256 tapeOut = ITape(tapePool).swap(0, false, amountIn, task == tapeToken ? minOut : 1);
+        _approve(wrapped, router, amountIn);
+        address[] memory path = _path(tapeQuote);
+        uint256[] memory amounts = ISwapV2(router).swapExactTokensForTokens(amountIn, 1, path, address(this), block.timestamp);
+        _approve(wrapped, router, 0);
+        uint256 usdt = amounts[amounts.length - 1];
+        _approve(tapeQuote, tapePool, usdt);
+        uint256 tapeOut = ITape(tapePool).swap(0, false, usdt, task == tapeToken ? minOut : 1);
         _approve(tapeQuote, tapePool, 0);
         if (task == tapeToken) {
             _forward(tapeToken, tapeOut);
@@ -244,10 +375,120 @@ contract RedPacket {
         _forward(tapeBem, bemOut);
     }
 
+    function _spotBuy(address task, uint256 amountIn, uint256 minOut) internal {
+        _approve(wrapped, BEM_SPOT, amountIn);
+        uint256 before = IERC20(task).balanceOf(msg.sender);
+        uint256 out = ISpot(BEM_SPOT).exactInputSingle(ISpot.ExactInputSingleParams({
+            tokenIn: wrapped,
+            tokenOut: task,
+            fee: BEM_FEE,
+            recipient: msg.sender,
+            amountIn: amountIn,
+            amountOutMinimum: minOut,
+            sqrtPriceLimitX96: 0
+        }));
+        _approve(wrapped, BEM_SPOT, 0);
+        require(out >= minOut && IERC20(task).balanceOf(msg.sender) >= before + minOut, "buy");
+    }
+
+    function _spotSell(address task, uint256 amountIn, uint256 minOut) internal {
+        _approve(task, BEM_SPOT, amountIn);
+        uint256 out = ISpot(BEM_SPOT).exactInputSingle(ISpot.ExactInputSingleParams({
+            tokenIn: task,
+            tokenOut: wrapped,
+            fee: BEM_FEE,
+            recipient: address(this),
+            amountIn: amountIn,
+            amountOutMinimum: minOut,
+            sqrtPriceLimitX96: 0
+        }));
+        _approve(task, BEM_SPOT, 0);
+        require(out >= minOut, "buy");
+        IWrap(wrapped).withdraw(out);
+    }
+
     function _path(address out) internal view returns (address[] memory path) {
         path = new address[](2);
-        path[0] = quote;
+        path[0] = wrapped;
         path[1] = out;
+    }
+
+    function _sell(uint256 amountIn, uint256 minOut) internal {
+        require(msg.value == 0, "value");
+        uint256 mark = _mark();
+        uint256 need = spotNeed > perpNeed ? spotNeed : perpNeed;
+        require(need > 0 && amountIn > 0 && minOut >= need, "task");
+        address task = hi == 1 ? wrapped : address(uint160(hi));
+        require(task != address(0) && task != wrapped, "task");
+        uint256 before = address(this).balance;
+        if (tapeBem != address(0) && task == tapeBem) {
+            _pull(task, msg.sender, amountIn);
+            _spotSell(task, amountIn, minOut);
+        } else if (tapePool != address(0) && task == tapeToken) {
+            _pull(task, msg.sender, amountIn);
+            _approve(task, tapePool, amountIn);
+            ITape(tapePool).swap(1, true, amountIn, minOut);
+            _approve(task, tapePool, 0);
+        } else if (tapePool != address(0) && task == tapeBem) _sellTape(task, amountIn);
+        else {
+            _pull(task, msg.sender, amountIn);
+            _approve(task, router, amountIn);
+            if (kind == 0) _sellBsc(task, amountIn, minOut);
+            else _sellV2(task, amountIn, minOut);
+            _approve(task, router, 0);
+        }
+        uint256 got = address(this).balance - before;
+        require(got >= need, "buy");
+        (bool sent, ) = msg.sender.call{value: got}("");
+        require(sent, "push");
+        _keep(mark);
+    }
+
+    function _sellV3(address task, uint256 amountIn, uint256 minOut) internal {
+        uint256 out = ISwapV3(router).exactInputSingle(ISwapV3.ExactInputSingleParams({
+            tokenIn: task,
+            tokenOut: wrapped,
+            fee: swapFee,
+            recipient: address(this),
+            deadline: block.timestamp,
+            amountIn: amountIn,
+            amountOutMinimum: minOut,
+            sqrtPriceLimitX96: 0
+        }));
+        require(out >= minOut, "buy");
+        IWrap(wrapped).withdraw(out);
+    }
+
+    function _sellV2(address task, uint256 amountIn, uint256 minOut) internal {
+        address[] memory path = new address[](2);
+        path[0] = task;
+        path[1] = wrapped;
+        uint256[] memory amounts = ISwapV2(router).swapExactTokensForETH(amountIn, minOut, path, address(this), block.timestamp);
+        require(amounts[amounts.length - 1] >= minOut, "buy");
+    }
+
+    function _sellTape(address task, uint256 amountIn) internal {
+        _pull(task, msg.sender, amountIn);
+        uint256 usdt;
+        if (task == tapeBem) {
+            _approve(tapeBem, tapePool, amountIn);
+            uint256 tapeOut = ITape(tapePool).swap(1, false, amountIn, 1);
+            _approve(tapeBem, tapePool, 0);
+            _approve(tapeToken, tapePool, tapeOut);
+            usdt = ITape(tapePool).swap(0, true, tapeOut, 1);
+            _approve(tapeToken, tapePool, 0);
+        } else {
+            _approve(tapeToken, tapePool, amountIn);
+            usdt = ITape(tapePool).swap(0, true, amountIn, 1);
+            _approve(tapeToken, tapePool, 0);
+        }
+        _approve(tapeQuote, router, usdt);
+        address[] memory path = new address[](2);
+        path[0] = tapeQuote;
+        path[1] = wrapped;
+        uint256[] memory amounts = ISwapV2(router).swapExactTokensForETH(usdt, 1, path, address(this), block.timestamp);
+        _approve(tapeQuote, router, 0);
+        require(amounts[amounts.length - 1] > 0, "buy");
     }
 
     function _fixed(uint256 bal) internal view returns (uint256) {

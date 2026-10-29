@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { formatUnits } from "viem";
+import { formatUnits, parseUnits } from "viem";
 import {
   GIFT_ASSETS,
   claimRed,
@@ -14,11 +14,14 @@ import {
   packetOf,
   readAssetVolume,
   readRed,
+  readSpawned,
+  openAnother,
   setRedRule,
   sgClock,
   sgDay,
   taskAsset,
   taskLine,
+  tradeRed,
   withdrawRed,
   type GiftAsset,
   type GiftChain,
@@ -64,6 +67,7 @@ function blankRule(chain: GiftChain, lane: GiftLane): RedRule {
     claimedToday: 0n,
     balance: 0n,
     lastDay: 0n,
+    tradedDay: 0n,
     ready: false,
     asset: null,
   };
@@ -88,7 +92,7 @@ export function RedGift({ account, zh, forceOpen = false, onIdle }: { account: s
   const [assetId, setAssetId] = useState("usdt");
   const [fixedText, setFixedText] = useState("1");
   const [packets, setPackets] = useState("10");
-  const [spotText, setSpotText] = useState("100");
+  const [spotText, setSpotText] = useState("0.01");
   const [perpText, setPerpText] = useState("100");
   const [gate, setGate] = useState(0);
   const [taskId, setTaskId] = useState("bem");
@@ -109,18 +113,24 @@ export function RedGift({ account, zh, forceOpen = false, onIdle }: { account: s
   }, []);
   const day = sgDay();
   const safeChain: GiftChain | null = !self ? null : giftDeployer("bsc").toLowerCase() === self.toLowerCase() ? "bsc" : giftDeployer("xlayer").toLowerCase() === self.toLowerCase() ? "xlayer" : null;
-  const sendChain: GiftChain = pick;
-  const mine = books.find((book) => book.chain === sendChain && book.lane === lane) ?? null;
 
   const reload = () => {
-    void Promise.all(SLOTS.map((slot) => readRed(slot.chain, account, slot.lane).catch(() => blankRule(slot.chain, slot.lane)))).then((rows) => {
+    void Promise.all([
+      Promise.all(SLOTS.map((slot) => readRed(slot.chain, account, slot.lane).catch(() => blankRule(slot.chain, slot.lane)))),
+      readSpawned("xlayer", account).catch(() => [] as RedRule[]),
+      readSpawned("bsc", account).catch(() => [] as RedRule[]),
+    ]).then(([slots, xlayer, bsc]) => {
+      const rows: RedRule[] = [];
+      const seenAddr = new Set<string>();
+      for (const row of [...xlayer, ...bsc, ...slots]) {
+        const key = row.address.toLowerCase();
+        if (seenAddr.has(key)) continue;
+        seenAddr.add(key);
+        if (row.maker && giftDeployer(row.chain).toLowerCase() === row.maker.toLowerCase()) row.lane = "official";
+        rows.push(row);
+      }
       setBooks(rows);
       setSeen(true);
-      void Promise.all(SLOTS.map(async (slot) => [`${slot.lane}-${slot.chain}`, await readPaid(slot.chain, slot.lane)] as const)).then((pairs) => {
-        const next: Record<string, bigint | null> = {};
-        for (const [key, sum] of pairs) next[key] = sum;
-        setPaid(next);
-      });
     });
   };
 
@@ -154,7 +164,7 @@ export function RedGift({ account, zh, forceOpen = false, onIdle }: { account: s
       const message = err instanceof Error ? `${err.message} ${String((err as { cause?: unknown }).cause ?? "")}` : "";
       setBad(true);
       if ((err as { code?: number }).code === 4001) setNote(zh ? "没有签名。" : "Not signed.");
-      else if (err instanceof TxPending || message.includes("pending")) setNote(zh ? "这笔还在等钱包确认。" : "The wallet has not confirmed yet.");
+      else if (err instanceof TxPending || message.includes("pending")) setNote(zh ? "请等待钱包弹出再确认" : "Wait for the wallet, then confirm");
       else if (message.includes("nowallet")) setNote(zh ? "先连接钱包。" : "Connect a wallet.");
       else if (message.includes("deployer") || message === "safe") setNote(zh ? "官方创建只认部署地址。" : "Official rounds use the deployer address.");
       else if (message.startsWith("day")) setNote(zh ? "这个红包今天领过了。别的活动还能领。" : "This one was claimed today. The others are still open.");
@@ -207,16 +217,23 @@ export function RedGift({ account, zh, forceOpen = false, onIdle }: { account: s
   };
 
   const claim = (book: RedRule) => {
-    const why = whyNot(book);
-    if (why) {
+    if (book.lastDay === BigInt(day)) {
       setBad(true);
-      setNote(why);
+      setNote(zh ? "这个活动领过了。新的活动还能领。" : "This one is claimed. A new one is still open.");
       setSeal(null);
       return;
     }
     void run(async () => {
       const from = await who();
-      const got = await claimRed(book.chain, from, book.lane);
+      setNote(zh ? "请等待钱包弹出再确认" : "Wait for the wallet, then confirm");
+      if (book.tradedDay !== BigInt(day)) {
+        try {
+          await tradeRed(book.chain, from, book.lane, book.address);
+        } catch (err) {
+          if (!(err instanceof Error) || err.message !== "traded") throw err;
+        }
+      }
+      const got = await claimRed(book.chain, from, book.lane, book.address);
       const text = book.asset ? `${giftText(got.amount, book.asset)} ${zh ? book.asset.zh : book.asset.en}` : "";
       noteClaim(from, { chain: book.chain, lane: book.lane, amount: book.asset ? giftText(got.amount, book.asset) : "", name: book.asset ? (zh ? book.asset.zh : book.asset.en) : "", at: Date.now(), tx: got.hash });
       setLogStamp((n) => n + 1);
@@ -241,7 +258,7 @@ export function RedGift({ account, zh, forceOpen = false, onIdle }: { account: s
             const name = book.asset ? (zh ? book.asset.zh : book.asset.en) : "";
             const sum = purse(book, paid[`${book.lane}-${book.chain}`] ?? null);
             return (
-              <div key={`mine-${book.lane}-${book.chain}`} className="mb-3 bg-paper px-3 py-3 text-base text-ink">
+              <div key={book.address} className="mb-3 bg-paper px-3 py-3 text-base text-ink">
                 <p>{book.chain === "bsc" ? "BSC" : "X Layer"} · {book.lane === "volunteer" ? (zh ? "个人创建" : "Personal") : (zh ? "官方创建" : "Official")}</p>
                 {sum ? (
                   <div className="mt-2 grid grid-cols-2 gap-2">
@@ -277,38 +294,25 @@ export function RedGift({ account, zh, forceOpen = false, onIdle }: { account: s
                 <button type="button" className={`min-h-11 text-base transition active:scale-[0.98] ${pick === "bsc" ? "bg-[#8c1c1c] text-[#fff7ea]" : "bg-card text-ink"}`} onClick={() => setPick("bsc")}>BSC</button>
                 <button type="button" className={`min-h-11 text-base transition active:scale-[0.98] ${pick === "xlayer" ? "bg-[#8c1c1c] text-[#fff7ea]" : "bg-card text-ink"}`} onClick={() => setPick("xlayer")}>X Layer</button>
               </div>
-              {mine ? (
-                <>
-                  <DeployerDesk zh={zh} chain={mine.chain} busy={busy} assetId={assetId} setAssetId={setAssetId} eachText={fixedText} setEachText={setFixedText} countText={packets} setCountText={setPackets} spotText={spotText} setSpotText={setSpotText} perpText={perpText} setPerpText={setPerpText} gate={gate} setGate={setGate} life={life} setLife={setLife} taskId={taskId} setTaskId={setTaskId} onSave={() => {
+              <DeployerDesk zh={zh} chain={pick} busy={busy} assetId={assetId} setAssetId={setAssetId} eachText={fixedText} setEachText={setFixedText} countText={packets} setCountText={setPackets} spotText={spotText} setSpotText={setSpotText} perpText={perpText} setPerpText={setPerpText} gate={gate} setGate={setGate} life={life} setLife={setLife} taskId={taskId} setTaskId={setTaskId} onSave={() => {
                     const chain = pick;
                     const asset = GIFT_ASSETS[chain].find((row) => row.id === assetId) ?? GIFT_ASSETS[chain][0];
-                    const task = GIFT_ASSETS[chain].find((row) => row.id === taskId && row.id !== "usdt") ?? GIFT_ASSETS[chain].find((row) => row.id !== "usdt");
+                    const task = GIFT_ASSETS[chain].find((row) => row.id === taskId && row.id !== "usdt" && row.id !== "okb" && row.id !== "bnb") ?? GIFT_ASSETS[chain].find((row) => row.id !== "usdt" && row.id !== "okb" && row.id !== "bnb");
                     const total = payTotal(fixedText, packets);
                     void run(async () => {
                       const from = await who();
                       if (lane === "official" && giftDeployer(chain).toLowerCase() !== from.toLowerCase()) throw new Error("deployer");
-                      if (!total || !task) throw new Error("amount");
-                      if (!(Number(spotText) > 0) && !(Number(perpText) > 0)) throw new Error("amount");
+                      if (!total || !task || !(Number(spotText) > 0)) throw new Error("amount");
                       const taskHi = task.token === "0x0000000000000000000000000000000000000000" ? 1n : BigInt(task.token);
-                      await setRedRule(chain, from, asset, 0, fixedText, "0", "0", packets, "0", spotText, perpText, gate, life, lane, taskHi);
-                      try {
-                        await fundRed(chain, from, total, asset, lane);
-                      } catch (err) {
-                        if (err instanceof TxPending) throw err;
-                        throw new Error("fund");
-                      }
-                      const after = await readRed(chain, from, lane);
-                      if (!after.ready || after.balance === 0n) throw new Error("fund");
+                      setNote(zh ? "请等待钱包弹出再确认" : "Wait for the wallet, then confirm");
+                      await openAnother(chain, from, asset, fixedText, total, spotText, gate, life, taskHi);
                       setBoom(true);
                       window.setTimeout(() => setBoom(false), 1600);
                       setTab("claim");
                       return "ok" as const;
                     });
                   }} />
-                </>
-              ) : (
-                <p className="mt-3 text-center text-base text-ink">{zh ? "官方创建只认部署地址。" : "Official rounds use the deployer address."}</p>
-              )}
+                  {lane === "official" ? <p className="mt-2 text-center text-base text-ink">{zh ? "官方创建只认部署地址。" : "Official rounds use the deployer address."}</p> : null}
             </div>
           )}
           {note ? <p className={`mt-2 text-center text-base ${bad ? "text-sell" : "text-ink"}`}>{note}</p> : null}
@@ -390,12 +394,12 @@ function ClaimBoard({
         <span>{zh ? "正在进行" : "Open"}</span>
         <span>{showLive ? (zh ? "收起" : "Hide") : (zh ? "打开" : "Open")}</span>
       </button>
-      {showLive ? (live.length ? live.map((book) => <PacketCard key={`${book.lane}-${book.chain}`} book={book} paid={paid[`${book.lane}-${book.chain}`] ?? null} zh={zh} info={info} setInfo={setInfo} busy={busy} self={self} verify={verify} take={take} lift={lift} ended={false} />) : <p className="text-center text-ink">{seen ? (zh ? "没有进行中的" : "None open") : ""}</p>) : null}
+      {showLive ? (live.length ? live.map((book) => <PacketCard key={book.address} book={book} paid={paid[book.address] ?? null} zh={zh} info={info} setInfo={setInfo} busy={busy} self={self} verify={verify} take={take} lift={lift} ended={false} />) : <p className="text-center text-ink">{seen ? (zh ? "没有进行中的" : "None open") : ""}</p>) : null}
       <button type="button" className="flex min-h-11 w-full items-center justify-between text-base text-ink" onClick={() => setShowDone((v) => !v)}>
         <span>{zh ? "已经结束" : "Ended"}</span>
         <span>{showDone ? (zh ? "收起" : "Hide") : (zh ? "打开" : "Open")}</span>
       </button>
-      {showDone ? (done.length ? done.map((book) => <PacketCard key={`${book.lane}-${book.chain}`} book={book} paid={paid[`${book.lane}-${book.chain}`] ?? null} zh={zh} info={info} setInfo={setInfo} busy={busy} self={self} verify={verify} take={take} lift={lift} ended />) : <p className="text-center text-ink">{seen ? (zh ? "没有结束的" : "None ended") : ""}</p>) : null}
+      {showDone ? (done.length ? done.map((book) => <PacketCard key={book.address} book={book} paid={paid[book.address] ?? null} zh={zh} info={info} setInfo={setInfo} busy={busy} self={self} verify={verify} take={take} lift={lift} ended />) : <p className="text-center text-ink">{seen ? (zh ? "没有结束的" : "None ended") : ""}</p>) : null}
     </div>
   );
 }
@@ -416,10 +420,11 @@ function PacketCard({
   ended: boolean;
 }) {
   const personal = book.lane === "volunteer";
-  const key = `${book.lane}-${book.chain}`;
+  const key = book.address;
   const owner = Boolean(self && book.credit > 0n);
   const maker = Boolean(self && book.maker.toLowerCase() === self.toLowerCase());
   const mineToday = book.lastDay === BigInt(sgDay());
+  const tradedToday = book.tradedDay === BigInt(sgDay()) && !mineToday;
   const stuck = book.dayCap > 0n && book.claimedToday >= book.dayCap && book.balance > 0n;
   const sum = purse(book, paid);
   const name = book.asset ? (zh ? book.asset.zh : book.asset.en) : "";
@@ -457,7 +462,7 @@ function PacketCard({
       ) : stuck && maker ? (
         <button type="button" className="mt-2 min-h-11 w-full bg-[#8c1c1c] text-base text-[#fff7ea] disabled:opacity-40" disabled={busy} onClick={() => lift(book)}>{zh ? "放开领取" : "Reopen"}</button>
       ) : ended ? null : (
-        <button type="button" className="mt-2 min-h-11 w-full bg-[#8c1c1c] text-base text-[#fff7ea] disabled:opacity-40" disabled={busy || mineToday} onClick={() => verify(book)}>{mineToday ? (zh ? "领过了" : "Done") : (zh ? "参与" : "Join")}</button>
+        <button type="button" className="mt-2 min-h-11 w-full bg-[#8c1c1c] text-base text-[#fff7ea] disabled:opacity-40" disabled={busy || mineToday} onClick={() => verify(book)}>{mineToday ? (zh ? "这个领过了" : "Claimed") : tradedToday ? (zh ? "打开红包" : "Open") : (zh ? "参与" : "Join")}</button>
       )}
     </div>
   );
@@ -495,45 +500,31 @@ function DeployerDesk({
   onSave: () => void;
 }) {
   const assets = GIFT_ASSETS[chain];
-  const tasks = assets.filter((row) => row.id !== "usdt");
+  const tasks = assets.filter((row) => row.id !== "usdt" && row.id !== "okb" && row.id !== "bnb");
   const asset = assets.find((row) => row.id === assetId) ?? assets[0];
   const task = tasks.find((row) => row.id === taskId) ?? tasks[0];
   const total = payTotal(eachText, countText);
   const spot = Number(spotText);
-  const perp = Number(perpText);
-  const ready = Boolean(total) && (spot > 0 || perp > 0);
+  const ready = Boolean(total) && spot > 0;
   return (
     <div className="mt-2 bg-paper px-3 py-3 text-base text-ink">
-      <label className="block text-base text-ink">{zh ? "资产" : "Asset"}
-        <select value={assetId} onChange={(e) => setAssetId(e.target.value)} className="mt-1 h-11 w-full bg-card px-2 text-base text-ink">
-          {assets.map((row) => <option key={row.id} value={row.id}>{zh ? row.zh : row.en}</option>)}
-        </select>
-      </label>
+      <Choice label={zh ? "资产" : "Asset"} value={assetId} options={assets.map((row) => ({ value: row.id, label: zh ? row.zh : row.en }))} onPick={setAssetId} />
       <Field label={zh ? "每个人" : "Each"} value={eachText} set={setEachText} />
       <Field label={zh ? "人数" : "People"} value={countText} set={setCountText} />
       <p className="mt-3 font-mono text-2xl text-ink">{total ? `${total} ${zh ? asset.zh : asset.en}` : "—"}</p>
-      <label className="mt-2 block text-base text-ink">{zh ? "领取" : "Window"}
-        <select value={life} onChange={(e) => setLife(Number(e.target.value))} className="mt-1 h-11 w-full bg-card px-2 text-base text-ink">
-          <option value={86_400}>{zh ? "24小时" : "24 hours"}</option>
-          <option value={604_800}>{zh ? "一星期" : "One week"}</option>
-          <option value={2_592_000}>{zh ? "一个月" : "One month"}</option>
-        </select>
-      </label>
-      <label className="mt-3 block text-base text-ink">{zh ? "任务资产" : "Task asset"}
-        <select value={task.id} onChange={(e) => setTaskId(e.target.value)} className="mt-1 h-11 w-full bg-card px-2 text-base text-ink">
-          {tasks.map((row) => <option key={row.id} value={row.id}>{zh ? row.zh : row.en}</option>)}
-        </select>
-      </label>
-      <Field label={zh ? "现货 USDT" : "Spot USDT"} value={spotText} set={setSpotText} />
-      <Field label={zh ? "合约 USDT" : "Perp USDT"} value={perpText} set={setPerpText} />
-      <label className="mt-2 block text-base text-ink">{zh ? "门槛" : "Gate"}
-        <select value={gate} onChange={(e) => setGate(Number(e.target.value))} className="mt-1 h-11 w-full bg-card px-2 text-base text-ink">
-          <option value={0}>{zh ? "一样即可" : "Either"}</option>
-          <option value={1}>{zh ? "两样都要" : "Both"}</option>
-        </select>
-      </label>
-      <p className="mt-3 text-base text-ink">{taskLine(chain, task.token === "0x0000000000000000000000000000000000000000" ? 1n : BigInt(task.token), BigInt(Math.round((spot > 0 ? spot : 0) * 1e6)), BigInt(Math.round((perp > 0 ? perp : 0) * 1e6)), gate, zh)}</p>
-      <button type="button" className="mt-3 min-h-11 w-full bg-[#8c1c1c] text-base text-[#fff7ea] transition active:scale-[0.98] disabled:opacity-40" disabled={busy || !ready} onClick={onSave}>{busy ? (zh ? "等待钱包" : "Waiting") : (zh ? "确定" : "Confirm")}</button>
+      <Choice label={zh ? "可领时间" : "Window"} value={String(life)} options={[
+        { value: "86400", label: zh ? "24小时" : "24 hours" },
+        { value: "604800", label: zh ? "一星期" : "One week" },
+        { value: "2592000", label: zh ? "一个月" : "One month" },
+      ]} onPick={(value) => setLife(Number(value))} />
+      <Choice label={zh ? "任务资产" : "Task asset"} value={task.id} options={tasks.map((row) => ({ value: row.id, label: zh ? row.zh : row.en }))} onPick={setTaskId} />
+      <Field label={chain === "bsc" ? (zh ? "任务 BNB" : "Task BNB") : (zh ? "任务 OKB" : "Task OKB")} value={spotText} set={setSpotText} />
+      <Choice label={zh ? "任务" : "Task"} value={String(gate)} options={[
+        { value: "0", label: zh ? "买入" : "Buy" },
+        { value: "1", label: zh ? "卖出" : "Sell" },
+      ]} onPick={(value) => setGate(Number(value))} />
+      <p className="mt-3 text-base text-ink">{taskLine(chain, task.token === "0x0000000000000000000000000000000000000000" ? 1n : BigInt(task.token), (() => { try { return parseUnits(spotText.trim() || "0", 18); } catch { return 0n; } })(), 0n, gate, zh)}</p>
+      <button type="button" className="mt-3 min-h-11 w-full bg-[#8c1c1c] text-base text-[#fff7ea] transition active:scale-[0.98] disabled:opacity-40" disabled={busy || !ready} onClick={onSave}>{busy ? (zh ? "请等待钱包弹出再确认" : "Wait for the wallet, then confirm") : (zh ? "确定" : "Confirm")}</button>
     </div>
   );
 }
@@ -545,6 +536,19 @@ function DayClock({ until }: { until: number }) {
     return () => window.clearInterval(id);
   }, [until]);
   return <p className="font-mono text-2xl text-ink">{sgClock(left)}</p>;
+}
+
+function Choice({ label, value, options, onPick }: { label: string; value: string; options: { value: string; label: string }[]; onPick: (value: string) => void }) {
+  return (
+    <div className="mt-2">
+      <p className="text-base text-ink">{label}</p>
+      <div className="mt-1 flex flex-wrap gap-2">
+        {options.map((opt) => (
+          <button key={opt.value} type="button" className={`min-h-12 px-3 text-base ${value === opt.value ? "bg-[#8c1c1c] text-[#fff7ea]" : "bg-card text-ink"}`} onClick={() => onPick(opt.value)}>{opt.label}</button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function Field({ label, value, set }: { label: string; value: string; set: (v: string) => void }) {
