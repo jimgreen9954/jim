@@ -273,6 +273,15 @@ export async function disconnectWallet(): Promise<void> {
   rememberChain(null);
 }
 
+export async function grantedAccount(eth: Eth): Promise<string | null> {
+  try {
+    const rows = (await eth.request({ method: "eth_accounts" })) as string[];
+    return rows?.[0] || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function ensureProvider(): Promise<Eth> {
   if (current) return current;
   const plugged = kind === "binance" ? binanceInjected() : okxInjected();

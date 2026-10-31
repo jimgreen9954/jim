@@ -53,6 +53,10 @@
     cursor: pointer;
     touch-action: manipulation;
   }
+  button.pouch-mark {
+    touch-action: none;
+    user-select: none;
+  }
   input,
   select,
   textarea {
@@ -408,15 +412,71 @@ input[type="checkbox"] {
   font-size: 0.8rem;
   letter-spacing: 0.08em;
 }
-.gift-line > button {
-  display: grid;
-  width: 2rem;
-  height: 2rem;
-  place-items: center;
-  border-radius: 999px;
-  color: var(--gift-leaf);
-  font-size: 1.15rem;
+.gift-pick {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 3.15rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-gold) 70%, transparent);
 }
+.gift-pick > span:first-child {
+  width: 3.6rem;
+  flex: none;
+  color: color-mix(in srgb, var(--color-ink) 55%, transparent);
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+}
+.gift-pick-value {
+  margin-left: auto;
+  min-width: 7.2rem;
+  padding: 0.28rem 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--gift-leaf) 62%, var(--color-gold));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-paper) 72%, transparent);
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+.gift-wheel-wrap {
+  position: relative;
+  height: 132px;
+  margin: 0.15rem 0 0.35rem;
+}
+.gift-wheel-wrap::before {
+  content: "";
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  top: 50%;
+  height: 44px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--gift-leaf) 70%, var(--color-gold));
+  background: color-mix(in srgb, var(--gift-leaf) 12%, transparent);
+  pointer-events: none;
+}
+.gift-wheel {
+  height: 100%;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  mask-image: linear-gradient(transparent, #000 22%, #000 78%, transparent);
+}
+.gift-wheel::-webkit-scrollbar { display: none; }
+.gift-wheel button {
+  display: grid;
+  height: 44px;
+  width: 100%;
+  place-items: center;
+  scroll-snap-align: center;
+  color: color-mix(in srgb, var(--color-ink) 38%, transparent);
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+}
+.gift-wheel button.is-on {
+  color: var(--color-ink);
+  font-size: 1.05rem;
+}
+.gift-wheel .gift-wheel-pad { height: 44px; scroll-snap-align: none; }
 .gift-go {
   display: grid;
   width: 100%;
@@ -545,8 +605,9 @@ html.day .gift-sheet {
 }
 
 @media (max-width: 1279px) {
-  .ph-hide, .ph-stat, .ph-book .book-meta, .ph-book .book-side, .ph-book .book-who, .ph-book .book-head { display: none; }
-  .ph-book .book-line { grid-template-columns: minmax(0, 1fr); gap: 0; padding: 1px 6px; border-top: 0; }
+  .ph-hide, .ph-stat, .ph-book .book-meta, .ph-book .book-side, .ph-book .book-addr, .ph-book .book-head { display: none; }
+  .ph-book .book-who { display: flex; }
+  .ph-book .book-line { grid-template-columns: minmax(0, 1fr) auto; gap: 0; padding: 1px 6px; border-top: 0; }
   .ph-book .book-mid { justify-content: center; margin: 2px 0; font-size: 13px; }
   .phone-desk { padding-bottom: 0.5rem; max-width: 100%; overflow-x: hidden; }
   .phone-desk[data-phone="chart"] .ph-book,

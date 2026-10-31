@@ -78,14 +78,10 @@ const swapEvent = parseAbiItem(
 );
 
 import { STOCKS, type StockKey } from "@/lib/stocks";
-import { ensureProvider, getProvider, rememberAccount } from "@/lib/wallet";
+import { ensureProvider, getProvider, grantedAccount, rememberAccount } from "@/lib/wallet";
 
 export function hasWallet(): boolean {
   return Boolean(getProvider());
-}
-
-function ethereum() {
-  return getProvider();
 }
 
 const client = createPublicClient({ transport: http(BSC.rpc) });
@@ -345,9 +341,20 @@ export async function recentPrints(market: "bem" | "bnb" | ErcKey = "bem"): Prom
   });
 }
 
+async function walletChain(eth: { request: (args: { method: string }) => Promise<unknown> }): Promise<number | null> {
+  try {
+    const id = await eth.request({ method: "eth_chainId" });
+    const text = typeof id === "string" ? id : String(id ?? "");
+    const n = Number.parseInt(text, text.startsWith("0x") ? 16 : 10);
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
+
 async function ensureBsc(): Promise<void> {
-  const eth = ethereum();
-  if (!eth) throw new Error("nowallet");
+  const eth = await ensureProvider();
+  if ((await walletChain(eth)) === BSC.chainId) return;
   try {
     await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: BSC.hex }] });
   } catch (err) {
@@ -374,8 +381,11 @@ async function ensureBsc(): Promise<void> {
 
 export async function connectBsc(): Promise<string> {
   const eth = await ensureProvider();
-  const accounts = (await eth.request({ method: "eth_requestAccounts" })) as string[];
-  const next = accounts[0];
+  let next = await grantedAccount(eth);
+  if (!next) {
+    const accounts = (await eth.request({ method: "eth_requestAccounts" })) as string[];
+    next = accounts[0];
+  }
   if (!next) throw new Error("nowallet");
   rememberAccount(next);
   await ensureBsc();
@@ -399,11 +409,11 @@ async function approveIfNeeded(from: string, token: Hex, need: bigint): Promise<
     args: [from as Hex, BSC.router],
   });
   if (allowance >= need) return;
-  if (allowance > 0n) {
-    const reset = encodeFunctionData({ abi: erc20, functionName: "approve", args: [BSC.router, 0n] });
-    await waitOk(await send(from, token, reset));
-  }
-  const approveData = encodeFunctionData({ abi: erc20, functionName: "approve", args: [BSC.router, need] });
+  const approveData = encodeFunctionData({
+    abi: erc20,
+    functionName: "approve",
+    args: [BSC.router, (1n << 256n) - 1n],
+  });
   await waitOk(await send(from, token, approveData));
 }
 

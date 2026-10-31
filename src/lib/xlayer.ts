@@ -60,7 +60,7 @@ const abi = [
   },
 ] as const;
 
-import { ensureProvider, getProvider, rememberAccount } from "@/lib/wallet";
+import { ensureProvider, getProvider, grantedAccount, rememberAccount } from "@/lib/wallet";
 
 export function hasWallet(): boolean {
   return Boolean(getProvider());
@@ -158,8 +158,11 @@ async function ensureXLayer(): Promise<void> {
 
 export async function connectXLayer(): Promise<string> {
   const eth = await ensureProvider();
-  const accounts = (await eth.request({ method: "eth_requestAccounts" })) as string[];
-  const next = accounts[0];
+  let next = await grantedAccount(eth);
+  if (!next) {
+    const accounts = (await eth.request({ method: "eth_requestAccounts" })) as string[];
+    next = accounts[0];
+  }
   if (!next) throw new Error("nowallet");
   rememberAccount(next);
   await ensureXLayer();

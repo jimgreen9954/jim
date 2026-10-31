@@ -1313,10 +1313,14 @@ function DeployerDesk({
   const total = payTotal(eachText, countText);
   const spot = Number(spotText);
   const ready = Boolean(total) && spot > 0;
-  const lifeText = life === 604800 ? (zh ? "一星期" : "1 week") : life === 2592000 ? (zh ? "一个月" : "1 month") : (zh ? "24小时" : "24 hours");
   return (
     <div className="gift-form">
-      <Line label={zh ? "红包" : "Prize"} text={zh ? asset.zh : asset.en} onPrev={() => setAssetId(cycle(assets.map((row) => row.id), asset.id, -1))} onNext={() => setAssetId(cycle(assets.map((row) => row.id), asset.id, 1))} />
+      <Wheel
+        label={zh ? "红包" : "Prize"}
+        value={asset.id}
+        options={assets.map((row) => ({ id: row.id, text: zh ? row.zh : row.en }))}
+        onPick={setAssetId}
+      />
       <label className="gift-field">
         <span>{zh ? "每人" : "Each"}</span>
         <input value={eachText} onChange={(e) => setEachText(e.target.value)} inputMode="decimal" className="h-10 min-w-0 flex-1 bg-transparent text-right font-mono text-lg text-ink outline-none" />
@@ -1330,9 +1334,31 @@ function DeployerDesk({
         <span>{zh ? "付出" : "Pay"}</span>
         <span className="font-mono text-lg">{total ? `${total} ${zh ? asset.zh : asset.en}` : "—"}</span>
       </div>
-      <Line label={zh ? "期限" : "Window"} text={lifeText} onPrev={() => setLife(cycle([86400, 604800, 2592000], life, -1))} onNext={() => setLife(cycle([86400, 604800, 2592000], life, 1))} />
-      <Line label={zh ? "任务" : "Task"} text={zh ? task.zh : task.en} onPrev={() => setTaskId(cycle(tasks.map((row) => row.id), task.id, -1))} onNext={() => setTaskId(cycle(tasks.map((row) => row.id), task.id, 1))} />
-      <Line label={zh ? "方向" : "Side"} text={gate === 1 ? (zh ? "卖出" : "Sell") : (zh ? "买入" : "Buy")} onPrev={() => setGate(gate === 1 ? 0 : 1)} onNext={() => setGate(gate === 1 ? 0 : 1)} />
+      <Wheel
+        label={zh ? "期限" : "Window"}
+        value={String(life)}
+        options={[
+          { id: "86400", text: zh ? "24小时" : "24 hours" },
+          { id: "604800", text: zh ? "一星期" : "1 week" },
+          { id: "2592000", text: zh ? "一个月" : "1 month" },
+        ]}
+        onPick={(id) => setLife(Number(id))}
+      />
+      <Wheel
+        label={zh ? "任务" : "Task"}
+        value={task.id}
+        options={tasks.map((row) => ({ id: row.id, text: zh ? row.zh : row.en }))}
+        onPick={setTaskId}
+      />
+      <Wheel
+        label={zh ? "方向" : "Side"}
+        value={String(gate)}
+        options={[
+          { id: "0", text: zh ? "买入" : "Buy" },
+          { id: "1", text: zh ? "卖出" : "Sell" },
+        ]}
+        onPick={(id) => setGate(Number(id))}
+      />
       <label className="gift-field">
         <span>{chain === "bsc" ? "BNB" : "OKB"}</span>
         <input value={spotText} onChange={(e) => setSpotText(e.target.value)} inputMode="decimal" className="h-10 min-w-0 flex-1 bg-transparent text-right font-mono text-lg text-ink outline-none" />
@@ -1348,21 +1374,70 @@ function DeployerDesk({
   );
 }
 
-function Line({ label, text, onPrev, onNext }: { label: string; text: string; onPrev: () => void; onNext: () => void }) {
+function Wheel({
+  label,
+  value,
+  options,
+  onPick,
+}: {
+  label: string;
+  value: string;
+  options: { id: string; text: string }[];
+  onPick: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const wait = useRef(0);
+  const text = options.find((row) => row.id === value)?.text ?? "";
+  useEffect(() => {
+    if (!open || !box.current) return;
+    const index = Math.max(0, options.findIndex((row) => row.id === value));
+    box.current.scrollTop = index * 44;
+  }, [open]);
+  const settle = () => {
+    window.clearTimeout(wait.current);
+    wait.current = window.setTimeout(() => {
+      const el = box.current;
+      if (!el) return;
+      const index = Math.round(el.scrollTop / 44);
+      const next = options[Math.min(options.length - 1, Math.max(0, index))];
+      if (next && next.id !== value) onPick(next.id);
+    }, 80);
+  };
   return (
-    <div className="gift-line">
-      <span>{label}</span>
-      <button type="button" onClick={onPrev} aria-label={label}>‹</button>
-      <span className="min-w-0 flex-1 text-center font-mono text-lg">{text}</span>
-      <button type="button" onClick={onNext} aria-label={label}>›</button>
+    <div>
+      <button type="button" className="gift-pick" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        <span>{label}</span>
+        <span className="gift-pick-value">{text}</span>
+      </button>
+      {open ? (
+        <div className="gift-wheel-wrap">
+          <div
+            ref={box}
+            className="gift-wheel"
+            onScroll={settle}
+            onTouchMove={(event) => event.stopPropagation()}
+          >
+            <div className="gift-wheel-pad" />
+            {options.map((row) => (
+              <button
+                key={row.id}
+                type="button"
+                className={row.id === value ? "is-on" : ""}
+                onClick={() => {
+                  onPick(row.id);
+                  setOpen(false);
+                }}
+              >
+                {row.text}
+              </button>
+            ))}
+            <div className="gift-wheel-pad" />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
-}
-
-function cycle<T>(list: T[], value: T, dir: number): T {
-  const index = list.indexOf(value);
-  const at = index < 0 ? 0 : index;
-  return list[(at + dir + list.length) % list.length];
 }
 
 function Fold({ zh, children }: { zh: boolean; children: ReactNode }) {

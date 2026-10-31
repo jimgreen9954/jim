@@ -413,8 +413,24 @@ export function savedXBemPerp(): string {
   return /^0x[a-fA-F0-9]{40}$/.test(saved) ? saved : "";
 }
 
+const FRESH_X_BOOK = "tapeliquid-xbook-19";
+const FRESH_X_MARK = "tapeliquid-xmark-19";
+
+export function freshXBook(): string {
+  if (typeof window === "undefined") return "";
+  const saved = window.localStorage.getItem(FRESH_X_BOOK) ?? "";
+  return /^0x[a-fA-F0-9]{40}$/.test(saved) ? saved : "";
+}
+
+export function revertXBook(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(FRESH_X_BOOK);
+  window.localStorage.removeItem(FRESH_X_MARK);
+}
+
 export function bookOf(which: Desk = desk): string {
-  return which === "xlayer" ? KNOWN_XPERP : BSC_REBATE;
+  if (which === "xlayer") return freshXBook() || KNOWN_XPERP;
+  return BSC_REBATE;
 }
 
 const RISK_BSC = "tapeliquid-risk-bsc";
@@ -1069,6 +1085,37 @@ async function bscTick(): Promise<number> {
 const pokeAbi = [
   { name: "poke", type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
 ] as const;
+
+/** New mark from the BEM/WOKB 1% pool, then a new book. The old book cannot change its mark. */
+export async function shipXBook(from: string): Promise<{ mark: string; book: string }> {
+  if (from.toLowerCase() !== FEE_TO.toLowerCase() && from.toLowerCase() !== XLAYER_SAFE.toLowerCase()) throw new Error("fee");
+  const was = desk;
+  desk = "xlayer";
+  try {
+    const have = freshXBook();
+    const savedMark = typeof window !== "undefined" ? window.localStorage.getItem(FRESH_X_MARK) ?? "" : "";
+    if (have && (await xBookState(have)) === "ready") return { mark: savedMark, book: have };
+    const rpc = await client();
+    const markHash = await send(from, CREATE_CALL, createCallData(MARK_BYTECODE as Hex), 3_000_000n);
+    const markReceipt = await rpc.getTransactionReceipt({ hash: markHash });
+    const mark = createdAddress(markReceipt.logs);
+    const poke = encodeFunctionData({ abi: pokeAbi, functionName: "poke" });
+    await send(from, mark as Hex, poke, 500_000n);
+    const args = encodeAbiParameters(
+      [{ type: "address" }, { type: "address" }, { type: "uint256" }, { type: "address" }],
+      [X_USDT, mark as Hex, 1_000_000n, XLAYER_SAFE],
+    );
+    const bookHash = await send(from, CREATE_CALL, createCallData((RISK_BYTECODE + args.slice(2)) as Hex), 8_000_000n);
+    const bookReceipt = await rpc.getTransactionReceipt({ hash: bookHash });
+    const book = createdAddress(bookReceipt.logs);
+    if ((await xBookState(book)) !== "ready") throw new Error("revert");
+    window.localStorage.setItem(FRESH_X_MARK, mark);
+    window.localStorage.setItem(FRESH_X_BOOK, book);
+    return { mark, book };
+  } finally {
+    desk = was;
+  }
+}
 
 export async function readStops(perp: string): Promise<{ id: bigint; user: string; long: boolean; margin: bigint; lev: number; trigger: bigint }[]> {
   const c = await client();

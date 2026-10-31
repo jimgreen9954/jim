@@ -1,4 +1,5 @@
 import { Component, lazy, Suspense, type ReactNode, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ArriveHint } from "@/components/exchange/phone-desk";
 import { PoolSpot } from "@/components/exchange/pool-spot";
 import { useExchange } from "@/lib/exchange-store";
@@ -244,22 +245,35 @@ export function RedPocket() {
       window.removeEventListener("resize", fit);
     };
   }, [open]);
+  const openedAt = useRef(0);
   return (
     <>
-      <PacketMark zh={zh} live={live} until={until} onOpen={() => setOpen(true)} />
-      {open ? (
-        <div
-          className="fixed inset-0 z-[90] flex items-end justify-center bg-black/70 sm:items-center"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            className="gift-sheet flex w-full max-w-md flex-col overflow-hidden text-ink"
-            style={{
-              height: sheetH ? Math.min(sheetH, 720) : "92dvh",
-              paddingBottom: "env(safe-area-inset-bottom)",
-            }}
-            onClick={(event) => event.stopPropagation()}
-          >
+      <PacketMark
+        zh={zh}
+        live={live}
+        until={until}
+        onOpen={() => {
+          openedAt.current = Date.now();
+          setOpen(true);
+        }}
+      />
+      {open && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[130] flex items-end justify-center bg-black/70 sm:items-center"
+              onClick={() => {
+                if (Date.now() - openedAt.current < 700) return;
+                setOpen(false);
+              }}
+            >
+              <div
+                className="gift-sheet flex w-full max-w-md flex-col overflow-hidden text-ink"
+                style={{
+                  height: sheetH ? Math.min(sheetH, 720) : "92dvh",
+                  paddingBottom: "env(safe-area-inset-bottom)",
+                }}
+                onClick={(event) => event.stopPropagation()}
+              >
             <div className="flex shrink-0 flex-col items-center px-4 pt-2">
               <span className="mb-2 h-1 w-10 rounded-full bg-gold" />
               <div className="flex w-full items-center justify-between">
@@ -286,8 +300,10 @@ export function RedPocket() {
               </Suspense>
             </div>
           </div>
-        </div>
-      ) : null}
+            </div>,
+            document.body,
+          )
+        : null}
     </>
   );
 }
@@ -335,10 +351,11 @@ function PacketMark({
     return { x: 8, y: 58 };
   });
   const [left, setLeft] = useState(0);
-  const drag = useRef<{ x: number; y: number; px: number; py: number; moved: boolean } | null>(
-    null,
-  );
+  const drag = useRef<{ x: number; y: number; px: number; py: number; at: number } | null>(null);
+  const moved = useRef(false);
+  const dragged = useRef(false);
   const tapped = useRef(0);
+  const [ready, setReady] = useState(false);
   useEffect(() => {
     if (!live) return;
     const tick = () => setLeft(Math.max(0, until * 1000 - Date.now()));
@@ -347,6 +364,7 @@ function PacketMark({
     return () => window.clearInterval(id);
   }, [live, until]);
   useEffect(() => {
+    setReady(true);
     const fit = () => setAt((now) => pouchBox(now.x, now.y));
     fit();
     window.addEventListener("resize", fit);
@@ -363,64 +381,111 @@ function PacketMark({
     tapped.current = now;
     onOpen();
   };
+  const finish = () => {
+    const hold = drag.current;
+    drag.current = null;
+    if (!hold) return;
+    if (moved.current) {
+      dragged.current = true;
+      moved.current = false;
+      setAt((now) => {
+        const next = pouchBox(now.x, now.y);
+        try {
+          localStorage.setItem("tl-pouch-pos", JSON.stringify(next));
+        } catch {
+          /* ignore */
+        }
+        return next;
+      });
+      return;
+    }
+    openOnce();
+  };
+  const follow = (px: number, py: number) => {
+    const hold = drag.current;
+    if (!hold) return;
+    const dx = px - hold.px;
+    const dy = py - hold.py;
+    if (Math.hypot(dx, dy) < 8) return;
+    moved.current = true;
+    setAt(pouchBox(hold.x + dx, hold.y + dy));
+  };
+  const down = (px: number, py: number) => {
+    moved.current = false;
+    dragged.current = false;
+    drag.current = { x: at.x, y: at.y, px, py, at: Date.now() };
+  };
 
-  return (
+  const mark = (
     <button
       type="button"
       aria-label={zh ? "红包锦囊" : "Red packet"}
-      className="fixed z-[80] w-16 touch-none active:scale-95"
-      style={{ left: at.x, top: at.y }}
+      className="pouch-mark fixed z-[120] grid h-14 w-14 place-items-center"
+      style={{ left: at.x, top: at.y, touchAction: "none" }}
       onPointerDown={(event) => {
-        drag.current = { x: at.x, y: at.y, px: event.clientX, py: event.clientY, moved: false };
+        if (event.button !== 0) return;
+        event.preventDefault();
+        if (!drag.current) down(event.clientX, event.clientY);
+        try {
+          event.currentTarget.setPointerCapture(event.pointerId);
+        } catch {
+          /* capture can fail if the pointer already ended */
+        }
       }}
       onPointerMove={(event) => {
-        const hold = drag.current;
-        if (!hold || (event.clientX === 0 && event.clientY === 0)) return;
-        const dx = event.clientX - hold.px;
-        const dy = event.clientY - hold.py;
-        if (Math.abs(dx) + Math.abs(dy) < 18) return;
-        hold.moved = true;
-        if (!event.currentTarget.hasPointerCapture(event.pointerId))
-          event.currentTarget.setPointerCapture(event.pointerId);
-        setAt(pouchBox(hold.x + dx, hold.y + dy));
+        if (!drag.current) return;
+        event.preventDefault();
+        follow(event.clientX, event.clientY);
       }}
-      onPointerUp={() => {
-        const hold = drag.current;
-        drag.current = null;
-        if (!hold) return;
-        if (!hold.moved) openOnce();
-        else
-          setAt((now) => {
-            const next = pouchBox(now.x, now.y);
-            try {
-              localStorage.setItem("tl-pouch-pos", JSON.stringify(next));
-            } catch {
-              /* ignore */
-            }
-            return next;
-          });
+      onPointerUp={(event) => {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        finish();
       }}
-      onPointerCancel={() => {
-        drag.current = null;
+      onPointerCancel={finish}
+      onTouchStart={(event) => {
+        if (drag.current) return;
+        const touch = event.changedTouches[0];
+        if (!touch) return;
+        down(touch.clientX, touch.clientY);
       }}
-      onClick={() => {
-        if (drag.current?.moved) return;
+      onTouchMove={(event) => {
+        const touch = event.changedTouches[0];
+        if (!touch || !drag.current) return;
+        event.preventDefault();
+        follow(touch.clientX, touch.clientY);
+      }}
+      onTouchEnd={(event) => {
+        if (!drag.current) return;
+        event.preventDefault();
+        finish();
+      }}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (dragged.current) {
+          dragged.current = false;
+          return;
+        }
         openOnce();
       }}
     >
-      <svg viewBox="0 0 32 36" className="mx-auto h-8 w-8 drop-shadow" aria-hidden="true">
+      <svg viewBox="0 0 32 36" className="h-8 w-8 drop-shadow" aria-hidden="true">
         <rect x="4" y="8" width="24" height="24" rx="2" fill="#8c1c1c" />
         <path d="M4 16h24" stroke="#e6c36a" strokeWidth="2" />
         <path d="M16 8v24" stroke="#e6c36a" strokeWidth="2" />
         <path d="M8 8c3-5 13-5 16 0" fill="#6e1212" stroke="#e6c36a" strokeWidth="1.4" />
       </svg>
       {live ? (
-        <span className="mt-0.5 block text-center font-mono text-[10px] leading-none text-[#e6c36a]">
+        <span className="absolute bottom-1 font-mono text-[10px] leading-none text-[#e6c36a]">
           {clock(left)}
         </span>
       ) : null}
     </button>
   );
+  if (!ready || typeof document === "undefined") return mark;
+  return createPortal(mark, document.body);
 }
 
 class DeskGuard extends Component<{ children: ReactNode; reset: string }, { bad: boolean }> {

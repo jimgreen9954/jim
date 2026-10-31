@@ -401,10 +401,18 @@ export function Kline({
   const stochD = osc.d.slice(start, start + rows.length);
   const lows = rows.map((bar) => bar.l);
   const highs = rows.map((bar) => bar.h);
-  let lo = Math.min(...lows);
-  let hi = Math.max(...highs);
+  const closes = rows
+    .map((bar) => bar.c)
+    .filter((n) => n > 0)
+    .sort((a, b) => a - b);
+  const mid = closes[Math.floor(closes.length / 2)] || closes[0] || 1;
+  const inBand = (p: number) => p > 0 && p <= mid * 3 && p >= mid / 3;
+  const fitH = highs.filter(inBand);
+  const fitL = lows.filter(inBand);
+  let lo = Math.min(...(fitL.length ? fitL : lows));
+  let hi = Math.max(...(fitH.length ? fitH : highs));
   for (const extra of [entry, mark, liq, tp, sl]) {
-    if (extra > 0) {
+    if (inBand(extra)) {
       lo = Math.min(lo, extra);
       hi = Math.max(hi, extra);
     }

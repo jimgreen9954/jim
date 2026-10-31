@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { bemPrice, bnbPrice, ercPrice } from "@/lib/bsc";
 import { CoinMark } from "@/components/exchange/coin-mark";
 import { okbPrice } from "@/lib/okb";
+import { STOCK_KEYS, STOCKS, type StockKey } from "@/lib/stocks";
 import { useExchange } from "@/lib/exchange-store";
 import { fundingPreview, fundClock, pct } from "@/lib/risk-rules";
 import { readOpenBook } from "@/lib/tape-open-candles";
@@ -20,7 +21,7 @@ export type PerpCoin = "bem" | "btc" | "eth" | "zec" | "tape";
 export type DeskView =
   | { kind: "tape"; market: SpotId; pair?: TapePair }
   | { kind: "otc"; market: SpotId }
-  | { kind: "pancake"; pair: "bem" | "bnb" | "okb" | "btc" | "eth" | "zec" | "xau" }
+  | { kind: "pancake"; pair: "bem" | "bnb" | "okb" | "btc" | "eth" | "zec" | "xau" | StockKey }
   | { kind: "perp"; chain: Desk; coin: PerpCoin };
 
 type Tab = "all" | "perp" | "spot";
@@ -34,6 +35,7 @@ type Row = {
   where: string;
   pin: boolean;
   lev?: string;
+  find?: string;
 };
 
 const ROWS: Row[] = [
@@ -165,6 +167,18 @@ const ROWS: Row[] = [
     where: "订单簿 · X Layer",
     pin: false,
   },
+  ...STOCK_KEYS.map(
+    (key): Row => ({
+      id: key,
+      view: { kind: "pancake", pair: key },
+      symbol: `${STOCKS[key].en}-USDT`,
+      kind: "spot",
+      tag: "美股",
+      where: "Pancake · BSC",
+      pin: false,
+      find: `${STOCKS[key].zh} ${STOCKS[key].en} 美股 stock`,
+    }),
+  ),
 ];
 
 function coinOf(row: Row): string {
@@ -252,6 +266,11 @@ export function MarketSheet({
     okbPrice()
       .then((text) => write("okbspot", text))
       .catch(() => undefined);
+    STOCK_KEYS.forEach((key) => {
+      ercPrice(key)
+        .then((text) => write(key, text))
+        .catch(() => undefined);
+    });
     return () => {
       dead = true;
     };
@@ -272,7 +291,7 @@ export function MarketSheet({
       )
         return false;
       if (!needle) return true;
-      return `${row.symbol} ${row.where} ${row.tag}`.toLowerCase().includes(needle);
+      return `${row.symbol} ${row.where} ${row.tag} ${row.find ?? ""}`.toLowerCase().includes(needle);
     });
   }, [q, tab, strict, px]);
 
@@ -325,8 +344,8 @@ export function MarketSheet({
         <div className="min-h-0 flex-1 overflow-auto">
           <p className="px-3 pt-2 text-[11px] text-ink/45">
             {zh
-              ? "先看代币。搜索只在你输入以后才筛选。价格来自池子或报价，读不到是横线，不填假数。"
-              : "Tokens are listed first. Search only filters after you type. Prices come from the pool or the quote. A dash is a missed read, not a made-up number."}
+              ? "现货、美股、合约都在这一栏。搜索代码或中文名。价格来自池子，读不到是横线，不填假数。"
+              : "Spot, US stocks, and perps are in this list. Search a ticker or a name. Prices come from the pool. A dash is a missed read, not a made-up number."}
           </p>
           <table className="w-full text-left text-xs">
             <thead className="sticky top-0 bg-card text-ink/45">

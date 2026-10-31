@@ -47,7 +47,6 @@ import {
   deployXLayer,
   bookOf,
   pickBook,
-  KNOWN_XPERP,
   liquidatePerp,
   openPerp,
   openPostPerp,
@@ -140,9 +139,15 @@ function plan(margin: string, lev: number, mark: bigint) {
   return { notional: m * lev, size: (m * lev) / px, adverse: Math.max(1, Math.round(90 / lev)) };
 }
 
+function withinSlip(px, refs, bps) {
+  if (!(bps > 0) || !(px > 0)) return true;
+  return refs.some((ref) => ref > 0 && Math.abs(px - ref) / ref <= bps / 10000);
+}
+
 function DeskLadder({
   rows,
   mark,
+  bookMark,
   account,
   busy,
   dec,
@@ -157,6 +162,7 @@ function DeskLadder({
 }: {
   rows: { perp: string; quote: BookQuote }[];
   mark: number;
+  bookMark: number;
   account: string | null;
   busy: boolean;
   dec: number;
@@ -176,8 +182,11 @@ function DeskLadder({
     const size = px > 0 ? (margin * quote.lev) / px : 0;
     return { perp, quote, px, limit, margin, size };
   });
+  const anchors = [mark, bookMark].filter((n) => n > 0);
   const away = (row: (typeof drawn)[number]) =>
-    mark > 0 && row.px > 0 && Math.abs(row.px - mark) / mark > 0.15;
+    anchors.length > 0 &&
+    row.px > 0 &&
+    anchors.every((ref) => Math.abs(row.px - ref) / ref > 0.15);
   const asks = drawn.filter((row) => !row.quote.long).sort((a, b) => b.px - a.px);
   const bids = drawn.filter((row) => row.quote.long).sort((a, b) => b.px - a.px);
   const nearAsks = asks.filter((row) => !away(row));
@@ -289,7 +298,7 @@ function DeskLadder({
             </button>
           )}
           <a
-            className="text-xs text-ink/50 underline"
+            className="book-addr text-xs text-ink/50 underline"
             href={`${scan}/address/${row.quote.user}`}
             target="_blank"
             rel="noreferrer"
@@ -1306,15 +1315,6 @@ export function RealPerp({
                       : null,
                   ],
                 }),
-                markFar && settle > 0
-                  ? /* @__PURE__ */ jsx("p", {
-                      className: "basis-full text-[11px] leading-5 text-sell",
-                      children:
-                        lang === "zh"
-                          ? `页面按 BEM/WOKB 1% 池报价 ${pxTextN(markN)}。已部署的标记合约仍是 ${pxTextN(settle)}，强平还用那个数。`
-                          : `The page prices off the BEM/WOKB 1% pool at ${pxTextN(markN)}. The deployed mark contract is still ${pxTextN(settle)}, and liquidation still uses that.`,
-                    })
-                  : null,
                 /* @__PURE__ */ jsx("button", {
                   type: "button",
                   className: "ml-auto grid size-9 place-items-center xl:hidden",
@@ -1493,6 +1493,7 @@ export function RealPerp({
                     /* @__PURE__ */ jsx(DeskLadder, {
                       rows: board,
                       mark: markN,
+                      bookMark: settle,
                       account,
                       busy,
                       dec,
@@ -1509,18 +1510,15 @@ export function RealPerp({
                         setMargin(margin.toFixed(2));
                       },
                       onTake: (book, quote) => {
-                        if (slipBps > 0 && markN > 0 && quote.price > 0n) {
-                          const away =
-                            Math.abs(Number(formatUnits(quote.price, 18)) - markN) / markN;
-                          if (away > slipBps / 10000) {
-                            setBad(true);
-                            setNote(
-                              lang === "zh"
-                                ? "这张单超出滑点，没有吃。"
-                                : "That quote is outside the slippage. It was not taken.",
-                            );
-                            return;
-                          }
+                        const px = quote.price > 0n ? Number(formatUnits(quote.price, 18)) : 0;
+                        if (!withinSlip(px, [markN, settle], slipBps)) {
+                          setBad(true);
+                          setNote(
+                            lang === "zh"
+                              ? "这张单离标记价太远，没有吃。把滑点放到不限再点一次。"
+                              : "That quote is too far from the mark. Set slippage to none and tap again.",
+                          );
+                          return;
                         }
                         run((from) =>
                           takePerp(
@@ -2857,11 +2855,9 @@ export function RealPerp({
                                                     lev,
                                                     px,
                                                   );
-                                                const away =
-                                                  Math.abs(
-                                                    Number(formatUnits(best.price, 18)) - markN,
-                                                  ) / markN;
-                                                if (away > slipBps / 10000) throw new Error("slip");
+                                                const awayPx = Number(formatUnits(best.price, 18));
+                                                if (!withinSlip(awayPx, [markN, settle], slipBps))
+                                                  throw new Error("slip");
                                                 return takePerp(
                                                   from,
                                                   perp,

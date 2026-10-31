@@ -132,6 +132,7 @@ export function Exchange({
         named === "net" ||
         named === "stake" ||
         named === "vault" ||
+        named === "lend" ||
         named === "bid" ||
         named === "ash"
       )
@@ -573,6 +574,7 @@ function Header({
     floor === "mine" &&
     place !== "stake" &&
     place !== "vault" &&
+    place !== "lend" &&
     place !== "bid" &&
     place !== "ash";
   const home = () => {
@@ -728,11 +730,10 @@ function Header({
         })}
         {item(zh ? "流片" : "Tape-out", floor === "canvas", () => go("canvas", "canvas"))}
         {item(zh ? "练习" : "Practice", floor === "paper", () => go("paper", "paper"))}
-        {item(
-          zh ? "金库" : "Vault",
-          floor === "mine" && (place === "vault" || place === "bid"),
-          () => go("mine", "vault"),
+        {item(zh ? "金库" : "Vault", floor === "mine" && (place === "vault" || place === "bid"), () =>
+          go("mine", "vault"),
         )}
+        {item(zh ? "借贷" : "Lend", floor === "mine" && place === "lend", () => go("mine", "lend"))}
         {item(zh ? "质押" : "Stake", floor === "mine" && place === "stake", () =>
           go("mine", "stake"),
         )}
@@ -778,6 +779,7 @@ function Header({
                   floor === "mine" && (place === "vault" || place === "bid"),
                   () => go("mine", "vault"),
                 )}
+                {row(zh ? "借贷" : "Lend", floor === "mine" && place === "lend", () => go("mine", "lend"))}
                 {row(zh ? "质押" : "Stake", floor === "mine" && place === "stake", () =>
                   go("mine", "stake"),
                 )}

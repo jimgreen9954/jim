@@ -25,6 +25,8 @@ import { connectXLayer, XLAYER } from "@/lib/xlayer";
 import { StakeDesk } from "@/components/exchange/stake-desk";
 import { BurnDesk } from "@/components/exchange/burn-desk";
 import { TapeDesk } from "@/components/exchange/tape-desk";
+import { CopyVault } from "@/components/exchange/copy-vault";
+import { LendDesk } from "@/components/exchange/lend-desk";
 import { SideRail } from "@/components/exchange/side-rail";
 
 export function MineDesk() {
@@ -48,7 +50,7 @@ export function MineDesk() {
   const [note, setNote] = useState<string | null>(null);
   const [bad, setBad] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [sheet, setSheet] = useState<"claim" | "stake" | "ash" | "bid">("claim");
+  const [sheet, setSheet] = useState<"claim" | "stake" | "ash" | "bid" | "copy" | "lend">("claim");
   const [networkOpen, setNetworkOpen] = useState(false);
   const [picked, setPicked] = useState<Record<string, boolean>>({});
 
@@ -57,7 +59,9 @@ export function MineDesk() {
     const apply = () => {
       const named = window.location.hash.replace(/^#/, "");
       if (named === "stake") setSheet("stake");
-      if (named === "vault" || named === "bid") setSheet("bid");
+      if (named === "vault") setSheet("copy");
+      if (named === "lend") setSheet("lend");
+      if (named === "bid") setSheet("bid");
       if (named === "ash") setSheet("ash");
       if (named === "mine" || named === "earn" || named === "net") setSheet("claim");
       setNetworkOpen(named === "net");
@@ -152,7 +156,7 @@ export function MineDesk() {
   const myWeight =
     tape?.seats.reduce((sum, row) => sum + (row.on ? BigInt(row.gates) : 0n), 0n) ?? 0n;
   const myShare = tape && tape.weight > 0n ? (tape.daily * myWeight) / tape.weight : 0n;
-  const jump = (hash: string, next: "claim" | "stake" | "ash" | "bid") => {
+  const jump = (hash: string, next: "claim" | "stake" | "ash" | "bid" | "copy" | "lend") => {
     setSheet(next);
     const url = `#${hash}`;
     if (window.location.hash !== url) window.history.replaceState(null, "", url);
@@ -432,14 +436,24 @@ export function MineDesk() {
             run: () => jump("ash", "ash"),
           },
           {
-            key: "bid",
-            label: zh ? "库藏" : "Reserve",
-            on: sheet === "bid",
-            run: () => jump("vault", "bid"),
+            key: "copy",
+            label: zh ? "跟单" : "Vault",
+            on: sheet === "copy",
+            run: () => jump("vault", "copy"),
+          },
+          {
+            key: "lend",
+            label: zh ? "借贷" : "Lend",
+            on: sheet === "lend",
+            run: () => jump("lend", "lend"),
           },
         ]}
       >
-        {sheet === "stake" ? (
+        {sheet === "lend" ? (
+          <LendDesk zh={zh} account={account} />
+        ) : sheet === "copy" ? (
+          <CopyVault zh={zh} account={account} />
+        ) : sheet === "stake" ? (
           <StakeDesk />
         ) : sheet === "ash" ? (
           <BurnDesk />
