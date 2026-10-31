@@ -1,14 +1,14 @@
 import { createPublicClient, encodeFunctionData, formatUnits, http, parseAbi, parseAbiItem, type Hex } from "viem";
 import { TxPending, XLAYER_SAFE, type PoolPrint, units, pretty } from "@/lib/bsc";
 import { deskParts } from "@/lib/invite-cut";
-import { ensureProvider, rememberAccount } from "@/lib/wallet";
+import { ensureProvider, grantedAccount, rememberAccount } from "@/lib/wallet";
 import { XLAYER } from "@/lib/xlayer";
 
 export const OKB = {
   router: "0x881fB2f98c13d521009464e7D1CBf16E1b394e8E" as const,
-  pool: "0xc71f9e1de80eb505c0cb3bbf90ae6593130e5d25" as const,
+  pool: "0xd352a852a328D7ECCC8BBF63E2e1dD73C68527Cd" as const,
   wokb: "0xe538905cf8410324e03A5A23C1c177a474D59b2b" as const,
-  usdt: "0x1E4a5963aBFD975d8c9021ce480b42188849D41d" as const,
+  usdt: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736" as const,
   usdtDecimals: 6,
   gasReserve: 2_000_000_000_000_000n,
 };
@@ -44,6 +44,14 @@ const swapV2 = parseAbiItem(
 
 async function ensureX(): Promise<void> {
   const eth = await ensureProvider();
+  try {
+    const id = await eth.request({ method: "eth_chainId" });
+    const text = typeof id === "string" ? id : String(id ?? "");
+    const n = Number.parseInt(text, text.startsWith("0x") ? 16 : 10);
+    if (n === XLAYER.chainId) return;
+  } catch {
+    /* read failed, ask the wallet */
+  }
   try {
     await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: XLAYER.hex }] });
   } catch (err) {
@@ -159,8 +167,14 @@ async function approveUsdt(from: string, need: bigint) {
     args: [from as Hex, OKB.router],
   });
   if (allowance >= need) return;
-  if (allowance > 0n) await waitOkX(await send(from, OKB.usdt, encodeFunctionData({ abi: erc20, functionName: "approve", args: [OKB.router, 0n] })));
-  await waitOkX(await send(from, OKB.usdt, encodeFunctionData({ abi: erc20, functionName: "approve", args: [OKB.router, need] })));
+  const max = (1n << 256n) - 1n;
+  if (allowance > 0n)
+    await waitOkX(
+      await send(from, OKB.usdt, encodeFunctionData({ abi: erc20, functionName: "approve", args: [OKB.router, 0n] })),
+    );
+  await waitOkX(
+    await send(from, OKB.usdt, encodeFunctionData({ abi: erc20, functionName: "approve", args: [OKB.router, max] })),
+  );
 }
 
 export async function quoteOkb(side: "buy" | "sell", amountIn: bigint): Promise<bigint> {
@@ -189,8 +203,11 @@ export async function readOkbPurse(account: string): Promise<{ okb: bigint; usdt
 
 export async function connectX(): Promise<string> {
   const eth = await ensureProvider();
-  const accounts = (await eth.request({ method: "eth_requestAccounts" })) as string[];
-  const next = accounts[0];
+  let next = await grantedAccount(eth);
+  if (!next) {
+    const accounts = (await eth.request({ method: "eth_requestAccounts" })) as string[];
+    next = accounts[0];
+  }
   if (!next) throw new Error("nowallet");
   rememberAccount(next);
   await ensureX();
@@ -333,16 +350,19 @@ export async function swapOkb(from: string, side: "buy" | "sell", amount: string
 
 export async function okbPrints(): Promise<PoolPrint[]> {
   const head = await xClient.getBlockNumber();
-  let logs: Awaited<ReturnType<typeof xClient.getLogs<typeof swapV2>>> = [];
-  for (const span of [400n, 120n, 40n]) {
+  const span = 80n;
+  const found: Awaited<ReturnType<typeof xClient.getLogs<typeof swapV2>>> = [];
+  for (let end = head; found.length < 12 && end + span > head - span * 16n; end -= span) {
+    const start = end > span ? end - span + 1n : 0n;
     try {
-      logs = await xClient.getLogs({ address: OKB.pool, event: swapV2, fromBlock: head > span ? head - span : 0n, toBlock: head });
-      break;
+      const rows = await xClient.getLogs({ address: OKB.pool, event: swapV2, fromBlock: start, toBlock: end });
+      found.unshift(...rows);
     } catch {
-      logs = [];
+      /* This RPC refuses a wider window. The next shorter one still runs. */
     }
+    if (start === 0n) break;
   }
-  const rows = logs.slice(-8).reverse();
+  const rows = found.slice(-8).reverse();
   const signers = await Promise.all(
     rows.map(async (log) => {
       try {

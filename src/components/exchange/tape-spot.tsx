@@ -1056,6 +1056,31 @@ export function TapeSpotDesk({
                           </button>
                         </li>
                       ))}
+                      {prints
+                        .filter(
+                          (row) =>
+                            account &&
+                            (row.taker.toLowerCase() === account.toLowerCase() ||
+                              row.maker.toLowerCase() === account.toLowerCase()),
+                        )
+                        .slice(0, 12)
+                        .map((row) => (
+                          <li
+                            key={`${row.tx}-${row.base}`}
+                            className="grid grid-cols-[4rem_1fr_auto] gap-2 border-t border-gold/30 px-3 py-2 font-mono text-xs"
+                          >
+                            <span className="text-ink/45">{zh ? "成交" : "Fill"}</span>
+                            <span>{moneyText(row.price, quoteUnit, okbRate)}</span>
+                            <a
+                              className="text-right underline"
+                              href={`${XLAYER.explorer}/tx/${row.tx}`}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              {baseText(market, row.base)}
+                            </a>
+                          </li>
+                        ))}
                     </ul>
                   )}
                 </div>

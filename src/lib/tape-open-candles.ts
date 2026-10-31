@@ -14,6 +14,8 @@ const SPAN: Record<CandleFrame, number> = {
   "15s": 15, "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400, "1w": 604800, "1M": 2592000, "3M": 7776000, "1y": 31536000,
 };
 
+const LOG_KEY = "tapeliquid-open-pool-log-v2";
+
 type Print = { t: number; quote: 0 | 1; tapeIn: boolean; amountIn: string; amountOut: string; tx: Hex; sender?: string };
 
 const drpc = createPublicClient({ transport: http("https://xlayer.drpc.org", { timeout: 12_000 }) });
@@ -21,6 +23,7 @@ const official = createPublicClient({ transport: http("https://rpc.xlayer.tech",
 
 let prints: Print[] = [];
 let cursor = 0n;
+let back = 0n;
 let openAt = 0;
 let loaded = false;
 let scanning = false;
@@ -28,8 +31,9 @@ let scanning = false;
 function store() {
   if (typeof localStorage === "undefined") return;
   try {
-    localStorage.setItem("tapeliquid-open-pool-log", JSON.stringify({
+    localStorage.setItem(LOG_KEY, JSON.stringify({
       to: cursor.toString(),
+      back: back.toString(),
       openAt,
       rows: prints.slice(-400),
     }));
@@ -43,14 +47,25 @@ function restore() {
   loaded = true;
   if (typeof localStorage === "undefined") return;
   try {
-    const raw = JSON.parse(localStorage.getItem("tapeliquid-open-pool-log") || "null") as { to?: string; openAt?: number; rows?: Print[] } | null;
+    const raw = JSON.parse(localStorage.getItem(LOG_KEY) || "null") as { to?: string; back?: string; openAt?: number; rows?: Print[] } | null;
     if (!raw) return;
     if (raw.to && /^\d+$/.test(raw.to)) cursor = BigInt(raw.to);
+    if (raw.back && /^\d+$/.test(raw.back)) back = BigInt(raw.back);
     if (raw.openAt && raw.openAt > 1e9) openAt = raw.openAt;
     if (Array.isArray(raw.rows)) prints = raw.rows.filter((row) => row && row.t > 0 && (row.quote === 0 || row.quote === 1));
   } catch {
     prints = [];
   }
+}
+
+export function rememberOpenPrint(row: Print) {
+  restore();
+  if (!row.tx || !row.sender || !(row.t > 0)) return;
+  const id = `${row.tx}:${row.amountIn}`;
+  if (prints.some((item) => `${item.tx}:${item.amountIn}` === id)) return;
+  prints.push(row);
+  prints.sort((a, b) => a.t - b.t);
+  store();
 }
 
 async function stamp(block: bigint): Promise<number> {
@@ -79,58 +94,63 @@ async function readWindow(from: bigint, to: bigint): Promise<{ logs: Awaited<Ret
 function kick() {
   if (scanning) return;
   scanning = true;
-  setTimeout(() => { void scanLogs(); }, 2000);
+  setTimeout(() => { void scanLogs(); }, 0);
 }
 
 async function scanLogs() {
-    restore();
-    if (!openAt) {
-      openAt = await stamp(OPEN_BLOCK);
-      if (openAt) store();
-    }
-    while (true) {
-      try {
-        const tip = await official.getBlockNumber();
-        let from = cursor > 0n ? cursor + 1n : OPEN_BLOCK;
-        if (from < OPEN_BLOCK) from = OPEN_BLOCK;
-        if (from > tip) {
-          await new Promise((resolve) => setTimeout(resolve, 20_000));
-          continue;
-        }
-        const want = from + 7999n > tip ? tip : from + 7999n;
-        const got = await readWindow(from, want);
-        const seen = new Map<string, number>();
-        const nowSec = Math.floor(Date.now() / 1000);
-        for (const log of got.logs) {
-          if (!("args" in log) || log.blockNumber == null || log.transactionHash == null) continue;
-          const args = log.args as { sender?: string; quote?: number | bigint; tapeIn?: boolean; amountIn?: bigint; amountOut?: bigint };
-          if (!args.sender || args.amountIn == null || args.amountOut == null || args.quote == null) continue;
-          const key = log.blockNumber.toString();
-          if (!seen.has(key)) {
-            seen.set(key, seen.size < 3 ? await stamp(log.blockNumber) : nowSec);
-          }
-          const t = seen.get(key) ?? nowSec;
-          if (!t) continue;
-          const id = `${log.transactionHash}:${args.amountIn}`;
-          if (prints.some((row) => `${row.tx}:${row.amountIn}` === id)) continue;
-          prints.push({
-            t,
-            quote: Number(args.quote) === 1 ? 1 : 0,
-            tapeIn: Boolean(args.tapeIn),
-            amountIn: args.amountIn.toString(),
-            amountOut: args.amountOut.toString(),
-            tx: log.transactionHash,
-            sender: args.sender,
-          });
-        }
-        prints.sort((a, b) => a.t - b.t);
-        cursor = got.to;
-        store();
-        await new Promise((resolve) => setTimeout(resolve, 15_000));
-      } catch {
-        await new Promise((resolve) => setTimeout(resolve, 6_000));
+  restore();
+  if (!openAt) {
+    openAt = await stamp(OPEN_BLOCK);
+    if (openAt) store();
+  }
+  while (true) {
+    try {
+      const tip = await official.getBlockNumber();
+      const recentFrom = tip > 89n ? tip - 89n : 0n;
+      const recent = await readWindow(recentFrom, tip);
+      await ingest(recent.logs);
+      cursor = tip;
+      if (back === 0n || back > tip) back = tip > 90n ? tip - 90n : 0n;
+      for (let step = 0; step < 8 && back > OPEN_BLOCK; step += 1) {
+        const to = back;
+        const from = to - 89n > OPEN_BLOCK ? to - 89n : OPEN_BLOCK;
+        const older = await readWindow(from, to);
+        await ingest(older.logs);
+        back = from > 0n ? from - 1n : 0n;
       }
+      store();
+      await new Promise((resolve) => setTimeout(resolve, 8_000));
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 6_000));
     }
+  }
+}
+
+async function ingest(logs: Awaited<ReturnType<typeof official.getLogs>>) {
+  const seen = new Map<string, number>();
+  const nowSec = Math.floor(Date.now() / 1000);
+  for (const log of logs) {
+    if (!("args" in log) || log.blockNumber == null || log.transactionHash == null) continue;
+    const args = log.args as { sender?: string; quote?: number | bigint; tapeIn?: boolean; amountIn?: bigint; amountOut?: bigint };
+    const topic = log.topics?.[1];
+    const sender = args.sender || (typeof topic === "string" ? `0x${topic.slice(-40)}` : "");
+    if (!sender || args.amountIn == null || args.amountOut == null || args.quote == null) continue;
+    const key = log.blockNumber.toString();
+    if (!seen.has(key)) {
+      seen.set(key, seen.size < 3 ? await stamp(log.blockNumber) : nowSec);
+    }
+    const t = seen.get(key) ?? nowSec;
+    if (!t) continue;
+    rememberOpenPrint({
+      t,
+      quote: Number(args.quote) === 1 ? 1 : 0,
+      tapeIn: Boolean(args.tapeIn),
+      amountIn: args.amountIn.toString(),
+      amountOut: args.amountOut.toString(),
+      tx: log.transactionHash,
+      sender,
+    });
+  }
 }
 
 function quotePx(row: Print): number {
@@ -262,15 +282,16 @@ export async function readOpenBook(): Promise<OpenBook> {
   const shown: OpenPrint[] = [];
   for (const row of prints) {
     const px = usdOf(row, bemQuote, okbPx);
+    const shownPx = px > 0 ? px : quotePx(row);
     const tapeAmt = Number(formatUnits(BigInt(row.tapeIn ? row.amountIn : row.amountOut), 8));
     const quoteDec = row.quote === 0 ? 8 : 18;
     const quoteUsd = row.quote === 0 ? bemQuote : okbPx;
     const quoteAmt = Number(formatUnits(BigInt(row.tapeIn ? row.amountOut : row.amountIn), quoteDec));
-    if (row.t >= now - 86_400) {
+    if (row.t >= now - 86_400 && px > 0) {
       volume += quoteAmt * quoteUsd;
-      if (!(open > 0) && px > 0) open = px;
+      if (!(open > 0)) open = px;
     }
-    if (px > 0 && tapeAmt > 0) shown.push({ t: row.t, quote: row.quote, tapeIn: row.tapeIn, tape: tapeAmt, usd: px, tx: row.tx, sender: row.sender ?? "" });
+    if (shownPx > 0 && tapeAmt > 0) shown.push({ t: row.t, quote: row.quote, tapeIn: row.tapeIn, tape: tapeAmt, usd: shownPx, tx: row.tx, sender: row.sender ?? "" });
   }
   return {
     price,

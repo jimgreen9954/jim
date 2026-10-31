@@ -118,7 +118,7 @@ export function SpotDesk({
   onMarkets,
   openLp = false,
 }: {
-  focus?: "bem" | "bnb" | "okb" | "btc" | "eth" | "zec" | "xau";
+  focus?: "bem" | "bnb" | "okb" | ErcKey;
   onMarkets?: () => void;
   openLp?: boolean;
 }) {
@@ -178,7 +178,7 @@ export function SpotDesk({
   }, [openLp]);
   useEffect(() => onAccount(setAccount), []);
   useEffect(() => {
-    setBook("crypto");
+    setBook(focus in STOCKS ? "stock" : "crypto");
     setPair(focus);
     setAmount("");
     setOut(null);
@@ -278,7 +278,9 @@ export function SpotDesk({
       payingBnb && side === "buy"
         ? 18
         : pair === "okb"
-          ? OKB.usdtDecimals
+          ? side === "buy"
+            ? OKB.usdtDecimals
+            : 18
           : side === "buy"
             ? BSC.usdtDecimals
             : baseDecimals;
@@ -416,7 +418,13 @@ export function SpotDesk({
       const tx = await place(side, amount, unit, min, pair);
       setHash(tx);
       rememberFill(
-        `${side === "buy" ? "买入" : "卖出"} ${amount} ${base}`,
+        lang === "zh"
+          ? side === "buy"
+            ? `付 ${amount} ${payUnit}，买入${out ? ` ${out}` : ""} ${base}`
+            : `卖出 ${amount} ${base}，收到${out ? ` ${out}` : ""} ${recvUnit}`
+          : side === "buy"
+            ? `Pay ${amount} ${payUnit}, buy${out ? ` ${out}` : ""} ${base}`
+            : `Sell ${amount} ${base}, receive${out ? ` ${out}` : ""} ${recvUnit}`,
         pair === "okb" ? okbTxUrl(tx) : txUrl(tx),
       );
       setNote(null);
@@ -578,8 +586,9 @@ export function SpotDesk({
                     ? STOCKS[pair].en
                     : pair;
   const stock = pair in STOCKS ? STOCKS[pair as StockKey] : null;
-  const payUnit = payingBnb && side === "buy" ? "BNB" : side === "buy" ? "USDT" : base;
-  const recvUnit = payingBnb && side === "sell" ? "BNB" : side === "buy" ? base : "USDT";
+  const quoteSym = pair === "okb" ? "USDT0" : "USDT";
+  const payUnit = payingBnb && side === "buy" ? "BNB" : side === "buy" ? quoteSym : base;
+  const recvUnit = payingBnb && side === "sell" ? "BNB" : side === "buy" ? base : quoteSym;
   let typed = 0n;
   try {
     typed = amount.trim() ? units(amount, payDecimals) : 0n;
@@ -635,7 +644,13 @@ export function SpotDesk({
           setRests(left);
           setHash(tx);
           rememberFill(
-            `${hit.side === "buy" ? "买入" : "卖出"} ${hit.amount}`,
+            lang === "zh"
+              ? hit.side === "buy"
+                ? `付 ${hit.amount} ${hit.unit === "bnb" ? "BNB" : hit.pair === "okb" ? "USDT0" : "USDT"}，买入 ${base}`
+                : `卖出 ${hit.amount} ${base}，收到 ${hit.unit === "bnb" ? "BNB" : hit.pair === "okb" ? "USDT0" : "USDT"}`
+              : hit.side === "buy"
+                ? `Pay ${hit.amount} ${hit.unit === "bnb" ? "BNB" : hit.pair === "okb" ? "USDT0" : "USDT"}, buy ${base}`
+                : `Sell ${hit.amount} ${base}, receive ${hit.unit === "bnb" ? "BNB" : hit.pair === "okb" ? "USDT0" : "USDT"}`,
             hit.pair === "okb" ? okbTxUrl(tx) : txUrl(tx),
           );
           setNote(null);
@@ -686,7 +701,7 @@ export function SpotDesk({
         <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-gold px-3 py-2">
           <button type="button" onClick={onMarkets} className="flex min-w-0 items-center gap-2">
             <CoinMark id={pair} />
-            <span className="truncate text-lg font-medium tracking-tight">{base}/USDT</span>
+            <span className="truncate text-lg font-medium tracking-tight">{base}/{quoteSym}</span>
             <PairChevron />
             <span className="lev-chip shrink-0 rounded px-1.5 py-0.5 text-[11px]">
               {lang === "zh" ? "现货" : "Spot"}
@@ -694,7 +709,7 @@ export function SpotDesk({
           </button>
           <p className="font-mono text-sm">
             {midN > 0 ? midN.toLocaleString("en-US", { maximumFractionDigits: 4 }) : "—"}{" "}
-            <span className="text-[11px] text-ink/40">USDT</span>
+            <span className="text-[11px] text-ink/40">{quoteSym}</span>
           </p>
           <p className={`font-mono text-sm ${change < 0 ? "text-sell" : "text-up"}`}>
             {midN > 0 ? `${change >= 0 ? "+" : ""}${(change * 100).toFixed(2)}%` : "—"}
@@ -756,7 +771,7 @@ export function SpotDesk({
                 <div className="spot-book px-2 py-1 text-[10px] text-ink/40">
                   <span>{lang === "zh" ? "价格" : "Price"}</span>
                   <span className="text-right">{base}</span>
-                  <span className="text-right">USDT</span>
+                  <span className="text-right">{quoteSym}</span>
                 </div>
                 <div className="book-scroll max-h-[28rem] overflow-auto">
                   {asks.map((level) => (
@@ -837,20 +852,20 @@ export function SpotDesk({
                 </div>
                 <p className="mt-3 font-mono text-lg tabular-nums">
                   {midN > 0 ? midN.toLocaleString("en-US", { maximumFractionDigits: 4 }) : "—"}{" "}
-                  <span className="text-xs text-ink/45">USDT</span>
+                  <span className="text-xs text-ink/45">{quoteSym}</span>
                 </p>
                 <div className="mt-2 grid grid-cols-2 border border-gold/40 font-mono text-sm">
                   <p className="px-2 py-2">
                     <span className="block text-[10px] text-ink/45">
-                      {lang === "zh" ? "可用" : "Available"} {payUnit}
+                      {lang === "zh" ? "可用" : "Available"}
                     </span>
-                    {pretty(spendable, payDecimals, 4)}
+                    {pretty(spendable, payDecimals, 4)} {payUnit}
                   </p>
                   <p className="border-l border-gold/40 px-2 py-2">
                     <span className="block text-[10px] text-ink/45">
-                      {lang === "zh" ? "约得" : "About"} {recvUnit}
+                      {lang === "zh" ? "约得" : "About"}
                     </span>
-                    {out ?? "—"}
+                    {out ? `${out} ${recvUnit}` : "—"}
                   </p>
                 </div>
                 {pair !== "okb" && pair !== "bnb" ? (
@@ -972,7 +987,16 @@ export function SpotDesk({
                         : lang === "zh"
                           ? "卖"
                           : "Sell"}{" "}
-                      {row.amount} @ {row.limit}
+                      {row.amount}{" "}
+                      {row.side === "buy"
+                        ? row.unit === "bnb"
+                          ? "BNB"
+                          : row.pair === "okb"
+                            ? "USDT0"
+                            : "USDT"
+                        : base}{" "}
+                      @ {row.limit}{" "}
+                      {quoteSym}
                     </span>
                     <button
                       type="button"

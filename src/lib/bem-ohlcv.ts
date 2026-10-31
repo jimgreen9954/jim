@@ -5,7 +5,7 @@ export type Candle = { t?: number; o: number; h: number; l: number; c: number; v
 export type CandleFrame = "15s" | "1m" | "5m" | "15m" | "1h" | "4h" | "1d" | "1w" | "1M" | "3M" | "1y";
 
 const POOL = "https://api.geckoterminal.com/api/v2/networks/bsc/pools/0x3098d7a051045000d68ec0360753a40c8cabea31/ohlcv";
-const XPOOL = "https://api.geckoterminal.com/api/v2/networks/x-layer/pools/0x24e2c7d83a298c388872b77619cf654941222db5b9f342e788b218b3f485b6a4/ohlcv";
+const XPOOL = "https://api.geckoterminal.com/api/v2/networks/x-layer/pools/0x2ccf8aa17f5df9fb5d51c9de12135a913ff29f7a/ohlcv";
 
 const direct: Record<Exclude<CandleFrame, "1w" | "1M" | "3M" | "1y">, { path: string; aggregate: number; limit: number }> = {
   "15s": { path: "second", aggregate: 15, limit: 300 },
@@ -35,7 +35,7 @@ async function fetchOhlcv(path: string, aggregate: number, limit: number): Promi
 }
 
 async function fetchXOhlcv(path: string, aggregate: number, limit: number): Promise<Candle[]> {
-  return fetchBook(XPOOL, path, aggregate, limit, "&token=quote");
+  return fetchBook(XPOOL, path, aggregate, limit, "");
 }
 
 async function fetchBook(base: string, path: string, aggregate: number, limit: number, extra: string): Promise<Candle[]> {

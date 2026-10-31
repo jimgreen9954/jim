@@ -3,22 +3,18 @@ pragma solidity ^0.8.24;
 
 import "./TickMath.sol";
 
-interface IStateView {
-    function getSlot0(bytes32 poolId) external view returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee);
-}
-
 interface ISlot0 {
     function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint16, uint16, uint16, uint8, bool);
 }
 
 /// Mark for the X Layer BEM book.
-/// Reads Uniswap v4 OKB/BEM and Uniswap v3 USDT0/WOKB. No admin.
+/// Reads the liquid Uniswap v3 BEM/WOKB 1% pool and the Uniswap v3 USDT0/WOKB pool.
+/// The empty v4 OKB/BEM pool is not used. No admin.
 /// Anyone can poke. A fresh poke moves at most 50 ticks, and at least 30 seconds must pass.
 /// After 30 quiet minutes the next poke may jump to the pools.
 contract XBemMark {
-    IStateView public constant STATE = IStateView(0x76Fd297e2D437cd7f76d50F01AfE6160f86e9990);
+    ISlot0 public constant BEM = ISlot0(0x2CcF8aa17F5DF9Fb5D51C9de12135a913fF29f7A);
     ISlot0 public constant OKB = ISlot0(0xe3BE6A0137f1b0602Fc1a4841686f43B340a5082);
-    bytes32 public constant BEM_POOL = 0x24e2c7d83a298c388872b77619cf654941222db5b9f342e788b218b3f485b6a4;
     uint32 public constant STALE = 1800;
     uint8 public constant SLOTS = 32;
 
@@ -84,10 +80,12 @@ contract XBemMark {
     }
 
     function _poolTick() internal view returns (int24) {
-        (uint160 bemSqrt,,,) = STATE.getSlot0(BEM_POOL);
+        (uint160 bemSqrt,,,,,,) = BEM.slot0();
         (uint160 okbSqrt,,,,,,) = OKB.slot0();
         if (bemSqrt == 0 || okbSqrt == 0) revert Bad();
-        uint256 syn = uint256(bemSqrt) * uint256(okbSqrt) / (uint256(1) << 96) / 1e6;
+        // BEM is token0 (8 decimals) and WOKB is token1 (18). USDT0 is token0 (6) and WOKB is token1 (18).
+        // USDT per BEM = (WOKB/BEM) * (USDT0/WOKB) * 10^(8-6). The perp mark is that price at 1e18.
+        uint256 syn = uint256(okbSqrt) * (uint256(1) << 96) / uint256(bemSqrt) / 1e6;
         if (syn < TickMath.MIN_SQRT_RATIO || syn >= TickMath.MAX_SQRT_RATIO) revert Bad();
         return TickMath.getTickAtSqrtRatio(uint160(syn));
     }

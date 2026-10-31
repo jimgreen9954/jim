@@ -2,6 +2,7 @@ import { createPublicClient, encodeFunctionData, formatUnits, http, parseAbi, pa
 import { FEE_TO, TxPending, XLAYER, XLAYER_SAFE } from "@/lib/chain-marks";
 import { deskParts } from "@/lib/invite-cut";
 import { ensureProvider } from "@/lib/wallet";
+import { rememberOpenPrint } from "@/lib/tape-open-candles";
 
 export const OPEN_POOL = "0x58eaD5b41Cfd3627791D439402dd65571c286484" as const;
 const TAPE = "0x8f2d517D3d62019CD8D7F08ae178Be05BBb6EBE3" as const;
@@ -117,6 +118,15 @@ export async function swapPool(from: string, quote: PoolQuote, tapeIn: boolean, 
     value,
   );
   await wait(hash);
+  rememberOpenPrint({
+    t: Math.floor(Date.now() / 1000),
+    quote,
+    tapeIn,
+    amountIn: amountIn.toString(),
+    amountOut: out.toString(),
+    tx: hash,
+    sender: from,
+  });
   return hash;
 }
 

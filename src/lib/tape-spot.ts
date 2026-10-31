@@ -151,7 +151,7 @@ export async function readCircuitPrints(): Promise<CircuitPrint[]> {
 }
 
 const PRINT_KEY = "tapeliquid-spot-prints-v3";
-const LOG_SPAN = 100n;
+const LOG_SPAN = 80n;
 const SPOT_BORN = 72965200n;
 
 type PrintWire = { tx: string; market: number; price: string; base: string; quote: string; fee: string; taker: string; maker: string };
@@ -234,20 +234,19 @@ async function fillPrints() {
   const born = tip > SPOT_BORN ? SPOT_BORN : 0n;
   const cached = readPrintCache();
   const rows = cached?.rows ?? [];
-  let low = cached?.low ?? tip + 1n;
-  let high = cached?.high ?? tip - 1n;
+  let low = cached && cached.low > 0n ? cached.low : tip + 1n;
+  let high = cached?.high ?? 0n;
   if (high < tip) {
-    for (let start = (high + 1n) < born ? born : high + 1n; start <= tip; start += LOG_SPAN) {
-      const end = start + LOG_SPAN - 1n > tip ? tip : start + LOG_SPAN - 1n;
-      const found = await pullLogs(spot, start, end);
-      if (!found) return;
+    const start = high + 1n > tip - LOG_SPAN ? high + 1n : tip - LOG_SPAN + 1n;
+    const found = await pullLogs(spot, start < 0n ? 0n : start, tip);
+    if (found) {
       mergePrints(rows, found);
-      high = end;
+      high = tip;
       if (low > high + 1n) low = high + 1n;
       writePrintCache(low, high, rows);
     }
   }
-  while (low > born) {
+  for (let step = 0; step < 12 && low > born; step += 1) {
     const end = low - 1n;
     const start = end - LOG_SPAN + 1n < born ? born : end - LOG_SPAN + 1n;
     const found = await pullLogs(spot, start, end);
@@ -255,6 +254,7 @@ async function fillPrints() {
     mergePrints(rows, found);
     low = start;
     writePrintCache(low, high, rows);
+    if (rows.length >= 40) return;
   }
 }
 
@@ -269,7 +269,7 @@ export function peekSpotPrints(market: SpotMarket | null): { rows: SpotPrint[]; 
   const low = cached?.low ?? 0n;
   const high = cached?.high ?? 0n;
   const covered = high >= low ? high - low + 1n : 0n;
-  const pending = printFlight != null && (cached == null || low > SPOT_BORN);
+  const pending = printFlight != null && !cached;
   return { rows, pending, minutes: Number(covered / 60n) };
 }
 

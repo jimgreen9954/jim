@@ -1673,7 +1673,13 @@ export function PoolSpot({
                 ).length === 0 ? (
                   <tr>
                     <td colSpan={4} className="py-3 text-ink/45">
-                      {zh ? "尚无成交" : "No trades"}
+                      {account
+                        ? zh
+                          ? "还没读到这个钱包的成交。最近的记录会先出现。"
+                          : "No fill for this wallet yet. The newest prints show up first."
+                        : zh
+                          ? "连接钱包后显示你的成交。"
+                          : "Connect a wallet to see your fills."}
                     </td>
                   </tr>
                 ) : (

@@ -408,6 +408,7 @@ export function RealPerp({
   const [bal, setBal] = useState(null);
   const [prices, setPrices] = useState([]);
   const [coinPx, setCoinPx] = useState(0);
+  const [mkt, setMkt] = useState(null);
   const [supply, setSupply] = useState(null);
   const [frame, setFrame] = useState("1h");
   const [chartTab, setChartTab] = useState("k");
@@ -491,6 +492,11 @@ export function RealPerp({
           if (dead || !(row.price > 0)) return;
           setCoinPx(row.price);
           setView(coinBook(row.price));
+          setMkt({
+            px: row.price,
+            chg: Number.isFinite(row.change) ? row.change : null,
+            vol: row.volume > 0 ? row.volume : 0,
+          });
         })
         .catch(() => void 0);
       getTapeCandles({ data: frame })
@@ -664,6 +670,41 @@ export function RealPerp({
       window.clearInterval(timer);
     };
   }, [chain, coin, frame]);
+  useEffect(() => {
+    if (coin === "tape") return;
+    const pair =
+      coin === "btc"
+        ? "bsc/0x247f51881d1E3aE0f759afB801413a6C948Ef442"
+        : coin === "eth"
+          ? "bsc/0xBe141893E4c6AD9272e8C04BAB7E6a10604501a5"
+          : coin === "zec"
+            ? "bsc/0x6701B287c8170D6c290C6f4Ef426782bD61Ae310"
+            : "bsc/0x3098D7A051045000d68eC0360753A40C8cABEa31";
+    let dead = false;
+    const load = () => {
+      fetch(`https://api.dexscreener.com/latest/dex/pairs/${pair}`)
+        .then((res) => res.json())
+        .then((body) => {
+          const row = body?.pair || body?.pairs?.[0];
+          const px = Number(row?.priceUsd);
+          const chg = Number(row?.priceChange?.h24);
+          const vol = Number(row?.volume?.h24);
+          if (dead || !(px > 0)) return;
+          setMkt({
+            px,
+            chg: Number.isFinite(chg) ? chg / 100 : null,
+            vol: Number.isFinite(vol) && vol > 0 ? vol : 0,
+          });
+        })
+        .catch(() => undefined);
+    };
+    load();
+    const id = window.setInterval(load, 20_000);
+    return () => {
+      dead = true;
+      window.clearInterval(id);
+    };
+  }, [coin]);
   useEffect(() => {
     const chart = () => setPhone("chart");
     const trade = () => setPhone("ticket");
@@ -1017,12 +1058,21 @@ export function RealPerp({
   const lastBar = prices.at(-1);
   const fundNow = fundingPreview(markN, lastBar?.c || markN);
   const fundText = fundNow ? pct(fundNow.capped) : "—";
-  const openBar = prices[0];
-  const drift = lastBar && openBar && openBar.o > 0 ? (lastBar.c - openBar.o) / openBar.o : 0;
-  const bookVol = prices.reduce(
-    (sum, bar) => sum + (bar.v && Number.isFinite(bar.v) ? bar.v : 0),
-    0,
-  );
+  const dayBars = prices.filter((bar) => {
+    const t = bar?.t;
+    if (!(t > 1e8)) return false;
+    const sec = t > 1e12 ? t / 1000 : t;
+    return sec >= Date.now() / 1000 - 86400;
+  });
+  const dayHigh = dayBars.length ? Math.max(...dayBars.map((bar) => bar.h)) : 0;
+  const dayLow = dayBars.length ? Math.min(...dayBars.map((bar) => bar.l)) : 0;
+  const dayChg =
+    dayBars.length && dayBars[0].o > 0
+      ? (dayBars[dayBars.length - 1].c - dayBars[0].o) / dayBars[0].o
+      : null;
+  const drift = mkt && mkt.chg != null ? mkt.chg : dayChg != null ? dayChg : 0;
+  const driftKnown = (mkt && mkt.chg != null) || dayChg != null;
+  const vol24 = mkt && mkt.vol > 0 ? mkt.vol : 0;
   const pxTextN = (n) => (n >= 100 ? n.toFixed(2) : n.toFixed(4));
   const choose = (nextChain, nextCoin) => {
     setMarkets(false);
@@ -1142,7 +1192,7 @@ export function RealPerp({
                       className: "mr-2 text-[11px] text-ink/45",
                       children: c.mark,
                     }),
-                    markN > 0 ? pxTextN(markN) : "—",
+                    markN > 0 ? pxTextN(markN) : mkt?.px > 0 ? pxTextN(mkt.px) : "—",
                   ],
                 }),
                 /* @__PURE__ */ jsxs("p", {
@@ -1168,41 +1218,41 @@ export function RealPerp({
                   ],
                 }),
                 /* @__PURE__ */ jsxs("p", {
-                  className: `font-mono text-sm ${drift < 0 ? "text-sell" : "text-up"}`,
+                  className: `font-mono text-sm ${!driftKnown ? "" : drift < 0 ? "text-sell" : "text-up"}`,
                   children: [
                     /* @__PURE__ */ jsx("span", {
                       className: "mr-2 text-[11px] text-ink/45",
                       children: lang === "zh" ? "24小时变化" : "24h change",
                     }),
-                    lastBar ? `${drift >= 0 ? "+" : ""}${(drift * 100).toFixed(2)}%` : "—",
+                    driftKnown ? `${drift >= 0 ? "+" : ""}${(drift * 100).toFixed(2)}%` : "—",
                   ],
                 }),
                 /* @__PURE__ */ jsxs("p", {
-                  className: "font-mono text-sm ph-hide",
+                  className: "font-mono text-sm",
                   children: [
                     /* @__PURE__ */ jsx("span", {
                       className: "mr-2 text-[11px] text-ink/45",
-                      children: lang === "zh" ? "高 / 低" : "High / low",
+                      children: lang === "zh" ? "24小时高 / 低" : "24h high / low",
                     }),
-                    prices.length
-                      ? `${Math.max(...prices.map((bar) => bar.h)).toFixed(4)} / ${Math.min(...prices.map((bar) => bar.l)).toFixed(4)}`
+                    dayHigh > 0
+                      ? `${pxTextN(dayHigh)} / ${pxTextN(dayLow)}`
                       : "—",
                   ],
                 }),
                 /* @__PURE__ */ jsxs("p", {
-                  className: "font-mono text-sm ph-hide",
+                  className: "font-mono text-sm",
                   children: [
                     /* @__PURE__ */ jsx("span", {
                       className: "mr-2 text-[11px] text-ink/45",
                       children: lang === "zh" ? "24小时成交量" : "24h volume",
                     }),
-                    bookVol > 0
-                      ? bookVol.toLocaleString("en-US", { maximumFractionDigits: 2 })
+                    vol24 > 0
+                      ? `${vol24.toLocaleString("en-US", { maximumFractionDigits: 0 })} USDT`
                       : "—",
                   ],
                 }),
                 /* @__PURE__ */ jsxs("p", {
-                  className: "font-mono text-sm ph-hide",
+                  className: "font-mono text-sm",
                   children: [
                     /* @__PURE__ */ jsx("span", {
                       className: "mr-2 text-[11px] text-ink/45",
@@ -1219,7 +1269,7 @@ export function RealPerp({
                   ],
                 }),
                 /* @__PURE__ */ jsxs("p", {
-                  className: "font-mono text-sm ph-hide",
+                  className: "font-mono text-sm",
                   children: [
                     /* @__PURE__ */ jsx("span", {
                       className: "mr-2 text-[11px] text-ink/45",
@@ -1256,6 +1306,15 @@ export function RealPerp({
                       : null,
                   ],
                 }),
+                markFar && settle > 0
+                  ? /* @__PURE__ */ jsx("p", {
+                      className: "basis-full text-[11px] leading-5 text-sell",
+                      children:
+                        lang === "zh"
+                          ? `页面按 BEM/WOKB 1% 池报价 ${pxTextN(markN)}。已部署的标记合约仍是 ${pxTextN(settle)}，强平还用那个数。`
+                          : `The page prices off the BEM/WOKB 1% pool at ${pxTextN(markN)}. The deployed mark contract is still ${pxTextN(settle)}, and liquidation still uses that.`,
+                    })
+                  : null,
                 /* @__PURE__ */ jsx("button", {
                   type: "button",
                   className: "ml-auto grid size-9 place-items-center xl:hidden",
