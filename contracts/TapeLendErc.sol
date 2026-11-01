@@ -24,6 +24,7 @@ interface IBook {
 /// Mode 0 prices the collateral from a 30-minute Uniswap v3 average.
 /// Modes 1 and 2 price TAPE and BEM from the open pool, moving at most 0.5% each 30 seconds.
 /// There is no owner and no rescue.
+/// Ten percent of interest is credited to the fee address. Ninety percent stays with suppliers.
 contract TapeLendErc {
     address public constant OPEN = 0x58eaD5b41Cfd3627791D439402dd65571c286484;
     address public constant OKB_POOL = 0xe3BE6A0137f1b0602Fc1a4841686f43B340a5082;
@@ -34,12 +35,14 @@ contract TapeLendErc {
     IERC20 public immutable usdt;
     address public immutable coll;
     address public immutable pool;
+    address public immutable feeTo;
     uint8 public immutable mode;
     uint256 public immutable unit;
 
     uint256 public constant LTV = 5000;
     uint256 public constant LIQ = 7500;
     uint256 public constant BONUS = 500;
+    uint256 public constant CUT = 1000;
     uint32 public constant WINDOW = 1800;
     uint256 public constant YEAR = 365 days;
     uint256 private constant DEAD = 1_000_000;
@@ -66,8 +69,8 @@ contract TapeLendErc {
         entered = 1;
     }
 
-    constructor(uint8 mode_, address usdt_, address coll_, address pool_, uint8 dec_) {
-        if (dec_ == 0 || dec_ > 18) revert Bad();
+    constructor(uint8 mode_, address usdt_, address coll_, address pool_, uint8 dec_, address feeTo_) {
+        if (dec_ == 0 || dec_ > 18 || feeTo_ == address(0)) revert Bad();
         if (mode_ == 0) {
             if (usdt_ == address(0) || coll_ == address(0) || pool_ == address(0)) revert Bad();
             if (IPool(pool_).token0() != usdt_ || IPool(pool_).token1() != coll_) revert Bad();
@@ -83,6 +86,7 @@ contract TapeLendErc {
         pool = pool_;
         mode = mode_;
         unit = 10 ** dec_;
+        feeTo = feeTo_;
         lastAccrue = block.timestamp;
         if (mode_ != 0) {
             stored = _spot();
@@ -323,7 +327,14 @@ contract TapeLendErc {
         if (totalBorrow == 0) return;
         uint256 util = totalBorrow * 10000 / (cash() + totalBorrow);
         uint256 interest = totalBorrow * _apr(util) / YEAR * dt / 1e18;
+        if (interest == 0) return;
         totalBorrow += interest;
+        uint256 cut = interest * CUT / 10000;
+        if (cut == 0) return;
+        uint256 minted = cut * (totalShares + DEAD) / (assets() + DUST);
+        if (minted == 0) return;
+        shares[feeTo] += minted;
+        totalShares += minted;
     }
 
     function _apr(uint256 util) internal pure returns (uint256) {

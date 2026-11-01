@@ -1,7 +1,8 @@
-import { decodeFunctionResult, encodeAbiParameters, encodeFunctionData, parseAbi, type Hex } from "viem";
+import { decodeFunctionResult, encodeAbiParameters, encodeFunctionData, hashTypedData, parseAbi, type Hex } from "viem";
 import { BNB_GAS_RESERVE, BSC, pretty, units } from "@/lib/bsc";
 import { BSC_SAFE, XLAYER, XLAYER_SAFE } from "@/lib/chain-marks";
 import { CREATE_CALL, createCallData } from "@/lib/create-call";
+import { LEND_BYTECODE } from "@/lib/lend-bytecode";
 import { LEND_ERC_BYTECODE } from "@/lib/lend-erc-bytecode";
 import { OKB } from "@/lib/okb";
 import { OPEN_POOL } from "@/lib/tape-open-swap";
@@ -47,10 +48,11 @@ const ZERO = "0x0000000000000000000000000000000000000000" as Hex;
 export type LendAsset = "gas" | "tape" | "bem";
 
 const PIN: Partial<Record<`${LendChain}:${LendAsset}`, Hex>> = {
-  "xlayer:gas": "0x1ba1939620bfaebcabd50d607d2deffa40b84465",
-  "xlayer:tape": "0x77019cebe90020c8d714e99ce7d35a5a4c841855",
-  "xlayer:bem": "0x6b7774cb12ed7573a7586e7d0e62a2a563ddd3f0",
-  "bsc:gas": "0x4bd8722d05c3334c062ae9c7a94425d6e396c54c",
+  "xlayer:gas": "0x57228158cba08c61710ab2644e583c328ec86ea7",
+  "xlayer:tape": "0x425285da21ed3eabe64550d1be7dcabcf6f9e851",
+  "xlayer:bem": "0x5ed8551f90acc6395810d8274b019bf13ef1f696",
+  "bsc:gas": "0xd8d981d32b12ea85b739bb667946975d25b0ab53",
+  "bsc:bem": "0xd2c7150f7779ded403c3f81a68dab5164b54df28",
 };
 
 export function lendChoices(chain: LendChain): LendAsset[] {
@@ -114,11 +116,15 @@ function keyOf(chain: LendChain, asset: LendAsset) {
   return `tapeliquid-lend2-${chain}-${asset}`;
 }
 
+function feeKey(chain: LendChain, asset: LendAsset) {
+  return `tapeliquid-lend3-${chain}-${asset}`;
+}
+
 export function lendAddress(chain: LendChain, asset: LendAsset = "gas"): Hex | null {
   const pinned = PIN[`${chain}:${asset}`];
   if (pinned) return pinned;
   if (typeof window === "undefined") return null;
-  const saved = window.localStorage.getItem(keyOf(chain, asset)) ?? "";
+  const saved = window.localStorage.getItem(feeKey(chain, asset)) ?? window.localStorage.getItem(keyOf(chain, asset)) ?? "";
   return /^0x[a-fA-F0-9]{40}$/.test(saved) ? (saved as Hex) : null;
 }
 
@@ -310,21 +316,161 @@ function born(logs: { topics: Hex[] }[]): string {
   throw new Error("revert");
 }
 
+const safeAbi = parseAbi([
+  "function getOwners() view returns (address[])",
+  "function nonce() view returns (uint256)",
+  "function getTransactionHash(address to,uint256 value,bytes data,uint8 operation,uint256 safeTxGas,uint256 baseGas,uint256 gasPrice,address gasToken,address refundReceiver,uint256 _nonce) view returns (bytes32)",
+  "function execTransaction(address to,uint256 value,bytes data,uint8 operation,uint256 safeTxGas,uint256 baseGas,uint256 gasPrice,address gasToken,address refundReceiver,bytes signatures) payable returns (bool)",
+]);
+
+function safeMessage(data: Hex, nonce: bigint) {
+  return {
+    to: CREATE_CALL,
+    value: 0n,
+    data,
+    operation: 0,
+    safeTxGas: 0n,
+    baseGas: 0n,
+    gasPrice: 0n,
+    gasToken: ZERO,
+    refundReceiver: ZERO,
+    nonce,
+  };
+}
+
+function normalizeSig(sig: string): Hex {
+  const hex = (sig.startsWith("0x") ? sig : `0x${sig}`).toLowerCase();
+  if (!/^0x[0-9a-f]{130}$/.test(hex)) throw new Error("revert");
+  const v = Number.parseInt(hex.slice(-2), 16);
+  const fixed = v < 27 ? v + 27 : v;
+  return `${hex.slice(0, 130)}${fixed.toString(16).padStart(2, "0")}` as Hex;
+}
+
 export async function deployLend(chain: LendChain, asset: LendAsset): Promise<string> {
   const spec = lendSpec(chain, asset);
-  if (spec.native) throw new Error("live");
   const from = await signer(chain);
-  if (from.toLowerCase() !== spec.safe.toLowerCase()) throw new Error("leader");
-  const args = encodeAbiParameters(
-    [{ type: "uint8" }, { type: "address" }, { type: "address" }, { type: "address" }, { type: "uint8" }],
-    [spec.mode, spec.usdt, spec.coll, spec.pool, spec.collDec],
-  );
-  const init = (LEND_ERC_BYTECODE + args.slice(2)) as Hex;
-  const hash = await send(from, CREATE_CALL, createCallData(init), 0n, 8_000_000n);
+  const who = from.toLowerCase();
+  const args = spec.native
+    ? encodeAbiParameters(
+        [{ type: "address" }, { type: "address" }, { type: "address" }, { type: "address" }],
+        [spec.usdt, spec.coll, spec.pool, spec.safe],
+      )
+    : encodeAbiParameters(
+        [
+          { type: "uint8" },
+          { type: "address" },
+          { type: "address" },
+          { type: "address" },
+          { type: "uint8" },
+          { type: "address" },
+        ],
+        [spec.mode, spec.usdt, spec.coll, spec.pool, spec.collDec, spec.safe],
+      );
+  const init = ((spec.native ? LEND_BYTECODE : LEND_ERC_BYTECODE) + args.slice(2)) as Hex;
+  const inner = createCallData(init);
+  const hash =
+    who === spec.safe.toLowerCase()
+      ? await send(from, CREATE_CALL, inner, 0n, 4_000_000n)
+      : await sendSafe(chain, spec.safe, spec.chainId, from, inner);
   const receipt = await wait(chain, hash);
   const landed = born(receipt.logs);
-  window.localStorage.setItem(keyOf(chain, asset), landed);
+  window.localStorage.setItem(feeKey(chain, asset), landed);
   return landed;
+}
+
+async function sendSafe(chain: LendChain, safe: Hex, chainId: number, from: string, data: Hex): Promise<Hex> {
+  const who = from.toLowerCase();
+  const owners = (await read<string[]>(chain, safe, "getOwners", [], safeAbi)).map((row) => row.toLowerCase());
+  if (!owners.includes(who)) throw new Error("leader");
+  const nonce = await read<bigint>(chain, safe, "nonce", [], safeAbi);
+  const message = safeMessage(data, nonce);
+  const typed = hashTypedData({
+    domain: { chainId, verifyingContract: safe },
+    types: {
+      SafeTx: [
+        { name: "to", type: "address" },
+        { name: "value", type: "uint256" },
+        { name: "data", type: "bytes" },
+        { name: "operation", type: "uint8" },
+        { name: "safeTxGas", type: "uint256" },
+        { name: "baseGas", type: "uint256" },
+        { name: "gasPrice", type: "uint256" },
+        { name: "gasToken", type: "address" },
+        { name: "refundReceiver", type: "address" },
+        { name: "nonce", type: "uint256" },
+      ],
+    },
+    primaryType: "SafeTx",
+    message,
+  });
+  const onchain = await read<Hex>(
+    chain,
+    safe,
+    "getTransactionHash",
+    [CREATE_CALL, 0n, data, 0, 0n, 0n, 0n, ZERO, ZERO, nonce],
+    safeAbi,
+  );
+  if (onchain.toLowerCase() !== typed.toLowerCase()) throw new Error("revert");
+  const storeKey = `tapeliquid-safe-${chain}-${nonce}-${typed}`;
+  const bag = JSON.parse(window.localStorage.getItem(storeKey) || "{}") as Record<string, string>;
+  if (!bag[who]) {
+    const eth = await ensureProvider();
+    const signed = (await eth.request({
+      method: "eth_signTypedData_v4",
+      params: [
+        from,
+        JSON.stringify({
+          types: {
+            EIP712Domain: [
+              { name: "chainId", type: "uint256" },
+              { name: "verifyingContract", type: "address" },
+            ],
+            SafeTx: [
+              { name: "to", type: "address" },
+              { name: "value", type: "uint256" },
+              { name: "data", type: "bytes" },
+              { name: "operation", type: "uint8" },
+              { name: "safeTxGas", type: "uint256" },
+              { name: "baseGas", type: "uint256" },
+              { name: "gasPrice", type: "uint256" },
+              { name: "gasToken", type: "address" },
+              { name: "refundReceiver", type: "address" },
+              { name: "nonce", type: "uint256" },
+            ],
+          },
+          domain: { chainId, verifyingContract: safe },
+          primaryType: "SafeTx",
+          message: {
+            to: CREATE_CALL,
+            value: "0",
+            data,
+            operation: 0,
+            safeTxGas: "0",
+            baseGas: "0",
+            gasPrice: "0",
+            gasToken: ZERO,
+            refundReceiver: ZERO,
+            nonce: nonce.toString(),
+          },
+        }),
+      ],
+    })) as string;
+    bag[who] = normalizeSig(signed);
+    window.localStorage.setItem(storeKey, JSON.stringify(bag));
+  }
+  const ready = owners.filter((owner) => bag[owner]);
+  if (ready.length < 2) throw new Error("second");
+  const signatures = `0x${owners
+    .filter((owner) => bag[owner])
+    .sort()
+    .map((owner) => bag[owner].slice(2))
+    .join("")}` as Hex;
+  const call = encodeFunctionData({
+    abi: safeAbi,
+    functionName: "execTransaction",
+    args: [CREATE_CALL, 0n, data, 0, 0n, 0n, 0n, ZERO, ZERO, signatures],
+  });
+  return send(from, safe, call, 0n, 5_000_000n);
 }
 
 export async function depositLend(chain: LendChain, asset: LendAsset, amount: string) {

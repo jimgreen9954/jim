@@ -23,14 +23,17 @@ interface IPool {
 /// Isolated USDT lending.
 /// Collateral is the gas token of this chain, wrapped inside the contract.
 /// Price is a 30-minute pool average, rounded down. There is no owner and no rescue.
+/// Ten percent of interest is credited to the fee address. Ninety percent stays with suppliers.
 contract TapeLend {
     IERC20 public immutable usdt;
     address public immutable coll;
     IPool public immutable pool;
+    address public immutable feeTo;
 
     uint256 public constant LTV = 5000;
     uint256 public constant LIQ = 7500;
     uint256 public constant BONUS = 500;
+    uint256 public constant CUT = 1000;
     uint32 public constant WINDOW = 1800;
     uint256 public constant YEAR = 365 days;
     uint256 public constant CAP = 1_000_000 ether;
@@ -55,12 +58,13 @@ contract TapeLend {
         entered = 1;
     }
 
-    constructor(address usdt_, address coll_, address pool_) {
-        if (usdt_ == address(0) || coll_ == address(0) || pool_ == address(0)) revert Bad();
+    constructor(address usdt_, address coll_, address pool_, address feeTo_) {
+        if (usdt_ == address(0) || coll_ == address(0) || pool_ == address(0) || feeTo_ == address(0)) revert Bad();
         if (IPool(pool_).token0() != usdt_ || IPool(pool_).token1() != coll_) revert Bad();
         usdt = IERC20(usdt_);
         coll = coll_;
         pool = IPool(pool_);
+        feeTo = feeTo_;
         lastAccrue = block.timestamp;
     }
 
@@ -252,7 +256,14 @@ contract TapeLend {
         if (totalBorrow == 0) return;
         uint256 util = totalBorrow * 10000 / (cash() + totalBorrow);
         uint256 interest = totalBorrow * _apr(util) / YEAR * dt / 1e18;
+        if (interest == 0) return;
         totalBorrow += interest;
+        uint256 cut = interest * CUT / 10000;
+        if (cut == 0) return;
+        uint256 minted = cut * (totalShares + DEAD) / (assets() + DUST);
+        if (minted == 0) return;
+        shares[feeTo] += minted;
+        totalShares += minted;
     }
 
     function _apr(uint256 util) internal pure returns (uint256) {
