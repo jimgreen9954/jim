@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { bemPrice, bnbPrice, ercPrice, pretty, quoteBemBnb, quoteUpBem, quoteUpBnb, quoteUpUsd } from "@/lib/bsc";
+import { bemPrice, bnbPrice, ercPrice, pretty, quoteBemBnb, quoteUpBem, quoteUpBnb, quoteUpUsd, quoteUpUsdt } from "@/lib/bsc";
 import { CoinMark } from "@/components/exchange/coin-mark";
 import { okbPrice, quoteBemOkb } from "@/lib/okb";
 import { STOCK_KEYS, STOCKS, type StockKey } from "@/lib/stocks";
@@ -21,7 +21,7 @@ export type PerpCoin = "bem" | "btc" | "eth" | "zec" | "up" | "tape";
 export type DeskView =
   | { kind: "tape"; market: SpotId; pair?: TapePair }
   | { kind: "otc"; market: SpotId }
-  | { kind: "pancake"; pair: "bem" | "bembnb" | "bemokb" | "upbnb" | "upbem" | "bnb" | "okb" | "btc" | "eth" | "zec" | "xau" | StockKey }
+  | { kind: "pancake"; pair: "bem" | "bembnb" | "bemokb" | "upbnb" | "upbem" | "upusdt" | "bnb" | "okb" | "btc" | "eth" | "zec" | "xau" | StockKey }
   | { kind: "perp"; chain: Desk; coin: PerpCoin };
 
 type Tab = "all" | "perp" | "spot";
@@ -80,6 +80,16 @@ const ROWS: Row[] = [
     id: "upbem",
     view: { kind: "pancake", pair: "upbem" },
     symbol: "UP-BEM",
+    kind: "spot",
+    tag: "现货",
+    where: "Pancake · BSC",
+    pin: true,
+    find: "UP TapeUP",
+  },
+  {
+    id: "upusdt",
+    view: { kind: "pancake", pair: "upusdt" },
+    symbol: "UP-USDT",
     kind: "spot",
     tag: "现货",
     where: "Pancake · BSC",
@@ -365,6 +375,9 @@ export function MarketSheet({
       .catch(() => undefined);
     quoteUpBem("sell", 10n ** 18n)
       .then((out) => write("upbem", pretty(out, 8, 6)))
+      .catch(() => undefined);
+    quoteUpUsdt("sell", 10n ** 18n)
+      .then((out) => write("upusdt", pretty(out, 18, 6)))
       .catch(() => undefined);
     quoteUpUsd()
       .then((text) => write("up", text))

@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import "./TickMath.sol";
 
 interface ISlot0 {
-    function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint16, uint16, uint16, uint8, bool);
+    function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint16, uint16, uint16, uint32, bool);
 }
 
 interface ITapePool {

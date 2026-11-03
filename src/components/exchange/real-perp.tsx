@@ -626,9 +626,16 @@ export function RealPerp({
           .then(setPerp)
           .catch(() => setPerp(pickBook(savedDesk(), "bem")));
     }
+    const onBook = (event: Event) => {
+      const detail = (event as CustomEvent<{ coin?: string; book?: string }>).detail;
+      if (!detail?.book || !detail.coin) return;
+      if (launch?.coin === detail.coin) setPerp(detail.book);
+    };
+    window.addEventListener("tape-coin-book", onBook);
     const stopAccount = onAccount(setAccount);
     const stopLink = onOpenLink(setLink);
     return () => {
+      window.removeEventListener("tape-coin-book", onBook);
       stopAccount();
       stopLink();
     };

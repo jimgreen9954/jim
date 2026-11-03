@@ -924,6 +924,7 @@ const v2Abi = parseAbi([
   "function getAmountsOut(uint256 amountIn, address[] path) view returns (uint256[] amounts)",
   "function swapExactETHForTokensSupportingFeeOnTransferTokens(uint256 amountOutMin, address[] path, address to, uint256 deadline) payable",
   "function swapExactTokensForETHSupportingFeeOnTransferTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline)",
+  "function swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline)",
 ]);
 
 export async function quoteUpBnb(side: "buy" | "sell", amountIn: bigint): Promise<bigint> {
@@ -950,6 +951,20 @@ export async function quoteUpUsd(): Promise<string> {
   const wbnb = await quoteUpBnb("sell", 10n ** 18n);
   const usdt = await quoteExact(BSC.wbnb, BSC.usdt, wbnb, BSC.bnbFee);
   return pretty(usdt, BSC.usdtDecimals, 4);
+}
+
+/** UP/USDT through the official Pancake v2 UP/WBNB pool, then USDT/WBNB. Not the thin UP/USDT v3 pool. */
+export async function quoteUpUsdt(side: "buy" | "sell", amountIn: bigint): Promise<bigint> {
+  const path = side === "buy" ? [BSC.usdt, BSC.wbnb, BSC.up] : [BSC.up, BSC.wbnb, BSC.usdt];
+  const amounts = await client.readContract({
+    address: BSC.v2Router,
+    abi: v2Abi,
+    functionName: "getAmountsOut",
+    args: [amountIn, path],
+  });
+  const out = amounts[amounts.length - 1] ?? 0n;
+  if (out <= 0n) throw new Error("nopool");
+  return out;
 }
 
 export async function swapUpBnbSpot(from: string, side: "buy" | "sell", amount: string): Promise<Hex> {
@@ -1037,6 +1052,36 @@ export async function swapUpBemSpot(from: string, side: "buy" | "sell", amount: 
   await waitOk(hash);
   try {
     await payDeskToken(from, pay, parts, `tl-fee:${from.toLowerCase()}:upbem:${side}:${amountIn}`);
+  } catch {
+    /* The pool swap is already in. */
+  }
+  return hash;
+}
+
+export async function swapUpUsdtSpot(from: string, side: "buy" | "sell", amount: string): Promise<Hex> {
+  const owner = from as Hex;
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20);
+  const buy = side === "buy";
+  const amountIn = units(amount, 18);
+  if (amountIn <= 0n) throw new Error("amount");
+  const parts = await deskParts("bsc", from, amountIn);
+  if (parts.swapIn <= 0n) throw new Error("amount");
+  const pay = buy ? BSC.usdt : BSC.up;
+  const held = await client.readContract({ address: pay, abi: erc20, functionName: "balanceOf", args: [owner] });
+  if (held < amountIn) throw new Error("balance");
+  const minOut = ((await quoteUpUsdt(side, parts.swapIn)) * 9900n) / 10_000n;
+  if (minOut <= 0n) throw new Error("tiny");
+  await approveIfNeeded(from, pay, parts.swapIn, BSC.v2Router);
+  const path = buy ? [BSC.usdt, BSC.wbnb, BSC.up] : [BSC.up, BSC.wbnb, BSC.usdt];
+  const data = encodeFunctionData({
+    abi: v2Abi,
+    functionName: "swapExactTokensForTokensSupportingFeeOnTransferTokens",
+    args: [parts.swapIn, minOut, path, owner, deadline],
+  });
+  const hash = await send(from, BSC.v2Router, data);
+  await waitOk(hash);
+  try {
+    await payDeskToken(from, pay, parts, `tl-fee:${from.toLowerCase()}:upusdt:${side}:${amountIn}`);
   } catch {
     /* The pool swap is already in. */
   }

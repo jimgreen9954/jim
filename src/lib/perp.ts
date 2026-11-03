@@ -456,7 +456,7 @@ function coinStore(which: Desk, coin: string): string {
 }
 
 function markStore(which: Desk, coin: string): string {
-  return `tl-coin-mark:${which}:${coin}`;
+  return `tl-coin-mark2:${which}:${coin}`;
 }
 
 export function coinBook(which: Desk, coin: string): string {
@@ -1178,7 +1178,11 @@ function markSane(coin: CoinBook, px: bigint): boolean {
 }
 
 /** One mark and one TapeRisk book for BTC, ETH, ZEC, UP, or TAPE. Not the BEM book. */
-export async function deployCoin(from: string, coin: CoinBook): Promise<{ book: string; hash: Hex }> {
+export async function deployCoin(
+  from: string,
+  coin: CoinBook,
+  onStep?: (step: 1 | 2 | 3) => void,
+): Promise<{ book: string; hash: Hex }> {
   const spec = COIN_SPEC[coin];
   const safe = spec.chain === "xlayer" ? XLAYER_SAFE : BSC_SAFE;
   if (from.toLowerCase() !== safe.toLowerCase() && from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("fee");
@@ -1191,6 +1195,7 @@ export async function deployCoin(from: string, coin: CoinBook): Promise<{ book: 
       const px = await readMark(spec.chain, have);
       if (px !== null && markSane(coin, px)) return { book: have, hash: "0x" };
       const pool = await rpc.readContract({ address: have as Hex, abi: poolAbi, functionName: "pool" });
+      onStep?.(2);
       const pokeHash = await send(from, pool, encodeFunctionData({ abi: pokeAbi, functionName: "poke" }), 1_200_000n);
       const again = await readMark(spec.chain, have);
       if (again !== null && markSane(coin, again)) return { book: have, hash: pokeHash };
@@ -1198,6 +1203,7 @@ export async function deployCoin(from: string, coin: CoinBook): Promise<{ book: 
     }
     let mark = typeof window !== "undefined" ? window.localStorage.getItem(markStore(spec.chain, coin)) ?? "" : "";
     if (!/^0x[a-fA-F0-9]{40}$/.test(mark)) {
+      onStep?.(1);
       const args = encodeAbiParameters(
         [{ type: "address" }, { type: "uint8" }, { type: "bool" }, { type: "uint8" }, { type: "uint8" }],
         [spec.src, spec.kind, spec.quoteIsToken0, spec.baseDec, spec.quoteDec],
@@ -1207,6 +1213,7 @@ export async function deployCoin(from: string, coin: CoinBook): Promise<{ book: 
       window.localStorage.setItem(markStore(spec.chain, coin), mark);
     }
     try {
+      onStep?.(2);
       await send(from, mark as Hex, encodeFunctionData({ abi: pokeAbi, functionName: "poke" }), 1_200_000n);
     } catch (err) {
       const count = await rpc
@@ -1222,6 +1229,7 @@ export async function deployCoin(from: string, coin: CoinBook): Promise<{ book: 
       [{ type: "address" }, { type: "address" }, { type: "uint256" }, { type: "address" }],
       [spec.chain === "xlayer" ? X_USDT : BSC.usdt, mark as Hex, spec.chain === "xlayer" ? 1_000_000n : 10n ** 18n, safe],
     );
+    onStep?.(3);
     const bookHash = await send(from, CREATE_CALL, createCallData((RISK_BYTECODE + bookArgs.slice(2)) as Hex), 8_000_000n);
     const book = createdAddress((await rpc.getTransactionReceipt({ hash: bookHash })).logs);
     const px = await readMark(spec.chain, book);
