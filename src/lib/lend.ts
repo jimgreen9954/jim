@@ -538,7 +538,18 @@ export async function borrowLend(chain: LendChain, asset: LendAsset, amount: str
   const qty = units(amount, spec.usdtDec);
   if (qty === 0n) throw new Error("amount");
   const from = await signer(chain);
-  await wait(chain, await send(from, need(chain, asset), encodeFunctionData({ abi, functionName: "borrow", args: [qty] })));
+  const lend = need(chain, asset);
+  const [cash, posted, liveFresh] = await Promise.all([
+    read<bigint>(chain, lend, "cash"),
+    read<bigint>(chain, lend, "collateral", [from as Hex]),
+    spec.native || spec.mode === 0 ? Promise.resolve(true) : read<boolean>(chain, lend, "fresh"),
+  ]);
+  if (posted === 0n) throw new Error("posted");
+  if (qty > cash) throw new Error("dry");
+  if (!liveFresh) {
+    await wait(chain, await send(from, lend, encodeFunctionData({ abi, functionName: "poke" })));
+  }
+  await wait(chain, await send(from, lend, encodeFunctionData({ abi, functionName: "borrow", args: [qty] })));
 }
 
 export async function repayLend(chain: LendChain, asset: LendAsset, amount: string) {

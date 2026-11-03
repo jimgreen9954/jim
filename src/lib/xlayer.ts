@@ -361,7 +361,7 @@ export async function readProcessor(): Promise<ProcessorStatus> {
     minted: minted.toString(),
     price: formatEther(price),
     fee: formatEther(fee),
-    circuits: nextId.toString(),
+    circuits: (nextId > 0n ? nextId - 1n : 0n).toString(),
   };
 }
 
@@ -562,32 +562,40 @@ export type KindSupply = {
   latchMint: bigint;
   nandBurn: bigint;
   latchBurn: bigint;
+  fresh: boolean;
 };
 
+const KIND_V = 2;
 const KIND_BASE: KindSupply = {
   block: 72499101n,
   nandMint: 388496n,
   latchMint: 97414n,
   nandBurn: 37194n,
   latchBurn: 0n,
+  fresh: false,
 };
 
 const MINT_TOPIC = "0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62";
 const ZERO_TOPIC = `0x${"0".repeat(64)}`;
 const KIND_KEY = "tapeliquid-kind-supply";
+const LOG_SPAN = 100n;
+const LOG_ROUNDS = 2000;
 
 function loadKind(): KindSupply | null {
   if (typeof localStorage === "undefined") return null;
   try {
     const raw = JSON.parse(localStorage.getItem(KIND_KEY) || "");
+    if (raw.v !== KIND_V) return null;
     const row = {
       block: BigInt(raw.block),
       nandMint: BigInt(raw.nandMint),
       latchMint: BigInt(raw.latchMint),
       nandBurn: BigInt(raw.nandBurn),
       latchBurn: BigInt(raw.latchBurn),
+      fresh: false,
     };
     if (row.block < KIND_BASE.block) return null;
+    if (row.nandMint + row.latchMint < KIND_BASE.nandMint + KIND_BASE.latchMint) return null;
     return row;
   } catch {
     return null;
@@ -599,6 +607,7 @@ function saveKind(row: KindSupply) {
   localStorage.setItem(
     KIND_KEY,
     JSON.stringify({
+      v: KIND_V,
       block: row.block.toString(),
       nandMint: row.nandMint.toString(),
       latchMint: row.latchMint.toString(),
@@ -614,11 +623,13 @@ function addMintLog(row: KindSupply, log: { data: string; topics: string[] }): K
   const value = BigInt(`0x${log.data.slice(66, 130)}`);
   if (id !== 0 && id !== 1) return row;
   const next = { ...row };
-  if (log.topics[2] === ZERO_TOPIC) {
+  const from = (log.topics[2] || "").toLowerCase();
+  const to = (log.topics[3] || "").toLowerCase();
+  if (from === ZERO_TOPIC) {
     if (id === 0) next.nandMint += value;
     else next.latchMint += value;
   }
-  if (log.topics[3] === ZERO_TOPIC) {
+  if (to === ZERO_TOPIC) {
     if (id === 0) next.nandBurn += value;
     else next.latchBurn += value;
   }
@@ -628,29 +639,38 @@ function addMintLog(row: KindSupply, log: { data: string; topics: string[] }): K
 export async function catchKindSupply(onStep?: (row: KindSupply) => void): Promise<KindSupply> {
   let row = loadKind() ?? { ...KIND_BASE };
   onStep?.(row);
-  const head = await client.getBlockNumber();
-  const span = 100n;
-  for (let round = 0; round < 8 && row.block < head; round += 1) {
+  let head: bigint;
+  try {
+    head = await client.getBlockNumber();
+  } catch {
+    return { ...row, fresh: false };
+  }
+  for (let round = 0; round < LOG_ROUNDS && row.block < head; round += 1) {
     const from = row.block + 1n;
-    const to = from + span - 1n > head ? head : from + span - 1n;
-    const logs = (await client.request({
-      method: "eth_getLogs",
-      params: [
-        {
-          address: DEPLOYED.transistors,
-          topics: [MINT_TOPIC],
-          fromBlock: `0x${from.toString(16)}`,
-          toBlock: `0x${to.toString(16)}`,
-        },
-      ],
-    })) as { data: string; topics: string[] }[];
+    const to = from + LOG_SPAN - 1n > head ? head : from + LOG_SPAN - 1n;
+    let logs: { data: string; topics: string[] }[];
+    try {
+      logs = (await client.request({
+        method: "eth_getLogs",
+        params: [
+          {
+            address: DEPLOYED.transistors,
+            topics: [MINT_TOPIC],
+            fromBlock: `0x${from.toString(16)}`,
+            toBlock: `0x${to.toString(16)}`,
+          },
+        ],
+      })) as { data: string; topics: string[] }[];
+    } catch {
+      break;
+    }
     let next = { ...row, block: to };
     for (const log of logs) next = addMintLog(next, log);
     row = next;
     saveKind(row);
     onStep?.(row);
   }
-  return row;
+  return { ...row, fresh: row.block + 2n >= head };
 }
 
 export function processorUrl(): string {

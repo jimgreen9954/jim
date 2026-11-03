@@ -4,6 +4,7 @@ import { CREATE_CALL, createCallData, createdAddress } from "@/lib/create-call";
 import { PERP_BYTECODE } from "@/lib/perp-artifact";
 import { RISK_BYTECODE } from "@/lib/risk-artifact";
 import { MARK_BYTECODE } from "@/lib/mark-artifact";
+import { DESK_MARK_BYTECODE } from "@/lib/desk-mark-artifact";
 import { getProvider } from "@/lib/wallet";
 import { XLAYER, connectXLayer } from "@/lib/xlayer";
 
@@ -446,7 +447,27 @@ export function riskOf(which: Desk): string {
   return /^0x[a-fA-F0-9]{40}$/.test(saved) ? saved : "";
 }
 
-export function pickBook(which: Desk, _coin: string): string {
+export type CoinBook = "btc" | "eth" | "zec" | "up" | "tape";
+
+const TAPE_POOL = "0x58eaD5b41Cfd3627791D439402dd65571c286484" as Hex;
+
+function coinStore(which: Desk, coin: string): string {
+  return `tl-coin-book:${which}:${coin}`;
+}
+
+function markStore(which: Desk, coin: string): string {
+  return `tl-coin-mark:${which}:${coin}`;
+}
+
+export function coinBook(which: Desk, coin: string): string {
+  if (typeof window === "undefined") return "";
+  const saved = window.localStorage.getItem(coinStore(which, coin)) ?? "";
+  return /^0x[a-fA-F0-9]{40}$/.test(saved) ? saved : "";
+}
+
+export function pickBook(which: Desk, coin: string): string {
+  if (coin === "tape") return coinBook("xlayer", "tape");
+  if (coin === "btc" || coin === "eth" || coin === "zec" || coin === "up") return coinBook("bsc", coin);
   return bookOf(which);
 }
 
@@ -473,7 +494,9 @@ export async function deployRisk(from: string, which: Desk): Promise<string> {
 }
 
 function pinned(perp: string): void {
-  if (perp.toLowerCase() !== bookOf().toLowerCase()) throw new Error("book");
+  const want = perp.toLowerCase();
+  const rows = [bookOf("bsc"), bookOf("xlayer"), coinBook("bsc", "btc"), coinBook("bsc", "eth"), coinBook("bsc", "zec"), coinBook("bsc", "up"), coinBook("xlayer", "tape")];
+  if (!rows.some((row) => row.length === 42 && row.toLowerCase() === want)) throw new Error("book");
 }
 
 export async function rememberXBem(address: string): Promise<string> {
@@ -1085,6 +1108,136 @@ async function bscTick(): Promise<number> {
 const pokeAbi = [
   { name: "poke", type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
 ] as const;
+
+export async function xPoolPrice(): Promise<number> {
+  const { createPublicClient, http } = await import("viem");
+  const c = createPublicClient({ transport: http(XLAYER.rpc, { timeout: 8_000 }) });
+  const abi = [
+    { name: "slot0", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint160" }, { type: "int24" }, { type: "uint16" }, { type: "uint16" }, { type: "uint16" }, { type: "uint8" }, { type: "bool" }] },
+  ] as const;
+  const [bem, okb] = await Promise.all([
+    c.readContract({ address: "0x2CcF8aa17F5DF9Fb5D51C9de12135a913fF29f7A", abi, functionName: "slot0" }),
+    c.readContract({ address: "0xe3BE6A0137f1b0602Fc1a4841686f43B340a5082", abi, functionName: "slot0" }),
+  ]);
+  const raw = (sqrt: bigint) => (sqrt * sqrt * 10n ** 18n) / (1n << 192n);
+  const bemRaw = raw(bem[0]);
+  const okbRaw = raw(okb[0]);
+  if (bemRaw === 0n || okbRaw === 0n) return 0;
+  const usdt = (bemRaw * 100n * 10n ** 18n) / okbRaw;
+  return Number(usdt) / 1e18;
+}
+
+/** The X Layer book cannot change its oracle. Anyone can poke it. After 30 quiet minutes it jumps to the pools. */
+export async function pokeXMark(from: string): Promise<Hex> {
+  const was = desk;
+  desk = "xlayer";
+  try {
+    const book = bookOf("xlayer");
+    const rpc = await client();
+    const pool = await rpc.readContract({
+      address: book as Hex,
+      abi: [{ name: "pool", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] }] as const,
+      functionName: "pool",
+    });
+    const data = encodeFunctionData({ abi: pokeAbi, functionName: "poke" });
+    return send(from, pool, data, 500_000n);
+  } finally {
+    desk = was;
+  }
+}
+
+const poolAbi = [
+  { name: "pool", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
+] as const;
+
+const COIN_SPEC = {
+  btc: { chain: "bsc" as Desk, src: BSC.btcPool, kind: 0, quoteIsToken0: true, baseDec: 18, quoteDec: 18, lo: 1_000, hi: 100_000 },
+  eth: { chain: "bsc" as Desk, src: BSC.ethPool, kind: 0, quoteIsToken0: false, baseDec: 18, quoteDec: 18, lo: 50, hi: 100_000 },
+  zec: { chain: "bsc" as Desk, src: BSC.zecPool, kind: 0, quoteIsToken0: false, baseDec: 18, quoteDec: 18, lo: 20, hi: 20_000 },
+  up: { chain: "bsc" as Desk, src: BSC.upWbnb, kind: 2, quoteIsToken0: true, baseDec: 18, quoteDec: 18, lo: 0.02, hi: 50 },
+  tape: { chain: "xlayer" as Desk, src: TAPE_POOL, kind: 1, quoteIsToken0: false, baseDec: 8, quoteDec: 6, lo: 0.05, hi: 100 },
+};
+
+async function readMark(which: Desk, perp: string): Promise<bigint | null> {
+  try {
+    const px = await (await deskClient(which)).readContract({
+      address: perp as Hex,
+      abi: [{ name: "mark", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] }] as const,
+      functionName: "mark",
+    });
+    return px;
+  } catch {
+    return null;
+  }
+}
+
+function markSane(coin: CoinBook, px: bigint): boolean {
+  const n = Number(px) / 1e18;
+  const spec = COIN_SPEC[coin];
+  return n >= spec.lo && n <= spec.hi;
+}
+
+/** One mark and one TapeRisk book for BTC, ETH, ZEC, UP, or TAPE. Not the BEM book. */
+export async function deployCoin(from: string, coin: CoinBook): Promise<{ book: string; hash: Hex }> {
+  const spec = COIN_SPEC[coin];
+  const safe = spec.chain === "xlayer" ? XLAYER_SAFE : BSC_SAFE;
+  if (from.toLowerCase() !== safe.toLowerCase() && from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("fee");
+  const was = desk;
+  desk = spec.chain;
+  try {
+    const have = coinBook(spec.chain, coin);
+    const rpc = await client();
+    if (have) {
+      const px = await readMark(spec.chain, have);
+      if (px !== null && markSane(coin, px)) return { book: have, hash: "0x" };
+      const pool = await rpc.readContract({ address: have as Hex, abi: poolAbi, functionName: "pool" });
+      const pokeHash = await send(from, pool, encodeFunctionData({ abi: pokeAbi, functionName: "poke" }), 1_200_000n);
+      const again = await readMark(spec.chain, have);
+      if (again !== null && markSane(coin, again)) return { book: have, hash: pokeHash };
+      throw new Error("price");
+    }
+    let mark = typeof window !== "undefined" ? window.localStorage.getItem(markStore(spec.chain, coin)) ?? "" : "";
+    if (!/^0x[a-fA-F0-9]{40}$/.test(mark)) {
+      const args = encodeAbiParameters(
+        [{ type: "address" }, { type: "uint8" }, { type: "bool" }, { type: "uint8" }, { type: "uint8" }],
+        [spec.src, spec.kind, spec.quoteIsToken0, spec.baseDec, spec.quoteDec],
+      );
+      const markHash = await send(from, CREATE_CALL, createCallData((DESK_MARK_BYTECODE + args.slice(2)) as Hex), 6_000_000n);
+      mark = createdAddress((await rpc.getTransactionReceipt({ hash: markHash })).logs);
+      window.localStorage.setItem(markStore(spec.chain, coin), mark);
+    }
+    try {
+      await send(from, mark as Hex, encodeFunctionData({ abi: pokeAbi, functionName: "poke" }), 1_200_000n);
+    } catch (err) {
+      const count = await rpc
+        .readContract({
+          address: mark as Hex,
+          abi: [{ name: "count", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint8" }] }] as const,
+          functionName: "count",
+        })
+        .catch(() => 0);
+      if (!count) throw err;
+    }
+    const bookArgs = encodeAbiParameters(
+      [{ type: "address" }, { type: "address" }, { type: "uint256" }, { type: "address" }],
+      [spec.chain === "xlayer" ? X_USDT : BSC.usdt, mark as Hex, spec.chain === "xlayer" ? 1_000_000n : 10n ** 18n, safe],
+    );
+    const bookHash = await send(from, CREATE_CALL, createCallData((RISK_BYTECODE + bookArgs.slice(2)) as Hex), 8_000_000n);
+    const book = createdAddress((await rpc.getTransactionReceipt({ hash: bookHash })).logs);
+    const px = await readMark(spec.chain, book);
+    if (px === null || !markSane(coin, px)) throw new Error("price");
+    window.localStorage.setItem(coinStore(spec.chain, coin), book);
+    return { book, hash: bookHash };
+  } finally {
+    desk = was;
+  }
+}
+
+export async function pokeBook(from: string, perp: string): Promise<Hex> {
+  pinned(perp);
+  const pool = await (await client()).readContract({ address: perp as Hex, abi: poolAbi, functionName: "pool" });
+  return send(from, pool, encodeFunctionData({ abi: pokeAbi, functionName: "poke" }), 1_200_000n);
+}
 
 /** New mark from the BEM/WOKB 1% pool, then a new book. The old book cannot change its mark. */
 export async function shipXBook(from: string): Promise<{ mark: string; book: string }> {

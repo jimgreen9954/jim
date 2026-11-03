@@ -24,7 +24,7 @@ export const getXCandles = createServerFn({ method: "GET" })
 
 export const getCoinCandles = createServerFn({ method: "GET" })
   .validator((input: { coin?: string; frame?: string }) => ({
-    coin: (input?.coin === "eth" || input?.coin === "zec" ? input.coin : "btc") as "btc" | "eth" | "zec",
+    coin: (input?.coin === "eth" || input?.coin === "zec" || input?.coin === "up" ? input.coin : "btc") as "btc" | "eth" | "zec" | "up",
     frame: (frames.includes(input?.frame as CandleFrame) ? input?.frame : "1m") as CandleFrame,
   }))
   .handler(async ({ data }) => pullCoin(data.coin, data.frame));

@@ -3,6 +3,7 @@ const SRC: Record<string, string> = {
   btc: "/coins/btc.png",
   eth: "/coins/eth.png",
   zec: "/coins/zec.png",
+  up: "/coins/up.svg",
   usdt: "/coins/usdt.png",
   bnb: "/coins/bnb.png",
   okb: "/coins/okb.svg",

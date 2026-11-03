@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { formatEther, formatUnits } from "viem";
+import { formatEther, formatUnits, parseEther } from "viem";
 import {
   bscBemBalance,
   BSC_BRIDGE,
@@ -8,8 +8,7 @@ import {
   type BridgeQuote,
 } from "@/lib/bem-bridge";
 import { deskParts } from "@/lib/invite-cut";
-import { bemPrice, BSC, quoteExact } from "@/lib/bsc";
-import { quoteOkb } from "@/lib/okb";
+import { bemPrice, BSC } from "@/lib/bsc";
 import { TAPE_BEM } from "@/lib/tape-pool";
 import { readOpenBook } from "@/lib/tape-open-candles";
 import {
@@ -50,6 +49,7 @@ import {
   type TermState,
 } from "@/lib/tape-term";
 import { XLAYER } from "@/lib/xlayer";
+import { payBalance, quoteGasRoute, sendGasRoute, type GasQuote } from "@/lib/gas-route";
 
 const TERMS = [
   { id: 0, zh: "三个月", en: "3 mo" },
@@ -82,79 +82,163 @@ function sgWhen(unix: bigint): string {
 function GasDesk({ account, zh }: { account: string | null; zh: boolean }) {
   const [toBnb, setToBnb] = useState(true);
   const [amt, setAmt] = useState("");
-  const [rate, setRate] = useState(0);
+  const [quote, setQuote] = useState<GasQuote | null>(null);
+  const [spendable, setSpendable] = useState(0n);
   const [note, setNote] = useState("");
   const [bad, setBad] = useState(false);
-  const amount = /^[0-9]*\.?[0-9]+$/.test(amt.trim()) ? Number(amt.trim()) : 0;
-  const net = amount > 0 ? amount * 0.998 : 0;
-  const out = toBnb ? net * rate : rate > 0 ? net / rate : 0;
-  const fee = amount > 0 ? amount * 0.002 : 0;
+  const [busy, setBusy] = useState(false);
+  const gross = (() => {
+    try {
+      return amt.trim() ? parseEther(amt.trim()) : 0n;
+    } catch {
+      return 0n;
+    }
+  })();
   const pay = toBnb ? "OKB" : "BNB";
   const get = toBnb ? "BNB" : "OKB";
+  const show = (n: bigint, digits = 6) => {
+    const num = Number(formatEther(n));
+    return Number.isFinite(num) ? num.toLocaleString("en-US", { maximumFractionDigits: digits }) : "0";
+  };
+  const reserve = toBnb ? 2_000_000_000_000_000n : 3_000_000_000_000_000n;
+  const free = spendable > reserve ? spendable - reserve : 0n;
 
   useEffect(() => {
     let dead = false;
-    Promise.all([
-      quoteOkb("sell", 10n ** 18n).catch(() => 0n),
-      quoteExact(BSC.wbnb, BSC.usdt, 10n ** 18n, BSC.bnbFee).catch(() => 0n),
-    ])
-      .then(([okbRaw, bnbRaw]) => {
-        if (dead) return;
-        const okbUsd = Number(formatUnits(okbRaw, 6));
-        const bnbUsd = Number(formatUnits(bnbRaw, 18));
-        setRate(okbUsd > 0 && bnbUsd > 0 ? okbUsd / bnbUsd : 0);
+    payBalance(toBnb, account)
+      .then((value) => {
+        if (!dead) setSpendable(value);
       })
       .catch(() => {
-        if (!dead) setRate(0);
+        if (!dead) setSpendable(0n);
       });
     return () => {
       dead = true;
     };
-  }, []);
+  }, [account, toBnb, busy]);
 
-  const cut = (n: number) =>
-    n > 0 ? n.toLocaleString("en-US", { maximumFractionDigits: 6 }) : "—";
+  useEffect(() => {
+    if (gross <= 0n) {
+      setQuote(null);
+      return;
+    }
+    let dead = false;
+    const who = account || (toBnb ? "0xb4D6039394c8B97C3AC3234aa07011B564Fcb88c" : "0xE51C19aE6E4261Ed329CC54F1120Cf0Ae09364Bd");
+    const id = window.setTimeout(() => {
+      deskParts(toBnb ? "xlayer" : "bsc", who, gross)
+        .then((parts) => (parts.swapIn > 0n ? quoteGasRoute(toBnb, who, parts.swapIn) : null))
+        .then((next) => {
+          if (!dead) setQuote(next);
+        })
+        .catch(() => {
+          if (!dead) setQuote(null);
+        });
+    }, 350);
+    return () => {
+      dead = true;
+      window.clearTimeout(id);
+    };
+  }, [account, toBnb, gross]);
+
+  const rate = quote && gross > 0n ? Number(formatEther(quote.amountOut)) / Number(formatEther(gross)) : 0;
 
   return (
-    <div className="mt-3 grid gap-2 border border-gold/40 px-3 py-3">
-      <p className="text-sm">{zh ? "OKB 与 BNB" : "OKB and BNB"}</p>
-      <p className="font-mono text-xs text-ink/60">
-        {zh ? "1 OKB ≈" : "1 OKB ≈"}{" "}
-        {rate > 0 ? rate.toLocaleString("en-US", { maximumFractionDigits: 6 }) : "—"} BNB ·{" "}
-        {zh ? "台费 0.20%" : "Fee 0.20%"}
-      </p>
-      <div className="grid grid-cols-2 border border-gold text-sm">
+    <div className="overflow-hidden border border-gold bg-paper">
+      <div className="flex items-end justify-between px-4 pb-3 pt-4">
+        <div>
+          <p className="text-[10px] tracking-[0.28em] text-gold">OKB / BNB</p>
+          <h3 className="font-display text-3xl italic leading-none">{zh ? "跨链兑换" : "Cross"}</h3>
+        </div>
+        <p className="text-right font-mono text-[11px] text-ink/55">
+          {rate > 0 ? `1 ${pay} ≈ ${rate.toLocaleString("en-US", { maximumFractionDigits: 6 })} ${get}` : "—"}
+          <span className="mt-1 block">{zh ? "台费 0.20%" : "Fee 0.20%"}</span>
+        </p>
+      </div>
+      <div className="mx-3 border border-gold/50 px-3 py-3">
+        <div className="flex items-center justify-between text-[10px] tracking-[0.18em] text-ink/45">
+          <span>{zh ? "付出" : "Pay"}</span>
+          <button type="button" className="tracking-normal" onClick={() => free > 0n && setAmt(formatEther(free))}>
+            {show(free, 4)} {pay}
+          </button>
+        </div>
+        <div className="mt-1 flex items-baseline gap-3">
+          <input
+            value={amt}
+            onChange={(event) => setAmt(event.target.value)}
+            inputMode="decimal"
+            placeholder="0"
+            className="min-w-0 flex-1 bg-transparent font-display text-4xl italic text-ink outline-none"
+          />
+          <span className="font-display text-2xl italic">{pay}</span>
+        </div>
+      </div>
+      <div className="relative z-10 -my-3 flex justify-center">
         <button
           type="button"
-          className={`min-h-11 ${toBnb ? "bg-ink text-paper" : ""}`}
-          onClick={() => setToBnb(true)}
+          aria-label={zh ? "换向" : "Switch"}
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-gold bg-ink text-sm text-paper"
+          onClick={() => {
+            setToBnb((value) => !value);
+            setAmt("");
+            setQuote(null);
+          }}
         >
-          OKB → BNB
-        </button>
-        <button
-          type="button"
-          className={`min-h-11 ${!toBnb ? "bg-ink text-paper" : ""}`}
-          onClick={() => setToBnb(false)}
-        >
-          BNB → OKB
+          换
         </button>
       </div>
-      <input
-        value={amt}
-        onChange={(event) => setAmt(event.target.value)}
-        inputMode="decimal"
-        placeholder={pay}
-        className="min-h-11 border border-gold/50 bg-transparent px-2 font-mono text-sm"
-      />
-      <p className="font-mono text-xs text-ink/70">
-        {zh ? "台费" : "Fee"} {cut(fee)} {pay} · {zh ? "到账约" : "About"} {cut(out)} {get}
-      </p>
-      <button type="button" disabled className="min-h-11 border border-gold/40 text-sm text-ink/50">
-        {zh
-          ? "两边库存还没部署，这一笔不会签名"
-          : "No inventory is deployed, so this does not sign"}
+      <div className="mx-3 border border-gold/50 px-3 py-3">
+        <p className="text-[10px] tracking-[0.18em] text-ink/45">{zh ? "到账" : "Receive"}</p>
+        <div className="mt-1 flex items-baseline justify-between gap-3">
+          <p className="font-display text-4xl italic leading-none">{quote ? show(quote.amountOut) : "0"}</p>
+          <span className="font-display text-2xl italic">{get}</span>
+        </div>
+        <p className="mt-2 font-mono text-[11px] text-ink/45">
+          {zh ? "最少" : "Min"} {quote ? show(quote.amountOutMin) : "0"} {get}
+          <span className="mx-2">·</span>
+          Sushi · Symbiosis
+        </p>
+      </div>
+      <button
+        type="button"
+        disabled={busy || !account || !quote}
+        className="mx-3 mb-3 mt-3 min-h-12 w-[calc(100%-1.5rem)] bg-ink text-sm tracking-[0.14em] text-paper disabled:opacity-40"
+        onClick={() => {
+          if (!account || gross <= 0n) return;
+          setBusy(true);
+          setBad(false);
+          setNote("");
+          sendGasRoute(toBnb, account, gross)
+            .then(() => {
+              setBad(false);
+              setNote(zh ? "已提交。到账要等桥的消息。" : "Submitted. It arrives with the bridge.");
+            })
+            .catch((err) => {
+              const code = err instanceof Error ? err.message : "";
+              setBad(true);
+              setNote(
+                code === "balance"
+                  ? zh
+                    ? "余额不够。"
+                    : "Balance is not enough."
+                  : code === "fee-kept"
+                    ? zh
+                      ? "台费已经转出，不退。兑换没有提交。"
+                      : "The fee was sent and is not returned. The swap was not submitted."
+                    : /rejected|denied|cancel/i.test(code)
+                      ? zh
+                        ? "已取消。"
+                        : "Cancelled."
+                      : zh
+                        ? "没有换过去。"
+                        : "It did not swap.",
+              );
+            })
+            .finally(() => setBusy(false));
+        }}
+      >
+        {zh ? "签名兑换" : "Sign swap"}
       </button>
-      {note ? <p className={`text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
+      {note ? <p className={`px-4 pb-4 text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
     </div>
   );
 }
@@ -175,7 +259,6 @@ export function OfficialBridge({
   const [amt, setAmt] = useState("");
   const [bscBal, setBscBal] = useState<bigint | null>(null);
   const [quote, setQuote] = useState<BridgeQuote | null>(null);
-  const [fee, setFee] = useState<bigint | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [bad, setBad] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -207,27 +290,15 @@ export function OfficialBridge({
   useEffect(() => {
     if (!open || !account || !amount) {
       setQuote(null);
-      setFee(null);
       return;
     }
     let dead = false;
-    deskParts(toX ? "bsc" : "xlayer", account, amount)
-      .then((parts) => {
-        if (dead) return;
-        setFee(parts.desk + parts.reward);
-        if (parts.swapIn <= 0n) {
-          setQuote(null);
-          return;
-        }
-        return quoteBridge(toX, account, parts.swapIn).then((next) => {
-          if (!dead) setQuote(next);
-        });
+    quoteBridge(toX, account, amount)
+      .then((next) => {
+        if (!dead) setQuote(next);
       })
       .catch(() => {
-        if (!dead) {
-          setQuote(null);
-          setFee(null);
-        }
+        if (!dead) setQuote(null);
       });
     return () => {
       dead = true;
@@ -235,7 +306,9 @@ export function OfficialBridge({
   }, [open, account, toX, amount]);
 
   return (
-    <div className="mt-3 border border-gold/40">
+    <div className="grid gap-3">
+      <GasDesk account={account} zh={zh} />
+      <div className="border border-gold/40">
       <button
         type="button"
         className="flex min-h-11 w-full items-center justify-between px-3 text-left"
@@ -271,7 +344,14 @@ export function OfficialBridge({
             placeholder={zh ? "BEM 数量" : "BEM amount"}
             className="min-h-12 border border-gold/50 bg-transparent px-2 font-mono text-sm"
           />
-          <p className="text-xs text-ink/55">
+          <button
+            type="button"
+            className="text-left text-xs text-ink/55"
+            onClick={() => {
+              const have = toX ? bscBal : xBem;
+              if (have && have > 0n) setAmt(formatUnits(have, 8));
+            }}
+          >
             {zh ? "可转" : "Available"}{" "}
             {toX
               ? bscBal == null
@@ -281,13 +361,11 @@ export function OfficialBridge({
                 ? "—"
                 : deskText(xBem, 8)}{" "}
             BEM
-          </p>
+          </button>
           <p className="text-xs leading-5">
-            {zh ? "台费" : "Fee"} 0.20% {fee == null ? "—" : deskText(fee, 8)} BEM ·{" "}
-            {zh ? "这次到账" : "Arrives"} {quote ? deskText(quote.received, 8) : "—"} ·{" "}
-            {zh ? "桥留下" : "Bridge keeps"}{" "}
-            {quote ? deskText(quote.sent - quote.received, 8) : "—"} · {toX ? "BNB" : "OKB"}{" "}
-            {quote ? formatEther(quote.nativeFee) : "—"}
+            {zh ? "这次到账" : "Arrives"} {quote ? deskText(quote.received, 8) : "—"} BEM ·{" "}
+            {zh ? "桥留下" : "Bridge keeps"} {quote ? deskText(quote.sent - quote.received, 8) : "—"} ·{" "}
+            {toX ? "BNB" : "OKB"} {quote ? formatEther(quote.nativeFee) : "—"}
           </p>
           <button
             type="button"
@@ -301,20 +379,33 @@ export function OfficialBridge({
                   setBad(false);
                   setNote(
                     zh
-                      ? "台费已付，桥已提交。到账要等桥的消息。"
-                      : "The fee is paid and the bridge is submitted. It arrives with the bridge message.",
+                      ? "已提交。到账要等桥的消息。"
+                      : "Submitted. It arrives with the bridge message.",
                   );
                 })
                 .catch((err) => {
+                  const code = err instanceof Error ? err.message : "";
                   setBad(true);
                   setNote(
-                    err instanceof Error && err.message === "fee-kept"
+                    code === "balance"
                       ? zh
-                        ? "台费已经转出，不退。桥没有提交。"
-                        : "The fee was sent and is not returned. The bridge was not submitted."
-                      : zh
-                        ? "没有跨过去。BEM 还在原来的链上。"
-                        : "It did not cross. The BEM is still on the original chain.",
+                        ? "这个地址上的 BEM 不够。"
+                        : "This address does not have enough BEM."
+                      : /rejected|denied|cancel/i.test(code)
+                        ? zh
+                          ? "已取消。"
+                          : "Cancelled."
+                        : /insufficient|funds/i.test(code)
+                          ? zh
+                            ? toX
+                              ? "BNB 不够付桥的消息费。"
+                              : "OKB 不够付桥的消息费。"
+                            : toX
+                              ? "Not enough BNB for the bridge fee."
+                              : "Not enough OKB for the bridge fee."
+                          : zh
+                            ? "没有跨过去。BEM 还在原来的链上。"
+                            : "It did not cross. The BEM is still on the original chain.",
                   );
                 })
                 .finally(() => setBusy(false));
@@ -350,7 +441,7 @@ export function OfficialBridge({
           {note ? <p className={`text-sm leading-6 ${bad ? "text-sell" : ""}`}>{note}</p> : null}
         </div>
       ) : null}
-      <GasDesk account={account} zh={zh} />
+    </div>
     </div>
   );
 }

@@ -31,6 +31,19 @@ const routerAbi = parseAbi([
   "function swapExactETHForTokens(uint256 amountOutMin, address[] path, address to, uint256 deadline) payable returns (uint256[] amounts)",
 ]);
 
+const v3Quoter = parseAbi([
+  "function quoteExactInputSingle((address tokenIn, address tokenOut, uint256 amountIn, uint24 fee, uint160 sqrtPriceLimitX96) params) returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)",
+]);
+
+const V3_ROUTER = "0x4f0c28f5926afda16bf2506d5d9e57ea190f9bca" as Hex;
+const X_BEM = "0x60e62Efa9405d6873C5deaBD4E6CC91c25363952" as Hex;
+
+const v3Router = parseAbi([
+  "function exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96) params) payable returns (uint256 amountOut)",
+  "function unwrapWETH9(uint256 amountMinimum, address recipient) payable",
+  "function multicall(uint256 deadline, bytes[] data) payable returns (bytes[] results)",
+]);
+
 const erc20 = parseAbi([
   "function balanceOf(address) view returns (uint256)",
   "function allowance(address owner, address spender) view returns (uint256)",
@@ -394,4 +407,86 @@ export function okbTxUrl(hash: string): string {
 
 export function okbAddressUrl(address: string): string {
   return `${XLAYER.explorer}/address/${address}`;
+}
+
+export async function quoteBemOkb(side: "buy" | "sell", amountIn: bigint): Promise<bigint> {
+  const tokenIn = side === "buy" ? OKB.wokb : X_BEM;
+  const tokenOut = side === "buy" ? X_BEM : OKB.wokb;
+  const quoted = await xClient.readContract({
+    address: "0x976183ac3d09840d243a88c0268badb3b3e3259f",
+    abi: v3Quoter,
+    functionName: "quoteExactInputSingle",
+    args: [{ tokenIn, tokenOut, amountIn, fee: 10000, sqrtPriceLimitX96: 0n }],
+  });
+  return quoted[0];
+}
+
+export async function readXBem(account: string): Promise<bigint> {
+  return xClient.readContract({ address: X_BEM, abi: erc20, functionName: "balanceOf", args: [account as Hex] });
+}
+
+export async function swapBemOkb(from: string, side: "buy" | "sell", amount: string): Promise<Hex> {
+  const owner = from as Hex;
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20);
+  if (side === "buy") {
+    const amountIn = units(amount, 18);
+    if (amountIn <= 0n) throw new Error("amount");
+    const bal = await xClient.getBalance({ address: owner });
+    if (bal < amountIn + OKB.gasReserve) throw new Error("gas");
+    const parts = await deskParts("xlayer", from, amountIn);
+    if (parts.swapIn <= 0n) throw new Error("amount");
+    const minOut = ((await quoteBemOkb("buy", parts.swapIn)) * 9900n) / 10_000n;
+    if (minOut <= 0n) throw new Error("tiny");
+    const data = encodeFunctionData({
+      abi: v3Router,
+      functionName: "exactInputSingle",
+      args: [{ tokenIn: OKB.wokb, tokenOut: X_BEM, fee: 10000, recipient: owner, amountIn: parts.swapIn, amountOutMinimum: minOut, sqrtPriceLimitX96: 0n }],
+    });
+    const hash = await send(from, V3_ROUTER, data, parts.swapIn);
+    await waitOkX(hash);
+    try {
+      if (parts.reward > 0n && parts.referrer) await send(from, parts.referrer as Hex, "0x", parts.reward);
+      if (parts.desk > 0n) await send(from, XLAYER_SAFE, "0x", parts.desk);
+    } catch {
+      /* The pool swap is already in. */
+    }
+    return hash;
+  }
+  const amountIn = units(amount, 8);
+  if (amountIn <= 0n) throw new Error("amount");
+  const held = await xClient.readContract({ address: X_BEM, abi: erc20, functionName: "balanceOf", args: [owner] });
+  if (held < amountIn) throw new Error("balance");
+  const parts = await deskParts("xlayer", from, amountIn);
+  if (parts.swapIn <= 0n) throw new Error("amount");
+  const allowance = await xClient.readContract({ address: X_BEM, abi: erc20, functionName: "allowance", args: [owner, V3_ROUTER] });
+  if (allowance < parts.swapIn) {
+    await stepX(`tl-approve:bemokb:${from.toLowerCase()}`, () =>
+      send(from, X_BEM, encodeFunctionData({ abi: erc20, functionName: "approve", args: [V3_ROUTER, parts.swapIn] })),
+    );
+  }
+  const minOut = ((await quoteBemOkb("sell", parts.swapIn)) * 9900n) / 10_000n;
+  if (minOut <= 0n) throw new Error("tiny");
+  const swapData = encodeFunctionData({
+    abi: v3Router,
+    functionName: "exactInputSingle",
+    args: [{ tokenIn: X_BEM, tokenOut: OKB.wokb, fee: 10000, recipient: V3_ROUTER, amountIn: parts.swapIn, amountOutMinimum: minOut, sqrtPriceLimitX96: 0n }],
+  });
+  const data = encodeFunctionData({
+    abi: v3Router,
+    functionName: "multicall",
+    args: [deadline, [swapData, encodeFunctionData({ abi: v3Router, functionName: "unwrapWETH9", args: [minOut, owner] })]],
+  });
+  const hash = await send(from, V3_ROUTER, data);
+  await waitOkX(hash);
+  try {
+    if (parts.reward > 0n && parts.referrer) {
+      await send(from, X_BEM, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [parts.referrer as Hex, parts.reward] }));
+    }
+    if (parts.desk > 0n) {
+      await send(from, X_BEM, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [XLAYER_SAFE, parts.desk] }));
+    }
+  } catch {
+    /* The pool swap is already in. */
+  }
+  return hash;
 }

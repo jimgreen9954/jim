@@ -2552,9 +2552,22 @@ export function bootLaunch(host: HTMLElement): () => void {
   const refreshBridge = () => {
     const ticket = ++bridgeTicket;
     const quote = host.querySelector("#bridge-quote");
+    const bal = host.querySelector("#bridge-bal");
     const raw = host.querySelector<HTMLInputElement>("#bridge-amt")?.value ?? "";
+    const dir = bridgeDir();
+    if (bal) {
+      bal.textContent = !bals
+        ? "先连钱包。数量不能大于这一边的 BEM。"
+        : dir === "to-xlayer"
+          ? `这只钱包 BSC 上有 ${bals.bemBsc} BEM。点这里填全部。`
+          : `这只钱包 X Layer 上有 ${bals.bemXl} BEM。点这里填全部。`;
+    }
     if (!quote) return;
-    void quoteBridge(bridgeDir(), raw)
+    if (!raw.trim()) {
+      quote.textContent = "填数量后再报价。";
+      return;
+    }
+    void quoteBridge(dir, raw)
       .then((text) => {
         if (alive && ticket === bridgeTicket && quote) quote.textContent = text;
       })
@@ -2642,6 +2655,7 @@ export function bootLaunch(host: HTMLElement): () => void {
       if (nodes.bem) nodes.bem.textContent = swapPair() === "bsc-bem" ? next.bemBsc : next.bemXl;
       if (nodes.bemCh) nodes.bemCh.textContent = swapPair() === "bsc-bem" ? "BSC" : "X Layer";
       if (nodes.tape) nodes.tape.textContent = next.tape;
+      refreshBridge();
     } catch {
       if (nodes.usdt) nodes.usdt.textContent = "—";
     }
@@ -2698,6 +2712,14 @@ export function bootLaunch(host: HTMLElement): () => void {
     const button = (event.target as HTMLElement).closest("button");
     const fill = button?.dataset.fill;
     if (fill === "usdt" || fill === "bnb" || fill === "okb" || fill === "bem" || fill === "tape") fillPay(fill);
+  }, opt);
+  host.querySelector("#bridge-bal")?.addEventListener("click", () => {
+    const input = host.querySelector<HTMLInputElement>("#bridge-amt");
+    if (!input || !bals) return;
+    const have = bridgeDir() === "to-xlayer" ? bals.bemBsc : bals.bemXl;
+    if (!have || have === "0") return;
+    input.value = have;
+    refreshBridge();
   }, opt);
   host.querySelector("#bridge-dir")?.addEventListener("click", (event) => {
     const button = (event.target as HTMLElement).closest("button");

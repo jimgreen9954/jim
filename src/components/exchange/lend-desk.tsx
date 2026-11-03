@@ -29,6 +29,8 @@ function failText(err: unknown, zh: boolean): string {
   if (code === "gas") return zh ? "要留下一点当网络费，不能全部抵押。" : "Leave a little for the network fee. You cannot lock all of it.";
   if (code === "idle") return zh ? "别人借走的部分现在取不出。" : "The part already borrowed cannot be withdrawn now.";
   if (code === "live") return zh ? "这口借贷还没部署。" : "This market is not deployed.";
+  if (code === "posted") return zh ? "这一口还没有你的抵押。质押页锁上的不能拿来借。" : "This market has none of your collateral. A stake on the stake page cannot be borrowed against.";
+  if (code === "dry") return zh ? "这口池子里现在没有这么多可借的稳定币。" : "This pool does not have that much stablecoin to lend.";
   if (code === "leader") return zh ? "这个钱包不是多签的签名地址。" : "This wallet is not a signer of the multisig.";
   if (code === "second") return zh ? "已记下这个地址的签名。换成另一个签名地址再点一次，才会从多签发出。" : "This signature is saved. Switch to the other signer and tap again. Then it is sent from the multisig.";
   if (code === "nowallet") return zh ? "先连接钱包。" : "Connect a wallet first.";
@@ -93,6 +95,15 @@ export function LendDesk({ zh, account }: { zh: boolean; account: string | null 
 
   const money = (value: bigint | undefined, dec: number = market.usdtDec) => (view && value !== undefined ? lendText(value, dec) : "—");
   const gasFree = view && market.native && view.walletGas > market.reserve ? view.walletGas - market.reserve : view?.walletColl ?? 0n;
+  const borrowRoom = (() => {
+    if (!view) return undefined;
+    let room = view.maxBorrow;
+    if (!view.fresh && view.price && view.posted > 0n) {
+      const cap = (view.posted * view.price) / 10n ** BigInt(market.collDec) / 2n;
+      room = cap > view.debt ? cap - view.debt : 0n;
+    }
+    return room > view.cash ? view.cash : room;
+  })();
 
   const act = () => {
     if (mode === "in") return depositLend(chain, asset, amount);
@@ -147,7 +158,7 @@ export function LendDesk({ zh, account }: { zh: boolean; account: string | null 
           <Cell k={zh ? "我的存款" : "My supply"} v={`${money(view?.supply)} ${market.usdtSym}`} />
           <Cell k={zh ? "已抵押" : "Locked"} v={`${money(view?.posted, market.collDec)} ${market.collSym}`} />
           <Cell k={zh ? "欠款" : "Debt"} v={`${money(view?.debt)} ${market.usdtSym}`} />
-          <Cell k={zh ? "还能借" : "Room"} v={`${money(view?.maxBorrow)} ${market.usdtSym}`} />
+          <Cell k={zh ? "还能借" : "Room"} v={`${money(borrowRoom)} ${market.usdtSym}`} />
         </dl>
         <div className="mt-3 flex flex-wrap gap-1">
           {([
@@ -173,7 +184,7 @@ export function LendDesk({ zh, account }: { zh: boolean; account: string | null 
                 : mode === "free"
                   ? `${zh ? "可取回" : "Free"} ${money(view?.freeColl, market.collDec)} ${market.collSym}`
                   : mode === "borrow"
-                    ? `${zh ? "还能借" : "Room"} ${money(view?.maxBorrow)} ${market.usdtSym}`
+                    ? `${zh ? "还能借" : "Room"} ${money(borrowRoom)} ${market.usdtSym}`
                     : `${zh ? "可用" : "Available"} ${money(view?.walletUsdt)} ${market.usdtSym}`}
           <input
             value={amount}

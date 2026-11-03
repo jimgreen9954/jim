@@ -26,7 +26,7 @@ export const BSC = {
   bnbPool: "0x172fcD41E0913e95784454622d1c3724f546f849" as const,
   bnbFee: 100,
   btcb: "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c" as const,
-  btcPool: "0x247f51881d1E3aE0f759afB801413a6C948Ef442" as const,
+  btcPool: "0x247f51881d1E3aE0f759AFB801413a6C948Ef442" as const,
   btcFee: 100,
   eth: "0x2170Ed0880ac9A755fd29B2688956BD959F933F8" as const,
   ethPool: "0xBe141893E4c6AD9272e8C04BAB7E6a10604501a5" as const,
@@ -34,6 +34,11 @@ export const BSC = {
   zec: "0x1Ba42e5193dfA8B03D15dd1B86a3113bbBEF8Eeb" as const,
   zecPool: "0x6701B287c8170D6c290C6f4Ef426782bD61Ae310" as const,
   zecFee: 500,
+  up: "0xEd99445d72787Adb627cD8588586984DF548CD2F" as const,
+  upWbnb: "0x364d573106Ff27F3e394BA2377E9b915Cf56Ba6A" as const,
+  upBemPool: "0x520e6B284e02f130EDB718dd90B5B4E025d5ca26" as const,
+  upBemFee: 2500,
+  v2Router: "0x10ED43C718714eb63d5aA57B78B54704E256024E" as const,
   xaut: "0x21cAef8A43163Eea865baeE23b9C2E327696A3bf" as const,
   xauPool: "0x83a0a8a723262651AE9C54bbba929f167443bc59" as const,
   xauFee: 500,
@@ -401,18 +406,18 @@ async function send(from: string, to: Hex, data: Hex, value = 0n): Promise<Hex> 
   })) as Hex;
 }
 
-async function approveIfNeeded(from: string, token: Hex, need: bigint): Promise<void> {
+async function approveIfNeeded(from: string, token: Hex, need: bigint, spender: Hex = BSC.router): Promise<void> {
   const allowance = await client.readContract({
     address: token,
     abi: erc20,
     functionName: "allowance",
-    args: [from as Hex, BSC.router],
+    args: [from as Hex, spender],
   });
   if (allowance >= need) return;
   const approveData = encodeFunctionData({
     abi: erc20,
     functionName: "approve",
-    args: [BSC.router, (1n << 256n) - 1n],
+    args: [spender, (1n << 256n) - 1n],
   });
   await waitOk(await send(from, token, approveData));
 }
@@ -860,4 +865,180 @@ export async function swapBemBnb(from: string, side: "buy" | "sell", amount: str
     args: [deadline, [swapData, encodeFunctionData({ abi: bnbRouterAbi, functionName: "unwrapWETH9", args: [minOut, owner] })]],
   });
   return send(from, BSC.router, data);
+}
+
+export async function swapBemBnbSpot(from: string, side: "buy" | "sell", amount: string): Promise<Hex> {
+  const owner = from as Hex;
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20);
+  const partsOf = async (amountIn: bigint) => deskParts("bsc", from, amountIn);
+  if (side === "buy") {
+    const amountIn = units(amount, 18);
+    if (amountIn <= 0n) throw new Error("amount");
+    const parts = await partsOf(amountIn);
+    if (parts.swapIn <= 0n) throw new Error("amount");
+    const native = await client.getBalance({ address: owner });
+    if (native < amountIn + BNB_GAS_RESERVE) throw new Error("gas");
+    const minOut = ((await quoteExact(BSC.wbnb, BSC.bem, parts.swapIn, 10000)) * 9900n) / 10_000n;
+    if (minOut <= 0n) throw new Error("tiny");
+    const data = encodeFunctionData({
+      abi: routerAbi,
+      functionName: "exactInputSingle",
+      args: [{ tokenIn: BSC.wbnb, tokenOut: BSC.bem, fee: 10000, recipient: owner, deadline, amountIn: parts.swapIn, amountOutMinimum: minOut, sqrtPriceLimitX96: 0n }],
+    });
+    const hash = await send(from, BSC.router, data, parts.swapIn);
+    await waitOk(hash);
+    try {
+      await payDeskNative(from, parts, `tl-fee:${from.toLowerCase()}:bembnb:${amountIn}`);
+    } catch {
+      /* The pool swap is already in. The desk fee is separate. */
+    }
+    return hash;
+  }
+  const amountIn = units(amount, BSC.bemDecimals);
+  if (amountIn <= 0n) throw new Error("amount");
+  const parts = await partsOf(amountIn);
+  if (parts.swapIn <= 0n) throw new Error("amount");
+  const held = await client.readContract({ address: BSC.bem, abi: erc20, functionName: "balanceOf", args: [owner] });
+  if (held < amountIn) throw new Error("balance");
+  await approveIfNeeded(from, BSC.bem, parts.swapIn);
+  const minOut = ((await quoteExact(BSC.bem, BSC.wbnb, parts.swapIn, 10000)) * 9900n) / 10_000n;
+  if (minOut <= 0n) throw new Error("tiny");
+  const swapData = encodeFunctionData({
+    abi: routerAbi,
+    functionName: "exactInputSingle",
+    args: [{ tokenIn: BSC.bem, tokenOut: BSC.wbnb, fee: 10000, recipient: BSC.router, deadline, amountIn: parts.swapIn, amountOutMinimum: minOut, sqrtPriceLimitX96: 0n }],
+  });
+  const unwrap = encodeFunctionData({ abi: routerAbi, functionName: "unwrapWETH9", args: [minOut, owner] });
+  const data = encodeFunctionData({ abi: routerAbi, functionName: "multicall", args: [[swapData, unwrap]] });
+  const hash = await send(from, BSC.router, data);
+  await waitOk(hash);
+  try {
+    await payDeskToken(from, BSC.bem, parts, `tl-fee:${from.toLowerCase()}:bembnb-sell:${amountIn}`);
+  } catch {
+    /* The pool swap is already in. */
+  }
+  return hash;
+}
+
+const v2Abi = parseAbi([
+  "function getAmountsOut(uint256 amountIn, address[] path) view returns (uint256[] amounts)",
+  "function swapExactETHForTokensSupportingFeeOnTransferTokens(uint256 amountOutMin, address[] path, address to, uint256 deadline) payable",
+  "function swapExactTokensForETHSupportingFeeOnTransferTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline)",
+]);
+
+export async function quoteUpBnb(side: "buy" | "sell", amountIn: bigint): Promise<bigint> {
+  const path = side === "buy" ? [BSC.wbnb, BSC.up] : [BSC.up, BSC.wbnb];
+  const amounts = await client.readContract({
+    address: BSC.v2Router,
+    abi: v2Abi,
+    functionName: "getAmountsOut",
+    args: [amountIn, path],
+  });
+  const out = amounts[amounts.length - 1] ?? 0n;
+  if (out <= 0n) throw new Error("nopool");
+  return out;
+}
+
+export async function quoteUpBem(side: "buy" | "sell", amountIn: bigint): Promise<bigint> {
+  const tokenIn = side === "buy" ? BSC.bem : BSC.up;
+  const tokenOut = side === "buy" ? BSC.up : BSC.bem;
+  return quoteExact(tokenIn, tokenOut, amountIn, BSC.upBemFee);
+}
+
+/** USDT for one UP, from the Pancake v2 UP/WBNB pool and the BNB/USDT pool. */
+export async function quoteUpUsd(): Promise<string> {
+  const wbnb = await quoteUpBnb("sell", 10n ** 18n);
+  const usdt = await quoteExact(BSC.wbnb, BSC.usdt, wbnb, BSC.bnbFee);
+  return pretty(usdt, BSC.usdtDecimals, 4);
+}
+
+export async function swapUpBnbSpot(from: string, side: "buy" | "sell", amount: string): Promise<Hex> {
+  const owner = from as Hex;
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20);
+  if (side === "buy") {
+    const amountIn = units(amount, 18);
+    if (amountIn <= 0n) throw new Error("amount");
+    const parts = await deskParts("bsc", from, amountIn);
+    if (parts.swapIn <= 0n) throw new Error("amount");
+    const native = await client.getBalance({ address: owner });
+    if (native < amountIn + BNB_GAS_RESERVE) throw new Error("gas");
+    const minOut = ((await quoteUpBnb("buy", parts.swapIn)) * 9900n) / 10_000n;
+    if (minOut <= 0n) throw new Error("tiny");
+    const data = encodeFunctionData({
+      abi: v2Abi,
+      functionName: "swapExactETHForTokensSupportingFeeOnTransferTokens",
+      args: [minOut, [BSC.wbnb, BSC.up], owner, deadline],
+    });
+    const hash = await send(from, BSC.v2Router, data, parts.swapIn);
+    await waitOk(hash);
+    try {
+      await payDeskNative(from, parts, `tl-fee:${from.toLowerCase()}:upbnb:${amountIn}`);
+    } catch {
+      /* The pool swap is already in. */
+    }
+    return hash;
+  }
+  const amountIn = units(amount, 18);
+  if (amountIn <= 0n) throw new Error("amount");
+  const parts = await deskParts("bsc", from, amountIn);
+  if (parts.swapIn <= 0n) throw new Error("amount");
+  const held = await client.readContract({ address: BSC.up, abi: erc20, functionName: "balanceOf", args: [owner] });
+  if (held < amountIn) throw new Error("balance");
+  await approveIfNeeded(from, BSC.up, parts.swapIn, BSC.v2Router);
+  const minOut = ((await quoteUpBnb("sell", parts.swapIn)) * 9900n) / 10_000n;
+  if (minOut <= 0n) throw new Error("tiny");
+  const data = encodeFunctionData({
+    abi: v2Abi,
+    functionName: "swapExactTokensForETHSupportingFeeOnTransferTokens",
+    args: [parts.swapIn, minOut, [BSC.up, BSC.wbnb], owner, deadline],
+  });
+  const hash = await send(from, BSC.v2Router, data);
+  await waitOk(hash);
+  try {
+    await payDeskToken(from, BSC.up, parts, `tl-fee:${from.toLowerCase()}:upbnb-sell:${amountIn}`);
+  } catch {
+    /* The pool swap is already in. */
+  }
+  return hash;
+}
+
+export async function swapUpBemSpot(from: string, side: "buy" | "sell", amount: string): Promise<Hex> {
+  const owner = from as Hex;
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20);
+  const buy = side === "buy";
+  const amountIn = units(amount, buy ? BSC.bemDecimals : 18);
+  if (amountIn <= 0n) throw new Error("amount");
+  const parts = await deskParts("bsc", from, amountIn);
+  if (parts.swapIn <= 0n) throw new Error("amount");
+  const pay = buy ? BSC.bem : BSC.up;
+  const held = await client.readContract({ address: pay, abi: erc20, functionName: "balanceOf", args: [owner] });
+  if (held < amountIn) throw new Error("balance");
+  const quoted = await quoteUpBem(side, parts.swapIn);
+  const minOut = (quoted * 9900n) / 10_000n;
+  if (minOut <= 0n) throw new Error("tiny");
+  await approveIfNeeded(from, pay, parts.swapIn);
+  const data = encodeFunctionData({
+    abi: routerAbi,
+    functionName: "exactInputSingle",
+    args: [
+      {
+        tokenIn: pay,
+        tokenOut: buy ? BSC.up : BSC.bem,
+        fee: BSC.upBemFee,
+        recipient: owner,
+        deadline,
+        amountIn: parts.swapIn,
+        amountOutMinimum: minOut,
+        sqrtPriceLimitX96: 0n,
+      },
+    ],
+  });
+  const hash = await send(from, BSC.router, data);
+  await waitOk(hash);
+  try {
+    await payDeskToken(from, pay, parts, `tl-fee:${from.toLowerCase()}:upbem:${side}:${amountIn}`);
+  } catch {
+    /* The pool swap is already in. */
+  }
+  return hash;
 }

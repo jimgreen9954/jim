@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { bemPrice, bnbPrice, ercPrice } from "@/lib/bsc";
+import { bemPrice, bnbPrice, ercPrice, pretty, quoteBemBnb, quoteUpBem, quoteUpBnb, quoteUpUsd } from "@/lib/bsc";
 import { CoinMark } from "@/components/exchange/coin-mark";
-import { okbPrice } from "@/lib/okb";
+import { okbPrice, quoteBemOkb } from "@/lib/okb";
 import { STOCK_KEYS, STOCKS, type StockKey } from "@/lib/stocks";
 import { useExchange } from "@/lib/exchange-store";
 import { fundingPreview, fundClock, pct } from "@/lib/risk-rules";
@@ -16,12 +16,12 @@ export { PairChevron };
 
 export type TapePair = "usdt" | "bem" | "okb";
 export type SpotId = 0 | 1 | 2;
-export type PerpCoin = "bem" | "btc" | "eth" | "zec" | "tape";
+export type PerpCoin = "bem" | "btc" | "eth" | "zec" | "up" | "tape";
 
 export type DeskView =
   | { kind: "tape"; market: SpotId; pair?: TapePair }
   | { kind: "otc"; market: SpotId }
-  | { kind: "pancake"; pair: "bem" | "bnb" | "okb" | "btc" | "eth" | "zec" | "xau" | StockKey }
+  | { kind: "pancake"; pair: "bem" | "bembnb" | "bemokb" | "upbnb" | "upbem" | "bnb" | "okb" | "btc" | "eth" | "zec" | "xau" | StockKey }
   | { kind: "perp"; chain: Desk; coin: PerpCoin };
 
 type Tab = "all" | "perp" | "spot";
@@ -47,6 +47,44 @@ const ROWS: Row[] = [
     tag: "现货",
     where: "Pancake · BSC",
     pin: true,
+  },
+  {
+    id: "bembnb",
+    view: { kind: "pancake", pair: "bembnb" },
+    symbol: "BEM-BNB",
+    kind: "spot",
+    tag: "现货",
+    where: "Pancake · BSC",
+    pin: true,
+  },
+  {
+    id: "bemokb",
+    view: { kind: "pancake", pair: "bemokb" },
+    symbol: "BEM-OKB",
+    kind: "spot",
+    tag: "现货",
+    where: "Uniswap · X Layer",
+    pin: true,
+  },
+  {
+    id: "upbnb",
+    view: { kind: "pancake", pair: "upbnb" },
+    symbol: "UP-BNB",
+    kind: "spot",
+    tag: "现货",
+    where: "Pancake · BSC",
+    pin: true,
+    find: "UP TapeUP",
+  },
+  {
+    id: "upbem",
+    view: { kind: "pancake", pair: "upbem" },
+    symbol: "UP-BEM",
+    kind: "spot",
+    tag: "现货",
+    where: "Pancake · BSC",
+    pin: true,
+    find: "UP TapeUP",
   },
   {
     id: "tape",
@@ -150,6 +188,57 @@ const ROWS: Row[] = [
     lev: "1000×",
   },
   {
+    id: "btc",
+    view: { kind: "perp", chain: "bsc", coin: "btc" },
+    symbol: "BTC-USDT",
+    kind: "perp",
+    tag: "永续",
+    where: "",
+    pin: true,
+    lev: "1000×",
+  },
+  {
+    id: "eth",
+    view: { kind: "perp", chain: "bsc", coin: "eth" },
+    symbol: "ETH-USDT",
+    kind: "perp",
+    tag: "永续",
+    where: "",
+    pin: true,
+    lev: "1000×",
+  },
+  {
+    id: "zec",
+    view: { kind: "perp", chain: "bsc", coin: "zec" },
+    symbol: "ZEC-USDT",
+    kind: "perp",
+    tag: "永续",
+    where: "",
+    pin: true,
+    lev: "1000×",
+  },
+  {
+    id: "up",
+    view: { kind: "perp", chain: "bsc", coin: "up" },
+    symbol: "UP-USDT",
+    kind: "perp",
+    tag: "永续",
+    where: "",
+    pin: true,
+    lev: "1000×",
+    find: "UP TapeUP",
+  },
+  {
+    id: "tapeperp",
+    view: { kind: "perp", chain: "xlayer", coin: "tape" },
+    symbol: "TAPE-USDT0",
+    kind: "perp",
+    tag: "永续",
+    where: "",
+    pin: true,
+    lev: "1000×",
+  },
+  {
     id: "nand",
     view: { kind: "tape", market: 1 },
     symbol: "NAND-USDT0",
@@ -238,7 +327,6 @@ export function MarketSheet({
         if (dead || (bid === 0n && ask === 0n)) return;
         const mid = bid > 0n && ask > 0n ? (bid + ask) / 2n : bid > 0n ? bid : ask;
         write("tape", usdtText(mid, 4));
-        write("tapeperp", usdtText(mid, 4));
       })
       .catch(() => undefined);
     if (typeof bem === "number" && bem > 0) {
@@ -265,6 +353,21 @@ export function MarketSheet({
       .catch(() => undefined);
     okbPrice()
       .then((text) => write("okbspot", text))
+      .catch(() => undefined);
+    quoteBemBnb("sell", 10n ** 8n)
+      .then((row) => write("bembnb", pretty(row.out, 18, 6)))
+      .catch(() => undefined);
+    quoteBemOkb("sell", 10n ** 8n)
+      .then((out) => write("bemokb", pretty(out, 18, 6)))
+      .catch(() => undefined);
+    quoteUpBnb("sell", 10n ** 18n)
+      .then((out) => write("upbnb", pretty(out, 18, 8)))
+      .catch(() => undefined);
+    quoteUpBem("sell", 10n ** 18n)
+      .then((out) => write("upbem", pretty(out, 8, 6)))
+      .catch(() => undefined);
+    quoteUpUsd()
+      .then((text) => write("up", text))
       .catch(() => undefined);
     STOCK_KEYS.forEach((key) => {
       ercPrice(key)

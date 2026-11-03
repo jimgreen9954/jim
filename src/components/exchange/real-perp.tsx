@@ -6,9 +6,12 @@ import { copy } from "@/lib/copy";
 import {
   BSC,
   FEE_TO,
+  bemPrice,
   connectBsc,
   ercPrice,
   pretty,
+  quoteUpUsd,
+  readBalances,
   tokenCap,
   units,
   type Balances,
@@ -47,12 +50,15 @@ import {
   deployXLayer,
   bookOf,
   pickBook,
+  deployCoin,
+  pokeBook,
   liquidatePerp,
   openPerp,
   openPostPerp,
   openScalePerp,
   openStopPerp,
   openTwapPerp,
+  xPoolPrice,
   armTrailPerp,
   readStops,
   readTwaps,
@@ -78,7 +84,8 @@ import { connectXLayer, XLAYER } from "@/lib/xlayer";
 import { TAPE_BEM } from "@/lib/tape-pool";
 import { readOpenBook } from "@/lib/tape-open-candles";
 import { peekSpotPrints } from "@/lib/tape-spot";
-import { xCap } from "@/lib/okb";
+import { fundMargin, modeLine, planMargin, readModes, saveModes } from "@/lib/margin-mode";
+import { readXBem, xCap } from "@/lib/okb";
 import { SideRail } from "@/components/exchange/side-rail";
 import { fundingPreview, pct } from "@/lib/risk-rules";
 
@@ -385,7 +392,7 @@ export function RealPerp({
   launch,
   onMarkets,
 }: {
-  launch?: { chain: Desk; coin: "bem" | "btc" | "eth" | "zec" | "tape" };
+  launch?: { chain: Desk; coin: "bem" | "btc" | "eth" | "zec" | "up" | "tape" };
   onMarkets?: () => void;
 } = {}) {
   const lang = useExchange((s) => s.lang);
@@ -427,8 +434,10 @@ export function RealPerp({
   const [sizePct, setSizePct] = useState(0);
   const [orderStyle, setOrderStyle] = useState("market");
   const [intent, setIntent] = useState<"long" | "short">("long");
-  const [marginMode, setMarginMode] = useState<"cross" | "iso">("iso");
-  const [acctMode, setAcctMode] = useState<"unified" | "port" | "manual">("manual");
+  const [marginMode, setMarginMode] = useState<"cross" | "iso">(() => readModes().margin);
+  const [acctMode, setAcctMode] = useState<"unified" | "port" | "manual">(() => readModes().acct);
+  const [bemPx, setBemPx] = useState(0);
+  const [xSpot, setXSpot] = useState(0);
   const [phone, setPhone] = useState(() =>
     typeof window !== "undefined" && window.matchMedia("(max-width: 1279px)").matches
       ? "ticket"
@@ -500,7 +509,7 @@ export function RealPerp({
         .then((row) => {
           if (dead || !(row.price > 0)) return;
           setCoinPx(row.price);
-          setView(coinBook(row.price));
+          if (!/^0x[a-fA-F0-9]{40}$/.test(pickBook("xlayer", "tape"))) setView(coinBook(row.price));
           setMkt({
             px: row.price,
             chg: Number.isFinite(row.change) ? row.change : null,
@@ -628,19 +637,45 @@ export function RealPerp({
     if (!account) return;
     let dead = false;
     readChainPurse(chain, account)
-      .then((next) => {
+      .then(async (next) => {
+        let bem = 0n;
+        try {
+          bem = chain === "xlayer" ? await readXBem(account) : (await readBalances(account)).bem;
+        } catch {
+          bem = 0n;
+        }
         if (!dead)
           setBal({
             bnb: next.gas,
             usdt: next.usdt,
-            bem: 0n,
+            bem,
           });
+        if (coin !== "bem") {
+          bemPrice()
+            .then((text) => {
+              const n = Number(String(text).replace(/,/g, ""));
+              if (!dead && n > 0) setBemPx(n);
+            })
+            .catch(() => void 0);
+        }
       })
       .catch(() => void 0);
     return () => {
       dead = true;
     };
-  }, [account, hash, chain]);
+  }, [account, hash, chain, coin]);
+  useEffect(() => {
+    if (chain !== "xlayer") return;
+    let dead = false;
+    xPoolPrice()
+      .then((n) => {
+        if (!dead && n > 0) setXSpot(n);
+      })
+      .catch(() => void 0);
+    return () => {
+      dead = true;
+    };
+  }, [chain, hash]);
   useEffect(() => {
     if (!(chain === "bsc" && coin !== "bem")) return;
     let dead = false;
@@ -663,12 +698,13 @@ export function RealPerp({
         .catch(() => {
           if (!dead) setPrices(previewFrame(candleCache.current, frame));
         });
-      ercPrice(coin)
+      const priceText = coin === "up" ? quoteUpUsd() : ercPrice(coin);
+      priceText
         .then((text) => {
           const n = Number(String(text).replace(/,/g, ""));
           if (dead || !(n > 0)) return;
           setCoinPx(n);
-          setView(coinBook(n));
+          if (!/^0x[a-fA-F0-9]{40}$/.test(pickBook("bsc", coin))) setView(coinBook(n));
         })
         .catch(() => void 0);
     };
@@ -688,7 +724,9 @@ export function RealPerp({
           ? "bsc/0xBe141893E4c6AD9272e8C04BAB7E6a10604501a5"
           : coin === "zec"
             ? "bsc/0x6701B287c8170D6c290C6f4Ef426782bD61Ae310"
-            : "bsc/0x3098D7A051045000d68eC0360753A40C8cABEa31";
+            : coin === "up"
+              ? "bsc/0x364d573106Ff27F3e394BA2377E9b915Cf56Ba6A"
+              : "bsc/0x3098D7A051045000d68eC0360753A40C8cABEa31";
     let dead = false;
     const load = () => {
       fetch(`https://api.dexscreener.com/latest/dex/pairs/${pair}`)
@@ -726,7 +764,7 @@ export function RealPerp({
   }, []);
   useEffect(() => {
     if (!/^0x[a-fA-F0-9]{40}$/.test(perp)) return;
-    if (coin === "tape" || (chain === "bsc" && coin !== "bem")) return;
+    if ((coin === "btc" || coin === "eth" || coin === "zec" || coin === "up" || coin === "tape") && !/^0x[a-fA-F0-9]{40}$/.test(pickBook(coin === "tape" ? "xlayer" : chain, coin))) return;
     let dead = false;
     let busy = false;
     const load = () => {
@@ -746,7 +784,15 @@ export function RealPerp({
           if (!dead) setBoard(rows);
         })
         .catch(() => void 0);
-      const bars = (chain === "xlayer" ? getXCandles({ data: frame }) : getCandles({ data: frame }))
+      const bars = (
+        coin === "tape"
+          ? getTapeCandles({ data: frame })
+          : coin === "btc" || coin === "eth" || coin === "zec" || coin === "up"
+            ? getCoinCandles({ data: { coin, frame } })
+            : chain === "xlayer"
+              ? getXCandles({ data: frame })
+              : getCandles({ data: frame })
+      )
         .then((next) => {
           if (dead) return;
           if (next.length) {
@@ -794,6 +840,8 @@ export function RealPerp({
     if (message === "nowallet") setNote(c.walletNo);
     else if (message === "usdt") setNote(chain === "xlayer" ? c.perpNeedX : c.perpNeedUsdt);
     else if (message === "nochain") setNote(c.perpNoChain);
+    else if (message === "fee")
+      setNote(lang === "zh" ? "只有收费地址能部署。" : "Only the fee address can deploy.");
     else if (message === "oracle")
       setNote(
         lang === "zh" ? "只有收费地址能写标记价。" : "Only the fee address can post the mark.",
@@ -823,6 +871,12 @@ export function RealPerp({
       );
     else if (message === "flat")
       setNote(lang === "zh" ? "没有可减的仓。" : "There is no position to reduce.");
+    else if (message === "net")
+      setNote(
+        lang === "zh"
+          ? "组合保证金不能只减一截。数量要盖住现在的反向仓，或改回手动。"
+          : "Portfolio margin cannot shrink part of a position. Cover the opposite side, or switch to manual.",
+      );
     else if (message === "book")
       setNote(
         lang === "zh" ? "不是这一本合约，没有发出。" : "That is not this book. Nothing was sent.",
@@ -924,9 +978,15 @@ export function RealPerp({
     }
   })();
   const lastClose = prices.at(-1)?.c ?? 0;
-  const alt = coin === "tape" || (chain === "bsc" && coin !== "bem");
+  const ownCoin = coin === "btc" || coin === "eth" || coin === "zec" || coin === "up" || coin === "tape";
+  const ownBook = ownCoin ? pickBook(coin === "tape" ? "xlayer" : "bsc", coin) : "";
+  const alt = ownCoin && !/^0x[a-fA-F0-9]{40}$/.test(ownBook);
+  const canDeploy = alt && ownCoin;
   const riskLive =
-    !alt && /^0x[a-fA-F0-9]{40}$/.test(perp) && perp.toLowerCase() === bookOf(chain).toLowerCase();
+    !alt &&
+    /^0x[a-fA-F0-9]{40}$/.test(perp) &&
+    (perp.toLowerCase() === bookOf(chain).toLowerCase() ||
+      (ownBook && perp.toLowerCase() === ownBook.toLowerCase()));
   const base =
     coin === "tape" ? "TAPE" : chain === "xlayer" || coin === "bem" ? "BEM" : coin.toUpperCase();
   const feeBlocked = lock.rows.some((row) => {
@@ -934,13 +994,26 @@ export function RealPerp({
     return chain === "xlayer" ? row.name.includes("X Layer") : row.name.includes("BSC 永续");
   });
   const settle = !alt && view && view.mark > 0n ? Number(formatUnits(view.mark, 18)) : 0;
-  const poolPx = lastClose > 0 ? lastClose : coinPx;
+  const poolPx =
+    coin === "tape"
+      ? coinPx > 0
+        ? coinPx
+        : lastClose
+      : coin === "btc" || coin === "eth" || coin === "zec" || coin === "up"
+        ? coinPx > 0
+          ? coinPx
+          : lastClose
+        : chain === "xlayer" && xSpot > 0
+          ? xSpot
+          : lastClose > 0
+            ? lastClose
+            : coinPx;
   const markFar =
-    chain === "xlayer" &&
     !alt &&
     settle > 0 &&
     poolPx > 0 &&
-    Math.abs(settle - poolPx) / poolPx > 0.08;
+    (coin === "btc" || coin === "eth" || coin === "zec" || coin === "up" || coin === "tape" || (chain === "xlayer" && coin === "bem")) &&
+    Math.abs(settle - poolPx) / poolPx > 0.03;
   const markN = alt
     ? coinPx || lastClose
     : markFar
@@ -1006,7 +1079,13 @@ export function RealPerp({
   };
   const fillMargin = (pct) => {
     setSizePct(pct);
-    const held = bal ? Number(formatUnits(bal.usdt, dec)) : 0;
+    const usdtHeld = bal ? Number(formatUnits(bal.usdt, dec)) : 0;
+    const px = coin === "bem" && markN > 0 ? markN : bemPx;
+    const spotHeld =
+      acctMode === "unified" && bal && px > 0
+        ? Number(formatUnits(bal.bem, chain === "xlayer" ? 8 : BSC.bemDecimals)) * px
+        : 0;
+    const held = usdtHeld + spotHeld;
     if (held > 0) {
       const n = Math.min(500, Math.max(floor, (held * pct) / 100));
       setMargin(n.toFixed(2));
@@ -1027,6 +1106,32 @@ export function RealPerp({
       ? mineOpen.levL
       : mineOpen.levS
     : 0;
+  const bemNow = coin === "bem" && markN > 0 ? markN : bemPx;
+  const freeN = bal ? Number(formatUnits(bal.usdt, dec)) : 0;
+  const spotN =
+    bal && bemNow > 0 ? Number(formatUnits(bal.bem, chain === "xlayer" ? 8 : BSC.bemDecimals)) * bemNow : 0;
+  const mineBook =
+    mineOpen && account
+      ? {
+          long: mineOpen.long.toLowerCase() === account.toLowerCase(),
+          notional: Math.max(
+            0,
+            Number(formatUnits(mineOpen.base, 18)) * Number(formatUnits(mineOpen.entry, 18)),
+          ),
+        }
+      : null;
+  const planned = planMargin({
+    marginMode,
+    acctMode,
+    margin: Number(margin),
+    lev: levOk ? lev : 1,
+    price: quotePx,
+    freeUsdt: freeN,
+    spotQuote: acctMode === "unified" ? spotN : 0,
+    intentLong: intent === "long",
+    mine: mineBook && mineBook.notional > 0 ? mineBook : null,
+  });
+  const modeWarn = modeLine(lang === "zh", planned, Number(margin) || 0, marginMode);
   const liqN =
     entryN > 0 && mineLev > 0
       ? account && mineOpen && mineOpen.long.toLowerCase() === account.toLowerCase()
@@ -1086,13 +1191,13 @@ export function RealPerp({
   const choose = (nextChain, nextCoin) => {
     setMarkets(false);
     setCoin(nextCoin);
-    const desk = nextCoin === "tape" ? "xlayer" : nextChain;
+    const desk = nextCoin === "tape" ? "xlayer" : nextCoin === "btc" || nextCoin === "eth" ? "bsc" : nextChain;
     if (desk !== chain) {
       selectDesk(desk);
       setChain(desk);
       (desk === "xlayer" ? connectXLayer() : connectBsc()).catch(() => void 0);
     }
-    if (nextCoin !== "tape") setPerp(pickBook(desk, nextCoin));
+    setPerp(pickBook(desk, nextCoin));
   };
   const proNames: Record<string, [string, string]> = {
     post: ["只挂", "Post"],
@@ -1116,7 +1221,8 @@ export function RealPerp({
           if (deal.long.toLowerCase() !== me && deal.short.toLowerCase() !== me) return sum;
           return sum + Number(formatUnits(deal.base, 18));
         }, 0);
-  const room = bal && markN > 0 ? (Number(formatUnits(bal.usdt, dec)) * (lev || 1)) / markN : 0;
+  const powerN = acctMode === "unified" ? freeN + spotN : freeN;
+  const room = powerN > 0 && markN > 0 ? (powerN * (lev || 1)) / markN : 0;
   const roomText = room > 0 ? room.toLocaleString("en-US", { maximumFractionDigits: 4 }) : "0";
   return /* @__PURE__ */ jsxs("div", {
     children: [
@@ -1163,7 +1269,10 @@ export function RealPerp({
                             }),
                             [
                               ["bsc", "bem", "BEM-USDT", "BSC"],
+                              ["bsc", "btc", "BTC-USDT", "BSC"],
+                              ["bsc", "eth", "ETH-USDT", "BSC"],
                               ["xlayer", "bem", "BEM-USDT0", "X Layer"],
+                              ["xlayer", "tape", "TAPE-USDT0", "X Layer"],
                             ].map(([nextChain, nextCoin, label, venue]) => {
                               return /* @__PURE__ */ jsxs(
                                 "button",
@@ -2537,7 +2646,11 @@ export function RealPerp({
                                       {lang === "zh" ? "可用" : "Available"}
                                     </span>
                                     <span className="text-right">
-                                      {bal ? pretty(bal.usdt, dec, 2) : "—"}{" "}
+                                      {acctMode === "unified" && spotN > 0
+                                        ? (freeN + spotN).toFixed(2)
+                                        : bal
+                                          ? pretty(bal.usdt, dec, 2)
+                                          : "—"}{" "}
                                       {chain === "xlayer" ? "USDT0" : "USDT"}
                                     </span>
                                     <span className="ph-stat text-ink/45">
@@ -2568,22 +2681,38 @@ export function RealPerp({
                                       {lang === "zh" ? "强平价格" : "Liq. price"}
                                     </span>
                                     <span className="text-right">
-                                      {liqN > 0
-                                        ? liqN.toFixed(4)
-                                        : quoteLiq > 0
-                                          ? quoteLiq.toFixed(4)
-                                          : "—"}
+                                      {planned.liq > 0
+                                        ? planned.liq.toFixed(4)
+                                        : liqN > 0
+                                          ? liqN.toFixed(4)
+                                          : quoteLiq > 0
+                                            ? quoteLiq.toFixed(4)
+                                            : "—"}
                                     </span>
                                     <span className="text-ink/45">
                                       {lang === "zh" ? "订单价值" : "Order value"}
                                     </span>
                                     <span className="text-right">
-                                      {ticket ? ticket.notional.toFixed(2) : "—"}
+                                      {planned.net === "close"
+                                        ? "0"
+                                        : planned.lock > 0 && planned.lev > 0
+                                          ? (planned.lock * planned.lev).toFixed(2)
+                                          : ticket
+                                            ? ticket.notional.toFixed(2)
+                                            : "—"}
                                     </span>
                                     <span className="text-ink/45">
                                       {lang === "zh" ? "所需保证金" : "Margin"}
                                     </span>
-                                    <span className="text-right">{marginOk ? margin : "—"}</span>
+                                    <span className="text-right">
+                                      {planned.net === "close"
+                                        ? "0"
+                                        : planned.lock > 0
+                                          ? planned.lock.toFixed(2)
+                                          : marginOk
+                                            ? margin
+                                            : "—"}
+                                    </span>
                                     <span className="ph-stat text-ink/45">
                                       {lang === "zh" ? "费用" : "Fee"}
                                     </span>
@@ -2608,7 +2737,10 @@ export function RealPerp({
                                         children: c.badPrice,
                                       })
                                     : null,
-                                  bal && marginOk && bal.usdt < need
+                                  bal &&
+                                  marginOk &&
+                                  freeN + (acctMode === "unified" ? spotN : 0) + 0.009 <
+                                    (planned.lock || Number(margin) || 0)
                                     ? /* @__PURE__ */ jsxs("p", {
                                         className: "text-sm text-sell",
                                         children: [
@@ -2626,26 +2758,65 @@ export function RealPerp({
                                     className={`min-h-12 text-paper disabled:opacity-40 ${intent === "long" ? "bg-up" : "bg-sell"}`}
                                     disabled={
                                       busy ||
-                                      feeBlocked ||
-                                      !levOk ||
-                                      !marginOk ||
-                                      !priceOk ||
-                                      (!alt && !view?.priced && !(markN > 0))
+                                      (!canDeploy &&
+                                        !markFar &&
+                                        (feeBlocked ||
+                                          !levOk ||
+                                          !marginOk ||
+                                          !priceOk ||
+                                          (!alt && !view?.priced && !(markN > 0))))
                                     }
                                     onClick={() => {
+                                      if (markFar) {
+                                        run((from) => pokeBook(from, perp));
+                                        return;
+                                      }
+                                      if (canDeploy) {
+                                        run(async (from) => {
+                                          const { book, hash } = await deployCoin(from, coin);
+                                          setPerp(book);
+                                          queueMicrotask(() => {
+                                            setBad(false);
+                                            setNote(
+                                              lang === "zh"
+                                                ? `已部署 ${book}。把这行地址发我，写进页面之后别人用的才是这一份。`
+                                                : `Deployed ${book}. Send this address so the page uses it for everyone.`,
+                                            );
+                                          });
+                                          return hash;
+                                        });
+                                        return;
+                                      }
+                                      if (planned.net === "reject") {
+                                        setBad(true);
+                                        setNote(
+                                          lang === "zh"
+                                            ? "组合保证金不能只减一截。数量要盖住现在的反向仓，或改回手动。"
+                                            : "Portfolio margin cannot shrink part of a position. Cover the opposite side, or switch to manual.",
+                                        );
+                                        return;
+                                      }
                                       if (alt) {
                                         setBad(true);
                                         setNote(
                                           lang === "zh"
-                                            ? "这一张还没有结算合约，签名不会发出。BEM 永续可以开。"
-                                            : "This contract has no settlement book, so nothing is signed. BEM perpetuals can open.",
+                                            ? "这一张还没有结算合约，签名不会发出。"
+                                            : "This contract has no settlement book, so nothing is signed.",
                                         );
                                         return;
                                       }
                                       setCard(intent);
                                     }}
                                   >
-                                    {waiting &&
+                                    {canDeploy
+                                      ? lang === "zh"
+                                        ? "部署合约"
+                                        : "Deploy the book"
+                                      : markFar
+                                      ? lang === "zh"
+                                        ? "对齐标记价"
+                                        : "Match the mark"
+                                      : waiting &&
                                     view &&
                                     (intent === "long" ? !view.pendingLong : view.pendingLong)
                                       ? c.pullQuote
@@ -2669,7 +2840,7 @@ export function RealPerp({
                                         yes: lang === "zh" ? "确认并签名" : "Confirm and sign",
                                         no: lang === "zh" ? "取消" : "Cancel",
                                         auto: !prefs.orderConfirm,
-                                        warn: "",
+                                        warn: modeWarn,
                                         onNo: () => setCard(null),
                                         onYes: () => {
                                           const long = card === "long";
@@ -2693,14 +2864,29 @@ export function RealPerp({
                                                 : markN > 0
                                                   ? markN.toFixed(4)
                                                   : "";
+                                            if (!reduceOnly && planned.net === "close") {
+                                              if (!view?.myDeal) throw new Error("flat");
+                                              return closePerp(from, perp, view.myDeal);
+                                            }
+                                            if (!reduceOnly && planned.net === "flip") {
+                                              if (!view?.myDeal) throw new Error("flat");
+                                              await closePerp(from, perp, view.myDeal);
+                                            }
+                                            if (!reduceOnly && planned.spotUsdt > 0)
+                                              await fundMargin(chain, from, planned.spotUsdt, bemNow);
+                                            const sendMargin =
+                                              !reduceOnly && planned.lock > 0
+                                                ? planned.lock.toFixed(2)
+                                                : margin;
+                                            const sendLev = !reduceOnly && planned.lev > 0 ? planned.lev : lev;
                                             let tx;
                                             if (orderStyle === "post")
                                               tx = await openPostPerp(
                                                 from,
                                                 perp,
                                                 long,
-                                                margin,
-                                                lev,
+                                                sendMargin,
+                                                sendLev,
                                                 px,
                                               );
                                             else if (orderStyle === "scale")
@@ -2708,8 +2894,8 @@ export function RealPerp({
                                                 from,
                                                 perp,
                                                 long,
-                                                margin,
-                                                lev,
+                                                sendMargin,
+                                                sendLev,
                                                 scaleA,
                                                 scaleB,
                                                 scaleN,
@@ -2719,8 +2905,8 @@ export function RealPerp({
                                                 from,
                                                 perp,
                                                 long,
-                                                margin,
-                                                lev,
+                                                sendMargin,
+                                                sendLev,
                                                 chasePx(long, markN, view?.quotes ?? []),
                                               );
                                             else if (orderStyle === "trail") {
@@ -2772,8 +2958,8 @@ export function RealPerp({
                                                     from,
                                                     perp,
                                                     long,
-                                                    margin,
-                                                    lev,
+                                                    sendMargin,
+                                                    sendLev,
                                                     stopPx,
                                                   );
                                                 } catch (err) {
@@ -2814,8 +3000,8 @@ export function RealPerp({
                                                 from,
                                                 perp,
                                                 long,
-                                                margin,
-                                                lev,
+                                                sendMargin,
+                                                sendLev,
                                                 twapN,
                                                 twapGap,
                                               );
@@ -2826,8 +3012,8 @@ export function RealPerp({
                                                     from,
                                                     perp,
                                                     long,
-                                                    margin,
-                                                    lev,
+                                                    sendMargin,
+                                                    sendLev,
                                                     px,
                                                   );
                                                 const other = (view?.quotes ?? []).filter(
@@ -2851,8 +3037,8 @@ export function RealPerp({
                                                     from,
                                                     perp,
                                                     long,
-                                                    margin,
-                                                    lev,
+                                                    sendMargin,
+                                                    sendLev,
                                                     px,
                                                   );
                                                 const awayPx = Number(formatUnits(best.price, 18));
@@ -2862,8 +3048,8 @@ export function RealPerp({
                                                   from,
                                                   perp,
                                                   best.id,
-                                                  margin,
-                                                  lev,
+                                                  sendMargin,
+                                                  sendLev,
                                                   true,
                                                 );
                                               })();
@@ -2871,7 +3057,7 @@ export function RealPerp({
                                               const entry = Number(limit) || markN;
                                               const band =
                                                 guard === "easy"
-                                                  ? easyBand(entry, lev || 1, long)
+                                                  ? easyBand(entry, sendLev || 1, long)
                                                   : {
                                                       tp: Number(tpText),
                                                       sl: Number(slText),
@@ -3283,7 +3469,10 @@ export function RealPerp({
         ? /* @__PURE__ */ jsx(MarginDialog, {
             zh: lang === "zh",
             mode: marginMode,
-            onPick: setMarginMode,
+            onPick: (next) => {
+              setMarginMode(next);
+              saveModes(next, acctMode);
+            },
             onClose: () => setMarginOpen(false),
           })
         : null,
@@ -3291,7 +3480,10 @@ export function RealPerp({
         ? /* @__PURE__ */ jsx(AccountDialog, {
             zh: lang === "zh",
             mode: acctMode,
-            onPick: setAcctMode,
+            onPick: (next) => {
+              setAcctMode(next);
+              saveModes(marginMode, next);
+            },
             onClose: () => setAcctOpen(false),
           })
         : null,

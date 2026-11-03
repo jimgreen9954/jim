@@ -177,9 +177,11 @@ export async function quoteSwap(pair: SwapPair, side: SwapSide, raw: string, quo
 
 async function send(from: string, to: Hex, data: Hex, value = 0n, chainId = "0xc4"): Promise<Hex> {
   const eth = await ensureProvider();
+  const tx: Record<string, string> = { from, to, data, value: `0x${value.toString(16)}` };
+  if (chainId) tx.chainId = chainId;
   return (await eth.request({
     method: "eth_sendTransaction",
-    params: [{ from, to, data, value: `0x${value.toString(16)}`, chainId }],
+    params: [tx],
   })) as Hex;
 }
 
@@ -417,6 +419,16 @@ export async function quoteBridge(dir: BridgeDir, raw: string): Promise<string> 
 export async function runBridge(dir: BridgeDir, raw: string): Promise<{ hash: string; url: string }> {
   const from = dir === "to-xlayer" ? await connectBsc() : await connectXLayer();
   const plan = bridgePlan(dir, from, raw);
+  const token = dir === "to-xlayer" ? BSC.bem : BRIDGE.xlayer;
+  const held = await plan.client.readContract({
+    address: token,
+    abi: erc20,
+    functionName: "balanceOf",
+    args: [from as Hex],
+  });
+  if (held < plan.param.amountLD) {
+    throw new Error(`short:${show(held, 8)}:${dir === "to-xlayer" ? "BSC" : "X Layer"}`);
+  }
   const fee = await nativeFee(dir, from, raw);
   if (dir === "to-xlayer") {
     const owner = from as Hex;
@@ -428,7 +440,7 @@ export async function runBridge(dir: BridgeDir, raw: string): Promise<{ hash: st
     });
     if (allowance < plan.param.amountLD) {
       const approveData = encodeFunctionData({ abi: erc20, functionName: "approve", args: [BRIDGE.bsc, plan.param.amountLD] });
-      const approveHash = await send(from, BSC.bem, approveData, 0n, "0x38");
+      const approveHash = await send(from, BSC.bem, approveData, 0n, "");
       await bsc.waitForTransactionReceipt({ hash: approveHash, timeout: 90_000 });
     }
   }
@@ -437,7 +449,9 @@ export async function runBridge(dir: BridgeDir, raw: string): Promise<{ hash: st
     functionName: "send",
     args: [plan.param, { nativeFee: fee, lzTokenFee: 0n }, from as Hex],
   });
-  const hash = await send(from, plan.oft, data, fee, dir === "to-xlayer" ? "0x38" : "0xc4");
+  const hash = await send(from, plan.oft, data, fee, "");
+  const receipt = await plan.client.waitForTransactionReceipt({ hash, timeout: 120_000 });
+  if (receipt.status !== "success") throw new Error("revert");
   return { hash, url: dir === "to-xlayer" ? bscTx(hash) : xTx(hash) };
 }
 
@@ -506,6 +520,10 @@ export function deskError(error: unknown): string {
   if (text === "gas") return "OKB 不够付 gas。留一点 OKB 再铸。";
   if (text === "pending") return "已经提交，还在等上链。先别再点。";
   if (text === "revert") return "这笔被链打回了，没有完成。看一下授权和余额。";
+  if (text.startsWith("short:")) {
+    const [, have, chain] = text.split(":");
+    return `${chain} 上这只钱包只有 ${have} BEM。数量改小，或点全部。`;
+  }
   if (/HTTP request failed|Failed to fetch|network|timeout|Load failed/i.test(text)) return "节点没连上，没有发出去。再点一次。";
   return text ? `没发出去：${text.slice(0, 160)}` : "没发出去。";
 }

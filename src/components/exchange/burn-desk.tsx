@@ -129,39 +129,39 @@ export function BurnDesk() {
           <Row
             k="NAND"
             v={
-              kind && board
+              kind?.fresh && board
                 ? `${num(nandGone)} · ${pct(nandGone, kind.nandMint)}`
                 : board
                   ? num(board.nand)
                   : "—"
             }
             sub={
-              kind
+              kind?.fresh
                 ? zh
                   ? `流片烧掉 ${num(kind.nandBurn)} · 黑洞 ${num(board?.nand ?? 0n)} · 已铸 ${num(kind.nandMint)}`
                   : `Tape-out ${num(kind.nandBurn)} · dead ${num(board?.nand ?? 0n)} · minted ${num(kind.nandMint)}`
                 : zh
-                  ? "铸币日志还在补。上面先是黑洞里的。"
-                  : "Mint logs are still loading. The figure above is only the dead address."
+                  ? "铸币日志还在重算，不显示旧账。上面先是黑洞里的。"
+                  : "Mint logs are being recounted. The old split is hidden. The figure above is only the dead address."
             }
           />
           <Row
             k="LATCH"
             v={
-              kind && board
+              kind?.fresh && board
                 ? `${num(latchGone)} · ${pct(latchGone, kind.latchMint)}`
                 : board
                   ? num(board.latch)
                   : "—"
             }
             sub={
-              kind
+              kind?.fresh
                 ? zh
                   ? `流片烧掉 ${num(kind.latchBurn)} · 黑洞 ${num(board?.latch ?? 0n)} · 已铸 ${num(kind.latchMint)}`
                   : `Tape-out ${num(kind.latchBurn)} · dead ${num(board?.latch ?? 0n)} · minted ${num(kind.latchMint)}`
                 : zh
-                  ? "铸币日志还在补。上面先是黑洞里的。"
-                  : "Mint logs are still loading. The figure above is only the dead address."
+                  ? "铸币日志还在重算，不显示旧账。上面先是黑洞里的。"
+                  : "Mint logs are being recounted. The old split is hidden. The figure above is only the dead address."
             }
           />
         </dl>

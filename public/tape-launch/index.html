@@ -1964,7 +1964,8 @@ tbody tr:hover { background: var(--soft); }
                 <button type="button" class="fbtn" data-dir="to-bsc">X Layer → BSC</button>
               </div>
               <label>数量（BEM）</label>
-              <input id="bridge-amt" inputmode="decimal" value="1">
+              <input id="bridge-amt" inputmode="decimal" placeholder="数量">
+              <p class="hint" id="bridge-bal">先连钱包。数量不能大于这一边的 BEM。</p>
               <p class="hint" id="bridge-quote">手续费读取中</p>
               <button class="buy" id="bridge-go" type="button" data-i18n="bridgeGo">跨过去</button>
               <a id="bridge-link" hidden target="_blank" rel="noopener"></a>

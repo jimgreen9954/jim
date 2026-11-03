@@ -17,13 +17,19 @@ import {
   isErcKey,
   pretty,
   quoteExact,
+  quoteBemBnb,
+  quoteUpBem,
+  quoteUpBnb,
   readAsset,
   readBalances,
   recentPrints,
   splitDeskFee,
   swapBem,
+  swapBemBnbSpot,
   swapBnb,
   swapListed,
+  swapUpBemSpot,
+  swapUpBnbSpot,
   swapWithBnb,
   quoteWithBnb,
   tokenCap,
@@ -35,7 +41,7 @@ import {
   type PoolPrint,
 } from "@/lib/bsc";
 import { STOCK_KEYS, STOCKS, type StockKey } from "@/lib/stocks";
-import { getSpotCandles } from "@/lib/candles";
+import { getCoinCandles, getSpotCandles } from "@/lib/candles";
 import type { Candle } from "@/lib/bem-ohlcv";
 import type { SpotFrame } from "@/lib/spot-ohlcv";
 import {
@@ -46,8 +52,11 @@ import {
   okbTxUrl,
   OKB,
   quoteOkb,
+  quoteBemOkb,
   readOkbPurse,
+  readXBem,
   swapOkb,
+  swapBemOkb,
   xCap,
 } from "@/lib/okb";
 import { XLAYER } from "@/lib/xlayer";
@@ -61,9 +70,19 @@ import { LpPanel } from "@/components/exchange/lp-desk";
 import { useFeeLock } from "@/lib/fee-lock";
 import { SideRail } from "@/components/exchange/side-rail";
 
+type SpotPairId = "bem" | "bembnb" | "bemokb" | "upbnb" | "upbem" | "bnb" | "okb" | ErcKey;
+
+function nativeSpot(pair: string): { base: string; quote: string; baseDec: number; quoteDec: number } | null {
+  if (pair === "bembnb") return { base: "BEM", quote: "BNB", baseDec: BSC.bemDecimals, quoteDec: 18 };
+  if (pair === "bemokb") return { base: "BEM", quote: "OKB", baseDec: BSC.bemDecimals, quoteDec: 18 };
+  if (pair === "upbnb") return { base: "UP", quote: "BNB", baseDec: 18, quoteDec: 18 };
+  if (pair === "upbem") return { base: "UP", quote: "BEM", baseDec: 18, quoteDec: BSC.bemDecimals };
+  return null;
+}
+
 type SpotRest = {
   id: string;
-  pair: "bem" | "bnb" | "okb" | ErcKey;
+  pair: SpotPairId;
   side: "buy" | "sell";
   amount: string;
   limit: number;
@@ -93,6 +112,16 @@ function limitMin(
 ): bigint | undefined {
   const n = Number(qty);
   if (!(px > 0) || !(n > 0) || (nextUnit === "bnb" && nextSide === "buy")) return undefined;
+  if (nextPair === "bembnb" || nextPair === "bemokb" || nextPair === "upbnb" || nextPair === "upbem") {
+    const nat = nativeSpot(nextPair);
+    const raw = nextSide === "buy" ? n / px : n * px;
+    if (!nat || !(raw > 0) || !Number.isFinite(raw)) return undefined;
+    try {
+      return units(raw.toFixed(8), nextSide === "buy" ? nat.baseDec : nat.quoteDec);
+    } catch {
+      return undefined;
+    }
+  }
   const listed = isErcKey(nextPair) ? ERC_BOOKS[nextPair] : null;
   const baseDec = listed ? listed.decimals : nextPair === "bem" ? BSC.bemDecimals : 18;
   const usdtDec = nextPair === "okb" ? OKB.usdtDecimals : BSC.usdtDecimals;
@@ -118,14 +147,14 @@ export function SpotDesk({
   onMarkets,
   openLp = false,
 }: {
-  focus?: "bem" | "bnb" | "okb" | ErcKey;
+  focus?: SpotPairId;
   onMarkets?: () => void;
   openLp?: boolean;
 }) {
   const lang = useExchange((s) => s.lang);
   const c = copy[lang];
   const [book, setBook] = useState<"crypto" | "stock">("crypto");
-  const [pair, setPair] = useState<"bem" | "bnb" | "okb" | ErcKey>("bem");
+  const [pair, setPair] = useState<SpotPairId>("bem");
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [unit, setUnit] = useState<"usdt" | "bnb">("usdt");
   const [amount, setAmount] = useState("");
@@ -149,6 +178,7 @@ export function SpotDesk({
   const [card, setCard] = useState(false);
   const [openLink, setOpenLink] = useState<string | null>(null);
   const [okbBal, setOkbBal] = useState<{ okb: bigint; usdt: bigint } | null>(null);
+  const [xBem, setXBem] = useState<bigint | null>(null);
   const [assetBal, setAssetBal] = useState<bigint | null>(null);
   const [frame, setFrame] = useState<SpotFrame>("1h");
   const [bars, setBars] = useState<Candle[]>([]);
@@ -191,39 +221,58 @@ export function SpotDesk({
     const pull = () => {
       if (document.hidden) return;
       const priceOf =
-        pair === "bnb"
-          ? bnbPrice
-          : pair === "okb"
-            ? okbPrice
-            : pair === "bem"
-              ? bemPrice
-              : () => ercPrice(pair);
+        pair === "bembnb"
+          ? async () => pretty((await quoteBemBnb("sell", 10n ** 8n)).out, 18, 6)
+          : pair === "bemokb"
+            ? async () => pretty(await quoteBemOkb("sell", 10n ** 8n), 18, 6)
+            : pair === "upbnb"
+              ? async () => pretty(await quoteUpBnb("sell", 10n ** 18n), 18, 8)
+              : pair === "upbem"
+                ? async () => pretty(await quoteUpBem("sell", 10n ** 18n), BSC.bemDecimals, 6)
+            : pair === "bnb"
+              ? bnbPrice
+              : pair === "okb"
+                ? okbPrice
+                : pair === "bem"
+                  ? bemPrice
+                  : () => ercPrice(pair);
       priceOf()
         .then((text) => {
           if (!dead) setPrice(text);
         })
         .catch(() => undefined);
-      const printsOf = pair === "okb" ? okbPrints() : recentPrints(pair);
-      printsOf
-        .then((rows) => {
-          if (!dead) setPrints(rows);
-        })
-        .catch(() => undefined);
+      if (pair === "bembnb" || pair === "bemokb" || pair === "upbnb" || pair === "upbem") {
+        if (!dead) setPrints([]);
+      } else {
+        const printsOf = pair === "okb" ? okbPrints() : recentPrints(pair);
+        printsOf
+          .then((rows) => {
+            if (!dead) setPrints(rows);
+          })
+          .catch(() => undefined);
+      }
       const who = account ?? currentAccount();
-      if (who && pair === "okb") {
+      if (who && (pair === "okb" || pair === "bemokb")) {
         readOkbPurse(who)
           .then((next) => {
             if (!dead) setOkbBal(next);
           })
           .catch(() => undefined);
+        if (pair === "bemokb") {
+          readXBem(who)
+            .then((next) => {
+              if (!dead) setXBem(next);
+            })
+            .catch(() => undefined);
+        }
       } else if (who) {
         readBalances(who)
           .then((next) => {
             if (!dead) setBalances(next);
           })
           .catch(() => undefined);
-        if (isErcKey(pair)) {
-          readAsset(who, ERC_BOOKS[pair].token)
+        if (isErcKey(pair) || pair === "upbnb" || pair === "upbem") {
+          readAsset(who, pair === "upbnb" || pair === "upbem" ? BSC.up : ERC_BOOKS[pair].token)
             .then((next) => {
               if (!dead) setAssetBal(next);
             })
@@ -241,6 +290,20 @@ export function SpotDesk({
 
   useEffect(() => {
     let dead = false;
+    if (pair === "upbnb" || pair === "upbem") {
+      getCoinCandles({ data: { coin: "up", frame } })
+        .then((rows) => {
+          if (!dead) setBars(rows);
+        })
+        .catch(() => undefined);
+      return () => {
+        dead = true;
+      };
+    }
+    if (pair === "bembnb" || pair === "bemokb") {
+      setBars([]);
+      return;
+    }
     getSpotCandles({ data: { pair, frame } })
       .then((rows) => {
         if (!dead) setBars(rows);
@@ -255,7 +318,11 @@ export function SpotDesk({
     let dead = false;
     const listed = isErcKey(pair) ? ERC_BOOKS[pair].token : null;
     const job =
-      pair === "okb" ? xCap(OKB.wokb) : tokenCap(pair === "bnb" ? BSC.wbnb : (listed ?? BSC.bem));
+      pair === "bemokb"
+        ? xCap("0x60e62Efa9405d6873C5deaBD4E6CC91c25363952")
+        : pair === "okb"
+          ? xCap(OKB.wokb)
+          : tokenCap(pair === "bnb" ? BSC.wbnb : pair === "upbnb" || pair === "upbem" ? BSC.up : pair === "bembnb" || !listed ? BSC.bem : listed);
     job
       .then((n) => {
         if (!dead) setSupply(n || null);
@@ -269,6 +336,53 @@ export function SpotDesk({
   }, [pair]);
 
   useEffect(() => {
+    const nat = nativeSpot(pair);
+    if (nat) {
+      let dead = false;
+      const payDecimals = side === "buy" ? nat.quoteDec : nat.baseDec;
+      const outDecimals = side === "buy" ? nat.baseDec : nat.quoteDec;
+      try {
+        const amountIn = units(amount || "0", payDecimals);
+        if (amountIn <= 0n) {
+          setOut(null);
+          setMinOut(null);
+          setFloor(null);
+          return;
+        }
+        const { swapIn } = splitDeskFee(amountIn);
+        const quoted =
+          pair === "bembnb"
+            ? quoteWithBnb(BSC.bem, 10000, side, swapIn)
+            : pair === "bemokb"
+              ? quoteBemOkb(side, swapIn)
+              : pair === "upbnb"
+                ? quoteUpBnb(side, swapIn)
+                : quoteUpBem(side, swapIn);
+        quoted
+          .then((value) => {
+            if (dead) return;
+            const min = (value * BigInt(10_000 - BSC.slippageBps)) / 10_000n;
+            setOut(pretty(value, outDecimals, 4));
+            setMinOut(pretty(min, outDecimals, 4));
+            setFloor(min);
+            setQuotedAt(Date.now());
+          })
+          .catch(() => {
+            if (!dead) {
+              setOut(null);
+              setMinOut(null);
+              setFloor(null);
+            }
+          });
+      } catch {
+        setOut(null);
+        setMinOut(null);
+        setFloor(null);
+      }
+      return () => {
+        dead = true;
+      };
+    }
     const listed = isErcKey(pair) ? ERC_BOOKS[pair] : null;
     const payingBnb = pair !== "okb" && pair !== "bnb" && unit === "bnb";
     const baseToken =
@@ -385,6 +499,28 @@ export function SpotDesk({
           : "Not enough balance. Nothing left the wallet.",
       );
     else if (/RPC|publicnode|Archive|Invalid param/i.test(message)) setNote(c.rpcWait);
+    else if (message === "gas")
+      setNote(
+        lang === "zh"
+          ? pair === "bemokb"
+            ? "OKB 不够付这笔，再留一点当 gas。"
+            : "BNB 不够付这笔，再留一点当 gas。"
+          : pair === "bemokb"
+            ? "Not enough OKB for this and gas."
+            : "Not enough BNB for this and gas.",
+      );
+    else if (message === "balance")
+      setNote(
+        lang === "zh"
+          ? pair === "upbnb" || pair === "upbem"
+            ? "这个钱包的 UP 不够。"
+            : "这个钱包的 BEM 不够。"
+          : pair === "upbnb" || pair === "upbem"
+            ? "This wallet does not have enough UP."
+            : "This wallet does not have enough BEM.",
+      );
+    else if (message === "tiny")
+      setNote(lang === "zh" ? "池子报不出价，没有发出去。" : "The pool did not quote. Nothing was sent.");
     else if (message === "amount") setNote(c.pay);
     else setNote(message || c.walletReject);
     setBad(true);
@@ -396,7 +532,7 @@ export function SpotDesk({
     setNote(lang === "zh" ? "正在打开钱包…" : "Opening the wallet…");
     try {
       const from = await connectKind(which);
-      if (pair === "okb") await connectX();
+      if (pair === "okb" || pair === "bemokb") await connectX();
       else await connectBsc();
       setAccount(from);
       setNote(null);
@@ -425,7 +561,7 @@ export function SpotDesk({
           : side === "buy"
             ? `Pay ${amount} ${payUnit}, buy${out ? ` ${out}` : ""} ${base}`
             : `Sell ${amount} ${base}, receive${out ? ` ${out}` : ""} ${recvUnit}`,
-        pair === "okb" ? okbTxUrl(tx) : txUrl(tx),
+        pair === "okb" || pair === "bemokb" ? okbTxUrl(tx) : txUrl(tx),
       );
       setNote(null);
     } catch (err) {
@@ -444,9 +580,31 @@ export function SpotDesk({
     nextPair: typeof pair,
   ) => {
     const from =
-      nextPair === "okb" ? (account ?? (await connectX())) : (account ?? (await connectBsc()));
+      nextPair === "okb" || nextPair === "bemokb"
+        ? account ?? (await connectX())
+        : account ?? (await connectBsc());
     setAccount(from);
     if (!nextAmount.trim()) throw new Error("amount");
+    if (nextPair === "bemokb") {
+      const tx = await swapBemOkb(from, nextSide, nextAmount);
+      markDeskFill("xlayer", from, "spot", Number(nextAmount) || 0, "bemokb");
+      return tx;
+    }
+    if (nextPair === "bembnb") {
+      const tx = await swapBemBnbSpot(from, nextSide, nextAmount);
+      markDeskFill("bsc", from, "spot", Number(nextAmount) || 0, "bembnb");
+      return tx;
+    }
+    if (nextPair === "upbnb") {
+      const tx = await swapUpBnbSpot(from, nextSide, nextAmount);
+      markDeskFill("bsc", from, "spot", Number(nextAmount) || 0, "upbnb");
+      return tx;
+    }
+    if (nextPair === "upbem") {
+      const tx = await swapUpBemSpot(from, nextSide, nextAmount);
+      markDeskFill("bsc", from, "spot", Number(nextAmount) || 0, "upbem");
+      return tx;
+    }
     const paying = nextPair !== "okb" && nextPair !== "bnb" && nextUnit === "bnb";
     const listed = isErcKey(nextPair) ? ERC_BOOKS[nextPair] : null;
     const tx =
@@ -475,8 +633,28 @@ export function SpotDesk({
   };
 
   const max = (pct: number) => {
-    const ready =
-      pair === "okb"
+    const nat = nativeSpot(pair);
+    if (pair === "upbnb" || pair === "upbem") {
+      if (!nat || !balances || (side === "sell" && assetBal == null)) return;
+      const raw =
+        side === "buy"
+          ? pair === "upbnb"
+            ? balances.bnb > BNB_GAS_RESERVE
+              ? balances.bnb - BNB_GAS_RESERVE
+              : 0n
+            : balances.bem
+          : (assetBal ?? 0n);
+      setAmount(sized(raw, side === "buy" ? nat.quoteDec : nat.baseDec, pct));
+      return;
+    }
+    const native = pair === "bembnb" || pair === "bemokb";
+    const ready = native
+      ? pair === "bemokb"
+        ? side === "buy"
+          ? Boolean(okbBal)
+          : xBem != null
+        : Boolean(balances)
+      : pair === "okb"
         ? Boolean(okbBal)
         : isErcKey(pair)
           ? side === "sell"
@@ -484,8 +662,15 @@ export function SpotDesk({
             : Boolean(balances)
           : Boolean(balances);
     if (!ready) return;
-    const raw =
-      side === "buy"
+    const raw = native
+      ? pair === "bemokb"
+        ? side === "buy"
+          ? (okbBal?.okb ?? 0n)
+          : (xBem ?? 0n)
+        : side === "buy"
+          ? (balances?.bnb ?? 0n)
+          : (balances?.bem ?? 0n)
+      : side === "buy"
         ? pair === "okb"
           ? (okbBal?.usdt ?? 0n)
           : (balances?.usdt ?? 0n)
@@ -496,60 +681,10 @@ export function SpotDesk({
             : isErcKey(pair)
               ? (assetBal ?? 0n)
               : (balances?.bem ?? 0n);
-    const decimals =
-      side === "buy"
-        ? pair === "okb"
-          ? OKB.usdtDecimals
-          : BSC.usdtDecimals
-        : isErcKey(pair)
-          ? ERC_BOOKS[pair].decimals
-          : pair === "bem"
-            ? BSC.bemDecimals
-            : 18;
-    const cap =
-      (pair === "bnb" || pair === "okb") &&
-      side === "sell" &&
-      raw > (pair === "okb" ? OKB.gasReserve : BNB_GAS_RESERVE)
-        ? raw - (pair === "okb" ? OKB.gasReserve : BNB_GAS_RESERVE)
-        : undefined;
-    setAmount(sized(raw, decimals, pct, cap));
-  };
-
-  const sellRaw =
-    pair === "okb"
-      ? okbBal && okbBal.okb > OKB.gasReserve
-        ? okbBal.okb - OKB.gasReserve
-        : 0n
-      : pair === "bnb"
-        ? balances && balances.bnb > BNB_GAS_RESERVE
-          ? balances.bnb - BNB_GAS_RESERVE
-          : 0n
-        : isErcKey(pair)
-          ? (assetBal ?? 0n)
-          : (balances?.bem ?? 0n);
-  const sellDec = isErcKey(pair) ? ERC_BOOKS[pair].decimals : pair === "bem" ? BSC.bemDecimals : 18;
-  const usdtRaw = pair === "okb" ? (okbBal?.usdt ?? 0n) : (balances?.usdt ?? 0n);
-  const usdtDec = pair === "okb" ? OKB.usdtDecimals : BSC.usdtDecimals;
-  const payingBnb = pair !== "okb" && pair !== "bnb" && unit === "bnb";
-  const payRaw =
-    payingBnb && side === "buy"
-      ? balances && balances.bnb > BNB_GAS_RESERVE
-        ? balances.bnb - BNB_GAS_RESERVE
-        : 0n
-      : pair === "okb"
-        ? side === "buy"
-          ? (okbBal?.usdt ?? 0n)
-          : (okbBal?.okb ?? 0n)
-        : side === "buy"
-          ? (balances?.usdt ?? 0n)
-          : pair === "bnb"
-            ? (balances?.bnb ?? 0n)
-            : isErcKey(pair)
-              ? (assetBal ?? 0n)
-              : (balances?.bem ?? 0n);
-  const payDecimals =
-    payingBnb && side === "buy"
-      ? 18
+    const decimals = native
+      ? side === "buy"
+        ? 18
+        : BSC.bemDecimals
       : side === "buy"
         ? pair === "okb"
           ? OKB.usdtDecimals
@@ -559,7 +694,104 @@ export function SpotDesk({
           : pair === "bem"
             ? BSC.bemDecimals
             : 18;
-  const reserve = pair === "okb" ? OKB.gasReserve : BNB_GAS_RESERVE;
+    const gas = pair === "bemokb" || pair === "okb" ? OKB.gasReserve : BNB_GAS_RESERVE;
+    const cap =
+      ((pair === "bnb" || pair === "okb") && side === "sell") || (native && side === "buy")
+        ? raw > gas
+          ? raw - gas
+          : 0n
+        : undefined;
+    setAmount(sized(raw, decimals, pct, cap));
+  };
+
+  const nat = nativeSpot(pair);
+  const sellRaw =
+    pair === "upbnb" || pair === "upbem"
+      ? (assetBal ?? 0n)
+      : pair === "bemokb"
+      ? (xBem ?? 0n)
+      : pair === "bembnb"
+        ? (balances?.bem ?? 0n)
+        : pair === "okb"
+          ? okbBal && okbBal.okb > OKB.gasReserve
+            ? okbBal.okb - OKB.gasReserve
+            : 0n
+          : pair === "bnb"
+            ? balances && balances.bnb > BNB_GAS_RESERVE
+              ? balances.bnb - BNB_GAS_RESERVE
+              : 0n
+            : isErcKey(pair)
+              ? (assetBal ?? 0n)
+              : (balances?.bem ?? 0n);
+  const sellDec = nat ? nat.baseDec : pair === "bem" ? BSC.bemDecimals : isErcKey(pair) ? ERC_BOOKS[pair].decimals : 18;
+  const usdtRaw =
+    pair === "upbnb"
+      ? (balances?.bnb ?? 0n)
+      : pair === "upbem"
+        ? (balances?.bem ?? 0n)
+        : pair === "bemokb"
+          ? (okbBal?.okb ?? 0n)
+          : pair === "bembnb"
+            ? (balances?.bnb ?? 0n)
+            : pair === "okb"
+              ? (okbBal?.usdt ?? 0n)
+              : (balances?.usdt ?? 0n);
+  const usdtDec = nat ? nat.quoteDec : pair === "okb" ? OKB.usdtDecimals : BSC.usdtDecimals;
+  const payingBnb = !nat && pair !== "okb" && pair !== "bnb" && unit === "bnb";
+  const payRaw =
+    pair === "upbnb"
+      ? side === "buy"
+        ? balances && balances.bnb > BNB_GAS_RESERVE
+          ? balances.bnb - BNB_GAS_RESERVE
+          : 0n
+        : (assetBal ?? 0n)
+      : pair === "upbem"
+        ? side === "buy"
+          ? (balances?.bem ?? 0n)
+          : (assetBal ?? 0n)
+        : pair === "bemokb"
+      ? side === "buy"
+        ? okbBal && okbBal.okb > OKB.gasReserve
+          ? okbBal.okb - OKB.gasReserve
+          : 0n
+        : (xBem ?? 0n)
+      : pair === "bembnb"
+        ? side === "buy"
+          ? balances && balances.bnb > BNB_GAS_RESERVE
+            ? balances.bnb - BNB_GAS_RESERVE
+            : 0n
+          : (balances?.bem ?? 0n)
+        : payingBnb && side === "buy"
+          ? balances && balances.bnb > BNB_GAS_RESERVE
+            ? balances.bnb - BNB_GAS_RESERVE
+            : 0n
+          : pair === "okb"
+            ? side === "buy"
+              ? (okbBal?.usdt ?? 0n)
+              : (okbBal?.okb ?? 0n)
+            : side === "buy"
+              ? (balances?.usdt ?? 0n)
+              : pair === "bnb"
+                ? (balances?.bnb ?? 0n)
+                : isErcKey(pair)
+                  ? (assetBal ?? 0n)
+                  : (balances?.bem ?? 0n);
+  const payDecimals = nat
+    ? side === "buy"
+      ? nat.quoteDec
+      : nat.baseDec
+    : payingBnb && side === "buy"
+        ? 18
+        : side === "buy"
+          ? pair === "okb"
+            ? OKB.usdtDecimals
+            : BSC.usdtDecimals
+          : isErcKey(pair)
+            ? ERC_BOOKS[pair].decimals
+            : pair === "bem"
+              ? BSC.bemDecimals
+              : 18;
+  const reserve = pair === "okb" || pair === "bemokb" ? OKB.gasReserve : BNB_GAS_RESERVE;
   const spendCap =
     (pair === "bnb" || pair === "okb") && side === "sell"
       ? payRaw > reserve
@@ -567,13 +799,14 @@ export function SpotDesk({
         : 0n
       : undefined;
   const spendable = spendCap ?? payRaw;
-  const base =
-    pair === "okb"
-      ? "OKB"
-      : pair === "bnb"
-        ? "BNB"
-        : pair === "bem"
-          ? "BEM"
+  const base = nat
+    ? nat.base
+    : pair === "bem"
+      ? "BEM"
+      : pair === "okb"
+        ? "OKB"
+        : pair === "bnb"
+          ? "BNB"
           : pair === "btc"
             ? "BTC"
             : pair === "eth"
@@ -583,10 +816,10 @@ export function SpotDesk({
                 : pair === "xau"
                   ? "XAU"
                   : pair in STOCKS
-                    ? STOCKS[pair].en
+                    ? STOCKS[pair as StockKey].en
                     : pair;
   const stock = pair in STOCKS ? STOCKS[pair as StockKey] : null;
-  const quoteSym = pair === "okb" ? "USDT0" : "USDT";
+  const quoteSym = nat ? nat.quote : pair === "okb" ? "USDT0" : "USDT";
   const payUnit = payingBnb && side === "buy" ? "BNB" : side === "buy" ? quoteSym : base;
   const recvUnit = payingBnb && side === "sell" ? "BNB" : side === "buy" ? base : quoteSym;
   let typed = 0n;
@@ -597,13 +830,19 @@ export function SpotDesk({
   }
   const deskFee = typed > 0n ? splitDeskFee(typed) : null;
   const over =
-    (pair === "okb"
-      ? Boolean(okbBal)
-      : isErcKey(pair)
-        ? side === "sell"
-          ? assetBal != null
-          : Boolean(balances)
-        : Boolean(balances)) && typed > spendable;
+    (pair === "bemokb"
+      ? side === "buy"
+        ? Boolean(okbBal)
+        : xBem != null
+      : pair === "bembnb"
+        ? Boolean(balances)
+        : pair === "okb"
+          ? Boolean(okbBal)
+          : isErcKey(pair)
+            ? side === "sell"
+              ? assetBal != null
+              : Boolean(balances)
+            : Boolean(balances)) && typed > spendable;
   const pcts = [25, 50, 75, 100];
   const midN = Number(String(shown ?? price ?? "").replace(/,/g, "")) || bars.at(-1)?.c || 0;
   const openC = bars[0]?.o || bars[0]?.c || 0;
@@ -651,7 +890,7 @@ export function SpotDesk({
               : hit.side === "buy"
                 ? `Pay ${hit.amount} ${hit.unit === "bnb" ? "BNB" : hit.pair === "okb" ? "USDT0" : "USDT"}, buy ${base}`
                 : `Sell ${hit.amount} ${base}, receive ${hit.unit === "bnb" ? "BNB" : hit.pair === "okb" ? "USDT0" : "USDT"}`,
-            hit.pair === "okb" ? okbTxUrl(tx) : txUrl(tx),
+            hit.pair === "okb" || hit.pair === "bemokb" ? okbTxUrl(tx) : txUrl(tx),
           );
           setNote(null);
         })
@@ -700,7 +939,7 @@ export function SpotDesk({
       >
         <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-gold px-3 py-2">
           <button type="button" onClick={onMarkets} className="flex min-w-0 items-center gap-2">
-            <CoinMark id={pair} />
+            <CoinMark id={pair === "bembnb" || pair === "bemokb" ? "bem" : pair === "upbnb" || pair === "upbem" ? "up" : pair} />
             <span className="truncate text-lg font-medium tracking-tight">{base}/{quoteSym}</span>
             <PairChevron />
             <span className="lev-chip shrink-0 rounded px-1.5 py-0.5 text-[11px]">
@@ -868,7 +1107,7 @@ export function SpotDesk({
                     {out ? `${out} ${recvUnit}` : "—"}
                   </p>
                 </div>
-                {pair !== "okb" && pair !== "bnb" ? (
+                {pair !== "okb" && pair !== "bnb" && !nativeSpot(pair) ? (
                   <div className="mt-2 grid grid-cols-2 gap-1">
                     <button
                       type="button"
@@ -1015,7 +1254,7 @@ export function SpotDesk({
                 {hash ? (
                   <a
                     className="mt-2 block text-xs underline"
-                    href={pair === "okb" ? okbTxUrl(hash) : txUrl(hash)}
+                    href={pair === "okb" || pair === "bemokb" ? okbTxUrl(hash) : txUrl(hash)}
                     target="_blank"
                     rel="noreferrer"
                   >

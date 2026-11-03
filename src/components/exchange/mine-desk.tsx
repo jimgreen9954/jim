@@ -177,7 +177,7 @@ export function MineDesk() {
       ? termParked - tape.termPrincipal - tape.termReward
       : 0n;
   const parked = tape
-    ? tape.burned + tape.pooled + tape.circuitHeld + tape.waferHeld + termParked
+    ? tape.burned + tape.pooled + tape.circuitHeld + tape.waferHeld + tape.spotHeld + tape.buybackHeld + tape.lendHeld + termParked
     : 0n;
   const circulating = tape ? (tape.supply > parked ? tape.supply - parked : 0n) : 0n;
   const unmined =
@@ -236,6 +236,9 @@ export function MineDesk() {
                 v={`${amount(tape.burned)} · ${share(tape.burned, tape.supply)} ${zh ? "已领出" : "of claimed"}`}
               />
               <Line k={zh ? "减 TAPE 池" : "Minus the pool"} v={amount(tape.pooled)} />
+              <Line k={zh ? "减 现货账本" : "Minus spot books"} v={amount(tape.spotHeld)} />
+              <Line k={zh ? "减 回购还没销毁" : "Minus buyback, not burned"} v={amount(tape.buybackHeld)} />
+              <Line k={zh ? "减 借贷抵押" : "Minus lend collateral"} v={amount(tape.lendHeld)} />
               <Line
                 k={zh ? "减 电路锁仓里已领未提出" : "Minus circuit lock"}
                 v={amount(tape.circuitHeld)}
@@ -292,7 +295,7 @@ export function MineDesk() {
             <Book title={zh ? "矿机和算力" : "Miners and weight"}>
               <Line
                 k={zh ? "已流片" : "Taped"}
-                v={tape.scanOk ? tape.circuits.toLocaleString("en-US") : "—"}
+                v={`${tape.circuits.toLocaleString("en-US")} ${zh ? "片" : "sheets"}`}
               />
               <Line
                 k={zh ? "正在挖" : "Mining"}
@@ -307,8 +310,8 @@ export function MineDesk() {
                 v={tape.scanOk ? idle.toLocaleString("en-US") : "—"}
               />
               <Line
-                k={zh ? "质押中" : "Staked"}
-                v={tape.scanOk ? tape.staked.toLocaleString("en-US") : "—"}
+                k={zh ? "质押电路" : "Staked circuits"}
+                v={tape.scanOk || tape.staked > 0 ? `${tape.staked.toLocaleString("en-US")} ${zh ? "片" : "sheets"}` : "—"}
               />
               <Line
                 k={zh ? "质押且正在挖" : "Staked and mining"}

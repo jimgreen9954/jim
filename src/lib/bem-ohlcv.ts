@@ -152,6 +152,7 @@ const COIN_POOL = {
   btc: "https://api.geckoterminal.com/api/v2/networks/bsc/pools/0x247f51881d1e3ae0f759afb801413a6c948ef442/ohlcv",
   eth: "https://api.geckoterminal.com/api/v2/networks/bsc/pools/0xbe141893e4c6ad9272e8c04bab7e6a10604501a5/ohlcv",
   zec: "https://api.geckoterminal.com/api/v2/networks/bsc/pools/0x6701b287c8170d6c290c6f4ef426782bd61ae310/ohlcv",
+  up: "https://api.geckoterminal.com/api/v2/networks/bsc/pools/0x364d573106ff27f3e394ba2377e9b915cf56ba6a/ohlcv",
 } as const;
 
 async function loadPool(base: string, frame: CandleFrame): Promise<Candle[]> {

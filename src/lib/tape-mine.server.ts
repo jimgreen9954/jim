@@ -25,11 +25,20 @@ const TAPE = "0x8f2d517D3d62019CD8D7F08ae178Be05BBb6EBE3" as const;
 const MINE = "0x60b1b7cae1bbd0e84ac3e1e43f933712f3ab67e8" as const;
 const ASH = "0x000000000000000000000000000000000000dEaD" as const;
 const POOL = "0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641" as const;
+const OPEN_POOL = "0x58eaD5b41Cfd3627791D439402dd65571c286484" as const;
+const SPOT = "0x68F66fAf7b29E30D0740934F81EB266F6ff17428" as const;
+const OLD_SPOT = "0x154E82c6a2ac121906D29af0EE81131E93B57860" as const;
+const BUYBACK = "0x53fa6A76ce9A3fE08698E04a4E9A674bd77a9DfF" as const;
+const TAPE_LEND = "0x425285da21ed3eabe64550d1be7dcabcf6f9e851" as const;
 const CIRCUIT_LOCK = "0x06c877cc158d9ca3547220f9fc156f39bce7013c" as const;
 const WAFER_LOCK = "0xA28390924607F08aaD8d03F512B41b6a1c012Ace" as const;
 const termAbi = parseAbi([
   "function tapeStakePot() view returns (uint256 staked, uint256 pot)",
   "function bemStakePot() view returns (uint256 staked, uint256 pot)",
+]);
+const lockAbi = parseAbi([
+  "function nextId() view returns (uint256)",
+  "function seat(uint256) view returns (address owner, uint8 term, uint64 start, uint64 unlock, uint256 circuitId, uint256 gates)",
 ]);
 const TAPE_TERM = "0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A" as const;
 const TAPE_TERM_NEW = "0x9D603A45321a3aDbFcAD0E49Fd944Cc281Baa833" as const;
@@ -76,6 +85,9 @@ export type TapeWire = {
   termPrincipal: string;
   termReward: string;
   termHeld: string;
+  spotHeld: string;
+  buybackHeld: string;
+  lendHeld: string;
   pendingNet: string;
   pendingStaked: string;
   staked: number;
@@ -92,6 +104,32 @@ function dailyAt(start: bigint): bigint {
   const era = (BigInt(Math.floor(Date.now() / 1000)) - start) / HALVING;
   if (era < 0n || era >= 64n) return 0n;
   return DAY >> era;
+}
+
+async function lockStakeCount(): Promise<number> {
+  try {
+    const next = await client.readContract({ address: CIRCUIT_LOCK, abi: lockAbi, functionName: "nextId" });
+    const n = Number(next) - 1;
+    if (!Number.isFinite(n) || n < 1) return 0;
+    const rows = await client.multicall({
+      contracts: Array.from({ length: n }, (_, index) => ({
+        address: CIRCUIT_LOCK,
+        abi: lockAbi,
+        functionName: "seat" as const,
+        args: [BigInt(index + 1)] as const,
+      })),
+      allowFailure: true,
+    });
+    let live = 0;
+    for (const row of rows) {
+      if (row.status !== "success" || !Array.isArray(row.result)) continue;
+      const owner = row.result[0];
+      if (typeof owner === "string" && !/^0x0{40}$/i.test(owner)) live += 1;
+    }
+    return live;
+  } catch {
+    return 0;
+  }
 }
 
 function text(amount: bigint): string {
@@ -112,11 +150,16 @@ async function headOf(account: string | null) {
     { address: CIRCUITS, abi: circuitAbi, functionName: "nextId" as const },
     { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [ASH] as const },
     { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [POOL] as const },
+    { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [OPEN_POOL] as const },
     { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [CIRCUIT_LOCK] as const },
     { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [WAFER_LOCK] as const },
     { address: TAPE_TERM, abi: termAbi, functionName: "tapeStakePot" as const },
     { address: TAPE_TERM, abi: termAbi, functionName: "bemStakePot" as const },
     { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [TAPE_TERM] as const },
+    { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [SPOT] as const },
+    { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [OLD_SPOT] as const },
+    { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [BUYBACK] as const },
+    { address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [TAPE_LEND] as const },
     ...(account ? [{ address: TAPE, abi: tokenAbi, functionName: "balanceOf" as const, args: [who] as const }] : []),
   ];
   const head = await client.multicall({ contracts: calls, allowFailure: false });
@@ -124,9 +167,9 @@ async function headOf(account: string | null) {
   if (cap !== CAP) throw new Error("cap");
   const start = head[3] as bigint;
   const next = head[4] as bigint;
-  let termPrincipal = pair(head[9])[0];
-  let termReward = pair(head[10])[1];
-  let termHeld = head[11] as bigint;
+  let termPrincipal = pair(head[10])[0];
+  let termReward = pair(head[11])[1];
+  let termHeld = head[12] as bigint;
   try {
     const more = await client.multicall({
       contracts: [
@@ -144,18 +187,22 @@ async function headOf(account: string | null) {
     supply: head[0] as bigint,
     cap,
     weight: head[2] as bigint,
-    balance: account ? (head[12] as bigint) : 0n,
+    balance: account ? (head[17] as bigint) : 0n,
     start,
     daily: dailyAt(start),
     last: Number(next) - 1,
     burned: head[5] as bigint,
-    pooled: head[6] as bigint,
-    circuitHeld: head[7] as bigint,
-    waferHeld: head[8] as bigint,
+    pooled: (head[6] as bigint) + (head[7] as bigint),
+    circuitHeld: head[8] as bigint,
+    waferHeld: head[9] as bigint,
     termPrincipal,
     termReward,
     termHeld,
-    locked: (head[7] as bigint) + (head[8] as bigint) + (termHeld > 0n ? termHeld : termPrincipal + termReward),
+    spotHeld: (head[13] as bigint) + (head[14] as bigint),
+    buybackHeld: head[15] as bigint,
+    lendHeld: head[16] as bigint,
+    locked: (head[8] as bigint) + (head[9] as bigint) + ((head[13] as bigint) + (head[14] as bigint)) + (head[15] as bigint) + (head[16] as bigint) + (termHeld > 0n ? termHeld : termPrincipal + termReward),
+    stakedLocks: await lockStakeCount(),
   };
 }
 
@@ -184,6 +231,9 @@ function pack(
     termPrincipal: row.termPrincipal.toString(),
     termReward: row.termReward.toString(),
     termHeld: row.termHeld.toString(),
+    spotHeld: row.spotHeld.toString(),
+    buybackHeld: row.buybackHeld.toString(),
+    lendHeld: row.lendHeld.toString(),
     pendingNet: net.pendingNet.toString(),
     pendingStaked: net.pendingStaked.toString(),
     staked: net.staked,
@@ -200,7 +250,13 @@ export async function loadTapeHead(account: string | null): Promise<TapeWire> {
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < 12_000) return hit.body;
   const row = await headOf(account);
-  const body = pack(row, 0, [], false, true);
+  const body = pack(row, 0, [], false, true, {
+    pendingNet: 0n,
+    pendingStaked: 0n,
+    staked: row.stakedLocks,
+    stakedLive: 0,
+    stakedWeight: 0n,
+  });
   cache.set(key, { at: Date.now(), body });
   return body;
 }
