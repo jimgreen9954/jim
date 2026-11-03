@@ -68,6 +68,7 @@ import { rememberFill, TradeLog } from "@/components/exchange/trade-foot";
 import { Kline } from "@/components/exchange/kline";
 import { CoinMark } from "@/components/exchange/coin-mark";
 import { PairChevron } from "@/components/exchange/pair-chevron";
+import type { DeskView } from "@/components/exchange/desk-chrome";
 import { LpPanel } from "@/components/exchange/lp-desk";
 import { useFeeLock } from "@/lib/fee-lock";
 import { SideRail } from "@/components/exchange/side-rail";
@@ -148,16 +149,19 @@ function sized(raw: bigint, decimals: number, pct: number, cap?: bigint): string
 export function SpotDesk({
   focus = "bem",
   onMarkets,
+  onJump,
   openLp = false,
 }: {
   focus?: SpotPairId;
   onMarkets?: () => void;
+  onJump?: (view: DeskView) => void;
   openLp?: boolean;
 }) {
   const lang = useExchange((s) => s.lang);
   const c = copy[lang];
   const [book, setBook] = useState<"crypto" | "stock">("crypto");
   const [pair, setPair] = useState<SpotPairId>("bem");
+  const [pairMenu, setPairMenu] = useState(false);
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [unit, setUnit] = useState<"usdt" | "bnb">("usdt");
   const [amount, setAmount] = useState("");
@@ -965,15 +969,83 @@ export function SpotDesk({
         className="phone-desk spot-split min-w-0 overflow-hidden border border-gold bg-card"
         data-phone={phone}
       >
-        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-gold px-3 py-2">
-          <button type="button" onClick={onMarkets} className="flex min-w-0 items-center gap-2">
+        <div className="relative flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-gold px-3 py-2">
+          <button
+            type="button"
+            onClick={() => setPairMenu((on) => !on)}
+            className="flex min-w-0 items-center gap-2"
+          >
             <CoinMark id={pair === "bembnb" || pair === "bemokb" ? "bem" : pair === "upbnb" || pair === "upbem" || pair === "upusdt" ? "up" : pair} />
             <span className="truncate text-lg font-medium tracking-tight">{base}/{quoteSym}</span>
-            <PairChevron />
+            <PairChevron up={pairMenu} />
             <span className="lev-chip shrink-0 rounded px-1.5 py-0.5 text-[11px]">
               {lang === "zh" ? "现货" : "Spot"}
             </span>
           </button>
+          {pairMenu ? (
+            <div className="absolute left-2 top-12 z-30 w-52 border border-gold bg-card shadow-plate">
+              <p className="px-3 pt-2 text-[10px] text-ink/40">{lang === "zh" ? "热门" : "Hot"}</p>
+              {(
+                [
+                  ["bem", "BEM/USDT"],
+                  ["upusdt", "UP/USDT"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => {
+                    setPairMenu(false);
+                    onJump?.({ kind: "pancake", pair: id });
+                  }}
+                  className={`block h-10 w-full px-3 text-left text-sm ${pair === id ? "bg-foil" : "hover:bg-foil/70"}`}
+                >
+                  {label}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setPairMenu(false);
+                  onJump?.({ kind: "tape", market: 0, pair: "usdt" });
+                }}
+                className="block h-10 w-full px-3 text-left text-sm hover:bg-foil/70"
+              >
+                TAPE/USDT0
+              </button>
+              {(
+                [
+                  ["btc", "BTC/USDT"],
+                  ["eth", "ETH/USDT"],
+                  ["bnb", "BNB/USDT"],
+                  ["okb", "OKB/USDT0"],
+                  ["zec", "ZEC/USDT"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => {
+                    setPairMenu(false);
+                    onJump?.({ kind: "pancake", pair: id });
+                  }}
+                  className={`block h-10 w-full px-3 text-left text-sm ${pair === id ? "bg-foil" : "hover:bg-foil/70"}`}
+                >
+                  {label}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setPairMenu(false);
+                  onMarkets?.();
+                }}
+                className="block h-10 w-full border-t border-gold/40 px-3 text-left text-sm text-ink/60"
+              >
+                {lang === "zh" ? "全部市场" : "All markets"}
+              </button>
+            </div>
+          ) : null}
           <p className="font-mono text-sm">
             {midN > 0 ? midN.toLocaleString("en-US", { maximumFractionDigits: 4 }) : "—"}{" "}
             <span className="text-[11px] text-ink/40">{quoteSym}</span>

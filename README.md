@@ -10,6 +10,11 @@ Spot fills on PancakeSwap V3 (BSC). BEM uses the 1% pool. BNB uses the 0.01% poo
 |---|---|---|
 | Perpetual | BSC | `0xce3511b6e909c9694826cfd5dbe434d457920eba` |
 | Perpetual | X Layer | `0xF771BECD373af1d062169E42AB7b3B1fadE2b11b` |
+| Bitcoin perpetual | BSC | `0x81A35fDaaEe7dE3dcDa195F312279Bb2aDc0b8B4` |
+| ETH perpetual | BSC | `0x564C9f5aa89430ca4f2945b466e34BE8705ee0B8` |
+| ZEC perpetual | BSC | `0xdAd8E211ec6c8b43eCe19Da2519C9505CDCbF229` |
+| UP perpetual | BSC | `0x5f913f7AFa71c51d69F472b0fE4c3EC74b1132F8` |
+| TAPE perpetual | X Layer | `0x9b17D0F6431957661AdD30051de2615cb08A3886` |
 | Mark | X Layer | `0xba5234cd46ec5eB0DFdf4ac329FF42EB3062B4eA` |
 | Transistor perpetual | BSC | `0x798637b6d18cE053D69CfC0B08Ead105de352c11` |
 | Circuits | X Layer | `0x69F663931209096037474d7C20402232E5C762cA` |
@@ -23,6 +28,8 @@ Spot fills on PancakeSwap V3 (BSC). BEM uses the 1% pool. BNB uses the 0.01% poo
 | Starter gift | X Layer NAND, BSC BEM | NAND `0x5374DFfD3186FfEDAC46Cc6c9545B9e9e2CEF45b`, BEM `0xa29f86319E66DAdF1e30548bcC593fa91CBB7278` |
 | BEM bridge | BSC | `0xa84B8D3893De6e9922f2B29bE1e1b115845F5E72` |
 | BEM | X Layer | `0x60e62Efa9405d6873C5deaBD4E6CC91c25363952` |
+
+Bitcoin, ETH, ZEC and UP each settle on their own BSC book. TAPE settles on its own X Layer book. The 0.20 percent on those five goes to that chain's multisig. None has an admin. An open price cannot exceed 100000. Hot spot and perps list BEM/USDT, UP/USDT, then TAPE/USDT, and the majors after that.
 
 The rulebook is the whitepaper on the site: [/whitepaper](https://trade.yizhantoken.com/whitepaper). It wins over this file. If a rule changes, update the page and this README the same day.
 

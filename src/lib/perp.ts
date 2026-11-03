@@ -4,7 +4,6 @@ import { CREATE_CALL, createCallData, createdAddress } from "@/lib/create-call";
 import { PERP_BYTECODE } from "@/lib/perp-artifact";
 import { RISK_BYTECODE } from "@/lib/risk-artifact";
 import { MARK_BYTECODE } from "@/lib/mark-artifact";
-import { DESK_MARK_BYTECODE } from "@/lib/desk-mark-artifact";
 import { getProvider } from "@/lib/wallet";
 import { XLAYER, connectXLayer } from "@/lib/xlayer";
 
@@ -451,15 +450,40 @@ export type CoinBook = "btc" | "eth" | "zec" | "up" | "tape";
 
 const TAPE_POOL = "0x58eaD5b41Cfd3627791D439402dd65571c286484" as Hex;
 
+/** Marks the multisig already created. Books are separate. */
+const COIN_MARK: Record<CoinBook, Hex> = {
+  btc: "0xCA0a236452fB2cE9257DCb976211E09A95769bd0",
+  eth: "0xcA755b4202Bfa5419c73019Eb889a5F884F7A337",
+  zec: "0x3a84F7df202C2d76a5435D467619D1a8d4815d21",
+  up: "0xD18Ec3c8d37D4954974EB217361C11b80E6545E3",
+  tape: "0x5EF3db885b1E3D254a192887965ed514187089A3",
+};
+
+export const BTC_COIN_BOOK = "0x81A35fDaaEe7dE3dcDa195F312279Bb2aDc0b8B4" as Hex;
+export const ETH_COIN_BOOK = "0x564C9f5aa89430ca4f2945b466e34BE8705ee0B8" as Hex;
+export const ZEC_COIN_BOOK = "0xdAd8E211ec6c8b43eCe19Da2519C9505CDCbF229" as Hex;
+export const UP_COIN_BOOK = "0x5f913f7AFa71c51d69F472b0fE4c3EC74b1132F8" as Hex;
+export const TAPE_COIN_BOOK = "0x9b17D0F6431957661AdD30051de2615cb08A3886" as Hex;
+
+const COIN_LIVE: Partial<Record<CoinBook, { chain: Desk; book: Hex }>> = {
+  btc: { chain: "bsc", book: BTC_COIN_BOOK },
+  eth: { chain: "bsc", book: ETH_COIN_BOOK },
+  zec: { chain: "bsc", book: ZEC_COIN_BOOK },
+  up: { chain: "bsc", book: UP_COIN_BOOK },
+  tape: { chain: "xlayer", book: TAPE_COIN_BOOK },
+};
+
 function coinStore(which: Desk, coin: string): string {
   return `tl-coin-book:${which}:${coin}`;
 }
 
-function markStore(which: Desk, coin: string): string {
-  return `tl-coin-mark2:${which}:${coin}`;
+function pendingStore(which: Desk, coin: string): string {
+  return `tl-coin-book-pending:${which}:${coin}`;
 }
 
 export function coinBook(which: Desk, coin: string): string {
+  const live = COIN_LIVE[coin as CoinBook];
+  if (live && live.chain === which) return live.book;
   if (typeof window === "undefined") return "";
   const saved = window.localStorage.getItem(coinStore(which, coin)) ?? "";
   return /^0x[a-fA-F0-9]{40}$/.test(saved) ? saved : "";
@@ -1190,48 +1214,45 @@ export async function deployCoin(
   desk = spec.chain;
   try {
     const have = coinBook(spec.chain, coin);
+    const pending = typeof window !== "undefined" ? window.localStorage.getItem(pendingStore(spec.chain, coin)) ?? "" : "";
+    const known = have || (/^0x[a-fA-F0-9]{40}$/.test(pending) ? pending : "");
     const rpc = await client();
-    if (have) {
-      const px = await readMark(spec.chain, have);
-      if (px !== null && markSane(coin, px)) return { book: have, hash: "0x" };
-      const pool = await rpc.readContract({ address: have as Hex, abi: poolAbi, functionName: "pool" });
-      onStep?.(2);
+    if (known) {
+      const px = await readMark(spec.chain, known);
+      if (px !== null && markSane(coin, px)) {
+        window.localStorage.setItem(coinStore(spec.chain, coin), known);
+        return { book: known, hash: "0x" };
+      }
+      const pool = await rpc.readContract({ address: known as Hex, abi: poolAbi, functionName: "pool" });
+      onStep?.(1);
       const pokeHash = await send(from, pool, encodeFunctionData({ abi: pokeAbi, functionName: "poke" }), 1_200_000n);
-      const again = await readMark(spec.chain, have);
-      if (again !== null && markSane(coin, again)) return { book: have, hash: pokeHash };
+      const again = await readMark(spec.chain, known);
+      if (again !== null && markSane(coin, again)) {
+        window.localStorage.setItem(coinStore(spec.chain, coin), known);
+        return { book: known, hash: pokeHash };
+      }
       throw new Error("price");
     }
-    let mark = typeof window !== "undefined" ? window.localStorage.getItem(markStore(spec.chain, coin)) ?? "" : "";
-    if (!/^0x[a-fA-F0-9]{40}$/.test(mark)) {
+    const mark = COIN_MARK[coin];
+    const poked = await rpc
+      .readContract({
+        address: mark,
+        abi: [{ name: "count", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint8" }] }] as const,
+        functionName: "count",
+      })
+      .catch(() => 0);
+    if (!poked) {
       onStep?.(1);
-      const args = encodeAbiParameters(
-        [{ type: "address" }, { type: "uint8" }, { type: "bool" }, { type: "uint8" }, { type: "uint8" }],
-        [spec.src, spec.kind, spec.quoteIsToken0, spec.baseDec, spec.quoteDec],
-      );
-      const markHash = await send(from, CREATE_CALL, createCallData((DESK_MARK_BYTECODE + args.slice(2)) as Hex), 6_000_000n);
-      mark = createdAddress((await rpc.getTransactionReceipt({ hash: markHash })).logs);
-      window.localStorage.setItem(markStore(spec.chain, coin), mark);
-    }
-    try {
-      onStep?.(2);
-      await send(from, mark as Hex, encodeFunctionData({ abi: pokeAbi, functionName: "poke" }), 1_200_000n);
-    } catch (err) {
-      const count = await rpc
-        .readContract({
-          address: mark as Hex,
-          abi: [{ name: "count", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint8" }] }] as const,
-          functionName: "count",
-        })
-        .catch(() => 0);
-      if (!count) throw err;
+      await send(from, mark, encodeFunctionData({ abi: pokeAbi, functionName: "poke" }), 1_200_000n);
     }
     const bookArgs = encodeAbiParameters(
       [{ type: "address" }, { type: "address" }, { type: "uint256" }, { type: "address" }],
       [spec.chain === "xlayer" ? X_USDT : BSC.usdt, mark as Hex, spec.chain === "xlayer" ? 1_000_000n : 10n ** 18n, safe],
     );
-    onStep?.(3);
+    onStep?.(poked ? 1 : 2);
     const bookHash = await send(from, CREATE_CALL, createCallData((RISK_BYTECODE + bookArgs.slice(2)) as Hex), 8_000_000n);
     const book = createdAddress((await rpc.getTransactionReceipt({ hash: bookHash })).logs);
+    window.localStorage.setItem(pendingStore(spec.chain, coin), book);
     const px = await readMark(spec.chain, book);
     if (px === null || !markSane(coin, px)) throw new Error("price");
     window.localStorage.setItem(coinStore(spec.chain, coin), book);

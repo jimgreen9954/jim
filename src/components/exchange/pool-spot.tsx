@@ -934,13 +934,43 @@ export function PoolSpot({
         {pairMenu ? (
           <div className="absolute left-2 top-12 z-30 w-52 border border-gold bg-card shadow-plate">
             <p className="px-3 pt-2 text-[10px] text-ink/40">{zh ? "热门" : "Hot"}</p>
+            <button
+              type="button"
+              onClick={() => {
+                setPairMenu(false);
+                onJump?.({ kind: "pancake", pair: "bem" });
+              }}
+              className="block h-10 w-full px-3 text-left text-sm hover:bg-foil/70"
+            >
+              BEM/USDT
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPairMenu(false);
+                onJump?.({ kind: "pancake", pair: "upusdt" });
+              }}
+              className="block h-10 w-full px-3 text-left text-sm hover:bg-foil/70"
+            >
+              UP/USDT
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onPair?.("usdt");
+                setPairMenu(false);
+              }}
+              className={`block h-10 w-full px-3 text-left text-sm ${active === "usdt" ? "bg-foil" : "hover:bg-foil/70"}`}
+            >
+              TAPE/USDT0
+            </button>
             {(
               [
-                ["bem", "BEM/USDT"],
                 ["btc", "BTC/USDT"],
                 ["eth", "ETH/USDT"],
                 ["bnb", "BNB/USDT"],
                 ["okb", "OKB/USDT0"],
+                ["zec", "ZEC/USDT"],
               ] as const
             ).map(([id, label]) => (
               <button
@@ -958,7 +988,6 @@ export function PoolSpot({
             <p className="border-t border-gold/40 px-3 pt-2 text-[10px] text-ink/40">TAPE</p>
             {(
               [
-                ["usdt", "TAPE/USDT0"],
                 ["bem", "TAPE/BEM"],
                 ["okb", "TAPE/OKB"],
               ] as const

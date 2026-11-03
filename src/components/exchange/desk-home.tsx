@@ -168,6 +168,7 @@ export function DeskHome({
           <SpotDesk
             focus={view.kind === "pancake" ? view.pair : "bem"}
             openLp={lp}
+            onJump={pick}
             onMarkets={() => {
               setSheet("spot");
               setOpen(true);

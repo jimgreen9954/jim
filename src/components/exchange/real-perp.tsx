@@ -1272,14 +1272,16 @@ export function RealPerp({
                           children: [
                             /* @__PURE__ */ jsx("p", {
                               className: "px-2 py-1 text-[11px] tracking-wide text-ink/45",
-                              children: lang === "zh" ? "永续 · 保证金" : "Perpetual · margin",
+                              children: lang === "zh" ? "热门" : "Hot",
                             }),
                             [
                               ["bsc", "bem", "BEM-USDT", "BSC"],
+                              ["xlayer", "bem", "BEM-USDT0", "X Layer"],
+                              ["bsc", "up", "UP-USDT", "BSC"],
+                              ["xlayer", "tape", "TAPE-USDT0", "X Layer"],
                               ["bsc", "btc", "BTC-USDT", "BSC"],
                               ["bsc", "eth", "ETH-USDT", "BSC"],
-                              ["xlayer", "bem", "BEM-USDT0", "X Layer"],
-                              ["xlayer", "tape", "TAPE-USDT0", "X Layer"],
+                              ["bsc", "zec", "ZEC-USDT", "BSC"],
                             ].map(([nextChain, nextCoin, label, venue]) => {
                               return /* @__PURE__ */ jsxs(
                                 "button",

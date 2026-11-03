@@ -21,7 +21,7 @@ function saved(): Record<string, string> {
 export function HomeBooks({ zh }: { zh: boolean }) {
   const [books, setBooks] = useState<Record<string, string> | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [step, setStep] = useState(0);
+  const [, setStep] = useState(0);
   const [note, setNote] = useState("");
 
   useEffect(() => {
@@ -45,7 +45,7 @@ export function HomeBooks({ zh }: { zh: boolean }) {
         const { book } = await deployCoin(from, row.coin, setStep);
         setBooks((prev) => ({ ...(prev ?? {}), [row.coin]: book }));
         window.dispatchEvent(new CustomEvent("tape-coin-book", { detail: { coin: row.coin, book } }));
-        setNote(book);
+        setNote("");
       } catch (err) {
         const code = err instanceof Error ? err.message : "";
         setNote(
@@ -68,10 +68,12 @@ export function HomeBooks({ zh }: { zh: boolean }) {
     })();
   };
 
+  const open = ROWS.filter((row) => !books[row.coin]);
+  if (open.length === 0) return null;
+
   return (
     <section className="border border-gold bg-card">
-      {ROWS.map((row) => {
-        const book = books[row.coin];
+      {open.map((row) => {
         return (
           <div
             key={row.coin}
@@ -80,24 +82,14 @@ export function HomeBooks({ zh }: { zh: boolean }) {
             <span className="w-24 shrink-0 text-sm">{zh ? row.zh : row.en}</span>
             <span className="text-xs text-ink/50">{row.where}</span>
             <span className="font-mono text-xs">0.20%</span>
-            {book ? (
-              <span className="ml-auto truncate font-mono text-[11px]">{book}</span>
-            ) : (
-              <button
-                type="button"
-                disabled={busy !== null}
-                onClick={() => sign(row)}
-                className="ml-auto min-h-11 shrink-0 border border-gold bg-ink px-3 text-sm text-paper disabled:opacity-40"
-              >
-                {busy === row.coin
-                  ? zh
-                    ? `签名 ${step}/3`
-                    : `Sign ${step}/3`
-                  : zh
-                    ? "部署"
-                    : "Deploy"}
-              </button>
-            )}
+            <button
+              type="button"
+              disabled={busy !== null}
+              onClick={() => sign(row)}
+              className="ml-auto min-h-11 shrink-0 border border-gold bg-ink px-3 text-sm text-paper disabled:opacity-40"
+            >
+              {busy === row.coin ? (zh ? "签名" : "Sign") : zh ? "部署" : "Deploy"}
+            </button>
           </div>
         );
       })}
