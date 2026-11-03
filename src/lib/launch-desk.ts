@@ -1993,12 +1993,26 @@ export function bootLaunch(host: HTMLElement): () => void {
     }
   })(), opt);
 
+  let actPage = 0;
   const paintActivity = (feed: Element) => {
     feed.replaceChildren();
     const acts = cpunkActivity();
-    for (const act of acts) {
-      const line = document.createElement("div");
+    const size = 40;
+    const pages = Math.max(1, Math.ceil(acts.length / size));
+    if (actPage >= pages) actPage = 0;
+    const slice = acts.slice(actPage * size, actPage * size + size);
+    const note = document.createElement("div");
+    note.className = "feed-row";
+    note.textContent = acts.length ? `共 ${acts.length} 条，第 ${actPage + 1} / ${pages} 页。` : "正在读取 Circuit Punk 从合约上线以来的成交、挂单、撤单和铸造。";
+    feed.append(note);
+    for (const act of slice) {
+      const line = document.createElement(act.tx ? "a" : "div");
       line.className = "feed-row";
+      if (line instanceof HTMLAnchorElement && act.tx) {
+        line.href = `https://www.oklink.com/x-layer/tx/${act.tx}`;
+        line.target = "_blank";
+        line.rel = "noopener";
+      }
       const pill = document.createElement("span");
       pill.className = "pill";
       pill.textContent = act.kind;
@@ -2010,14 +2024,32 @@ export function bootLaunch(host: HTMLElement): () => void {
       time.style.color = "var(--muted)";
       time.textContent = act.time || (act.tx ? "X Layer" : "在售");
       line.append(pill, name, px, time);
-      line.addEventListener("click", () => open("trade"));
+      if (!act.tx) line.addEventListener("click", () => open("trade"));
       feed.append(line);
     }
-    if (!acts.length) {
-      const line = document.createElement("div");
-      line.className = "feed-row";
-      line.textContent = "Circuit Punk 还没有读到挂单或成交。";
-      feed.append(line);
+    if (pages > 1) {
+      const bar = document.createElement("div");
+      bar.className = "toolbar";
+      const newer = document.createElement("button");
+      newer.type = "button";
+      newer.className = "chip";
+      newer.textContent = "较新";
+      newer.disabled = actPage === 0;
+      newer.addEventListener("click", () => {
+        actPage = Math.max(0, actPage - 1);
+        paintActivity(feed);
+      });
+      const older = document.createElement("button");
+      older.type = "button";
+      older.className = "chip";
+      older.textContent = "更早";
+      older.disabled = actPage >= pages - 1;
+      older.addEventListener("click", () => {
+        actPage = Math.min(pages - 1, actPage + 1);
+        paintActivity(feed);
+      });
+      bar.append(newer, older);
+      feed.append(bar);
     }
   };
 

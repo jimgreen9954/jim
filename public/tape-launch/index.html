@@ -2120,7 +2120,8 @@ tbody tr:hover { background: var(--soft); }
                 <h3>交易记录</h3>
                 <button class="chip" id="cp-log-toggle" type="button">隐藏</button>
               </div>
-              <p class="sub">成交、挂单、撤单和铸造都在这里。时间是新加坡时间，点一行可以看那笔交易。</p>
+              <p class="sub">成交、挂单、撤单和铸造，从合约上线读到现在。时间是新加坡时间。可以按编号查，点一行看那笔交易。</p>
+              <input id="cp-log-q" inputmode="numeric" placeholder="按编号查，例如 7473" style="height:36px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);padding:0 12px;width:180px;margin:0 0 8px">
               <div class="feed cp-log" id="cp-log">
                 <div class="feed-row"><span>正在读链上的铸造、挂单和成交。</span></div>
               </div>
@@ -2293,7 +2294,7 @@ tbody tr:hover { background: var(--soft); }
     <div id="page-activity" class="page">
       <div class="pad">
         <h2 style="font-size:28px;margin:12px 0 16px" data-i18n="activity">动态</h2>
-        <p class="sub">Circuit Punk 的成交、挂单、撤单和铸造。时间是新加坡时间。</p>
+        <p class="sub">Circuit Punk 从合约上线以来的成交、挂单、撤单和铸造。时间是新加坡时间。记录多的时候可以翻页。</p>
         <div class="feed" id="tape-feed">
           <div class="feed-row"><span>正在读取 tapeout.net 的成交…</span></div>
         </div>

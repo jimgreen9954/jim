@@ -1087,7 +1087,7 @@ export function bootCpunk(
     try {
       const latest = await client.getBlockNumber();
       let end = latest;
-      for (let step = 0; step < 160 && end >= born && !signal.aborted && openId === id; step += 1) {
+      for (let step = 0; end >= born && !signal.aborted && openId === id; step += 1) {
         const start = end > 49_999n ? end - 49_999n : 0n;
         const from = start < born ? born : start;
         if (from > end) break;
@@ -1505,6 +1505,7 @@ export function bootCpunk(
   let tip = 0n;
   let feedReady = false;
   let historyDone = false;
+  let feedPage = 0;
   const feedRows: FeedRow[] = [];
   const seenFeed = new Set<string>();
   const blockClock = new Map<string, number>();
@@ -1578,16 +1579,25 @@ export function bootCpunk(
     }
   };
   const paintFeed = () => {
-    const items = [...feedRows].sort((a, b) => b.unix - a.unix).slice(0, 60);
+    const all = [...feedRows].sort((a, b) => b.unix - a.unix || b.id - a.id);
+    const query = Number(host.querySelector<HTMLInputElement>("#cp-log-q")?.value.trim() || "");
+    const sorted = query ? all.filter((row) => row.id === query) : all;
+    const pageSize = 40;
+    const pages = Math.max(1, Math.ceil(sorted.length / pageSize));
+    if (feedPage >= pages) feedPage = 0;
+    const items = sorted.slice(feedPage * pageSize, feedPage * pageSize + pageSize);
     host.querySelectorAll(".cp-log").forEach((box) => {
       box.replaceChildren();
-      if (!items.length) {
-        const row = document.createElement("div");
-        row.className = "feed-row";
-        row.textContent = historyDone ? "读过的区块里还没有成交、挂单、撤单或铸造。" : "正在往前读链上的成交和挂单。";
-        box.append(row);
-        return;
-      }
+      const note = document.createElement("div");
+      note.className = "feed-row";
+      note.textContent = !sorted.length
+        ? historyDone
+          ? query
+            ? `#${query} 从合约上线到现在没有成交、挂单、撤单或铸造。`
+            : "从合约上线到现在，还没有成交、挂单、撤单或铸造。"
+          : "正在从最新记录读到合约上线。读到的会显示在这里。"
+        : `共 ${sorted.length} 条，第 ${feedPage + 1} / ${pages} 页。${historyDone ? "已包含合约上线以来的成交、挂单、撤单和铸造。" : "还在读取更早的记录。"}`;
+      box.append(note);
       for (const item of items) {
         const row = document.createElement("a");
         row.className = "feed-row";
@@ -1605,9 +1615,33 @@ export function bootCpunk(
         row.append(kind, name, px, time);
         box.append(row);
       }
+      if (pages > 1) {
+        const bar = document.createElement("div");
+        bar.className = "toolbar";
+        const newer = document.createElement("button");
+        newer.type = "button";
+        newer.className = "chip";
+        newer.textContent = "较新";
+        newer.disabled = feedPage === 0;
+        newer.addEventListener("click", () => {
+          feedPage = Math.max(0, feedPage - 1);
+          paintFeed();
+        });
+        const older = document.createElement("button");
+        older.type = "button";
+        older.className = "chip";
+        older.textContent = "更早";
+        older.disabled = feedPage >= pages - 1;
+        older.addEventListener("click", () => {
+          feedPage = Math.min(pages - 1, feedPage + 1);
+          paintFeed();
+        });
+        bar.append(newer, older);
+        box.append(bar);
+      }
     });
     syncActs = () => {
-      const trades = items.map((row) => ({
+      const trades = all.map((row) => ({
         kind: row.kind,
         id: row.id,
         px: row.px,
@@ -1619,7 +1653,6 @@ export function bootCpunk(
         ? []
         : [...listed.entries()]
           .sort((a, b) => (a[1].at > b[1].at ? -1 : 1))
-          .slice(0, 30)
           .map(([id, row]) => ({
             kind: "挂单" as const,
             id,
@@ -1650,24 +1683,19 @@ export function bootCpunk(
           tip = latest;
         }
       } else {
-        const floor = latest > 600_000n ? latest - 600_000n : born;
-        for (let step = 0; step < 6 && back >= floor; step += 1) {
+        for (let step = 0; step < 8 && back >= born; step += 1) {
           const end = back;
-          const start = end > 1_999n ? end - 1_999n : 0n;
-          const from = start < floor ? floor : start;
+          const start = end > 9_999n ? end - 9_999n : 0n;
+          const from = start < born ? born : start;
           if (from > end) break;
           await takeLogs(await pullLogs(from, end));
           back = from - 1n;
-          if (feedRows.length >= 80 || from <= floor) {
+          if (from <= born) {
             historyDone = true;
             break;
           }
         }
-        if (back < floor) historyDone = true;
-      }
-      if (feedRows.length > 200) {
-        feedRows.sort((a, b) => b.unix - a.unix);
-        feedRows.splice(200);
+        if (back < born) historyDone = true;
       }
       paintFeed();
     } catch {
@@ -1687,6 +1715,10 @@ export function bootCpunk(
     }, { signal });
   }
   void scanFeed();
+  host.querySelector("#cp-log-q")?.addEventListener("input", () => {
+    feedPage = 0;
+    paintFeed();
+  }, { signal });
   paintHolders();
   void scanHolders();
   const tradePage = host.querySelector("#page-trade");
