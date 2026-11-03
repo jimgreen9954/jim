@@ -530,6 +530,21 @@ td.right, th.right { text-align: right; }
 .feed-row:last-child { border-bottom: 0; }
 .cp-log, #cp-log { max-height: 420px; overflow: auto; }
 .listed-at { margin-top: 4px; color: var(--muted); font-size: 12px; }
+.item-history { margin-top: 12px; }
+.item-history h4 { margin: 0 0 8px; font-size: 16px; }
+.hist-row {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+  color: inherit;
+  text-decoration: none;
+}
+.hist-row img { width: 48px; height: 48px; image-rendering: pixelated; background: #638596; border-radius: 8px; }
+.hist-row b { display: block; font-size: 14px; }
+.hist-row small { color: var(--muted); font-size: 12px; }
 .tag { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 800; background: var(--soft); }
 .tag.founder { background: #e0b15a; color: #1a1206; }
 .tag.mars { background: #c4554a; color: #fff; }
@@ -2360,6 +2375,7 @@ tbody tr:hover { background: var(--soft); }
     <p id="cp-sheet-own"></p>
     <p id="cp-sheet-px"></p>
     <div id="cp-sheet-meta"></div>
+    <div class="item-history" id="cp-sheet-history"></div>
     <button class="buy" id="cp-buy" type="button">买下</button>
     <button class="buy ghost" id="cp-cancel" type="button">撤单</button>
     <p id="cp-sheet-msg"></p>

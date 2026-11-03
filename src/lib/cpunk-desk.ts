@@ -987,7 +987,192 @@ export function bootCpunk(
       buy.textContent = quote > 0n ? `付 ${bemText(quote)} BEM + ${bemText(quote * 1000n)} TAPE` : "买下";
     }
     if (cancel) cancel.hidden = !seller || seller.toLowerCase() !== me;
+    void loadItemHistory(id);
   };
+
+  type ItemHist = { kind: string; who: string; px: string; time: string; unix: number; tx: string };
+  const itemHistory = new Map<number, ItemHist[]>();
+  const paintItemHistory = (id: number, rows: ItemHist[], done: boolean) => {
+    const box = host.querySelector("#cp-sheet-history");
+    if (!box || openId !== id) return;
+    box.replaceChildren();
+    const title = document.createElement("h4");
+    title.textContent = "交易历史";
+    box.append(title);
+    if (!rows.length) {
+      const note = document.createElement("p");
+      note.className = "sub";
+      note.textContent = done ? "这张还没有成交、挂单或转让。" : "正在读取这张的交易历史。成交过的也会出现在这里。";
+      box.append(note);
+      return;
+    }
+    for (const row of rows) {
+      const link = document.createElement("a");
+      link.className = "hist-row";
+      link.href = row.tx ? `https://www.oklink.com/x-layer/tx/${row.tx}` : "#";
+      link.target = "_blank";
+      link.rel = "noopener";
+      const img = document.createElement("img");
+      img.alt = `Circuit Punk ${id}`;
+      img.src = `/api/circuit-punk/${id}.png?v=3`;
+      const text = document.createElement("span");
+      const heading = document.createElement("b");
+      heading.textContent = row.px ? `${row.kind} · ${row.px}` : row.kind;
+      const small = document.createElement("small");
+      small.textContent = [row.who, row.time || "时间读取中"].filter(Boolean).join(" · ");
+      text.append(heading, small);
+      link.append(img, text);
+      box.append(link);
+    }
+    if (!done) {
+      const note = document.createElement("p");
+      note.className = "sub";
+      note.textContent = "还在往前读更早的成交。";
+      box.append(note);
+    }
+  };
+  async function loadItemHistory(id: number) {
+    const cached = itemHistory.get(id);
+    if (cached) {
+      paintItemHistory(id, cached, true);
+      return;
+    }
+    const listedEv = parseAbiItem("event Listed(uint256 indexed id, address indexed seller, uint256 quote)");
+    const boughtEv = parseAbiItem("event Bought(uint256 indexed id, address indexed buyer, uint256 quote)");
+    const cancelEv = parseAbiItem("event Cancelled(uint256 indexed id)");
+    const mintedEv = parseAbiItem("event Minted(address indexed to, uint256 indexed id)");
+    const transferEv = parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)");
+    type Draft = ItemHist & { block: bigint };
+    const drafts: Draft[] = [];
+    const seen = new Set<string>();
+    const add = (row: Draft) => {
+      const key = `${row.kind}:${row.tx}:${row.block.toString()}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      drafts.push(row);
+    };
+    for (const row of feedRows) {
+      if (row.id !== id) continue;
+      add({ kind: row.kind, who: row.who, px: row.px, time: row.time, unix: row.unix, tx: row.tx, block: 0n });
+    }
+    const show = (done: boolean) => {
+      const buyTx = new Set(drafts.filter((row) => row.kind === "成交").map((row) => row.tx));
+      const mintTx = new Set(drafts.filter((row) => row.kind === "铸造").map((row) => row.tx));
+      const rows = drafts
+        .filter((row) => row.kind !== "转让" || (!buyTx.has(row.tx) && !mintTx.has(row.tx)))
+        .map(({ block: _block, ...row }) => row)
+        .sort((a, b) => b.unix - a.unix);
+      paintItemHistory(id, rows, done);
+      return rows;
+    };
+    show(false);
+    type RawLog = { data: `0x${string}`; topics: [`0x${string}`, ...`0x${string}`[]]; blockNumber: bigint | null; transactionHash: `0x${string}` | null };
+    const ranged = async (event: typeof listedEv | typeof boughtEv | typeof cancelEv | typeof mintedEv | typeof transferEv, args: { id: bigint } | { tokenId: bigint }, from: bigint, to: bigint, depth = 0): Promise<RawLog[]> => {
+      try {
+        const logs = await client.getLogs({ address: CPUNK, event, args, fromBlock: from, toBlock: to });
+        return logs.map((log) => ({
+          data: log.data,
+          topics: log.topics as [`0x${string}`, ...`0x${string}`[]],
+          blockNumber: log.blockNumber,
+          transactionHash: log.transactionHash,
+        }));
+      } catch {
+        if (depth > 2 || to <= from + 2_000n) return [];
+        const mid = from + (to - from) / 2n;
+        const left = await ranged(event, args, from, mid, depth + 1);
+        const right = await ranged(event, args, mid + 1n, to, depth + 1);
+        return [...left, ...right];
+      }
+    };
+    try {
+      const latest = await client.getBlockNumber();
+      let end = latest;
+      for (let step = 0; step < 160 && end >= born && !signal.aborted && openId === id; step += 1) {
+        const start = end > 49_999n ? end - 49_999n : 0n;
+        const from = start < born ? born : start;
+        if (from > end) break;
+        const [listedLogs, boughtLogs, cancelLogs, mintedLogs, transferLogs] = await Promise.all([
+          ranged(listedEv, { id: BigInt(id) }, from, end),
+          ranged(boughtEv, { id: BigInt(id) }, from, end),
+          ranged(cancelEv, { id: BigInt(id) }, from, end),
+          ranged(mintedEv, { id: BigInt(id) }, from, end),
+          ranged(transferEv, { tokenId: BigInt(id) }, from, end),
+        ]);
+        const blocks = [...new Set(
+          [...listedLogs, ...boughtLogs, ...cancelLogs, ...mintedLogs, ...transferLogs]
+            .map((log) => log.blockNumber)
+            .filter((block): block is bigint => block != null),
+        )];
+        await Promise.all(blocks.map((block) => stamp(block)));
+        const at = (block: bigint | null) => (block == null ? 0 : blockClock.get(block.toString()) ?? 0);
+        for (const log of listedLogs) {
+          const decoded = decodeEventLog({ abi: [listedEv], data: log.data, topics: log.topics });
+          if (decoded.eventName !== "Listed") continue;
+          const unix = at(log.blockNumber);
+          add({
+            kind: "挂单",
+            who: `卖家 ${cut(decoded.args.seller)}`,
+            px: `${bemText(decoded.args.quote)} BEM + ${bemText(decoded.args.quote * 1000n)} TAPE`,
+            time: unix ? clock(unix) : "",
+            unix,
+            tx: log.transactionHash ?? "",
+            block: log.blockNumber ?? 0n,
+          });
+        }
+        for (const log of boughtLogs) {
+          const decoded = decodeEventLog({ abi: [boughtEv], data: log.data, topics: log.topics });
+          if (decoded.eventName !== "Bought") continue;
+          const unix = at(log.blockNumber);
+          add({
+            kind: "成交",
+            who: `买家 ${cut(decoded.args.buyer)}`,
+            px: `${bemText(decoded.args.quote)} BEM + ${bemText(decoded.args.quote * 1000n)} TAPE`,
+            time: unix ? clock(unix) : "",
+            unix,
+            tx: log.transactionHash ?? "",
+            block: log.blockNumber ?? 0n,
+          });
+        }
+        for (const log of cancelLogs) {
+          const unix = at(log.blockNumber);
+          add({ kind: "撤单", who: "", px: "", time: unix ? clock(unix) : "", unix, tx: log.transactionHash ?? "", block: log.blockNumber ?? 0n });
+        }
+        for (const log of mintedLogs) {
+          const decoded = decodeEventLog({ abi: [mintedEv], data: log.data, topics: log.topics });
+          if (decoded.eventName !== "Minted") continue;
+          const unix = at(log.blockNumber);
+          add({
+            kind: "铸造",
+            who: `给 ${cut(decoded.args.to)}`,
+            px: "",
+            time: unix ? clock(unix) : "",
+            unix,
+            tx: log.transactionHash ?? "",
+            block: log.blockNumber ?? 0n,
+          });
+        }
+        for (const log of transferLogs) {
+          const decoded = decodeEventLog({ abi: [transferEv], data: log.data, topics: log.topics });
+          if (decoded.eventName !== "Transfer") continue;
+          const unix = at(log.blockNumber);
+          add({
+            kind: decoded.args.from.toLowerCase() === ZERO ? "铸造" : "转让",
+            who: `${cut(decoded.args.from)} → ${cut(decoded.args.to)}`,
+            px: "",
+            time: unix ? clock(unix) : "",
+            unix,
+            tx: log.transactionHash ?? "",
+            block: log.blockNumber ?? 0n,
+          });
+        }
+        end = from - 1n;
+        show(end < born);
+      }
+      if (openId === id) itemHistory.set(id, show(true));
+    } catch {
+      if (openId === id) show(true);
+    }
+  }
 
   const refresh = async () => {
     try {
