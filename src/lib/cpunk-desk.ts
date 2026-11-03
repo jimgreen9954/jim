@@ -356,7 +356,7 @@ export function bootCpunk(
     const query = (host.querySelector<HTMLInputElement>("#cp-holder-q")?.value ?? "").trim().toLowerCase().replace(/^#/, "");
     if (note) {
       note.textContent = holderSeen < holderTotal
-        ? "正在读取链上持有人。"
+        ? `正在读取链上持有人，已读 ${holderSeen} / ${holderTotal}。这是 Circuit Punk 合约，不是欧易里的 TapeCode-Test1。`
         : `共 ${holderRows.length} 个持有地址。`;
     }
     if (!body) return;
@@ -385,7 +385,7 @@ export function bootCpunk(
     }
     const pool = [...bags.entries()]
       .map(([address, ids]) => ({ address, ids }))
-      .filter((row) => holderSeen >= holderTotal || HOLDER_LABEL[row.address])
+      .filter((row) => row.ids.length > 0)
       .sort((a, b) => {
       const rank = (addr: string) => {
         const place = HOLDER_RANK.indexOf(addr);
@@ -479,8 +479,16 @@ export function bootCpunk(
         const wave = [0, 1, 2, 3].map((slot) => ids.slice(index + slot * 80, index + (slot + 1) * 80)).filter((slice) => slice.length);
         let owners: (string | null)[][] = [];
         try {
-          owners = await Promise.all(wave.map((slice) => ownersOf(slice)));
+          owners = await Promise.race([
+            Promise.all(wave.map((slice) => ownersOf(slice))),
+            new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error("timeout")), 12_000)),
+          ]);
         } catch {
+          seen += wave.reduce((sum, slice) => sum + slice.length, 0);
+          holderSeen = seen;
+          holderTotal = ids.length;
+          if (note) note.textContent = `这一批持有人超时，先跳过。已读 ${seen} / ${ids.length}。`;
+          paintHolders();
           continue;
         }
         const escrow: number[] = [];
@@ -723,9 +731,11 @@ export function bootCpunk(
     if (note) {
       note.textContent = !me
         ? "先连接钱包，这里显示你的挂单。"
-        : mine.length
-          ? `你挂着 ${mine.length} 张。点撤单即可取消。`
-          : "你还没有挂单。";
+        : holderSeen < holderTotal
+          ? `正在读取链上挂单，已读 ${holderSeen} / ${holderTotal}。读完才知道这个钱包有没有挂。`
+          : mine.length
+            ? `你挂着 ${mine.length} 张。点撤单即可取消。`
+            : "这个钱包在 Circuit Punk 上还没有挂单。TapeCode-Test1 是欧易上的另一套，不会出现在这里。";
     }
     box.replaceChildren();
     for (const [id, row] of mine) {
@@ -1366,11 +1376,15 @@ export function bootCpunk(
   ]);
   type FeedRow = { kind: "挂单" | "成交" | "撤单" | "铸造" | "转让"; id: number; px: string; who: string; tx: string; time: string; unix: number };
   const born = 73628100n;
-  let back = 0n;
   let tip = 0n;
   let feedReady = false;
   let historyDone = false;
   let feedPage = 0;
+  let feedNote = "先读持有人，再读成交和铸造。两边一起读会把节点堵住。";
+  let launchAt = born;
+  const launchEnd = born + 12_000n;
+  let probeAt = 0n;
+  const dense: { from: bigint; to: bigint }[] = [];
   const feedRows: FeedRow[] = [];
   const seenFeed = new Set<string>();
   const blockClock = new Map<string, number>();
@@ -1409,7 +1423,9 @@ export function bootCpunk(
   };
   const takeLogs = async (logs: Awaited<ReturnType<typeof client.getLogs>>) => {
     const blocks = [...new Set(logs.map((log) => log.blockNumber).filter((block): block is bigint => block != null))];
-    await Promise.all(blocks.map((block) => stamp(block)));
+    for (let index = 0; index < blocks.length; index += 6) {
+      await Promise.all(blocks.slice(index, index + 6).map((block) => stamp(block)));
+    }
     for (const log of logs) {
       try {
         const decoded = decodeEventLog({ abi: logAbi, data: log.data, topics: log.topics });
@@ -1485,7 +1501,7 @@ export function bootCpunk(
           ? query
             ? `#${query} 从合约上线到现在没有成交、挂单、撤单或铸造。`
             : "从合约上线到现在，还没有成交、挂单、撤单或铸造。"
-          : "正在从最新记录读到合约上线。读到的会显示在这里。"
+          : feedNote
         : `共 ${sorted.length} 条，第 ${feedPage + 1} / ${pages} 页。${historyDone ? "已包含合约上线以来的成交、挂单、撤单和铸造。" : "还在读取更早的记录。"}`;
       box.append(note);
       for (const item of items) {
@@ -1562,8 +1578,8 @@ export function bootCpunk(
       salesNote.textContent = sold.length
         ? "卖出的不会留在挂单格子里。下面是最近成交，带图片和时间。"
         : historyDone
-          ? "从合约上线到现在还没有成交。"
-          : "正在读取成交。卖出的不会留在挂单里，读到就出现在这里。";
+          ? "从合约上线到现在还没有成交。铸造、挂单和撤单在下面的交易记录里。"
+          : feedNote;
     }
     if (sales) {
       sales.replaceChildren();
@@ -1595,8 +1611,9 @@ export function bootCpunk(
     try {
       const latest = await client.getBlockNumber();
       if (!feedReady) {
-        back = latest;
         tip = latest;
+        probeAt = latest;
+        launchAt = born;
         feedReady = true;
       }
       if (historyDone) {
@@ -1608,22 +1625,49 @@ export function bootCpunk(
         }
       } else {
         const jobs: Promise<Awaited<ReturnType<typeof pullLogs>>>[] = [];
-        for (let step = 0; step < 8 && back >= born; step += 1) {
-          const end = back;
-          const from = end > born + 99n ? end - 99n : born;
-          if (from > end) break;
-          jobs.push(pullLogs(from, end));
-          back = from - 1n;
+        if (launchAt <= launchEnd) {
+          for (let step = 0; step < 3 && launchAt <= launchEnd; step += 1) {
+            const from = launchAt;
+            const end = from + 99n > launchEnd ? launchEnd : from + 99n;
+            jobs.push(pullLogs(from, end));
+            launchAt = end + 1n;
+          }
+          feedNote = `正在读合约上线时的铸造。已读到区块 ${launchAt.toString()}。`;
+        }
+        for (let step = 0; step < 3 && probeAt > launchEnd; step += 1) {
+          const end = probeAt;
+          const from = end > 99n ? end - 99n : 0n;
+          const mark = end;
+          jobs.push(pullLogs(from, end).then((logs) => {
+            if (logs.length) {
+              const spanFrom = mark > 3_000n ? mark - 3_000n : born;
+              dense.push({ from: spanFrom < born ? born : spanFrom, to: mark });
+            }
+            return logs;
+          }));
+          probeAt -= 1_500n;
+        }
+        if (!jobs.length && dense.length) feedNote = "正在补有记录的那一段。";
+        else if (launchAt > launchEnd) feedNote = `正在查找成交和挂单。查到区块 ${probeAt > born ? probeAt.toString() : born.toString()}。找到的会马上出现。`;
+        const next = dense[0];
+        if (next && jobs.length < 4) {
+          const end = next.from + 99n > next.to ? next.to : next.from + 99n;
+          jobs.push(pullLogs(next.from, end));
+          next.from = end + 1n;
+          if (next.from > next.to) dense.shift();
         }
         for (const part of await Promise.all(jobs)) await takeLogs(part);
-        if (back < born) historyDone = true;
+        if (launchAt > launchEnd && probeAt <= launchEnd && dense.length === 0) historyDone = true;
       }
+      const found = feedRows.length;
+      if (found) feedNote = `${feedNote} 已找到 ${found} 条。`;
       paintFeed();
     } catch {
+      feedNote = "这一段节点没返回，等一下再读。";
       paintFeed();
     } finally {
       scanning = false;
-      if (!historyDone && !signal.aborted) window.setTimeout(() => void scanFeed(), 250);
+      if (!historyDone && !signal.aborted) window.setTimeout(() => void scanFeed(), 400);
     }
   };
   paintFeed();
@@ -1636,13 +1680,14 @@ export function bootCpunk(
       logToggle.textContent = logBox.hidden ? "显示" : "隐藏";
     }, { signal });
   }
-  void scanFeed();
+  paintHolders();
   host.querySelector("#cp-log-q")?.addEventListener("input", () => {
     feedPage = 0;
     paintFeed();
   }, { signal });
-  paintHolders();
-  void scanHolders();
+  void scanHolders().finally(() => {
+    if (!signal.aborted) void scanFeed();
+  });
   const tradePage = host.querySelector("#page-trade");
   const forgeInput = host.querySelector<HTMLInputElement>("#cp-forge-ids");
   const forgeOut = host.querySelector("#cp-forge-out");
