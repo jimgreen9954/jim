@@ -530,6 +530,15 @@ td.right, th.right { text-align: right; }
 .feed-row:last-child { border-bottom: 0; }
 .cp-log, #cp-log { max-height: 420px; overflow: auto; }
 .listed-at { margin-top: 4px; color: var(--muted); font-size: 12px; }
+.sale-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0 0 14px; }
+.sale-card {
+  display: grid; grid-template-columns: 56px 1fr; gap: 8px; align-items: center;
+  border: 1px solid var(--line); border-radius: 12px; padding: 8px; background: var(--card);
+  color: inherit; text-decoration: none;
+}
+.sale-card img { width: 56px; height: 56px; image-rendering: pixelated; background: #638596; border-radius: 8px; }
+.sale-card b { display: block; font-size: 14px; }
+.sale-card small { color: var(--muted); font-size: 12px; }
 .item-history { margin-top: 12px; }
 .item-history h4 { margin: 0 0 8px; font-size: 16px; }
 .hist-row {
@@ -1412,7 +1421,7 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
   .cp-sheet { width: 100%; }
   table { min-width: 520px; }
   .search { flex: 1 1 auto; min-width: 0; }
-  .item-grid, .tape-grid, .trait-grid, .wallet-balances { grid-template-columns: 1fr 1fr; }
+  .item-grid, .tape-grid, .trait-grid, .wallet-balances, .sale-strip { grid-template-columns: 1fr 1fr; }
   .feed-row { grid-template-columns: 1fr; gap: 4px; }
   .cp-hero { width: min(240px, 72vw); }
   .cp-hero .face { height: auto; width: 100%; aspect-ratio: 1; }
@@ -2107,6 +2116,9 @@ tbody tr:hover { background: var(--soft); }
               <button class="chip" type="button" data-sort="common">稀有在后</button>
               <button class="chip" type="button" data-sort="id">按编号</button>
             </div>
+            <h3 style="font-size:16px;margin:4px 0 6px">最近成交</h3>
+            <p class="sub" id="cp-sales-note">卖出的不会留在挂单里。</p>
+            <div id="cp-sales" class="sale-strip"></div>
             <div class="item-grid" id="cp-grid"></div>
             <div class="toolbar" id="cp-pager">
               <button class="chip" id="cp-art-prev" type="button">上一页</button>

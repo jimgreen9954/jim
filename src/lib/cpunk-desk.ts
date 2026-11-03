@@ -174,7 +174,7 @@ async function ownersOf(ids: number[]): Promise<(string | null)[]> {
   return decoded.map((row) => (row.success && row.returnData.length >= 66 ? `0x${row.returnData.slice(-40)}`.toLowerCase() : null));
 }
 
-type CpunkAct = { kind: "挂单" | "成交" | "撤单" | "铸造"; id: number; px: string; who: string; tx: string; time: string };
+type CpunkAct = { kind: "挂单" | "成交" | "撤单" | "铸造" | "转让"; id: number; px: string; who: string; tx: string; time: string };
 const cpunkActs: CpunkAct[] = [];
 export function cpunkActivity(): CpunkAct[] {
   return cpunkActs.slice();
@@ -991,7 +991,6 @@ export function bootCpunk(
   };
 
   type ItemHist = { kind: string; who: string; px: string; time: string; unix: number; tx: string };
-  const itemHistory = new Map<number, ItemHist[]>();
   const paintItemHistory = (id: number, rows: ItemHist[], done: boolean) => {
     const box = host.querySelector("#cp-sheet-history");
     if (!box || openId !== id) return;
@@ -1031,147 +1030,12 @@ export function bootCpunk(
       box.append(note);
     }
   };
-  async function loadItemHistory(id: number) {
-    const cached = itemHistory.get(id);
-    if (cached) {
-      paintItemHistory(id, cached, true);
-      return;
-    }
-    const listedEv = parseAbiItem("event Listed(uint256 indexed id, address indexed seller, uint256 quote)");
-    const boughtEv = parseAbiItem("event Bought(uint256 indexed id, address indexed buyer, uint256 quote)");
-    const cancelEv = parseAbiItem("event Cancelled(uint256 indexed id)");
-    const mintedEv = parseAbiItem("event Minted(address indexed to, uint256 indexed id)");
-    const transferEv = parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)");
-    type Draft = ItemHist & { block: bigint };
-    const drafts: Draft[] = [];
-    const seen = new Set<string>();
-    const add = (row: Draft) => {
-      const key = `${row.kind}:${row.tx}:${row.block.toString()}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      drafts.push(row);
-    };
-    for (const row of feedRows) {
-      if (row.id !== id) continue;
-      add({ kind: row.kind, who: row.who, px: row.px, time: row.time, unix: row.unix, tx: row.tx, block: 0n });
-    }
-    const show = (done: boolean) => {
-      const buyTx = new Set(drafts.filter((row) => row.kind === "成交").map((row) => row.tx));
-      const mintTx = new Set(drafts.filter((row) => row.kind === "铸造").map((row) => row.tx));
-      const rows = drafts
-        .filter((row) => row.kind !== "转让" || (!buyTx.has(row.tx) && !mintTx.has(row.tx)))
-        .map(({ block: _block, ...row }) => row)
-        .sort((a, b) => b.unix - a.unix);
-      paintItemHistory(id, rows, done);
-      return rows;
-    };
-    show(false);
-    type RawLog = { data: `0x${string}`; topics: [`0x${string}`, ...`0x${string}`[]]; blockNumber: bigint | null; transactionHash: `0x${string}` | null };
-    const ranged = async (event: typeof listedEv | typeof boughtEv | typeof cancelEv | typeof mintedEv | typeof transferEv, args: { id: bigint } | { tokenId: bigint }, from: bigint, to: bigint, depth = 0): Promise<RawLog[]> => {
-      try {
-        const logs = await client.getLogs({ address: CPUNK, event, args, fromBlock: from, toBlock: to });
-        return logs.map((log) => ({
-          data: log.data,
-          topics: log.topics as [`0x${string}`, ...`0x${string}`[]],
-          blockNumber: log.blockNumber,
-          transactionHash: log.transactionHash,
-        }));
-      } catch {
-        if (depth > 2 || to <= from + 2_000n) return [];
-        const mid = from + (to - from) / 2n;
-        const left = await ranged(event, args, from, mid, depth + 1);
-        const right = await ranged(event, args, mid + 1n, to, depth + 1);
-        return [...left, ...right];
-      }
-    };
-    try {
-      const latest = await client.getBlockNumber();
-      let end = latest;
-      for (let step = 0; end >= born && !signal.aborted && openId === id; step += 1) {
-        const start = end > 49_999n ? end - 49_999n : 0n;
-        const from = start < born ? born : start;
-        if (from > end) break;
-        const [listedLogs, boughtLogs, cancelLogs, mintedLogs, transferLogs] = await Promise.all([
-          ranged(listedEv, { id: BigInt(id) }, from, end),
-          ranged(boughtEv, { id: BigInt(id) }, from, end),
-          ranged(cancelEv, { id: BigInt(id) }, from, end),
-          ranged(mintedEv, { id: BigInt(id) }, from, end),
-          ranged(transferEv, { tokenId: BigInt(id) }, from, end),
-        ]);
-        const blocks = [...new Set(
-          [...listedLogs, ...boughtLogs, ...cancelLogs, ...mintedLogs, ...transferLogs]
-            .map((log) => log.blockNumber)
-            .filter((block): block is bigint => block != null),
-        )];
-        await Promise.all(blocks.map((block) => stamp(block)));
-        const at = (block: bigint | null) => (block == null ? 0 : blockClock.get(block.toString()) ?? 0);
-        for (const log of listedLogs) {
-          const decoded = decodeEventLog({ abi: [listedEv], data: log.data, topics: log.topics });
-          if (decoded.eventName !== "Listed") continue;
-          const unix = at(log.blockNumber);
-          add({
-            kind: "挂单",
-            who: `卖家 ${cut(decoded.args.seller)}`,
-            px: `${bemText(decoded.args.quote)} BEM + ${bemText(decoded.args.quote * 1000n)} TAPE`,
-            time: unix ? clock(unix) : "",
-            unix,
-            tx: log.transactionHash ?? "",
-            block: log.blockNumber ?? 0n,
-          });
-        }
-        for (const log of boughtLogs) {
-          const decoded = decodeEventLog({ abi: [boughtEv], data: log.data, topics: log.topics });
-          if (decoded.eventName !== "Bought") continue;
-          const unix = at(log.blockNumber);
-          add({
-            kind: "成交",
-            who: `买家 ${cut(decoded.args.buyer)}`,
-            px: `${bemText(decoded.args.quote)} BEM + ${bemText(decoded.args.quote * 1000n)} TAPE`,
-            time: unix ? clock(unix) : "",
-            unix,
-            tx: log.transactionHash ?? "",
-            block: log.blockNumber ?? 0n,
-          });
-        }
-        for (const log of cancelLogs) {
-          const unix = at(log.blockNumber);
-          add({ kind: "撤单", who: "", px: "", time: unix ? clock(unix) : "", unix, tx: log.transactionHash ?? "", block: log.blockNumber ?? 0n });
-        }
-        for (const log of mintedLogs) {
-          const decoded = decodeEventLog({ abi: [mintedEv], data: log.data, topics: log.topics });
-          if (decoded.eventName !== "Minted") continue;
-          const unix = at(log.blockNumber);
-          add({
-            kind: "铸造",
-            who: `给 ${cut(decoded.args.to)}`,
-            px: "",
-            time: unix ? clock(unix) : "",
-            unix,
-            tx: log.transactionHash ?? "",
-            block: log.blockNumber ?? 0n,
-          });
-        }
-        for (const log of transferLogs) {
-          const decoded = decodeEventLog({ abi: [transferEv], data: log.data, topics: log.topics });
-          if (decoded.eventName !== "Transfer") continue;
-          const unix = at(log.blockNumber);
-          add({
-            kind: decoded.args.from.toLowerCase() === ZERO ? "铸造" : "转让",
-            who: `${cut(decoded.args.from)} → ${cut(decoded.args.to)}`,
-            px: "",
-            time: unix ? clock(unix) : "",
-            unix,
-            tx: log.transactionHash ?? "",
-            block: log.blockNumber ?? 0n,
-          });
-        }
-        end = from - 1n;
-        show(end < born);
-      }
-      if (openId === id) itemHistory.set(id, show(true));
-    } catch {
-      if (openId === id) show(true);
-    }
+  function loadItemHistory(id: number) {
+    const rows = feedRows
+      .filter((row) => row.id === id)
+      .map((row) => ({ kind: row.kind, who: row.who, px: row.px, time: row.time, unix: row.unix, tx: row.tx }))
+      .sort((a, b) => b.unix - a.unix);
+    paintItemHistory(id, rows, historyDone);
   }
 
   const refresh = async () => {
@@ -1498,8 +1362,9 @@ export function bootCpunk(
     "event Listed(uint256 indexed id, address indexed seller, uint256 quote)",
     "event Bought(uint256 indexed id, address indexed buyer, uint256 quote)",
     "event Cancelled(uint256 indexed id)",
+    "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
   ]);
-  type FeedRow = { kind: "挂单" | "成交" | "撤单" | "铸造"; id: number; px: string; who: string; tx: string; time: string; unix: number };
+  type FeedRow = { kind: "挂单" | "成交" | "撤单" | "铸造" | "转让"; id: number; px: string; who: string; tx: string; time: string; unix: number };
   const born = 73628100n;
   let back = 0n;
   let tip = 0n;
@@ -1524,14 +1389,22 @@ export function bootCpunk(
     }
   };
   const pullLogs = async (from: bigint, to: bigint, depth = 0): Promise<Awaited<ReturnType<typeof client.getLogs>>> => {
+    const end = to > from + 99n ? from + 99n : to;
     try {
-      return await client.getLogs({ address: CPUNK, fromBlock: from, toBlock: to });
-    } catch {
-      if (depth > 3 || to <= from + 40n) return [];
-      const mid = from + (to - from) / 2n;
-      const left = await pullLogs(from, mid, depth + 1);
-      const right = await pullLogs(mid + 1n, to, depth + 1);
-      return [...left, ...right];
+      return await client.getLogs({ address: CPUNK, fromBlock: from, toBlock: end });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (depth < 2 && /429|rate|limit/i.test(message)) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1000));
+        return pullLogs(from, end, depth + 1);
+      }
+      if (depth < 4 && end - from > 40n) {
+        const mid = from + (end - from) / 2n;
+        const left = await pullLogs(from, mid, depth + 1);
+        const right = await pullLogs(mid + 1n, end, depth + 1);
+        return [...left, ...right];
+      }
+      return [];
     }
   };
   const takeLogs = async (logs: Awaited<ReturnType<typeof client.getLogs>>) => {
@@ -1543,7 +1416,8 @@ export function bootCpunk(
         const tx = log.transactionHash ?? "";
         const unix = log.blockNumber == null ? 0 : blockClock.get(log.blockNumber.toString()) ?? 0;
         const time = unix ? clock(unix) : "";
-        const key = `${decoded.eventName}:${String(decoded.args.id)}:${tx}`;
+        const id = "id" in decoded.args ? Number(decoded.args.id) : "tokenId" in decoded.args ? Number(decoded.args.tokenId) : 0;
+        const key = `${decoded.eventName}:${id}:${tx}`;
         if (seenFeed.has(key)) continue;
         seenFeed.add(key);
         if (decoded.eventName === "Listed") {
@@ -1558,7 +1432,27 @@ export function bootCpunk(
             time,
             unix,
           });
+        } else if (decoded.eventName === "Cancelled") {
+          feedRows.push({ kind: "撤单", id: Number(decoded.args.id), px: "", who: "", tx, time, unix });
+        } else if (decoded.eventName === "Minted") {
+          feedRows.push({ kind: "铸造", id: Number(decoded.args.id), px: "", who: cut(decoded.args.to), tx, time, unix });
+        } else if (decoded.eventName === "Transfer") {
+          const from = decoded.args.from.toLowerCase();
+          if (from === ZERO) continue;
+          if (feedRows.some((row) => row.tx === tx && row.kind === "成交")) continue;
+          const lastList = [...feedRows].reverse().find((row) => row.id === id && row.kind === "挂单");
+          feedRows.push({
+            kind: from === CPUNK.toLowerCase() ? "成交" : "转让",
+            id,
+            px: from === CPUNK.toLowerCase() ? lastList?.px ?? "" : "",
+            who: cut(decoded.args.to),
+            tx,
+            time,
+            unix,
+          });
         } else if (decoded.eventName === "Bought") {
+          const prior = feedRows.findIndex((row) => row.tx === tx && row.id === Number(decoded.args.id) && row.kind === "成交");
+          if (prior >= 0) feedRows.splice(prior, 1);
           feedRows.push({
             kind: "成交",
             id: Number(decoded.args.id),
@@ -1568,10 +1462,6 @@ export function bootCpunk(
             time,
             unix,
           });
-        } else if (decoded.eventName === "Cancelled") {
-          feedRows.push({ kind: "撤单", id: Number(decoded.args.id), px: "", who: "", tx, time, unix });
-        } else if (decoded.eventName === "Minted") {
-          feedRows.push({ kind: "铸造", id: Number(decoded.args.id), px: "", who: cut(decoded.args.to), tx, time, unix });
         }
       } catch {
         /* other events */
@@ -1665,6 +1555,38 @@ export function bootCpunk(
       window.dispatchEvent(new CustomEvent("cpunk-feed"));
     };
     syncActs();
+    const sales = host.querySelector("#cp-sales");
+    const salesNote = host.querySelector("#cp-sales-note");
+    const sold = all.filter((row) => row.kind === "成交").slice(0, 8);
+    if (salesNote) {
+      salesNote.textContent = sold.length
+        ? "卖出的不会留在挂单格子里。下面是最近成交，带图片和时间。"
+        : historyDone
+          ? "从合约上线到现在还没有成交。"
+          : "正在读取成交。卖出的不会留在挂单里，读到就出现在这里。";
+    }
+    if (sales) {
+      sales.replaceChildren();
+      for (const item of sold) {
+        const link = document.createElement("a");
+        link.className = "sale-card";
+        link.href = item.tx ? `https://www.oklink.com/x-layer/tx/${item.tx}` : "#";
+        link.target = "_blank";
+        link.rel = "noopener";
+        const img = document.createElement("img");
+        img.alt = "";
+        img.src = `/api/circuit-punk/${item.id}.png?v=3`;
+        const text = document.createElement("span");
+        const title = document.createElement("b");
+        title.textContent = `#${item.id} 成交`;
+        const small = document.createElement("small");
+        small.textContent = [item.px, item.time || "时间读取中"].filter(Boolean).join(" · ");
+        text.append(title, small);
+        link.append(img, text);
+        sales.append(link);
+      }
+    }
+    if (openId) loadItemHistory(openId);
   };
   let scanning = false;
   const scanFeed = async () => {
@@ -1678,23 +1600,22 @@ export function bootCpunk(
         feedReady = true;
       }
       if (historyDone) {
-        if (tip < latest) {
-          await takeLogs(await pullLogs(tip + 1n, latest));
-          tip = latest;
+        while (tip < latest && !signal.aborted) {
+          const from = tip + 1n;
+          const end = latest > from + 99n ? from + 99n : latest;
+          await takeLogs(await pullLogs(from, end));
+          tip = end;
         }
       } else {
+        const jobs: Promise<Awaited<ReturnType<typeof pullLogs>>>[] = [];
         for (let step = 0; step < 8 && back >= born; step += 1) {
           const end = back;
-          const start = end > 9_999n ? end - 9_999n : 0n;
-          const from = start < born ? born : start;
+          const from = end > born + 99n ? end - 99n : born;
           if (from > end) break;
-          await takeLogs(await pullLogs(from, end));
+          jobs.push(pullLogs(from, end));
           back = from - 1n;
-          if (from <= born) {
-            historyDone = true;
-            break;
-          }
         }
+        for (const part of await Promise.all(jobs)) await takeLogs(part);
         if (back < born) historyDone = true;
       }
       paintFeed();
@@ -1702,6 +1623,7 @@ export function bootCpunk(
       paintFeed();
     } finally {
       scanning = false;
+      if (!historyDone && !signal.aborted) window.setTimeout(() => void scanFeed(), 250);
     }
   };
   paintFeed();
