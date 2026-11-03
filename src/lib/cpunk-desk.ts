@@ -80,6 +80,19 @@ function bemText(raw: bigint): string {
   return frac ? `${whole}.${frac}` : whole.toString();
 }
 
+function clock(unix: bigint | number): string {
+  const ms = Number(unix) * 1000;
+  if (!Number.isFinite(ms) || ms <= 0) return "";
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Singapore",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(ms));
+}
+
 function bemRaw(text: string): bigint {
   const clean = text.trim();
   if (!/^\d+(\.\d+)?$/.test(clean)) throw new Error("px");
@@ -161,7 +174,7 @@ async function ownersOf(ids: number[]): Promise<(string | null)[]> {
   return decoded.map((row) => (row.success && row.returnData.length >= 66 ? `0x${row.returnData.slice(-40)}`.toLowerCase() : null));
 }
 
-type CpunkAct = { kind: "挂单" | "成交"; id: number; px: string; who: string; tx: string };
+type CpunkAct = { kind: "挂单" | "成交" | "撤单" | "铸造"; id: number; px: string; who: string; tx: string; time: string };
 const cpunkActs: CpunkAct[] = [];
 export function cpunkActivity(): CpunkAct[] {
   return cpunkActs.slice();
@@ -263,7 +276,8 @@ export function bootCpunk(
     "function approve(address,uint256) returns (bool)",
   ]);
   const listedEvent = parseAbiItem("event Listed(uint256 indexed id, address indexed seller, uint256 quote)");
-  let listed = new Map<number, { seller: string; quote: bigint }>();
+  type Listing = { seller: string; quote: bigint; at: bigint };
+  let listed = new Map<number, Listing>();
   const tradeNotes = new Map<number, string>();
   let minted = 0;
   let walletMints: number | null = null;
@@ -450,7 +464,7 @@ export function bootCpunk(
         const rows = await readListings(slice).catch(() => []);
         slice.forEach((id, place) => {
           const row = rows[place];
-          if (row && row[0].toLowerCase() !== ZERO && row[1] > 0n) listed.set(id, { seller: row[0], quote: row[1] });
+          if (row && row[0].toLowerCase() !== ZERO && row[1] > 0n) listed.set(id, { seller: row[0], quote: row[1], at: row[2] });
         });
       }
       if (listed.size) paint();
@@ -484,7 +498,7 @@ export function bootCpunk(
           const rows = await Promise.all(escrow.map((id) => client.readContract({ address: CPUNK, abi, functionName: "listings", args: [BigInt(id)] }).catch(() => null)));
           escrow.forEach((id, place) => {
             const row = rows[place];
-            if (row && row[0].toLowerCase() !== ZERO && row[1] > 0n) listed.set(id, { seller: row[0], quote: row[1] });
+            if (row && row[0].toLowerCase() !== ZERO && row[1] > 0n) listed.set(id, { seller: row[0], quote: row[1], at: row[2] });
           });
         }
         holderSeen = seen;
@@ -721,7 +735,10 @@ export function bootCpunk(
       img.alt = "";
       img.src = `/api/circuit-punk/${id}.png?v=3`;
       const label = document.createElement("b");
-      label.innerHTML = `#${id}<small>${bemText(row.quote)} BEM + ${bemText(row.quote * 1000n)} TAPE</small>`;
+      label.textContent = `#${id}`;
+      const price = document.createElement("small");
+      price.textContent = `${bemText(row.quote)} BEM + ${bemText(row.quote * 1000n)} TAPE · 挂单时间 ${row.at > 0n ? clock(row.at) : "读取中"}`;
+      label.append(price);
       const button = document.createElement("button");
       button.type = "button";
       button.className = "buy ghost";
@@ -878,6 +895,9 @@ export function bootCpunk(
       price.textContent = row
         ? `${sortMode === "high" || sortMode === "low" ? `价位 ${pricePlace.get(id)} · ` : ""}在售 ${bemText(row.quote)} BEM + ${bemText(row.quote * 1000n)} TAPE`
         : tradeNotes.get(id) ?? (id === next && live && !ended ? "下一张铸造" : "未挂单");
+      const when = document.createElement("div");
+      when.className = "listed-at";
+      when.textContent = row ? `挂单时间 ${row.at > 0n ? clock(row.at) : "读取中"}` : "";
       const traits = document.createElement("dl");
       traits.className = "trait-mini";
       for (const cell of info.traits) {
@@ -892,7 +912,7 @@ export function bootCpunk(
         line.append(key, value);
         traits.append(line);
       }
-      body.append(name, price, traits);
+      body.append(name, price, when, traits);
       card.append(pic, body);
       card.addEventListener("click", () => void openCard(id), { signal });
       grid.append(card);
@@ -946,15 +966,21 @@ export function bootCpunk(
     if (sheet) sheet.hidden = false;
     let seller = "";
     let quote = 0n;
+    let listedAt = 0n;
     const owner = await client.readContract({ address: CPUNK, abi, functionName: "ownerOf", args: [BigInt(id)] }).catch(() => "");
     const listing = await client.readContract({ address: CPUNK, abi, functionName: "listings", args: [BigInt(id)] }).catch(() => null);
     if (listing && listing[0].toLowerCase() !== ZERO) {
       seller = listing[0];
       quote = listing[1];
+      listedAt = listing[2];
     }
     const mark = owner ? (HOLDER_LABEL[owner.toLowerCase()] ?? holderRole([id], reserve)) : undefined;
     if (own) own.textContent = owner ? `持有 ${mark ? `${mark.name} · ` : ""}${owner}` : "这张还没铸出。";
-    if (px) px.textContent = quote > 0n ? `买下付 ${bemText(quote)} BEM 和 ${bemText(quote * 1000n)} TAPE` : "没有挂单";
+    if (px) {
+      px.textContent = quote > 0n
+        ? `买下付 ${bemText(quote)} BEM 和 ${bemText(quote * 1000n)} TAPE。挂单时间 ${listedAt > 0n ? clock(listedAt) : "读取中"}`
+        : "没有挂单";
+    }
     const me = (currentAccount() ?? "").toLowerCase();
     if (buy) {
       buy.hidden = quote === 0n || seller.toLowerCase() === me;
@@ -1002,7 +1028,7 @@ export function bootCpunk(
         slice.forEach((id, place) => {
           const row = rows[place];
           if (!row) return;
-          if (row[0].toLowerCase() !== ZERO && row[1] > 0n) listed.set(id, { seller: row[0], quote: row[1] });
+          if (row[0].toLowerCase() !== ZERO && row[1] > 0n) listed.set(id, { seller: row[0], quote: row[1], at: row[2] });
           else listed.delete(id);
         });
       }
@@ -1056,7 +1082,7 @@ export function bootCpunk(
       if (msg) msg.textContent = "等钱包确认这笔挂单。";
       await send(from, CPUNK, encodeFunctionData({ abi, functionName: "list", args: [BigInt(id), quote] }));
       if (msg) msg.textContent = `#${id} 已挂出。在「挂单」里，排在市场最前。`;
-      listed.set(id, { seller: from, quote });
+      listed.set(id, { seller: from, quote, at: BigInt(Math.floor(Date.now() / 1000)) });
       tradeNotes.set(id, `挂出 ${bemText(quote)} BEM + ${bemText(quote * 1000n)} TAPE`);
       listsOnly = true;
       filterPage = 0;
@@ -1288,19 +1314,92 @@ export function bootCpunk(
     "event Bought(uint256 indexed id, address indexed buyer, uint256 quote)",
     "event Cancelled(uint256 indexed id)",
   ]);
-  type FeedRow = { kind: "挂单" | "成交" | "撤单" | "铸造"; id: number; px: string; who: string; tx: string; line: string };
+  type FeedRow = { kind: "挂单" | "成交" | "撤单" | "铸造"; id: number; px: string; who: string; tx: string; time: string; unix: number };
   const born = 73628100n;
-  let cursor = 0n;
+  let back = 0n;
+  let tip = 0n;
   let feedReady = false;
+  let historyDone = false;
   const feedRows: FeedRow[] = [];
+  const seenFeed = new Set<string>();
+  const blockClock = new Map<string, number>();
+  const stamp = async (block: bigint) => {
+    const key = block.toString();
+    const hit = blockClock.get(key);
+    if (hit != null) return hit;
+    try {
+      const row = await client.getBlock({ blockNumber: block });
+      const unix = Number(row.timestamp);
+      blockClock.set(key, unix);
+      return unix;
+    } catch {
+      blockClock.set(key, 0);
+      return 0;
+    }
+  };
+  const pullLogs = async (from: bigint, to: bigint, depth = 0): Promise<Awaited<ReturnType<typeof client.getLogs>>> => {
+    try {
+      return await client.getLogs({ address: CPUNK, fromBlock: from, toBlock: to });
+    } catch {
+      if (depth > 3 || to <= from + 40n) return [];
+      const mid = from + (to - from) / 2n;
+      const left = await pullLogs(from, mid, depth + 1);
+      const right = await pullLogs(mid + 1n, to, depth + 1);
+      return [...left, ...right];
+    }
+  };
+  const takeLogs = async (logs: Awaited<ReturnType<typeof client.getLogs>>) => {
+    const blocks = [...new Set(logs.map((log) => log.blockNumber).filter((block): block is bigint => block != null))];
+    await Promise.all(blocks.map((block) => stamp(block)));
+    for (const log of logs) {
+      try {
+        const decoded = decodeEventLog({ abi: logAbi, data: log.data, topics: log.topics });
+        const tx = log.transactionHash ?? "";
+        const unix = log.blockNumber == null ? 0 : blockClock.get(log.blockNumber.toString()) ?? 0;
+        const time = unix ? clock(unix) : "";
+        const key = `${decoded.eventName}:${String(decoded.args.id)}:${tx}`;
+        if (seenFeed.has(key)) continue;
+        seenFeed.add(key);
+        if (decoded.eventName === "Listed") {
+          const prev = listed.get(Number(decoded.args.id));
+          if (prev && prev.at === 0n && unix) listed.set(Number(decoded.args.id), { ...prev, at: BigInt(unix) });
+          feedRows.push({
+            kind: "挂单",
+            id: Number(decoded.args.id),
+            px: `${bemText(decoded.args.quote)} BEM + ${bemText(decoded.args.quote * 1000n)} TAPE`,
+            who: cut(decoded.args.seller),
+            tx,
+            time,
+            unix,
+          });
+        } else if (decoded.eventName === "Bought") {
+          feedRows.push({
+            kind: "成交",
+            id: Number(decoded.args.id),
+            px: `${bemText(decoded.args.quote)} BEM + ${bemText(decoded.args.quote * 1000n)} TAPE`,
+            who: cut(decoded.args.buyer),
+            tx,
+            time,
+            unix,
+          });
+        } else if (decoded.eventName === "Cancelled") {
+          feedRows.push({ kind: "撤单", id: Number(decoded.args.id), px: "", who: "", tx, time, unix });
+        } else if (decoded.eventName === "Minted") {
+          feedRows.push({ kind: "铸造", id: Number(decoded.args.id), px: "", who: cut(decoded.args.to), tx, time, unix });
+        }
+      } catch {
+        /* other events */
+      }
+    }
+  };
   const paintFeed = () => {
+    const items = [...feedRows].sort((a, b) => b.unix - a.unix).slice(0, 60);
     host.querySelectorAll(".cp-log").forEach((box) => {
       box.replaceChildren();
-      const items = [...feedRows].reverse().slice(0, 40);
       if (!items.length) {
         const row = document.createElement("div");
         row.className = "feed-row";
-        row.textContent = cursor <= born ? "正在读链上的真实挂单和成交。" : "这段还没有挂单或成交。";
+        row.textContent = historyDone ? "读过的区块里还没有成交、挂单、撤单或铸造。" : "正在往前读链上的成交和挂单。";
         box.append(row);
         return;
       }
@@ -1310,26 +1409,41 @@ export function bootCpunk(
         row.href = item.tx ? `https://www.oklink.com/x-layer/tx/${item.tx}` : "#";
         row.target = "_blank";
         row.rel = "noopener";
-        row.textContent = item.line;
+        const kind = document.createElement("span");
+        kind.textContent = item.kind;
+        const name = document.createElement("span");
+        name.textContent = `Circuit Punk #${item.id}${item.who ? ` · ${item.who}` : ""}`;
+        const px = document.createElement("span");
+        px.textContent = item.px || "—";
+        const time = document.createElement("span");
+        time.textContent = item.time || "时间读取中";
+        row.append(kind, name, px, time);
         box.append(row);
       }
     });
     syncActs = () => {
-      const sales = feedRows
-        .filter((row): row is FeedRow & { kind: "成交" } => row.kind === "成交")
-        .slice(-24)
-        .reverse();
-      const orders = [...listed.entries()]
-        .sort((a, b) => (a[1].quote < b[1].quote ? -1 : 1))
-        .slice(0, 30)
-        .map(([id, row]) => ({
-          kind: "挂单" as const,
-          id,
-          px: `${bemText(row.quote)} BEM + ${bemText(row.quote * 1000n)} TAPE`,
-          who: cut(row.seller),
-          tx: "",
-        }));
-      cpunkActs.splice(0, cpunkActs.length, ...sales, ...orders);
+      const trades = items.map((row) => ({
+        kind: row.kind,
+        id: row.id,
+        px: row.px,
+        who: row.who,
+        tx: row.tx,
+        time: row.time || "时间读取中",
+      }));
+      const orders = trades.length
+        ? []
+        : [...listed.entries()]
+          .sort((a, b) => (a[1].at > b[1].at ? -1 : 1))
+          .slice(0, 30)
+          .map(([id, row]) => ({
+            kind: "挂单" as const,
+            id,
+            px: `${bemText(row.quote)} BEM + ${bemText(row.quote * 1000n)} TAPE`,
+            who: cut(row.seller),
+            tx: "",
+            time: row.at > 0n ? clock(row.at) : "在售",
+          }));
+      cpunkActs.splice(0, cpunkActs.length, ...trades, ...orders);
       window.dispatchEvent(new CustomEvent("cpunk-feed"));
     };
     syncActs();
@@ -1341,53 +1455,36 @@ export function bootCpunk(
     try {
       const latest = await client.getBlockNumber();
       if (!feedReady) {
-        cursor = latest > 900n ? latest - 900n : born;
+        back = latest;
+        tip = latest;
         feedReady = true;
       }
-      for (let step = 0; step < 1 && cursor <= latest; step += 1) {
-        const end = cursor + 99n > latest ? latest : cursor + 99n;
-        const logs = await client.getLogs({ address: CPUNK, fromBlock: cursor, toBlock: end });
-        for (const log of logs) {
-          try {
-            const decoded = decodeEventLog({ abi: logAbi, data: log.data, topics: log.topics });
-            const tx = log.transactionHash ?? "";
-            if (decoded.eventName === "Listed") {
-              listed.set(Number(decoded.args.id), { seller: decoded.args.seller, quote: decoded.args.quote });
-              tradeNotes.set(Number(decoded.args.id), `挂出 ${bemText(decoded.args.quote)} BEM + ${bemText(decoded.args.quote * 1000n)} TAPE`);
-              feedRows.push({
-                kind: "挂单",
-                id: Number(decoded.args.id),
-                px: `${bemText(decoded.args.quote)} BEM + ${bemText(decoded.args.quote * 1000n)} TAPE`,
-                who: cut(decoded.args.seller),
-                tx,
-                line: `挂出 #${decoded.args.id} · ${bemText(decoded.args.quote)} BEM + ${bemText(decoded.args.quote * 1000n)} TAPE · ${cut(decoded.args.seller)}`,
-              });
-            } else if (decoded.eventName === "Bought") {
-              listed.delete(Number(decoded.args.id));
-              tradeNotes.set(Number(decoded.args.id), `成交 ${bemText(decoded.args.quote)} BEM + ${bemText(decoded.args.quote * 1000n)} TAPE`);
-              feedRows.push({
-                kind: "成交",
-                id: Number(decoded.args.id),
-                px: `${bemText(decoded.args.quote)} BEM + ${bemText(decoded.args.quote * 1000n)} TAPE`,
-                who: cut(decoded.args.buyer),
-                tx,
-                line: `买下 #${decoded.args.id} · ${bemText(decoded.args.quote)} BEM + ${bemText(decoded.args.quote * 1000n)} TAPE · ${cut(decoded.args.buyer)}`,
-              });
-            } else if (decoded.eventName === "Cancelled") {
-              listed.delete(Number(decoded.args.id));
-              feedRows.push({ kind: "撤单", id: Number(decoded.args.id), px: "", who: "", tx, line: `撤单 #${decoded.args.id}` });
-            } else if (decoded.eventName === "Minted") {
-              feedRows.push({ kind: "铸造", id: Number(decoded.args.id), px: "", who: cut(decoded.args.to), tx, line: `铸造 #${decoded.args.id} → ${cut(decoded.args.to)}` });
-            }
-          } catch {
-            /* other events */
+      if (historyDone) {
+        if (tip < latest) {
+          await takeLogs(await pullLogs(tip + 1n, latest));
+          tip = latest;
+        }
+      } else {
+        const floor = latest > 600_000n ? latest - 600_000n : born;
+        for (let step = 0; step < 6 && back >= floor; step += 1) {
+          const end = back;
+          const start = end > 1_999n ? end - 1_999n : 0n;
+          const from = start < floor ? floor : start;
+          if (from > end) break;
+          await takeLogs(await pullLogs(from, end));
+          back = from - 1n;
+          if (feedRows.length >= 80 || from <= floor) {
+            historyDone = true;
+            break;
           }
         }
-        cursor = end + 1n;
+        if (back < floor) historyDone = true;
       }
-      if (feedRows.length > 120) feedRows.splice(0, feedRows.length - 120);
+      if (feedRows.length > 200) {
+        feedRows.sort((a, b) => b.unix - a.unix);
+        feedRows.splice(200);
+      }
       paintFeed();
-      paint();
     } catch {
       paintFeed();
     } finally {
@@ -1397,7 +1494,6 @@ export function bootCpunk(
   paintFeed();
   const logToggle = host.querySelector<HTMLButtonElement>("#cp-log-toggle");
   const logBox = host.querySelector<HTMLElement>("#cp-log");
-  if (window.matchMedia("(max-width: 860px)").matches && logBox) logBox.hidden = true;
   if (logToggle && logBox) {
     logToggle.textContent = logBox.hidden ? "显示" : "隐藏";
     logToggle.addEventListener("click", () => {

@@ -2008,7 +2008,7 @@ export function bootLaunch(host: HTMLElement): () => void {
       px.textContent = act.px || "—";
       const time = document.createElement("span");
       time.style.color = "var(--muted)";
-      time.textContent = act.tx ? "X Layer" : "在售";
+      time.textContent = act.time || (act.tx ? "X Layer" : "在售");
       line.append(pill, name, px, time);
       line.addEventListener("click", () => open("trade"));
       feed.append(line);

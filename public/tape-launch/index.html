@@ -528,7 +528,8 @@ td.right, th.right { text-align: right; }
   font-size: 14px;
 }
 .feed-row:last-child { border-bottom: 0; }
-.cp-log, #cp-log { max-height: 240px; overflow: auto; }
+.cp-log, #cp-log { max-height: 420px; overflow: auto; }
+.listed-at { margin-top: 4px; color: var(--muted); font-size: 12px; }
 .tag { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 800; background: var(--soft); }
 .tag.founder { background: #e0b15a; color: #1a1206; }
 .tag.mars { background: #c4554a; color: #fff; }
@@ -2104,6 +2105,7 @@ tbody tr:hover { background: var(--soft); }
                 <h3>交易记录</h3>
                 <button class="chip" id="cp-log-toggle" type="button">隐藏</button>
               </div>
+              <p class="sub">成交、挂单、撤单和铸造都在这里。时间是新加坡时间，点一行可以看那笔交易。</p>
               <div class="feed cp-log" id="cp-log">
                 <div class="feed-row"><span>正在读链上的铸造、挂单和成交。</span></div>
               </div>
@@ -2276,6 +2278,7 @@ tbody tr:hover { background: var(--soft); }
     <div id="page-activity" class="page">
       <div class="pad">
         <h2 style="font-size:28px;margin:12px 0 16px" data-i18n="activity">动态</h2>
+        <p class="sub">Circuit Punk 的成交、挂单、撤单和铸造。时间是新加坡时间。</p>
         <div class="feed" id="tape-feed">
           <div class="feed-row"><span>正在读取 tapeout.net 的成交…</span></div>
         </div>
