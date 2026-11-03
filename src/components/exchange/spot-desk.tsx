@@ -42,6 +42,7 @@ import {
   type Balances,
   type PoolPrint,
 } from "@/lib/bsc";
+import { tradeStepText } from "@/lib/trade-step";
 import { STOCK_KEYS, STOCKS, type StockKey } from "@/lib/stocks";
 import { getCoinCandles, getSpotCandles } from "@/lib/candles";
 import type { Candle } from "@/lib/bem-ohlcv";
@@ -222,6 +223,15 @@ export function SpotDesk({
     setMinOut(null);
   }, [focus]);
   useEffect(() => onOpenLink(setOpenLink), []);
+  useEffect(() => {
+    const onStep = (event: Event) => {
+      const step = (event as CustomEvent<string>).detail;
+      setBad(false);
+      setNote(tradeStepText(step, lang === "zh"));
+    };
+    window.addEventListener("tl-trade-step", onStep);
+    return () => window.removeEventListener("tl-trade-step", onStep);
+  }, [lang]);
 
   useEffect(() => {
     let dead = false;
@@ -485,6 +495,12 @@ export function SpotDesk({
           ? "价格变了，现在的最少到账低于刚才确认的数。看新报价再签。"
           : "The price moved. The new minimum is below the one you confirmed. Look again, then sign.",
       );
+    else if (message === "fee-open")
+      setNote(
+        lang === "zh"
+          ? "成交了，手续费没扣上。再点一次补上。"
+          : "Filled. The fee was not taken. Tap again to pay it.",
+      );
     else if (message === "fee-kept")
       setNote(
         lang === "zh"
@@ -568,7 +584,7 @@ export function SpotDesk({
     setBusy(true);
     busyRef.current = true;
     setBad(false);
-    setNote(c.walletBusy);
+    setNote(tradeStepText("fill", lang === "zh"));
     try {
       const tx = await place(side, amount, unit, min, pair);
       setHash(tx);

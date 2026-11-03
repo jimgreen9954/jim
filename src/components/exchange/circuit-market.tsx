@@ -97,6 +97,23 @@ export function CircuitMarket({ zh, lang }: { zh: boolean; lang: "zh" | "en" }) 
 
   useEffect(() => onAccount(setAccount), []);
   useEffect(() => {
+    const onStep = (event: Event) => {
+      const step = (event as CustomEvent<string>).detail;
+      setBad(false);
+      setNote(
+        step === "fee"
+          ? zh
+            ? "先扣 0.20% 手续费。确认后，下一笔才是成交。"
+            : "The 0.20% fee comes first. The next confirmation is the trade."
+          : zh
+            ? "手续费已扣。这一笔是成交。"
+            : "The fee is in. This confirmation is the trade.",
+      );
+    };
+    window.addEventListener("tl-trade-step", onStep);
+    return () => window.removeEventListener("tl-trade-step", onStep);
+  }, [zh]);
+  useEffect(() => {
     let dead = false;
     const pull = () => {
       if (document.hidden) return;

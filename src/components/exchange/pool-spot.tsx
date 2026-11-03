@@ -7,6 +7,7 @@ import { PhoneChrome, wantedPane, type PhonePane } from "@/components/exchange/p
 import { CoinMark } from "@/components/exchange/coin-mark";
 import { announceFill, readPrefs, useDeskPrefs } from "@/lib/desk-prefs";
 import { markDeskFill } from "@/lib/red-packet";
+import { tradeStepText } from "@/lib/trade-step";
 import { tapePoolCandles, readOpenBook, type OpenBook } from "@/lib/tape-open-candles";
 import type { CandleFrame } from "@/lib/bem-ohlcv";
 import { currentAccount, onAccount } from "@/lib/wallet";
@@ -302,6 +303,15 @@ export function PoolSpot({
   bookRef.current = book;
 
   useEffect(() => onAccount(setAccount), []);
+  useEffect(() => {
+    const onStep = (event: Event) => {
+      const step = (event as CustomEvent<string>).detail;
+      setBad(false);
+      setNote(tradeStepText(step, zh));
+    };
+    window.addEventListener("tl-trade-step", onStep);
+    return () => window.removeEventListener("tl-trade-step", onStep);
+  }, [zh]);
 
   useEffect(() => {
     let dead = false;
@@ -552,6 +562,8 @@ export function PoolSpot({
           ? "OKB 还在钱包里。再点一次卖出，下一笔签名换成 USDT0。"
           : "The OKB is still in the wallet. Tap sell again. The next signature pays USDT0.",
       );
+    else if (message === "fee-open")
+      setNote(zh ? "成交了，手续费没扣上。再点一次补上。" : "Filled. The fee was not taken. Tap again to pay it.");
     else if (message === "fee")
       setNote(zh ? "收费地址不对，没有签名。" : "Fee address mismatch. Not signed.");
     else if (message === "gas") setNote(zh ? "OKB 要留下手续费。" : "Keep OKB for gas.");
@@ -773,6 +785,17 @@ export function PoolSpot({
     }
     if (mode === "market") {
       setBusy(true);
+      setNote(
+        pairRef.current === "usdt" && side === "sell"
+          ? zh
+            ? "第一笔是池子付 OKB。签完后下一笔才换成 USDT0。"
+            : "The first signature pays OKB. The next one turns it into USDT0."
+          : pairRef.current === "usdt"
+            ? tradeStepText("fill", zh)
+            : zh
+              ? "这一笔里扣 0.20% 并成交。失败则都不发生。"
+              : "This confirmation takes the 0.20% and the fill together. If it reverts, neither happens.",
+      );
       try {
         const from = account ?? (await connectHere());
         setAccount(from);
@@ -1031,7 +1054,7 @@ export function PoolSpot({
           OTC
         </button>
         <a
-          className="hidden max-w-[8rem] truncate font-mono text-[11px] text-ink/40 underline sm:inline"
+          className="desk-extra"
           href={`https://www.oklink.com/xlayer/address/${POOL}`}
           target="_blank"
           rel="noreferrer"
@@ -1287,7 +1310,7 @@ export function PoolSpot({
                 {zh ? "可用" : "Available"} {quoteSym}
               </span>
               {bal ? poolText(buyHeld, quoteDec) : "—"}
-              <span className="block text-[10px] text-ink/40">
+              <span className="desk-extra">
                 {zh ? "可买" : "Buys"} {buyTapeLabel} TAPE
               </span>
             </p>
@@ -1486,11 +1509,7 @@ export function PoolSpot({
             <p className="flex justify-between">
               <span>{zh ? "费用" : "Fee"}</span>
               <span>
-                {active === "usdt" && side === "buy"
-                  ? zh
-                    ? "台费 0.20% + 池子 0.20%"
-                    : "Desk 0.20% + pool 0.20%"
-                  : "0.20%"}
+                0.20%
               </span>
             </p>
           </div>
@@ -1527,7 +1546,7 @@ export function PoolSpot({
                         : `Sell TAPE · receive ${quoteSym}`}
           </button>
           {note ? (
-            <p className={`mt-2 text-xs leading-5 ${bad ? "text-sell" : "text-ink/80"}`}>{note}</p>
+            <p className={`mt-2 text-xs leading-5 ${bad ? "text-sell" : "text-ink/70"}`}>{note}</p>
           ) : null}
           <TradeLog zh={zh} />
         </div>

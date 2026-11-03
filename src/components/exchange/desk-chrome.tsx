@@ -458,11 +458,6 @@ export function MarketSheet({
           ))}
         </div>
         <div className="min-h-0 flex-1 overflow-auto">
-          <p className="px-3 pt-2 text-[11px] text-ink/45">
-            {zh
-              ? "现货、美股、合约都在这一栏。搜索代码或中文名。价格来自池子，读不到是横线，不填假数。"
-              : "Spot, US stocks, and perps are in this list. Search a ticker or a name. Prices come from the pool. A dash is a missed read, not a made-up number."}
-          </p>
           <table className="w-full text-left text-xs">
             <thead className="sticky top-0 bg-card text-ink/45">
               <tr>
@@ -526,9 +521,6 @@ export function MarketSheet({
             </tbody>
           </table>
         </div>
-        <p className="border-t border-gold/30 px-3 py-2 text-[11px] text-ink/40">
-          {zh ? "Esc 关闭。" : "Esc closes."}
-        </p>
       </div>
     </div>
   );

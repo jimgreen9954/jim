@@ -57,7 +57,7 @@ export function TradeLog({ zh }: { zh: boolean }) {
     };
   }, []);
   return (
-    <div className="mt-2 border border-gold/40">
+    <div className="desk-extra mt-2 border border-gold/40">
       <button
         type="button"
         className="flex h-8 w-full items-center justify-between px-2 text-xs"

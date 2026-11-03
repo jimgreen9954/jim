@@ -4,6 +4,7 @@ import { OFFICIAL } from "@/lib/official-books";
 import type { CircuitSigned } from "@/lib/circuit-board";
 import { getProvider } from "@/lib/wallet";
 import { deskParts } from "@/lib/invite-cut";
+import { sayTradeStep } from "@/lib/trade-step";
 
 const client = createPublicClient({ transport: http(BSC.rpc) });
 
@@ -46,6 +47,8 @@ async function send(from: string, to: Hex, data: Hex, value = 0n): Promise<Hex> 
 
 async function payFee(from: string, notional: bigint): Promise<void> {
   const parts = await deskParts("bsc", from, notional);
+  if (parts.reward <= 0n && parts.desk <= 0n) return;
+  sayTradeStep("fee");
   const pay = async (to: Hex, value: bigint) => {
     if (value <= 0n) return;
     const hash = await send(from, to, "0x", value);
@@ -108,6 +111,7 @@ export async function fillOfficialBid(from: string, id: bigint, quantity: bigint
   }
   await client.call({ account: from as Hex, to: OFFICIAL.transistorMarket, data });
   await payFee(from, notional);
+  sayTradeStep("trade");
   try {
     return await finishPaid(await send(from, OFFICIAL.transistorMarket, data));
   } catch (err) {
@@ -128,6 +132,7 @@ export async function placeOfficialBid(from: string, transistors: Hex, tokenId: 
   });
   await client.call({ account: from as Hex, to: OFFICIAL.transistorMarket, data, value: notional });
   await payFee(from, notional);
+  sayTradeStep("trade");
   try {
     return await finishPaid(await send(from, OFFICIAL.transistorMarket, data, notional));
   } catch (err) {
@@ -142,6 +147,7 @@ export async function buyOfficialCircuit(from: string, id: bigint, priceWei: big
   const data = encodeFunctionData({ abi: listAbi, functionName: "buy", args: [id, priceWei] });
   await client.call({ account: from as Hex, to: OFFICIAL.circuitMarket, data, value: priceWei });
   await payFee(from, priceWei);
+  sayTradeStep("trade");
   try {
     return await finishPaid(await send(from, OFFICIAL.circuitMarket, data, priceWei));
   } catch (err) {
@@ -171,6 +177,7 @@ export async function fillSignedCircuit(from: string, ask: CircuitSigned): Promi
     : encodeFunctionData({ abi: signedAbi, functionName: "fillSignedAsk", args: [common, ask.signature, from as Hex] });
   await client.call({ account: from as Hex, to: ask.exchange, data, value });
   await payFee(from, price);
+  sayTradeStep("trade");
   try {
     return await finishPaid(await send(from, ask.exchange, data, value));
   } catch (err) {

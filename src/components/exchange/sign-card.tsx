@@ -30,7 +30,7 @@ export function SignCard({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-3 sm:items-center">
       <section className="max-h-[85vh] w-full max-w-lg overflow-auto border border-gold bg-card p-4 shadow-plate">
-        <h2 className="font-display text-3xl italic">{title}</h2>
+        <h2 className="text-sm">{title}</h2>
         <dl className="mt-3 flex flex-col gap-2">
           {lines.map((line) => (
             <div key={line.k} className="border-b border-gold/30 pb-2">

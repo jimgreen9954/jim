@@ -84,7 +84,7 @@ import { connectXLayer, XLAYER } from "@/lib/xlayer";
 import { TAPE_BEM } from "@/lib/tape-pool";
 import { readOpenBook } from "@/lib/tape-open-candles";
 import { peekSpotPrints } from "@/lib/tape-spot";
-import { fundMargin, modeLine, planMargin, readModes, saveModes } from "@/lib/margin-mode";
+import { modeLine, planMargin, readModes, saveModes } from "@/lib/margin-mode";
 import { readXBem, xCap } from "@/lib/okb";
 import { SideRail } from "@/components/exchange/side-rail";
 import { fundingPreview, pct } from "@/lib/risk-rules";
@@ -191,6 +191,7 @@ function DeskLadder({
   });
   const anchors = [mark, bookMark].filter((n) => n > 0);
   const away = (row: (typeof drawn)[number]) =>
+    !(account && row.quote.user.toLowerCase() === account.toLowerCase()) &&
     anchors.length > 0 &&
     row.px > 0 &&
     anchors.every((ref) => Math.abs(row.px - ref) / ref > 0.15);
@@ -200,7 +201,6 @@ function DeskLadder({
   const nearBids = bids.filter((row) => !away(row));
   const farCount = asks.length - nearAsks.length + (bids.length - nearBids.length);
   const [showFar, setShowFar] = useState(false);
-  const [more, setMore] = useState(false);
   const [tick, setTick] = useState(0);
   const group = (list: typeof drawn) => {
     if (!tick) return list;
@@ -215,14 +215,62 @@ function DeskLadder({
   };
   const bookAsks = nearAsks.length + nearBids.length > 0 && !showFar ? nearAsks : asks;
   const bookBids = nearAsks.length + nearBids.length > 0 && !showFar ? nearBids : bids;
-  const askRows = more ? group(bookAsks) : group(bookAsks).slice(-6);
-  const bidRows = more ? group(bookBids) : group(bookBids).slice(0, 6);
-  const hidden = bookAsks.length + bookBids.length - askRows.length - bidRows.length;
+  const askRows = group(bookAsks);
+  const bidRows = group(bookBids);
   const bestAsk = (nearAsks.length ? nearAsks : asks).at(-1)?.px ?? 0;
   const bestBid = (nearBids.length ? nearBids : bids).at(0)?.px ?? 0;
   const spread = bestAsk > 0 && bestBid > 0 ? bestAsk - bestBid : 0;
   const zh = lang === "zh";
-  const depthOf = Math.max(...[...askRows, ...bidRows].map((row) => row.margin), 1);
+  const midPx = bestBid > 0 && bestAsk > 0 ? (bestBid + bestAsk) / 2 : mark > 0 ? mark : bookMark;
+  const stepOf = (px: number) => {
+    if (!(px > 0)) return 0.01;
+    if (px >= 1000) return 1;
+    if (px >= 100) return 0.1;
+    if (px >= 10) return 0.01;
+    if (px >= 1) return 0.001;
+    return px * 0.001;
+  };
+  const fillSide = (rows: typeof askRows, side: "ask" | "bid") => {
+    const kept = side === "ask" ? rows.slice(-8) : rows.slice(0, 8);
+    const need = 8 - kept.length;
+    if (need <= 0 || !(midPx > 0)) return kept;
+    const step = stepOf(midPx);
+    const seen = new Set(kept.map((row) => row.px.toFixed(6)));
+    const extra = [];
+    const edge = side === "ask" ? (kept[0]?.px ?? midPx) : (kept.at(-1)?.px ?? midPx);
+    for (let i = 1; extra.length < need && i < 80; i++) {
+      const px = side === "ask" ? edge + step * i : edge - step * i;
+      if (!(px > 0)) break;
+      const key = px.toFixed(6);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      extra.push({
+        perp: "ghost",
+        quote: { id: `${side}-${i}`, user: "", long: side === "bid", margin: 0n, lev: 0, price: 0n },
+        px,
+        limit: px,
+        margin: 0,
+        size: 0,
+        ghost: true,
+      });
+    }
+    if (side === "ask") return [...extra.sort((a, b) => b.px - a.px), ...kept].slice(-8);
+    return [...kept, ...extra].slice(0, 8);
+  };
+  const showAsks = fillSide(askRows, "ask");
+  const showBids = fillSide(bidRows, "bid");
+  const isMine = (row: (typeof drawn)[number]) =>
+    Boolean(account && row.quote?.user && row.quote.user.toLowerCase() === account.toLowerCase());
+  const withMine = (shown: typeof showAsks, source: typeof asks) => {
+    const extra = source.filter(
+      (row) => isMine(row) && !shown.some((have) => String(have.quote.id) === String(row.quote.id)),
+    );
+    if (!extra.length) return shown;
+    return [...shown, ...extra].sort((a, b) => b.px - a.px);
+  };
+  const liveAsks = withMine(showAsks, asks);
+  const liveBids = withMine(showBids, bids);
+  const depthOf = Math.max(...[...liveAsks, ...liveBids].map((row) => row.margin), 1);
   const cumOf = (rows: typeof askRows, fromBest: boolean) => {
     const totals = new Map<string, number>();
     let sum = 0;
@@ -233,157 +281,92 @@ function DeskLadder({
     }
     return totals;
   };
-  const askCum = cumOf(askRows, true);
-  const bidCum = cumOf(bidRows, false);
+  const askCum = cumOf(liveAsks, true);
+  const bidCum = cumOf(liveBids, false);
   const line = (row: (typeof drawn)[number], takeLong: boolean) => {
+    const pxText = row.px > 0 ? (row.px >= 100 ? row.px.toFixed(2) : row.px.toFixed(4)) : "—";
+    if (row.ghost) {
+      return (
+        <button
+          key={`g-${takeLong ? "a" : "b"}-${row.px}`}
+          type="button"
+          onClick={() => row.px > 0 && onPrice(row.px)}
+          className="book-row grid w-full grid-cols-3 px-2 text-left font-mono text-[12px] hover:bg-black/5"
+        >
+          <span className={takeLong ? "text-sell/75" : "text-up/75"}>{pxText}</span>
+          <span className="text-right text-ink/20">—</span>
+          <span className="book-total text-right text-ink/15">—</span>
+        </button>
+      );
+    }
     const mine = Boolean(account && row.quote.user.toLowerCase() === account.toLowerCase());
-    const pct = mark > 0 && row.px > 0 ? ((row.px - mark) / mark) * 100 : null;
-    const depth = Math.max(8, Math.min(100, (row.margin / depthOf) * 100));
+    const depth = Math.max(6, Math.min(100, (row.margin / depthOf) * 100));
     const cum = (takeLong ? askCum : bidCum).get(`${row.perp}-${row.quote.id}`) ?? row.margin;
     return (
-      <div
+      <button
         key={`${row.perp}-${row.quote.id}`}
-        className="book-line relative grid grid-cols-[2.2rem_minmax(0,1fr)_auto] items-center gap-2 border-t border-gold/20 px-2 py-2 text-sm"
+        type="button"
+        onClick={() => {
+          if (row.px > 0) onPrice(row.px);
+          if (!mine && row.size > 0) onSize(row.margin);
+        }}
+        className={`book-row relative grid w-full grid-cols-3 overflow-hidden px-2 text-left font-mono text-[12px] hover:bg-black/5 ${mine ? "bg-[#17875a]/10" : ""}`}
       >
         <span
-          className="book-side pointer-events-none absolute inset-y-0 right-0"
+          className="pointer-events-none absolute inset-y-0 right-0"
           style={{
             width: `${depth}%`,
-            background: takeLong ? "rgba(242,54,69,0.14)" : "rgba(8,153,129,0.14)",
+            background: takeLong ? "rgba(242,54,69,0.16)" : "rgba(8,153,129,0.16)",
           }}
         />
-        <span className={`book-side relative ${takeLong ? "text-sell" : "text-[#1b6b45]"}`}>
-          {takeLong ? (zh ? "空" : "S") : zh ? "多" : "L"}
+        <span className={`relative min-w-0 truncate ${takeLong ? "text-sell" : "text-up"}`}>
+          {pxText}
+          {mine ? <span className="ml-1 text-[10px] text-ink/55">{zh ? "我" : "Me"}</span> : null}
         </span>
-        <button
-          type="button"
-          className="relative flex min-w-0 items-center justify-between text-left font-mono tabular-nums xl:block"
-          onClick={() => row.px > 0 && onPrice(row.px)}
-        >
-          <span className={takeLong ? "text-sell" : "text-[#1b6b45]"}>
-            {row.limit > 0 ? row.px.toFixed(4) : zh ? "随标记" : "At mark"}
-          </span>
-          <span className="book-size ml-2 font-mono text-[11px] xl:hidden">
-            {row.size > 0 ? row.size.toFixed(4) : row.margin.toFixed(2)}
-          </span>
-          {pct != null ? (
-            <span className="book-meta ml-2 text-xs text-ink/45">
-              {pct > 0 ? "+" : ""}
-              {pct.toFixed(1)}%
-            </span>
-          ) : null}
-          <span
-            className="book-meta mt-0.5 block truncate text-xs text-ink/60"
-            onClick={(event) => {
-              event.stopPropagation();
-              onSize(row.margin);
-            }}
-          >
-            {row.margin.toFixed(2)} USDT · Σ {cum.toFixed(2)} · {row.quote.lev}× ·{" "}
-            {row.size.toFixed(2)} {unit}
-            {away(row) ? (zh ? " · 偏离" : " · far") : ""}
-          </span>
-        </button>
-        <span className="book-who relative flex flex-col items-end gap-1">
-          {mine ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onCancel(row.perp, row.quote)}
-              className="min-h-8 border border-gold px-2 text-xs"
-            >
-              {zh ? "撤单" : "Cancel"}
-            </button>
-          ) : (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onTake(row.perp, row.quote)}
-              className="min-h-8 border border-gold px-2 text-xs"
-            >
-              {takeLong ? (zh ? "吃单开多" : "Take long") : zh ? "吃单开空" : "Take short"}
-            </button>
-          )}
-          <a
-            className="book-addr text-xs text-ink/50 underline"
-            href={`${scan}/address/${row.quote.user}`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            {named(row.quote.user).slice(0, 6)}
-          </a>
+        <span className="relative text-right text-ink/80">
+          {row.size > 0 ? row.size.toFixed(4) : row.margin.toFixed(2)}
         </span>
-      </div>
+        <span className="book-total relative text-right text-ink/45">{cum.toFixed(2)}</span>
+      </button>
     );
   };
+  const spreadPct = spread > 0 && midPx > 0 ? (spread / midPx) * 100 : 0;
   return (
-    <div className="border-t border-gold/30">
-      <p className="book-meta px-2 pt-2 font-mono text-xs text-ink/60">
-        {zh ? "卖一" : "Ask"} {bestAsk > 0 ? bestAsk.toFixed(4) : "—"}
-        {" · "}
-        {zh ? "买一" : "Bid"} {bestBid > 0 ? bestBid.toFixed(4) : "—"}
-        {spread > 0
-          ? ` · ${zh ? "价差" : "Spread"} ${((spread / Math.max(mark, bestBid)) * 100).toFixed(2)}%`
-          : ""}
-      </p>
-      <div className="book-meta flex gap-1 px-2 pb-1">
-        {[0, 0.01, 0.1, 1].map((step) => (
-          <button
-            key={step}
-            type="button"
-            onClick={() => setTick(step)}
-            className={`h-6 px-2 font-mono text-[10px] ${tick === step ? "bg-ink" : "border border-gold/30 text-ink/50"}`}
-          >
-            {step === 0 ? (zh ? "逐笔" : "Tick") : step}
-          </button>
-        ))}
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex shrink-0 items-center gap-2 px-2 pt-1">
+        <div className="grid flex-1 grid-cols-3 text-[10px] text-ink/40">
+          <span>{zh ? "价格" : "Price"}</span>
+          <span className="text-right">{unit}</span>
+          <span className="book-total text-right">{zh ? "合计" : "Total"}</span>
+        </div>
+        <select
+          aria-label={zh ? "价格档" : "Tick"}
+          value={String(tick)}
+          onChange={(event) => setTick(Number(event.target.value))}
+          className="h-6 border border-gold/30 bg-transparent px-1 font-mono text-[10px] text-ink/55 outline-none"
+        >
+          <option value="0">{zh ? "逐笔" : "Tick"}</option>
+          <option value="0.01">0.01</option>
+          <option value="0.1">0.1</option>
+          <option value="1">1</option>
+        </select>
       </div>
-      <div className="book-head grid grid-cols-[2.2rem_minmax(0,1fr)_auto] gap-2 px-2 py-1 text-xs text-ink/50">
-        <span>{zh ? "方向" : "Side"}</span>
-        <span>{zh ? "价格 · 保证金 · 倍数" : "Price · margin · leverage"}</span>
-        <span className="text-right">{zh ? "对手" : "Who"}</span>
+      <div className="book-fill">
+        {liveAsks.map((row) => line(row, true))}
+        <button
+          type="button"
+          className="book-row flex w-full items-center justify-between border-y border-gold/30 px-2 font-mono text-sm"
+          onClick={() => midPx > 0 && onPrice(midPx)}
+        >
+          <span className={spreadPct > 0.05 ? "text-sell" : "text-up"}>
+            {midPx > 0 ? (midPx >= 100 ? midPx.toFixed(2) : midPx.toFixed(4)) : "—"}
+          </span>
+          <span className="text-[11px] text-ink/40">
+            {spreadPct > 0 ? `${spreadPct.toFixed(3)}%` : zh ? "标记" : "Mark"}
+          </span>
+        </button>
+        {liveBids.map((row) => line(row, false))}
       </div>
-      {askRows.map((row) => line(row, true))}
-      <p className="book-mid my-1 flex items-center gap-3 px-2 font-mono text-sm">
-        <span className="h-px flex-1 bg-gold/40" />
-        <button
-          type="button"
-          className="font-mono"
-          onClick={() => onPrice(bestBid > 0 && bestAsk > 0 ? (bestBid + bestAsk) / 2 : mark)}
-        >
-          {bestBid > 0 && bestAsk > 0
-            ? ((bestBid + bestAsk) / 2).toFixed(4)
-            : mark > 0
-              ? mark.toFixed(4)
-              : "—"}
-        </button>
-        <span className="h-px flex-1 bg-gold/40" />
-      </p>
-      {bidRows.map((row) => line(row, false))}
-      {farCount > 0 && nearAsks.length + nearBids.length > 0 ? (
-        <button
-          type="button"
-          className="min-h-9 w-full text-xs text-ink/60"
-          onClick={() => setShowFar((value) => !value)}
-        >
-          {showFar
-            ? zh
-              ? "收起偏离的单"
-              : "Hide far quotes"
-            : zh
-              ? `偏离标记价 ${farCount} 张`
-              : `${farCount} far from the mark`}
-        </button>
-      ) : null}
-      {hidden > 0 || more ? (
-        <button
-          type="button"
-          className="min-h-9 w-full border-t border-gold/30 text-xs"
-          onClick={() => setMore((value) => !value)}
-        >
-          {more ? (zh ? "收起" : "Fold") : zh ? `再看 ${hidden} 张` : `${hidden} more`}
-        </button>
-      ) : null}
     </div>
   );
 }
@@ -456,6 +439,7 @@ export function RealPerp({
   const [dock, setDock] = useState<
     "bal" | "pos" | "ord" | "twap" | "chase" | "fill" | "fund" | "hist"
   >("pos");
+  const [bookTab, setBookTab] = useState<"book" | "tape">("book");
   const [fills, setFills] = useState<{ t: number; kind: string; hash: string }[]>(() =>
     readFills(),
   );
@@ -643,32 +627,37 @@ export function RealPerp({
   useEffect(() => {
     if (!account) return;
     let dead = false;
-    readChainPurse(chain, account)
-      .then(async (next) => {
-        let bem = 0n;
-        try {
-          bem = chain === "xlayer" ? await readXBem(account) : (await readBalances(account)).bem;
-        } catch {
-          bem = 0n;
-        }
-        if (!dead)
-          setBal({
-            bnb: next.gas,
-            usdt: next.usdt,
-            bem,
-          });
-        if (coin !== "bem") {
-          bemPrice()
-            .then((text) => {
-              const n = Number(String(text).replace(/,/g, ""));
-              if (!dead && n > 0) setBemPx(n);
-            })
-            .catch(() => void 0);
-        }
-      })
-      .catch(() => void 0);
+    const pull = () => {
+      readChainPurse(chain, account)
+        .then(async (next) => {
+          let bem = 0n;
+          try {
+            bem = chain === "xlayer" ? await readXBem(account) : (await readBalances(account)).bem;
+          } catch {
+            bem = 0n;
+          }
+          if (!dead)
+            setBal({
+              bnb: next.gas,
+              usdt: next.usdt,
+              bem,
+            });
+          if (coin !== "bem") {
+            bemPrice()
+              .then((text) => {
+                const n = Number(String(text).replace(/,/g, ""));
+                if (!dead && n > 0) setBemPx(n);
+              })
+              .catch(() => void 0);
+          }
+        })
+        .catch(() => void 0);
+    };
+    pull();
+    const timer = window.setInterval(pull, 12_000);
     return () => {
       dead = true;
+      window.clearInterval(timer);
     };
   }, [account, hash, chain, coin]);
   useEffect(() => {
@@ -769,6 +758,7 @@ export function RealPerp({
       window.removeEventListener("tape-trade", trade);
     };
   }, []);
+  const sawOrder = useRef(false);
   useEffect(() => {
     if (!/^0x[a-fA-F0-9]{40}$/.test(perp)) return;
     if ((coin === "btc" || coin === "eth" || coin === "zec" || coin === "up" || coin === "tape") && !/^0x[a-fA-F0-9]{40}$/.test(pickBook(coin === "tape" ? "xlayer" : chain, coin))) return;
@@ -780,7 +770,13 @@ export function RealPerp({
       selectDesk(chain);
       const book = readPerp(perp, account)
         .then((next) => {
-          if (!dead && next) setView(next);
+          if (dead || !next) return;
+          setView(next);
+          const who = account?.toLowerCase();
+          if (who && !sawOrder.current && next.quotes?.some((quote) => quote.user?.toLowerCase() === who)) {
+            sawOrder.current = true;
+            setDock("ord");
+          }
         })
         .catch((err) => {
           if (dead) return;
@@ -845,7 +841,16 @@ export function RealPerp({
     const code = err.code;
     const message = err instanceof Error ? err.message : "";
     if (message === "nowallet") setNote(c.walletNo);
-    else if (message === "usdt") setNote(chain === "xlayer" ? c.perpNeedX : c.perpNeedUsdt);
+    else if (message === "usdt")
+      setNote(
+        lang === "zh"
+          ? `${chain === "xlayer" ? "USDT0" : "USDT"} 不够，没有打开钱包。`
+          : `Not enough ${chain === "xlayer" ? "USDT0" : "USDT"}. The wallet was not opened.`,
+      );
+    else if (message === "revert")
+      setNote(
+        lang === "zh" ? "这笔合约过不了，没有打开钱包。" : "That call would fail. The wallet was not opened.",
+      );
     else if (message === "nochain") setNote(c.perpNoChain);
     else if (message === "fee")
       setNote(lang === "zh" ? "只有收费地址能部署。" : "Only the fee address can deploy.");
@@ -904,7 +909,7 @@ export function RealPerp({
     setBad(true);
   };
   const run = async (task, kind) => {
-    if ((kind === "close" || kind === "close-all") && readPrefs().closeConfirm) {
+    if ((kind === "close" || kind === "close-all" || kind === "close-row") && readPrefs().closeConfirm) {
       if (closeArm.current !== kind) {
         closeArm.current = kind;
         setNote(lang === "zh" ? "再点一次确认平仓" : "Tap again to close");
@@ -931,7 +936,13 @@ export function RealPerp({
     }
     setBusy(true);
     setBad(false);
-    setNote(c.walletBusy);
+    setNote(
+      !kind || kind === "open"
+        ? lang === "zh"
+          ? "保证金锁进合约。0.20% 在成交的同一笔里扣，不成交不扣。撤单退回时扣 0.20%。"
+          : "Margin locks in the contract. The 0.20% comes out in the same fill. No fill, no fee. A cancel returns the rest after 0.20%."
+        : c.walletBusy,
+    );
     try {
       selectDesk(chain);
       const from = account ?? (chain === "xlayer" ? await connectXLayer() : await connectBsc());
@@ -950,7 +961,26 @@ export function RealPerp({
             coin,
           );
       }
-      setNote(null);
+        setNote(null);
+        if (/^0x[a-fA-F0-9]{40}$/.test(perp)) {
+          void readPerp(perp, from)
+            .then((next) => {
+              setView(next);
+              const who = from.toLowerCase();
+              const hasQuote = next.quotes?.some((quote) => quote.user?.toLowerCase() === who);
+              const hasDeal = next.liveDeals?.some(
+                (deal) =>
+                  deal.long.toLowerCase() === who || deal.short.toLowerCase() === who,
+              );
+              if (kind === "cancel") setDock("ord");
+              else if (kind === "close" || kind === "close-all") setDock(hasDeal ? "pos" : "bal");
+              else if (kind !== "poke") setDock(hasDeal && !hasQuote ? "pos" : "ord");
+            })
+            .catch(() => undefined);
+          void readBoard()
+            .then((rows) => setBoard(rows))
+            .catch(() => undefined);
+        }
     } catch (err) {
       if (kind === "cancel") {
         setNote(
@@ -1021,11 +1051,13 @@ export function RealPerp({
     poolPx > 0 &&
     (coin === "btc" || coin === "eth" || coin === "zec" || coin === "up" || coin === "tape" || (chain === "xlayer" && coin === "bem")) &&
     Math.abs(settle - poolPx) / poolPx > 0.03;
+  const ownMark =
+    coin === "btc" || coin === "eth" || coin === "zec" || coin === "up" || coin === "tape" || chain === "xlayer";
   const markN = alt
     ? coinPx || lastClose
     : markFar
       ? poolPx
-      : chain === "xlayer"
+      : ownMark
         ? settle || poolPx
         : live && live > 0
           ? live
@@ -1087,14 +1119,8 @@ export function RealPerp({
   const fillMargin = (pct) => {
     setSizePct(pct);
     const usdtHeld = bal ? Number(formatUnits(bal.usdt, dec)) : 0;
-    const px = coin === "bem" && markN > 0 ? markN : bemPx;
-    const spotHeld =
-      acctMode === "unified" && bal && px > 0
-        ? Number(formatUnits(bal.bem, chain === "xlayer" ? 8 : BSC.bemDecimals)) * px
-        : 0;
-    const held = usdtHeld + spotHeld;
-    if (held > 0) {
-      const n = Math.min(500, Math.max(floor, (held * pct) / 100));
+    if (usdtHeld > 0) {
+      const n = Math.min(500, (usdtHeld * pct) / 100);
       setMargin(n.toFixed(2));
       return;
     }
@@ -1134,7 +1160,7 @@ export function RealPerp({
     lev: levOk ? lev : 1,
     price: quotePx,
     freeUsdt: freeN,
-    spotQuote: acctMode === "unified" ? spotN : 0,
+    spotQuote: 0,
     intentLong: intent === "long",
     mine: mineBook && mineBook.notional > 0 ? mineBook : null,
   });
@@ -1228,9 +1254,76 @@ export function RealPerp({
           if (deal.long.toLowerCase() !== me && deal.short.toLowerCase() !== me) return sum;
           return sum + Number(formatUnits(deal.base, 18));
         }, 0);
+  const me = account?.toLowerCase() ?? "";
+  const myDeals = (view?.liveDeals ?? []).filter(
+    (deal) => me && (deal.long.toLowerCase() === me || deal.short.toLowerCase() === me),
+  );
+  const myQuotes = (view?.quotes ?? []).filter((quote) => me && quote.user.toLowerCase() === me);
+  const shownDeals =
+    myDeals.length > 0
+      ? myDeals
+      : view && me && view.kind === 2 && (view.base > 0n || view.margin > 0n)
+        ? [
+            {
+              id: view.myDeal || 0n,
+              long: view.long ? account : view.other || zero,
+              short: view.long ? view.other || zero : account,
+              marginL: view.long ? view.margin : 0n,
+              marginS: view.long ? 0n : view.margin,
+              base: view.base,
+              entry: view.entry,
+              eqL: view.long ? view.equity : 0n,
+              eqS: view.long ? 0n : view.equity,
+              levL: 0,
+              levS: 0,
+            },
+          ]
+        : [];
   const powerN = acctMode === "unified" ? freeN + spotN : freeN;
   const room = powerN > 0 && markN > 0 ? (powerN * (lev || 1)) / markN : 0;
   const roomText = room > 0 ? room.toLocaleString("en-US", { maximumFractionDigits: 4 }) : "0";
+  const needLock = planned.net === "close" ? 0 : planned.lock > 0 ? planned.lock : Number(margin) || 0;
+  const opensMargin = !reduceOnly && planned.net !== "close" && orderStyle !== "trail";
+  const usdtShort = Boolean(bal) && opensMargin && needLock > freeN + 0.009;
+  const walletUsdt = bal ? freeN.toFixed(2) : "—";
+  const shortLine =
+    lang === "zh"
+      ? `${chain === "xlayer" ? "USDT0" : "USDT"} 不够。这一笔要 ${needLock.toFixed(2)}，钱包里只有 ${walletUsdt}。没有打开钱包。`
+      : `Not enough ${chain === "xlayer" ? "USDT0" : "USDT"}. This order needs ${needLock.toFixed(2)} and the wallet has ${walletUsdt}. The wallet was not opened.`;
+  const place = (side) => {
+    setIntent(side);
+    if (busy) return;
+    if (markFar) {
+      run((from) => pokeBook(from, perp));
+      return;
+    }
+    if (canDeploy || alt) return;
+    if (feeBlocked) {
+      setBad(true);
+      setNote(lang === "zh" ? "开仓停了。" : "Opening is stopped.");
+      return;
+    }
+    if (!levOk || !marginOk || !priceOk) {
+      setBad(true);
+      setNote(lang === "zh" ? "先看价格和保证金。" : "Check the price and margin.");
+      return;
+    }
+    if (usdtShort) {
+      setBad(true);
+      setNote(shortLine);
+      return;
+    }
+    if (planned.net === "reject") {
+      setBad(true);
+      setNote(
+        lang === "zh"
+          ? "数量要盖住反向仓，或改回手动。"
+          : "Cover the opposite side, or switch to manual.",
+      );
+      return;
+    }
+    setCard(side);
+  };
   return /* @__PURE__ */ jsxs("div", {
     children: [
       /* @__PURE__ */ jsx("section", {
@@ -1241,10 +1334,10 @@ export function RealPerp({
           children: [
             /* @__PURE__ */ jsxs("div", {
               className:
-                "flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-gold px-3 py-2",
+                "flex flex-nowrap items-center gap-x-4 border-b border-gold px-3 py-2",
               children: [
                 /* @__PURE__ */ jsxs("div", {
-                  className: "relative",
+                  className: "relative shrink-0",
                   children: [
                     /* @__PURE__ */ jsxs("button", {
                       type: "button",
@@ -1312,130 +1405,74 @@ export function RealPerp({
                       : null,
                   ],
                 }),
-                /* @__PURE__ */ jsxs("p", {
-                  className: "font-mono text-sm",
+                /* @__PURE__ */ jsx("div", {
+                  className: "hl-stats",
                   children: [
-                    /* @__PURE__ */ jsx("span", {
-                      className: "mr-2 text-[11px] text-ink/45",
-                      children: c.mark,
-                    }),
-                    markN > 0 ? pxTextN(markN) : mkt?.px > 0 ? pxTextN(mkt.px) : "—",
-                  ],
+                    {
+                      k: c.mark,
+                      v: markN > 0 ? pxTextN(markN) : mkt?.px > 0 ? pxTextN(mkt.px) : "—",
+                      tone: "text-up",
+                    },
+                    { k: lang === "zh" ? "预言机" : "Oracle", v: lastBar ? pxTextN(lastBar.c) : "—" },
+                    {
+                      k: lang === "zh" ? "24小时变化" : "24h change",
+                      v: driftKnown ? `${drift >= 0 ? "+" : ""}${(drift * 100).toFixed(2)}%` : "—",
+                      tone: !driftKnown ? "" : drift < 0 ? "text-sell" : "text-up",
+                    },
+                    {
+                      k: lang === "zh" ? "24小时成交量" : "24h volume",
+                      v:
+                        vol24 > 0
+                          ? vol24.toLocaleString("en-US", { maximumFractionDigits: 0 })
+                          : "—",
+                    },
+                    {
+                      k: lang === "zh" ? "合约持仓量" : "Open interest",
+                      v: view?.liveDeals?.length
+                        ? view.liveDeals
+                            .reduce(
+                              (sum, deal) => sum + Number(formatUnits(deal.base, 18)) * (markN || 0),
+                              0,
+                            )
+                            .toLocaleString("en-US", { maximumFractionDigits: 0 })
+                        : "—",
+                    },
+                    {
+                      k: lang === "zh" ? "资金费 / 倒计时" : "Funding",
+                      v: `${fundText} · ${fundClock(lang === "zh")}`,
+                    },
+                  ].map((stat) =>
+                    jsx(
+                      "p",
+                      {
+                        className: "hl-stat",
+                        children: [
+                          jsx("span", { children: stat.k }),
+                          jsx("b", { className: stat.tone || "", children: stat.v }),
+                        ],
+                      },
+                      stat.k,
+                    ),
+                  ),
                 }),
-                /* @__PURE__ */ jsxs("p", {
-                  className: "font-mono text-sm ph-hide",
+                /* @__PURE__ */ jsxs("div", {
+                  className: "ml-auto text-right leading-tight xl:hidden",
                   children: [
-                    /* @__PURE__ */ jsx("span", {
-                      className: "mr-2 text-[11px] text-ink/45",
-                      children: lang === "zh" ? "预言机" : "Oracle",
+                    /* @__PURE__ */ jsx("p", {
+                      className: `font-mono text-lg tabular-nums ${!driftKnown || drift >= 0 ? "text-up" : "text-sell"}`,
+                      children: markN > 0 ? pxTextN(markN) : mkt?.px > 0 ? pxTextN(mkt.px) : "—",
                     }),
-                    lastBar ? pxTextN(lastBar.c) : "—",
-                  ],
-                }),
-                /* @__PURE__ */ jsxs("p", {
-                  className: "font-mono text-sm ph-hide",
-                  children: [
-                    /* @__PURE__ */ jsx("span", {
-                      className: "mr-2 text-[11px] text-ink/45",
-                      children: lang === "zh" ? "溢价" : "Premium",
+                    /* @__PURE__ */ jsx("p", {
+                      className: `font-mono text-[11px] tabular-nums ${!driftKnown ? "text-ink/45" : drift < 0 ? "text-sell" : "text-up"}`,
+                      children: driftKnown
+                        ? `${drift >= 0 ? "+" : ""}${(drift * 100).toFixed(2)}%`
+                        : "—",
                     }),
-                    lastBar && markN > 0 && lastBar.c > 0
-                      ? `${(((markN - lastBar.c) / lastBar.c) * 100).toFixed(3)}%`
-                      : "—",
-                  ],
-                }),
-                /* @__PURE__ */ jsxs("p", {
-                  className: `font-mono text-sm ${!driftKnown ? "" : drift < 0 ? "text-sell" : "text-up"}`,
-                  children: [
-                    /* @__PURE__ */ jsx("span", {
-                      className: "mr-2 text-[11px] text-ink/45",
-                      children: lang === "zh" ? "24小时变化" : "24h change",
-                    }),
-                    driftKnown ? `${drift >= 0 ? "+" : ""}${(drift * 100).toFixed(2)}%` : "—",
-                  ],
-                }),
-                /* @__PURE__ */ jsxs("p", {
-                  className: "font-mono text-sm",
-                  children: [
-                    /* @__PURE__ */ jsx("span", {
-                      className: "mr-2 text-[11px] text-ink/45",
-                      children: lang === "zh" ? "24小时高 / 低" : "24h high / low",
-                    }),
-                    dayHigh > 0
-                      ? `${pxTextN(dayHigh)} / ${pxTextN(dayLow)}`
-                      : "—",
-                  ],
-                }),
-                /* @__PURE__ */ jsxs("p", {
-                  className: "font-mono text-sm",
-                  children: [
-                    /* @__PURE__ */ jsx("span", {
-                      className: "mr-2 text-[11px] text-ink/45",
-                      children: lang === "zh" ? "24小时成交量" : "24h volume",
-                    }),
-                    vol24 > 0
-                      ? `${vol24.toLocaleString("en-US", { maximumFractionDigits: 0 })} USDT`
-                      : "—",
-                  ],
-                }),
-                /* @__PURE__ */ jsxs("p", {
-                  className: "font-mono text-sm",
-                  children: [
-                    /* @__PURE__ */ jsx("span", {
-                      className: "mr-2 text-[11px] text-ink/45",
-                      children: lang === "zh" ? "合约持仓量" : "Open interest",
-                    }),
-                    view?.liveDeals?.length
-                      ? view.liveDeals
-                          .reduce(
-                            (sum, deal) => sum + Number(formatUnits(deal.base, 18)) * (markN || 0),
-                            0,
-                          )
-                          .toLocaleString("en-US", { maximumFractionDigits: 2 })
-                      : "—",
-                  ],
-                }),
-                /* @__PURE__ */ jsxs("p", {
-                  className: "font-mono text-sm",
-                  children: [
-                    /* @__PURE__ */ jsx("span", {
-                      className: "mr-2 text-[11px] text-ink/45",
-                      children: lang === "zh" ? "资金费 / 倒计时" : "Funding",
-                    }),
-                    fundText,
-                    " · ",
-                    fundClock(lang === "zh"),
-                  ],
-                }),
-                /* @__PURE__ */ jsxs("p", {
-                  className: "ph-hide text-[11px] text-ink/45",
-                  children: [
-                    chain === "xlayer"
-                      ? lang === "zh"
-                        ? "逐仓 · USDT0"
-                        : "Isolated · USDT0"
-                      : lang === "zh"
-                        ? "逐仓 · USDT"
-                        : "Isolated · USDT",
-                    !alt && /^0x[a-fA-F0-9]{40}$/.test(perp)
-                      ? /* @__PURE__ */ jsxs(Fragment, {
-                          children: [
-                            " · ",
-                            /* @__PURE__ */ jsx("a", {
-                              className: "underline",
-                              href: `${scan}/address/${perp}`,
-                              target: "_blank",
-                              rel: "noreferrer",
-                              children: lang === "zh" ? "合约" : "Contract",
-                            }),
-                          ],
-                        })
-                      : null,
                   ],
                 }),
                 /* @__PURE__ */ jsx("button", {
                   type: "button",
-                  className: "ml-auto grid size-9 place-items-center xl:hidden",
+                  className: "grid size-9 place-items-center xl:hidden",
                   onClick: () => setPhone(phone === "chart" ? "ticket" : "chart"),
                   "aria-label": lang === "zh" ? "图表" : "Chart",
                   children: /* @__PURE__ */ jsx(PairChevron, { up: phone === "chart" }),
@@ -1454,7 +1491,7 @@ export function RealPerp({
               : null,
             null,
             /* @__PURE__ */ jsxs("div", {
-              className: "desk-grid grid items-start xl:grid-cols-[minmax(0,1fr)_17.5rem_22rem]",
+              className: "desk-grid grid items-stretch xl:grid-cols-[minmax(0,1fr)_18rem_22rem]",
               children: [
                 /* @__PURE__ */ jsxs("div", {
                   className: "ph-chart order-1 min-w-0 xl:order-1",
@@ -1547,7 +1584,7 @@ export function RealPerp({
                     }),
                     lock.status === "bad" && feeBlocked
                       ? /* @__PURE__ */ jsx("p", {
-                          className: "px-3 pb-2 text-sm text-sell",
+                          className: "hidden",
                           children:
                             lang === "zh"
                               ? "收费地址对不上，开仓停了。"
@@ -1558,58 +1595,56 @@ export function RealPerp({
                 }),
                 /* @__PURE__ */ jsxs("div", {
                   className:
-                    "ph-book order-3 min-w-0 border-t border-gold xl:order-2 xl:border-t-0 xl:border-l",
+                    "ph-book order-3 flex h-full min-h-[28rem] min-w-0 flex-col self-stretch border-t border-gold xl:order-2 xl:border-t-0 xl:border-l",
                   children: [
                     /* @__PURE__ */ jsxs("div", {
-                      className:
-                        "book-meta flex h-9 items-center border-b border-gold px-3 text-xs text-ink/70",
+                      className: "flex h-9 items-center gap-3 border-b border-gold px-3 text-xs",
                       children: [
-                        /* @__PURE__ */ jsx("span", {
+                        jsx("button", {
+                          type: "button",
+                          onClick: () => setBookTab("book"),
+                          className: bookTab === "book" ? "tab-on" : "text-ink/45",
                           children: lang === "zh" ? "订单簿" : "Book",
                         }),
-                        account &&
-                        (view?.quotes ?? []).some(
-                          (quote) => quote.user.toLowerCase() === account.toLowerCase(),
-                        )
-                          ? /* @__PURE__ */ jsx("button", {
-                              type: "button",
-                              className: "ml-2 underline",
-                              disabled: busy,
-                              onClick: () =>
-                                run(async (from) => {
-                                  const mine = (view?.quotes ?? []).filter(
-                                    (quote) => quote.user.toLowerCase() === from.toLowerCase(),
-                                  );
-                                  let last;
-                                  for (const quote of mine)
-                                    last = await cancelPerp(from, perp, quote.id);
-                                  return last;
-                                }, "cancel"),
-                              children: lang === "zh" ? "全撤" : "Cancel all",
-                            })
-                          : null,
-                        /* @__PURE__ */ jsx("span", {
-                          className: "ml-auto font-mono text-ink/40",
-                          children: lang === "zh" ? "价差" : "Spread",
+                        jsx("button", {
+                          type: "button",
+                          onClick: () => setBookTab("tape"),
+                          className: bookTab === "tape" ? "tab-on" : "text-ink/45",
+                          children: lang === "zh" ? "最新成交" : "Trades",
                         }),
                       ],
                     }),
-                    /* @__PURE__ */ jsx("div", {
-                      className:
-                        "flex justify-between px-1.5 pt-1 text-[10px] text-ink/45 xl:hidden",
-                      children: /* @__PURE__ */ jsxs(Fragment, {
-                        children: [
-                          /* @__PURE__ */ jsx("span", {
-                            children: lang === "zh" ? "价格" : "Price",
-                          }),
-                          /* @__PURE__ */ jsx("span", {
-                            children: lang === "zh" ? `数量 (${base})` : `Size (${base})`,
-                          }),
-                        ],
-                      }),
-                    }),
-                    /* @__PURE__ */ jsx(DeskLadder, {
-                      rows: board,
+                    bookTab === "tape"
+                      ? jsx("div", {
+                          className: "book-scroll max-h-[28rem] overflow-auto",
+                          children: fills.length
+                            ? fills.slice(0, 30).map((row) =>
+                                jsxs(
+                                  "p",
+                                  {
+                                    className: "grid grid-cols-[1fr_auto] px-2 py-[3px] font-mono text-[12px]",
+                                    children: [
+                                      jsx("span", {
+                                        className: "text-ink/80",
+                                        children: row.kind,
+                                      }),
+                                      jsx("span", {
+                                        className: "text-ink/45",
+                                        children: new Date(row.t).toLocaleTimeString([], {
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                          second: "2-digit",
+                                        }),
+                                      }),
+                                    ],
+                                  },
+                                  `${row.hash}-${row.t}`,
+                                ),
+                              )
+                            : null,
+                        })
+                      : jsx(DeskLadder, {
+                      rows: (view?.quotes ?? []).map((quote) => ({ perp, quote })),
                       mark: markN,
                       bookMark: settle,
                       account,
@@ -1652,15 +1687,31 @@ export function RealPerp({
                       onCancel: (book, quote) =>
                         run((from) => cancelPerp(from, book, quote.id), "cancel"),
                     }),
+
                   ],
                 }),
                 /* @__PURE__ */ jsxs("div", {
                   className:
-                    "ph-ticket order-2 flex min-w-0 flex-col gap-3 border-t border-gold p-3 xl:sticky xl:top-14 xl:order-3 xl:max-h-[calc(100dvh-4.5rem)] xl:overflow-y-auto xl:overscroll-contain xl:border-t-0 xl:border-l",
+                    "ph-ticket perp-ticket order-2 flex min-w-0 flex-col gap-3 self-stretch border-t border-gold p-3 xl:sticky xl:top-14 xl:order-3 xl:max-h-[calc(100dvh-4.5rem)] xl:self-start xl:overflow-y-auto xl:overscroll-contain xl:border-t-0 xl:border-l",
                   children: [
                     /* @__PURE__ */ jsxs("div", {
-                      className: "hidden grid-cols-3 gap-1 text-xs xl:grid",
+                      className: "hl-modes grid grid-cols-3 gap-1 text-xs",
                       children: [
+                        /* @__PURE__ */ jsx("button", {
+                          type: "button",
+                          onClick: () => setProOpen(true),
+                          className: "h-8 xl:hidden",
+                          children:
+                            orderStyle === "market"
+                              ? lang === "zh"
+                                ? "市价"
+                                : "Market"
+                              : orderStyle === "limit"
+                                ? lang === "zh"
+                                  ? "限价"
+                                  : "Limit"
+                                : proLabel,
+                        }),
                         /* @__PURE__ */ jsx("button", {
                           type: "button",
                           onClick: () => setMarginOpen(true),
@@ -1683,7 +1734,7 @@ export function RealPerp({
                         /* @__PURE__ */ jsx("button", {
                           type: "button",
                           onClick: () => setAcctOpen(true),
-                          className: "h-8 border border-gold/50",
+                          className: "hidden h-8 border border-gold/50 xl:block",
                           children:
                             acctMode === "unified"
                               ? lang === "zh"
@@ -1701,7 +1752,7 @@ export function RealPerp({
                     }),
                     view?.liveDeals?.length
                       ? /* @__PURE__ */ jsxs("div", {
-                          className: "hidden border border-gold/40 p-3 xl:block",
+                          className: "hidden",
                           children: [
                             /* @__PURE__ */ jsxs("div", {
                               className: "flex items-center gap-2",
@@ -1905,124 +1956,15 @@ export function RealPerp({
                       : null,
                     /^0x[a-fA-F0-9]{40}$/.test(perp) &&
                       /* @__PURE__ */ jsxs("div", {
-                        className: "flex flex-col gap-3 border border-gold/40 p-3",
+                        className: "flex min-h-0 flex-1 flex-col gap-2",
                         children: [
                           waiting
-                            ? /* @__PURE__ */ jsxs("p", {
-                                className: "text-sm leading-relaxed",
-                                children: [
-                                  mine
-                                    ? c.perpOther
-                                    : `${c.waitQuote} · ${view?.pendingLong ? c.postLong : c.postShort} · ${usdtText(view?.pendingMargin ?? 0n)} USDT · ${view?.pendingLev}×`,
-                                  " ",
-                                  c.pkMiss,
-                                ],
-                              })
+                            ? /* @__PURE__ */ jsx("p", { className: "hidden" })
                             : null,
                           inDeal && !view?.book
-                            ? /* @__PURE__ */ jsxs("div", {
-                                className: "grid grid-cols-2 gap-2 text-sm",
-                                children: [
-                                  /* @__PURE__ */ jsxs("p", {
-                                    className: "border border-gold/40 px-2 py-2",
-                                    children: [
-                                      /* @__PURE__ */ jsx("span", {
-                                        className: "block text-xs tracking-widest text-gold",
-                                        children:
-                                          lang === "zh" ? "方向和倍数" : "Side and leverage",
-                                      }),
-                                      /* @__PURE__ */ jsxs("span", {
-                                        className: "font-mono",
-                                        children: [
-                                          view?.long
-                                            ? lang === "zh"
-                                              ? "多"
-                                              : "Long"
-                                            : lang === "zh"
-                                              ? "空"
-                                              : "Short",
-                                          (() => {
-                                            const notional = view
-                                              ? Number(formatUnits(view.base, 18)) *
-                                                Number(formatUnits(view.entry, 18))
-                                              : 0;
-                                            const marginN = view
-                                              ? Number(formatUnits(view.margin, dec))
-                                              : 0;
-                                            const times =
-                                              marginN > 0 && notional > 0
-                                                ? Math.max(1, Math.round(notional / marginN))
-                                                : 0;
-                                            return times ? ` · ${times}×` : "";
-                                          })(),
-                                        ],
-                                      }),
-                                    ],
-                                  }),
-                                  /* @__PURE__ */ jsxs("p", {
-                                    className: "border border-gold/40 px-2 py-2",
-                                    children: [
-                                      /* @__PURE__ */ jsx("span", {
-                                        className: "block text-xs tracking-widest text-gold",
-                                        children: lang === "zh" ? "保证金" : "Margin",
-                                      }),
-                                      /* @__PURE__ */ jsxs("span", {
-                                        className: "font-mono",
-                                        children: [
-                                          usdtText(view?.margin ?? view?.equity ?? 0n),
-                                          " USDT",
-                                        ],
-                                      }),
-                                    ],
-                                  }),
-                                  /* @__PURE__ */ jsxs("p", {
-                                    className: "border border-gold/40 px-2 py-2",
-                                    children: [
-                                      /* @__PURE__ */ jsx("span", {
-                                        className: "block text-xs tracking-widest text-gold",
-                                        children: lang === "zh" ? "强平价" : "Liquidation",
-                                      }),
-                                      /* @__PURE__ */ jsx("span", {
-                                        className: "font-mono",
-                                        children: (() => {
-                                          const notional = view
-                                            ? Number(formatUnits(view.base, 18)) *
-                                              Number(formatUnits(view.entry, 18))
-                                            : 0;
-                                          const marginN = view
-                                            ? Number(formatUnits(view.margin, dec))
-                                            : 0;
-                                          const times =
-                                            marginN > 0 && notional > 0
-                                              ? Math.max(1, Math.round(notional / marginN))
-                                              : 0;
-                                          if (!(entryN > 0) || !times) return "—";
-                                          return (
-                                            view?.long
-                                              ? entryN * (1 - 0.5 / times)
-                                              : entryN * (1 + 0.5 / times)
-                                          ).toFixed(4);
-                                        })(),
-                                      }),
-                                    ],
-                                  }),
-                                  /* @__PURE__ */ jsxs("p", {
-                                    className: "border border-gold/40 px-2 py-2",
-                                    children: [
-                                      /* @__PURE__ */ jsx("span", {
-                                        className: "block text-xs tracking-widest text-gold",
-                                        children: lang === "zh" ? "开仓价" : "Entry",
-                                      }),
-                                      /* @__PURE__ */ jsx("span", {
-                                        className: "font-mono",
-                                        children: pxText(view?.entry ?? 0n),
-                                      }),
-                                    ],
-                                  }),
-                                ],
-                              })
+                            ? /* @__PURE__ */ jsx("div", { className: "hidden" })
                             : null,
-                          view?.book
+                          false
                             ? /* @__PURE__ */ jsxs(Fragment, {
                                 children: [
                                   /* @__PURE__ */ jsxs("div", {
@@ -2116,11 +2058,11 @@ export function RealPerp({
                                 ],
                               })
                             : null,
-                          (view?.book ? sheet === "book" : !inDeal && !mine)
+                          true
                             ? /* @__PURE__ */ jsxs(Fragment, {
                                 children: [
                                   <>
-                                    <div className="grid grid-cols-3 gap-1 xl:hidden">
+                                    <div className="hidden">
                                       <button
                                         type="button"
                                         onClick={() => setProOpen((on) => !on)}
@@ -2285,27 +2227,44 @@ export function RealPerp({
                                       <button
                                         type="button"
                                         onClick={() => setIntent("long")}
-                                        className={`h-10 text-sm ${intent === "long" ? "bg-up text-paper" : "border border-gold/40 text-ink/55"}`}
+                                        className={`h-10 text-sm ${intent === "long" ? "hl-buy" : "hl-buy off"}`}
                                       >
                                         {lang === "zh" ? "买入 / 做多" : "Buy / Long"}
                                       </button>
                                       <button
                                         type="button"
                                         onClick={() => setIntent("short")}
-                                        className={`h-10 text-sm ${intent === "short" ? "bg-sell text-paper" : "border border-gold/40 text-ink/55"}`}
+                                        className={`h-10 text-sm ${intent === "short" ? "hl-sell" : "hl-sell off"}`}
                                       >
                                         {lang === "zh" ? "卖出 / 做空" : "Sell / Short"}
                                       </button>
                                     </div>
-                                    <p className="flex justify-between text-xs xl:hidden">
+                                    <div className="grid grid-cols-2 gap-y-0.5 font-mono text-[12px]">
                                       <span className="text-ink/45">
                                         {lang === "zh" ? "可用" : "Available"}
                                       </span>
-                                      <span className="font-mono">
-                                        {bal ? pretty(bal.usdt, dec, 2) : "0.00"}{" "}
+                                      <span className="text-right">
+                                        {bal ? pretty(bal.usdt, dec, 2) : "—"}{" "}
                                         {chain === "xlayer" ? "USDT0" : "USDT"}
                                       </span>
-                                    </p>
+                                      <span className="text-ink/45">
+                                        {lang === "zh" ? "当前仓位" : "Position"}
+                                      </span>
+                                      <span className="text-right">
+                                        {posSize ? posSize.toFixed(4) : "0.00"} {base}
+                                      </span>
+                                    </div>
+                                    {orderStyle === "market" || orderStyle === "chase" ? (
+                                      <p className="hl-field font-mono text-sm">
+                                        <span className="shrink-0 text-[11px] text-ink/45">
+                                          {lang === "zh" ? "价格" : "Price"}
+                                        </span>
+                                        <span className="ml-auto">
+                                          {markN > 0 ? pxTextN(markN) : "—"}
+                                          <span className="ml-2 text-[11px] text-ink/40">Mid</span>
+                                        </span>
+                                      </p>
+                                    ) : null}
                                     {orderStyle === "limit" || orderStyle === "post" ? (
                                       <label className="relative flex items-center gap-2 border border-gold/40 px-3 py-2">
                                         <span className="shrink-0 text-[11px] text-ink/45">
@@ -2428,7 +2387,7 @@ export function RealPerp({
                                         {chain === "xlayer" ? "USDT0" : "USDT"}
                                       </span>
                                     </label>
-                                    <div className="hidden grid-cols-4 gap-1 xl:grid">
+                                    <div className="hidden">
                                       {[25, 50, 75, 100].map((pct) => (
                                         <button
                                           key={pct}
@@ -2440,7 +2399,7 @@ export function RealPerp({
                                         </button>
                                       ))}
                                     </div>
-                                    <div className="flex items-center gap-2 xl:hidden">
+                                    <div className="flex items-center gap-2">
                                       <input
                                         type="range"
                                         min={0}
@@ -2453,23 +2412,26 @@ export function RealPerp({
                                         {sizePct}%
                                       </span>
                                     </div>
-                                    <label className="flex items-center gap-2 text-sm">
-                                      <input
-                                        type="checkbox"
-                                        checked={reduceOnly}
-                                        onChange={() => setReduceOnly((on) => !on)}
-                                      />
-                                      {lang === "zh" ? "只减仓" : "Reduce only"}
-                                    </label>
-                                    <label className="flex items-center gap-2 text-sm">
-                                      <input
-                                        type="checkbox"
-                                        checked={ticketMore}
-                                        onChange={() => setTicketMore((on) => !on)}
-                                      />
-                                      {lang === "zh" ? "止盈/止损" : "TP / SL"}
-                                    </label>
-                                    <div className="hidden grid-cols-4 gap-1 xl:grid">
+                                    <div className="flex items-center gap-3 text-xs text-ink/70">
+                                      <label className="flex items-center gap-2">
+                                        <input
+                                          type="checkbox"
+                                          checked={reduceOnly}
+                                          onChange={() => setReduceOnly((on) => !on)}
+                                        />
+                                        {lang === "zh" ? "只减仓" : "Reduce only"}
+                                      </label>
+                                      <span className="font-mono text-ink/45">GTC</span>
+                                      <label className="ml-auto flex items-center gap-2">
+                                        <input
+                                          type="checkbox"
+                                          checked={ticketMore}
+                                          onChange={() => setTicketMore((on) => !on)}
+                                        />
+                                        {lang === "zh" ? "止盈/止损" : "TP / SL"}
+                                      </label>
+                                    </div>
+                                    <div className="hidden">
                                       {[10, 50, 100, 0].map((bps) => (
                                         <button
                                           key={bps}
@@ -2651,15 +2613,11 @@ export function RealPerp({
                                       })
                                     : null,
                                   <div className="grid grid-cols-2 gap-y-1 font-mono text-[11px]">
-                                    <span className="text-ink/45">
+                                    <span className="ph-stat text-ink/45">
                                       {lang === "zh" ? "可用" : "Available"}
                                     </span>
-                                    <span className="text-right">
-                                      {acctMode === "unified" && spotN > 0
-                                        ? (freeN + spotN).toFixed(2)
-                                        : bal
-                                          ? pretty(bal.usdt, dec, 2)
-                                          : "—"}{" "}
+                                    <span className="ph-stat text-right">
+                                      {bal ? pretty(bal.usdt, dec, 2) : "—"}{" "}
                                       {chain === "xlayer" ? "USDT0" : "USDT"}
                                     </span>
                                     <span className="ph-stat text-ink/45">
@@ -2722,49 +2680,39 @@ export function RealPerp({
                                             ? margin
                                             : "—"}
                                     </span>
-                                    <span className="ph-stat text-ink/45">
+                                    <span className="text-ink/45">
                                       {lang === "zh" ? "费用" : "Fee"}
                                     </span>
-                                    <span className="ph-stat text-right">0.20% / 0.20%</span>
+                                    <span className="text-right">0.20% / 0.20%</span>
                                     <span className="text-ink/45">
                                       {lang === "zh" ? "滑点" : "Slippage"}
                                     </span>
                                     <span className="text-right">
                                       Est {slipBps === 0 ? "0%" : `${(slipBps / 100).toFixed(2)}%`}{" "}
-                                      / Max 1.00%
+                                      / Max 8.00%
                                     </span>
                                   </div>,
                                   !levOk || !marginOk
                                     ? /* @__PURE__ */ jsx("p", {
-                                        className: "text-sm text-sell",
+                                        className: "desk-extra",
                                         children: !levOk ? c.levCap : `${floor}–500 USDT`,
                                       })
                                     : null,
                                   !priceOk
                                     ? /* @__PURE__ */ jsx("p", {
-                                        className: "text-sm text-sell",
+                                        className: "desk-extra",
                                         children: c.badPrice,
                                       })
                                     : null,
-                                  bal &&
-                                  marginOk &&
-                                  freeN + (acctMode === "unified" ? spotN : 0) + 0.009 <
-                                    (planned.lock || Number(margin) || 0)
-                                    ? /* @__PURE__ */ jsxs("p", {
-                                        className: "text-sm text-sell",
-                                        children: [
-                                          chain === "xlayer" ? c.perpNeedX : c.perpNeedUsdt,
-                                          " ",
-                                          pretty(bal.usdt, dec, 2),
-                                          " / ",
-                                          margin,
-                                          " USDT",
-                                        ],
+                                  usdtShort
+                                    ? /* @__PURE__ */ jsx("p", {
+                                        className: "text-xs leading-snug text-sell",
+                                        children: shortLine,
                                       })
                                     : null,
                                   <button
                                     type="button"
-                                    className={`min-h-12 text-paper disabled:opacity-40 ${intent === "long" ? "bg-up" : "bg-sell"}`}
+                                    className={`min-h-11 w-full text-sm ${intent === "short" ? "hl-sell" : "hl-buy"}`}
                                     disabled={
                                       busy ||
                                       (!canDeploy &&
@@ -2814,6 +2762,11 @@ export function RealPerp({
                                         );
                                         return;
                                       }
+                                      if (usdtShort) {
+                                        setBad(true);
+                                        setNote(shortLine);
+                                        return;
+                                      }
                                       setCard(intent);
                                     }}
                                   >
@@ -2837,12 +2790,12 @@ export function RealPerp({
                                           ? "卖出 / 做空"
                                           : "Sell / Short"}
                                   </button>,
-                                  note ? (
-                                    <p className={`text-xs ${bad ? "text-sell" : "text-ink/70"}`}>
-                                      {note}
-                                    </p>
-                                  ) : null,
-                                  <TradeLog zh={lang === "zh"} />,
+                                  note
+                                    ? /* @__PURE__ */ jsx("p", {
+                                        className: `text-xs ${bad ? "text-sell" : "text-ink/70"}`,
+                                        children: note,
+                                      })
+                                    : null,
                                   card
                                     ? /* @__PURE__ */ jsx(SignCard, {
                                         title: lang === "zh" ? "签名前看一眼" : "Before you sign",
@@ -2881,12 +2834,17 @@ export function RealPerp({
                                               if (!view?.myDeal) throw new Error("flat");
                                               await closePerp(from, perp, view.myDeal);
                                             }
-                                            if (!reduceOnly && planned.spotUsdt > 0)
-                                              await fundMargin(chain, from, planned.spotUsdt, bemNow);
                                             const sendMargin =
                                               !reduceOnly && planned.lock > 0
                                                 ? planned.lock.toFixed(2)
                                                 : margin;
+                                            if (
+                                              !reduceOnly &&
+                                              planned.net !== "close" &&
+                                              orderStyle !== "trail" &&
+                                              Number(sendMargin) > freeN + 0.009
+                                            )
+                                              throw new Error("usdt");
                                             const sendLev = !reduceOnly && planned.lev > 0 ? planned.lev : lev;
                                             let tx;
                                             if (orderStyle === "post")
@@ -3139,6 +3097,84 @@ export function RealPerp({
                                 children: c.liqNow,
                               })
                             : null,
+                          /* @__PURE__ */ jsxs("div", {
+                            className: "ticket-well",
+                            children: [
+                              /* @__PURE__ */ jsxs("div", {
+                                children: [
+                                  /* @__PURE__ */ jsx("p", {
+                                    className: "text-[11px] text-ink/40",
+                                    children: lang === "zh" ? "开仓" : "Open",
+                                  }),
+                                  /* @__PURE__ */ jsx("p", {
+                                    className: `mt-1 text-[13px] leading-snug ${usdtShort ? "text-sell" : "text-ink/75"}`,
+                                    children: usdtShort
+                                      ? lang === "zh"
+                                        ? "把保证金调到钱包里的 USDT 以内再开。现货不会被卖掉。"
+                                        : "Lower the margin to the USDT in the wallet. Spot is not sold."
+                                      : lang === "zh"
+                                        ? "保证金只锁钱包里的 USDT，不会先卖现货。0.20% 在成交的同一笔里扣，没成交不扣。"
+                                        : "Margin locks wallet USDT only. Spot is not sold first. The 0.20% is taken in the fill, and not taken if it does not fill.",
+                                  }),
+                                  acctMode === "unified" && spotN > 0
+                                    ? /* @__PURE__ */ jsx("p", {
+                                        className: "mt-1 font-mono text-[11px] text-ink/45",
+                                        children:
+                                          lang === "zh"
+                                            ? `现货 ${spotN.toFixed(2)} 留在钱包，不计入这一笔。`
+                                            : `Spot ${spotN.toFixed(2)} stays in the wallet and is not part of this order.`,
+                                      })
+                                    : null,
+                                ],
+                              }),
+                              /* @__PURE__ */ jsxs("div", {
+                                className: "grid grid-cols-3 gap-2 border-t border-gold/30 pt-2 font-mono text-[11px]",
+                                children: [
+                                  /* @__PURE__ */ jsxs("p", {
+                                    className: "flex flex-col gap-0.5",
+                                    children: [
+                                      /* @__PURE__ */ jsx("span", {
+                                        className: "text-ink/40",
+                                        children: lang === "zh" ? "标记" : "Mark",
+                                      }),
+                                      /* @__PURE__ */ jsx("span", {
+                                        children: markN > 0 ? pxTextN(markN) : "—",
+                                      }),
+                                    ],
+                                  }),
+                                  /* @__PURE__ */ jsxs("p", {
+                                    className: "flex flex-col gap-0.5",
+                                    children: [
+                                      /* @__PURE__ */ jsx("span", {
+                                        className: "text-ink/40",
+                                        children: lang === "zh" ? "强平" : "Liq",
+                                      }),
+                                      /* @__PURE__ */ jsx("span", {
+                                        children:
+                                          planned.liq > 0
+                                            ? planned.liq.toFixed(4)
+                                            : quoteLiq > 0
+                                              ? quoteLiq.toFixed(4)
+                                              : "—",
+                                      }),
+                                    ],
+                                  }),
+                                  /* @__PURE__ */ jsxs("p", {
+                                    className: "flex flex-col gap-0.5 text-right",
+                                    children: [
+                                      /* @__PURE__ */ jsx("span", {
+                                        className: "text-ink/40",
+                                        children: chain === "xlayer" ? "USDT0" : "USDT",
+                                      }),
+                                      /* @__PURE__ */ jsx("span", {
+                                        children: walletUsdt,
+                                      }),
+                                    ],
+                                  }),
+                                ],
+                              }),
+                            ],
+                          }),
                         ],
                       }),
                   ],
@@ -3147,7 +3183,7 @@ export function RealPerp({
             }),
             account
               ? /* @__PURE__ */ jsxs("p", {
-                  className: "font-mono text-xs xl:col-span-12",
+                  className: "hidden",
                   children: [
                     short(account),
                     " · ",
@@ -3160,100 +3196,164 @@ export function RealPerp({
               : null,
             perp && bal && view && bal.usdt < view.min
               ? /* @__PURE__ */ jsx("p", {
-                  className: "text-sm text-sell xl:col-span-12",
+                  className: "hidden",
                   children: chain === "xlayer" ? c.perpNeedX : c.perpNeedUsdt,
                 })
               : null,
-            <div className="border-t border-gold xl:col-span-12">
+            false ? (
+              <div className="grid gap-2 border-t border-gold px-3 py-2 sm:grid-cols-2">
+                {shownDeals.map((deal) => {
+                  const mineLong = deal.long.toLowerCase() === me;
+                  const pnl = mineLong ? deal.eqL - deal.marginL : deal.eqS - deal.marginS;
+                  const marginSide = mineLong ? deal.marginL : deal.marginS;
+                  const roe = marginSide > 0n ? (Number(pnl) / Number(marginSide)) * 100 : 0;
+                  const entry = Number(formatUnits(deal.entry, 18));
+                  const size = Number(formatUnits(deal.base, 18));
+                  const up = pnl >= 0n;
+                  const sideLev = (mineLong ? deal.levL : deal.levS) || 0;
+                  return (
+                    <div
+                      key={`pos-${deal.id.toString()}`}
+                      className={`flex items-center gap-3 border px-3 py-2 ${mineLong ? "border-[#17875a]/40" : "border-sell/40"}`}
+                    >
+                      <span className={`h-10 w-1 shrink-0 ${up ? "bg-[#17875a]" : "bg-sell"}`} />
+                      <div className="min-w-0 flex-1">
+                        <p className="flex items-baseline gap-2 text-sm">
+                          <span className="font-medium">{base}-USDT</span>
+                          <span className={mineLong ? "text-[#17875a]" : "text-sell"}>
+                            {mineLong ? (lang === "zh" ? "多" : "Long") : lang === "zh" ? "空" : "Short"}
+                            {sideLev ? ` ${sideLev}×` : ""}
+                          </span>
+                        </p>
+                        <p className="font-mono text-[11px] text-ink/50">
+                          {size.toFixed(4)} {base}
+                          {" · "}
+                          {entry > 0 ? pxTextN(entry) : "—"}
+                          {" → "}
+                          {markN > 0 ? pxTextN(markN) : "—"}
+                        </p>
+                      </div>
+                      <div className={`text-right font-mono ${up ? "text-[#17875a]" : "text-sell"}`}>
+                        <p className="text-sm">
+                          {up ? "+" : ""}
+                          {pretty(pnl, dec, 4)}
+                        </p>
+                        <p className="text-[11px]">
+                          {roe >= 0 ? "+" : ""}
+                          {roe.toFixed(2)}%
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="h-8 shrink-0 border border-sell px-2 text-xs text-sell"
+                        disabled={busy}
+                        onClick={() => run((from) => closePerp(from, perp, deal.id), "close")}
+                      >
+                        {lang === "zh" ? "平仓" : "Close"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null,
+            <div className="ph-blotter border-t border-gold xl:col-span-12 xl:grid xl:grid-cols-[minmax(0,1fr)_15.5rem]">
+              <div className="min-w-0">
               <div className="flex gap-1 overflow-x-auto px-2 pt-1">
                 {(
                   [
                     ["bal", lang === "zh" ? "余额" : "Balances"],
-                    ["pos", lang === "zh" ? "仓位" : "Positions"],
-                    ["ord", lang === "zh" ? "当前委托" : "Open orders"],
+                    ["pos", lang === "zh" ? `仓位 (${shownDeals.length})` : `Positions (${shownDeals.length})`],
+                    ["ord", lang === "zh" ? `当前委托 (${myQuotes.length})` : `Orders (${myQuotes.length})`],
                     ["twap", "TWAP"],
-                    ["chase", lang === "zh" ? "追价" : "Chase"],
+                    ["chase", lang === "zh" ? "追价" : "Chase", "phone-more"],
                     ["fill", lang === "zh" ? "历史成交" : "Trade history"],
-                    ["fund", lang === "zh" ? "资金费历史" : "Funding"],
-                    ["hist", lang === "zh" ? "历史委托" : "Order history"],
+                    ["fund", lang === "zh" ? "资金费历史" : "Funding", "phone-more"],
+                    ["hist", lang === "zh" ? "历史委托" : "Order history", "phone-more"],
                   ] as const
-                ).map(([id, label]) => (
+                ).map(([id, label, extra]) => (
                   <button
                     key={id}
                     type="button"
                     onClick={() => setDock(id)}
-                    className={`h-8 shrink-0 px-2 text-xs ${dock === id ? "tab-on" : "text-ink/45"}`}
+                    className={`h-8 shrink-0 px-2 text-xs ${extra || ""} ${dock === id ? "tab-on" : "text-ink/45"}`}
                   >
                     {label}
                   </button>
                 ))}
               </div>
-              <div className="min-h-14 px-3 py-2 text-xs">
+              <div className="min-h-14 overflow-x-auto px-2 py-2 text-xs">
                 {dock === "pos" ? (
-                  account &&
-                  (view?.liveDeals ?? []).some(
-                    (deal) =>
-                      deal.long.toLowerCase() === account.toLowerCase() ||
-                      deal.short.toLowerCase() === account.toLowerCase(),
-                  ) ? (
-                    <div className="flex flex-col gap-1 font-mono">
-                      {(view?.liveDeals ?? [])
-                        .filter(
-                          (deal) =>
-                            deal.long.toLowerCase() === account.toLowerCase() ||
-                            deal.short.toLowerCase() === account.toLowerCase(),
-                        )
-                        .map((deal) => {
-                          const mineLong = deal.long.toLowerCase() === account.toLowerCase();
-                          const pnl = mineLong ? deal.eqL - deal.marginL : deal.eqS - deal.marginS;
-                          const marginSide = mineLong ? deal.marginL : deal.marginS;
-                          const roe =
-                            marginSide > 0n ? (Number(pnl) / Number(marginSide)) * 100 : 0;
-                          const entry = Number(formatUnits(deal.entry, 18));
-                          const sideLev = (mineLong ? deal.levL : deal.levS) || 0;
-                          const liq =
-                            entry > 0 && sideLev > 0
-                              ? mineLong
-                                ? entry * (1 - 0.5 / sideLev)
-                                : entry * (1 + 0.5 / sideLev)
-                              : 0;
-                          return (
-                            <p
-                              key={deal.id.toString()}
-                              className="flex flex-wrap items-center gap-2"
+                  shownDeals.length ? (
+                    <div className="flex flex-col gap-2">
+                      {shownDeals.map((deal) => {
+                        const mineLong = deal.long.toLowerCase() === me;
+                        const pnl = mineLong ? deal.eqL - deal.marginL : deal.eqS - deal.marginS;
+                        const marginSide = mineLong ? deal.marginL : deal.marginS;
+                        const roe = marginSide > 0n ? (Number(pnl) / Number(marginSide)) * 100 : 0;
+                        const entry = Number(formatUnits(deal.entry, 18));
+                        const sideLev = (mineLong ? deal.levL : deal.levS) || 0;
+                        const liq =
+                          entry > 0 && sideLev > 0
+                            ? mineLong
+                              ? entry * (1 - 0.5 / sideLev)
+                              : entry * (1 + 0.5 / sideLev)
+                            : 0;
+                        const size = Number(formatUnits(deal.base, 18));
+                        const up = pnl >= 0n;
+                        return (
+                          <div key={deal.id.toString()} className="border border-gold/30 px-2 py-2">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-sm">
+                                  {base}-USDT{" "}
+                                  <span className={mineLong ? "text-[#1b6b45]" : "text-sell"}>
+                                    {mineLong ? (lang === "zh" ? "多" : "Long") : lang === "zh" ? "空" : "Short"}
+                                    {sideLev ? ` ${sideLev}×` : ""}
+                                  </span>
+                                </p>
+                                <p className="mt-1 font-mono text-[11px] text-ink/50">
+                                  {size.toFixed(4)} {base}
+                                  {" · "}
+                                  {entry > 0 ? pxTextN(entry) : "—"}
+                                  {" → "}
+                                  {markN > 0 ? pxTextN(markN) : "—"}
+                                  {" · "}
+                                  {usdtText(marginSide)}
+                                  {liq > 0 ? ` · ${lang === "zh" ? "强平" : "Liq"} ${liq.toFixed(4)}` : ""}
+                                </p>
+                              </div>
+                              <div className={`shrink-0 text-right font-mono ${up ? "text-[#1b6b45]" : "text-sell"}`}>
+                                <p className="text-base leading-none">
+                                  {roe >= 0 ? "+" : ""}
+                                  {roe.toFixed(2)}%
+                                </p>
+                                <p className="mt-1 text-[11px]">
+                                  {up ? "+" : ""}
+                                  {pretty(pnl, dec, 4)}
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              className="mt-2 h-8 border border-sell px-3 text-sell"
+                              disabled={busy}
+                              onClick={() => run((from) => closePerp(from, perp, deal.id), "close")}
                             >
-                              <span>
-                                #{deal.id.toString()}{" "}
-                                {mineLong
-                                  ? lang === "zh"
-                                    ? "多"
-                                    : "Long"
-                                  : lang === "zh"
-                                    ? "空"
-                                    : "Short"}{" "}
-                                · {pxText(deal.entry)}
-                                {prefs.showPnl
-                                  ? ` · ${pnl >= 0n ? "+" : ""}${pretty(pnl, dec, 4)} · ${roe >= 0 ? "+" : ""}${roe.toFixed(2)}%`
-                                  : ""}{" "}
-                                · {lang === "zh" ? "强平" : "Liq"} {liq > 0 ? liq.toFixed(4) : "—"}
-                              </span>
-                              <button
-                                type="button"
-                                className="underline"
-                                disabled={busy}
-                                onClick={() =>
-                                  run((from) => closePerp(from, perp, deal.id), "close")
-                                }
-                              >
-                                {lang === "zh" ? "平仓" : "Close"}
-                              </button>
-                            </p>
-                          );
-                        })}
+                              {lang === "zh" ? "平仓" : "Close"}
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   ) : (
-                    <p className="text-ink/45">
-                      {lang === "zh" ? "尚无开放仓位" : "No open position"}
+                    <p className="px-1 text-ink/45">
+                      {myQuotes.length
+                        ? lang === "zh"
+                          ? "还没有成交。挂着的单在「委托」，没人接就没有盈亏。"
+                          : "Nothing has filled. The resting order is under Orders. No fill, no PnL."
+                        : lang === "zh"
+                          ? "尚无开放仓位"
+                          : "No open position"}
                     </p>
                   )
                 ) : null}
@@ -3265,45 +3365,44 @@ export function RealPerp({
                   </p>
                 ) : null}
                 {dock === "ord" ? (
-                  (view?.quotes ?? []).some(
-                    (quote) => account && quote.user.toLowerCase() === account.toLowerCase(),
-                  ) ? (
-                    <div className="flex flex-col gap-1 font-mono">
-                      {(view?.quotes ?? [])
-                        .filter(
-                          (quote) => account && quote.user.toLowerCase() === account.toLowerCase(),
-                        )
-                        .map((quote) => (
-                          <p key={quote.id.toString()} className="flex items-center gap-3">
-                            <span>
-                              #{quote.id.toString()}{" "}
-                              {quote.long
-                                ? lang === "zh"
-                                  ? "多"
-                                  : "Long"
-                                : lang === "zh"
-                                  ? "空"
-                                  : "Short"}{" "}
-                              · {quote.price > 0n ? pxText(quote.price) : "—"} ·{" "}
-                              {usdtText(quote.margin)}
-                            </span>
+                  myQuotes.length ? (
+                    <div className="flex flex-col gap-2">
+                      {myQuotes.map((quote) => {
+                        const px = quote.price > 0n ? Number(formatUnits(quote.price, 18)) : markN;
+                        const marginN = Number(formatUnits(quote.margin, dec));
+                        const size = px > 0 ? (marginN * quote.lev) / px : 0;
+                        return (
+                          <div key={quote.id.toString()} className="flex items-center gap-2 border border-gold/30 px-2 py-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm">
+                                {base}-USDT{" "}
+                                <span className={quote.long ? "text-[#1b6b45]" : "text-sell"}>
+                                  {quote.long ? (lang === "zh" ? "多" : "Long") : lang === "zh" ? "空" : "Short"}
+                                  {` ${quote.lev}×`}
+                                </span>
+                              </p>
+                              <p className="mt-1 font-mono text-[11px] text-ink/50">
+                                {quote.price > 0n ? pxTextN(px) : lang === "zh" ? "随标记" : "Mark"}
+                                {" · "}
+                                {size > 0 ? size.toFixed(4) : "—"} {base}
+                                {" · "}
+                                {usdtText(quote.margin)}
+                              </p>
+                            </div>
                             <button
                               type="button"
-                              className="underline"
+                              className="h-8 shrink-0 border border-gold px-2"
                               disabled={busy}
-                              onClick={() =>
-                                run((from) => cancelPerp(from, perp, quote.id), "cancel")
-                              }
+                              onClick={() => run((from) => cancelPerp(from, perp, quote.id), "cancel")}
                             >
-                              {lang === "zh" ? "撤销" : "Cancel"}
+                              {lang === "zh" ? "撤单" : "Cancel"}
                             </button>
-                          </p>
-                        ))}
+                          </div>
+                        );
+                      })}
                     </div>
                   ) : (
-                    <p className="text-ink/45">
-                      {lang === "zh" ? "没有未成交的委托" : "No open orders"}
-                    </p>
+                    <p className="px-1 text-ink/45">{lang === "zh" ? "没有未成交的委托" : "No open orders"}</p>
                   )
                 ) : null}
                 {stops.some(
@@ -3443,16 +3542,47 @@ export function RealPerp({
                   </p>
                 ) : null}
               </div>
+              </div>
+              <aside className="hl-acct border-t border-gold px-3 py-2 xl:border-l xl:border-t-0">
+                <p className="mb-1 text-[11px] text-ink/40">
+                  {lang === "zh" ? "账户权益" : "Account equity"}
+                </p>
+                <p className="hl-kv">
+                  <span>{lang === "zh" ? "现货" : "Spot"}</span>
+                  <span>{spotN.toFixed(2)}</span>
+                </p>
+                <p className="hl-kv">
+                  <span>{lang === "zh" ? "合约" : "Perps"}</span>
+                  <span>{usedMargin.toFixed(2)}</span>
+                </p>
+                <p className="hl-kv">
+                  <span>{lang === "zh" ? "余额" : "Balance"}</span>
+                  <span>
+                    {bal ? freeN.toFixed(2) : "—"} {chain === "xlayer" ? "USDT0" : "USDT"}
+                  </span>
+                </p>
+                <p className="hl-kv">
+                  <span>{lang === "zh" ? "未实现盈亏" : "uPnL"}</span>
+                  <span className={openPnl >= 0 ? "text-up" : "text-sell"}>
+                    {openPnl >= 0 ? "+" : ""}
+                    {openPnl.toFixed(2)}
+                  </span>
+                </p>
+                <p className="hl-kv">
+                  <span>{lang === "zh" ? "费用" : "Fees"}</span>
+                  <span>0.20% / 0.20%</span>
+                </p>
+              </aside>
             </div>,
             note
               ? /* @__PURE__ */ jsx("p", {
-                  className: `text-sm xl:col-span-12 ${bad ? "text-sell" : ""}`,
+                  className: `text-xs xl:col-span-12 ${bad ? "text-sell" : "text-ink/70"}`,
                   children: note,
                 })
               : null,
             hash
               ? /* @__PURE__ */ jsx("a", {
-                  className: "text-sm underline decoration-gold underline-offset-4 xl:col-span-12",
+                  className: "desk-extra",
                   href: `${scan}/tx/${hash}`,
                   target: "_blank",
                   rel: "noreferrer",

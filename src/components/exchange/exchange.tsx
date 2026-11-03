@@ -166,7 +166,6 @@ export function Exchange({
             setShop={setShop}
             setGiftOpen={setGiftOpen}
           />
-          {floor === "desk" ? <TradeBanner /> : null}
           <div
             key={`${floor}-${shop}`}
             className={`flex flex-col gap-3 px-2 pt-2 sm:px-3 ${floor === "paper" ? "pb-6" : ""}`}
@@ -337,41 +336,6 @@ function TerminalBar({
         <ThemeButton night={night} setNight={setNight} />
       </span>
     </footer>
-  );
-}
-
-function TradeBanner() {
-  const zh = useExchange((s) => s.lang) === "zh";
-  const cells = zh
-    ? [
-        ["现货", "TAPE"],
-        ["委托", "限价 / 市价"],
-        ["合约", "TAPE"],
-        ["市场", "全部"],
-      ]
-    : [
-        ["Spot", "TAPE"],
-        ["Order", "Limit / Market"],
-        ["Perps", "TAPE"],
-        ["Markets", "All"],
-      ];
-  return (
-    <div className="trade-ribbon hidden overflow-x-auto lg:block" role="status">
-      <div className="mx-auto flex h-8 w-max min-w-full items-stretch justify-center">
-        {cells.map(([key, value], index) => (
-          <div
-            key={key}
-            className={`flex items-center gap-2 px-3.5 ${index > 0 ? "ribbon-rule" : ""}`}
-          >
-            {index === 0 ? (
-              <span className="live-dot size-1.5 shrink-0 rounded-full bg-up" aria-hidden />
-            ) : null}
-            <span className="text-[10px] tracking-[0.18em] text-current/45 uppercase">{key}</span>
-            <span className="font-mono text-[12px]">{value}</span>
-          </div>
-        ))}
-      </div>
-    </div>
   );
 }
 

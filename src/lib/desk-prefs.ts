@@ -22,7 +22,7 @@ const KEY = "tapeliquid-desk-prefs-v1";
 
 export const PREF_DEFAULTS: DeskPrefs = {
   keepAlive: true,
-  orderConfirm: true,
+  orderConfirm: false,
   closeConfirm: true,
   closeAllHold: false,
   delayGuard: true,

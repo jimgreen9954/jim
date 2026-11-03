@@ -72,10 +72,9 @@ export function planMargin(input: {
       work = notional - mine.notional;
     }
   }
-  const spendable = input.acctMode === "unified" ? input.freeUsdt + Math.max(0, input.spotQuote) : input.freeUsdt;
+  const spendable = input.freeUsdt;
   const sized = sizeLock(input.marginMode, work, lev0, spendable);
-  const spotUsdt =
-    input.acctMode === "unified" && sized.lock > input.freeUsdt + 0.009 ? round2(sized.lock - input.freeUsdt) : 0;
+  const spotUsdt = 0;
   const price = input.price > 0 ? input.price : 0;
   const liq =
     net === "close" || !(price > 0) || !(sized.lev > 0)
@@ -97,7 +96,8 @@ export function modeLine(zh: boolean, plan: MarginPlan, typed: number, marginMod
         ? `全仓锁进 ${plan.lock.toFixed(2)}，倍数改成 ${plan.lev}。`
         : `Cross locks ${plan.lock.toFixed(2)} at ${plan.lev}×.`,
     );
-  if (plan.spotUsdt > 0) bits.push(zh ? "USDT 不够，先卖 BEM。" : "USDT is short, so BEM is sold first.");
+  if (plan.spotUsdt > 0)
+    bits.push(zh ? "钱包 USDT 不够。现货不会自动卖掉。" : "Wallet USDT is short. Spot is not sold automatically.");
   return bits.join(" ");
 }
 

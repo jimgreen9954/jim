@@ -7,6 +7,7 @@ import {
   sendBridge,
   type BridgeQuote,
 } from "@/lib/bem-bridge";
+import { tradeStepText } from "@/lib/trade-step";
 import { deskParts } from "@/lib/invite-cut";
 import { bemPrice, BSC } from "@/lib/bsc";
 import { TAPE_BEM } from "@/lib/tape-pool";
@@ -87,6 +88,15 @@ function GasDesk({ account, zh }: { account: string | null; zh: boolean }) {
   const [note, setNote] = useState("");
   const [bad, setBad] = useState(false);
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    const onStep = (event: Event) => {
+      const step = (event as CustomEvent<string>).detail;
+      setBad(false);
+      setNote(step === "trade" ? (zh ? "正在兑换。" : "Swapping now.") : tradeStepText(step, zh));
+    };
+    window.addEventListener("tl-trade-step", onStep);
+    return () => window.removeEventListener("tl-trade-step", onStep);
+  }, [zh]);
   const gross = (() => {
     try {
       return amt.trim() ? parseEther(amt.trim()) : 0n;
@@ -206,7 +216,7 @@ function GasDesk({ account, zh }: { account: string | null; zh: boolean }) {
           if (!account || gross <= 0n) return;
           setBusy(true);
           setBad(false);
-          setNote("");
+          setNote(tradeStepText("fill", zh));
           sendGasRoute(toBnb, account, gross)
             .then(() => {
               setBad(false);
@@ -220,7 +230,15 @@ function GasDesk({ account, zh }: { account: string | null; zh: boolean }) {
                   ? zh
                     ? "余额不够。"
                     : "Balance is not enough."
-                  : code === "fee-kept"
+                  : code === "fee-open"
+                    ? zh
+                      ? "兑换已经发出，手续费没扣上。再点一次只补手续费。"
+                      : "The swap was sent. The fee was not taken. Tap again to pay only the fee."
+                    : code === "pending"
+                      ? zh
+                        ? "兑换已经提交，回执还没读到。再点一次不会再换，只等回执后补手续费。"
+                        : "The swap is submitted and the receipt is not back. Tapping again does not swap twice. It only pays the fee after the receipt."
+                    : code === "fee-kept"
                     ? zh
                       ? "台费已经转出，不退。兑换没有提交。"
                       : "The fee was sent and is not returned. The swap was not submitted."

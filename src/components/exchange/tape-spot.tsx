@@ -512,13 +512,14 @@ export function TapeSpotDesk({
     );
   })();
 
-  const run = (task: () => Promise<unknown>, ok: string) => {
+  const run = (task: () => Promise<unknown>, ok: string, lead?: string) => {
     setBusy(true);
     setBad(false);
     setNote(
-      zh
-        ? "正在连接 X Layer 钱包。请在钱包中确认。"
-        : "Connecting the X Layer wallet. Confirm the request there.",
+      lead ??
+        (zh
+          ? "正在连接 X Layer 钱包。请在钱包中确认。"
+          : "Connecting the X Layer wallet. Confirm the request there."),
     );
     task()
       .then((result) => {
@@ -650,6 +651,9 @@ export function TapeSpotDesk({
       zh
         ? "已按这一档提交。数量不超过这一档，多出来的不会再挂成新单。"
         : "Submitted at this level. The amount does not exceed it, so nothing extra is left on the book.",
+      zh
+        ? "这一笔确认先扣 0.20% 手续费，然后挂单。"
+        : "This confirmation takes the 0.20% fee, then rests the order.",
     );
   };
 
@@ -1248,6 +1252,9 @@ export function TapeSpotDesk({
                       zh
                         ? "已进订单簿。没有对手的部分继续挂着，不会消失。"
                         : "It is on the book. Whatever did not meet another order stays there.",
+                      zh
+                        ? "这一笔确认先扣 0.20% 手续费，然后挂单。"
+                        : "This confirmation takes the 0.20% fee, then rests the order.",
                     );
                   }}
                 >

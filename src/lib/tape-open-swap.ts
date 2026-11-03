@@ -1,6 +1,8 @@
 import { createPublicClient, encodeFunctionData, formatUnits, http, parseAbi, parseUnits, type Hex } from "viem";
 import { FEE_TO, TxPending, XLAYER, XLAYER_SAFE } from "@/lib/chain-marks";
 import { deskParts } from "@/lib/invite-cut";
+import { sayTradeStep } from "@/lib/trade-step";
+import { rejected, sendUserBatch, type SignedCall } from "@/lib/one-sign";
 import { ensureProvider } from "@/lib/wallet";
 import { rememberOpenPrint } from "@/lib/tape-open-candles";
 
@@ -150,31 +152,66 @@ export async function buyOkbWithUsdt0(from: string, usdtIn: bigint): Promise<big
   if (parts.swapIn <= 0n) throw new Error("amount");
   const out = await quoteUsdt0Okb("buy", parts.swapIn);
   if (out <= 0n) throw new Error("empty");
-  if (parts.reward > 0n && parts.referrer) {
-    await wait(await send(from, USDT, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [parts.referrer, parts.reward] })));
-  }
-  if (parts.desk > 0n) {
-    let routed = false;
-    try {
-      const { routeDeskFee } = await import("@/lib/card-pool");
-      routed = await routeDeskFee("xlayer", from, parts.desk, 0);
-    } catch (err) {
-      if (err instanceof TxPending) throw err;
-      routed = false;
-    }
-    if (!routed) {
-      await wait(await send(from, USDT, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [XLAYER_SAFE, parts.desk] })));
-    }
-  }
   await approveToken(from, USDT, parts.swapIn);
-  const minOut = out * 99n / 100n;
-  const before = await client.getBalance({ address: from as Hex });
+  const minOut = (out * 99n) / 100n;
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20);
   const data = encodeFunctionData({
     abi: v2,
     functionName: "swapExactTokensForETH",
-    args: [parts.swapIn, minOut, [USDT, WOKB], from as Hex, BigInt(Math.floor(Date.now() / 1000) + 60 * 20)],
+    args: [parts.swapIn, minOut, [USDT, WOKB], from as Hex, deadline],
   });
-  await wait(await send(from, ROUTER, data));
+  const before = await client.getBalance({ address: from as Hex });
+  const calls: SignedCall[] = [];
+  if (parts.reward > 0n && parts.referrer) {
+    calls.push({
+      to: USDT,
+      data: encodeFunctionData({ abi: erc20, functionName: "transfer", args: [parts.referrer, parts.reward] }),
+    });
+  }
+  if (parts.desk > 0n) {
+    calls.push({
+      to: USDT,
+      data: encodeFunctionData({ abi: erc20, functionName: "transfer", args: [XLAYER_SAFE, parts.desk] }),
+    });
+  }
+  calls.push({ to: ROUTER, data });
+  let filled = false;
+  if (calls.length > 1) {
+    try {
+      sayTradeStep("both");
+      await wait(await sendUserBatch(from, XLAYER.chainId, calls));
+      filled = true;
+    } catch (err) {
+      if (rejected(err) || err instanceof TxPending) throw err;
+      if (!(err instanceof Error) || err.message !== "no-batch") throw err;
+    }
+  }
+  if (!filled) {
+    sayTradeStep("fill");
+    await wait(await send(from, ROUTER, data));
+    if (parts.reward > 0n || parts.desk > 0n) sayTradeStep("fee");
+    try {
+      if (parts.reward > 0n && parts.referrer) {
+        await wait(await send(from, USDT, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [parts.referrer, parts.reward] })));
+      }
+      if (parts.desk > 0n) {
+        let routed = false;
+        try {
+          const { routeDeskFee } = await import("@/lib/card-pool");
+          routed = await routeDeskFee("xlayer", from, parts.desk, 0);
+        } catch (err) {
+          if (err instanceof TxPending) throw err;
+          routed = false;
+        }
+        if (!routed) {
+          await wait(await send(from, USDT, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [XLAYER_SAFE, parts.desk] })));
+        }
+      }
+    } catch (err) {
+      if (err instanceof TxPending) throw err;
+      throw new Error("fee-open");
+    }
+  }
   const after = await client.getBalance({ address: from as Hex });
   const gained = after > before ? after - before : 0n;
   if (gained <= 0n) throw new Error("empty");

@@ -296,11 +296,12 @@ export function TapeTerminal({
   const askView = useMemo(() => [...asks].reverse(), [asks]);
   const traded = prints.reduce((sum, row) => sum + row.quote, 0n);
 
-  const run = (task: () => Promise<unknown>, ok: string) => {
+  const run = (task: () => Promise<unknown>, ok: string, lead?: string) => {
     setBusy(true);
     setBad(false);
     setNote(
-      zhUi ? "正在连接 X Layer。请在钱包里确认。" : "Connecting X Layer. Confirm in the wallet.",
+      lead ??
+        (zhUi ? "正在连接 X Layer。请在钱包里确认。" : "Connecting X Layer. Confirm in the wallet."),
     );
     task()
       .then(() => {
@@ -388,6 +389,9 @@ export function TapeTerminal({
           return last;
         },
         zhUi ? "分批已挂上。" : "The scale is on the book.",
+        zhUi
+          ? "这一笔确认先扣 0.20% 手续费，然后挂单。"
+          : "This confirmation takes the 0.20% fee, then rests the order.",
       );
       return;
     }
@@ -454,6 +458,9 @@ export function TapeTerminal({
       zhUi
         ? "已进订单簿。能碰上的马上成交，剩下的继续挂着。"
         : "It is on the book. What can cross fills now. The rest stays.",
+      zhUi
+        ? "这一笔确认先扣 0.20% 手续费，然后挂单。"
+        : "This confirmation takes the 0.20% fee, then rests the order.",
     );
   };
 
@@ -743,9 +750,7 @@ export function TapeTerminal({
                       : `Sell ${name}`}
               </button>
               {note ? (
-                <p className={`mt-2 text-xs leading-5 ${bad ? "text-sell" : "text-ink/80"}`}>
-                  {note}
-                </p>
+                <p className={`mt-2 text-xs leading-5 ${bad ? "text-sell" : "text-ink/70"}`}>{note}</p>
               ) : null}
               <TradeLog zh={zhUi} />
             </>

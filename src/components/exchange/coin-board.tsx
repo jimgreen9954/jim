@@ -17,6 +17,7 @@ import {
 } from "@/lib/bsc";
 import { inviteCut, referrerOf } from "@/lib/invite-cut";
 import { rememberFill, TradeLog, TradeQuota } from "@/components/exchange/trade-foot";
+import { tradeStepText } from "@/lib/trade-step";
 import { markDeskFill } from "@/lib/red-packet";
 import { currentAccount, onAccount } from "@/lib/wallet";
 
@@ -43,6 +44,15 @@ export function CoinBoard({ coin, lang }: { coin: "btc" | "eth" | "zec"; lang: "
   const payDecimals = side === "buy" ? BSC.usdtDecimals : book.decimals;
 
   useEffect(() => onAccount(setAccount), []);
+  useEffect(() => {
+    const onStep = (event: Event) => {
+      const step = (event as CustomEvent<string>).detail;
+      setBad(false);
+      setNote(tradeStepText(step, zh));
+    };
+    window.addEventListener("tl-trade-step", onStep);
+    return () => window.removeEventListener("tl-trade-step", onStep);
+  }, [zh]);
   useEffect(() => {
     let dead = false;
     const pull = () => {
@@ -120,7 +130,7 @@ export function CoinBoard({ coin, lang }: { coin: "btc" | "eth" | "zec"; lang: "
     if (!floor || !amount.trim() || over) return;
     setBusy(true);
     setBad(false);
-    setNote(zh ? "先在钱包确认。" : "Confirm in the wallet.");
+    setNote(tradeStepText("fill", zh));
     void (async () => {
       try {
         const from = account ?? (await connectBsc());
@@ -146,7 +156,9 @@ export function CoinBoard({ coin, lang }: { coin: "btc" | "eth" | "zec"; lang: "
               ? "已经提交。回执还没读到，先不要再签同一笔。"
               : "Submitted. The receipt is not back. Do not sign the same order again.",
           );
-        } else if (/rejected|denied|4001/i.test(message))
+        } else if (message === "fee-open")
+          setNote(zh ? "成交了，手续费没扣上。再点一次补上。" : "Filled. The fee was not taken. Tap again to pay it.");
+        else if (/rejected|denied|4001/i.test(message))
           setNote(zh ? "你取消了。" : "You cancelled.");
         else setNote(zh ? "没有成交。" : "No fill.");
       } finally {

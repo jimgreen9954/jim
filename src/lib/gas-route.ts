@@ -1,6 +1,8 @@
 import type { Hex } from "viem";
 import { BSC, BSC_SAFE, XLAYER_SAFE } from "@/lib/bsc";
 import { deskParts } from "@/lib/invite-cut";
+import { sayTradeStep } from "@/lib/trade-step";
+import { rejected, sendUserBatch, type SignedCall } from "@/lib/one-sign";
 import { ensureProvider, switchDeskChain } from "@/lib/wallet";
 import { XLAYER } from "@/lib/xlayer";
 
@@ -84,6 +86,32 @@ async function sendValue(from: string, to: Hex, value: bigint, data: Hex = "0x")
   return (await eth.request({ method: "eth_sendTransaction", params: [tx] })) as Hex;
 }
 
+async function mined(chain: "xlayer" | "bsc", hash: Hex): Promise<"ok" | "bad" | "wait"> {
+  for (let i = 0; i < 15; i++) {
+    for (const url of RPC[chain]) {
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_getTransactionReceipt", params: [hash] }),
+        });
+        const json = (await res.json()) as { result?: { status?: string } | null };
+        const status = json.result?.status;
+        if (status === "0x1") return "ok";
+        if (status === "0x0") return "bad";
+      } catch {
+        /* next rpc */
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+  return "wait";
+}
+
+function gasKey(from: string, amount: bigint) {
+  return `tl-gas:${from.toLowerCase()}:${amount}`;
+}
+
 export async function sendGasRoute(toBnb: boolean, from: string, amount: bigint): Promise<Hex> {
   const chain = toBnb ? "xlayer" : "bsc";
   const parts = await deskParts(chain, from, amount);
@@ -95,19 +123,58 @@ export async function sendGasRoute(toBnb: boolean, from: string, amount: bigint)
   if (quote.value !== parts.swapIn) throw new Error("quote");
   await switchDeskChain(quote.chainId);
   const safe = (toBnb ? XLAYER_SAFE : BSC_SAFE) as Hex;
-  let paid = false;
-  if (parts.reward > 0n && parts.referrer) {
-    await sendValue(from, parts.referrer, parts.reward);
-    paid = true;
+  const calls: SignedCall[] = [];
+  if (parts.reward > 0n && parts.referrer) calls.push({ to: parts.referrer, data: "0x", value: parts.reward });
+  if (parts.desk > 0n) calls.push({ to: safe, data: "0x", value: parts.desk });
+  calls.push({ to: quote.to, data: quote.data, value: quote.value });
+  if (calls.length > 1) {
+    try {
+      sayTradeStep("both");
+      return await sendUserBatch(from, quote.chainId, calls);
+    } catch (err) {
+      if (rejected(err)) throw err;
+      const message = err instanceof Error ? err.message : "";
+      if (message !== "no-batch") throw err;
+    }
   }
-  if (parts.desk > 0n) {
-    await sendValue(from, safe, parts.desk);
-    paid = true;
+  const key = gasKey(from, amount);
+  let hash = "";
+  try {
+    hash = sessionStorage.getItem(key) ?? "";
+  } catch {
+    hash = "";
+  }
+  if (!/^0x[0-9a-fA-F]{64}$/.test(hash)) {
+    sayTradeStep("fill");
+    hash = await sendValue(from, quote.to, quote.value, quote.data);
+    try {
+      sessionStorage.setItem(key, hash);
+    } catch {
+      /* ignore */
+    }
+  }
+  const state = await mined(chain, hash as Hex);
+  if (state === "wait") throw new Error("pending");
+  if (state === "bad") {
+    try {
+      sessionStorage.removeItem(key);
+    } catch {
+      /* ignore */
+    }
+    throw new Error("reverted");
+  }
+  if (parts.reward > 0n || parts.desk > 0n) sayTradeStep("fee");
+  try {
+    if (parts.reward > 0n && parts.referrer) await sendValue(from, parts.referrer, parts.reward);
+    if (parts.desk > 0n) await sendValue(from, safe, parts.desk);
+  } catch (err) {
+    if (rejected(err)) throw new Error("fee-open");
+    throw new Error("fee-open");
   }
   try {
-    return await sendValue(from, quote.to, quote.value, quote.data);
-  } catch (err) {
-    if (paid) throw new Error("fee-kept");
-    throw err;
+    sessionStorage.removeItem(key);
+  } catch {
+    /* ignore */
   }
+  return hash as Hex;
 }

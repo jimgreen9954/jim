@@ -1,5 +1,5 @@
 import { encodeAbiParameters, encodeFunctionData, type Hex } from "viem";
-import { BSC, BSC_SAFE, FEE_TO, XLAYER_SAFE, connectBsc, pretty, readBalances, units, waitReceipt } from "@/lib/bsc";
+import { BSC, BSC_SAFE, FEE_TO, XLAYER_SAFE, bscClient, connectBsc, pretty, readBalances, units, waitReceipt } from "@/lib/bsc";
 import { CREATE_CALL, createCallData, createdAddress } from "@/lib/create-call";
 import { PERP_BYTECODE } from "@/lib/perp-artifact";
 import { RISK_BYTECODE } from "@/lib/risk-artifact";
@@ -237,15 +237,15 @@ const erc20 = [
 ] as const;
 
 async function deskClient(which: Desk) {
+  if (which !== "xlayer") return bscClient;
   const { createPublicClient, http } = await import("viem");
-  const rpc = which === "xlayer" ? XLAYER.rpc : BSC.rpc;
-  return createPublicClient({ transport: http(rpc, { timeout: 8_000 }) });
+  return createPublicClient({ transport: http(XLAYER.rpc, { timeout: 8_000 }) });
 }
 
 async function client() {
+  if (desk !== "xlayer") return bscClient;
   const { createPublicClient, http } = await import("viem");
-  const rpc = desk === "xlayer" ? XLAYER.rpc : BSC.rpc;
-  return createPublicClient({ transport: http(rpc, { timeout: 8_000 }) });
+  return createPublicClient({ transport: http(XLAYER.rpc, { timeout: 8_000 }) });
 }
 
 async function send(from: string, to: Hex | undefined, data: Hex, gasLimit?: bigint): Promise<Hex> {
@@ -595,6 +595,51 @@ export async function readBoard(): Promise<{ perp: string; quote: BookQuote }[]>
   return rows;
 }
 
+export type MineRow = {
+  chain: Desk;
+  coin: string;
+  book: string;
+  kind: "quote" | "deal";
+  quote?: BookQuote;
+  deal?: LiveDeal;
+};
+
+/** Every open quote and deal this wallet has, on every live book. */
+export async function readMine(account: string): Promise<MineRow[]> {
+  const who = account.toLowerCase();
+  const books = [
+    ["bsc", "bem", BSC_REBATE],
+    ["xlayer", "bem", KNOWN_XPERP],
+    ["bsc", "btc", BTC_COIN_BOOK],
+    ["bsc", "eth", ETH_COIN_BOOK],
+    ["bsc", "zec", ZEC_COIN_BOOK],
+    ["bsc", "up", UP_COIN_BOOK],
+    ["xlayer", "tape", TAPE_COIN_BOOK],
+  ] as const;
+  const out: MineRow[] = [];
+  const was = desk;
+  try {
+    for (const [chain, coin, book] of books) {
+      desk = chain;
+      try {
+        const view = await readPerp(book, account);
+        for (const quote of view.quotes) {
+          if (quote.user.toLowerCase() === who) out.push({ chain, coin, book, kind: "quote", quote });
+        }
+        for (const deal of view.liveDeals) {
+          if (deal.long.toLowerCase() === who || deal.short.toLowerCase() === who)
+            out.push({ chain, coin, book, kind: "deal", deal });
+        }
+      } catch {
+        /* one quiet book does not hide the others */
+      }
+    }
+  } finally {
+    desk = was;
+  }
+  return out;
+}
+
 export async function resumeDeploy(): Promise<{ address: string; hash: string }> {
   const address = savedPerp();
   const hash = window.localStorage.getItem(TX_KEY) ?? "";
@@ -700,6 +745,32 @@ export function splitEquity(base: bigint, entry: bigint, px: bigint, marginL: bi
   return { eqL: left, eqS: right };
 }
 
+const MULTI = "0xcA11bde05977b3631167028862bE2a173976CA11" as Hex;
+
+async function packed(
+  c: { multicall: Function; readContract: Function },
+  contracts: readonly { address: Hex; abi: readonly unknown[]; functionName: string; args: readonly [bigint] }[],
+) {
+  if (!contracts.length) return [] as { status: "success" | "failure"; result?: readonly unknown[] }[];
+  try {
+    return (await c.multicall({
+      contracts,
+      allowFailure: true,
+      multicallAddress: MULTI,
+    })) as { status: "success" | "failure"; result?: readonly unknown[] }[];
+  } catch {
+    const rows = [];
+    for (const item of contracts) {
+      try {
+        rows.push({ status: "success" as const, result: await c.readContract(item) });
+      } catch {
+        rows.push({ status: "failure" as const });
+      }
+    }
+    return rows;
+  }
+}
+
 export async function readPerp(perp: string, account: string | null): Promise<PerpView> {
   const c = await client();
   const addr = perp as Hex;
@@ -721,68 +792,75 @@ export async function readPerp(perp: string, account: string | null): Promise<Pe
   try {
     const nextQuote = await c.readContract({ address: addr, abi, functionName: "nextQuote" });
     const nextDeal = await c.readContract({ address: addr, abi, functionName: "nextDeal" });
+    const quoteIds: bigint[] = [];
+    const startQ = nextQuote > 80n ? nextQuote - 79n : 1n;
+    for (let id = nextQuote; id >= startQ && id > 0n; id -= 1n) quoteIds.push(id);
+    const dealIds: bigint[] = [];
+    const startD = nextDeal > 48n ? nextDeal - 47n : 1n;
+    for (let id = nextDeal; id >= startD && id > 0n; id -= 1n) dealIds.push(id);
+    const quotePacked = await packed(c, quoteIds.map((id) => ({ address: addr, abi: quoteWideAbi, functionName: "quotes" as const, args: [id] as const })));
+    const dealPacked = await packed(c, dealIds.map((id) => ({ address: addr, abi: dealWideAbi, functionName: "deals" as const, args: [id] as const })));
     const quotes: BookQuote[] = [];
-    const startQ = nextQuote > 24n ? nextQuote - 23n : 1n;
-    for (let id = nextQuote; id >= startQ && id > 0n; id -= 1n) {
-      let user = empty;
-      let long = false;
-      let margin = 0n;
-      let lev = 0;
-      let open = false;
-      let price = 0n;
-      try {
-        const row = await c.readContract({ address: addr, abi: quoteWideAbi, functionName: "quotes", args: [id] });
-        user = row[0];
-        long = row[1];
-        margin = row[2];
-        lev = Number(row[3]);
-        open = row[4];
-        price = row[5];
-      } catch {
-        const row = await c.readContract({ address: addr, abi, functionName: "quotes", args: [id] });
-        user = row[0];
-        long = row[1];
-        margin = row[2];
-        lev = Number(row[3]);
-        open = row[4];
-      }
-      if (!open) continue;
-      quotes.push({ id, user, long, margin, lev, price });
-    }
+    quoteIds.forEach((id, index) => {
+      const row = quotePacked[index];
+      if (!row || row.status !== "success" || row.result == null) return;
+      const raw = row.result as {
+        user?: string;
+        long?: boolean;
+        margin?: bigint;
+        lev?: number | bigint;
+        open?: boolean;
+        price?: bigint;
+        0?: string;
+        1?: boolean;
+        2?: bigint;
+        3?: number | bigint;
+        4?: boolean;
+        5?: bigint;
+      };
+      const user = raw.user ?? raw[0];
+      const long = Boolean(raw.long ?? raw[1]);
+      const margin = raw.margin ?? raw[2] ?? 0n;
+      const levRaw = raw.lev ?? raw[3] ?? 0;
+      const open = Boolean(raw.open ?? raw[4]);
+      const price = raw.price ?? raw[5] ?? 0n;
+      if (!user || !open) return;
+      quotes.push({ id, user, long, margin, lev: Number(levRaw), price });
+    });
     const liveDeals: LiveDeal[] = [];
-    const startD = nextDeal > 16n ? nextDeal - 15n : 1n;
-    for (let id = nextDeal; id >= startD && id > 0n; id -= 1n) {
-      let long = empty;
-      let short = empty;
-      let marginL = 0n;
-      let marginS = 0n;
-      let base = 0n;
-      let entry = 0n;
-      let open = false;
-      let levL = 0;
-      let levS = 0;
-      try {
-        const wide = await c.readContract({ address: addr, abi: dealWideAbi, functionName: "deals", args: [id] });
-        long = wide[0];
-        short = wide[1];
-        marginL = wide[2];
-        marginS = wide[3];
-        base = wide[4];
-        entry = wide[5];
-        open = wide[6];
-        levL = Number(wide[7]);
-        levS = Number(wide[8]);
-      } catch {
-        const row = await c.readContract({ address: addr, abi, functionName: "deals", args: [id] });
-        long = row[0];
-        short = row[1];
-        marginL = row[2];
-        marginS = row[3];
-        base = row[4];
-        entry = row[5];
-        open = row[6];
-      }
-      if (!open) continue;
+    dealIds.forEach((id, index) => {
+      const row = dealPacked[index];
+      if (!row || row.status !== "success" || row.result == null) return;
+      const raw = row.result as {
+        long?: string;
+        short?: string;
+        marginL?: bigint;
+        marginS?: bigint;
+        base?: bigint;
+        entry?: bigint;
+        open?: boolean;
+        levL?: number | bigint;
+        levS?: number | bigint;
+        0?: string;
+        1?: string;
+        2?: bigint;
+        3?: bigint;
+        4?: bigint;
+        5?: bigint;
+        6?: boolean;
+        7?: number | bigint;
+        8?: number | bigint;
+      };
+      const long = raw.long ?? raw[0];
+      const short = raw.short ?? raw[1];
+      const marginL = raw.marginL ?? raw[2] ?? 0n;
+      const marginS = raw.marginS ?? raw[3] ?? 0n;
+      const base = raw.base ?? raw[4] ?? 0n;
+      const entry = raw.entry ?? raw[5] ?? 0n;
+      const open = Boolean(raw.open ?? raw[6]);
+      const levL = Number(raw.levL ?? raw[7] ?? 0);
+      const levS = Number(raw.levS ?? raw[8] ?? 0);
+      if (!open || !long || !short) return;
       const eq = splitEquity(base, entry, mark, marginL, marginS);
       const notional = mark > 0n ? (base * mark) / 10n ** 18n : 0n;
       const weak = (eqSide: bigint, levSide: number) =>
@@ -802,7 +880,7 @@ export async function readPerp(perp: string, account: string | null): Promise<Pe
         levL,
         levS,
       });
-    }
+    });
     const first = liveDeals[0];
     const mine = account
       ? liveDeals.find((deal) => deal.long.toLowerCase() === account.toLowerCase() || deal.short.toLowerCase() === account.toLowerCase())
@@ -893,15 +971,45 @@ async function ensureAllowance(from: string, perp: string, amount: bigint) {
     functionName: "allowance",
     args: [from as Hex, perp as Hex],
   });
-  if (allowance >= amount) return;
+  const max = (1n << 256n) - 1n;
+  if (allowance > max / 2n) return;
   if (allowance > 0n) {
     const reset = encodeFunctionData({ abi: erc20, functionName: "approve", args: [perp as Hex, 0n] });
     const resetHash = await send(from, token, reset);
-    if (desk === "bsc") await waitReceipt(resetHash);
+    await (await client()).waitForTransactionReceipt({ hash: resetHash, timeout: 60_000 });
   }
-  const data = encodeFunctionData({ abi: erc20, functionName: "approve", args: [perp as Hex, amount] });
+  const data = encodeFunctionData({ abi: erc20, functionName: "approve", args: [perp as Hex, max] });
   const hash = await send(from, token, data);
-  if (desk === "bsc") await waitReceipt(hash);
+  await (await client()).waitForTransactionReceipt({ hash, timeout: 60_000 });
+}
+
+async function openWouldRevert(from: string, perp: Hex, data: Hex): Promise<boolean> {
+  const c = await client();
+  try {
+    await c.call({ account: from as Hex, to: perp, data });
+    return false;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (/revert|execution|Bad\(|0xe143a034/i.test(message)) return true;
+    return false;
+  }
+}
+
+async function sendOpen(from: string, perp: string, amount: bigint, data: Hex): Promise<Hex> {
+  const c = await client();
+  const token = tokenAddress();
+  const allowance = await c.readContract({
+    address: token,
+    abi: erc20,
+    functionName: "allowance",
+    args: [from as Hex, perp as Hex],
+  });
+  if (allowance < amount) await ensureAllowance(from, perp, amount);
+  if (await openWouldRevert(from, perp as Hex, data)) {
+    const held = desk === "xlayer" ? await readDeskUsdt(from) : (await readBalances(from)).usdt;
+    throw new Error(held < amount ? "usdt" : "revert");
+  }
+  return send(from, perp as Hex, data);
 }
 
 export async function bookIsRisk(perp: string): Promise<boolean> {
@@ -924,7 +1032,6 @@ async function pullMargin(from: string, perp: string, margin: string, lev: numbe
   if (lev < 1 || lev > 1000) throw new Error("lev");
   const balances = desk === "xlayer" ? { usdt: await readDeskUsdt(from) } : await readBalances(from);
   if (balances.usdt < amount) throw new Error("usdt");
-  await ensureAllowance(from, perp, amount);
   return amount;
 }
 
@@ -940,7 +1047,7 @@ export async function openPostPerp(from: string, perp: string, long: boolean, ma
       functionName: "openPost",
       args: [long, amount, lev, px],
     });
-    return send(from, perp as Hex, data);
+    return sendOpen(from, perp, amount, data);
   }
   const view = await readPerp(perp, null);
   const cross = view.quotes.some((quote) => quote.long !== long && quote.price > 0n && (long ? quote.price <= px : quote.price >= px));
@@ -961,7 +1068,7 @@ export async function openScalePerp(from: string, perp: string, long: boolean, m
       functionName: "openScale",
       args: [long, amount, lev, lo, hi, count],
     });
-    return send(from, perp as Hex, data);
+    return sendOpen(from, perp, amount, data);
   }
   const each = Number(margin) / count;
   if (!Number.isFinite(each) || each <= 0) throw new Error("amount");
@@ -984,7 +1091,7 @@ export async function openStopPerp(from: string, perp: string, long: boolean, ma
     functionName: "openStop",
     args: [long, amount, lev, px],
   });
-  return send(from, perp as Hex, data);
+  return sendOpen(from, perp, amount, data);
 }
 
 export async function openTwapPerp(from: string, perp: string, long: boolean, margin: string, lev: number, slices: number, gap: number): Promise<Hex> {
@@ -997,7 +1104,7 @@ export async function openTwapPerp(from: string, perp: string, long: boolean, ma
     functionName: "openTwap",
     args: [long, amount, lev, slices, gap],
   });
-  return send(from, perp as Hex, data);
+  return sendOpen(from, perp, amount, data);
 }
 
 export async function armTrailPerp(from: string, perp: string, dealId: bigint, bps: number): Promise<Hex> {
@@ -1022,13 +1129,12 @@ export async function openPerp(from: string, perp: string, long: boolean, margin
   if (px < 10n ** 16n || px > 100_000n * 10n ** 18n) throw new Error("price");
   const balances = desk === "xlayer" ? { usdt: await readDeskUsdt(from) } : await readBalances(from);
   if (balances.usdt < amount) throw new Error("usdt");
-  await ensureAllowance(from, perp, amount);
   const data = encodeFunctionData({
     abi: openAtAbi,
     functionName: "open",
     args: [long, amount, lev, px],
   });
-  return send(from, perp as Hex, data);
+  return sendOpen(from, perp, amount, data);
 }
 
 export async function takePerp(from: string, perp: string, quoteId: bigint, margin: string, lev: number, priced: boolean): Promise<Hex> {
@@ -1039,13 +1145,12 @@ export async function takePerp(from: string, perp: string, quoteId: bigint, marg
   if (lev < 1 || lev > 1000) throw new Error("lev");
   const balances = desk === "xlayer" ? { usdt: await readDeskUsdt(from) } : await readBalances(from);
   if (balances.usdt < amount) throw new Error("usdt");
-  await ensureAllowance(from, perp, amount);
   const data = encodeFunctionData({
     abi: priced ? takeWideAbi : abi,
     functionName: "take",
     args: [quoteId, amount, lev],
   });
-  return send(from, perp as Hex, data);
+  return sendOpen(from, perp, amount, data);
 }
 
 export async function cancelPerp(from: string, perp: string, quoteId?: bigint): Promise<Hex> {
@@ -1089,13 +1194,15 @@ export async function readDeskUsdt(account: string): Promise<bigint> {
 }
 
 export async function readChainPurse(which: Desk, account: string): Promise<{ gas: bigint; usdt: bigint }> {
+  if (which !== "xlayer") {
+    const row = await readBalances(account);
+    return { gas: row.bnb, usdt: row.usdt };
+  }
   const { createPublicClient, http } = await import("viem");
-  const rpc = which === "xlayer" ? XLAYER.rpc : BSC.rpc;
-  const c = createPublicClient({ transport: http(rpc, { timeout: 8_000 }) });
-  const token = which === "xlayer" ? X_USDT : BSC.usdt;
+  const c = createPublicClient({ transport: http(XLAYER.rpc, { timeout: 8_000 }) });
   const [gas, usdt] = await Promise.all([
     c.getBalance({ address: account as Hex }),
-    c.readContract({ address: token, abi: erc20, functionName: "balanceOf", args: [account as Hex] }),
+    c.readContract({ address: X_USDT, abi: erc20, functionName: "balanceOf", args: [account as Hex] }),
   ]);
   return { gas, usdt };
 }

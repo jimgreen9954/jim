@@ -1,6 +1,7 @@
 import {
   createPublicClient,
   encodeFunctionData,
+  fallback,
   formatUnits,
   http,
   parseAbi,
@@ -9,6 +10,8 @@ import {
   type Hex,
 } from "viem";
 import { deskParts, type DeskParts } from "@/lib/invite-cut";
+import { sayTradeStep } from "@/lib/trade-step";
+import { rejected, sendUserBatch, type SignedCall } from "@/lib/one-sign";
 
 export const BSC = {
   chainId: 56,
@@ -89,16 +92,22 @@ export function hasWallet(): boolean {
   return Boolean(getProvider());
 }
 
-const client = createPublicClient({ transport: http(BSC.rpc) });
-
-export const bscClient = client;
-
 const receiptRpcs = [
   BSC.rpc,
   "https://bsc-dataseed1.defibit.io",
   "https://bsc-dataseed1.ninicoin.io",
+  "https://bsc.publicnode.com",
   "https://rpc.48.club",
 ];
+
+const client = createPublicClient({
+  transport: fallback(
+    receiptRpcs.map((url) => http(url, { timeout: 8_000, retryCount: 0 })),
+    { rank: false },
+  ),
+});
+
+export const bscClient = client;
 
 export async function bscRpc(body: unknown): Promise<string> {
   let last = "rpc";
@@ -282,12 +291,41 @@ export async function quoteExact(tokenIn: Hex, tokenOut: Hex, amountIn: bigint, 
 export type Balances = { bnb: bigint; usdt: bigint; bem: bigint };
 
 export async function readBalances(account: string): Promise<Balances> {
-  const [bnb, usdt, bem] = await Promise.all([
-    client.getBalance({ address: account as Hex }),
-    client.readContract({ address: BSC.usdt, abi: erc20, functionName: "balanceOf", args: [account as Hex] }),
-    client.readContract({ address: BSC.bem, abi: erc20, functionName: "balanceOf", args: [account as Hex] }),
-  ]);
-  return { bnb, usdt, bem };
+  try {
+    const [bnb, usdt, bem] = await Promise.all([
+      client.getBalance({ address: account as Hex }),
+      client.readContract({ address: BSC.usdt, abi: erc20, functionName: "balanceOf", args: [account as Hex] }),
+      client.readContract({ address: BSC.bem, abi: erc20, functionName: "balanceOf", args: [account as Hex] }),
+    ]);
+    return { bnb, usdt, bem };
+  } catch (err) {
+    const via = await readBalancesFromWallet(account);
+    if (via) return via;
+    throw err;
+  }
+}
+
+async function readBalancesFromWallet(account: string): Promise<Balances | null> {
+  const eth = getProvider();
+  if (!eth) return null;
+  try {
+    const chainId = String(await eth.request({ method: "eth_chainId" })).toLowerCase();
+    if (chainId !== BSC.hex) return null;
+    const data = `0x70a08231${account.toLowerCase().slice(2).padStart(64, "0")}`;
+    const call = async (to: string) => {
+      const raw = (await eth.request({ method: "eth_call", params: [{ to, data }, "latest"] })) as string;
+      if (!raw || raw === "0x") throw new Error("empty");
+      return BigInt(raw);
+    };
+    const [bnbRaw, usdt, bem] = await Promise.all([
+      eth.request({ method: "eth_getBalance", params: [account, "latest"] }) as Promise<string>,
+      call(BSC.usdt),
+      call(BSC.bem),
+    ]);
+    return { bnb: BigInt(bnbRaw), usdt, bem };
+  } catch {
+    return null;
+  }
 }
 
 export type PoolPrint = {
@@ -414,6 +452,10 @@ async function approveIfNeeded(from: string, token: Hex, need: bigint, spender: 
     args: [from as Hex, spender],
   });
   if (allowance >= need) return;
+  if (allowance > 0n) {
+    const reset = encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, 0n] });
+    await waitOk(await send(from, token, reset));
+  }
   const approveData = encodeFunctionData({
     abi: erc20,
     functionName: "approve",
@@ -422,15 +464,99 @@ async function approveIfNeeded(from: string, token: Hex, need: bigint, spender: 
   await waitOk(await send(from, token, approveData));
 }
 
-async function finishSwap(from: string, data: Hex, paid: boolean, swapKey: string, feeKey: string): Promise<Hex> {
+function feeTransferCalls(parts: DeskParts, token: Hex | null): SignedCall[] {
+  const calls: SignedCall[] = [];
+  if (parts.reward > 0n && parts.referrer) {
+    calls.push(
+      token
+        ? { to: token, data: encodeFunctionData({ abi: erc20, functionName: "transfer", args: [parts.referrer, parts.reward] }) }
+        : { to: parts.referrer, data: "0x", value: parts.reward },
+    );
+  }
+  if (parts.desk > 0n) {
+    calls.push(
+      token
+        ? { to: token, data: encodeFunctionData({ abi: erc20, functionName: "transfer", args: [BSC_SAFE, parts.desk] }) }
+        : { to: BSC_SAFE, data: "0x", value: parts.desk },
+    );
+  }
+  return calls;
+}
+
+async function finishTogether(
+  from: string,
+  parts: DeskParts,
+  token: Hex | null,
+  swapTo: Hex,
+  data: Hex,
+  value: bigint,
+  swapKey: string,
+  feeKey: string,
+  _left?: bigint,
+): Promise<Hex | null> {
+  const resumed = await resumeSwap(swapKey);
+  if (resumed) {
+    forget(feeKey);
+    return resumed;
+  }
+  const calls = feeTransferCalls(parts, token);
+  if (!calls.length) return null;
+  calls.push({ to: swapTo, data, value });
+  sayTradeStep("both");
+  try {
+    const hash = await sendUserBatch(from, BSC.chainId, calls);
+    remember(swapKey, hash);
+    await waitOk(hash);
+    forget(swapKey);
+    forget(feeKey);
+    return hash;
+  } catch (err) {
+    if (rejected(err) || err instanceof TxPending) throw err;
+    const message = err instanceof Error ? err.message : "";
+    if (message === "pending" || message === "chain") throw err;
+    return null;
+  }
+}
+
+async function fillThenFee(
+  from: string,
+  data: Hex,
+  parts: DeskParts,
+  swapKey: string,
+  feeKey: string,
+  to: Hex,
+  value: bigint,
+  token: Hex | null,
+): Promise<Hex> {
+  const hash = await finishSwap(from, data, false, swapKey, feeKey, to, value);
+  try {
+    if (token) await payDeskToken(from, token, parts, feeKey);
+    else await payDeskNative(from, parts, feeKey);
+  } catch (err) {
+    if (err instanceof TxPending) throw err;
+    throw new Error("fee-open");
+  }
+  return hash;
+}
+
+async function finishSwap(
+  from: string,
+  data: Hex,
+  paid: boolean,
+  swapKey: string,
+  feeKey: string,
+  to: Hex = BSC.router,
+  value = 0n,
+): Promise<Hex> {
   const resumed = await resumeSwap(swapKey);
   if (resumed) {
     forget(feeKey);
     return resumed;
   }
   let hash: Hex;
+  sayTradeStep("fill");
   try {
-    hash = await send(from, BSC.router, data);
+    hash = await send(from, to, data, value);
   } catch (err) {
     if (paid) throw new Error("fee-kept");
     throw err;
@@ -468,6 +594,7 @@ function boundMin(quoted: bigint, floor?: bigint): bigint {
 
 async function payDeskToken(from: string, token: Hex, parts: DeskParts, feeKey: string): Promise<boolean> {
   if (parts.reward <= 0n && parts.desk <= 0n) return false;
+  sayTradeStep("fee");
   if (parts.reward > 0n && parts.referrer) {
     const data = encodeFunctionData({ abi: erc20, functionName: "transfer", args: [parts.referrer, parts.reward] });
     await step(`${feeKey}:ref`, () => send(from, token, data));
@@ -493,6 +620,7 @@ async function payDeskToken(from: string, token: Hex, parts: DeskParts, feeKey: 
 
 async function payDeskNative(from: string, parts: DeskParts, feeKey: string): Promise<boolean> {
   if (parts.reward <= 0n && parts.desk <= 0n) return false;
+  sayTradeStep("fee");
   if (parts.reward > 0n && parts.referrer) await step(`${feeKey}:ref`, () => send(from, parts.referrer as Hex, "0x", parts.reward));
   if (parts.desk > 0n) await step(feeKey, () => send(from, BSC_SAFE, "0x", parts.desk));
   return true;
@@ -518,8 +646,6 @@ export async function swapBem(from: string, side: "buy" | "sell", amount: string
   const quoted = await quoteExact(tokenIn, tokenOut, swapIn);
   const minOut = boundMin(quoted, floor);
   const owner = from as Hex;
-  await approveIfNeeded(from, tokenIn, swapIn);
-  const paid = await payDeskToken(from, tokenIn, parts, feeKey);
   const data = encodeFunctionData({
     abi: routerAbi,
     functionName: "exactInputSingle",
@@ -536,7 +662,10 @@ export async function swapBem(from: string, side: "buy" | "sell", amount: string
       },
     ],
   });
-  return finishSwap(from, data, paid, swapKey, feeKey);
+  await approveIfNeeded(from, tokenIn, swapIn);
+  const together = await finishTogether(from, parts, tokenIn, BSC.router, data, 0n, swapKey, feeKey, swapIn);
+  if (together) return together;
+  return fillThenFee(from, data, parts, swapKey, feeKey, BSC.router, 0n, tokenIn);
 }
 
 export async function swapListed(from: string, key: ErcKey, side: "buy" | "sell", amount: string, floor?: bigint): Promise<Hex> {
@@ -563,8 +692,6 @@ export async function swapListed(from: string, key: ErcKey, side: "buy" | "sell"
   const quoted = await quoteExact(tokenIn, tokenOut, swapIn, feeTier);
   const minOut = boundMin(quoted, floor);
   const owner = from as Hex;
-  await approveIfNeeded(from, tokenIn, swapIn);
-  const paid = await payDeskToken(from, tokenIn, parts, feeKey);
   const data = encodeFunctionData({
     abi: routerAbi,
     functionName: "exactInputSingle",
@@ -581,7 +708,10 @@ export async function swapListed(from: string, key: ErcKey, side: "buy" | "sell"
       },
     ],
   });
-  return finishSwap(from, data, paid, swapKey, feeKey);
+  await approveIfNeeded(from, tokenIn, swapIn);
+  const together = await finishTogether(from, parts, tokenIn, BSC.router, data, 0n, swapKey, feeKey, swapIn);
+  if (together) return together;
+  return fillThenFee(from, data, parts, swapKey, feeKey, BSC.router, 0n, tokenIn);
 }
 
 export async function swapBnb(from: string, side: "buy" | "sell", amount: string, floor?: bigint): Promise<Hex> {
@@ -603,8 +733,6 @@ export async function swapBnb(from: string, side: "buy" | "sell", amount: string
     }
     const quoted = await quoteExact(BSC.usdt, BSC.wbnb, swapIn, BSC.bnbFee);
     const minOut = boundMin(quoted, floor);
-    await approveIfNeeded(from, BSC.usdt, swapIn);
-    const paid = await payDeskToken(from, BSC.usdt, parts, feeKey);
     const swapData = encodeFunctionData({
       abi: routerAbi,
       functionName: "exactInputSingle",
@@ -627,7 +755,10 @@ export async function swapBnb(from: string, side: "buy" | "sell", amount: string
       args: [minOut, owner],
     });
     const data = encodeFunctionData({ abi: routerAbi, functionName: "multicall", args: [[swapData, unwrapData]] });
-    return finishSwap(from, data, paid, swapKey, feeKey);
+    await approveIfNeeded(from, BSC.usdt, swapIn);
+    const together = await finishTogether(from, parts, BSC.usdt, BSC.router, data, 0n, swapKey, feeKey, swapIn);
+    if (together) return together;
+    return fillThenFee(from, data, parts, swapKey, feeKey, BSC.router, 0n, BSC.usdt);
   }
   const bal = await client.getBalance({ address: owner });
   const maxSpend = bal > BNB_GAS_RESERVE ? bal - BNB_GAS_RESERVE : 0n;
@@ -647,36 +778,40 @@ export async function swapBnb(from: string, side: "buy" | "sell", amount: string
   }
   const quoted = await quoteExact(BSC.wbnb, BSC.usdt, swapIn, BSC.bnbFee);
   const minOut = boundMin(quoted, floor);
-  const paid = await payDeskNative(from, parts, feeKey);
+  const data = encodeFunctionData({
+    abi: routerAbi,
+    functionName: "exactInputSingle",
+    args: [
+      {
+        tokenIn: BSC.wbnb,
+        tokenOut: BSC.usdt,
+        fee: BSC.bnbFee,
+        recipient: owner,
+        deadline,
+        amountIn: swapIn,
+        amountOutMinimum: minOut,
+        sqrtPriceLimitX96: 0n,
+      },
+    ],
+  });
+  const deposit = encodeFunctionData({ abi: wbnbAbi, functionName: "deposit" });
   try {
-    const deposit = encodeFunctionData({ abi: wbnbAbi, functionName: "deposit" });
     const wrapKey = `tl-wrap:${who}:${swapIn}`;
     await step(wrapKey, () => send(from, BSC.wbnb, deposit, swapIn));
     await approveIfNeeded(from, BSC.wbnb, swapIn);
-    const data = encodeFunctionData({
-      abi: routerAbi,
-      functionName: "exactInputSingle",
-      args: [
-        {
-          tokenIn: BSC.wbnb,
-          tokenOut: BSC.usdt,
-          fee: BSC.bnbFee,
-          recipient: owner,
-          deadline,
-          amountIn: swapIn,
-          amountOutMinimum: minOut,
-          sqrtPriceLimitX96: 0n,
-        },
-      ],
-    });
-    const hash = await finishSwap(from, data, paid, swapKey, feeKey);
+    const hash = await finishSwap(from, data, false, swapKey, feeKey);
     forget(wrapKey);
+    try {
+      await payDeskNative(from, parts, feeKey);
+    } catch (err) {
+      if (err instanceof TxPending) throw err;
+      throw new Error("fee-open");
+    }
     return hash;
   } catch (err) {
     if (err instanceof TxPending) throw err;
     const message = err instanceof Error ? err.message : "";
-    if (message === "fee-kept" || message === "fee-kept-slip" || message === "quote-moved" || message === "pending") throw err;
-    if (paid) throw new Error("fee-kept");
+    if (message === "fee-open" || message === "fee-kept" || message === "fee-kept-slip" || message === "quote-moved" || message === "pending") throw err;
     throw err;
   }
 }
@@ -730,38 +865,46 @@ export async function swapWithBnb(from: string, token: Hex, decimals: number, fe
     const feeKey = `tl-fee:${who}:bnb-in:${token}:${amountIn}`;
     const already = await resumeSwap(swapKey);
     if (already) return already;
-    const paid = await payDeskNative(from, parts, feeKey);
     try {
       const deposit = encodeFunctionData({ abi: wbnbAbi, functionName: "deposit" });
       await step(`tl-wrap:${who}:${swapIn}`, () => send(from, BSC.wbnb, deposit, swapIn));
       await approveIfNeeded(from, BSC.wbnb, swapIn);
+      let hash: Hex;
       if (direct) {
         const data = encodeFunctionData({
           abi: routerAbi,
           functionName: "exactInputSingle",
           args: [{ tokenIn: BSC.wbnb, tokenOut: token, fee: direct.fee, recipient: owner, deadline, amountIn: swapIn, amountOutMinimum: minOut, sqrtPriceLimitX96: 0n }],
         });
-        return finishSwap(from, data, paid, swapKey, feeKey);
+        hash = await finishSwap(from, data, false, swapKey, feeKey);
+      } else {
+        const usdtOut = await quoteExact(BSC.wbnb, BSC.usdt, swapIn, BSC.bnbFee);
+        const leg = encodeFunctionData({
+          abi: routerAbi,
+          functionName: "exactInputSingle",
+          args: [{ tokenIn: BSC.wbnb, tokenOut: BSC.usdt, fee: BSC.bnbFee, recipient: owner, deadline, amountIn: swapIn, amountOutMinimum: (usdtOut * 99n) / 100n, sqrtPriceLimitX96: 0n }],
+        });
+        const first = await finishSwap(from, leg, false, `${swapKey}:usdt`, feeKey);
+        await client.waitForTransactionReceipt({ hash: first, timeout: 60_000 });
+        const usdtBal = await client.readContract({ address: BSC.usdt, abi: erc20, functionName: "balanceOf", args: [owner] });
+        const spend = usdtBal > usdtOut ? usdtOut : usdtBal;
+        await approveIfNeeded(from, BSC.usdt, spend);
+        const data = encodeFunctionData({
+          abi: routerAbi,
+          functionName: "exactInputSingle",
+          args: [{ tokenIn: BSC.usdt, tokenOut: token, fee: feeHint, recipient: owner, deadline, amountIn: spend, amountOutMinimum: minOut, sqrtPriceLimitX96: 0n }],
+        });
+        hash = await finishSwap(from, data, false, swapKey, feeKey);
       }
-      const usdtOut = await quoteExact(BSC.wbnb, BSC.usdt, swapIn, BSC.bnbFee);
-      const leg = encodeFunctionData({
-        abi: routerAbi,
-        functionName: "exactInputSingle",
-        args: [{ tokenIn: BSC.wbnb, tokenOut: BSC.usdt, fee: BSC.bnbFee, recipient: owner, deadline, amountIn: swapIn, amountOutMinimum: (usdtOut * 99n) / 100n, sqrtPriceLimitX96: 0n }],
-      });
-      const first = await finishSwap(from, leg, paid, `${swapKey}:usdt`, feeKey);
-      await client.waitForTransactionReceipt({ hash: first, timeout: 60_000 });
-      const usdtBal = await client.readContract({ address: BSC.usdt, abi: erc20, functionName: "balanceOf", args: [owner] });
-      const spend = usdtBal > usdtOut ? usdtOut : usdtBal;
-      await approveIfNeeded(from, BSC.usdt, spend);
-      const data = encodeFunctionData({
-        abi: routerAbi,
-        functionName: "exactInputSingle",
-        args: [{ tokenIn: BSC.usdt, tokenOut: token, fee: feeHint, recipient: owner, deadline, amountIn: spend, amountOutMinimum: minOut, sqrtPriceLimitX96: 0n }],
-      });
-      return finishSwap(from, data, false, swapKey, feeKey);
+      try {
+        await payDeskNative(from, parts, feeKey);
+      } catch (err) {
+        if (err instanceof TxPending) throw err;
+        throw new Error("fee-open");
+      }
+      return hash;
     } catch (err) {
-      if (paid && !(err instanceof TxPending)) throw new Error("fee-kept");
+      if (err instanceof TxPending || (err instanceof Error && err.message === "fee-open")) throw err;
       throw err;
     }
   }
@@ -779,7 +922,6 @@ export async function swapWithBnb(from: string, token: Hex, decimals: number, fe
   const already = await resumeSwap(swapKey);
   if (already) return already;
   await approveIfNeeded(from, token, swapIn);
-  const paid = await payDeskToken(from, token, parts, feeKey);
   if (direct) {
     const data = encodeFunctionData({
       abi: routerAbi,
@@ -788,14 +930,16 @@ export async function swapWithBnb(from: string, token: Hex, decimals: number, fe
     });
     const unwrap = encodeFunctionData({ abi: routerAbi, functionName: "unwrapWETH9", args: [minOut, owner] });
     const packed = encodeFunctionData({ abi: routerAbi, functionName: "multicall", args: [[data, unwrap]] });
-    return finishSwap(from, packed, paid, swapKey, feeKey);
+    const together = await finishTogether(from, parts, token, BSC.router, packed, 0n, swapKey, feeKey);
+    if (together) return together;
+    return fillThenFee(from, packed, parts, swapKey, feeKey, BSC.router, 0n, token);
   }
   const data = encodeFunctionData({
     abi: routerAbi,
     functionName: "exactInputSingle",
     args: [{ tokenIn: token, tokenOut: BSC.usdt, fee: feeHint, recipient: owner, deadline, amountIn: swapIn, amountOutMinimum: 1n, sqrtPriceLimitX96: 0n }],
   });
-  const first = await finishSwap(from, data, paid, `${swapKey}:usdt`, feeKey);
+  const first = await finishSwap(from, data, false, `${swapKey}:usdt`, feeKey);
   await client.waitForTransactionReceipt({ hash: first, timeout: 60_000 });
   const usdtBal = await client.readContract({ address: BSC.usdt, abi: erc20, functionName: "balanceOf", args: [owner] });
   const spend = usdtBal > quoted ? quoted : usdtBal;
@@ -808,7 +952,14 @@ export async function swapWithBnb(from: string, token: Hex, decimals: number, fe
   });
   const unwrap = encodeFunctionData({ abi: routerAbi, functionName: "unwrapWETH9", args: [(bnbOut * 99n) / 100n, owner] });
   const packed = encodeFunctionData({ abi: routerAbi, functionName: "multicall", args: [[leg, unwrap]] });
-  return finishSwap(from, packed, false, swapKey, feeKey);
+  const hash = await finishSwap(from, packed, false, swapKey, feeKey);
+  try {
+    await payDeskToken(from, token, parts, feeKey);
+  } catch (err) {
+    if (err instanceof TxPending) throw err;
+    throw new Error("fee-open");
+  }
+  return hash;
 }
 
 export function txUrl(hash: string): string {
@@ -885,14 +1036,11 @@ export async function swapBemBnbSpot(from: string, side: "buy" | "sell", amount:
       functionName: "exactInputSingle",
       args: [{ tokenIn: BSC.wbnb, tokenOut: BSC.bem, fee: 10000, recipient: owner, deadline, amountIn: parts.swapIn, amountOutMinimum: minOut, sqrtPriceLimitX96: 0n }],
     });
-    const hash = await send(from, BSC.router, data, parts.swapIn);
-    await waitOk(hash);
-    try {
-      await payDeskNative(from, parts, `tl-fee:${from.toLowerCase()}:bembnb:${amountIn}`);
-    } catch {
-      /* The pool swap is already in. The desk fee is separate. */
-    }
-    return hash;
+    const swapKey = `tl-swap:${from.toLowerCase()}:bembnb:${amountIn}`;
+    const feeKey = `tl-fee:${from.toLowerCase()}:bembnb:${amountIn}`;
+    const together = await finishTogether(from, parts, null, BSC.router, data, parts.swapIn, swapKey, feeKey);
+    if (together) return together;
+    return fillThenFee(from, data, parts, swapKey, feeKey, BSC.router, parts.swapIn, null);
   }
   const amountIn = units(amount, BSC.bemDecimals);
   if (amountIn <= 0n) throw new Error("amount");
@@ -900,7 +1048,6 @@ export async function swapBemBnbSpot(from: string, side: "buy" | "sell", amount:
   if (parts.swapIn <= 0n) throw new Error("amount");
   const held = await client.readContract({ address: BSC.bem, abi: erc20, functionName: "balanceOf", args: [owner] });
   if (held < amountIn) throw new Error("balance");
-  await approveIfNeeded(from, BSC.bem, parts.swapIn);
   const minOut = ((await quoteExact(BSC.bem, BSC.wbnb, parts.swapIn, 10000)) * 9900n) / 10_000n;
   if (minOut <= 0n) throw new Error("tiny");
   const swapData = encodeFunctionData({
@@ -910,14 +1057,12 @@ export async function swapBemBnbSpot(from: string, side: "buy" | "sell", amount:
   });
   const unwrap = encodeFunctionData({ abi: routerAbi, functionName: "unwrapWETH9", args: [minOut, owner] });
   const data = encodeFunctionData({ abi: routerAbi, functionName: "multicall", args: [[swapData, unwrap]] });
-  const hash = await send(from, BSC.router, data);
-  await waitOk(hash);
-  try {
-    await payDeskToken(from, BSC.bem, parts, `tl-fee:${from.toLowerCase()}:bembnb-sell:${amountIn}`);
-  } catch {
-    /* The pool swap is already in. */
-  }
-  return hash;
+  const feeKey = `tl-fee:${from.toLowerCase()}:bembnb-sell:${amountIn}`;
+  const swapKey = `tl-swap:${from.toLowerCase()}:bembnb-sell:${amountIn}`;
+  await approveIfNeeded(from, BSC.bem, parts.swapIn);
+  const together = await finishTogether(from, parts, BSC.bem, BSC.router, data, 0n, swapKey, feeKey, parts.swapIn);
+  if (together) return together;
+  return fillThenFee(from, data, parts, swapKey, feeKey, BSC.router, 0n, BSC.bem);
 }
 
 const v2Abi = parseAbi([
@@ -984,14 +1129,11 @@ export async function swapUpBnbSpot(from: string, side: "buy" | "sell", amount: 
       functionName: "swapExactETHForTokensSupportingFeeOnTransferTokens",
       args: [minOut, [BSC.wbnb, BSC.up], owner, deadline],
     });
-    const hash = await send(from, BSC.v2Router, data, parts.swapIn);
-    await waitOk(hash);
-    try {
-      await payDeskNative(from, parts, `tl-fee:${from.toLowerCase()}:upbnb:${amountIn}`);
-    } catch {
-      /* The pool swap is already in. */
-    }
-    return hash;
+    const swapKey = `tl-swap:${from.toLowerCase()}:upbnb:${amountIn}`;
+    const feeKey = `tl-fee:${from.toLowerCase()}:upbnb:${amountIn}`;
+    const together = await finishTogether(from, parts, null, BSC.v2Router, data, parts.swapIn, swapKey, feeKey);
+    if (together) return together;
+    return fillThenFee(from, data, parts, swapKey, feeKey, BSC.v2Router, parts.swapIn, null);
   }
   const amountIn = units(amount, 18);
   if (amountIn <= 0n) throw new Error("amount");
@@ -999,7 +1141,6 @@ export async function swapUpBnbSpot(from: string, side: "buy" | "sell", amount: 
   if (parts.swapIn <= 0n) throw new Error("amount");
   const held = await client.readContract({ address: BSC.up, abi: erc20, functionName: "balanceOf", args: [owner] });
   if (held < amountIn) throw new Error("balance");
-  await approveIfNeeded(from, BSC.up, parts.swapIn, BSC.v2Router);
   const minOut = ((await quoteUpBnb("sell", parts.swapIn)) * 9900n) / 10_000n;
   if (minOut <= 0n) throw new Error("tiny");
   const data = encodeFunctionData({
@@ -1007,14 +1148,12 @@ export async function swapUpBnbSpot(from: string, side: "buy" | "sell", amount: 
     functionName: "swapExactTokensForETHSupportingFeeOnTransferTokens",
     args: [parts.swapIn, minOut, [BSC.up, BSC.wbnb], owner, deadline],
   });
-  const hash = await send(from, BSC.v2Router, data);
-  await waitOk(hash);
-  try {
-    await payDeskToken(from, BSC.up, parts, `tl-fee:${from.toLowerCase()}:upbnb-sell:${amountIn}`);
-  } catch {
-    /* The pool swap is already in. */
-  }
-  return hash;
+  const feeKey = `tl-fee:${from.toLowerCase()}:upbnb-sell:${amountIn}`;
+  const swapKey = `tl-swap:${from.toLowerCase()}:upbnb-sell:${amountIn}`;
+  await approveIfNeeded(from, BSC.up, parts.swapIn, BSC.v2Router);
+  const together = await finishTogether(from, parts, BSC.up, BSC.v2Router, data, 0n, swapKey, feeKey, parts.swapIn);
+  if (together) return together;
+  return fillThenFee(from, data, parts, swapKey, feeKey, BSC.v2Router, 0n, BSC.up);
 }
 
 export async function swapUpBemSpot(from: string, side: "buy" | "sell", amount: string): Promise<Hex> {
@@ -1031,7 +1170,6 @@ export async function swapUpBemSpot(from: string, side: "buy" | "sell", amount: 
   const quoted = await quoteUpBem(side, parts.swapIn);
   const minOut = (quoted * 9900n) / 10_000n;
   if (minOut <= 0n) throw new Error("tiny");
-  await approveIfNeeded(from, pay, parts.swapIn);
   const data = encodeFunctionData({
     abi: routerAbi,
     functionName: "exactInputSingle",
@@ -1048,14 +1186,12 @@ export async function swapUpBemSpot(from: string, side: "buy" | "sell", amount: 
       },
     ],
   });
-  const hash = await send(from, BSC.router, data);
-  await waitOk(hash);
-  try {
-    await payDeskToken(from, pay, parts, `tl-fee:${from.toLowerCase()}:upbem:${side}:${amountIn}`);
-  } catch {
-    /* The pool swap is already in. */
-  }
-  return hash;
+  const feeKey = `tl-fee:${from.toLowerCase()}:upbem:${side}:${amountIn}`;
+  const swapKey = `tl-swap:${from.toLowerCase()}:upbem:${side}:${amountIn}`;
+  await approveIfNeeded(from, pay, parts.swapIn);
+  const together = await finishTogether(from, parts, pay, BSC.router, data, 0n, swapKey, feeKey, parts.swapIn);
+  if (together) return together;
+  return fillThenFee(from, data, parts, swapKey, feeKey, BSC.router, 0n, pay);
 }
 
 export async function swapUpUsdtSpot(from: string, side: "buy" | "sell", amount: string): Promise<Hex> {
@@ -1071,19 +1207,16 @@ export async function swapUpUsdtSpot(from: string, side: "buy" | "sell", amount:
   if (held < amountIn) throw new Error("balance");
   const minOut = ((await quoteUpUsdt(side, parts.swapIn)) * 9900n) / 10_000n;
   if (minOut <= 0n) throw new Error("tiny");
-  await approveIfNeeded(from, pay, parts.swapIn, BSC.v2Router);
   const path = buy ? [BSC.usdt, BSC.wbnb, BSC.up] : [BSC.up, BSC.wbnb, BSC.usdt];
   const data = encodeFunctionData({
     abi: v2Abi,
     functionName: "swapExactTokensForTokensSupportingFeeOnTransferTokens",
     args: [parts.swapIn, minOut, path, owner, deadline],
   });
-  const hash = await send(from, BSC.v2Router, data);
-  await waitOk(hash);
-  try {
-    await payDeskToken(from, pay, parts, `tl-fee:${from.toLowerCase()}:upusdt:${side}:${amountIn}`);
-  } catch {
-    /* The pool swap is already in. */
-  }
-  return hash;
+  const feeKey = `tl-fee:${from.toLowerCase()}:upusdt:${side}:${amountIn}`;
+  const swapKey = `tl-swap:${from.toLowerCase()}:upusdt:${side}:${amountIn}`;
+  await approveIfNeeded(from, pay, parts.swapIn, BSC.v2Router);
+  const together = await finishTogether(from, parts, pay, BSC.v2Router, data, 0n, swapKey, feeKey, parts.swapIn);
+  if (together) return together;
+  return fillThenFee(from, data, parts, swapKey, feeKey, BSC.v2Router, 0n, pay);
 }
