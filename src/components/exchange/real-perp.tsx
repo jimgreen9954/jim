@@ -936,13 +936,7 @@ export function RealPerp({
     }
     setBusy(true);
     setBad(false);
-    setNote(
-      !kind || kind === "open"
-        ? lang === "zh"
-          ? "保证金锁进合约。0.20% 在成交的同一笔里扣，不成交不扣。撤单退回时扣 0.20%。"
-          : "Margin locks in the contract. The 0.20% comes out in the same fill. No fill, no fee. A cancel returns the rest after 0.20%."
-        : c.walletBusy,
-    );
+    setNote(c.walletBusy);
     try {
       selectDesk(chain);
       const from = account ?? (chain === "xlayer" ? await connectXLayer() : await connectBsc());
@@ -2539,26 +2533,42 @@ export function RealPerp({
                                                 ],
                                               })
                                             : null,
-                                          guard === "easy" && markN > 0
-                                            ? /* @__PURE__ */ jsxs("p", {
-                                                className: "mt-2 font-mono text-sm tabular-nums",
+                                          guard === "easy" && (Number(limit) || markN) > 0
+                                            ? /* @__PURE__ */ jsxs("div", {
+                                                className: "mt-2 flex flex-col gap-1 font-mono text-sm tabular-nums",
                                                 children: [
-                                                  c.stopTp,
-                                                  " $",
-                                                  easyBand(
-                                                    Number(limit) || markN,
-                                                    lev || 1,
-                                                    true,
-                                                  ).tp.toFixed(2),
-                                                  " · ",
-                                                  c.stopSl,
-                                                  " $",
-                                                  easyBand(
-                                                    Number(limit) || markN,
-                                                    lev || 1,
-                                                    true,
-                                                  ).sl.toFixed(2),
-                                                ],
+                                                  ["long", true],
+                                                  ["short", false],
+                                                ].map(([key, side]) => {
+                                                  const entry = Number(limit) || markN;
+                                                  const band = easyBand(entry, lev || 1, side === true);
+                                                  const px = (n) => (n >= 100 ? n.toFixed(2) : n.toFixed(4));
+                                                  const on = (side === true) === (intent === "long");
+                                                  return /* @__PURE__ */ jsxs(
+                                                    "p",
+                                                    {
+                                                      className: on ? "" : "text-ink/45",
+                                                      children: [
+                                                        side === true
+                                                          ? lang === "zh"
+                                                            ? "做多"
+                                                            : "Long"
+                                                          : lang === "zh"
+                                                            ? "做空"
+                                                            : "Short",
+                                                        " ",
+                                                        c.stopTp,
+                                                        " ",
+                                                        px(band.tp),
+                                                        " · ",
+                                                        c.stopSl,
+                                                        " ",
+                                                        px(band.sl),
+                                                      ],
+                                                    },
+                                                    String(key),
+                                                  );
+                                                }),
                                               })
                                             : null,
                                           arm && !arm.spent
@@ -2974,18 +2984,15 @@ export function RealPerp({
                                               );
                                             else
                                               tx = await (async () => {
-                                                if (orderStyle !== "market" || slipBps <= 0)
-                                                  return openPerp(
-                                                    from,
-                                                    perp,
-                                                    long,
-                                                    sendMargin,
-                                                    sendLev,
-                                                    px,
-                                                  );
-                                                const other = (view?.quotes ?? []).filter(
+                                                const fresh = await readPerp(perp, from).catch(() => null);
+                                                const book = fresh?.quotes?.length ? fresh.quotes : (view?.quotes ?? []);
+                                                const mineAddr = from.toLowerCase();
+                                                const other = book.filter(
                                                   (quote) =>
-                                                    quote.long !== long && quote.price > 0n,
+                                                    quote.open !== false &&
+                                                    quote.long !== long &&
+                                                    quote.price > 0n &&
+                                                    quote.user?.toLowerCase() !== mineAddr,
                                                 );
                                                 const best = other.reduce<
                                                   (typeof other)[number] | null
@@ -2999,25 +3006,38 @@ export function RealPerp({
                                                       ? quote
                                                       : pick;
                                                 }, null);
-                                                if (!best || !(markN > 0))
-                                                  return openPerp(
-                                                    from,
-                                                    perp,
-                                                    long,
-                                                    sendMargin,
-                                                    sendLev,
-                                                    px,
-                                                  );
-                                                const awayPx = Number(formatUnits(best.price, 18));
-                                                if (!withinSlip(awayPx, [markN, settle], slipBps))
-                                                  throw new Error("slip");
-                                                return takePerp(
+                                                const limitPx = Number(limit);
+                                                const want =
+                                                  orderStyle === "limit" && limitPx > 0 ? limitPx : markN;
+                                                if (best && want > 0 && orderStyle !== "post") {
+                                                  const awayPx = Number(formatUnits(best.price, 18));
+                                                  const crosses =
+                                                    orderStyle === "limit"
+                                                      ? long
+                                                        ? want + 1e-8 >= awayPx
+                                                        : want <= awayPx + 1e-8
+                                                      : withinSlip(
+                                                          awayPx,
+                                                          [want, markN, settle].filter((n) => n > 0),
+                                                          slipBps,
+                                                        );
+                                                  if (crosses && awayPx > 0)
+                                                    return takePerp(
+                                                      from,
+                                                      perp,
+                                                      best.id,
+                                                      sendMargin,
+                                                      sendLev,
+                                                      true,
+                                                    );
+                                                }
+                                                return openPerp(
                                                   from,
                                                   perp,
-                                                  best.id,
+                                                  long,
                                                   sendMargin,
                                                   sendLev,
-                                                  true,
+                                                  px,
                                                 );
                                               })();
                                             if (guard !== "off") {
@@ -3100,35 +3120,14 @@ export function RealPerp({
                           /* @__PURE__ */ jsxs("div", {
                             className: "ticket-well",
                             children: [
+                              usdtShort
+                                ? /* @__PURE__ */ jsx("p", {
+                                    className: "text-xs leading-snug text-sell",
+                                    children: shortLine,
+                                  })
+                                : null,
                               /* @__PURE__ */ jsxs("div", {
-                                children: [
-                                  /* @__PURE__ */ jsx("p", {
-                                    className: "text-[11px] text-ink/40",
-                                    children: lang === "zh" ? "开仓" : "Open",
-                                  }),
-                                  /* @__PURE__ */ jsx("p", {
-                                    className: `mt-1 text-[13px] leading-snug ${usdtShort ? "text-sell" : "text-ink/75"}`,
-                                    children: usdtShort
-                                      ? lang === "zh"
-                                        ? "把保证金调到钱包里的 USDT 以内再开。现货不会被卖掉。"
-                                        : "Lower the margin to the USDT in the wallet. Spot is not sold."
-                                      : lang === "zh"
-                                        ? "保证金只锁钱包里的 USDT，不会先卖现货。0.20% 在成交的同一笔里扣，没成交不扣。"
-                                        : "Margin locks wallet USDT only. Spot is not sold first. The 0.20% is taken in the fill, and not taken if it does not fill.",
-                                  }),
-                                  acctMode === "unified" && spotN > 0
-                                    ? /* @__PURE__ */ jsx("p", {
-                                        className: "mt-1 font-mono text-[11px] text-ink/45",
-                                        children:
-                                          lang === "zh"
-                                            ? `现货 ${spotN.toFixed(2)} 留在钱包，不计入这一笔。`
-                                            : `Spot ${spotN.toFixed(2)} stays in the wallet and is not part of this order.`,
-                                      })
-                                    : null,
-                                ],
-                              }),
-                              /* @__PURE__ */ jsxs("div", {
-                                className: "grid grid-cols-3 gap-2 border-t border-gold/30 pt-2 font-mono text-[11px]",
+                                className: "grid grid-cols-3 gap-2 font-mono text-[11px]",
                                 children: [
                                   /* @__PURE__ */ jsxs("p", {
                                     className: "flex flex-col gap-0.5",
@@ -3371,6 +3370,12 @@ export function RealPerp({
                         const px = quote.price > 0n ? Number(formatUnits(quote.price, 18)) : markN;
                         const marginN = Number(formatUnits(quote.margin, dec));
                         const size = px > 0 ? (marginN * quote.lev) / px : 0;
+                        const hit = (view?.quotes ?? []).some((other) => {
+                          if (!other.user || other.user.toLowerCase() === me) return false;
+                          if (other.long === quote.long || !(other.price > 0n) || !(px > 0)) return false;
+                          const opx = Number(formatUnits(other.price, 18));
+                          return quote.long ? opx <= px : opx >= px;
+                        });
                         return (
                           <div key={quote.id.toString()} className="flex items-center gap-2 border border-gold/30 px-2 py-2">
                             <div className="min-w-0 flex-1">
@@ -3388,6 +3393,13 @@ export function RealPerp({
                                 {" · "}
                                 {usdtText(quote.margin)}
                               </p>
+                              {hit ? (
+                                <p className="mt-1 text-[11px] text-ink/55">
+                                  {lang === "zh"
+                                    ? "对手已挂。对方再开一笔就会成交。同一个钱包不能吃自己的单。"
+                                    : "A counterquote is up. Their next order fills this. One wallet cannot fill its own quote."}
+                                </p>
+                              ) : null}
                             </div>
                             <button
                               type="button"

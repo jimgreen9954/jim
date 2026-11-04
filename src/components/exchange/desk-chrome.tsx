@@ -419,12 +419,11 @@ export function MarketSheet({
 
   return (
     <div
-      className="fixed inset-x-0 bottom-[calc(3.4rem+env(safe-area-inset-bottom))] top-[var(--desk-top)] z-[80] xl:bottom-0"
+      className="fixed inset-0 z-[90] flex items-start justify-center bg-black/50 p-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:p-6"
       onClick={onClose}
     >
-      <div className="absolute inset-0 bg-black/50" />
       <div
-        className="pop-in absolute inset-x-0 top-0 flex h-full flex-col overflow-hidden border border-gold bg-card shadow-plate sm:inset-x-4 sm:top-2 sm:h-auto sm:max-h-[min(36rem,calc(100dvh-8rem))]"
+        className="pop-in flex h-[min(40rem,calc(100dvh-1.5rem))] w-full max-w-5xl flex-col overflow-hidden border border-gold bg-card shadow-plate"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center gap-2 border-b border-gold/40 p-2">
@@ -491,7 +490,21 @@ export function MarketSheet({
                             {row.lev}
                           </span>
                         ) : null}
-                        <span className="ml-2 text-[10px] text-ink/40">{row.tag}</span>
+                        <span className="ml-2 text-[10px] text-ink/40">
+                          {row.tag === "现货"
+                            ? zh
+                              ? "现货"
+                              : "Spot"
+                            : row.tag === "永续"
+                              ? zh
+                                ? "永续"
+                                : "Perp"
+                              : row.tag === "美股"
+                                ? zh
+                                  ? "美股"
+                                  : "Stock"
+                                : row.tag}
+                        </span>
                       </span>
                     </span>
                   </td>
@@ -502,7 +515,10 @@ export function MarketSheet({
                     {row.kind === "perp" ? (zh ? "不收" : "None") : "—"}
                   </td>
                   <td className="hidden px-2 py-2 text-ink/60 sm:table-cell">
-                    {row.where}
+                    {row.where
+                      .replace("池子", zh ? "池子" : "Pool")
+                      .replace("订单簿", zh ? "订单簿" : "Book")
+                      .replace("工房挂单", zh ? "工房挂单" : "Workshop")}
                     {row.id === "tape" && pool ? (
                       <span className="ml-2 font-mono text-ink/40">
                         {zh ? "池" : "Pool"} {pool}
@@ -538,6 +554,7 @@ export function LevDialog({
   onClose: () => void;
 }) {
   const [n, setN] = useState(lev >= 1 ? lev : 3);
+  const [text, setText] = useState(String(lev >= 1 ? lev : 3));
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -574,11 +591,35 @@ export function LevDialog({
             onChange={(event) => {
               const next = Number(event.target.value);
               setN(next);
+              setText(String(next));
               onLev(next);
             }}
             className="touch-range w-full"
           />
-          <span className="w-16 shrink-0 text-right font-mono text-lg">{n}×</span>
+          <label className="flex w-20 shrink-0 items-center justify-end gap-0.5 font-mono text-lg">
+            <input
+              value={text}
+              inputMode="numeric"
+              aria-label={zh ? "杠杆倍数" : "Leverage"}
+              onChange={(event) => {
+                const raw = event.target.value.replace(/[^\d]/g, "").slice(0, 4);
+                setText(raw);
+                const next = Number(raw);
+                if (next >= 1 && next <= 1000) {
+                  setN(next);
+                  onLev(next);
+                }
+              }}
+              onBlur={() => {
+                const next = Math.min(1000, Math.max(1, Math.round(Number(text) || n || 1)));
+                setN(next);
+                setText(String(next));
+                onLev(next);
+              }}
+              className="w-14 bg-transparent text-right outline-none"
+            />
+            <span>×</span>
+          </label>
         </div>
         <button
           type="button"

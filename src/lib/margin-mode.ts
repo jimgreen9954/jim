@@ -35,16 +35,10 @@ function round2(n: number) {
   return Math.round(n * 100) / 100;
 }
 
-function sizeLock(mode: MarginMode, notional: number, lev: number, spendable: number) {
+function sizeLock(notional: number, lev: number) {
   const typed = notional / lev;
   if (!(notional > 0) || !(typed > 0)) return { lock: 0, lev };
-  if (mode !== "cross" || !(spendable > typed + 0.009)) return { lock: round2(typed), lev };
-  const room = Math.min(500, spendable);
-  const first = Math.min(room, notional);
-  const next = Math.max(1, Math.min(1000, Math.round(notional / first)));
-  const lock = Math.min(room, notional / next);
-  if (!(lock > 0)) return { lock: round2(Math.min(room, typed)), lev };
-  return { lock: round2(lock), lev: next };
+  return { lock: round2(Math.min(500, typed)), lev };
 }
 
 export function planMargin(input: {
@@ -72,8 +66,7 @@ export function planMargin(input: {
       work = notional - mine.notional;
     }
   }
-  const spendable = input.freeUsdt;
-  const sized = sizeLock(input.marginMode, work, lev0, spendable);
+  const sized = sizeLock(work, lev0);
   const spotUsdt = 0;
   const price = input.price > 0 ? input.price : 0;
   const liq =

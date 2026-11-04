@@ -1,14 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { jumpChain } from "@/components/exchange/desk-home";
+import { currentDesk, type Desk } from "@/lib/perp";
 import {
   connectKind,
   currentAccount,
-  currentChain,
   disconnectWallet,
   onAccount,
-  onChain,
   onOpenLink,
   switchDeskChain,
-  type DeskChain,
 } from "@/lib/wallet";
 import { copy } from "@/lib/copy";
 import { useExchange } from "@/lib/exchange-store";
@@ -17,45 +16,69 @@ function short(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
-export function ChainSwitch({ compact = false }: { compact?: boolean }) {
+export function ChainSwitch({
+  compact = false,
+  onJump,
+}: {
+  compact?: boolean;
+  onJump?: (side: "spot" | "perp") => void;
+}) {
   const lang = useExchange((s) => s.lang);
-  const [id, setId] = useState<number | null>(currentChain());
-  const [busy, setBusy] = useState<DeskChain | null>(null);
-  useEffect(() => onChain(setId), []);
-  const pick = (next: DeskChain) => {
-    if (busy || id === next) return;
+  const zh = lang === "zh";
+  const [desk, setDesk] = useState<Desk>("bsc");
+  const [ready, setReady] = useState(false);
+  const [busy, setBusy] = useState<Desk | null>(null);
+  const gen = useRef(0);
+  useEffect(() => {
+    const on = (event: Event) => {
+      const next = (event as CustomEvent<string>).detail;
+      if (next === "bsc" || next === "xlayer") setDesk(next);
+    };
+    window.addEventListener("tape-desk-chain", on);
+    setDesk(currentDesk());
+    setReady(true);
+    return () => window.removeEventListener("tape-desk-chain", on);
+  }, []);
+  const pick = (next: Desk) => {
+    const view = jumpChain(next);
+    onJump?.(view.kind === "perp" ? "perp" : "spot");
+    if (!currentAccount()) return;
+    const mine = ++gen.current;
     setBusy(next);
-    void switchDeskChain(next)
-      .catch(async (err: unknown) => {
-        if (!(err instanceof Error) || err.message !== "nowallet") return;
-        await connectKind("okx");
-        await switchDeskChain(next);
-      })
+    void switchDeskChain(next === "bsc" ? 56 : 196)
       .catch(() => undefined)
-      .finally(() => setBusy(null));
+      .finally(() => {
+        if (gen.current === mine) setBusy(null);
+      });
   };
-  const item = (next: DeskChain, label: string) => {
-    const on = id === next;
+  const item = (next: Desk, mark: string, label: string, onClass: string) => {
+    const on = ready && desk === next;
     return (
       <button
-        key={next}
         type="button"
-        disabled={busy != null}
+        aria-pressed={on}
+        title={
+          zh
+            ? next === "bsc"
+              ? "切到 BSC 交易"
+              : "切到 X Layer 交易"
+            : next === "bsc"
+              ? "Trade on BSC"
+              : "Trade on X Layer"
+        }
+        className={`${on ? onClass : ""}${busy === next ? " busy" : ""}`}
         onClick={() => pick(next)}
-        className={`h-8 rounded-md px-2 text-xs disabled:opacity-40 ${on ? "bg-ink text-paper" : "text-ink/70"}`}
       >
-        {busy === next ? "…" : label}
+        <img src={mark} alt="" width={18} height={18} decoding="async" />
+        <span>{label}</span>
       </button>
     );
   };
   return (
-    <span
-      className="inline-flex h-8 items-center rounded-md border border-gold bg-card"
-      aria-label={lang === "zh" ? "切换链" : "Chain"}
-    >
-      {item(56, "BSC")}
-      {item(196, compact ? "X" : "X Layer")}
-    </span>
+    <div className="chain-switch shrink-0" role="group" aria-label={zh ? "切换链" : "Switch chain"}>
+      {item("bsc", "/coins/bnb.png", "BSC", "on-bsc")}
+      {item("xlayer", "/coins/okb.svg", compact ? "X" : "X Layer", "on-x")}
+    </div>
   );
 }
 

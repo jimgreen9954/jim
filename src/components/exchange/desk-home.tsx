@@ -6,6 +6,7 @@ import { PoolSpot } from "@/components/exchange/pool-spot";
 import { useExchange } from "@/lib/exchange-store";
 import type { DeskView } from "@/components/exchange/desk-chrome";
 import { currentAccount, onAccount } from "@/lib/wallet";
+import { selectDesk, type Desk } from "@/lib/perp";
 
 const RedGift = lazy(() =>
   import("@/components/exchange/red-gift").then((mod) => ({ default: mod.RedGift })),
@@ -38,6 +39,47 @@ export function rememberLp() {
   wantLp = true;
 }
 
+export function deskChain(view: DeskView): Desk {
+  if (view.kind === "perp") return view.chain;
+  if (view.kind === "tape" || view.kind === "otc") return "xlayer";
+  if (view.kind === "pancake" && (view.pair === "okb" || view.pair === "bemokb")) return "xlayer";
+  return "bsc";
+}
+
+export function viewOnChain(view: DeskView, chain: Desk): DeskView {
+  if (deskChain(view) === chain) return view;
+  if (view.kind === "perp") {
+    if (view.coin === "bem") return { kind: "perp", chain, coin: "bem" };
+    if (chain === "xlayer") return { kind: "perp", chain: "xlayer", coin: "bem" };
+    return { kind: "perp", chain: "bsc", coin: "bem" };
+  }
+  if (chain === "xlayer") {
+    if (view.kind === "pancake" && (view.pair === "bem" || view.pair === "bembnb"))
+      return { kind: "pancake", pair: "bemokb" };
+    if (view.kind === "pancake" && view.pair === "bnb") return { kind: "pancake", pair: "okb" };
+    return { kind: "tape", market: 0, pair: "usdt" };
+  }
+  if (view.kind === "pancake" && view.pair === "bemokb") return { kind: "pancake", pair: "bem" };
+  if (view.kind === "pancake" && view.pair === "okb") return { kind: "pancake", pair: "bnb" };
+  return { kind: "pancake", pair: "bem" };
+}
+
+export function jumpChain(chain: Desk): DeskView {
+  const next = viewOnChain(held, chain);
+  held = next;
+  wantLp = false;
+  selectDesk(chain);
+  window.dispatchEvent(new CustomEvent("tape-chain", { detail: next }));
+  window.dispatchEvent(new CustomEvent("tape-desk-chain", { detail: chain }));
+  return next;
+}
+
+function announceChain(view: DeskView) {
+  const chain = deskChain(view);
+  selectDesk(chain);
+  window.dispatchEvent(new CustomEvent("tape-desk-chain", { detail: chain }));
+}
+
 export function DeskHome({
   desk,
   onDesk,
@@ -66,6 +108,7 @@ export function DeskHome({
       setView(next);
       setLp(false);
       setOpen(false);
+      announceChain(next);
     };
     const onLp = () => {
       const next: DeskView = { kind: "pancake", pair: "bem" };
@@ -81,10 +124,27 @@ export function DeskHome({
       setOpen(true);
     };
     window.addEventListener("tape-markets", onMarkets);
+    const onChain = (event: Event) => {
+      const next = (event as CustomEvent<DeskView>).detail;
+      if (!next || typeof next !== "object" || !("kind" in next)) return;
+      held = next;
+      wantLp = false;
+      setView(next);
+      setLp(false);
+      setOpen(false);
+      onDesk(next.kind === "perp" ? "perp" : "spot");
+    };
+    window.addEventListener("tape-chain", onChain);
+    if (desk === "perp" && held.kind !== "perp") {
+      held = { kind: "perp", chain: "bsc", coin: "bem" };
+      setView(held);
+    }
+    announceChain(held);
     return () => {
       window.removeEventListener("tape-home", onHome);
       window.removeEventListener("tape-lp", onLp);
       window.removeEventListener("tape-markets", onMarkets);
+      window.removeEventListener("tape-chain", onChain);
     };
   }, [desk]);
 
@@ -103,6 +163,7 @@ export function DeskHome({
     }
     onDesk(side);
     window.dispatchEvent(new CustomEvent("tape-chart"));
+    announceChain(next);
   };
 
   const showPerp = desk === "perp" || view.kind === "perp";

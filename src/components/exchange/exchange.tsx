@@ -5,7 +5,7 @@ import { startPersistence, useExchange } from "@/lib/exchange-store";
 import { fmtPct, fmtPx, fmtUsd } from "@/lib/format";
 import { equity, sessionChange } from "@/lib/match-engine";
 import { DeskHome, RedPocket, rememberDesk } from "@/components/exchange/desk-home";
-import { ConnectButton } from "@/components/exchange/wallet-bar";
+import { ConnectButton, ChainSwitch } from "@/components/exchange/wallet-bar";
 import { SettingsMenu } from "@/components/exchange/settings-menu";
 import { LocaleMenu } from "@/components/exchange/locale-menu";
 import { SideRail } from "@/components/exchange/side-rail";
@@ -581,6 +581,10 @@ function Header({
       {label}
     </button>
   );
+  const openDesk = (side: "spot" | "perp") => {
+    setDesk(side);
+    go("desk", side);
+  };
   return (
     <header className="desk-header sticky top-0 z-50 border-b border-gold px-2 sm:px-3 pt-[env(safe-area-inset-top)]">
       <div className="flex h-12 items-center gap-1 lg:hidden">
@@ -612,6 +616,7 @@ function Header({
           />
         </button>
         <div className="ml-auto flex items-center gap-1">
+          <ChainSwitch compact onJump={openDesk} />
           <ConnectButton compact />
           <ThemeButton night={night} setNight={setNight} icon />
           <LocaleMenu />
@@ -647,6 +652,7 @@ function Header({
           {item(zh ? "规则" : "Rules", floor === "rules", () => go("rules", "rules"))}
         </nav>
         <div className="ml-auto flex shrink-0 items-center gap-1">
+          <ChainSwitch onJump={openDesk} />
           <ConnectButton />
           {wide ? (
             <Suspense fallback={null}>
