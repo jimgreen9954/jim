@@ -10,7 +10,7 @@ import { nitro } from "nitro/vite";
 import { grokPwaPlugin } from "./scripts/grok-pwa-plugin.mjs";
 // @ts-expect-error JS plugin alongside the TS vite config
 import { appEnvPlugin } from "./scripts/app-env-plugin.mjs";
-import { isMigrationFile } from "./scripts/migration-plan.mjs";
+import { serveOkxImage } from "./src/lib/okx-img.ts";
 
 /** The files `src/lib/db.ts` globs — same directory, same non-recursive scope. */
 function hasGlobbedMigrations(root: string): boolean {
@@ -68,6 +68,25 @@ function circuitPunkPlugin(): Plugin {
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         const pathOnly = (req.url ?? "").split("?", 1)[0] ?? "";
+        const host = String(req.headers.host ?? "127.0.0.1:8080");
+        if (pathOnly === "/api/okx-img") {
+          try {
+            const hit = await serveOkxImage(new URL(req.url ?? "/", `http://${host}`));
+            if (!hit) {
+              next();
+              return;
+            }
+            res.statusCode = hit.status;
+            hit.headers.forEach((value, key) => res.setHeader(key, value));
+            res.end(Buffer.from(await hit.arrayBuffer()));
+          } catch (err) {
+            console.error("[okx-img]", err);
+            res.statusCode = 502;
+            res.setHeader("content-type", "text/plain; charset=utf-8");
+            res.end("no");
+          }
+          return;
+        }
         if (!pathOnly.startsWith("/api/circuit-punk/")) {
           next();
           return;
@@ -76,7 +95,6 @@ function circuitPunkPlugin(): Plugin {
           const mod = (await server.ssrLoadModule("/src/lib/circuit-punk-http.ts")) as {
             serveCircuitPunk: (url: URL) => Response | null;
           };
-          const host = String(req.headers.host ?? "127.0.0.1:8080");
           const hit = mod.serveCircuitPunk(new URL(req.url ?? "/", `http://${host}`));
           if (!hit) {
             next();
