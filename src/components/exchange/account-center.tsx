@@ -19,7 +19,7 @@ import { getOfficialBooks } from "@/lib/official-books";
 import { transferBscCircuit, transferBscTransistor } from "@/lib/official-trade";
 import { okbPrice, OKB, readOkbPurse } from "@/lib/okb";
 import { BSC_REBATE, KNOWN_XPERP, readPerp } from "@/lib/perp";
-import { currentAccount, getProvider, onAccount } from "@/lib/wallet";
+import { connectKind, currentAccount, disconnectWallet, getProvider, onAccount } from "@/lib/wallet";
 import { connectXLayer, transferCircuit, transferTransistor, XLAYER } from "@/lib/xlayer";
 import { LOCK_TERMS, readLocks, type LockSeat } from "@/lib/tape-lock";
 import {
@@ -527,11 +527,39 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
 
   if (!account) {
     return (
-      <p className="border border-gold px-3 py-4 text-sm">
-        {zh
-          ? "右上角先登入。这一页只读你的地址，不保管资产。"
-          : "Sign in at the top right. This page only reads your address."}
-      </p>
+      <div className="flex flex-col gap-3">
+        <div className="border border-gold px-3 py-4">
+          <p className="hidden text-sm lg:block">
+            {zh
+              ? "右上角先登入。这一页只读你的地址，不保管资产。"
+              : "Sign in at the top right. This page only reads your address."}
+          </p>
+          <div className="lg:hidden">
+            <p className="text-sm">
+              {zh
+                ? "登入或退出都在这一页。本页只读地址，不保管资产。"
+                : "Sign in and out on this page. It only reads your address."}
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                className="min-h-11 bg-ink text-sm text-paper"
+                onClick={() => void connectKind("okx").catch(() => undefined)}
+              >
+                {zh ? "连接 OKX" : "Connect OKX"}
+              </button>
+              <button
+                type="button"
+                className="min-h-11 border border-gold text-sm"
+                onClick={() => void connectKind("binance").catch(() => undefined)}
+              >
+                {zh ? "连接币安" : "Connect Binance"}
+              </button>
+            </div>
+          </div>
+        </div>
+        <PayDesk zh={zh} account={null} />
+      </div>
     );
   }
 
@@ -876,8 +904,8 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
   };
 
   return (
-    <section className="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_24rem]">
-      <div className="order-2 flex min-w-0 flex-col gap-3 lg:order-1">
+    <section className="flex min-w-0 flex-col gap-3">
+      <div className="flex min-w-0 flex-col gap-3">
         <div className="border border-gold px-4 py-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -898,6 +926,13 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
               {freshing ? (zh ? "刷新中" : "Refreshing") : zh ? "刷新" : "Refresh"}
             </button>
           </div>
+          <button
+            type="button"
+            className="mt-3 min-h-11 w-full border border-gold text-sm lg:hidden"
+            onClick={() => void disconnectWallet()}
+          >
+            {zh ? "退出钱包" : "Log out"}
+          </button>
           <p className="mt-4 font-display text-4xl leading-none">
             {total == null ? "—" : money(total)}
           </p>
@@ -915,6 +950,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
             </p>
           </div>
         </div>
+        <PayDesk zh={zh} account={account} />
         <FeePass account={account} zh={zh} />
         <RedGift account={account} zh={zh} />
 
@@ -1574,9 +1610,6 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
           </div>
         ) : null}
         {note ? <p className={`text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
-      </div>
-      <div className="order-1 lg:sticky lg:top-16 lg:order-2">
-        <PayDesk zh={zh} account={account} />
       </div>
     </section>
   );

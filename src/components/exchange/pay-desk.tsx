@@ -164,6 +164,7 @@ export function PayDesk({ zh, account }: { zh: boolean; account: string | null }
   const [bad, setBad] = useState(false);
   const [note, setNote] = useState("");
   const [hash, setHash] = useState("");
+  const [shown, setShown] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -175,7 +176,7 @@ export function PayDesk({ zh, account }: { zh: boolean; account: string | null }
   useEffect(() => onAccount(() => setBalances({})), []);
 
   useEffect(() => {
-    if (!who) return;
+    if (!shown || !who) return;
     let dead = false;
     const pull = () => {
       Promise.all([
@@ -211,7 +212,7 @@ export function PayDesk({ zh, account }: { zh: boolean; account: string | null }
       dead = true;
       window.clearInterval(id);
     };
-  }, [who]);
+  }, [who, shown]);
 
   const bill: Bill | null =
     who && (mode === "pay" || openAmount || /^\d+(\.\d+)?$/.test(amount.trim()))
@@ -453,12 +454,26 @@ export function PayDesk({ zh, account }: { zh: boolean; account: string | null }
 
   return (
     <aside className="border border-gold bg-card">
-      <div className="border-b border-gold/40 px-3 py-3">
-        <p className="text-[11px] tracking-[0.18em] text-gold">{zh ? "收付款" : "Pay"}</p>
-        <h3 className="mt-1 text-lg leading-6">
-          {zh ? "扫码付，或生成收款码" : "Scan to pay, or make a code"}
-        </h3>
-        <p className="mt-1 text-xs leading-5 text-ink/55">
+      <button
+        type="button"
+        className="flex h-12 w-full items-center gap-3 px-3 text-left"
+        aria-expanded={shown}
+        onClick={() =>
+          setShown((on) => {
+            if (on) setScanOn(false);
+            return !on;
+          })
+        }
+      >
+        <span className="text-sm">{zh ? "收付款" : "Pay"}</span>
+        <span className="ml-auto text-xs text-ink/50">
+          {shown ? (zh ? "收起" : "Close") : zh ? "打开" : "Open"}
+        </span>
+      </button>
+      {shown ? (
+        <>
+      <div className="border-b border-gold/40 px-3 pb-3">
+        <p className="text-xs leading-5 text-ink/55">
           {zh
             ? "TAPE、BEM、OKB、BNB。X Layer 的 BEM 和 BSC 的 BEM 是两份币。BNB 是 BSC 的原生币，OKB 是 X Layer 的原生币，不能混。"
             : "TAPE, BEM, OKB and BNB. X Layer BEM and BSC BEM are different coins. BNB is native on BSC. OKB is native on X Layer."}
@@ -754,6 +769,8 @@ export function PayDesk({ zh, account }: { zh: boolean; account: string | null }
         )}
         {note ? <p className={`text-sm leading-6 ${bad ? "text-sell" : ""}`}>{note}</p> : null}
       </div>
+        </>
+      ) : null}
     </aside>
   );
 }

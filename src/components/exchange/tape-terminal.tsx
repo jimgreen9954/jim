@@ -540,6 +540,28 @@ export function TapeTerminal({
               setPhone("ticket");
             }}
           />
+          <div className="grid grid-cols-2 gap-2 px-3 pb-3 xl:hidden">
+            <button
+              type="button"
+              className="h-11 bg-ink text-sm text-paper"
+              onClick={() => {
+                setSide("buy");
+                setPhone("ticket");
+              }}
+            >
+              {zhUi ? "买入" : "Buy"}
+            </button>
+            <button
+              type="button"
+              className="h-11 bg-sell text-sm text-white"
+              onClick={() => {
+                setSide("sell");
+                setPhone("ticket");
+              }}
+            >
+              {zhUi ? "卖出" : "Sell"}
+            </button>
+          </div>
         </div>
         <div className="ph-book order-3 min-w-0 border-t border-gold xl:order-2 xl:border-t-0 xl:border-l">
           <div className="flex h-9 items-center border-b border-gold px-3 text-xs text-ink/70">

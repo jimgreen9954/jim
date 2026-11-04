@@ -1049,7 +1049,7 @@ export function PoolSpot({
         <button
           type="button"
           onClick={onOtc}
-          className="ml-auto h-7 shrink-0 border border-gold/40 px-2 text-xs text-ink/70"
+          className="ml-auto hidden h-7 shrink-0 border border-gold/40 px-2 text-xs text-ink/70 xl:inline-flex xl:items-center"
         >
           OTC
         </button>
@@ -1108,6 +1108,28 @@ export function PoolSpot({
               ))}
             </div>
           ) : null}
+          <div className="grid grid-cols-2 gap-2 px-3 pb-3 xl:hidden">
+            <button
+              type="button"
+              className="h-11 bg-ink text-sm text-paper"
+              onClick={() => {
+                setSide("buy");
+                setPhone("ticket");
+              }}
+            >
+              {zh ? "买入" : "Buy"}
+            </button>
+            <button
+              type="button"
+              className="h-11 bg-sell text-sm text-white"
+              onClick={() => {
+                setSide("sell");
+                setPhone("ticket");
+              }}
+            >
+              {zh ? "卖出" : "Sell"}
+            </button>
+          </div>
         </div>
         <div
           className="ph-book order-3 min-w-0 border-t border-gold xl:order-2 xl:border-t-0 xl:border-l"

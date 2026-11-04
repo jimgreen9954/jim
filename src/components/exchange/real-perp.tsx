@@ -1464,13 +1464,6 @@ export function RealPerp({
                     }),
                   ],
                 }),
-                /* @__PURE__ */ jsx("button", {
-                  type: "button",
-                  className: "grid size-9 place-items-center xl:hidden",
-                  onClick: () => setPhone(phone === "chart" ? "ticket" : "chart"),
-                  "aria-label": lang === "zh" ? "图表" : "Chart",
-                  children: /* @__PURE__ */ jsx(PairChevron, { up: phone === "chart" }),
-                }),
               ],
             }),
             link

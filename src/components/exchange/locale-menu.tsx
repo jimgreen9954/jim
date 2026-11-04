@@ -30,13 +30,13 @@ const WORD = {
   reset: { zh: "重置", en: "Reset", fr: "Réinitialiser", ko: "재설정", es: "Restablecer" },
 } as const;
 
-export function LocaleMenu() {
+export function LocaleMenu({ embedded = false }: { embedded?: boolean } = {}) {
   const locale = useExchange((s) => s.locale);
   const num = useExchange((s) => s.num);
   const setLocale = useExchange((s) => s.setLocale);
   const setNum = useExchange((s) => s.setNum);
   const [open, setOpen] = useState(false);
-  const [box, setBox] = useState<{ top: number; right: number } | null>(null);
+  const [box, setBox] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
   const btn = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
 
@@ -45,7 +45,19 @@ export function LocaleMenu() {
     const place = () => {
       const rect = btn.current?.getBoundingClientRect();
       if (!rect) return;
-      setBox({ top: rect.bottom + 6, right: Math.max(8, window.innerWidth - rect.right) });
+      const width = 176;
+      const margin = 8;
+      let right = window.innerWidth - rect.right;
+      if (window.innerWidth - right - width < margin) right = window.innerWidth - margin - width;
+      if (right < margin) right = margin;
+      const below = window.innerHeight - rect.bottom;
+      const above = rect.top;
+      const up = below < 240 && above > below;
+      setBox(
+        up
+          ? { bottom: Math.max(margin, window.innerHeight - rect.top + 6), right }
+          : { top: rect.bottom + 6, right },
+      );
     };
     place();
     const close = (event: PointerEvent) => {
@@ -62,6 +74,24 @@ export function LocaleMenu() {
       window.removeEventListener("resize", place);
     };
   }, [open]);
+
+  if (embedded) {
+    return (
+      <div className="py-1">
+        <p className="px-4 pt-2 text-xs text-ink/45">{WORD.lang[locale]}</p>
+        {LANGS.map((row) => (
+          <button
+            key={row.id}
+            type="button"
+            className={`flex h-12 w-full items-center px-4 text-left text-[15px] ${locale === row.id ? "text-ink" : "text-ink/80"}`}
+            onClick={() => setLocale(row.id)}
+          >
+            {row.label}
+          </button>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <>
@@ -84,13 +114,14 @@ export function LocaleMenu() {
           <circle cx="12" cy="12" r="8" />
           <path d="M4 12h16M12 4c2.2 2.4 2.2 13.6 0 16M12 4c-2.2 2.4-2.2 13.6 0 16" />
         </svg>
+        <span className="menu-word">{WORD.lang[locale]}</span>
       </button>
       {open && box
         ? createPortal(
             <div
               ref={panel}
-              className="fixed z-[80] w-44 rounded-lg border border-gold bg-card py-2 text-sm text-ink shadow-plate"
-              style={{ top: box.top, right: box.right }}
+              className="fixed z-[90] max-h-[min(24rem,calc(100dvh-1rem))] w-44 overflow-y-auto rounded-lg border border-gold bg-card py-2 text-sm text-ink shadow-plate"
+              style={{ top: box.top, bottom: box.bottom, right: box.right }}
             >
               <p className="px-3 py-1 text-xs text-ink/45">{WORD.num[locale]}</p>
               {NUMS.map((row) => (

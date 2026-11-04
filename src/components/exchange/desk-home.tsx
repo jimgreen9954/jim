@@ -39,6 +39,11 @@ export function rememberLp() {
   wantLp = true;
 }
 
+export function openOtcDesk() {
+  held = { kind: "otc", market: 0 };
+  wantLp = false;
+}
+
 export function deskChain(view: DeskView): Desk {
   if (view.kind === "perp") return view.chain;
   if (view.kind === "tape" || view.kind === "otc") return "xlayer";
@@ -135,9 +140,25 @@ export function DeskHome({
       onDesk(next.kind === "perp" ? "perp" : "spot");
     };
     window.addEventListener("tape-chain", onChain);
+    const onOtc = () => {
+      const next: DeskView = { kind: "otc", market: 0 };
+      held = next;
+      wantLp = false;
+      setView(next);
+      setLp(false);
+      setOpen(false);
+      announceChain(next);
+    };
+    window.addEventListener("tape-otc", onOtc);
     if (desk === "perp" && held.kind !== "perp") {
       held = { kind: "perp", chain: "bsc", coin: "bem" };
       setView(held);
+    }
+    if (desk === "spot" && held.kind === "perp") {
+      held = { kind: "tape", market: 0 };
+      wantLp = false;
+      setView(held);
+      setLp(false);
     }
     announceChain(held);
     return () => {
@@ -145,6 +166,7 @@ export function DeskHome({
       window.removeEventListener("tape-lp", onLp);
       window.removeEventListener("tape-markets", onMarkets);
       window.removeEventListener("tape-chain", onChain);
+      window.removeEventListener("tape-otc", onOtc);
     };
   }, [desk]);
 
@@ -162,11 +184,11 @@ export function DeskHome({
       window.dispatchEvent(new HashChangeEvent("hashchange"));
     }
     onDesk(side);
-    window.dispatchEvent(new CustomEvent("tape-chart"));
+    window.dispatchEvent(new CustomEvent("tape-trade"));
     announceChain(next);
   };
 
-  const showPerp = desk === "perp" || view.kind === "perp";
+  const showPerp = desk === "perp";
   const pool = !showPerp && view.kind === "tape" && view.market === 0;
   const book = !showPerp && (view.kind === "otc" || (view.kind === "tape" && view.market !== 0));
   const showCake = !showPerp && view.kind === "pancake";
@@ -253,6 +275,11 @@ export function RedPocket() {
   const [until, setUntil] = useState(0);
   const [live, setLive] = useState(false);
   useEffect(() => onAccount(setAccount), []);
+  useEffect(() => {
+    const openIt = () => setOpen(true);
+    window.addEventListener("tape-open-red", openIt);
+    return () => window.removeEventListener("tape-open-red", openIt);
+  }, []);
   useEffect(() => {
     let stop = false;
     const look = () => {
@@ -484,7 +511,7 @@ function PacketMark({
     <button
       type="button"
       aria-label={zh ? "红包锦囊" : "Red packet"}
-      className="pouch-mark fixed z-[120] grid h-14 w-14 place-items-center"
+      className="pouch-mark fixed z-[120] hidden h-14 w-14 place-items-center lg:grid"
       style={{ left: at.x, top: at.y, touchAction: "none" }}
       onPointerDown={(event) => {
         if (event.button !== 0) return;

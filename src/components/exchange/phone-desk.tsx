@@ -1,6 +1,6 @@
 export type PhonePane = "chart" | "book" | "ticket";
 
-let wanted: PhonePane = "chart";
+let wanted: PhonePane = "ticket";
 
 export function wantedPane(): PhonePane {
   return wanted;

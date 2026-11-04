@@ -4,7 +4,7 @@ import { copy } from "@/lib/copy";
 import { startPersistence, useExchange } from "@/lib/exchange-store";
 import { fmtPct, fmtPx, fmtUsd } from "@/lib/format";
 import { equity, sessionChange } from "@/lib/match-engine";
-import { DeskHome, RedPocket, rememberDesk } from "@/components/exchange/desk-home";
+import { DeskHome, RedPocket, openOtcDesk, rememberDesk } from "@/components/exchange/desk-home";
 import { ConnectButton, ChainSwitch } from "@/components/exchange/wallet-bar";
 import { SettingsMenu } from "@/components/exchange/settings-menu";
 import { LocaleMenu } from "@/components/exchange/locale-menu";
@@ -478,7 +478,7 @@ function Header({
   const [wide, setWide] = useState(
     () => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches,
   );
-  const [pane, setPane] = useState<"chart" | "ticket">("chart");
+  const [pane, setPane] = useState<"chart" | "ticket">("ticket");
   useEffect(() => {
     const chart = () => setPane("chart");
     const trade = () => setPane("ticket");
@@ -615,12 +615,8 @@ function Header({
             className="size-6 rounded-full"
           />
         </button>
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex items-center">
           <ChainSwitch compact onJump={openDesk} />
-          <ConnectButton compact />
-          <ThemeButton night={night} setNight={setNight} icon />
-          <LocaleMenu />
-          {!wide ? <SettingsMenu zh={zh} /> : null}
         </div>
       </div>
       <div className="hidden h-12 items-center gap-1 lg:flex">
@@ -756,11 +752,16 @@ function Header({
                 {row(zh ? "销毁" : "Burn", floor === "mine" && place === "ash", () =>
                   go("mine", "ash"),
                 )}
-                <div className="mx-4 my-2 border-t border-white/10" />
-                {row(zh ? "投资组合" : "Portfolio", floor === "me", () => {
-                  setGiftOpen(false);
-                  go("me", "me");
+                {row("OTC", false, () => {
+                  openOtcDesk();
+                  setDesk("spot");
+                  go("desk", "spot");
+                  window.dispatchEvent(new CustomEvent("tape-otc"));
                 })}
+                {row(zh ? "红包" : "Red packet", false, () => {
+                  window.dispatchEvent(new CustomEvent("tape-open-red"));
+                })}
+                <div className="mx-4 my-2 border-t border-white/10" />
                 <div className="px-1">
                   <Suspense fallback={null}>
                     <FeeBook />
@@ -782,6 +783,14 @@ function Header({
                 >
                   Telegram
                 </a>
+                <div
+                  onClick={(event) => {
+                    if (event.target instanceof HTMLButtonElement) setMenu(false);
+                  }}
+                >
+                  <LocaleMenu embedded />
+                </div>
+                <SettingsMenu zh={zh} />
                 <button
                   type="button"
                   className="flex h-12 w-full items-center px-4 text-left text-[15px] text-ink"
@@ -798,26 +807,6 @@ function Header({
                     : zh
                       ? "换成夜间"
                       : "Switch to night"}
-                </button>
-                <button
-                  type="button"
-                  className="flex h-12 w-full items-center px-4 text-left text-[15px] text-ink/80"
-                  onClick={() => {
-                    setMenu(false);
-                    connectKind("binance").catch(() => undefined);
-                  }}
-                >
-                  {zh ? "币安钱包" : "Binance"}
-                </button>
-                <button
-                  type="button"
-                  className="flex h-12 w-full items-center px-4 text-left text-[15px] text-ink/50"
-                  onClick={() => {
-                    setMenu(false);
-                    void disconnectWallet();
-                  }}
-                >
-                  {zh ? "退出钱包" : "Disconnect"}
                 </button>
               </nav>
             </div>,
