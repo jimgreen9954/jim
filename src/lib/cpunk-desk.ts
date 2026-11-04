@@ -1420,8 +1420,13 @@ export function bootCpunk(
   };
   const takeLogs = async (logs: Awaited<ReturnType<typeof client.getLogs>>) => {
     const blocks = [...new Set(logs.map((log) => log.blockNumber).filter((block): block is bigint => block != null))];
-    for (let index = 0; index < blocks.length; index += 6) {
-      await Promise.all(blocks.slice(index, index + 6).map((block) => stamp(block)));
+    if (blocks.length > 8) {
+      const unix = await stamp(blocks[0]);
+      for (const block of blocks) blockClock.set(block.toString(), unix);
+    } else {
+      for (let index = 0; index < blocks.length; index += 6) {
+        await Promise.all(blocks.slice(index, index + 6).map((block) => stamp(block)));
+      }
     }
     for (const log of logs) {
       try {
@@ -1496,8 +1501,9 @@ export function bootCpunk(
       unix: Number(row.at),
     }));
     const seenLive = new Set(feedRows.filter((row) => row.kind === "挂单").map((row) => row.id));
-    const all = [...feedRows, ...live.filter((row) => !seenLive.has(row.id))].sort((a, b) => b.unix - a.unix || b.id - a.id);
-    const recent = all.filter((row) => row.unix === 0 || row.unix >= cutoff);
+    const weight = (kind: string) => (kind === "成交" ? 3 : kind === "转让" ? 2 : kind === "撤单" ? 1 : 0);
+    const all = [...feedRows, ...live.filter((row) => !seenLive.has(row.id))].sort((a, b) => weight(b.kind) - weight(a.kind) || b.unix - a.unix || b.id - a.id);
+    const recent = all.filter((row) => row.kind === "成交" || row.kind === "转让" || row.kind === "撤单" || row.unix === 0 || row.unix >= cutoff);
     const pool = recentOnly ? recent : all;
     const query = Number(host.querySelector<HTMLInputElement>("#cp-log-q")?.value.trim() || "");
     const sorted = query ? pool.filter((row) => row.id === query) : pool;
@@ -1505,7 +1511,6 @@ export function bootCpunk(
     const pages = Math.max(1, Math.ceil(sorted.length / pageSize));
     if (feedPage >= pages) feedPage = 0;
     const items = sorted.slice(feedPage * pageSize, feedPage * pageSize + pageSize);
-    const reached = reachedUnix ? clock(reachedUnix) : "今天";
     host.querySelectorAll(".cp-log").forEach((box) => {
       box.replaceChildren();
       const modes = document.createElement("div");
@@ -1525,13 +1530,13 @@ export function bootCpunk(
       box.append(modes);
       const note = document.createElement("div");
       note.className = "feed-row";
+      const sales = pool.filter((row) => row.kind === "成交").length;
+      const moves = pool.filter((row) => row.kind === "转让").length;
       note.textContent = !sorted.length
         ? query
-          ? `#${query} 在${recentOnly ? "近两周" : "已读到的记录"}里还没有。`
-          : recentOnly
-            ? `近两周还没有成交、挂单或撤单。正在从今天往回读，已读到 ${reached}。10月19日的铸造不在这一页。`
-            : feedNote
-        : `${recentOnly ? "近两周 " : ""}共 ${sorted.length} 条，第 ${feedPage + 1} / ${pages} 页。已读到 ${reached}。`;
+          ? `#${query} 还没有成交或转让。`
+          : feedNote
+        : `成交 ${sales} 条，转让 ${moves} 条，放在最上面。共 ${sorted.length} 条，第 ${feedPage + 1} / ${pages} 页。`;
       box.append(note);
       for (const item of items) {
         const row = document.createElement("a");
@@ -1671,13 +1676,16 @@ export function bootCpunk(
         }
         feedReady = true;
         if (!priorityBuilt) {
-          let end = 74073000n;
-          const floor = 74067000n;
-          while (end > floor) {
-            const from = end - 99n > floor ? end - 99n : floor;
-            priority.push([from, end]);
-            end = from - 1n;
-          }
+          const fill = (hi: bigint, lo: bigint) => {
+            let end = hi;
+            while (end > lo) {
+              const from = end - 99n > lo ? end - 99n : lo;
+              priority.push([from, end]);
+              end = from - 1n;
+            }
+          };
+          fill(born + 9_000n, born);
+          fill(74073000n, 74067000n);
           priorityBuilt = true;
         }
       }
@@ -1692,7 +1700,9 @@ export function bootCpunk(
         const spans: [bigint, bigint][] = [];
         if (priority.length) {
           spans.push(...priority.splice(0, 2));
-          feedNote = "正在读 10月24日 的撤单和转让。这一段里没有人买成。";
+          feedNote = priority.length > 60
+            ? "正在读 10月19日 的转让，读到就放在挂单上面。"
+            : "正在读 10月24日 的撤单。买成的成交读到会放在最上面。";
         } else {
           let end = cursor;
           for (let step = 0; step < 2 && end > born; step += 1) {
@@ -1707,7 +1717,8 @@ export function bootCpunk(
         for (const part of parts) await takeLogs(part);
         tip = latest;
         try {
-          const saved = feedRows.slice(0, 1500).map((row) => ({ ...row, unix: row.unix }));
+          const ranked = [...feedRows.filter((row) => row.kind === "成交" || row.kind === "转让"), ...feedRows.filter((row) => row.kind !== "成交" && row.kind !== "转让")];
+          const saved = ranked.slice(0, 1500).map((row) => ({ ...row, unix: row.unix }));
           localStorage.setItem("cpunk-feed-v2", JSON.stringify({ cursor: cursor.toString(), tip: latest.toString(), rows: saved }));
         } catch {
           /* private mode */
@@ -1716,8 +1727,9 @@ export function bootCpunk(
         const unix = await stamp(mark);
         if (unix && !priority.length) reachedUnix = unix;
         const when = reachedUnix ? clock(reachedUnix) : "今天";
-        if (priority.length) feedNote = "正在读 10月24日 的撤单和转让。这一段里没有人买成。";
-        else feedNote = `挂单先显示。成交还要往回补，已读到 ${when}。已查到的记录里没有成交，10月24日有撤单和转让。`;
+        if (priority.length > 60) feedNote = "正在读 10月19日 的转让，读到就放在挂单上面。";
+        else if (priority.length) feedNote = "正在读 10月24日 的撤单。买成的成交读到会放在最上面。";
+        else feedNote = `转让和成交放在最上面。继续从今天往回补，已读到 ${when}。`;
         if (!priority.length && cursor <= born) historyDone = true;
       }
       paintFeed();
