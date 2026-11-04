@@ -346,6 +346,9 @@ export function bootCpunk(
   };
 
   let holderRows: { address: string; ids: number[] }[] = [];
+  let listSeen = 0;
+  let listTotal = 0;
+  let listsReady = false;
   let holderSeen = 0;
   let holderTotal = 0;
   let holderPage = 0;
@@ -450,7 +453,7 @@ export function bootCpunk(
   const scanHolders = async () => {
     const note = host.querySelector("#cp-holders-note");
     holderSeen = 0;
-    holderTotal = 1;
+    holderTotal = 0;
     paint();
     try {
       const [pub, heldReserve] = await Promise.all([
@@ -458,16 +461,6 @@ export function bootCpunk(
         client.readContract({ address: CPUNK, abi: ownerAbi, functionName: "reserve" }),
       ]);
       const publicIds = Array.from({ length: Number(pub) }, (_, index) => Number(heldReserve) + 1 + index);
-      for (let index = 0; index < publicIds.length; index += 80) {
-        if (signal.aborted) return;
-        const slice = publicIds.slice(index, index + 80);
-        const rows = await readListings(slice).catch(() => []);
-        slice.forEach((id, place) => {
-          const row = rows[place];
-          if (row && row[0].toLowerCase() !== ZERO && row[1] > 0n) listed.set(id, { seller: row[0], quote: row[1], at: row[2] });
-        });
-      }
-      if (listed.size) paint();
       const reserveIds = Array.from({ length: Number(heldReserve) }, (_, index) => index + 1);
       const reserveHigh = reserveIds.filter((id) => id > 150).reverse();
       const ids = [...reserveHigh, ...publicIds, ...reserveIds.filter((id) => id <= 150)];
@@ -731,8 +724,10 @@ export function bootCpunk(
     if (note) {
       note.textContent = !me
         ? "先连接钱包，这里显示你的挂单。"
-        : holderSeen < holderTotal
-          ? `正在读取链上挂单，已读 ${holderSeen} / ${holderTotal}。读完才知道这个钱包有没有挂。`
+        : !listsReady
+          ? listTotal
+            ? `正在读取挂单 ${listSeen} / ${listTotal}。读到的会马上出现。`
+            : "正在向 X Layer 读取挂单。"
           : mine.length
             ? `你挂着 ${mine.length} 张。点撤单即可取消。`
             : "这个钱包在 Circuit Punk 上还没有挂单。TapeCode-Test1 是欧易上的另一套，不会出现在这里。";
@@ -1486,7 +1481,17 @@ export function bootCpunk(
   };
   const paintFeed = () => {
     const cutoff = Math.floor(Date.now() / 1000) - 14 * 24 * 60 * 60;
-    const all = [...feedRows].sort((a, b) => b.unix - a.unix || b.id - a.id);
+    const live = [...listed.entries()].map(([id, row]) => ({
+      kind: "挂单" as const,
+      id,
+      px: `${bemText(row.quote)} BEM + ${bemText(row.quote * 1000n)} TAPE`,
+      who: cut(row.seller),
+      tx: "",
+      time: row.at > 0n ? clock(row.at) : "在售",
+      unix: Number(row.at),
+    }));
+    const seenLive = new Set(feedRows.filter((row) => row.kind === "挂单").map((row) => row.id));
+    const all = [...feedRows, ...live.filter((row) => !seenLive.has(row.id))].sort((a, b) => b.unix - a.unix || b.id - a.id);
     const recent = all.filter((row) => row.unix === 0 || row.unix >= cutoff);
     const pool = recentOnly ? recent : all;
     const query = Number(host.querySelector<HTMLInputElement>("#cp-log-q")?.value.trim() || "");
@@ -1642,6 +1647,23 @@ export function bootCpunk(
         recentFloor = latest > twoWeeks ? latest - twoWeeks : born;
         if (recentFloor < born) recentFloor = born;
         if (head) reachedUnix = Number(head.timestamp);
+        try {
+          const raw = localStorage.getItem("cpunk-feed-v1");
+          const saved = raw ? JSON.parse(raw) as { cursor?: string; tip?: string; rows?: FeedRow[] } : null;
+          if (saved?.rows?.length) {
+            for (const row of saved.rows) {
+              if (!row || !row.kind || !Number.isInteger(row.id)) continue;
+              const key = `${row.kind}:${row.id}:${row.tx}:${row.unix}`;
+              if (seenFeed.has(key)) continue;
+              seenFeed.add(key);
+              feedRows.push(row);
+            }
+          }
+          const savedCursor = saved?.cursor ? BigInt(saved.cursor) : 0n;
+          if (savedCursor > born && savedCursor < latest) cursor = savedCursor;
+        } catch {
+          cursor = latest;
+        }
         feedReady = true;
       }
       if (historyDone) {
@@ -1654,7 +1676,7 @@ export function bootCpunk(
       } else {
         const spans: [bigint, bigint][] = [];
         let end = cursor;
-        for (let step = 0; step < 4 && end > born; step += 1) {
+        for (let step = 0; step < 2 && end > born; step += 1) {
           const from = end > born + 99n ? end - 99n : born;
           if (from > end) break;
           spans.push([from, end]);
@@ -1664,12 +1686,17 @@ export function bootCpunk(
         for (const part of parts) await takeLogs(part);
         if (spans.length) cursor = spans[spans.length - 1][0] - 1n;
         tip = latest;
+        try {
+          const saved = feedRows.slice(0, 1500).map((row) => ({ ...row, unix: row.unix }));
+          localStorage.setItem("cpunk-feed-v1", JSON.stringify({ cursor: cursor.toString(), tip: latest.toString(), rows: saved }));
+        } catch {
+          /* private mode */
+        }
         const mark = cursor > born ? cursor : born;
         const unix = await stamp(mark);
         if (unix) reachedUnix = unix;
         const when = reachedUnix ? clock(reachedUnix) : "今天";
-        const phase = cursor > recentFloor ? "近两周" : "更早的铸造和转让";
-        feedNote = `正在从今天往回读${phase}，已读到 ${when}。读到的成交、挂单和撤单会直接出现，不会用 10 月 19 日的铸造挡住。`;
+        feedNote = `挂单已经单独读了。成交记录正在从今天往回补，已读到 ${when}。X Layer 一次只给约 100 个区块，所以成交比挂单慢。`;
         if (cursor <= born) historyDone = true;
       }
       paintFeed();
@@ -1679,6 +1706,45 @@ export function bootCpunk(
     } finally {
       scanning = false;
       if (!signal.aborted && !historyDone) window.setTimeout(() => void scanFeed(), 350);
+    }
+  };
+  const scanListings = async () => {
+    listSeen = 0;
+    listTotal = 0;
+    listsReady = false;
+    paint();
+    try {
+      const [pub, heldReserve] = await Promise.race([
+        Promise.all([
+          client.readContract({ address: CPUNK, abi: ownerAbi, functionName: "publicMinted" }),
+          client.readContract({ address: CPUNK, abi: ownerAbi, functionName: "reserve" }),
+        ]),
+        new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error("timeout")), 15_000)),
+      ]);
+      const supply = Math.min(10_000, Number(heldReserve) + Number(pub));
+      const ids = Array.from({ length: supply }, (_, index) => supply - index);
+      listTotal = ids.length;
+      for (let index = 0; index < ids.length; index += 80) {
+        if (signal.aborted) return;
+        const slice = ids.slice(index, index + 80);
+        const rows = await readListings(slice).catch(() => []);
+        slice.forEach((id, place) => {
+          const row = rows[place];
+          if (row && row[0].toLowerCase() !== ZERO && row[1] > 0n) listed.set(id, { seller: row[0], quote: row[1], at: row[2] });
+        });
+        listSeen = Math.min(listTotal, index + slice.length);
+        paint();
+        paintFeed();
+      }
+    } catch {
+      if (!listTotal) return;
+    } finally {
+      if (listTotal) {
+        listsReady = true;
+        listSeen = listTotal;
+        paint();
+        paintFeed();
+      }
     }
   };
   paintFeed();
@@ -1696,8 +1762,17 @@ export function bootCpunk(
     feedPage = 0;
     paintFeed();
   }, { signal });
-  void scanFeed();
-  void scanHolders();
+  void (async () => {
+    await scanListings();
+    if (!listsReady && !signal.aborted) await scanListings();
+    if (signal.aborted) return;
+    if (!listsReady) {
+      const note = host.querySelector("#cp-my-note");
+      if (note) note.textContent = "挂单这次没读到。刷新页面再试。";
+    }
+    void scanHolders();
+    void scanFeed();
+  })();
   const tradePage = host.querySelector("#page-trade");
   const forgeInput = host.querySelector<HTMLInputElement>("#cp-forge-ids");
   const forgeOut = host.querySelector("#cp-forge-out");
