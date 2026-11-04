@@ -1581,7 +1581,7 @@ export function bootCpunk(
       }
     });
     syncActs = () => {
-      const trades = pool.map((row) => ({
+      const trades = all.map((row) => ({
         kind: row.kind,
         id: row.id,
         px: row.px,

@@ -528,6 +528,63 @@ td.right, th.right { text-align: right; }
   font-size: 14px;
 }
 .feed-row:last-child { border-bottom: 0; }
+.act-switch {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 14px;
+}
+.act-kind {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  align-items: center;
+  min-height: 74px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  text-align: left;
+  color: var(--ink);
+}
+.act-kind b {
+  grid-row: 1 / span 2;
+  font-size: 26px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+}
+.act-kind span { font-weight: 750; font-size: 15px; }
+.act-kind small { color: var(--muted); font-size: 12px; }
+.act-kind.on {
+  background: #1a140c;
+  color: #f6f1e6;
+  border-color: #1a140c;
+}
+.act-kind.on small { color: #e0b15a; }
+.act-kind[data-kind="成交"].on { background: #1a140c; }
+.act-kind[data-kind="转让"].on { background: #16324f; border-color: #16324f; }
+.act-kind[data-kind="挂单"].on { background: #3d3218; border-color: #3d3218; }
+.act-kind[data-kind="撤单"].on { background: #3a2a28; border-color: #3a2a28; }
+.act-kind[data-kind="铸造"].on { background: #243028; border-color: #243028; }
+.feed-row.act-line { grid-template-columns: 56px minmax(0, 1fr) auto; }
+.act-line img {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background: #638596;
+  image-rendering: pixelated;
+}
+.act-copy, .act-meta { display: grid; gap: 4px; min-width: 0; }
+.act-copy b, .act-meta b { font-size: 15px; }
+.act-copy small, .act-meta small { color: var(--muted); font-size: 12px; }
+.act-meta { text-align: right; }
+.act-empty { padding: 36px 16px; text-align: center; }
+.act-empty b { display: block; font-size: 18px; margin-bottom: 6px; }
+.act-empty p { margin: 0; color: var(--muted); }
+.act-pages { padding: 12px 16px 16px; }
+.act-page { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
 .cp-log, #cp-log { max-height: 420px; overflow: auto; }
 .listed-at { margin-top: 4px; color: var(--muted); font-size: 12px; }
 .sale-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0 0 14px; }
@@ -1423,6 +1480,9 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
   .search { flex: 1 1 auto; min-width: 0; }
   .item-grid, .tape-grid, .trait-grid, .wallet-balances, .sale-strip { grid-template-columns: 1fr 1fr; }
   .feed-row { grid-template-columns: 1fr; gap: 4px; }
+  .feed-row.act-line { grid-template-columns: 48px minmax(0, 1fr) auto; }
+  .act-switch { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .act-kind:last-child { grid-column: 1 / -1; }
   .cp-hero { width: min(240px, 72vw); }
   .cp-hero .face { height: auto; width: 100%; aspect-ratio: 1; }
   .drop-hero { height: auto; overflow: visible; }
@@ -2305,8 +2365,8 @@ tbody tr:hover { background: var(--soft); }
 
     <div id="page-activity" class="page">
       <div class="pad">
-        <h2 style="font-size:28px;margin:12px 0 16px" data-i18n="activity">动态</h2>
-        <p class="sub">默认是近两周的成交、挂单、撤单和转让，从今天往回读。10月19日的铸造在「全部」里。</p>
+        <h2 style="font-size:28px;margin:12px 0 8px" data-i18n="activity">动态</h2>
+        <p class="sub">点一类，只看这一类。成交、转让、挂单、撤单、铸造分开。</p>
         <div class="feed" id="tape-feed">
           <div class="feed-row"><span>正在读取 tapeout.net 的成交…</span></div>
         </div>

@@ -1994,42 +1994,95 @@ export function bootLaunch(host: HTMLElement): () => void {
   })(), opt);
 
   let actPage = 0;
+  let actKind: "成交" | "转让" | "挂单" | "撤单" | "铸造" = "成交";
+  const actKinds = [
+    { kind: "成交" as const, hint: "买成的" },
+    { kind: "转让" as const, hint: "转给别人" },
+    { kind: "挂单" as const, hint: "正在卖" },
+    { kind: "撤单" as const, hint: "已取消" },
+    { kind: "铸造" as const, hint: "新铸出" },
+  ];
   const paintActivity = (feed: Element) => {
-    feed.replaceChildren();
+    const parent = feed.parentElement;
+    let switcher = parent?.querySelector<HTMLElement>("#tape-act-switch") ?? null;
+    if (!switcher && parent) {
+      switcher = document.createElement("div");
+      switcher.id = "tape-act-switch";
+      switcher.className = "act-switch";
+      parent.insertBefore(switcher, feed);
+    }
     const acts = cpunkActivity();
-    const size = 40;
-    const pages = Math.max(1, Math.ceil(acts.length / size));
+    const counts = new Map(actKinds.map((item) => [item.kind, acts.filter((row) => row.kind === item.kind).length]));
+    if (switcher) {
+      switcher.replaceChildren();
+      for (const item of actKinds) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `act-kind${actKind === item.kind ? " on" : ""}`;
+        button.dataset.kind = item.kind;
+        const count = document.createElement("b");
+        count.textContent = String(counts.get(item.kind) ?? 0);
+        const label = document.createElement("span");
+        label.textContent = item.kind;
+        const hint = document.createElement("small");
+        hint.textContent = item.hint;
+        button.append(count, label, hint);
+        button.addEventListener("click", () => {
+          actKind = item.kind;
+          actPage = 0;
+          paintActivity(feed);
+        });
+        switcher.append(button);
+      }
+    }
+    const shown = acts.filter((row) => row.kind === actKind);
+    feed.replaceChildren();
+    const size = 20;
+    const pages = Math.max(1, Math.ceil(shown.length / size));
     if (actPage >= pages) actPage = 0;
-    const slice = acts.slice(actPage * size, actPage * size + size);
-    const note = document.createElement("div");
-    note.className = "feed-row";
-    note.textContent = acts.length ? `近两周 ${acts.length} 条，第 ${actPage + 1} / ${pages} 页。` : "正在从今天往回读近两周的成交、挂单和撤单。10月19日的铸造不会挡在前面。";
-    feed.append(note);
+    const slice = shown.slice(actPage * size, actPage * size + size);
+    if (!slice.length) {
+      const empty = document.createElement("div");
+      empty.className = "act-empty";
+      const title = document.createElement("b");
+      title.textContent = acts.length ? `还没有${actKind}` : "正在读取链上记录";
+      const text = document.createElement("p");
+      text.textContent = acts.length ? "点上面另一类。每一类分开看，不会混在一起。" : "读到成交、转让、挂单、撤单或铸造，数字会跳。";
+      empty.append(title, text);
+      feed.append(empty);
+    }
     for (const act of slice) {
       const line = document.createElement(act.tx ? "a" : "div");
-      line.className = "feed-row";
+      line.className = "feed-row act-line";
       if (line instanceof HTMLAnchorElement && act.tx) {
         line.href = `https://www.oklink.com/x-layer/tx/${act.tx}`;
         line.target = "_blank";
         line.rel = "noopener";
       }
-      const pill = document.createElement("span");
-      pill.className = "pill";
-      pill.textContent = act.kind;
-      const name = document.createElement("span");
-      name.textContent = `Circuit Punk #${act.id}${act.who ? ` · ${act.who}` : ""}`;
-      const px = document.createElement("span");
+      const img = document.createElement("img");
+      img.alt = "";
+      img.src = `/api/circuit-punk/${act.id}.png?v=3`;
+      const body = document.createElement("span");
+      body.className = "act-copy";
+      const name = document.createElement("b");
+      name.textContent = `Circuit Punk #${act.id}`;
+      const who = document.createElement("small");
+      who.textContent = act.who || act.kind;
+      body.append(name, who);
+      const meta = document.createElement("span");
+      meta.className = "act-meta";
+      const px = document.createElement("b");
       px.textContent = act.px || "—";
-      const time = document.createElement("span");
-      time.style.color = "var(--muted)";
+      const time = document.createElement("small");
       time.textContent = act.time || (act.tx ? "X Layer" : "在售");
-      line.append(pill, name, px, time);
+      meta.append(px, time);
+      line.append(img, body, meta);
       if (!act.tx) line.addEventListener("click", () => open("trade"));
       feed.append(line);
     }
     if (pages > 1) {
       const bar = document.createElement("div");
-      bar.className = "toolbar";
+      bar.className = "toolbar act-pages";
       const newer = document.createElement("button");
       newer.type = "button";
       newer.className = "chip";
@@ -2039,6 +2092,9 @@ export function bootLaunch(host: HTMLElement): () => void {
         actPage = Math.max(0, actPage - 1);
         paintActivity(feed);
       });
+      const page = document.createElement("span");
+      page.className = "act-page";
+      page.textContent = `${actPage + 1} / ${pages}`;
       const older = document.createElement("button");
       older.type = "button";
       older.className = "chip";
@@ -2048,7 +2104,7 @@ export function bootLaunch(host: HTMLElement): () => void {
         actPage = Math.min(pages - 1, actPage + 1);
         paintActivity(feed);
       });
-      bar.append(newer, older);
+      bar.append(newer, page, older);
       feed.append(bar);
     }
   };
