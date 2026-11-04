@@ -725,9 +725,11 @@ export function bootCpunk(
       note.textContent = !me
         ? "先连接钱包，这里显示你的挂单。"
         : !listsReady
-          ? listTotal
-            ? `正在读取挂单 ${listSeen} / ${listTotal}。读到的会马上出现。`
-            : "正在向 X Layer 读取挂单。"
+          ? listed.size
+            ? `已显示上次记下的 ${listed.size} 张挂单，正在对链上。`
+            : listTotal
+              ? `正在读取挂单 ${listSeen} / ${listTotal}。读到的会马上出现。`
+              : "正在向 X Layer 读取挂单。"
           : mine.length
             ? `你挂着 ${mine.length} 张。点撤单即可取消。`
             : "这个钱包在 Circuit Punk 上还没有挂单。TapeCode-Test1 是欧易上的另一套，不会出现在这里。";
@@ -1382,8 +1384,37 @@ export function bootCpunk(
   let feedNote = "挂单先从合约读。10月24日的撤单和转让会接着补上。已查到的区块里还没有成交。";
   const priority: [bigint, bigint][] = [];
   let priorityBuilt = false;
+  let priorityDone = false;
+  let cachedCursor = 0n;
+  let cachedTip = 0n;
+  let gapCursor = 0n;
+  let gapFloor = 0n;
   const feedRows: FeedRow[] = [];
   const seenFeed = new Set<string>();
+  const rememberFeed = () => {
+    try {
+      const ranked = [
+        ...feedRows.filter((row) => row.kind === "成交" || row.kind === "转让" || row.kind === "撤单"),
+        ...feedRows.filter((row) => row.kind === "挂单" || row.kind === "铸造"),
+      ];
+      const rows = ranked.slice(0, 4000);
+      localStorage.setItem("cpunk-feed-v3", JSON.stringify({
+        cursor: cursor.toString(),
+        tip: tip.toString(),
+        priorityDone,
+        rows,
+      }));
+      const lists = [...listed.entries()].slice(0, 2000).map(([id, row]) => ({
+        id,
+        seller: row.seller,
+        quote: row.quote.toString(),
+        at: row.at.toString(),
+      }));
+      localStorage.setItem("cpunk-listed-v1", JSON.stringify(lists));
+    } catch {
+      /* private mode or full storage */
+    }
+  };
   const blockClock = new Map<string, number>();
   const stamp = async (block: bigint) => {
     const key = block.toString();
@@ -1435,13 +1466,16 @@ export function bootCpunk(
         const unix = log.blockNumber == null ? 0 : blockClock.get(log.blockNumber.toString()) ?? 0;
         const time = unix ? clock(unix) : "";
         const id = "id" in decoded.args ? Number(decoded.args.id) : "tokenId" in decoded.args ? Number(decoded.args.tokenId) : 0;
-        const key = `${decoded.eventName}:${id}:${tx}`;
-        if (seenFeed.has(key)) continue;
-        seenFeed.add(key);
+        const keep = (kind: FeedRow["kind"], row: FeedRow) => {
+          const key = `${kind}:${row.id}:${row.tx}`;
+          if (seenFeed.has(key)) return;
+          seenFeed.add(key);
+          feedRows.push(row);
+        };
         if (decoded.eventName === "Listed") {
           const prev = listed.get(Number(decoded.args.id));
           if (prev && prev.at === 0n && unix) listed.set(Number(decoded.args.id), { ...prev, at: BigInt(unix) });
-          feedRows.push({
+          keep("挂单", {
             kind: "挂单",
             id: Number(decoded.args.id),
             px: `${bemText(decoded.args.quote)} BEM + ${bemText(decoded.args.quote * 1000n)} TAPE`,
@@ -1451,13 +1485,13 @@ export function bootCpunk(
             unix,
           });
         } else if (decoded.eventName === "Cancelled") {
-          feedRows.push({ kind: "撤单", id: Number(decoded.args.id), px: "", who: "", tx, time, unix });
+          keep("撤单", { kind: "撤单", id: Number(decoded.args.id), px: "", who: "", tx, time, unix });
         } else if (decoded.eventName === "Minted") {
-          feedRows.push({ kind: "铸造", id: Number(decoded.args.id), px: "", who: cut(decoded.args.to), tx, time, unix });
+          keep("铸造", { kind: "铸造", id: Number(decoded.args.id), px: "", who: cut(decoded.args.to), tx, time, unix });
         } else if (decoded.eventName === "Transfer") {
           const from = decoded.args.from.toLowerCase();
           if (from === ZERO || from === CPUNK.toLowerCase()) continue;
-          feedRows.push({
+          keep("转让", {
             kind: "转让",
             id,
             px: "",
@@ -1467,9 +1501,7 @@ export function bootCpunk(
             unix,
           });
         } else if (decoded.eventName === "Bought") {
-          const prior = feedRows.findIndex((row) => row.tx === tx && row.id === Number(decoded.args.id) && row.kind === "成交");
-          if (prior >= 0) feedRows.splice(prior, 1);
-          feedRows.push({
+          keep("成交", {
             kind: "成交",
             id: Number(decoded.args.id),
             px: `${bemText(decoded.args.quote)} BEM + ${bemText(decoded.args.quote * 1000n)} TAPE`,
@@ -1657,25 +1689,13 @@ export function bootCpunk(
         recentFloor = latest > twoWeeks ? latest - twoWeeks : born;
         if (recentFloor < born) recentFloor = born;
         if (head) reachedUnix = Number(head.timestamp);
-        try {
-          const raw = localStorage.getItem("cpunk-feed-v2");
-          const saved = raw ? JSON.parse(raw) as { cursor?: string; tip?: string; rows?: FeedRow[] } : null;
-          if (saved?.rows?.length) {
-            for (const row of saved.rows) {
-              if (!row || !row.kind || !Number.isInteger(row.id)) continue;
-              const key = `${row.kind}:${row.id}:${row.tx}:${row.unix}`;
-              if (seenFeed.has(key)) continue;
-              seenFeed.add(key);
-              feedRows.push(row);
-            }
-          }
-          const savedCursor = saved?.cursor ? BigInt(saved.cursor) : 0n;
-          if (savedCursor > born && savedCursor < latest) cursor = savedCursor;
-        } catch {
-          cursor = latest;
+        if (cachedTip > born && cachedTip < latest) {
+          gapCursor = latest;
+          gapFloor = cachedTip;
         }
+        if (cachedCursor > born && cachedCursor < latest) cursor = cachedCursor;
         feedReady = true;
-        if (!priorityBuilt) {
+        if (!priorityBuilt && !priorityDone) {
           const fill = (hi: bigint, lo: bigint) => {
             let end = hi;
             while (end > lo) {
@@ -1698,7 +1718,18 @@ export function bootCpunk(
         }
       } else {
         const spans: [bigint, bigint][] = [];
-        if (priority.length) {
+        if (gapCursor > gapFloor) {
+          const end = gapCursor;
+          const from = end > gapFloor + 99n ? end - 99n : gapFloor + 1n;
+          if (from <= end) spans.push([from, end]);
+          const end2 = from - 1n;
+          if (end2 > gapFloor) {
+            const from2 = end2 > gapFloor + 99n ? end2 - 99n : gapFloor + 1n;
+            if (from2 <= end2) spans.push([from2, end2]);
+            gapCursor = from2 - 1n;
+          } else gapCursor = end2;
+          feedNote = `已先显示浏览器记下的 ${feedRows.length} 条。正在补这次新出现的。`;
+        } else if (priority.length) {
           spans.push(...priority.splice(0, 2));
           feedNote = priority.length > 60
             ? "正在读 10月19日 的转让，读到就放在挂单上面。"
@@ -1715,22 +1746,18 @@ export function bootCpunk(
         }
         const parts = await Promise.all(spans.map(([from, to]) => pullLogs(from, to)));
         for (const part of parts) await takeLogs(part);
-        tip = latest;
-        try {
-          const ranked = [...feedRows.filter((row) => row.kind === "成交" || row.kind === "转让"), ...feedRows.filter((row) => row.kind !== "成交" && row.kind !== "转让")];
-          const saved = ranked.slice(0, 1500).map((row) => ({ ...row, unix: row.unix }));
-          localStorage.setItem("cpunk-feed-v2", JSON.stringify({ cursor: cursor.toString(), tip: latest.toString(), rows: saved }));
-        } catch {
-          /* private mode */
-        }
+        tip = gapCursor > gapFloor ? gapCursor : latest;
+        if (priorityBuilt && priority.length === 0) priorityDone = true;
+        rememberFeed();
         const mark = cursor > born ? cursor : born;
         const unix = await stamp(mark);
         if (unix && !priority.length) reachedUnix = unix;
         const when = reachedUnix ? clock(reachedUnix) : "今天";
-        if (priority.length > 60) feedNote = "正在读 10月19日 的转让，读到就放在挂单上面。";
+        if (gapCursor > gapFloor) feedNote = `已先显示浏览器记下的记录。正在补这次新出现的，已读到 ${when}。`;
+        else if (priority.length > 60) feedNote = "正在读 10月19日 的转让，读到就放在挂单上面。";
         else if (priority.length) feedNote = "正在读 10月24日 的撤单。买成的成交读到会放在最上面。";
         else feedNote = `转让和成交放在最上面。继续从今天往回补，已读到 ${when}。`;
-        if (!priority.length && cursor <= born) historyDone = true;
+        if (gapCursor <= gapFloor && !priority.length && cursor <= born) historyDone = true;
       }
       paintFeed();
     } catch {
@@ -1777,10 +1804,38 @@ export function bootCpunk(
         listSeen = listTotal;
         paint();
         paintFeed();
+        rememberFeed();
       }
     }
   };
+  const restoreFeed = () => {
+    try {
+      const listedRaw = localStorage.getItem("cpunk-listed-v1");
+      const lists = listedRaw ? JSON.parse(listedRaw) as { id: number; seller: string; quote: string; at: string }[] : [];
+      for (const row of lists) {
+        if (!row || !Number.isInteger(row.id) || !row.seller) continue;
+        listed.set(row.id, { seller: row.seller, quote: BigInt(row.quote || "0"), at: BigInt(row.at || "0") });
+      }
+      const raw = localStorage.getItem("cpunk-feed-v3") ?? localStorage.getItem("cpunk-feed-v2");
+      const saved = raw ? JSON.parse(raw) as { cursor?: string; tip?: string; priorityDone?: boolean; rows?: FeedRow[] } : null;
+      for (const row of saved?.rows ?? []) {
+        if (!row || !row.kind || !Number.isInteger(row.id)) continue;
+        const key = `${row.kind}:${row.id}:${row.tx}`;
+        if (seenFeed.has(key)) continue;
+        seenFeed.add(key);
+        feedRows.push(row);
+      }
+      cachedCursor = saved?.cursor ? BigInt(saved.cursor) : 0n;
+      cachedTip = saved?.tip ? BigInt(saved.tip) : 0n;
+      priorityDone = Boolean(saved?.priorityDone);
+      if (feedRows.length) feedNote = `已先显示浏览器记下的 ${feedRows.length} 条。新的成交会接在后面。`;
+    } catch {
+      /* ignore a broken cache */
+    }
+  };
+  restoreFeed();
   paintFeed();
+  window.setTimeout(() => paintFeed(), 0);
   const logToggle = host.querySelector<HTMLButtonElement>("#cp-log-toggle");
   const logBox = host.querySelector<HTMLElement>("#cp-log");
   if (logToggle && logBox) {
