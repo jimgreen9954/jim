@@ -580,9 +580,15 @@ td.right, th.right { text-align: right; }
 .act-copy b, .act-meta b { font-size: 15px; }
 .act-copy small, .act-meta small { color: var(--muted); font-size: 12px; }
 .act-meta { text-align: right; }
-.act-empty { padding: 36px 16px; text-align: center; }
-.act-empty b { display: block; font-size: 18px; margin-bottom: 6px; }
-.act-empty p { margin: 0; color: var(--muted); }
+.act-empty { padding: 28px 16px; text-align: center; }
+.act-empty b { display: block; font-size: 16px; }
+.act-head {
+  padding: 12px 16px 4px;
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: .04em;
+  color: var(--muted);
+}
 .act-pages { padding: 12px 16px 16px; }
 .act-page { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
 .cp-log, #cp-log { max-height: 420px; overflow: auto; }
@@ -2406,7 +2412,7 @@ tbody tr:hover { background: var(--soft); }
     <div id="page-activity" class="page">
       <div class="pad">
         <h2 style="font-size:28px;margin:12px 0 8px" data-i18n="activity">动态</h2>
-        <p class="sub">点一类，只看这一类。成交、转让、挂单、撤单、铸造分开。</p>
+        <p class="sub">成交和撤单直接列在下面。转让、挂单、铸造点上面的卡再看。</p>
         <div class="feed" id="tape-feed">
           <div class="feed-row"><span>正在读取 tapeout.net 的成交…</span></div>
         </div>

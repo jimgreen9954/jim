@@ -1553,7 +1553,7 @@ export function bootCpunk(
       unix: Number(row.at),
     }));
     const seenLive = new Set(feedRows.filter((row) => row.kind === "挂单").map((row) => row.id));
-    const weight = (kind: string) => (kind === "成交" ? 3 : kind === "转让" ? 2 : kind === "撤单" ? 1 : 0);
+    const weight = (kind: string) => (kind === "成交" || kind === "撤单" ? 3 : kind === "转让" ? 2 : 0);
     const all = [...feedRows, ...live.filter((row) => !seenLive.has(row.id))].sort((a, b) => weight(b.kind) - weight(a.kind) || b.unix - a.unix || b.id - a.id);
     const recent = all.filter((row) => row.kind === "成交" || row.kind === "转让" || row.kind === "撤单" || row.unix === 0 || row.unix >= cutoff);
     const pool = recentOnly ? recent : all;
@@ -1660,16 +1660,20 @@ export function bootCpunk(
     const sales = host.querySelector("#cp-sales");
     const salesNote = host.querySelector("#cp-sales-note");
     const sold = all.filter((row) => row.kind === "成交").slice(0, 8);
+    const cancelled = all.filter((row) => row.kind === "撤单").slice(0, 8);
+    const strip = sold.length ? sold : cancelled;
     if (salesNote) {
       salesNote.textContent = sold.length
         ? "卖出的不会留在挂单格子里。下面是最近成交，带图片和时间。"
-        : historyDone
-          ? "从合约上线到现在还没有成交。铸造、挂单和撤单在下面的交易记录里。"
-          : feedNote;
+        : cancelled.length
+          ? "还没有人买成。下面是撤单，点进去是链上那一笔。"
+          : historyDone
+            ? "从合约上线到现在还没有成交。铸造、挂单和撤单在下面的交易记录里。"
+            : feedNote;
     }
     if (sales) {
       sales.replaceChildren();
-      for (const item of sold) {
+      for (const item of strip) {
         const link = document.createElement("a");
         link.className = "sale-card";
         link.href = item.tx ? `https://www.oklink.com/x-layer/tx/${item.tx}` : "#";
@@ -1680,7 +1684,7 @@ export function bootCpunk(
         img.src = `/api/circuit-punk/${item.id}.png?v=3`;
         const text = document.createElement("span");
         const title = document.createElement("b");
-        title.textContent = `#${item.id} 成交`;
+        title.textContent = `#${item.id} ${item.kind}`;
         const small = document.createElement("small");
         small.textContent = [item.px, item.time || "时间读取中"].filter(Boolean).join(" · ");
         text.append(title, small);

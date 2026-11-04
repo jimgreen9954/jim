@@ -2047,77 +2047,91 @@ export function bootLaunch(host: HTMLElement): () => void {
     }
     const shown = acts.filter((row) => row.kind === actKind);
     feed.replaceChildren();
-    const size = 20;
-    const pages = Math.max(1, Math.ceil(shown.length / size));
-    if (actPage >= pages) actPage = 0;
-    const slice = shown.slice(actPage * size, actPage * size + size);
-    if (!slice.length) {
-      const empty = document.createElement("div");
-      empty.className = "act-empty";
-      const title = document.createElement("b");
-      title.textContent = acts.length ? `还没有${actKind}` : "正在读取链上记录";
-      const text = document.createElement("p");
-      text.textContent = actKind === "成交"
-        ? "买成的记录从最新区块往回找。撤单在旁边，点开就能看。"
-        : acts.length ? "点上面另一类。每一类分开看，不会混在一起。" : "读到成交、转让、挂单、撤单或铸造，数字会跳。";
-      empty.append(title, text);
-      feed.append(empty);
-    }
-    for (const act of slice) {
-      const line = document.createElement(act.tx ? "a" : "div");
-      line.className = "feed-row act-line";
-      if (line instanceof HTMLAnchorElement && act.tx) {
-        line.href = `https://www.oklink.com/x-layer/tx/${act.tx}`;
-        line.target = "_blank";
-        line.rel = "noopener";
+    const paintRows = (rows: typeof acts) => {
+      if (!rows.length) {
+        const empty = document.createElement("div");
+        empty.className = "act-empty";
+        const title = document.createElement("b");
+        title.textContent = "还没有这一类";
+        empty.append(title);
+        feed.append(empty);
+        return;
       }
-      const img = document.createElement("img");
-      img.alt = "";
-      img.src = `/api/circuit-punk/${act.id}.png?v=3`;
-      const body = document.createElement("span");
-      body.className = "act-copy";
-      const name = document.createElement("b");
-      name.textContent = `Circuit Punk #${act.id}`;
-      const who = document.createElement("small");
-      who.textContent = act.who || act.kind;
-      body.append(name, who);
-      const meta = document.createElement("span");
-      meta.className = "act-meta";
-      const px = document.createElement("b");
-      px.textContent = act.px || "—";
-      const time = document.createElement("small");
-      time.textContent = act.time || (act.tx ? "X Layer" : "在售");
-      meta.append(px, time);
-      line.append(img, body, meta);
-      if (!act.tx) line.addEventListener("click", () => open("trade"));
-      feed.append(line);
-    }
-    if (pages > 1) {
-      const bar = document.createElement("div");
-      bar.className = "toolbar act-pages";
-      const newer = document.createElement("button");
-      newer.type = "button";
-      newer.className = "chip";
-      newer.textContent = "较新";
-      newer.disabled = actPage === 0;
-      newer.addEventListener("click", () => {
-        actPage = Math.max(0, actPage - 1);
-        paintActivity(feed);
-      });
-      const page = document.createElement("span");
-      page.className = "act-page";
-      page.textContent = `${actPage + 1} / ${pages}`;
-      const older = document.createElement("button");
-      older.type = "button";
-      older.className = "chip";
-      older.textContent = "更早";
-      older.disabled = actPage >= pages - 1;
-      older.addEventListener("click", () => {
-        actPage = Math.min(pages - 1, actPage + 1);
-        paintActivity(feed);
-      });
-      bar.append(newer, page, older);
-      feed.append(bar);
+      for (const act of rows) {
+        const line = document.createElement(act.tx ? "a" : "div");
+        line.className = "feed-row act-line";
+        if (line instanceof HTMLAnchorElement && act.tx) {
+          line.href = `https://www.oklink.com/x-layer/tx/${act.tx}`;
+          line.target = "_blank";
+          line.rel = "noopener";
+        }
+        const img = document.createElement("img");
+        img.alt = "";
+        img.src = `/api/circuit-punk/${act.id}.png?v=3`;
+        const body = document.createElement("span");
+        body.className = "act-copy";
+        const name = document.createElement("b");
+        name.textContent = `Circuit Punk #${act.id}`;
+        const who = document.createElement("small");
+        who.textContent = act.who || act.kind;
+        body.append(name, who);
+        const meta = document.createElement("span");
+        meta.className = "act-meta";
+        const px = document.createElement("b");
+        px.textContent = act.px || act.kind;
+        const time = document.createElement("small");
+        time.textContent = act.time || (act.tx ? "X Layer" : "在售");
+        meta.append(px, time);
+        line.append(img, body, meta);
+        if (!act.tx) line.addEventListener("click", () => open("trade"));
+        feed.append(line);
+      }
+    };
+    const head = (label: string, count: number) => {
+      const row = document.createElement("div");
+      row.className = "act-head";
+      row.textContent = `${label} ${count} 笔`;
+      feed.append(row);
+    };
+    if (actKind === "成交" || actKind === "撤单") {
+      const sales = acts.filter((row) => row.kind === "成交");
+      const cancels = acts.filter((row) => row.kind === "撤单");
+      head("成交", sales.length);
+      paintRows(sales.slice(0, 20));
+      head("撤单", cancels.length);
+      paintRows(cancels.slice(0, 20));
+    } else {
+      const size = 20;
+      const pages = Math.max(1, Math.ceil(shown.length / size));
+      if (actPage >= pages) actPage = 0;
+      paintRows(shown.slice(actPage * size, actPage * size + size));
+      if (pages > 1) {
+        const bar = document.createElement("div");
+        bar.className = "toolbar act-pages";
+        const newer = document.createElement("button");
+        newer.type = "button";
+        newer.className = "chip";
+        newer.textContent = "较新";
+        newer.disabled = actPage === 0;
+        newer.addEventListener("click", () => {
+          actPage = Math.max(0, actPage - 1);
+          paintActivity(feed);
+        });
+        const page = document.createElement("span");
+        page.className = "act-page";
+        page.textContent = `${actPage + 1} / ${pages}`;
+        const older = document.createElement("button");
+        older.type = "button";
+        older.className = "chip";
+        older.textContent = "更早";
+        older.disabled = actPage >= pages - 1;
+        older.addEventListener("click", () => {
+          actPage = Math.min(pages - 1, actPage + 1);
+          paintActivity(feed);
+        });
+        bar.append(newer, page, older);
+        feed.append(bar);
+      }
     }
   };
 
