@@ -427,10 +427,15 @@ export function bootLaunch(host: HTMLElement): () => void {
       apply();
     }, opt);
   });
-  host.querySelector<HTMLInputElement>(".search input")?.addEventListener("input", (event) => {
-    query = (event.target as HTMLInputElement).value.trim().toLowerCase();
-    apply();
-  }, opt);
+  host.querySelectorAll<HTMLInputElement>(".search input").forEach((input) => {
+    input.addEventListener("input", () => {
+      query = input.value.trim().toLowerCase();
+      host.querySelectorAll<HTMLInputElement>(".search input").forEach((other) => {
+        if (other !== input) other.value = input.value;
+      });
+      apply();
+    }, opt);
+  });
 
   const saved = window.localStorage.getItem("tape-theme") === "dark" ? "dark" : "light";
   const themeBtn = host.querySelector<HTMLButtonElement>("#btn-theme");
@@ -442,6 +447,8 @@ export function bootLaunch(host: HTMLElement): () => void {
       const day = narrow ? (uiLang() === "zh" ? "昼" : "Day") : t("themeDay");
       const night = narrow ? (uiLang() === "zh" ? "夜" : "Night") : t("themeNight");
       themeBtn.textContent = mode === "dark" ? day : night;
+      const drawerTheme = host.querySelector<HTMLButtonElement>("#drawer-theme");
+      if (drawerTheme) drawerTheme.textContent = themeBtn.textContent;
     }
     window.localStorage.setItem("tape-theme", mode);
   };
@@ -2955,10 +2962,14 @@ export function bootLaunch(host: HTMLElement): () => void {
     paintAccount(currentAccount());
     refreshSwap();
     if (langBtn) langBtn.textContent = t("langBtn");
+    const drawerLang = host.querySelector<HTMLButtonElement>("#drawer-lang");
+    if (drawerLang && langBtn) drawerLang.textContent = langBtn.textContent;
   };
   bootLang();
   paintLang();
   langBtn?.addEventListener("click", () => setUiLang(uiLang() === "zh" ? "en" : "zh"), opt);
+  host.querySelector("#drawer-lang")?.addEventListener("click", () => langBtn?.click(), opt);
+  host.querySelector("#drawer-theme")?.addEventListener("click", () => themeBtn?.click(), opt);
   const stopLang = onLang(paintLang);
 
   const stopGenesis = bootGenesis(host);

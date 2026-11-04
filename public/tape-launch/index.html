@@ -1439,7 +1439,30 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
   .search input { font-size: 13px; min-width: 0; }
   .search input::placeholder { font-size: 12px; }
   .search svg { width: 14px; height: 14px; }
-  #btn-theme, #btn-lang, .account { flex: 0 0 auto; }
+  .topbar .search,
+  .topbar .soc,
+  .topbar #btn-lang,
+  .topbar #btn-theme { display: none !important; }
+  .topbar .account { margin-left: auto; gap: 8px; }
+  .topbar .signin {
+    height: 36px;
+    max-width: 150px;
+    padding: 0 14px;
+    border-radius: 999px;
+    background: #1a140c;
+    color: #f7f1e4;
+    font-size: 13px;
+    font-weight: 750;
+    line-height: 36px;
+    box-shadow: 0 8px 18px rgba(26, 20, 12, .16);
+  }
+  .topbar .signin.out {
+    background: transparent;
+    color: #9a4036;
+    box-shadow: none;
+    border: 1px solid var(--line);
+    padding: 0 12px;
+  }
   .top-logo { flex: 0 0 auto; min-width: 0; }
   #btn-theme, #btn-lang, .signin, .signin.out {
     font-size: 12px;
@@ -1623,15 +1646,18 @@ tbody tr:hover { background: var(--soft); }
   .shell { padding-top: calc(46px + env(safe-area-inset-top)); }
   .search { height: 30px; padding: 0 6px; }
   .search input, .search input::placeholder { font-size: clamp(11px, 3vw, 13px); }
-  #btn-theme, #btn-lang, .signin, .signin.out, .soc {
-    font-size: clamp(10px, 2.6vw, 12px);
-    height: 28px;
-    line-height: 28px;
-    padding: 0 6px;
-    max-width: 18vw;
+  .topbar .search,
+  .topbar .soc,
+  .topbar #btn-lang,
+  .topbar #btn-theme { display: none !important; }
+  .topbar .signin, .topbar .signin.out {
+    font-size: 13px;
+    height: 36px;
+    line-height: 36px;
+    max-width: 150px;
+    padding: 0 14px;
   }
   .rail-social { display: none; }
-  .soc { display: inline-flex; }
   .hero-meta h2 { font-size: 20px; }
   .pad { padding: 12px 12px 24px; }
   .rank { order: 0; }
@@ -1714,6 +1740,10 @@ tbody tr:hover { background: var(--soft); }
     line-height: 1;
   }
   .nav-drawer .nav-item svg { width: 20px; height: 20px; }
+  .drawer-tools { display: grid; gap: 8px; padding: 8px 8px 12px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+  .drawer-tools .search { max-width: none; height: 40px; margin: 0; }
+  .drawer-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .drawer-row .chip { width: 100%; justify-content: center; }
 }
 </style>
 </head>
@@ -1766,6 +1796,16 @@ tbody tr:hover { background: var(--soft); }
 </aside>
 <div class="nav-shade" id="nav-shade" hidden></div>
 <nav class="nav-drawer" id="nav-drawer" hidden>
+  <div class="drawer-tools">
+    <label class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>
+      <input data-i18n-ph="searchPh" placeholder="搜索系列 / NFT / 钱包">
+    </label>
+    <div class="drawer-row">
+      <button class="chip" id="drawer-lang" type="button">EN</button>
+      <button class="chip" id="drawer-theme" type="button">深夜</button>
+    </div>
+  </div>
   <button class="nav-item nav-more" data-page="forge" type="button" onclick="switchPage('forge')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg><span>合成</span>
   </button>
