@@ -1379,7 +1379,9 @@ export function bootCpunk(
   let feedPage = 0;
   let recentOnly = true;
   let reachedUnix = 0;
-  let feedNote = "正在从今天往回读近两周。10月19日的铸造先不占这一页。";
+  let feedNote = "挂单先从合约读。10月24日的撤单和转让会接着补上。已查到的区块里还没有成交。";
+  const priority: [bigint, bigint][] = [];
+  let priorityBuilt = false;
   const feedRows: FeedRow[] = [];
   const seenFeed = new Set<string>();
   const blockClock = new Map<string, number>();
@@ -1449,14 +1451,12 @@ export function bootCpunk(
           feedRows.push({ kind: "铸造", id: Number(decoded.args.id), px: "", who: cut(decoded.args.to), tx, time, unix });
         } else if (decoded.eventName === "Transfer") {
           const from = decoded.args.from.toLowerCase();
-          if (from === ZERO) continue;
-          if (feedRows.some((row) => row.tx === tx && row.kind === "成交")) continue;
-          const lastList = [...feedRows].reverse().find((row) => row.id === id && row.kind === "挂单");
+          if (from === ZERO || from === CPUNK.toLowerCase()) continue;
           feedRows.push({
-            kind: from === CPUNK.toLowerCase() ? "成交" : "转让",
+            kind: "转让",
             id,
-            px: from === CPUNK.toLowerCase() ? lastList?.px ?? "" : "",
-            who: cut(decoded.args.to),
+            px: "",
+            who: `${cut(decoded.args.from)} → ${cut(decoded.args.to)}`,
             tx,
             time,
             unix,
@@ -1477,6 +1477,11 @@ export function bootCpunk(
       } catch {
         /* other events */
       }
+    }
+    const covered = new Set(feedRows.filter((row) => row.kind === "挂单" || row.kind === "撤单" || row.kind === "成交").map((row) => row.tx));
+    for (let index = feedRows.length - 1; index >= 0; index -= 1) {
+      const row = feedRows[index];
+      if (row.kind === "转让" && row.tx && covered.has(row.tx)) feedRows.splice(index, 1);
     }
   };
   const paintFeed = () => {
@@ -1648,7 +1653,7 @@ export function bootCpunk(
         if (recentFloor < born) recentFloor = born;
         if (head) reachedUnix = Number(head.timestamp);
         try {
-          const raw = localStorage.getItem("cpunk-feed-v1");
+          const raw = localStorage.getItem("cpunk-feed-v2");
           const saved = raw ? JSON.parse(raw) as { cursor?: string; tip?: string; rows?: FeedRow[] } : null;
           if (saved?.rows?.length) {
             for (const row of saved.rows) {
@@ -1665,6 +1670,16 @@ export function bootCpunk(
           cursor = latest;
         }
         feedReady = true;
+        if (!priorityBuilt) {
+          let end = 74073000n;
+          const floor = 74067000n;
+          while (end > floor) {
+            const from = end - 99n > floor ? end - 99n : floor;
+            priority.push([from, end]);
+            end = from - 1n;
+          }
+          priorityBuilt = true;
+        }
       }
       if (historyDone) {
         while (tip < latest && !signal.aborted) {
@@ -1675,29 +1690,35 @@ export function bootCpunk(
         }
       } else {
         const spans: [bigint, bigint][] = [];
-        let end = cursor;
-        for (let step = 0; step < 2 && end > born; step += 1) {
-          const from = end > born + 99n ? end - 99n : born;
-          if (from > end) break;
-          spans.push([from, end]);
-          end = from - 1n;
+        if (priority.length) {
+          spans.push(...priority.splice(0, 2));
+          feedNote = "正在读 10月24日 的撤单和转让。这一段里没有人买成。";
+        } else {
+          let end = cursor;
+          for (let step = 0; step < 2 && end > born; step += 1) {
+            const from = end > born + 99n ? end - 99n : born;
+            if (from > end) break;
+            spans.push([from, end]);
+            end = from - 1n;
+          }
+          if (spans.length) cursor = spans[spans.length - 1][0] - 1n;
         }
         const parts = await Promise.all(spans.map(([from, to]) => pullLogs(from, to)));
         for (const part of parts) await takeLogs(part);
-        if (spans.length) cursor = spans[spans.length - 1][0] - 1n;
         tip = latest;
         try {
           const saved = feedRows.slice(0, 1500).map((row) => ({ ...row, unix: row.unix }));
-          localStorage.setItem("cpunk-feed-v1", JSON.stringify({ cursor: cursor.toString(), tip: latest.toString(), rows: saved }));
+          localStorage.setItem("cpunk-feed-v2", JSON.stringify({ cursor: cursor.toString(), tip: latest.toString(), rows: saved }));
         } catch {
           /* private mode */
         }
         const mark = cursor > born ? cursor : born;
         const unix = await stamp(mark);
-        if (unix) reachedUnix = unix;
+        if (unix && !priority.length) reachedUnix = unix;
         const when = reachedUnix ? clock(reachedUnix) : "今天";
-        feedNote = `挂单已经单独读了。成交记录正在从今天往回补，已读到 ${when}。X Layer 一次只给约 100 个区块，所以成交比挂单慢。`;
-        if (cursor <= born) historyDone = true;
+        if (priority.length) feedNote = "正在读 10月24日 的撤单和转让。这一段里没有人买成。";
+        else feedNote = `挂单先显示。成交还要往回补，已读到 ${when}。已查到的记录里没有成交，10月24日有撤单和转让。`;
+        if (!priority.length && cursor <= born) historyDone = true;
       }
       paintFeed();
     } catch {
