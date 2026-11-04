@@ -2003,7 +2003,7 @@ export function bootLaunch(host: HTMLElement): () => void {
     const slice = acts.slice(actPage * size, actPage * size + size);
     const note = document.createElement("div");
     note.className = "feed-row";
-    note.textContent = acts.length ? `共 ${acts.length} 条，第 ${actPage + 1} / ${pages} 页。` : "正在读取 Circuit Punk 从合约上线以来的成交、挂单、撤单和铸造。";
+    note.textContent = acts.length ? `近两周 ${acts.length} 条，第 ${actPage + 1} / ${pages} 页。` : "正在从今天往回读近两周的成交、挂单和撤单。10月19日的铸造不会挡在前面。";
     feed.append(note);
     for (const act of slice) {
       const line = document.createElement(act.tx ? "a" : "div");

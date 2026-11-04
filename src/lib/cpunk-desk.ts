@@ -1377,14 +1377,14 @@ export function bootCpunk(
   type FeedRow = { kind: "挂单" | "成交" | "撤单" | "铸造" | "转让"; id: number; px: string; who: string; tx: string; time: string; unix: number };
   const born = 73628100n;
   let tip = 0n;
+  let cursor = 0n;
+  let recentFloor = born;
   let feedReady = false;
   let historyDone = false;
   let feedPage = 0;
-  let feedNote = "先读持有人，再读成交和铸造。两边一起读会把节点堵住。";
-  let launchAt = born;
-  const launchEnd = born + 12_000n;
-  let probeAt = 0n;
-  const dense: { from: bigint; to: bigint }[] = [];
+  let recentOnly = true;
+  let reachedUnix = 0;
+  let feedNote = "正在从今天往回读近两周。10月19日的铸造先不占这一页。";
   const feedRows: FeedRow[] = [];
   const seenFeed = new Set<string>();
   const blockClock = new Map<string, number>();
@@ -1418,7 +1418,7 @@ export function bootCpunk(
         const right = await pullLogs(mid + 1n, end, depth + 1);
         return [...left, ...right];
       }
-      return [];
+      throw error;
     }
   };
   const takeLogs = async (logs: Awaited<ReturnType<typeof client.getLogs>>) => {
@@ -1485,24 +1485,43 @@ export function bootCpunk(
     }
   };
   const paintFeed = () => {
+    const cutoff = Math.floor(Date.now() / 1000) - 14 * 24 * 60 * 60;
     const all = [...feedRows].sort((a, b) => b.unix - a.unix || b.id - a.id);
+    const recent = all.filter((row) => row.unix === 0 || row.unix >= cutoff);
+    const pool = recentOnly ? recent : all;
     const query = Number(host.querySelector<HTMLInputElement>("#cp-log-q")?.value.trim() || "");
-    const sorted = query ? all.filter((row) => row.id === query) : all;
+    const sorted = query ? pool.filter((row) => row.id === query) : pool;
     const pageSize = 40;
     const pages = Math.max(1, Math.ceil(sorted.length / pageSize));
     if (feedPage >= pages) feedPage = 0;
     const items = sorted.slice(feedPage * pageSize, feedPage * pageSize + pageSize);
+    const reached = reachedUnix ? clock(reachedUnix) : "今天";
     host.querySelectorAll(".cp-log").forEach((box) => {
       box.replaceChildren();
+      const modes = document.createElement("div");
+      modes.className = "toolbar";
+      for (const mode of [{ label: "近两周", on: true }, { label: "全部", on: false }]) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `chip${recentOnly === mode.on ? " on" : ""}`;
+        button.textContent = mode.label;
+        button.addEventListener("click", () => {
+          recentOnly = mode.on;
+          feedPage = 0;
+          paintFeed();
+        });
+        modes.append(button);
+      }
+      box.append(modes);
       const note = document.createElement("div");
       note.className = "feed-row";
       note.textContent = !sorted.length
-        ? historyDone
-          ? query
-            ? `#${query} 从合约上线到现在没有成交、挂单、撤单或铸造。`
-            : "从合约上线到现在，还没有成交、挂单、撤单或铸造。"
-          : feedNote
-        : `共 ${sorted.length} 条，第 ${feedPage + 1} / ${pages} 页。${historyDone ? "已包含合约上线以来的成交、挂单、撤单和铸造。" : "还在读取更早的记录。"}`;
+        ? query
+          ? `#${query} 在${recentOnly ? "近两周" : "已读到的记录"}里还没有。`
+          : recentOnly
+            ? `近两周还没有成交、挂单或撤单。正在从今天往回读，已读到 ${reached}。10月19日的铸造不在这一页。`
+            : feedNote
+        : `${recentOnly ? "近两周 " : ""}共 ${sorted.length} 条，第 ${feedPage + 1} / ${pages} 页。已读到 ${reached}。`;
       box.append(note);
       for (const item of items) {
         const row = document.createElement("a");
@@ -1547,7 +1566,7 @@ export function bootCpunk(
       }
     });
     syncActs = () => {
-      const trades = all.map((row) => ({
+      const trades = pool.map((row) => ({
         kind: row.kind,
         id: row.id,
         px: row.px,
@@ -1612,8 +1631,17 @@ export function bootCpunk(
       const latest = await client.getBlockNumber();
       if (!feedReady) {
         tip = latest;
-        probeAt = latest;
-        launchAt = born;
+        cursor = latest;
+        const head = await client.getBlock({ blockNumber: latest }).catch(() => null);
+        const earlierBlock = latest > 20_000n ? latest - 20_000n : born;
+        const earlier = await client.getBlock({ blockNumber: earlierBlock }).catch(() => null);
+        const elapsed = head && earlier ? Number(head.timestamp - earlier.timestamp) : 20_000;
+        const span = Number(latest - earlierBlock);
+        const secondsPerBlock = span > 0 && elapsed > 0 ? elapsed / span : 1;
+        const twoWeeks = BigInt(Math.max(1, Math.ceil((14 * 24 * 60 * 60) / secondsPerBlock)));
+        recentFloor = latest > twoWeeks ? latest - twoWeeks : born;
+        if (recentFloor < born) recentFloor = born;
+        if (head) reachedUnix = Number(head.timestamp);
         feedReady = true;
       }
       if (historyDone) {
@@ -1624,50 +1652,33 @@ export function bootCpunk(
           tip = end;
         }
       } else {
-        const jobs: Promise<Awaited<ReturnType<typeof pullLogs>>>[] = [];
-        if (launchAt <= launchEnd) {
-          for (let step = 0; step < 3 && launchAt <= launchEnd; step += 1) {
-            const from = launchAt;
-            const end = from + 99n > launchEnd ? launchEnd : from + 99n;
-            jobs.push(pullLogs(from, end));
-            launchAt = end + 1n;
-          }
-          feedNote = `正在读合约上线时的铸造。已读到区块 ${launchAt.toString()}。`;
+        const spans: [bigint, bigint][] = [];
+        let end = cursor;
+        for (let step = 0; step < 4 && end > born; step += 1) {
+          const from = end > born + 99n ? end - 99n : born;
+          if (from > end) break;
+          spans.push([from, end]);
+          end = from - 1n;
         }
-        for (let step = 0; step < 3 && probeAt > launchEnd; step += 1) {
-          const end = probeAt;
-          const from = end > 99n ? end - 99n : 0n;
-          const mark = end;
-          jobs.push(pullLogs(from, end).then((logs) => {
-            if (logs.length) {
-              const spanFrom = mark > 3_000n ? mark - 3_000n : born;
-              dense.push({ from: spanFrom < born ? born : spanFrom, to: mark });
-            }
-            return logs;
-          }));
-          probeAt -= 1_500n;
-        }
-        if (!jobs.length && dense.length) feedNote = "正在补有记录的那一段。";
-        else if (launchAt > launchEnd) feedNote = `正在查找成交和挂单。查到区块 ${probeAt > born ? probeAt.toString() : born.toString()}。找到的会马上出现。`;
-        const next = dense[0];
-        if (next && jobs.length < 4) {
-          const end = next.from + 99n > next.to ? next.to : next.from + 99n;
-          jobs.push(pullLogs(next.from, end));
-          next.from = end + 1n;
-          if (next.from > next.to) dense.shift();
-        }
-        for (const part of await Promise.all(jobs)) await takeLogs(part);
-        if (launchAt > launchEnd && probeAt <= launchEnd && dense.length === 0) historyDone = true;
+        const parts = await Promise.all(spans.map(([from, to]) => pullLogs(from, to)));
+        for (const part of parts) await takeLogs(part);
+        if (spans.length) cursor = spans[spans.length - 1][0] - 1n;
+        tip = latest;
+        const mark = cursor > born ? cursor : born;
+        const unix = await stamp(mark);
+        if (unix) reachedUnix = unix;
+        const when = reachedUnix ? clock(reachedUnix) : "今天";
+        const phase = cursor > recentFloor ? "近两周" : "更早的铸造和转让";
+        feedNote = `正在从今天往回读${phase}，已读到 ${when}。读到的成交、挂单和撤单会直接出现，不会用 10 月 19 日的铸造挡住。`;
+        if (cursor <= born) historyDone = true;
       }
-      const found = feedRows.length;
-      if (found) feedNote = `${feedNote} 已找到 ${found} 条。`;
       paintFeed();
     } catch {
-      feedNote = "这一段节点没返回，等一下再读。";
+      feedNote = "这一段节点忙，停在原地再读，不会把这段跳过。";
       paintFeed();
     } finally {
       scanning = false;
-      if (!historyDone && !signal.aborted) window.setTimeout(() => void scanFeed(), 400);
+      if (!signal.aborted && !historyDone) window.setTimeout(() => void scanFeed(), 350);
     }
   };
   paintFeed();
@@ -1685,9 +1696,8 @@ export function bootCpunk(
     feedPage = 0;
     paintFeed();
   }, { signal });
-  void scanHolders().finally(() => {
-    if (!signal.aborted) void scanFeed();
-  });
+  void scanFeed();
+  void scanHolders();
   const tradePage = host.querySelector("#page-trade");
   const forgeInput = host.querySelector<HTMLInputElement>("#cp-forge-ids");
   const forgeOut = host.querySelector("#cp-forge-out");
