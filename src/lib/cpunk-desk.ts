@@ -1468,7 +1468,13 @@ export function bootCpunk(
         const id = "id" in decoded.args ? Number(decoded.args.id) : "tokenId" in decoded.args ? Number(decoded.args.tokenId) : 0;
         const keep = (kind: FeedRow["kind"], row: FeedRow) => {
           const key = `${kind}:${row.id}:${row.tx}`;
-          if (seenFeed.has(key)) return;
+          if (seenFeed.has(key)) {
+            if (kind === "成交" && row.px) {
+              const place = feedRows.findIndex((item) => item.kind === kind && item.id === row.id && item.tx === row.tx);
+              if (place >= 0 && !feedRows[place].px) feedRows[place] = row;
+            }
+            return;
+          }
           seenFeed.add(key);
           feedRows.push(row);
         };
@@ -1490,7 +1496,21 @@ export function bootCpunk(
           keep("铸造", { kind: "铸造", id: Number(decoded.args.id), px: "", who: cut(decoded.args.to), tx, time, unix });
         } else if (decoded.eventName === "Transfer") {
           const from = decoded.args.from.toLowerCase();
-          if (from === ZERO || from === CPUNK.toLowerCase()) continue;
+        if (from === ZERO) continue;
+          if (from === CPUNK.toLowerCase()) {
+            const cancel = logs.some((item) => item.transactionHash === tx && item.topics[0]?.toLowerCase() === "0xc41d93b8bfbf9fd7cf5bfe271fd649ab6a6fec0ea101c23b82a2a28eca2533a9");
+            if (cancel) continue;
+            keep("成交", {
+              kind: "成交",
+              id,
+              px: "",
+              who: cut(decoded.args.to),
+              tx,
+              time,
+              unix,
+            });
+            continue;
+          }
           keep("转让", {
             kind: "转让",
             id,
@@ -1695,7 +1715,7 @@ export function bootCpunk(
         }
         if (cachedCursor > born && cachedCursor < latest) cursor = cachedCursor;
         feedReady = true;
-        if (!priorityBuilt && !priorityDone) {
+        if (!priorityBuilt && !priorityDone && feedRows.filter((row) => row.kind === "铸造").length < 200) {
           const fill = (hi: bigint, lo: bigint) => {
             let end = hi;
             while (end > lo) {
@@ -1729,6 +1749,16 @@ export function bootCpunk(
             gapCursor = from2 - 1n;
           } else gapCursor = end2;
           feedNote = `已先显示浏览器记下的 ${feedRows.length} 条。正在补这次新出现的。`;
+        } else if (cursor > recentFloor) {
+          let end = cursor;
+          for (let step = 0; step < 4 && end > recentFloor; step += 1) {
+            const from = end > recentFloor + 99n ? end - 99n : recentFloor;
+            if (from > end) break;
+            spans.push([from, end]);
+            end = from - 1n;
+          }
+          if (spans.length) cursor = spans[spans.length - 1][0] - 1n;
+          feedNote = "正在从今天往回找成交和撤单。找到就出现在动态里。";
         } else if (priority.length) {
           spans.push(...priority.splice(0, 2));
           feedNote = priority.length > 60

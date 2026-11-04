@@ -2001,7 +2001,8 @@ export function bootLaunch(host: HTMLElement): () => void {
   })(), opt);
 
   let actPage = 0;
-  let actKind: "成交" | "转让" | "挂单" | "撤单" | "铸造" = "成交";
+  let actKind: "成交" | "转让" | "挂单" | "撤单" | "铸造" = "撤单";
+  let actPicked = false;
   const actKinds = [
     { kind: "成交" as const, hint: "买成的" },
     { kind: "转让" as const, hint: "转给别人" },
@@ -2020,6 +2021,7 @@ export function bootLaunch(host: HTMLElement): () => void {
     }
     const acts = cpunkActivity();
     const counts = new Map(actKinds.map((item) => [item.kind, acts.filter((row) => row.kind === item.kind).length]));
+    if (!actPicked) actKind = (counts.get("成交") ?? 0) > 0 ? "成交" : (counts.get("撤单") ?? 0) > 0 ? "撤单" : "转让";
     if (switcher) {
       switcher.replaceChildren();
       for (const item of actKinds) {
@@ -2036,6 +2038,7 @@ export function bootLaunch(host: HTMLElement): () => void {
         button.append(count, label, hint);
         button.addEventListener("click", () => {
           actKind = item.kind;
+          actPicked = true;
           actPage = 0;
           paintActivity(feed);
         });
@@ -2054,7 +2057,9 @@ export function bootLaunch(host: HTMLElement): () => void {
       const title = document.createElement("b");
       title.textContent = acts.length ? `还没有${actKind}` : "正在读取链上记录";
       const text = document.createElement("p");
-      text.textContent = acts.length ? "点上面另一类。每一类分开看，不会混在一起。" : "读到成交、转让、挂单、撤单或铸造，数字会跳。";
+      text.textContent = actKind === "成交"
+        ? "买成的记录从最新区块往回找。撤单在旁边，点开就能看。"
+        : acts.length ? "点上面另一类。每一类分开看，不会混在一起。" : "读到成交、转让、挂单、撤单或铸造，数字会跳。";
       empty.append(title, text);
       feed.append(empty);
     }
