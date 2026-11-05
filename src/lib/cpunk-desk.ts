@@ -536,7 +536,7 @@ export function bootCpunk(
     const owned = host.querySelector("#cp-owned");
     if (!address) {
       if (countNode) countNode.textContent = "—";
-      if (note) note.textContent = "连接钱包后，这里显示张数、编号和图片。";
+      if (note) note.textContent = "";
       idsBox?.replaceChildren();
       box?.replaceChildren();
       mine?.replaceChildren();
@@ -544,7 +544,7 @@ export function bootCpunk(
       host.querySelector("#cp-forge-owned")?.replaceChildren();
       const mineNote = host.querySelector("#cp-forge-mine");
       const bestNote = host.querySelector("#cp-forge-best");
-      if (mineNote) mineNote.textContent = "连接钱包后，这里列出你持有的卡。";
+      if (mineNote) mineNote.textContent = "";
       if (bestNote) bestNote.textContent = "连接钱包后，点上面的「用我持有的合成」。";
       heldForForge = [];
       return;
@@ -850,30 +850,12 @@ export function bootCpunk(
     grid.replaceChildren();
     const view = host.querySelector("#cp-view-note");
     const pageNote = host.querySelector("#cp-art-page");
-    const picked = Object.entries(filters).filter((entry) => entry[1]);
-    const sortText = sortMode === "high" ? "价格从高到低" : sortMode === "low" ? "价格从低到高" : sortMode === "id" ? "按编号排" : sortMode === "common" ? "稀有的在后" : "稀有的在前";
-    if (view) {
-      view.textContent = sortMode === "high" || sortMode === "low"
-        ? listsOnly
-          ? forSale.length
-            ? `挂单 ${forSale.length} 张，${sortText}。`
-            : "还没有读到挂单。合约里托管的会补进来。"
-          : `在售 ${forSale.length} 张按${sortText}排在前面。没挂单的在后面。`
-        : listsOnly
-          ? forSale.length
-            ? `挂单 ${forSale.length} 张，排在市场最前。`
-            : "还没有读到挂单。合约里托管的会补进来。"
-          : `在售 ${forSale.length} 张排在最前，后面是${picked.length ? picked.map((entry) => entry[1]).join(" · ") : "全部"}，${sortText}。`;
-    }
+    if (view) view.textContent = listsOnly && forSale.length ? String(forSale.length) : "";
     if (pageNote) pageNote.textContent = matched.length ? `${filterPage + 1} / ${pages}` : "没有";
     if (!ids.length) {
       const empty = document.createElement("p");
       empty.className = "sub";
-      empty.textContent = listsOnly
-        ? holderSeen < holderTotal
-          ? "正在读取链上挂单。读到的会立刻出现在这里。"
-          : "还没有挂单，所以现在买不了。钱包里有的，在左边填编号再点挂出。"
-        : "没有符合这些属性的 Circuit Punk。";
+      empty.textContent = listsOnly ? (holderSeen < holderTotal ? "" : "没有挂单") : "没有";
       grid.append(empty);
       return;
     }
@@ -1680,15 +1662,7 @@ export function bootCpunk(
     const sold = all.filter((row) => row.kind === "成交").slice(0, 8);
     const cancelled = all.filter((row) => row.kind === "撤单").slice(0, 8);
     const strip = sold.length ? sold : cancelled;
-    if (salesNote) {
-      salesNote.textContent = sold.length
-        ? "卖出的不会留在挂单格子里。下面是最近成交，带图片和时间。"
-        : cancelled.length
-          ? "还没有人买成。下面是撤单，点进去是链上那一笔。"
-          : historyDone
-            ? "从合约上线到现在还没有成交。铸造、挂单和撤单在下面的交易记录里。"
-            : feedNote;
-    }
+    if (salesNote) salesNote.textContent = "";
     if (sales) {
       sales.replaceChildren();
       for (const item of strip) {

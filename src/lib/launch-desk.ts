@@ -2052,11 +2052,8 @@ export function bootLaunch(host: HTMLElement): () => void {
         const empty = document.createElement("div");
         empty.className = "act-empty";
         const title = document.createElement("b");
-        title.textContent = actKind === "成交" ? "正在读取成交" : "还没有这一类";
-        const text = document.createElement("p");
-        text.textContent = actKind === "成交" ? "从最新区块往回读买成。转让是另一类，不会混在这里。" : "";
+        title.textContent = actKind === "成交" ? "正在读取" : "还没有这一类";
         empty.append(title);
-        if (text.textContent) empty.append(text);
         feed.append(empty);
         return;
       }

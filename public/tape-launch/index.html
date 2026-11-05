@@ -1970,7 +1970,6 @@ tbody tr:hover { background: var(--soft); }
 
             <section class="block">
               <h3>今日涨幅</h3>
-              <p class="sub">过去 24 小时地板价变化最大</p>
               <div class="mover-grid" id="mover-grid"></div>
             </section>
           </div>
@@ -2086,7 +2085,7 @@ tbody tr:hover { background: var(--soft); }
               <p class="hint swap-warn" id="swap-liq" hidden></p>
               <button class="buy swap-go" id="swap-go" type="button" data-i18n="swapGo">兑换</button>
               <a id="swap-link" hidden target="_blank" rel="noopener"></a>
-              <p class="hint" id="swap-msg">成交发给官方池子。取消就等于没换。</p>
+              <p class="hint" id="swap-msg"></p>
             </form>
             <form class="form" id="bridge-form" onsubmit="return false">
               <h3 data-i18n="bridgeTitle">BEM 跨链</h3>
@@ -2100,7 +2099,7 @@ tbody tr:hover { background: var(--soft); }
               <p class="hint" id="bridge-quote">手续费读取中</p>
               <button class="buy" id="bridge-go" type="button" data-i18n="bridgeGo">跨过去</button>
               <a id="bridge-link" hidden target="_blank" rel="noopener"></a>
-              <p class="hint" id="bridge-msg">TapeOut 官方 1:1 桥。OKB 和 TAPE 没有这条桥，不会假装跨过去。</p>
+              <p class="hint" id="bridge-msg"></p>
             </form>
           </div>
           <div class="tabs">
@@ -2129,7 +2128,6 @@ tbody tr:hover { background: var(--soft); }
           <div>
             <p class="cp-kicker">火热交易中</p>
             <h2>Circuit Punk</h2>
-            <p class="by">Circuit Punk 是本市场的创始收藏，第一套，也是唯一一套。收藏和成交在 nft.tapeliquid.net。确认身份和手续费减免在 app.tapeliquid.net。</p>
             <details class="fold">
               <summary>介绍</summary>
               <p class="by">它依照 TapeOut 的 TAP-721 草案发行：在 ERC-721 的图像之外，每一枚另附一份 tapnet/1 网表及其 SHA-256。本收藏现处于 L0，网表可以核对，但尚未流片。肖像致敬比特币与 BEM 的早期参与者，包括 Hal Finney、Adam Back、Jameson Lopp，以及 BEM 的早期持有人。肖像是纪念，不构成投资建议。</p>
@@ -2137,7 +2135,7 @@ tbody tr:hover { background: var(--soft); }
             </details>
           </div>
         </div>
-        <div class="desk-pass">合成放在下面。选自己的编号，凑齐后点「合成」，会生成一张卡。
+        <div class="desk-pass">
           <button class="forge-go" type="button" onclick="switchPage('forge')">打开合成</button>
         </div>
         <div class="cp-stats" id="cp-stats"></div>
@@ -2150,11 +2148,11 @@ tbody tr:hover { background: var(--soft); }
         <div class="cp-layout">
           <aside class="cp-mint">
             <h3>铸造</h3>
-            <p class="hint" id="cp-left" style="text-align:left">一次一张。每次 1 TAPE + 0.001 BEM。一个钱包最多十次。</p>
+            <p class="hint" id="cp-left" style="text-align:left"></p>
             <p class="cp-cost" id="cp-cost">每次需要 <b>1 TAPE</b> 和 <b>0.001 BEM</b></p>
             <input id="cp-qty" value="1" hidden>
             <button class="buy" id="cp-mint" type="button">火热交易中</button>
-            <p class="hint" id="cp-mint-msg" style="text-align:left">连上钱包后，这里写明还能铸几次。铸完会刷新。持有的在资产里看。</p>
+            <p class="hint" id="cp-mint-msg" style="text-align:left"></p>
           </aside>
         </div>
       </div>
@@ -2170,7 +2168,6 @@ tbody tr:hover { background: var(--soft); }
           <div>
             <p class="cp-kicker">火热交易中</p>
             <h2>Circuit Punk</h2>
-            <p class="by">Circuit Punk 是本市场的创始收藏，第一套，也是唯一一套。收藏和成交在 nft.tapeliquid.net。确认身份和手续费减免在 app.tapeliquid.net。</p>
             <details class="fold">
               <summary>介绍</summary>
               <p class="by">它依照 TapeOut 的 TAP-721 草案发行：在 ERC-721 的图像之外，每一枚另附一份 tapnet/1 网表及其 SHA-256。本收藏现处于 L0，网表可以核对，但尚未流片。肖像致敬比特币与 BEM 的早期参与者，包括 Hal Finney、Adam Back、Jameson Lopp，以及 BEM 的早期持有人。肖像是纪念，不构成投资建议。</p>
@@ -2178,13 +2175,12 @@ tbody tr:hover { background: var(--soft); }
             </details>
           </div>
         </div>
-        <div class="desk-pass">合成放在这里。选自己的编号，凑齐后点「合成」，会生成一张卡。
+        <div class="desk-pass">
           <button class="forge-go" type="button" onclick="switchPage('forge')">打开合成</button>
         </div>
         <div class="cp-layout">
           <aside class="cp-mint">
             <h3>挂出你的一张</h3>
-            <p class="hint" style="text-align:left">一次一张。编号和价格都可以在这里改。</p>
             <label>编号</label>
             <input id="cp-list-id" inputmode="numeric" placeholder="在这里输入编号，例如 7001">
             <label>用哪种标价</label>
@@ -2195,22 +2191,20 @@ tbody tr:hover { background: var(--soft); }
             <label id="cp-px-label">价格（BEM）</label>
             <input id="cp-list-px" inputmode="decimal" value="0.002" placeholder="在这里输入价格">
             <p class="hint" id="cp-pair" style="text-align:left">买家付 0.002 BEM，同时付 2 TAPE。</p>
-            <p class="hint" id="cp-mine" style="text-align:left">连接钱包后，点下面的编号就能挂。</p>
             <div class="hold-ids" id="cp-mine-row"></div>
             <button class="buy" id="cp-list" type="button">挂出</button>
-            <p class="hint" id="cp-list-msg" style="text-align:left">成交在这份合约里。先连钱包。</p>
+            <p class="hint" id="cp-list-msg" style="text-align:left"></p>
             <div class="cp-jump">
               <button class="buy ghost" type="button" onclick="switchPage('mint')">去铸造</button>
             </div>
           </aside>
           <div id="cp-market-col">
             <h2 class="cp-market-title">Circuit Punk</h2>
-            <p class="sub">一万张像素肖像。挂单在下面，点开能看编号和属性。</p>
             <div class="toolbar">
               <button class="chip" id="cp-tab-items" type="button">物品</button>
               <button class="chip on" id="cp-tab-lists" type="button">挂单</button>
               <button class="chip" id="cp-filter-toggle" type="button">筛选</button>
-              <span class="sub" id="cp-view-note">正在看物品。没选属性时按稀有度排。</span>
+              <span class="sub" id="cp-view-note"></span>
               <input id="cp-find" inputmode="numeric" placeholder="输入编号" style="height:36px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);padding:0 12px;width:120px">
               <button class="chip" id="cp-open" type="button">打开</button>
             </div>
@@ -2223,7 +2217,7 @@ tbody tr:hover { background: var(--soft); }
               <button class="chip" type="button" data-sort="id">按编号</button>
             </div>
             <h3 style="font-size:16px;margin:4px 0 6px">最近成交</h3>
-            <p class="sub" id="cp-sales-note">卖出的不会留在挂单里。</p>
+            <p class="sub" id="cp-sales-note"></p>
             <div id="cp-sales" class="sale-strip"></div>
             <div class="item-grid" id="cp-grid"></div>
             <div class="toolbar" id="cp-pager">
@@ -2238,17 +2232,16 @@ tbody tr:hover { background: var(--soft); }
                 <h3>交易记录</h3>
                 <button class="chip" id="cp-log-toggle" type="button">隐藏</button>
               </div>
-              <p class="sub">默认只看成交。先显示今天买成的，挂单和更早的记录随后再补。时间是新加坡时间。</p>
               <input id="cp-log-q" inputmode="numeric" placeholder="按编号查，例如 7473" style="height:36px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);padding:0 12px;width:180px;margin:0 0 8px">
               <div class="feed cp-log" id="cp-log">
                 <div class="feed-row"><span>正在读链上的铸造、挂单和成交。</span></div>
               </div>
             </div>
             <h3 style="font-size:16px;margin:0 0 6px">我的挂单</h3>
-            <p class="hint" id="cp-my-note" style="text-align:left;margin:0 0 8px">连上钱包后，这里只放你挂着的，方便撤单。</p>
+            <p class="hint" id="cp-my-note" style="text-align:left;margin:0 0 8px"></p>
             <div class="my-lists" id="cp-my-lists"></div>
             <h3 style="font-size:16px;margin:18px 0 8px">持有地址</h3>
-            <p class="sub" id="cp-holders-note">正在读取链上持有人。</p>
+            <p class="sub" id="cp-holders-note"></p>
             <div class="toolbar" id="cp-holder-bar">
               <input id="cp-holder-q" placeholder="搜地址或编号" style="height:36px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);padding:0 12px;width:min(240px, 46vw)">
               <button class="chip" id="cp-holder-prev" type="button">上一页</button>
@@ -2273,15 +2266,15 @@ tbody tr:hover { background: var(--soft); }
         <section class="forge-board" id="cp-forge">
           <h3>合成</h3>
           <button class="buy" id="cp-forge-go" type="button">用我持有的合成</button>
-          <p class="hint" id="cp-forge-go-msg" style="text-align:left">连上钱包后点这一下。能凑齐就会直接出卡。</p>
+          <p class="hint" id="cp-forge-go-msg" style="text-align:left"></p>
           <div id="cp-forge-out"></div>
           <details class="fold">
             <summary>介绍</summary>
             <p class="by">只在这一页选你自己的 Circuit Punk。点卡加入材料，再点一次拿下。也可以自己输入编号。合成会把这些编号锁进合约，不销毁，锁着不能转。拆开之后有 48 小时解冻，这 48 小时不能转。拆出来的编号 30 天内不能再合成，别的编号不受影响。一个钱包只认最高的一张。这张卡不减本市场成交费。买卖仍只收 0.2%，不能再加版权费。减免只在交易所。</p>
           </details>
           <h4 class="forge-step">1. 你的卡</h4>
-          <p class="hint" id="cp-forge-mine" style="text-align:left">连接钱包后，这里列出你持有的卡。</p>
-          <p class="by" id="cp-forge-best">连接钱包后，这里显示你现在手里最高的一张。</p>
+          <p class="hint" id="cp-forge-mine" style="text-align:left"></p>
+          <p class="by" id="cp-forge-best"></p>
           <div class="forge-owned" id="cp-forge-owned"></div>
           <h4 class="forge-step">2. 材料</h4>
           <details class="fold">
@@ -2412,7 +2405,6 @@ tbody tr:hover { background: var(--soft); }
     <div id="page-activity" class="page">
       <div class="pad">
         <h2 style="font-size:28px;margin:12px 0 8px" data-i18n="activity">动态</h2>
-        <p class="sub">先看成交。今天买了多少、一共多少，写在列表上面。</p>
         <div class="feed" id="tape-feed">
           <div class="feed-row"><span>正在读取 tapeout.net 的成交…</span></div>
         </div>
@@ -2476,12 +2468,12 @@ tbody tr:hover { background: var(--soft); }
           <p class="hint" id="xfer-msg"></p>
         </div>
         <h3 style="font-size:16px;margin:4px 8px 8px">我的 Circuit Punk</h3>
-        <p class="sub" id="punk-hold-note">连接钱包后，这里显示张数、编号和图片。</p>
+        <p class="sub" id="punk-hold-note"></p>
         <div class="hold-ids" id="punk-hold-ids"></div>
         <div class="hold-grid" id="punk-hold"></div>
         <h3 data-i18n="holdings" style="font-size:16px;margin:4px 8px 8px">链上资产</h3>
         <div class="wallet-balances" id="wallet-balances"></div>
-        <p class="sub" data-i18n="balNote">余额来自这个钱包地址在 BSC 和 X Layer 上的链上数据，不是欧易交易所账户。</p>
+        <p class="sub" data-i18n="balNote"></p>
         <div id="hold-list"></div>
       </div>
     </div>
