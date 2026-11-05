@@ -2238,7 +2238,7 @@ tbody tr:hover { background: var(--soft); }
                 <h3>交易记录</h3>
                 <button class="chip" id="cp-log-toggle" type="button">隐藏</button>
               </div>
-              <p class="sub">默认看近两周，从今天往回读。时间是新加坡时间。10月19日的铸造要点「全部」。</p>
+              <p class="sub">默认只看成交。先显示今天买成的，挂单和更早的记录随后再补。时间是新加坡时间。</p>
               <input id="cp-log-q" inputmode="numeric" placeholder="按编号查，例如 7473" style="height:36px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);padding:0 12px;width:180px;margin:0 0 8px">
               <div class="feed cp-log" id="cp-log">
                 <div class="feed-row"><span>正在读链上的铸造、挂单和成交。</span></div>
@@ -2412,7 +2412,7 @@ tbody tr:hover { background: var(--soft); }
     <div id="page-activity" class="page">
       <div class="pad">
         <h2 style="font-size:28px;margin:12px 0 8px" data-i18n="activity">动态</h2>
-        <p class="sub">成交和撤单直接列在下面。转让、挂单、铸造点上面的卡再看。</p>
+        <p class="sub">先看成交。今天买了多少、一共多少，写在列表上面。</p>
         <div class="feed" id="tape-feed">
           <div class="feed-row"><span>正在读取 tapeout.net 的成交…</span></div>
         </div>

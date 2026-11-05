@@ -174,7 +174,7 @@ async function ownersOf(ids: number[]): Promise<(string | null)[]> {
   return decoded.map((row) => (row.success && row.returnData.length >= 66 ? `0x${row.returnData.slice(-40)}`.toLowerCase() : null));
 }
 
-type CpunkAct = { kind: "挂单" | "成交" | "撤单" | "铸造" | "转让"; id: number; px: string; who: string; tx: string; time: string };
+type CpunkAct = { kind: "挂单" | "成交" | "撤单" | "铸造" | "转让"; id: number; px: string; who: string; tx: string; time: string; unix: number };
 const cpunkActs: CpunkAct[] = [];
 export function cpunkActivity(): CpunkAct[] {
   return cpunkActs.slice();
@@ -1379,7 +1379,7 @@ export function bootCpunk(
   let feedReady = false;
   let historyDone = false;
   let feedPage = 0;
-  let recentOnly = true;
+  let logKind: "成交" | "挂单" | "全部" = "成交";
   let reachedUnix = 0;
   let feedNote = "挂单先从合约读。10月24日的撤单和转让会接着补上。已查到的区块里还没有成交。";
   const priority: [bigint, bigint][] = [];
@@ -1542,7 +1542,6 @@ export function bootCpunk(
     }
   };
   const paintFeed = () => {
-    const cutoff = Math.floor(Date.now() / 1000) - 14 * 24 * 60 * 60;
     const live = [...listed.entries()].map(([id, row]) => ({
       kind: "挂单" as const,
       id,
@@ -1553,10 +1552,8 @@ export function bootCpunk(
       unix: Number(row.at),
     }));
     const seenLive = new Set(feedRows.filter((row) => row.kind === "挂单").map((row) => row.id));
-    const weight = (kind: string) => (kind === "成交" || kind === "撤单" ? 3 : kind === "转让" ? 2 : 0);
-    const all = [...feedRows, ...live.filter((row) => !seenLive.has(row.id))].sort((a, b) => weight(b.kind) - weight(a.kind) || b.unix - a.unix || b.id - a.id);
-    const recent = all.filter((row) => row.kind === "成交" || row.kind === "转让" || row.kind === "撤单" || row.unix === 0 || row.unix >= cutoff);
-    const pool = recentOnly ? recent : all;
+    const all = [...feedRows, ...live.filter((row) => !seenLive.has(row.id))].sort((a, b) => b.unix - a.unix || b.id - a.id);
+    const pool = logKind === "全部" ? all : all.filter((row) => row.kind === logKind);
     const query = Number(host.querySelector<HTMLInputElement>("#cp-log-q")?.value.trim() || "");
     const sorted = query ? pool.filter((row) => row.id === query) : pool;
     const pageSize = 40;
@@ -1567,13 +1564,17 @@ export function bootCpunk(
       box.replaceChildren();
       const modes = document.createElement("div");
       modes.className = "toolbar";
-      for (const mode of [{ label: "近两周", on: true }, { label: "全部", on: false }]) {
+      for (const mode of [
+        { label: "成交", kind: "成交" as const },
+        { label: "挂单", kind: "挂单" as const },
+        { label: "全部", kind: "全部" as const },
+      ]) {
         const button = document.createElement("button");
         button.type = "button";
-        button.className = `chip${recentOnly === mode.on ? " on" : ""}`;
+        button.className = `chip${logKind === mode.kind ? " on" : ""}`;
         button.textContent = mode.label;
         button.addEventListener("click", () => {
-          recentOnly = mode.on;
+          logKind = mode.kind;
           feedPage = 0;
           paintFeed();
         });
@@ -1582,13 +1583,22 @@ export function bootCpunk(
       box.append(modes);
       const note = document.createElement("div");
       note.className = "feed-row";
-      const sales = pool.filter((row) => row.kind === "成交").length;
-      const moves = pool.filter((row) => row.kind === "转让").length;
-      note.textContent = !sorted.length
-        ? query
-          ? `#${query} 还没有成交或转让。`
-          : feedNote
-        : `成交 ${sales} 条，转让 ${moves} 条，放在最上面。共 ${sorted.length} 条，第 ${feedPage + 1} / ${pages} 页。`;
+      const sales = feedRows.filter((row) => row.kind === "成交");
+      const day = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" });
+      const bemOf = (px: string) => {
+        const n = Number(px.replace(/,/g, "").split(" ")[0]);
+        return Number.isFinite(n) ? n : 0;
+      };
+      const todayRows = sales.filter((row) => row.unix > 0 && new Date(row.unix * 1000).toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" }) === day);
+      const total = (rows: FeedRow[]) => rows.reduce((sum, row) => sum + bemOf(row.px), 0);
+      const money = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 4 });
+      note.textContent = logKind === "成交"
+        ? `今天 ${todayRows.length} 笔 · ${money(total(todayRows))} BEM。已读到 ${sales.length} 笔成交 · ${money(total(sales))} BEM。`
+        : !sorted.length
+          ? query
+            ? `#${query} 还没有记录。`
+            : feedNote
+          : `${logKind} ${sorted.length} 条，第 ${feedPage + 1} / ${pages} 页。`;
       box.append(note);
       for (const item of items) {
         const row = document.createElement("a");
@@ -1640,6 +1650,7 @@ export function bootCpunk(
         who: row.who,
         tx: row.tx,
         time: row.time || "时间读取中",
+        unix: row.unix,
       }));
       const orders = trades.length
         ? []
@@ -1652,6 +1663,7 @@ export function bootCpunk(
             who: cut(row.seller),
             tx: "",
             time: row.at > 0n ? clock(row.at) : "在售",
+            unix: Number(row.at),
           }));
       cpunkActs.splice(0, cpunkActs.length, ...trades, ...orders);
       window.dispatchEvent(new CustomEvent("cpunk-feed"));
@@ -1713,11 +1725,11 @@ export function bootCpunk(
         recentFloor = latest > twoWeeks ? latest - twoWeeks : born;
         if (recentFloor < born) recentFloor = born;
         if (head) reachedUnix = Number(head.timestamp);
-        if (cachedTip > born && cachedTip < latest) {
-          gapCursor = latest;
-          gapFloor = cachedTip;
-        }
-        if (cachedCursor > born && cachedCursor < latest) cursor = cachedCursor;
+        const dayBlocks = BigInt(Math.max(1, Math.ceil((36 * 60 * 60) / secondsPerBlock)));
+        gapCursor = latest;
+        gapFloor = latest > dayBlocks ? latest - dayBlocks : born;
+        tip = gapFloor;
+        cursor = cachedCursor > born && cachedCursor < gapFloor ? cachedCursor : gapFloor;
         feedReady = true;
         if (!priorityBuilt && !priorityDone && feedRows.filter((row) => row.kind === "铸造").length < 200) {
           const fill = (hi: bigint, lo: bigint) => {
@@ -1741,18 +1753,22 @@ export function bootCpunk(
           tip = end;
         }
       } else {
+        if (gapCursor <= gapFloor && latest > tip) {
+          gapCursor = latest;
+          gapFloor = tip > born ? tip : gapFloor;
+        }
         const spans: [bigint, bigint][] = [];
+        let nextGap = gapCursor;
         if (gapCursor > gapFloor) {
-          const end = gapCursor;
-          const from = end > gapFloor + 99n ? end - 99n : gapFloor + 1n;
-          if (from <= end) spans.push([from, end]);
-          const end2 = from - 1n;
-          if (end2 > gapFloor) {
-            const from2 = end2 > gapFloor + 99n ? end2 - 99n : gapFloor + 1n;
-            if (from2 <= end2) spans.push([from2, end2]);
-            gapCursor = from2 - 1n;
-          } else gapCursor = end2;
-          feedNote = `已先显示浏览器记下的 ${feedRows.length} 条。正在补这次新出现的。`;
+          let end = gapCursor;
+          for (let step = 0; step < 6 && end > gapFloor; step += 1) {
+            const from = end > gapFloor + 99n ? end - 99n : gapFloor + 1n;
+            if (from > end) break;
+            spans.push([from, end]);
+            end = from - 1n;
+          }
+          nextGap = end;
+          feedNote = "先读最近一天的成交。新买的会马上出现。";
         } else if (cursor > recentFloor) {
           let end = cursor;
           for (let step = 0; step < 4 && end > recentFloor; step += 1) {
@@ -1780,15 +1796,16 @@ export function bootCpunk(
         }
         const parts = await Promise.all(spans.map(([from, to]) => pullLogs(from, to)));
         for (const part of parts) await takeLogs(part);
-        tip = gapCursor > gapFloor ? gapCursor : latest;
+        if (nextGap !== gapCursor) gapCursor = nextGap;
+        tip = gapCursor > gapFloor ? gapFloor : latest;
         if (priorityBuilt && priority.length === 0) priorityDone = true;
         rememberFeed();
         const mark = cursor > born ? cursor : born;
         const unix = await stamp(mark);
         if (unix && !priority.length) reachedUnix = unix;
         const when = reachedUnix ? clock(reachedUnix) : "今天";
-        if (gapCursor > gapFloor) feedNote = `已先显示浏览器记下的记录。正在补这次新出现的，已读到 ${when}。`;
-        else if (priority.length > 60) feedNote = "正在读 10月19日 的转让，读到就放在挂单上面。";
+        if (gapCursor > gapFloor) feedNote = "先读最近一天的成交。新买的会马上出现。";
+        else if (priority.length > 60) feedNote = "最近一天读完了。接着补更早的记录。";
         else if (priority.length) feedNote = "正在读 10月24日 的撤单。买成的成交读到会放在最上面。";
         else feedNote = `转让和成交放在最上面。继续从今天往回补，已读到 ${when}。`;
         if (gapCursor <= gapFloor && !priority.length && cursor <= born) historyDone = true;
