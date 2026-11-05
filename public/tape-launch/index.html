@@ -589,6 +589,43 @@ td.right, th.right { text-align: right; }
   letter-spacing: .04em;
   color: var(--muted);
 }
+.sale-sum {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.sale-sum article {
+  min-width: 0;
+  border-radius: 16px;
+  padding: 12px 14px 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+.sale-sum article.all {
+  background: #1a140c;
+  color: #f6f1e6;
+  border-color: #1a140c;
+}
+.sale-sum small { display: block; font-size: 12px; color: var(--muted); }
+.sale-sum article.all small { color: #e0b15a; }
+.sale-sum b {
+  display: block;
+  margin: 4px 0 8px;
+  font-size: 28px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+}
+.sale-sum span {
+  display: block;
+  font-size: 13px;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+.cp-log > .toolbar { padding: 10px 12px 0; }
 .act-pages { padding: 12px 16px 16px; }
 .act-page { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
 .cp-log, #cp-log { max-height: 420px; overflow: auto; }
@@ -1412,6 +1449,8 @@ button.token { width: 100%; text-align: left; font: inherit; color: inherit; }
   .page, .pad, .cp-layout, #cp-market-col, .cp-mint, .form { min-width: 0; max-width: 100%; }
   #cp-market-col { display: flex; flex-direction: column; gap: 12px; }
   #cp-log { max-height: 240px; overflow: auto; }
+  .sale-sum { padding: 10px; gap: 8px; }
+  .sale-sum b { font-size: 22px; }
   .cp-log .feed-row { white-space: normal; overflow-wrap: anywhere; font-size: 13px; line-height: 1.4; }
   .table-wrap { overflow-x: auto; max-width: 100%; }
   table { min-width: 520px; }

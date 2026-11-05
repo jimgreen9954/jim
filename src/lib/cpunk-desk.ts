@@ -1565,8 +1565,6 @@ export function bootCpunk(
         modes.append(button);
       }
       box.append(modes);
-      const note = document.createElement("div");
-      note.className = "feed-row";
       const sales = feedRows.filter((row) => row.kind === "成交");
       const day = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" });
       const bemOf = (px: string) => {
@@ -1576,18 +1574,28 @@ export function bootCpunk(
       const todayRows = sales.filter((row) => row.unix > 0 && new Date(row.unix * 1000).toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" }) === day);
       const total = (rows: FeedRow[]) => rows.reduce((sum, row) => sum + bemOf(row.px), 0);
       const money = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 4 });
-      const pair = (rows: FeedRow[]) => {
-        const bem = total(rows);
-        return `${money(bem)} BEM + ${money(bem * 1000)} TAPE`;
-      };
-      note.textContent = logKind === "成交"
-        ? `今天 ${todayRows.length} 笔 · ${pair(todayRows)}。已读到 ${sales.length} 笔成交 · ${pair(sales)}。`
-        : !sorted.length
-          ? query
-            ? `#${query} 还没有记录。`
-            : feedNote
-          : `${logKind} ${sorted.length} 条，第 ${feedPage + 1} / ${pages} 页。`;
-      box.append(note);
+      if (logKind === "成交") {
+        const sum = document.createElement("div");
+        sum.className = "sale-sum";
+        for (const card of [
+          { label: "今天", count: todayRows.length, bem: total(todayRows), dark: false },
+          { label: "合计", count: sales.length, bem: total(sales), dark: true },
+        ]) {
+          const article = document.createElement("article");
+          if (card.dark) article.className = "all";
+          const label = document.createElement("small");
+          label.textContent = card.label;
+          const count = document.createElement("b");
+          count.textContent = String(card.count);
+          const bem = document.createElement("span");
+          bem.textContent = `${money(card.bem)} BEM`;
+          const tape = document.createElement("span");
+          tape.textContent = `${money(card.bem * 1000)} TAPE`;
+          article.append(label, count, bem, tape);
+          sum.append(article);
+        }
+        box.append(sum);
+      }
       for (const item of items) {
         const row = document.createElement("a");
         row.className = "feed-row";

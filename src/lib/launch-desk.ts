@@ -2094,15 +2094,27 @@ export function bootLaunch(host: HTMLElement): () => void {
       return Number.isFinite(n) ? n : 0;
     };
     const todaySales = sales.filter((row) => row.unix > 0 && new Date(row.unix * 1000).toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" }) === day);
-    const pair = (rows: typeof sales) => {
-      const bem = rows.reduce((sum, row) => sum + bemOf(row.px), 0);
-      const text = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 4 });
-      return `${text(bem)} BEM + ${text(bem * 1000)} TAPE`;
-    };
+    const money = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 4 });
     if (actKind === "成交") {
       const summary = document.createElement("div");
-      summary.className = "act-head";
-      summary.textContent = `今天 ${todaySales.length} 笔 · ${pair(todaySales)}。已读到 ${sales.length} 笔 · ${pair(sales)}。`;
+      summary.className = "sale-sum";
+      for (const card of [
+        { label: "今天", count: todaySales.length, bem: todaySales.reduce((sum, row) => sum + bemOf(row.px), 0), dark: false },
+        { label: "合计", count: sales.length, bem: sales.reduce((sum, row) => sum + bemOf(row.px), 0), dark: true },
+      ]) {
+        const article = document.createElement("article");
+        if (card.dark) article.className = "all";
+        const label = document.createElement("small");
+        label.textContent = card.label;
+        const count = document.createElement("b");
+        count.textContent = String(card.count);
+        const bem = document.createElement("span");
+        bem.textContent = `${money(card.bem)} BEM`;
+        const tape = document.createElement("span");
+        tape.textContent = `${money(card.bem * 1000)} TAPE`;
+        article.append(label, count, bem, tape);
+        summary.append(article);
+      }
       feed.append(summary);
     }
     const size = 20;
