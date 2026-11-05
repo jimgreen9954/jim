@@ -1594,8 +1594,12 @@ export function bootCpunk(
       const todayRows = sales.filter((row) => row.unix > 0 && new Date(row.unix * 1000).toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" }) === day);
       const total = (rows: FeedRow[]) => rows.reduce((sum, row) => sum + bemOf(row.px), 0);
       const money = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 4 });
+      const pair = (rows: FeedRow[]) => {
+        const bem = total(rows);
+        return `${money(bem)} BEM + ${money(bem * 1000)} TAPE`;
+      };
       note.textContent = logKind === "成交"
-        ? `今天 ${todayRows.length} 笔 · ${money(total(todayRows))} BEM。已读到 ${sales.length} 笔成交 · ${money(total(sales))} BEM。`
+        ? `今天 ${todayRows.length} 笔 · ${pair(todayRows)}。已读到 ${sales.length} 笔成交 · ${pair(sales)}。`
         : !sorted.length
           ? query
             ? `#${query} 还没有记录。`

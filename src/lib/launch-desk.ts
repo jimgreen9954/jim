@@ -2097,11 +2097,15 @@ export function bootLaunch(host: HTMLElement): () => void {
       return Number.isFinite(n) ? n : 0;
     };
     const todaySales = sales.filter((row) => row.unix > 0 && new Date(row.unix * 1000).toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" }) === day);
-    const money = (rows: typeof sales) => rows.reduce((sum, row) => sum + bemOf(row.px), 0).toLocaleString("en-US", { maximumFractionDigits: 4 });
+    const pair = (rows: typeof sales) => {
+      const bem = rows.reduce((sum, row) => sum + bemOf(row.px), 0);
+      const text = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 4 });
+      return `${text(bem)} BEM + ${text(bem * 1000)} TAPE`;
+    };
     if (actKind === "成交") {
       const summary = document.createElement("div");
       summary.className = "act-head";
-      summary.textContent = `今天 ${todaySales.length} 笔 · ${money(todaySales)} BEM。已读到 ${sales.length} 笔 · ${money(sales)} BEM。`;
+      summary.textContent = `今天 ${todaySales.length} 笔 · ${pair(todaySales)}。已读到 ${sales.length} 笔 · ${pair(sales)}。`;
       feed.append(summary);
     }
     const size = 20;
