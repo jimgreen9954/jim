@@ -1912,39 +1912,54 @@ export function bootCpunk(
   let saleCursor = 0n;
   let saleFloor = 0n;
   let salesArchiveTip = 0n;
-  let saleDone = false;
+  let saleHead = 0n;
+  let saleLive = false;
   let saleScanning = false;
   const scanSales = async () => {
-    if (saleScanning || saleDone || signal.aborted) return;
+    if (saleScanning || signal.aborted) return;
     saleScanning = true;
     try {
       const latest = await client.getBlockNumber();
-      if (saleCursor === 0n) {
-        const head = await client.getBlock({ blockNumber: latest });
-        const earlierBlock = latest > 40_000n ? latest - 40_000n : born;
-        const earlier = await client.getBlock({ blockNumber: earlierBlock }).catch(() => null);
-        const elapsed = earlier ? Number(head.timestamp - earlier.timestamp) : 40_000;
-        const span = Number(latest - earlierBlock);
-        const secondsPerBlock = span > 0 && elapsed > 0 ? elapsed / span : 1;
-        const blocks = BigInt(Math.max(1, Math.ceil((2 * 24 * 60 * 60) / secondsPerBlock)));
-        saleFloor = latest > blocks ? latest - blocks : born;
-        if (salesArchiveTip > saleFloor) saleFloor = salesArchiveTip;
-        saleCursor = latest;
+      if (!saleLive) {
+        if (saleCursor === 0n) {
+          const head = await client.getBlock({ blockNumber: latest });
+          const earlierBlock = latest > 40_000n ? latest - 40_000n : born;
+          const earlier = await client.getBlock({ blockNumber: earlierBlock }).catch(() => null);
+          const elapsed = earlier ? Number(head.timestamp - earlier.timestamp) : 40_000;
+          const span = Number(latest - earlierBlock);
+          const secondsPerBlock = span > 0 && elapsed > 0 ? elapsed / span : 1;
+          const blocks = BigInt(Math.max(1, Math.ceil((2 * 24 * 60 * 60) / secondsPerBlock)));
+          saleFloor = latest > blocks ? latest - blocks : born;
+          if (salesArchiveTip > saleFloor) saleFloor = salesArchiveTip;
+          saleHead = latest;
+          saleCursor = latest;
+        }
+        const spans: [bigint, bigint][] = [];
+        let end = saleCursor;
+        for (let step = 0; step < 6 && end > saleFloor; step += 1) {
+          const from = end > saleFloor + 99n ? end - 99n : saleFloor + 1n;
+          if (from > end) break;
+          spans.push([from, end]);
+          end = from - 1n;
+        }
+        const parts = await Promise.all(spans.map(([from, to]) => pullLogs(from, to, 0, boughtTopic)));
+        for (const part of parts) await takeLogs(part);
+        saleCursor = end;
+        if (saleCursor <= saleFloor) saleLive = true;
+      } else if (latest > saleHead) {
+        const spans: [bigint, bigint][] = [];
+        let from = saleHead + 1n;
+        for (let step = 0; step < 4 && from <= latest; step += 1) {
+          const end = latest > from + 99n ? from + 99n : latest;
+          spans.push([from, end]);
+          from = end + 1n;
+        }
+        const parts = await Promise.all(spans.map(([start, end]) => pullLogs(start, end, 0, boughtTopic)));
+        for (const part of parts) await takeLogs(part);
+        saleHead = spans.length ? spans[spans.length - 1][1] : saleHead;
       }
-      const spans: [bigint, bigint][] = [];
-      let end = saleCursor;
-      for (let step = 0; step < 6 && end > saleFloor; step += 1) {
-        const from = end > saleFloor + 99n ? end - 99n : saleFloor + 1n;
-        if (from > end) break;
-        spans.push([from, end]);
-        end = from - 1n;
-      }
-      const parts = await Promise.all(spans.map(([from, to]) => pullLogs(from, to, 0, boughtTopic)));
-      for (const part of parts) await takeLogs(part);
-      saleCursor = end;
-      if (saleCursor <= saleFloor) saleDone = true;
       const found = feedRows.filter((row) => row.kind === "成交").length;
-      feedNote = saleDone ? `最近两天的成交已读完，共 ${found} 笔。` : `正在读成交，已有 ${found} 笔。`;
+      feedNote = saleLive ? `成交跟着新区块走，大约每 8 秒对一次。已有 ${found} 笔。` : `正在补最近的成交，已有 ${found} 笔。`;
       rememberFeed();
       paintFeed();
     } catch {
@@ -1952,7 +1967,7 @@ export function bootCpunk(
       paintFeed();
     } finally {
       saleScanning = false;
-      if (!signal.aborted && !saleDone) window.setTimeout(() => void scanSales(), 250);
+      if (!signal.aborted) window.setTimeout(() => void scanSales(), saleLive ? 8_000 : 250);
     }
   };
   void scanSales();
