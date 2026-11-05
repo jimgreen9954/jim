@@ -1907,6 +1907,7 @@ export function bootCpunk(
   const boughtTopic = "0xd2728f908c7e0feb83c6278798370fcb86b62f236c9dbf1a3f541096c2159040" as const;
   let saleCursor = 0n;
   let saleFloor = 0n;
+  let salesArchiveTip = 0n;
   let saleDone = false;
   let saleScanning = false;
   const scanSales = async () => {
@@ -1923,6 +1924,7 @@ export function bootCpunk(
         const secondsPerBlock = span > 0 && elapsed > 0 ? elapsed / span : 1;
         const blocks = BigInt(Math.max(1, Math.ceil((2 * 24 * 60 * 60) / secondsPerBlock)));
         saleFloor = latest > blocks ? latest - blocks : born;
+        if (salesArchiveTip > saleFloor) saleFloor = salesArchiveTip;
         saleCursor = latest;
       }
       const spans: [bigint, bigint][] = [];
@@ -1950,6 +1952,34 @@ export function bootCpunk(
     }
   };
   void scanSales();
+  void fetch("/tape-launch/sales.json")
+    .then((res) => (res.ok ? res.json() : null))
+    .then((body: { tip?: string; rows?: { id: number; buyer?: string; quote?: string; tx?: string; unix?: number }[] } | null) => {
+      if (!body?.rows?.length || signal.aborted) return;
+      for (const row of body.rows) {
+        if (!Number.isInteger(row.id) || !row.tx) continue;
+        const key = `成交:${row.id}:${row.tx}`;
+        if (seenFeed.has(key)) continue;
+        seenFeed.add(key);
+        const quote = BigInt(row.quote || "0");
+        feedRows.push({
+          kind: "成交",
+          id: row.id,
+          px: `${bemText(quote)} BEM + ${bemText(quote * 1000n)} TAPE`,
+          who: cut(row.buyer || ""),
+          tx: row.tx,
+          time: row.unix ? clock(row.unix) : "",
+          unix: row.unix || 0,
+        });
+      }
+      if (body.tip && /^[0-9]+$/.test(body.tip)) salesArchiveTip = BigInt(body.tip);
+      if (salesArchiveTip > saleFloor) saleFloor = salesArchiveTip;
+      const found = feedRows.filter((row) => row.kind === "成交").length;
+      feedNote = `历史成交 ${found} 笔。新的买成会补在上面。`;
+      rememberFeed();
+      paintFeed();
+    })
+    .catch(() => {});
   host.querySelector("#cp-log-q")?.addEventListener("input", () => {
     feedPage = 0;
     paintFeed();
