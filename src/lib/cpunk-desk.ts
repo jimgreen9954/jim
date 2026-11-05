@@ -1959,7 +1959,7 @@ export function bootCpunk(
         saleHead = spans.length ? spans[spans.length - 1][1] : saleHead;
       }
       const found = feedRows.filter((row) => row.kind === "成交").length;
-      feedNote = saleLive ? `成交跟着新区块走，大约每 8 秒对一次。已有 ${found} 笔。` : `正在补最近的成交，已有 ${found} 笔。`;
+      feedNote = saleLive ? `成交跟着新区块走，大约每 2 秒对一次。已有 ${found} 笔。` : `正在补最近的成交，已有 ${found} 笔。`;
       rememberFeed();
       paintFeed();
     } catch {
@@ -1967,7 +1967,7 @@ export function bootCpunk(
       paintFeed();
     } finally {
       saleScanning = false;
-      if (!signal.aborted) window.setTimeout(() => void scanSales(), saleLive ? 8_000 : 250);
+      if (!signal.aborted) window.setTimeout(() => void scanSales(), saleLive ? 2_000 : 250);
     }
   };
   void scanSales();
