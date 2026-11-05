@@ -2021,7 +2021,7 @@ export function bootLaunch(host: HTMLElement): () => void {
     }
     const acts = cpunkActivity();
     const counts = new Map(actKinds.map((item) => [item.kind, acts.filter((row) => row.kind === item.kind).length]));
-    if (!actPicked) actKind = (counts.get("成交") ?? 0) > 0 ? "成交" : (counts.get("撤单") ?? 0) > 0 ? "撤单" : "转让";
+    if (!actPicked) actKind = "成交";
     if (switcher) {
       switcher.replaceChildren();
       for (const item of actKinds) {
@@ -2052,8 +2052,11 @@ export function bootLaunch(host: HTMLElement): () => void {
         const empty = document.createElement("div");
         empty.className = "act-empty";
         const title = document.createElement("b");
-        title.textContent = "还没有这一类";
+        title.textContent = actKind === "成交" ? "正在读取成交" : "还没有这一类";
+        const text = document.createElement("p");
+        text.textContent = actKind === "成交" ? "从最新区块往回读买成。转让是另一类，不会混在这里。" : "";
         empty.append(title);
+        if (text.textContent) empty.append(text);
         feed.append(empty);
         return;
       }

@@ -1411,6 +1411,8 @@ export function bootCpunk(
         at: row.at.toString(),
       }));
       localStorage.setItem("cpunk-listed-v1", JSON.stringify(lists));
+      const sales = feedRows.filter((row) => row.kind === "成交").slice(0, 500);
+      localStorage.setItem("cpunk-sales-v1", JSON.stringify(sales));
     } catch {
       /* private mode or full storage */
     }
@@ -1430,20 +1432,20 @@ export function bootCpunk(
       return 0;
     }
   };
-  const pullLogs = async (from: bigint, to: bigint, depth = 0): Promise<Awaited<ReturnType<typeof client.getLogs>>> => {
+  const pullLogs = async (from: bigint, to: bigint, depth = 0, topic?: `0x${string}`): Promise<Awaited<ReturnType<typeof client.getLogs>>> => {
     const end = to > from + 99n ? from + 99n : to;
     try {
-      return await client.getLogs({ address: CPUNK, fromBlock: from, toBlock: end });
+      return await client.getLogs({ address: CPUNK, fromBlock: from, toBlock: end, ...(topic ? { topics: [topic] } : {}) });
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       if (depth < 2 && /429|rate|limit/i.test(message)) {
         await new Promise((resolve) => window.setTimeout(resolve, 1000));
-        return pullLogs(from, end, depth + 1);
+        return pullLogs(from, end, depth + 1, topic);
       }
       if (depth < 4 && end - from > 40n) {
         const mid = from + (end - from) / 2n;
-        const left = await pullLogs(from, mid, depth + 1);
-        const right = await pullLogs(mid + 1n, end, depth + 1);
+        const left = await pullLogs(from, mid, depth + 1, topic);
+        const right = await pullLogs(mid + 1n, end, depth + 1, topic);
         return [...left, ...right];
       }
       throw error;
@@ -1867,19 +1869,24 @@ export function bootCpunk(
         if (!row || !Number.isInteger(row.id) || !row.seller) continue;
         listed.set(row.id, { seller: row.seller, quote: BigInt(row.quote || "0"), at: BigInt(row.at || "0") });
       }
-      const raw = localStorage.getItem("cpunk-feed-v3") ?? localStorage.getItem("cpunk-feed-v2");
-      const saved = raw ? JSON.parse(raw) as { cursor?: string; tip?: string; priorityDone?: boolean; rows?: FeedRow[] } : null;
-      for (const row of saved?.rows ?? []) {
-        if (!row || !row.kind || !Number.isInteger(row.id)) continue;
+      const keepSaved = (row: FeedRow | null) => {
+        if (!row || (row.kind !== "成交" && row.kind !== "撤单" && row.kind !== "挂单") || !Number.isInteger(row.id)) return;
         const key = `${row.kind}:${row.id}:${row.tx}`;
-        if (seenFeed.has(key)) continue;
+        if (seenFeed.has(key)) return;
         seenFeed.add(key);
         feedRows.push(row);
-      }
+      };
+      const salesRaw = localStorage.getItem("cpunk-sales-v1");
+      const salesSaved = salesRaw ? JSON.parse(salesRaw) as FeedRow[] : [];
+      if (Array.isArray(salesSaved)) for (const row of salesSaved) keepSaved(row);
+      const raw = localStorage.getItem("cpunk-feed-v3") ?? localStorage.getItem("cpunk-feed-v2");
+      const saved = raw ? JSON.parse(raw) as { cursor?: string; tip?: string; priorityDone?: boolean; rows?: FeedRow[] } : null;
+      for (const row of saved?.rows ?? []) keepSaved(row);
       cachedCursor = saved?.cursor ? BigInt(saved.cursor) : 0n;
       cachedTip = saved?.tip ? BigInt(saved.tip) : 0n;
       priorityDone = Boolean(saved?.priorityDone);
-      if (feedRows.length) feedNote = `已先显示浏览器记下的 ${feedRows.length} 条。新的成交会接在后面。`;
+      const sales = feedRows.filter((row) => row.kind === "成交").length;
+      feedNote = sales ? `已记下 ${sales} 笔成交。正在补最近两天。` : "正在从最新区块读买成。";
     } catch {
       /* ignore a broken cache */
     }
@@ -1897,6 +1904,52 @@ export function bootCpunk(
     }, { signal });
   }
   paintHolders();
+  const boughtTopic = "0xd2728f908c7e0feb83c6278798370fcb86b62f236c9dbf1a3f541096c2159040" as const;
+  let saleCursor = 0n;
+  let saleFloor = 0n;
+  let saleDone = false;
+  let saleScanning = false;
+  const scanSales = async () => {
+    if (saleScanning || saleDone || signal.aborted) return;
+    saleScanning = true;
+    try {
+      const latest = await client.getBlockNumber();
+      if (saleCursor === 0n) {
+        const head = await client.getBlock({ blockNumber: latest });
+        const earlierBlock = latest > 40_000n ? latest - 40_000n : born;
+        const earlier = await client.getBlock({ blockNumber: earlierBlock }).catch(() => null);
+        const elapsed = earlier ? Number(head.timestamp - earlier.timestamp) : 40_000;
+        const span = Number(latest - earlierBlock);
+        const secondsPerBlock = span > 0 && elapsed > 0 ? elapsed / span : 1;
+        const blocks = BigInt(Math.max(1, Math.ceil((2 * 24 * 60 * 60) / secondsPerBlock)));
+        saleFloor = latest > blocks ? latest - blocks : born;
+        saleCursor = latest;
+      }
+      const spans: [bigint, bigint][] = [];
+      let end = saleCursor;
+      for (let step = 0; step < 6 && end > saleFloor; step += 1) {
+        const from = end > saleFloor + 99n ? end - 99n : saleFloor + 1n;
+        if (from > end) break;
+        spans.push([from, end]);
+        end = from - 1n;
+      }
+      const parts = await Promise.all(spans.map(([from, to]) => pullLogs(from, to, 0, boughtTopic)));
+      for (const part of parts) await takeLogs(part);
+      saleCursor = end;
+      if (saleCursor <= saleFloor) saleDone = true;
+      const found = feedRows.filter((row) => row.kind === "成交").length;
+      feedNote = saleDone ? `最近两天的成交已读完，共 ${found} 笔。` : `正在读成交，已有 ${found} 笔。`;
+      rememberFeed();
+      paintFeed();
+    } catch {
+      feedNote = "成交这一段节点忙，停在原地再读。";
+      paintFeed();
+    } finally {
+      saleScanning = false;
+      if (!signal.aborted && !saleDone) window.setTimeout(() => void scanSales(), 250);
+    }
+  };
+  void scanSales();
   host.querySelector("#cp-log-q")?.addEventListener("input", () => {
     feedPage = 0;
     paintFeed();
