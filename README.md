@@ -49,3 +49,4 @@ npm run dev
 
 Contracts are in `contracts/`. They are not upgradeable. Do not send a key to this repository.
 # redeploy trigger Sat Nov  7 09:54:20 UTC 2026
+
