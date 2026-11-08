@@ -42,6 +42,8 @@ import {
   type Balances,
   type PoolPrint,
 } from "@/lib/bsc";
+import { UpRelease, UpSpotNotice } from "@/components/exchange/up-notice";
+import { quoteUpPoolBuy, quoteUpPoolSell, quoteUpPoolUsdt } from "@/lib/up-official";
 import { tradeStepText } from "@/lib/trade-step";
 import { STOCK_KEYS, STOCKS, type StockKey } from "@/lib/stocks";
 import { getCoinCandles, getSpotCandles } from "@/lib/candles";
@@ -163,6 +165,10 @@ export function SpotDesk({
   const [book, setBook] = useState<"crypto" | "stock">("crypto");
   const [pair, setPair] = useState<SpotPairId>("bem");
   const [pairMenu, setPairMenu] = useState(false);
+  const [upNotice, setUpNotice] = useState(false);
+  useEffect(() => {
+    if (pair === "upusdt" || pair === "upbem" || pair === "upbnb") setUpNotice(true);
+  }, [pair]);
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [unit, setUnit] = useState<"usdt" | "bnb">("usdt");
   const [amount, setAmount] = useState("");
@@ -376,9 +382,15 @@ export function SpotDesk({
               ? quoteBemOkb(side, swapIn)
               : pair === "upbnb"
                 ? quoteUpBnb(side, swapIn)
-                : pair === "upusdt"
-                  ? quoteUpUsdt(side, swapIn)
-                  : quoteUpBem(side, swapIn);
+                : pair === "upusdt" && side === "buy"
+                  ? quoteUpPoolUsdt(swapIn).then((row) => row.net)
+                  : pair === "upusdt"
+                    ? quoteUpPoolSell(swapIn).then((bem) => quoteExact(BSC.bem, BSC.usdt, bem, BSC.fee))
+                    : pair === "upbem" && side === "buy"
+                      ? quoteUpPoolBuy(swapIn).then((row) => row.net)
+                      : pair === "upbem"
+                        ? quoteUpPoolSell(swapIn)
+                        : quoteUpBem(side, swapIn);
         quoted
           .then((value) => {
             if (dead) return;
@@ -1245,6 +1257,19 @@ export function SpotDesk({
                     {out ? `${out} ${recvUnit}` : "—"}
                   </p>
                 </div>
+                {pair === "upusdt" || pair === "upbem" || pair === "upbnb" ? (
+                  <>
+                    <UpRelease zh={lang === "zh"} account={account} />
+                    <button
+                      type="button"
+                      className="mt-2 h-8 w-full border border-gold/40 text-xs text-ink/70"
+                      onClick={() => setUpNotice(true)}
+                    >
+                      {lang === "zh" ? "官方池：30% 到账，70% 在 25 天内领取" : "Official pool: 30% now, 70% over 25 days"}
+                    </button>
+                    <UpSpotNotice zh={lang === "zh"} open={upNotice} onClose={() => setUpNotice(false)} />
+                  </>
+                ) : null}
                 {pair !== "okb" && pair !== "bnb" && !nativeSpot(pair) ? (
                   <div className="mt-2 grid grid-cols-2 gap-1">
                     <button

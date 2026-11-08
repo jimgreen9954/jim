@@ -24,6 +24,7 @@ import {
   type CircuitAsk,
   type CircuitPrint,
 } from "@/lib/tape-spot";
+import { claimSplitTape, joinCircuit, readSplit, splitCircuit } from "@/lib/circuit-split";
 
 type Pace = { daily: bigint; weight: bigint };
 type Shape = { nIn: string; nOut: string; state: string; gates: string };
@@ -679,7 +680,7 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
                     {[
                       [
                         zh ? "电路" : "Circuit",
-                        zh ? "编号。一整张，不能拆。" : "One circuit. It cannot be split.",
+                        zh ? "编号。按算力拆成份额，凑齐可以合成。" : "Split by gate count. Holding every share joins it back.",
                       ],
                       [
                         zh ? "结构" : "Shape",
@@ -928,8 +929,8 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
           <p className="mt-1 text-[12px] text-ink/45">
             {pickedList
               ? zh
-                ? "当前可购买 1 个。电路不能拆。"
-                : "1 available. A circuit cannot be split."
+                ? "当前可购买 1 个。钱包里的可以按算力拆。"
+                : "1 available. A wallet circuit can be split by its gate count."
               : zh
                 ? "当前可购买 0 个"
                 : "0 available"}
@@ -1050,8 +1051,8 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
                     v={shapeLine(pickedShape)}
                     tip={
                       zh
-                        ? "输入、输出、状态位数。按张卖，不能拆。"
-                        : "Inputs, outputs, and state bits. Sold whole."
+                        ? "输入、输出、状态位数。整张按张卖。钱包里的可以按算力拆。"
+                        : "Inputs, outputs, and state bits. A wallet circuit can be split by its gates."
                     }
                   />
                   <Pair
@@ -1373,6 +1374,7 @@ function Mine({
               <p className="mt-1">
                 <MineState zh={zh} on={flags[row.id]} check={checks[row.id]} />
               </p>
+              <SplitActs zh={zh} account={account} id={row.id} gates={row.gates} />
             </div>
             <span className="text-sm text-ink/70">{zh ? "挂出" : "List"}</span>
           </li>
@@ -1412,8 +1414,8 @@ function Mine({
                   label={zh ? "结构" : "Shape"}
                   text={
                     zh
-                      ? "输入、输出、状态位数。电路按张卖，不能拆。"
-                      : "Inputs, outputs, and state bits."
+                      ? "输入、输出、状态位数。整张按张卖。钱包里的可以按算力拆。"
+                      : "Inputs, outputs, and state bits. A whole circuit is listed as one."
                   }
                 />
               </th>
@@ -1494,7 +1496,7 @@ function Mine({
                     <MineState zh={zh} on={flags[row.id]} check={checks[row.id]} />
                   </td>
                   <td className="px-2 py-1.5 text-right">
-                    {zh ? "右边挂出" : "List on the right"}
+                    <SplitActs zh={zh} account={account} id={row.id} gates={row.gates} />
                   </td>
                 </tr>
               );
@@ -1592,6 +1594,73 @@ function Prints({ zh, rows }: { zh: boolean; rows: CircuitPrint[] }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function SplitActs({
+  zh,
+  account,
+  id,
+  gates,
+}: {
+  zh: boolean;
+  account: string | null;
+  id: string;
+  gates: string;
+}) {
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [held, setHeld] = useState("");
+  useEffect(() => {
+    if (!account) return;
+    let dead = false;
+    readSplit(BigInt(id), account)
+      .then((row) => {
+        if (!dead) setHeld(row.shares.toString());
+      })
+      .catch(() => {
+        if (!dead) setHeld("");
+      });
+    return () => {
+      dead = true;
+    };
+  }, [account, id, note]);
+  const run = async (kind: "split" | "join" | "claim") => {
+    if (!account) {
+      setNote(zh ? "先连接钱包。" : "Connect a wallet.");
+      return;
+    }
+    setBusy(true);
+    setNote("");
+    try {
+      const token = BigInt(id);
+      if (kind === "split") await splitCircuit(account, token);
+      else if (kind === "join") await joinCircuit(account, token);
+      else await claimSplitTape(account, token);
+      setNote(zh ? "已提交。拆开后这张继续产 TAPE。" : "Sent. It keeps mining after the split.");
+    } catch {
+      setNote(zh ? "没发出去。电路要在这个钱包里，不要直接转进拆分合约。" : "Not sent. Keep the circuit in this wallet.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const count = Number(gates).toLocaleString("en-US");
+  return (
+    <div className="mt-2 flex flex-wrap items-center justify-end gap-2" onClick={(event) => event.stopPropagation()}>
+      <button type="button" disabled={busy} className="min-h-8 border border-gold px-2 text-xs" onClick={() => run("split")}>
+        {zh ? `拆成 ${count} 份` : `Split into ${count}`}
+      </button>
+      <button type="button" disabled={busy} className="min-h-8 px-2 text-xs text-ink/70" onClick={() => run("join")}>
+        {zh ? "合成" : "Join"}
+      </button>
+      <button type="button" disabled={busy} className="min-h-8 px-2 text-xs text-ink/70" onClick={() => run("claim")}>
+        {zh ? "领 TAPE" : "Claim"}
+      </button>
+      {held && held !== "0" ? (
+        <span className="font-mono text-[11px] text-ink/50">{zh ? `${held} 份` : `${held}`}</span>
+      ) : null}
+      {note ? <span className="text-[11px] text-ink/60">{note}</span> : null}
     </div>
   );
 }

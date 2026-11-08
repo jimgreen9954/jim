@@ -321,7 +321,7 @@ export function TapeSpotDesk({
   zh: boolean;
   lanes?: readonly (SpotMarket | "circuit" | "cap")[];
 }) {
-  const choices = lanes ?? ([0, 1, 2, "circuit", "cap"] as const);
+  const choices = lanes ?? (["circuit", 0, 1, 2, "cap"] as const);
   const [spot, setSpot] = useState<string | null>(() => spotAddress());
   const [ready, setReady] = useState(true);
   const [account, setAccount] = useState<string | null>(currentAccount());

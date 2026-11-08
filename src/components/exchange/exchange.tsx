@@ -705,7 +705,7 @@ function Header({
         )}
         {item(zh ? "销毁" : "Burn", floor === "mine" && place === "ash", () => go("mine", "ash"))}
       </nav>
-      {menu && !wide
+      {menu && !wide && typeof document !== "undefined"
         ? createPortal(
             <div className="fixed inset-0 z-[70]">
               <button
@@ -813,7 +813,7 @@ function Header({
             document.body,
           )
         : null}
-      {wide
+      {wide || typeof document === "undefined"
         ? null
         : createPortal(
             <nav className="phone-tabbar fixed inset-x-0 bottom-0 z-[45] grid grid-cols-3 border-t border-gold bg-card pt-1.5 pb-[max(0.45rem,env(safe-area-inset-bottom))] text-ink">
