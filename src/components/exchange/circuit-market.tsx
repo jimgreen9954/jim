@@ -226,6 +226,15 @@ export function CircuitMarket({ zh, lang }: { zh: boolean; lang: "zh" | "en" }) 
               board?.refDayPx != null ? `${num(board.refDayPx, 2)} BNB` : "—",
             ],
             [
+              zh ? "市值" : "Market cap",
+              board
+                ? (() => {
+                    const sum = [...board.official, ...board.other].reduce((n, row) => n + (row.ask ?? 0), 0);
+                    return sum > 0 ? `${num(sum, 2)} BNB` : "—";
+                  })()
+                : "—",
+            ],
+            [
               zh ? "24h 成交额" : "24h volume",
               board?.vol24h != null ? `${num(board.vol24h, 2)} BNB` : "—",
             ],

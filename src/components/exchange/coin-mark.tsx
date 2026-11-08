@@ -10,6 +10,7 @@ const SRC: Record<string, string> = {
   bem: "/coins/bem.webp",
   nand: "/coins/nand.svg",
   latch: "/coins/latch.svg",
+  fab: "/coins/fab.svg",
 };
 
 export function CoinMark({ id, className = "size-6" }: { id: string; className?: string }) {

@@ -153,6 +153,8 @@ const COIN_POOL = {
   eth: "https://api.geckoterminal.com/api/v2/networks/bsc/pools/0xbe141893e4c6ad9272e8c04bab7e6a10604501a5/ohlcv",
   zec: "https://api.geckoterminal.com/api/v2/networks/bsc/pools/0x6701b287c8170d6c290c6f4ef426782bd61ae310/ohlcv",
   up: "https://api.geckoterminal.com/api/v2/networks/bsc/pools/0x364d573106ff27f3e394ba2377e9b915cf56ba6a/ohlcv",
+  // Token chart. Gecko builds it from that token's most liquid pool (BEM/FAB 0.9%).
+  fab: "https://api.geckoterminal.com/api/v2/networks/x-layer/tokens/0x72f349b1eee7833b26f8c81a8410775a4e231ed2/ohlcv",
 } as const;
 
 async function loadPool(base: string, frame: CandleFrame): Promise<Candle[]> {

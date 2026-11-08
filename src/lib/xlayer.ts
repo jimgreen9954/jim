@@ -455,6 +455,31 @@ export async function circuitShapes(ids: bigint[]): Promise<Map<string, { nIn: s
   return out;
 }
 
+export function recheckOwner(owner: string) {
+  const ids = circuitIndex?.owners.get(owner.toLowerCase()) ?? [];
+  if (!circuitIndex || ids.length === 0) return Promise.resolve();
+  const who = owner.toLowerCase();
+  return client
+    .multicall({
+      contracts: ids.map((id) => ({
+        address: DEPLOYED.circuits,
+        abi: circuitAbi,
+        functionName: "ownerOf" as const,
+        args: [id] as const,
+      })),
+      allowFailure: true,
+    })
+    .then((rows) => {
+      if (!circuitIndex) return;
+      const kept = (circuitIndex.owners.get(who) ?? []).filter((id) => !ids.some((drop) => drop === id));
+      rows.forEach((row, index) => {
+        if (row.status === "success" && typeof row.result === "string" && row.result.toLowerCase() === who) kept.push(ids[index]);
+      });
+      circuitIndex.owners.set(who, kept);
+    })
+    .catch(() => undefined);
+}
+
 export async function myCircuits(owner: string): Promise<{ id: string; gates: string; nIn: string; nOut: string }[]> {
   const index = await ownedCircuits();
   const ids = index.owners.get(owner.toLowerCase()) ?? [];

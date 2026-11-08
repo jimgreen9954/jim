@@ -165,19 +165,27 @@ async function rpc(chain: LendChain, method: string, params: unknown[]): Promise
   throw new Error(last);
 }
 
-async function call(chain: LendChain, to: Hex, data: Hex): Promise<Hex> {
-  const result = await rpc(chain, "eth_call", [{ to, data }, "latest"]);
+async function call(chain: LendChain, to: Hex, data: Hex, block: "latest" | bigint = "latest"): Promise<Hex> {
+  const tag = typeof block === "bigint" ? `0x${block.toString(16)}` : "latest";
+  const result = await rpc(chain, "eth_call", [{ to, data }, tag]);
   if (typeof result !== "string") throw new Error("rpc");
   return result as Hex;
 }
 
-function read<T>(chain: LendChain, to: Hex, fn: string, args: readonly unknown[] = [], book: readonly unknown[] = abi): Promise<T> {
+function read<T>(
+  chain: LendChain,
+  to: Hex,
+  fn: string,
+  args: readonly unknown[] = [],
+  book: readonly unknown[] = abi,
+  block: "latest" | bigint = "latest",
+): Promise<T> {
   const data = (encodeFunctionData as (spec: { abi: readonly unknown[]; functionName: string; args?: readonly unknown[] }) => Hex)({
     abi: book,
     functionName: fn,
     args,
   });
-  return call(chain, to, data).then(
+  return call(chain, to, data, block).then(
     (raw) =>
       (decodeFunctionResult as (spec: { abi: readonly unknown[]; functionName: string; data: Hex }) => T)({
         abi: book,
@@ -573,6 +581,280 @@ export async function pokeLend(chain: LendChain, asset: LendAsset) {
 
 export function lendText(amount: bigint, decimals: number): string {
   return pretty(amount, decimals, 4);
+}
+
+export function lendPlain(amount: bigint, decimals: number): string {
+  const raw = pretty(amount, decimals, decimals).replace(/,/g, "");
+  return raw;
+}
+
+/** Collateral marked in stablecoin. Same division the contract uses. Null when the price is not in. */
+export function collQuote(posted: bigint, price: bigint | null, collDec: number): bigint | null {
+  if (!price || price <= 0n) return null;
+  return (posted * price) / 10n ** BigInt(collDec);
+}
+
+/** Debt / collateral value, in basis points. 7500 is the contract liquidation line. */
+export function debtBps(debt: bigint, value: bigint | null): bigint | null {
+  if (debt === 0n) return 0n;
+  if (value == null) return null;
+  if (value === 0n) return 10001n;
+  return (debt * 10000n) / value;
+}
+
+/**
+ * Lowest collateral price, in stablecoin raw units per 1 token, that is still safe.
+ * One tick under this, liquidate() is allowed. Matches TapeLend / TapeLendErc: 75%.
+ */
+export function closePrice(debt: bigint, posted: bigint, collDec: number): bigint | null {
+  if (debt === 0n || posted === 0n) return null;
+  const unit = 10n ** BigInt(collDec);
+  const den = 7500n * posted;
+  const num = debt * 10000n * unit;
+  let px = (num + den - 1n) / den;
+  const open = (p: bigint) => debt * 10000n > ((posted * p) / unit) * 7500n;
+  for (let i = 0; i < 8 && open(px); i += 1) px += 1n;
+  return px;
+}
+
+export function bpsText(bps: bigint): string {
+  if (bps > 10000n) return ">100%";
+  const whole = bps / 100n;
+  const frac = (bps % 100n).toString().padStart(2, "0");
+  return `${whole.toString()}.${frac}%`;
+}
+
+const BONUS = 500n;
+const LIQ_BPS = 7500n;
+
+export type Seize = {
+  pay: bigint;
+  seize: bigint;
+  seizeValue: bigint;
+  profit: bigint;
+  wiped: bigint;
+  shortfall: bigint;
+};
+
+/** What one full liquidation does, using the contract's rounding. */
+export function seizeQuote(debt: bigint, posted: bigint, price: bigint, collDec: number): Seize | null {
+  if (debt === 0n || posted === 0n || price <= 0n) return null;
+  const unit = 10n ** BigInt(collDec);
+  const usdtOf = (amount: bigint) => (amount * price) / unit;
+  const collOf = (amount: bigint) => (amount * unit + price - 1n) / price;
+  const cover = usdtOf((posted * 10000n) / (10000n + BONUS));
+  const pay = cover < debt ? cover : debt;
+  if (pay === 0n) return null;
+  let seize = collOf((pay * (10000n + BONUS)) / 10000n);
+  if (seize > posted) seize = posted;
+  if (seize === 0n) return null;
+  const seizeValue = usdtOf(seize);
+  const closes = pay === debt || seize === posted;
+  const wiped = closes ? debt : pay;
+  return {
+    pay,
+    seize,
+    seizeValue,
+    profit: seizeValue > pay ? seizeValue - pay : 0n,
+    wiped,
+    shortfall: closes && debt > pay ? debt - pay : 0n,
+  };
+}
+
+export function underwater(debt: bigint, posted: bigint, price: bigint | null, collDec: number): boolean {
+  if (debt === 0n || posted === 0n || !price || price <= 0n) return false;
+  const value = (posted * price) / 10n ** BigInt(collDec);
+  return debt * 10000n > value * LIQ_BPS;
+}
+
+const SEEN: Partial<Record<`${LendChain}:${LendAsset}`, { block: bigint; borrow: bigint; addrs: readonly Hex[] }>> = {
+  "xlayer:tape": {
+    block: 74735282n,
+    borrow: 83600343n,
+    addrs: [
+      "0x585d2df4b8fdda783b074555e6f3787e3fcb39d7",
+      "0xe98239cd0fe01f027842d6af58edd05e0c3fa7a8",
+      "0xeb5d714444a14691c765b485632e28cb1619dbf4",
+    ],
+  },
+  "xlayer:bem": {
+    block: 75031920n,
+    borrow: 674082592n,
+    addrs: [
+      "0x585d2df4b8fdda783b074555e6f3787e3fcb39d7",
+      "0xeb5d714444a14691c765b485632e28cb1619dbf4",
+      "0x18529cbdb9cf708c1497122c21344f7fd7448ed0",
+      "0x5166d829e38e78f402c2b0be289adb086cb5d331",
+    ],
+  },
+};
+
+export type Debtor = {
+  chain: LendChain;
+  asset: LendAsset;
+  account: Hex;
+  debt: bigint;
+  posted: bigint;
+  price: bigint | null;
+  ratio: bigint | null;
+  seize: Seize | null;
+  open: boolean;
+};
+
+function bagKey(chain: LendChain, asset: LendAsset) {
+  return `tapeliquid-debtors-${chain}-${asset}`;
+}
+
+function loadBag(chain: LendChain, asset: LendAsset) {
+  const seen = SEEN[`${chain}:${asset}`];
+  let saved: { block?: string; borrow?: string; addrs?: string[] } = {};
+  if (typeof window !== "undefined") {
+    try {
+      saved = JSON.parse(window.localStorage.getItem(bagKey(chain, asset)) || "{}") as typeof saved;
+    } catch {
+      saved = {};
+    }
+  }
+  const addrs = new Set<string>([...(seen?.addrs ?? []), ...(saved.addrs ?? [])].map((item) => item.toLowerCase()));
+  const block = saved.block ? BigInt(saved.block) : seen?.block ?? 0n;
+  const borrow = saved.borrow ? BigInt(saved.borrow) : seen?.borrow ?? 0n;
+  return { block, borrow, addrs };
+}
+
+function saveBag(chain: LendChain, asset: LendAsset, block: bigint, borrow: bigint, addrs: Set<string>) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(
+    bagKey(chain, asset),
+    JSON.stringify({ block: block.toString(), borrow: borrow.toString(), addrs: [...addrs] }),
+  );
+}
+
+async function bornBlock(chain: LendChain, lend: Hex): Promise<bigint> {
+  const key = `tapeliquid-lend-born-${chain}-${lend}`;
+  if (typeof window !== "undefined") {
+    const saved = window.localStorage.getItem(key);
+    if (saved && /^\d+$/.test(saved)) return BigInt(saved);
+  }
+  const head = BigInt(String(await rpc(chain, "eth_blockNumber", [])));
+  let lo = 1n;
+  let hi = head;
+  while (lo < hi) {
+    const mid = (lo + hi) / 2n;
+    const code = await rpc(chain, "eth_getCode", [lend, `0x${mid.toString(16)}`]);
+    if (typeof code === "string" && code !== "0x") hi = mid;
+    else lo = mid + 1n;
+  }
+  if (typeof window !== "undefined") window.localStorage.setItem(key, lo.toString());
+  return lo;
+}
+
+async function callersAt(chain: LendChain, lend: Hex, block: bigint): Promise<string[]> {
+  const raw = (await rpc(chain, "eth_getBlockByNumber", [`0x${block.toString(16)}`, true])) as {
+    transactions?: { from?: string; to?: string | null }[];
+  };
+  const to = lend.toLowerCase();
+  return (raw.transactions ?? [])
+    .filter((tx) => (tx.to || "").toLowerCase() === to && tx.from)
+    .map((tx) => (tx.from as string).toLowerCase());
+}
+
+async function extendBorrowers(chain: LendChain, asset: LendAsset, lend: Hex, liveBorrow: bigint) {
+  const bag = loadBag(chain, asset);
+  if (bag.borrow === liveBorrow && bag.block > 0n) return bag.addrs;
+  let block = bag.block;
+  let cur = bag.borrow;
+  if (block === 0n) {
+    block = await bornBlock(chain, lend);
+    cur = 0n;
+  }
+  const at = await read<bigint>(chain, lend, "totalBorrow", [], abi, block).catch(() => null);
+  if (at !== cur) {
+    block = await bornBlock(chain, lend);
+    cur = 0n;
+  }
+  const head = BigInt(String(await rpc(chain, "eth_blockNumber", [])));
+  let guard = 0;
+  while (cur !== liveBorrow && block < head && guard < 40) {
+    let left = block;
+    let right = head;
+    while (left + 1n < right) {
+      const mid = (left + right) / 2n;
+      const value = await read<bigint>(chain, lend, "totalBorrow", [], abi, mid);
+      if (value === cur) left = mid;
+      else right = mid;
+    }
+    for (const from of await callersAt(chain, lend, right)) bag.addrs.add(from);
+    cur = await read<bigint>(chain, lend, "totalBorrow", [], abi, right);
+    block = right;
+    guard += 1;
+  }
+  saveBag(chain, asset, head, liveBorrow, bag.addrs);
+  return bag.addrs;
+}
+
+export async function readDebtors(): Promise<Debtor[]> {
+  const jobs = (["xlayer", "bsc"] as const).flatMap((chain) => lendChoices(chain).map((asset) => debtorsOf(chain, asset)));
+  const rows = (await Promise.all(jobs)).flat();
+  return rows.sort((a, b) => Number(b.open) - Number(a.open) || Number((b.ratio ?? 0n) - (a.ratio ?? 0n)));
+}
+
+async function debtorsOf(chain: LendChain, asset: LendAsset): Promise<Debtor[]> {
+  const lend = lendAddress(chain, asset);
+  if (!lend) return [];
+  const spec = lendSpec(chain, asset);
+  const liveBorrow = await read<bigint>(chain, lend, "totalBorrow").catch(() => 0n);
+  if (liveBorrow === 0n) return [];
+  const who = await extendBorrowers(chain, asset, lend, liveBorrow).catch(() => loadBag(chain, asset).addrs);
+  const price = await read<bigint>(chain, lend, "price").catch(() => null);
+  const rows = await Promise.all(
+    [...who].map(async (account) => {
+      const [debt, posted] = await Promise.all([
+        read<bigint>(chain, lend, "debtOf", [account as Hex]).catch(() => 0n),
+        read<bigint>(chain, lend, "collateral", [account as Hex]).catch(() => 0n),
+      ]);
+      return { account: account as Hex, debt, posted };
+    }),
+  );
+  return rows
+    .filter((row) => row.debt > 0n)
+    .map((row) => {
+      const value = collQuote(row.posted, price, spec.collDec);
+      const ratio = debtBps(row.debt, value);
+      const seize = price && price > 0n ? seizeQuote(row.debt, row.posted, price, spec.collDec) : null;
+      return {
+        chain,
+        asset,
+        account: row.account,
+        debt: row.debt,
+        posted: row.posted,
+        price,
+        ratio,
+        seize,
+        open: underwater(row.debt, row.posted, price, spec.collDec),
+      };
+    });
+}
+
+export async function liquidateLend(chain: LendChain, asset: LendAsset, account: string) {
+  const spec = lendSpec(chain, asset);
+  const from = await signer(chain);
+  if (from.toLowerCase() === account.toLowerCase()) throw new Error("self");
+  const lend = need(chain, asset);
+  const [debt, posted, price, have] = await Promise.all([
+    read<bigint>(chain, lend, "debtOf", [account as Hex]),
+    read<bigint>(chain, lend, "collateral", [account as Hex]),
+    read<bigint>(chain, lend, "price"),
+    read<bigint>(chain, spec.usdt, "balanceOf", [from as Hex], erc20),
+  ]);
+  if (!underwater(debt, posted, price, spec.collDec)) throw new Error("safe");
+  const quote = seizeQuote(debt, posted, price, spec.collDec);
+  if (!quote) throw new Error("amount");
+  if (have < quote.pay) throw new Error("usdt");
+  await allowToken(chain, from, spec.usdt, quote.pay, lend);
+  await wait(
+    chain,
+    await send(from, lend, encodeFunctionData({ abi, functionName: "liquidate", args: [account as Hex, 2n ** 256n - 1n] })),
+  );
 }
 
 export function aprText(apr: bigint): string {

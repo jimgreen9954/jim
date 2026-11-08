@@ -21,7 +21,7 @@ function saved(): Record<string, string> {
 export function HomeBooks({ zh }: { zh: boolean }) {
   const [books, setBooks] = useState<Record<string, string> | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [, setStep] = useState(0);
+  const [step, setStep] = useState(0);
   const [note, setNote] = useState("");
 
   useEffect(() => {
@@ -45,7 +45,11 @@ export function HomeBooks({ zh }: { zh: boolean }) {
         const { book } = await deployCoin(from, row.coin, setStep);
         setBooks((prev) => ({ ...(prev ?? {}), [row.coin]: book }));
         window.dispatchEvent(new CustomEvent("tape-coin-book", { detail: { coin: row.coin, book } }));
-        setNote("");
+        setNote(
+          zh
+            ? `已部署 ${book}。把这行地址发我，我写进页面，再把这个按钮撤掉。`
+            : `Deployed ${book}. Send this address. I will pin it and remove this button.`,
+        );
       } catch (err) {
         const code = err instanceof Error ? err.message : "";
         setNote(
@@ -69,7 +73,7 @@ export function HomeBooks({ zh }: { zh: boolean }) {
   };
 
   const open = ROWS.filter((row) => !books[row.coin]);
-  if (open.length === 0) return null;
+  if (open.length === 0 && !note) return null;
 
   return (
     <section className="border border-gold bg-card">
@@ -88,7 +92,7 @@ export function HomeBooks({ zh }: { zh: boolean }) {
               onClick={() => sign(row)}
               className="ml-auto min-h-11 shrink-0 border border-gold bg-ink px-3 text-sm text-paper disabled:opacity-40"
             >
-              {busy === row.coin ? (zh ? "签名" : "Sign") : zh ? "部署" : "Deploy"}
+              {busy === row.coin ? (zh ? (step <= 1 ? "标记" : "永续") : "Sign") : zh ? "部署" : "Deploy"}
             </button>
           </div>
         );

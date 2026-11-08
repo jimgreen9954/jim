@@ -3,11 +3,13 @@ import { createPortal } from "react-dom";
 import { bemPrice, bnbPrice, ercPrice, pretty, quoteBemBnb, quoteUpBem, quoteUpBnb, quoteUpUsd, quoteUpUsdt } from "@/lib/bsc";
 import { CoinMark } from "@/components/exchange/coin-mark";
 import { okbPrice, quoteBemOkb } from "@/lib/okb";
+import { fabBemPrice, fabUsd } from "@/lib/fab";
 import { STOCK_KEYS, STOCKS, type StockKey } from "@/lib/stocks";
 import { useExchange } from "@/lib/exchange-store";
 import { fundingPreview, fundClock, pct } from "@/lib/risk-rules";
 import { readOpenBook } from "@/lib/tape-open-candles";
 import { readSpotBook, usdtText } from "@/lib/tape-spot";
+import { readShareBook } from "@/lib/circuit-split";
 import type { Desk } from "@/lib/perp";
 
 import { PairChevron } from "@/components/exchange/pair-chevron";
@@ -16,12 +18,13 @@ export { PairChevron };
 
 export type TapePair = "usdt" | "bem" | "okb";
 export type SpotId = 0 | 1 | 2;
-export type PerpCoin = "bem" | "btc" | "eth" | "zec" | "up" | "tape";
+export type PerpCoin = "bem" | "btc" | "eth" | "zec" | "up" | "tape" | "fab";
 
 export type DeskView =
   | { kind: "tape"; market: SpotId; pair?: TapePair }
+  | { kind: "hash" }
   | { kind: "otc"; market: SpotId }
-  | { kind: "pancake"; pair: "bem" | "bembnb" | "bemokb" | "upbnb" | "upbem" | "upusdt" | "bnb" | "okb" | "btc" | "eth" | "zec" | "xau" | StockKey }
+  | { kind: "pancake"; pair: "bem" | "bembnb" | "bemokb" | "upbnb" | "upbem" | "upusdt" | "bnb" | "okb" | "btc" | "eth" | "zec" | "xau" | "fab" | StockKey }
   | { kind: "perp"; chain: Desk; coin: PerpCoin };
 
 type Tab = "all" | "perp" | "spot";
@@ -66,6 +69,16 @@ const ROWS: Row[] = [
     tag: "现货",
     where: "池子 · X Layer",
     pin: true,
+  },
+  {
+    id: "hash",
+    view: { kind: "hash" },
+    symbol: "TAPE算力-USDT0",
+    kind: "spot",
+    tag: "现货",
+    where: "订单簿 · X Layer",
+    pin: true,
+    find: "算力 TAPELIQUID 电路份数 hash",
   },
   {
     id: "btcspot",
@@ -113,6 +126,16 @@ const ROWS: Row[] = [
     pin: true,
   },
   {
+    id: "fabspot",
+    view: { kind: "pancake", pair: "fab" },
+    symbol: "FAB-BEM",
+    kind: "spot",
+    tag: "现货",
+    where: "最大池 · X Layer",
+    pin: true,
+    find: "FAB FabX BEM/FAB",
+  },
+  {
     id: "bem",
     view: { kind: "perp", chain: "bsc", coin: "bem" },
     symbol: "BEM-USDT",
@@ -152,6 +175,17 @@ const ROWS: Row[] = [
     where: "",
     pin: true,
     lev: "1000×",
+  },
+  {
+    id: "fab",
+    view: { kind: "perp", chain: "xlayer", coin: "fab" },
+    symbol: "FAB-USDT0",
+    kind: "perp",
+    tag: "永续",
+    where: "最大池 · X Layer",
+    pin: true,
+    lev: "1000×",
+    find: "FAB FabX",
   },
   {
     id: "btc",
@@ -281,6 +315,7 @@ const ROWS: Row[] = [
 ];
 
 function coinOf(row: Row): string {
+  if (row.id === "hash") return "tape";
   if (row.id.startsWith("tape")) return "tape";
   const head = row.symbol.split("-")[0]?.toLowerCase() ?? "tape";
   return head;
@@ -339,6 +374,15 @@ export function MarketSheet({
         write("tape", usdtText(mid, 4));
       })
       .catch(() => undefined);
+    readShareBook(80n)
+      .then((book) => {
+        const bid = book.bids[0]?.price ?? 0n;
+        const ask = book.asks[0]?.price ?? 0n;
+        if (dead || (bid === 0n && ask === 0n)) return;
+        const mid = bid > 0n && ask > 0n ? (bid + ask) / 2n : bid > 0n ? bid : ask;
+        write("hash", usdtText(mid, 4));
+      })
+      .catch(() => undefined);
     if (typeof bem === "number" && bem > 0) {
       const text = bem.toLocaleString("en-US", { maximumFractionDigits: 4 });
       write("bem", text);
@@ -381,6 +425,15 @@ export function MarketSheet({
       .catch(() => undefined);
     quoteUpUsd()
       .then((text) => write("up", text))
+      .catch(() => undefined);
+    fabBemPrice()
+      .then((text) => write("fabspot", text))
+      .catch(() => undefined);
+    fabUsd()
+      .then((n) => {
+        if (!(n > 0)) return;
+        write("fab", n.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 }));
+      })
       .catch(() => undefined);
     STOCK_KEYS.forEach((key) => {
       ercPrice(key)

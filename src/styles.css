@@ -659,6 +659,10 @@ html.day .gift-sheet {
   column-gap: 8px;
   font-variant-numeric: tabular-nums;
 }
+.hash-book {
+  grid-template-columns: minmax(4.2rem, 1fr) minmax(2.8rem, 0.7fr) 2.6rem minmax(3rem, 0.8fr);
+  column-gap: 14px;
+}
 .spot-book > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (min-width: 1280px) {
   .spot-split .spot-grid { align-items: stretch; }
@@ -914,4 +918,64 @@ html.day .hl-sell.off {
   .chain-switch button {
     padding-inline: 0.22rem;
   }
+}
+
+.earn-tape,
+.earn-hash,
+.earn-bem {
+  position: relative;
+  overflow: hidden;
+}
+.earn-tape::before,
+.earn-hash::before,
+.earn-bem::before {
+  content: "";
+  display: block;
+  height: 3px;
+}
+.earn-tape {
+  border-color: #c6a15a;
+  background: color-mix(in srgb, #c6a15a 11%, var(--color-card));
+}
+.earn-tape::before { background: #c6a15a; }
+.earn-hash {
+  border-color: color-mix(in srgb, var(--color-up) 70%, var(--color-gold));
+  background: color-mix(in srgb, var(--color-up) 10%, var(--color-card));
+}
+.earn-hash::before { background: var(--color-up); }
+.earn-bem {
+  border-color: color-mix(in srgb, #8ea2ff 62%, var(--color-gold));
+  background: color-mix(in srgb, #8ea2ff 11%, var(--color-card));
+}
+.earn-bem::before { background: #8ea2ff; }
+.earn-kicker {
+  display: inline-flex;
+  align-items: center;
+  height: 1.15rem;
+  padding: 0 0.4rem;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+}
+.earn-kicker-tape { background: #c6a15a; color: #1c1408; }
+.earn-kicker-hash { background: var(--color-up); color: #06221c; }
+html.day .earn-kicker-hash { color: #f7f4ee; }
+.earn-kicker-bem { background: #8ea2ff; color: #101426; }
+.earn-btn-hash {
+  background: var(--color-up);
+  color: #06221c;
+}
+html.day .earn-btn-hash { color: #f7f4ee; }
+.earn-btn-bem {
+  background: #31407a;
+  color: #f4f1ea;
+}
+.yield-strip {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--color-up) 45%, transparent);
+  background: color-mix(in srgb, var(--color-up) 8%, transparent);
+  padding: 0.45rem 0.55rem;
 }

@@ -31,12 +31,12 @@ export type Holdings = {
 };
 
 export const getHoldings = createServerFn({ method: "POST" })
-  .validator((input: { account?: string }) => {
+  .validator((input: { account?: string; fresh?: boolean }) => {
     const account = (input?.account ?? "").trim();
     if (!/^0x[a-fA-F0-9]{40}$/.test(account)) throw new Error("address");
-    return { account };
+    return { account, fresh: input?.fresh === true };
   })
   .handler(async ({ data }): Promise<Holdings> => {
     const { loadHoldings } = await import("./holdings.server");
-    return loadHoldings(data.account);
+    return loadHoldings(data.account, data.fresh);
   });

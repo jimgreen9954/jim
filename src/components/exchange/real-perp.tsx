@@ -88,6 +88,7 @@ import { modeLine, planMargin, readModes, saveModes } from "@/lib/margin-mode";
 import { readXBem, xCap } from "@/lib/okb";
 import { SideRail } from "@/components/exchange/side-rail";
 import { fundingPreview, pct } from "@/lib/risk-rules";
+import { fabUsd } from "@/lib/fab";
 
 function short(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
@@ -191,7 +192,7 @@ function DeskLadder({
   });
   const anchors = [mark, bookMark].filter((n) => n > 0);
   const away = (row: (typeof drawn)[number]) =>
-    !(account && row.quote.user.toLowerCase() === account.toLowerCase()) &&
+    !(account && row.quote.user?.toLowerCase() === account.toLowerCase()) &&
     anchors.length > 0 &&
     row.px > 0 &&
     anchors.every((ref) => Math.abs(row.px - ref) / ref > 0.15);
@@ -299,7 +300,7 @@ function DeskLadder({
         </button>
       );
     }
-    const mine = Boolean(account && row.quote.user.toLowerCase() === account.toLowerCase());
+    const mine = Boolean(account && row.quote.user?.toLowerCase() === account.toLowerCase());
     const depth = Math.max(6, Math.min(100, (row.margin / depthOf) * 100));
     const cum = (takeLong ? askCum : bidCum).get(`${row.perp}-${row.quote.id}`) ?? row.margin;
     return (
@@ -375,7 +376,7 @@ export function RealPerp({
   launch,
   onMarkets,
 }: {
-  launch?: { chain: Desk; coin: "bem" | "btc" | "eth" | "zec" | "up" | "tape" };
+  launch?: { chain: Desk; coin: "bem" | "btc" | "eth" | "zec" | "up" | "tape" | "fab" };
   onMarkets?: () => void;
 } = {}) {
   const lang = useExchange((s) => s.lang);
@@ -462,7 +463,7 @@ export function RealPerp({
   const closeArm = useRef("");
   const candleCache = useRef(new Map());
   useEffect(() => {
-    if (coin === "tape") {
+    if (coin === "tape" || coin === "fab") {
       setSupply(null);
       return;
     }
@@ -521,6 +522,37 @@ export function RealPerp({
       window.clearInterval(timer);
     };
   }, [coin, frame]);
+  useEffect(() => {
+    if (coin !== "fab") return;
+    let dead = false;
+    const load = () => {
+      fabUsd()
+        .then((n) => {
+          if (dead || !(n > 0)) return;
+          setCoinPx(n);
+          if (!/^0x[a-fA-F0-9]{40}$/.test(pickBook("xlayer", "fab"))) setView(coinBook(n));
+        })
+        .catch(() => void 0);
+      getCoinCandles({ data: { coin: "fab", frame } })
+        .then((next) => {
+          if (dead) return;
+          if (next.length) {
+            candleCache.current.set(frame, next);
+            writeCandleBook(`${chain}:${coin}`, candleCache.current);
+          }
+          setPrices(next.length ? next : previewFrame(candleCache.current, frame));
+        })
+        .catch(() => {
+          if (!dead) setPrices(previewFrame(candleCache.current, frame));
+        });
+    };
+    load();
+    const timer = window.setInterval(load, 12_000);
+    return () => {
+      dead = true;
+      window.clearInterval(timer);
+    };
+  }, [coin, frame, chain]);
   useEffect(() => {
     if (!account) return;
     setArm(readArm(account, perp));
@@ -712,7 +744,7 @@ export function RealPerp({
     };
   }, [chain, coin, frame]);
   useEffect(() => {
-    if (coin === "tape") return;
+    if (coin === "tape" || coin === "fab") return;
     const pair =
       coin === "btc"
         ? "bsc/0x247f51881d1E3aE0f759afB801413a6C948Ef442"
@@ -761,7 +793,7 @@ export function RealPerp({
   const sawOrder = useRef(false);
   useEffect(() => {
     if (!/^0x[a-fA-F0-9]{40}$/.test(perp)) return;
-    if ((coin === "btc" || coin === "eth" || coin === "zec" || coin === "up" || coin === "tape") && !/^0x[a-fA-F0-9]{40}$/.test(pickBook(coin === "tape" ? "xlayer" : chain, coin))) return;
+    if ((coin === "btc" || coin === "eth" || coin === "zec" || coin === "up" || coin === "tape" || coin === "fab") && !/^0x[a-fA-F0-9]{40}$/.test(pickBook(coin === "tape" || coin === "fab" ? "xlayer" : chain, coin))) return;
     let dead = false;
     let busy = false;
     const load = () => {
@@ -790,7 +822,7 @@ export function RealPerp({
       const bars = (
         coin === "tape"
           ? getTapeCandles({ data: frame })
-          : coin === "btc" || coin === "eth" || coin === "zec" || coin === "up"
+          : coin === "btc" || coin === "eth" || coin === "zec" || coin === "up" || coin === "fab"
             ? getCoinCandles({ data: { coin, frame } })
             : chain === "xlayer"
               ? getXCandles({ data: frame })
@@ -1009,8 +1041,8 @@ export function RealPerp({
     }
   })();
   const lastClose = prices.at(-1)?.c ?? 0;
-  const ownCoin = coin === "btc" || coin === "eth" || coin === "zec" || coin === "up" || coin === "tape";
-  const ownBook = ownCoin ? pickBook(coin === "tape" ? "xlayer" : "bsc", coin) : "";
+  const ownCoin = coin === "btc" || coin === "eth" || coin === "zec" || coin === "up" || coin === "tape" || coin === "fab";
+  const ownBook = ownCoin ? pickBook(coin === "tape" || coin === "fab" ? "xlayer" : "bsc", coin) : "";
   const alt = ownCoin && !/^0x[a-fA-F0-9]{40}$/.test(ownBook);
   const canDeploy = alt && ownCoin;
   const riskLive =
@@ -1019,14 +1051,14 @@ export function RealPerp({
     (perp.toLowerCase() === bookOf(chain).toLowerCase() ||
       (ownBook && perp.toLowerCase() === ownBook.toLowerCase()));
   const base =
-    coin === "tape" ? "TAPE" : chain === "xlayer" || coin === "bem" ? "BEM" : coin.toUpperCase();
+    coin === "tape" ? "TAPE" : coin === "fab" ? "FAB" : chain === "xlayer" || coin === "bem" ? "BEM" : coin.toUpperCase();
   const feeBlocked = lock.rows.some((row) => {
     if (!row.got || row.ok) return false;
     return chain === "xlayer" ? row.name.includes("X Layer") : row.name.includes("BSC 永续");
   });
   const settle = !alt && view && view.mark > 0n ? Number(formatUnits(view.mark, 18)) : 0;
   const poolPx =
-    coin === "tape"
+    coin === "tape" || coin === "fab"
       ? coinPx > 0
         ? coinPx
         : lastClose
@@ -1043,10 +1075,10 @@ export function RealPerp({
     !alt &&
     settle > 0 &&
     poolPx > 0 &&
-    (coin === "btc" || coin === "eth" || coin === "zec" || coin === "up" || coin === "tape" || (chain === "xlayer" && coin === "bem")) &&
+    (coin === "btc" || coin === "eth" || coin === "zec" || coin === "up" || coin === "tape" || coin === "fab" || (chain === "xlayer" && coin === "bem")) &&
     Math.abs(settle - poolPx) / poolPx > 0.03;
   const ownMark =
-    coin === "btc" || coin === "eth" || coin === "zec" || coin === "up" || coin === "tape" || chain === "xlayer";
+    coin === "btc" || coin === "eth" || coin === "zec" || coin === "up" || coin === "tape" || coin === "fab" || chain === "xlayer";
   const markN = alt
     ? coinPx || lastClose
     : markFar
@@ -1169,7 +1201,7 @@ export function RealPerp({
     if (!account || !view) return 0;
     const me = account.toLowerCase();
     const quotes = (view.quotes ?? [])
-      .filter((quote) => quote.user.toLowerCase() === me)
+      .filter((quote) => quote.user?.toLowerCase() === me)
       .reduce((sum, quote) => sum + Number(formatUnits(quote.margin, dec)), 0);
     const deals = (view.liveDeals ?? []).reduce(
       (sum, deal) =>
@@ -1218,7 +1250,7 @@ export function RealPerp({
   const choose = (nextChain, nextCoin) => {
     setMarkets(false);
     setCoin(nextCoin);
-    const desk = nextCoin === "tape" ? "xlayer" : nextCoin === "btc" || nextCoin === "eth" ? "bsc" : nextChain;
+    const desk = nextCoin === "tape" || nextCoin === "fab" ? "xlayer" : nextCoin === "btc" || nextCoin === "eth" ? "bsc" : nextChain;
     if (desk !== chain) {
       selectDesk(desk);
       setChain(desk);
@@ -1252,7 +1284,7 @@ export function RealPerp({
   const myDeals = (view?.liveDeals ?? []).filter(
     (deal) => me && (deal.long.toLowerCase() === me || deal.short.toLowerCase() === me),
   );
-  const myQuotes = (view?.quotes ?? []).filter((quote) => me && quote.user.toLowerCase() === me);
+  const myQuotes = (view?.quotes ?? []).filter((quote) => me && quote.user?.toLowerCase() === me);
   const shownDeals =
     myDeals.length > 0
       ? myDeals
@@ -1342,14 +1374,21 @@ export function RealPerp({
                         <span className="text-lg font-medium tracking-tight">
                           {coin === "tape"
                             ? "TAPE-USDT0"
-                            : chain === "xlayer"
-                              ? "BEM-USDT0"
-                              : `${base}-USDT`}
+                            : coin === "fab"
+                              ? "FAB-USDT0"
+                              : chain === "xlayer"
+                                ? "BEM-USDT0"
+                                : `${base}-USDT`}
                         </span>,
                         <PairChevron up={markets} />,
                         <span className="lev-chip rounded px-1.5 py-0.5 font-mono text-[11px]">
                           {lev}×
                         </span>,
+                        coin === "fab" ? (
+                          <span className="text-[11px] text-ink/45">
+                            {lang === "zh" ? "标记走最大池 BEM/FAB 0.9%" : "Mark · deepest BEM/FAB 0.9%"}
+                          </span>
+                        ) : null,
                       ],
                     }),
                     markets && !onMarkets
@@ -1366,6 +1405,7 @@ export function RealPerp({
                               ["xlayer", "bem", "BEM-USDT0", "X Layer"],
                               ["bsc", "up", "UP-USDT", "BSC"],
                               ["xlayer", "tape", "TAPE-USDT0", "X Layer"],
+                              ["xlayer", "fab", "FAB-USDT0", "X Layer"],
                               ["bsc", "btc", "BTC-USDT", "BSC"],
                               ["bsc", "eth", "ETH-USDT", "BSC"],
                               ["bsc", "zec", "ZEC-USDT", "BSC"],
@@ -1375,7 +1415,7 @@ export function RealPerp({
                                 {
                                   type: "button",
                                   onClick: () => choose(nextChain, nextCoin),
-                                  className: `flex w-full items-center gap-2 px-2 py-2 text-left text-sm ${coin === nextCoin && (nextCoin === "tape" || chain === nextChain) ? "bg-foil" : "hover:bg-foil/70"}`,
+                                  className: `flex w-full items-center gap-2 px-2 py-2 text-left text-sm ${coin === nextCoin && (nextCoin === "tape" || nextCoin === "fab" || chain === nextChain) ? "bg-foil" : "hover:bg-foil/70"}`,
                                   children: [
                                     /* @__PURE__ */ jsx(CoinMark, {
                                       id: nextCoin,
@@ -1977,7 +2017,7 @@ export function RealPerp({
                                           view.quotes.filter(
                                             (quote) =>
                                               account &&
-                                              quote.user.toLowerCase() === account.toLowerCase(),
+                                              quote.user?.toLowerCase() === account.toLowerCase(),
                                           ).length === 0
                                             ? /* @__PURE__ */ jsx("p", {
                                                 className: "text-sm text-ink/60",
@@ -1991,7 +2031,7 @@ export function RealPerp({
                                             .filter(
                                               (quote) =>
                                                 account &&
-                                                quote.user.toLowerCase() === account.toLowerCase(),
+                                                quote.user?.toLowerCase() === account.toLowerCase(),
                                             )
                                             .map((quote) =>
                                               /* @__PURE__ */ jsxs(

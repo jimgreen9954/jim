@@ -1,9 +1,12 @@
-import { encodeAbiParameters, encodeFunctionData, type Hex } from "viem";
+import { encodeAbiParameters, encodeFunctionData, getAddress, keccak256, stringToBytes, type Hex } from "viem";
 import { BSC, BSC_SAFE, FEE_TO, XLAYER_SAFE, bscClient, connectBsc, pretty, readBalances, units, waitReceipt } from "@/lib/bsc";
 import { CREATE_CALL, createCallData, createdAddress } from "@/lib/create-call";
 import { PERP_BYTECODE } from "@/lib/perp-artifact";
 import { RISK_BYTECODE } from "@/lib/risk-artifact";
+import { DESK_MARK_BYTECODE } from "@/lib/desk-mark-artifact";
+import { FAB_PERP_SHIP_BYTECODE, FAB_VIEW_QUOTER_BYTECODE } from "@/lib/fab-ship-artifact";
 import { MARK_BYTECODE } from "@/lib/mark-artifact";
+import { FAB_QUOTER } from "@/lib/fab";
 import { getProvider } from "@/lib/wallet";
 import { XLAYER, connectXLayer } from "@/lib/xlayer";
 
@@ -446,12 +449,12 @@ export function riskOf(which: Desk): string {
   return /^0x[a-fA-F0-9]{40}$/.test(saved) ? saved : "";
 }
 
-export type CoinBook = "btc" | "eth" | "zec" | "up" | "tape";
+export type CoinBook = "btc" | "eth" | "zec" | "up" | "tape" | "fab";
 
 const TAPE_POOL = "0x58eaD5b41Cfd3627791D439402dd65571c286484" as Hex;
 
 /** Marks the multisig already created. Books are separate. */
-const COIN_MARK: Record<CoinBook, Hex> = {
+const COIN_MARK: Record<Exclude<CoinBook, "fab">, Hex> = {
   btc: "0xCA0a236452fB2cE9257DCb976211E09A95769bd0",
   eth: "0xcA755b4202Bfa5419c73019Eb889a5F884F7A337",
   zec: "0x3a84F7df202C2d76a5435D467619D1a8d4815d21",
@@ -464,6 +467,7 @@ export const ETH_COIN_BOOK = "0x564C9f5aa89430ca4f2945b466e34BE8705ee0B8" as Hex
 export const ZEC_COIN_BOOK = "0xdAd8E211ec6c8b43eCe19Da2519C9505CDCbF229" as Hex;
 export const UP_COIN_BOOK = "0x5f913f7AFa71c51d69F472b0fE4c3EC74b1132F8" as Hex;
 export const TAPE_COIN_BOOK = "0x9b17D0F6431957661AdD30051de2615cb08A3886" as Hex;
+export const FAB_COIN_BOOK = "0x6Bd480BF658FaB7A2cb758c0408A7b3B5B94B431" as Hex;
 
 const COIN_LIVE: Partial<Record<CoinBook, { chain: Desk; book: Hex }>> = {
   btc: { chain: "bsc", book: BTC_COIN_BOOK },
@@ -471,6 +475,7 @@ const COIN_LIVE: Partial<Record<CoinBook, { chain: Desk; book: Hex }>> = {
   zec: { chain: "bsc", book: ZEC_COIN_BOOK },
   up: { chain: "bsc", book: UP_COIN_BOOK },
   tape: { chain: "xlayer", book: TAPE_COIN_BOOK },
+  fab: { chain: "xlayer", book: FAB_COIN_BOOK },
 };
 
 function coinStore(which: Desk, coin: string): string {
@@ -490,7 +495,7 @@ export function coinBook(which: Desk, coin: string): string {
 }
 
 export function pickBook(which: Desk, coin: string): string {
-  if (coin === "tape") return coinBook("xlayer", "tape");
+  if (coin === "tape" || coin === "fab") return coinBook("xlayer", coin);
   if (coin === "btc" || coin === "eth" || coin === "zec" || coin === "up") return coinBook("bsc", coin);
   return bookOf(which);
 }
@@ -519,7 +524,7 @@ export async function deployRisk(from: string, which: Desk): Promise<string> {
 
 function pinned(perp: string): void {
   const want = perp.toLowerCase();
-  const rows = [bookOf("bsc"), bookOf("xlayer"), coinBook("bsc", "btc"), coinBook("bsc", "eth"), coinBook("bsc", "zec"), coinBook("bsc", "up"), coinBook("xlayer", "tape")];
+  const rows = [bookOf("bsc"), bookOf("xlayer"), coinBook("bsc", "btc"), coinBook("bsc", "eth"), coinBook("bsc", "zec"), coinBook("bsc", "up"), coinBook("xlayer", "tape"), coinBook("xlayer", "fab")];
   if (!rows.some((row) => row.length === 42 && row.toLowerCase() === want)) throw new Error("book");
 }
 
@@ -615,6 +620,7 @@ export async function readMine(account: string): Promise<MineRow[]> {
     ["bsc", "zec", ZEC_COIN_BOOK],
     ["bsc", "up", UP_COIN_BOOK],
     ["xlayer", "tape", TAPE_COIN_BOOK],
+    ["xlayer", "fab", FAB_COIN_BOOK],
   ] as const;
   const out: MineRow[] = [];
   const was = desk;
@@ -1287,6 +1293,7 @@ const COIN_SPEC = {
   zec: { chain: "bsc" as Desk, src: BSC.zecPool, kind: 0, quoteIsToken0: false, baseDec: 18, quoteDec: 18, lo: 20, hi: 20_000 },
   up: { chain: "bsc" as Desk, src: BSC.upWbnb, kind: 2, quoteIsToken0: true, baseDec: 18, quoteDec: 18, lo: 0.02, hi: 50 },
   tape: { chain: "xlayer" as Desk, src: TAPE_POOL, kind: 1, quoteIsToken0: false, baseDec: 8, quoteDec: 6, lo: 0.05, hi: 100 },
+  fab: { chain: "xlayer" as Desk, src: FAB_QUOTER, kind: 3, quoteIsToken0: false, baseDec: 8, quoteDec: 8, lo: 0.01, hi: 50 },
 };
 
 async function readMark(which: Desk, perp: string): Promise<bigint | null> {
@@ -1306,6 +1313,17 @@ function markSane(coin: CoinBook, px: bigint): boolean {
   const n = Number(px) / 1e18;
   const spec = COIN_SPEC[coin];
   return n >= spec.lo && n <= spec.hi;
+}
+
+const FAB_BOOK_TOPIC = keccak256(stringToBytes("Book(address,uint256)"));
+
+function shippedFabBook(logs: readonly { data: Hex; topics: readonly Hex[] }[]): string {
+  for (const log of logs) {
+    if (log.topics[0]?.toLowerCase() !== FAB_BOOK_TOPIC.toLowerCase()) continue;
+    const indexed = log.topics[1];
+    if (indexed && indexed.length === 66) return getAddress(`0x${indexed.slice(26)}`);
+  }
+  throw new Error("revert");
 }
 
 /** One mark and one TapeRisk book for BTC, ETH, ZEC, UP, or TAPE. Not the BEM book. */
@@ -1339,6 +1357,22 @@ export async function deployCoin(
         return { book: known, hash: pokeHash };
       }
       throw new Error("price");
+    }
+    if (coin === "fab") {
+      // The live mark staticcalls the v4 quoter, which has to write state, so poke always reverts.
+      // Ship a view quoter, retarget the mark, poke, and open the book in one transaction.
+      const shipArgs = encodeAbiParameters(
+        [{ type: "bytes" }, { type: "bytes" }, { type: "bytes" }, { type: "address" }, { type: "uint256" }, { type: "address" }],
+        [FAB_VIEW_QUOTER_BYTECODE, DESK_MARK_BYTECODE, RISK_BYTECODE, X_USDT, 1_000_000n, safe],
+      );
+      onStep?.(2);
+      const bookHash = await send(from, CREATE_CALL, createCallData((FAB_PERP_SHIP_BYTECODE + shipArgs.slice(2)) as Hex), 16_000_000n);
+      const book = shippedFabBook((await rpc.getTransactionReceipt({ hash: bookHash })).logs);
+      window.localStorage.setItem(pendingStore(spec.chain, coin), book);
+      const px = await readMark(spec.chain, book);
+      if (px === null || !markSane(coin, px)) throw new Error("price");
+      window.localStorage.setItem(coinStore(spec.chain, coin), book);
+      return { book, hash: bookHash };
     }
     const mark = COIN_MARK[coin];
     const poked = await rpc

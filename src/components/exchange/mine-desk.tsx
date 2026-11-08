@@ -28,6 +28,8 @@ import { TapeDesk } from "@/components/exchange/tape-desk";
 import { CopyVault } from "@/components/exchange/copy-vault";
 import { LendDesk } from "@/components/exchange/lend-desk";
 import { SideRail } from "@/components/exchange/side-rail";
+import { HashClaim } from "@/components/exchange/share-spot";
+import { claimSplitMany, listSplitPieces, readShareSeats, type ShareSeat } from "@/lib/circuit-split";
 
 export function MineDesk() {
   const lang = useExchange((s) => s.lang);
@@ -53,6 +55,8 @@ export function MineDesk() {
   const [sheet, setSheet] = useState<"claim" | "stake" | "ash" | "bid" | "copy" | "lend">("claim");
   const [networkOpen, setNetworkOpen] = useState(false);
   const [picked, setPicked] = useState<Record<string, boolean>>({});
+  const [shares, setShares] = useState<ShareSeat[]>([]);
+  const [shareTick, setShareTick] = useState(0);
 
   useEffect(() => onAccount((next) => setAccount(next)), []);
   useEffect(() => {
@@ -149,9 +153,29 @@ export function MineDesk() {
     };
   }, [account]);
 
+  useEffect(() => {
+    if (!account || sheet !== "claim") {
+      if (!account) setShares([]);
+      return;
+    }
+    let dead = false;
+    listSplitPieces()
+      .then((pieces) => readShareSeats(account, pieces))
+      .then((rows) => {
+        if (!dead) setShares(rows);
+      })
+      .catch(() => {
+        if (!dead) setShares([]);
+      });
+    return () => {
+      dead = true;
+    };
+  }, [account, sheet, shareTick]);
+
   const pendingBem = miners.reduce((sum, row) => sum + row.pending, 0n);
   const pendingTape = tape?.seats.reduce((sum, row) => sum + (row.on ? row.pending : 0n), 0n) ?? 0n;
   const liveSeats = (tape?.seats ?? []).filter((row) => row.on && row.pending > 0n);
+  const shareRows = shares.filter((seat) => !liveSeats.some((row) => row.id === seat.id));
   const chosen = liveSeats.filter((row) => picked[row.id] !== false);
   const myWeight =
     tape?.seats.reduce((sum, row) => sum + (row.on ? BigInt(row.gates) : 0n), 0n) ?? 0n;
@@ -217,11 +241,21 @@ export function MineDesk() {
         <button
           type="button"
           onClick={() => setNetworkOpen((open) => !open)}
-          className="flex min-h-11 w-full items-center justify-between px-3 text-left text-sm"
+          className="grid w-full grid-cols-3 text-left"
         >
-          <span>{zh ? "全网 TAPE" : "TAPE network"}</span>
-          <span className="text-xs text-ink/50">
-            {networkOpen ? (zh ? "收起" : "Hide") : zh ? "打开" : "Open"}
+          <span className="px-4 py-3">
+            <span className="block text-[10px] tracking-[0.16em] text-ink/40">{zh ? "今日排放" : "Today"}</span>
+            <span className="mt-1 block font-mono text-lg tabular-nums">{tape ? amount(tape.daily) : "—"}</span>
+          </span>
+          <span className="border-l border-gold/30 px-4 py-3">
+            <span className="block text-[10px] tracking-[0.16em] text-ink/40">{zh ? "实时流通" : "Circulating"}</span>
+            <span className="mt-1 block font-mono text-lg tabular-nums">{tape ? amount(circulating) : "—"}</span>
+          </span>
+          <span className="flex items-center justify-between border-l border-gold/30 px-4 py-3">
+            <span>
+              <span className="block text-[10px] tracking-[0.16em] text-ink/40">{zh ? "全网" : "Network"}</span>
+              <span className="mt-1 block text-sm">{networkOpen ? (zh ? "收起明细" : "Hide") : zh ? "看明细" : "Details"}</span>
+            </span>
           </span>
         </button>
         {networkOpen && tape ? (
@@ -463,18 +497,24 @@ export function MineDesk() {
         ) : sheet === "bid" ? (
           <TapeDesk account={account} zh={zh} />
         ) : (
-          <section className="grid items-start gap-4 lg:grid-cols-2">
-            <article className="order-2 border border-gold bg-card px-3 py-3">
-              <p className="text-xs tracking-widest text-gold">BSC · tapeout.net</p>
-              <h2 className="font-display text-3xl italic">
-                {zh ? "领 TapeOut BEM" : "Claim TapeOut BEM"}
-              </h2>
-              <p className="mt-2 text-sm leading-relaxed">
-                {zh
-                  ? "数字每 15 秒从挖矿合约重读。矿机名单用 TapeOut 快照，大约一分钟。只有 Behemoth 和 TapeOut 上已经开挖的电路才有 BEM。这一页不替你做题，也不托管。"
-                  : "Figures are read from the mining contract every 15 seconds. The miner list is the TapeOut snapshot. Only circuits already mining on Behemoth or TapeOut earn BEM."}
+          <section className="grid items-stretch gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <article className="order-3 flex min-w-0 flex-col earn-bem">
+              <div className="flex items-start justify-between gap-3 px-4 pt-4">
+                <div>
+                  <p className="text-[11px] tracking-[0.16em] text-ink/40">BSC</p>
+                  <h2 className="mt-1 text-lg font-medium">{zh ? "TapeOut BEM" : "TapeOut BEM"}</h2>
+                  <span className="earn-kicker earn-kicker-bem mt-2">BEM</span>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] tracking-wide text-ink/40">{zh ? "可领" : "Pending"}</p>
+                  <p className="font-mono text-2xl leading-none tabular-nums text-up">{account ? bemText(pendingBem) : "—"}</p>
+                  <p className="mt-1 text-[11px] text-ink/40">BEM</p>
+                </div>
+              </div>
+              <p className="px-4 pt-2 text-xs leading-5 text-ink/50">
+                {zh ? "已经在挖的电路，BEM 在这里领取。" : "BEM from circuits already mining is claimed here."}
               </p>
-              <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
+              <dl className="mt-3 grid grid-cols-3 border-y border-gold/25">
                 <Cell
                   k={zh ? "今天排放" : "Daily emission"}
                   v={
@@ -506,20 +546,10 @@ export function MineDesk() {
                 <Cell k={zh ? "已验证权重" : "Verified weight"} v={stats?.verifWeight ?? "—"} />
                 <Cell k={zh ? "未验证权重" : "Unverified weight"} v={stats?.unverWeight ?? "—"} />
               </dl>
-              <p className="mt-3 text-sm">
-                {zh ? "这个地址待领" : "Pending here"}{" "}
-                <span className="font-mono">{account ? bemText(pendingBem) : "—"} BEM</span>
+              <p className="px-4 pt-3 text-xs text-ink/45">
+                {snap ? (zh ? `名单 ${snap}` : `List ${snap}`) : zh ? "连上钱包后读名单" : "The list is read after you connect"}
               </p>
-              <p className="mt-1 text-xs text-ink/50">
-                {snap
-                  ? zh
-                    ? `名单 ${snap}`
-                    : `List ${snap}`
-                  : zh
-                    ? "连上钱包后读名单"
-                    : "The list is read after you connect"}
-              </p>
-              <ul className="mt-2 max-h-64 overflow-auto border border-gold/40">
+              <ul className="mx-4 mt-2 max-h-64 overflow-auto border border-gold/30">
                 {miners.map((row) => (
                   <li
                     key={`${row.circuits}-${row.circuitId}`}
@@ -538,10 +568,11 @@ export function MineDesk() {
                   </li>
                 ) : null}
               </ul>
+              <div className="mt-auto p-4">
               <button
                 type="button"
                 disabled={busy || !account || pendingBem === 0n}
-                className="mt-3 min-h-12 w-full bg-ink font-display text-2xl italic text-paper disabled:opacity-40"
+                className="min-h-11 w-full text-sm earn-btn-bem disabled:opacity-40"
                 onClick={() => {
                   if (!account) return;
                   setBusy(true);
@@ -565,58 +596,47 @@ export function MineDesk() {
                     .finally(() => setBusy(false));
                 }}
               >
-                {zh ? "签名领取 BEM" : "Sign and claim BEM"}
+                {zh ? "领取 BEM" : "Claim BEM"}
               </button>
+              </div>
               {account && pendingBem === 0n ? (
-                <p className="mt-2 text-xs text-ink/60">
-                  {zh
-                    ? "没有待领。TapeOut 快照里没有这地址的矿机，或者矿机还没挖出可领的 BEM。这一页不能替你开工 TapeOut 电路。"
-                    : "Nothing is pending. The TapeOut snapshot has no miner here, or it has not earned claimable BEM. This page cannot open a TapeOut circuit for you."}
+                <p className="px-4 pb-2 text-xs leading-5 text-ink/45">
+                  {zh ? "没有待领。" : "Nothing is pending."}
                 </p>
               ) : null}
-              <p className="mt-2 break-all text-xs text-ink/50">
-                <a
-                  className="underline"
-                  href="https://tapeout.net/bridge"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {zh ? "TapeOut BEM 跨链" : "TapeOut BEM bridge"}
+              <p className="px-4 pb-4 text-[11px] leading-5 text-ink/40">
+                <a className="underline" href="https://tapeout.net/bridge" target="_blank" rel="noreferrer">
+                  {zh ? "跨链" : "Bridge"}
                 </a>
                 {" · "}
-                <a
-                  className="underline"
-                  href={`${BSC.explorer}/address/0xa84B8D3893De6e9922f2B29bE1e1b115845F5E72`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
+                <a className="underline" href={`${BSC.explorer}/address/0xa84B8D3893De6e9922f2B29bE1e1b115845F5E72`} target="_blank" rel="noreferrer">
                   BSC
                 </a>
                 {" · "}
-                <a
-                  className="underline"
-                  href={`${XLAYER.explorer}/address/0x60e62Efa9405d6873C5deaBD4E6CC91c25363952`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  X Layer BEM
+                <a className="underline" href={`${XLAYER.explorer}/address/0x60e62Efa9405d6873C5deaBD4E6CC91c25363952`} target="_blank" rel="noreferrer">
+                  X Layer
                 </a>
-                <span className="mt-1 block">
-                  {zh
-                    ? "本站不经手资产。跨链另收付出金额的千分之二。TAPE 没有自己的桥。"
-                    : "This site does not custody the assets. The cross charges 0.20% of the amount. TAPE has no bridge."}
-                </span>
               </p>
             </article>
-            <article className="order-1 min-w-0 overflow-hidden border border-gold bg-card px-3 py-3">
-              <p className="text-xs tracking-widest text-gold">X Layer · TAPELIQUID</p>
-              <h2 className="font-display text-3xl italic">{zh ? "领 TAPE" : "Claim TAPE"}</h2>
-              <p className="mt-2 text-sm leading-relaxed">
-                {zh
-                  ? "这里只列出已经开工、而且有待领的矿机。有收入就是已经在挖，不再做一键验证。勾上要领的几台，分开签。"
-                  : "Only miners already running and holding a reward are listed. A reward means it is already mining. Pick the ones to claim."}
+            <article className="order-2 flex min-w-0 flex-col earn-tape md:order-1">
+              <div className="flex items-start justify-between gap-3 px-4 pt-4">
+                <div>
+                  <p className="text-[11px] tracking-[0.16em] text-ink/40">X LAYER</p>
+                  <h2 className="mt-1 text-lg font-medium">{zh ? "电路 TAPE" : "Circuit TAPE"}</h2>
+                  <span className="earn-kicker earn-kicker-tape mt-2">TAPE</span>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] tracking-wide text-ink/40">{zh ? "可领" : "Pending"}</p>
+                  <p className="font-mono text-2xl leading-none tabular-nums text-up">
+                    {account && tape ? amount(pendingTape) : "—"}
+                  </p>
+                  <p className="mt-1 text-[11px] text-ink/40">TAPE</p>
+                </div>
+              </div>
+              <p className="px-4 pt-2 text-xs leading-5 text-ink/50">
+                {zh ? "整张电路和拆开的算力在这一张名单。勾选整张，一次签名。算力按笔签。" : "Whole circuits and split hashrate are on this list. Select whole circuits and sign once. Shares sign per circuit."}
               </p>
-              <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
+              <dl className="mt-3 grid grid-cols-3 border-y border-gold/25">
                 <Cell
                   k={zh ? "今天排放" : "Daily emission"}
                   v={tape ? `${amount(tape.daily)} TAPE` : "—"}
@@ -646,39 +666,30 @@ export function MineDesk() {
                   v={account && tape ? `${amount(myShare)} TAPE` : "—"}
                 />
               </dl>
-              <p className="mt-3 text-sm">
-                {zh ? "这个地址待领" : "Pending here"}{" "}
-                <span className="font-mono">
-                  {account && tape ? `${amount(pendingTape)} TAPE` : "—"}
-                </span>
-              </p>
-              <p className="mt-1 font-mono text-xs text-ink/70">
-                {account && tape
-                  ? zh
-                    ? `可领 ${liveSeats.length} 台 · 已选 ${chosen.length}`
-                    : `${liveSeats.length} paying · ${chosen.length} selected`
-                  : "—"}
-              </p>
-              <p className="mt-1 text-xs text-ink/50">
-                {tapeErr
-                  ? tapeErr
-                  : tape?.scanning
+              <div className="flex items-center justify-between px-4 pt-3 text-xs text-ink/45">
+                <span>
+                  {account && tape
                     ? zh
-                      ? "正在对这个地址名下已经开工的矿机。"
-                      : "Matching the miners already running for this address."
-                    : !tape?.scanOk
-                      ? zh
-                        ? "电路名单这次没扫全。刷新再试，不要把空名单当成没有矿机。"
-                        : "The circuit list did not finish. Refresh before treating an empty list as none."
-                      : account && tape
-                        ? zh
-                          ? `钱包 ${amount(tape.balance)} TAPE`
-                          : `Wallet ${amount(tape.balance)} TAPE`
-                        : zh
-                          ? "连上 X Layer 后读这个地址的矿机"
-                          : "Connect on X Layer to read this address"}
-              </p>
-              <ul className="mt-2 max-h-72 overflow-auto border border-gold/40">
+                      ? `${liveSeats.length + shareRows.length} 笔可领 · 已选 ${chosen.length}`
+                      : `${liveSeats.length + shareRows.length} paying · ${chosen.length} selected`
+                    : zh
+                      ? "连上后显示矿机"
+                      : "Connect to see miners"}
+                </span>
+                {liveSeats.length > 0 ? (
+                  <button
+                    type="button"
+                    className="underline"
+                    onClick={() => {
+                      const allOn = liveSeats.every((row) => picked[row.id] !== false);
+                      setPicked(Object.fromEntries(liveSeats.map((row) => [row.id, !allOn])));
+                    }}
+                  >
+                    {liveSeats.every((row) => picked[row.id] !== false) ? (zh ? "取消全选" : "Clear") : zh ? "全选" : "All"}
+                  </button>
+                ) : null}
+              </div>
+              <ul className="mx-4 mt-2 max-h-72 overflow-auto border border-gold/30">
                 {liveSeats.map((row) => {
                   const on = picked[row.id] !== false;
                   return (
@@ -706,7 +717,7 @@ export function MineDesk() {
                         <button
                           type="button"
                           disabled={busy}
-                          className="mt-1 min-h-8 border border-gold px-2 text-xs disabled:opacity-40"
+                          className="min-h-8 px-1 text-xs text-ink/55 underline disabled:opacity-40"
                           onClick={() => {
                             if (!account) return;
                             setBusy(true);
@@ -733,7 +744,38 @@ export function MineDesk() {
                     </li>
                   );
                 })}
-                {account && tape?.scanOk && liveSeats.length === 0 ? (
+                {shareRows.map((seat) => (
+                  <li key={`share-${seat.id}`} className="flex items-center justify-between gap-3 border-t border-gold/30 px-2 py-2">
+                    <span className="min-w-0">
+                      <span className="block font-mono text-sm">
+                        #{seat.id} · {seat.shares.toLocaleString("en-US")} H
+                      </span>
+                      <span className="text-[11px] text-up">{zh ? "算力份额" : "Hashrate shares"}</span>
+                    </span>
+                    <div className="text-right">
+                      <p className="font-mono text-xs">{amount(seat.pending)} TAPE</p>
+                      <button
+                        type="button"
+                        disabled={busy || !account || seat.pending === 0n}
+                        className="min-h-8 px-1 text-xs text-ink/55 underline disabled:opacity-40"
+                        onClick={() => {
+                          if (!account) return;
+                          setBusy(true);
+                          claimSplitMany(account, [BigInt(seat.id)])
+                            .then(() => {
+                              say(zh ? `#${seat.id} 算力 TAPE 已领到这个钱包。` : `#${seat.id} hashrate TAPE is in this wallet.`);
+                              setShareTick((n) => n + 1);
+                            })
+                            .catch(() => say(zh ? "这一笔没有领走。" : "This one was not claimed.", true))
+                            .finally(() => setBusy(false));
+                        }}
+                      >
+                        {zh ? "领取算力" : "Claim hash"}
+                      </button>
+                    </div>
+                  </li>
+                ))}
+                {account && tape?.scanOk && liveSeats.length === 0 && shareRows.length === 0 ? (
                   <li className="px-2 py-3 text-sm text-ink/60">
                     {zh
                       ? "这个地址没有已经开工、还带着待领的矿机。"
@@ -741,12 +783,12 @@ export function MineDesk() {
                   </li>
                 ) : null}
               </ul>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                {!account ? (
-                  <button
-                    type="button"
-                    className="col-span-2 min-h-12 bg-ink font-display text-2xl italic text-paper"
-                    onClick={() => {
+              <div className="mt-auto p-4">
+              {!account ? (
+                <button
+                  type="button"
+                  className="min-h-11 w-full bg-ink text-sm text-paper"
+                  onClick={() => {
                       setBusy(true);
                       connectXLayer()
                         .then(setAccount)
@@ -762,7 +804,7 @@ export function MineDesk() {
                   <button
                     type="button"
                     disabled={busy || chosen.length === 0}
-                    className="col-span-2 min-h-12 bg-ink font-display text-2xl italic text-paper disabled:opacity-40"
+                    className="min-h-11 w-full border border-[#c6a15a] bg-ink text-sm text-paper disabled:opacity-40"
                     onClick={() => {
                       setBusy(true);
                       claimTape(
@@ -799,39 +841,39 @@ export function MineDesk() {
                         .finally(() => setBusy(false));
                     }}
                   >
-                    {zh ? `签名领取 ${chosen.length} 台` : `Sign and claim ${chosen.length}`}
+                    {zh ? `领取电路 TAPE · ${chosen.length}` : `Claim circuit TAPE · ${chosen.length}`}
                   </button>
                 )}
               </div>
-              {account && tape?.scanOk && liveSeats.length === 0 ? (
-                <p className="mt-2 text-xs text-ink/60">
-                  {zh
-                    ? "没有待领。没开工的矿机不在这张表。"
-                    : "Nothing is pending. A miner that is not running is not on this list."}
-                </p>
-              ) : null}
-              {note ? <p className={`mt-2 text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
-              <p className="mt-2 min-w-0 max-w-full overflow-hidden text-xs text-ink/50">
-                <a
-                  className="block max-w-full truncate underline"
-                  title={TAPE}
-                  href={`${XLAYER.explorer}/address/${TAPE}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  TAPE {TAPE}
-                </a>
-                <a
-                  className="mt-1 block max-w-full truncate underline"
-                  title={TAPE_MINE}
-                  href={`${XLAYER.explorer}/address/${TAPE_MINE}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Mine {TAPE_MINE}
+              <p className="px-4 pb-4 text-[11px] leading-5 text-ink/40">
+                {tapeErr
+                  ? tapeErr
+                  : tape?.scanning
+                    ? zh
+                      ? "正在对已经开工的矿机。"
+                      : "Matching miners already running."
+                    : !tape?.scanOk
+                      ? zh
+                        ? "名单没扫全。刷新再试。"
+                        : "The list did not finish. Refresh."
+                      : account && tape
+                        ? zh
+                          ? `钱包 ${amount(tape.balance)} TAPE`
+                          : `Wallet ${amount(tape.balance)} TAPE`
+                        : ""}
+                {account && tape?.scanOk && liveSeats.length === 0 && shareRows.length === 0
+                  ? zh
+                    ? " 没有待领。"
+                    : " Nothing is pending."
+                  : ""}
+                {" · "}
+                <a className="underline" href={`${XLAYER.explorer}/address/${TAPE_MINE}`} target="_blank" rel="noreferrer">
+                  {zh ? "挖矿合约" : "Mine"}
                 </a>
               </p>
+              {note ? <p className={`px-4 pb-4 text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
             </article>
+            <HashClaim zh={zh} account={account} />
           </section>
         )}
       </SideRail>
@@ -865,9 +907,9 @@ function amount(value: bigint): string {
 
 function Cell({ k, v }: { k: string; v: string }) {
   return (
-    <div className="min-w-0 overflow-hidden border border-gold/40 px-2 py-2">
-      <dt className="text-xs text-ink/50">{k}</dt>
-      <dd className="mt-1 break-all font-mono text-sm">{v}</dd>
+    <div className="min-w-0 border-l border-gold/20 px-3 py-2 first:border-l-0 [&:nth-child(3n+1)]:border-l-0">
+      <dt className="truncate text-[10px] tracking-wide text-ink/40">{k}</dt>
+      <dd className="mt-0.5 truncate font-mono text-[13px] tabular-nums">{v}</dd>
     </div>
   );
 }

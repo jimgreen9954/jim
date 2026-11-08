@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BSC_REBATE, BTC_COIN_BOOK, ETH_COIN_BOOK, KNOWN_XMARK, KNOWN_XPERP, PREV_BSC, PREV_XMARK, PREV_XPERP, TAPE_COIN_BOOK, UP_COIN_BOOK, ZEC_COIN_BOOK } from "@/lib/perp";
+import { BSC_REBATE, BTC_COIN_BOOK, ETH_COIN_BOOK, FAB_COIN_BOOK, KNOWN_XMARK, KNOWN_XPERP, PREV_BSC, PREV_XMARK, PREV_XPERP, TAPE_COIN_BOOK, UP_COIN_BOOK, ZEC_COIN_BOOK } from "@/lib/perp";
 import { GATE } from "@/lib/gate-chain";
 import { BSC, BSC_SAFE, FEE_TO, XLAYER_SAFE } from "@/lib/bsc";
 import { NPM } from "@/lib/lp";
@@ -155,7 +155,9 @@ const zhBody: Section[] = [
       "同一份标记只挂这一本 X Layer 永续。BSC 上的 BEM 永续读 Pancake 池子的均价，不读这份标记。浅池仍可能在短时间里影响那条均价。",
       "BSC 永续页上，BEM、比特币、ETH、ZEC、UP 是同一张合约台。比特币和 ETH 各有自己的永续，标记读各自的 Pancake 池约 10 分钟均价，不写进 BEM 那一本。ZEC 读 Pancake 的 ZEC/USDT 池 0x6701B287c8170D6c290C6f4Ef426782bD61Ae310。UP 读 Pancake V2 的 UP/WBNB 池 0x364d573106Ff27F3e394BA2377E9b915Cf56Ba6A，再乘 BNB/USDT 池，得到 USDT 价。TAPE 永续在 X Layer，结算本是 " +
         TAPE_COIN_BOOK +
-        "，标记 0x5EF3db885b1E3D254a192887965ed514187089A3，千分之二进 X Layer 多签，没有管理员。比特币、ETH、ZEC、UP 的结算本已经接上，千分之二进 BSC 多签。开仓价不能超过 100000。",
+        "，标记 0x5EF3db885b1E3D254a192887965ed514187089A3，千分之二进 X Layer 多签，没有管理员。FAB 永续在 X Layer，结算本是 " +
+        FAB_COIN_BOOK +
+        "，标记 0x358A948C454B350d54261AfE93616194fbB467C4，读 BEM/FAB 0.9% 池换成美元，千分之二进 X Layer 多签，没有管理员。比特币、ETH、ZEC、UP 的结算本已经接上，千分之二进 BSC 多签。开仓价不能超过 100000。",
       "TAPE 是 TAPELIQUID 的唯一平台币。只有这一枚，没有第二枚。矿池没有管理员，也不能改排放。",
       "返佣合约有 clerk。clerk 可以提取返佣池里的余额。不是每一份合约都没有管理员。",
     ],
@@ -207,7 +209,7 @@ const zhBody: Section[] = [
     h: "地址",
     ps: [
       `页面先收的台费，以及现在的现货和永续合约里的千分之二：BSC 多签 ${BSC_SAFE}，X Layer 多签 ${XLAYER_SAFE}。以前的池子和上一本永续仍进 ${FEE_TO}。TAPE ${TAPE}。TAPE 挖矿 ${TAPE_MINE}。TAPE 池 0x58eaD5b41Cfd3627791D439402dd65571c286484。旧池 0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641。流通减去这两口的余额。晶圆锁仓 0xA28390924607F08aaD8d03F512B41b6a1c012Ace。电路锁仓 0x06c877cc158d9ca3547220f9fc156f39bce7013c。回购 0x53fa6A76ce9A3fE08698E04a4E9A674bd77a9DfF。期限质押 0x9D603A45321a3aDbFcAD0E49Fd944Cc281Baa833。以前的锁仓 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A。现货 ${TAPE_SPOT}。上一本现货 0x154E82c6a2ac121906D29af0EE81131E93B57860 不再挂新单。TAPELIQUID 电路 ${DEPLOYED.circuits}。TAPELIQUID 晶体管 ${DEPLOYED.transistors}。`,
-      `BSC 永续 ${BSC_REBATE}。X Layer 永续 ${KNOWN_XPERP}。比特币 ${BTC_COIN_BOOK}。ETH ${ETH_COIN_BOOK}。ZEC ${ZEC_COIN_BOOK}。UP ${UP_COIN_BOOK}。TAPE ${TAPE_COIN_BOOK}。千分之二进该链多签。没有管理员。标记 ${KNOWN_XMARK}。晶体管永续 ${GATE}。流动性仓位 ${NPM}。X Layer 借贷：OKB 0x57228158cba08c61710ab2644e583c328ec86ea7，TAPE 0x425285da21ed3eabe64550d1be7dcabcf6f9e851，BEM 0x5ed8551f90acc6395810d8274b019bf13ef1f696。BSC 借贷：BNB 0xd8d981d32b12ea85b739bb667946975d25b0ab53，BEM 0xd2c7150f7779ded403c3f81a68dab5164b54df28。`,
+      `BSC 永续 ${BSC_REBATE}。X Layer 永续 ${KNOWN_XPERP}。比特币 ${BTC_COIN_BOOK}。ETH ${ETH_COIN_BOOK}。ZEC ${ZEC_COIN_BOOK}。UP ${UP_COIN_BOOK}。TAPE ${TAPE_COIN_BOOK}。FAB ${FAB_COIN_BOOK}。千分之二进该链多签。没有管理员。标记 ${KNOWN_XMARK}。晶体管永续 ${GATE}。流动性仓位 ${NPM}。X Layer 借贷：OKB 0x57228158cba08c61710ab2644e583c328ec86ea7，TAPE 0x425285da21ed3eabe64550d1be7dcabcf6f9e851，BEM 0x5ed8551f90acc6395810d8274b019bf13ef1f696。BSC 借贷：BNB 0xd8d981d32b12ea85b739bb667946975d25b0ab53，BEM 0xd2c7150f7779ded403c3f81a68dab5164b54df28。`,
       `BSC BEM ${BSC.bem}。BSC UP ${BSC.up}。BSC 桥 ${BEM_BRIDGE}。X Layer BEM ${X_BEM}。TapeOut BEM 挖矿 0x7E2E0DC66a3bD9103E69b766afA62d9f7b697b46。`,
       `TapeOut 晶体管市场 ${OFFICIAL.transistorMarket}。TapeOut 电路市场 ${OFFICIAL.circuitMarket}。BEM 池 ${BSC.pool}。`,
       `X Layer 印鉴领取 ${LOCKED_REBATE.xlayer}。BSC 印鉴领取 ${LOCKED_REBATE.bsc}。红包发布台 0x284Fa8819980A229622B711A52BF66bD9cDCbC2d。X Layer 已经在用，每一份从这里新开。BSC 使用同一个地址，第一次发布时放上。TAPE 走能成交的自有池。其他现货走能成交的兑换。合约只在本所。以前的红包不再使用。`,
@@ -359,7 +361,9 @@ const en: Section[] = [
       "An unmatched order stays under Open orders. The book marks it. There is no PnL until someone takes it. A taken order is a position. The position shows size, entry, mark, margin, PnL, and the return on margin. A resting quote can only be cancelled by the wallet that posted it. Cancelling takes 0.20 percent of the margin and returns the rest. A filled position cannot be cancelled. It can only be closed.",
       "BTC and ETH each have their own perpetual. The mark reads that coin's Pancake pool, about a 10-minute average, and it is not written into the BEM book. ZEC reads the Pancake ZEC/USDT pool 0x6701B287c8170D6c290C6f4Ef426782bD61Ae310. UP reads the Pancake v2 UP/WBNB pool 0x364d573106Ff27F3e394BA2377E9b915Cf56Ba6A, then the BNB/USDT pool, and the mark is USDT per UP. The TAPE perpetual is on X Layer. Its book is " +
         TAPE_COIN_BOOK +
-        ". Its mark is 0x5EF3db885b1E3D254a192887965ed514187089A3. The 0.20 percent goes to the X Layer multisig. There is no admin. The Bitcoin, ETH, ZEC and UP books are attached. The 0.20 percent goes to the BSC multisig. An open price cannot exceed 100000.",
+        ". Its mark is 0x5EF3db885b1E3D254a192887965ed514187089A3. The 0.20 percent goes to the X Layer multisig. There is no admin. The FAB perpetual is on X Layer. Its book is " +
+        FAB_COIN_BOOK +
+        ". Its mark is 0x358A948C454B350d54261AfE93616194fbB467C4, from the BEM/FAB 0.9% pool in dollars. The 0.20 percent goes to the X Layer multisig. There is no admin. The Bitcoin, ETH, ZEC and UP books are attached. The 0.20 percent goes to the BSC multisig. An open price cannot exceed 100000.",
       "TAPE is the only platform token of TAPELIQUID. There is one token, not a second. The mine has no admin, and the emission cannot be changed.",
       "The rebate contract has a clerk. The clerk can withdraw the rebate pool. Not every contract is without an admin.",
     ],
@@ -412,7 +416,7 @@ const en: Section[] = [
     h: "Addresses",
     ps: [
       `The fee this page collects, and the 0.20 percent inside the live spot and perpetual contracts: BSC multisig ${BSC_SAFE}, X Layer multisig ${XLAYER_SAFE}. The previous pool and the previous perpetual still pay ${FEE_TO}. TAPE ${TAPE}. TAPE mine ${TAPE_MINE}. TAPE pool 0x58eaD5b41Cfd3627791D439402dd65571c286484. Earlier pool 0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641. Circulating supply subtracts both balances. Wafer lock 0xA28390924607F08aaD8d03F512B41b6a1c012Ace. Circuit lock 0x06c877cc158d9ca3547220f9fc156f39bce7013c. Buyback 0x53fa6A76ce9A3fE08698E04a4E9A674bd77a9DfF. Timed stake 0x9D603A45321a3aDbFcAD0E49Fd944Cc281Baa833. Earlier locks 0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A. Spot ${TAPE_SPOT}. The previous spot 0x154E82c6a2ac121906D29af0EE81131E93B57860 takes no new orders. TAPELIQUID circuits ${DEPLOYED.circuits}. TAPELIQUID transistors ${DEPLOYED.transistors}.`,
-      `BSC perpetual ${BSC_REBATE}. X Layer perpetual ${KNOWN_XPERP}. Bitcoin ${BTC_COIN_BOOK}. ETH ${ETH_COIN_BOOK}. ZEC ${ZEC_COIN_BOOK}. UP ${UP_COIN_BOOK}. TAPE ${TAPE_COIN_BOOK}. The 0.20 percent goes to that chain's multisig. There is no admin. Mark ${KNOWN_XMARK}. Transistor perpetual ${GATE}. Liquidity positions ${NPM}. X Layer lending: OKB 0x57228158cba08c61710ab2644e583c328ec86ea7, TAPE 0x425285da21ed3eabe64550d1be7dcabcf6f9e851, BEM 0x5ed8551f90acc6395810d8274b019bf13ef1f696. BSC lending: BNB 0xd8d981d32b12ea85b739bb667946975d25b0ab53, BEM 0xd2c7150f7779ded403c3f81a68dab5164b54df28.`,
+      `BSC perpetual ${BSC_REBATE}. X Layer perpetual ${KNOWN_XPERP}. Bitcoin ${BTC_COIN_BOOK}. ETH ${ETH_COIN_BOOK}. ZEC ${ZEC_COIN_BOOK}. UP ${UP_COIN_BOOK}. TAPE ${TAPE_COIN_BOOK}. FAB ${FAB_COIN_BOOK}. The 0.20 percent goes to that chain's multisig. There is no admin. Mark ${KNOWN_XMARK}. Transistor perpetual ${GATE}. Liquidity positions ${NPM}. X Layer lending: OKB 0x57228158cba08c61710ab2644e583c328ec86ea7, TAPE 0x425285da21ed3eabe64550d1be7dcabcf6f9e851, BEM 0x5ed8551f90acc6395810d8274b019bf13ef1f696. BSC lending: BNB 0xd8d981d32b12ea85b739bb667946975d25b0ab53, BEM 0xd2c7150f7779ded403c3f81a68dab5164b54df28.`,
       `BSC BEM ${BSC.bem}. BSC UP ${BSC.up}. BSC bridge ${BEM_BRIDGE}. X Layer BEM ${X_BEM}. TapeOut BEM mine 0x7E2E0DC66a3bD9103E69b766afA62d9f7b697b46.`,
       `TapeOut transistor market ${OFFICIAL.transistorMarket}. TapeOut circuit market ${OFFICIAL.circuitMarket}. BEM pool ${BSC.pool}.`,
       `X Layer seal claim ${LOCKED_REBATE.xlayer}. BSC seal claim ${LOCKED_REBATE.bsc}. Red packet desk 0x284Fa8819980A229622B711A52BF66bD9cDCbC2d. X Layer already uses it, and each round is a new contract there. BSC uses the same address and places it on the first publish. TAPE uses the pool that can fill. Other spot assets use a market that can fill. Perpetuals stay on this exchange. The earlier packets are no longer used.`,

@@ -2,10 +2,13 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { SideRail } from "@/components/exchange/side-rail";
 import { formatUnits } from "viem";
 import { XLAYER } from "@/lib/xlayer";
-import { quoteOkb } from "@/lib/okb";
+import { quoteOkb, xCap } from "@/lib/okb";
+import { TAPE_TOKEN } from "@/lib/tape-pool";
+import { SpotStats } from "@/components/exchange/spot-stats";
 import { rememberFill, TradeLog } from "@/components/exchange/trade-foot";
 import { Hint } from "@/components/exchange/hint";
 import { TapeCircuits } from "@/components/exchange/tape-circuits";
+import { HashSpot } from "@/components/exchange/share-spot";
 import { ContainerDesk } from "@/components/exchange/capacitor-desk";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import {
@@ -319,13 +322,13 @@ export function TapeSpotDesk({
   lanes,
 }: {
   zh: boolean;
-  lanes?: readonly (SpotMarket | "circuit" | "cap")[];
+  lanes?: readonly (SpotMarket | "circuit" | "cap" | "hash")[];
 }) {
-  const choices = lanes ?? (["circuit", 0, 1, 2, "cap"] as const);
+  const choices = lanes ?? (["circuit", 0, "hash", 1, 2, "cap"] as const);
   const [spot, setSpot] = useState<string | null>(() => spotAddress());
   const [ready, setReady] = useState(true);
   const [account, setAccount] = useState<string | null>(currentAccount());
-  const [lane, setLane] = useState<SpotMarket | "circuit" | "cap">(choices[0] ?? 0);
+  const [lane, setLane] = useState<SpotMarket | "circuit" | "cap" | "hash">(choices[0] ?? 0);
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [price, setPrice] = useState("");
   const [amount, setAmount] = useState("");
@@ -336,6 +339,7 @@ export function TapeSpotDesk({
   const [purse, setPurse] = useState<SpotPurse | null>(null);
   const [orders, setOrders] = useState<OpenOrder[]>([]);
   const [prints, setPrints] = useState<SpotPrint[]>([]);
+  const [tapeSupply, setTapeSupply] = useState<number | null>(null);
   const [reading, setReading] = useState(false);
   const [readMin, setReadMin] = useState(0);
   const [tab, setTab] = useState<"tape" | "mine">("tape");
@@ -347,9 +351,20 @@ export function TapeSpotDesk({
   const [takes, setTakes] = useState<Record<string, string>>({});
   const [picked, setPicked] = useState<string | null>(null);
   const askBox = useRef<HTMLDivElement>(null);
-  const market: SpotMarket = lane === "circuit" || lane === "cap" ? 0 : lane;
+  const market: SpotMarket = lane === "circuit" || lane === "cap" || lane === "hash" ? 0 : lane;
 
   useEffect(() => onAccount(setAccount), []);
+  useEffect(() => {
+    let dead = false;
+    xCap(TAPE_TOKEN)
+      .then((n) => {
+        if (!dead) setTapeSupply(n > 0 ? n : null);
+      })
+      .catch(() => undefined);
+    return () => {
+      dead = true;
+    };
+  }, []);
   useEffect(() => setSpot(spotAddress()), []);
   useEffect(() => {
     if (!spot) return;
@@ -379,7 +394,7 @@ export function TapeSpotDesk({
   }, [lane]);
 
   useEffect(() => {
-    if (!spot || !ready || lane === "circuit" || lane === "cap") return;
+    if (!spot || !ready || lane === "circuit" || lane === "cap" || lane === "hash") return;
     let dead = false;
     const look = () => {
       const snap = peekSpotPrints(market);
@@ -397,7 +412,7 @@ export function TapeSpotDesk({
   }, [spot, ready, market, lane]);
 
   useEffect(() => {
-    if (!spot || !ready || lane === "circuit" || lane === "cap") return;
+    if (!spot || !ready || lane === "circuit" || lane === "cap" || lane === "hash") return;
     let dead = false;
     const pull = () => {
       if (document.hidden) return;
@@ -729,6 +744,10 @@ export function TapeSpotDesk({
             ? zh
               ? "TAPELIQUID 电路"
               : "TAPELIQUID circuits"
+            : id === "hash"
+              ? zh
+                ? "TAPE算力"
+                : "TAPELIQUID hashrate"
             : id === "cap"
               ? zh
                 ? "TapeOut 容器"
@@ -741,6 +760,8 @@ export function TapeSpotDesk({
       <section className="grid gap-3">
         {lane === "circuit" ? (
           <TapeCircuits zh={zh} />
+        ) : lane === "hash" ? (
+          <HashSpot zh={zh} />
         ) : lane === "cap" ? (
           <ContainerDesk zh={zh} />
         ) : (
@@ -781,7 +802,19 @@ export function TapeSpotDesk({
                       ))}
                     </div>
                   </div>
-                  <p className="text-right text-xs leading-5 text-ink/60">
+                  <div className="text-right text-xs leading-5 text-ink/60">
+                    <SpotStats
+                      zh={zh}
+                      cap={
+                        market === 0 && tapeSupply != null && (bestAsk > 0n || bestBid > 0n)
+                          ? tapeSupply * Number(formatUnits(bestAsk > 0n ? bestAsk : bestBid, 6))
+                          : null
+                      }
+                      vol={reading && traded.n === 0 ? null : Number(formatUnits(traded.quote, 6))}
+                      capUnit="USDT0"
+                      volUnit="USDT0"
+                    />
+                    <p className="mt-2">
                     {zh ? "买一" : "Bid"}{" "}
                     {bestBid > 0n ? moneyText(bestBid, quoteUnit, okbRate) : "—"}
                     <br />
@@ -797,7 +830,8 @@ export function TapeSpotDesk({
                       }
                     />{" "}
                     {spread > 0n ? moneyText(spread, quoteUnit, okbRate) : "—"}
-                  </p>
+                    </p>
+                  </div>
                 </div>
                 <div className="grid grid-cols-[3.2rem_minmax(0,1fr)_auto] items-center px-1.5 py-1 text-[11px] text-ink/45 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_auto] sm:px-2">
                   <span>{zh ? "价格" : "Price"}</span>

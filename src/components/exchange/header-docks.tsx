@@ -129,7 +129,7 @@ function GoldMark() {
   );
 }
 
-export function FeeBook() {
+export function FeeBook({ bar = false }: { bar?: boolean }) {
   const zh = useExchange((s) => s.lang) === "zh";
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<{ k: string; v: string }[]>([]);
@@ -192,7 +192,7 @@ export function FeeBook() {
         type="button"
         aria-label={zh ? "手续费" : "Fees"}
         title={zh ? "台费 0.20%" : "Desk fee 0.20%"}
-        className={`grid size-9 place-items-center rounded-md ${open ? "bg-foil" : ""}`}
+        className={`grid place-items-center rounded-md ${bar ? "size-7" : "size-9"} ${open ? "bg-foil" : ""}`}
         onClick={() => setOpen((on) => !on)}
       >
         <GoldMark />
@@ -202,7 +202,11 @@ export function FeeBook() {
         ? createPortal(
             <div
               ref={panel}
-              className="fixed inset-x-3 top-[calc(env(safe-area-inset-top)+3.5rem)] z-[80] max-h-[min(28rem,calc(100dvh-5rem))] overflow-y-auto border border-gold bg-paper p-3 text-sm shadow-plate sm:inset-x-auto sm:right-3 sm:w-[22rem]"
+              className={
+                bar
+                  ? "fixed right-3 bottom-10 z-[80] max-h-[min(28rem,calc(100dvh-4rem))] w-[min(22rem,calc(100vw-1.5rem))] overflow-y-auto border border-gold bg-paper p-3 text-sm shadow-plate"
+                  : "fixed inset-x-3 top-[calc(env(safe-area-inset-top)+3.5rem)] z-[80] max-h-[min(28rem,calc(100dvh-5rem))] overflow-y-auto border border-gold bg-paper p-3 text-sm shadow-plate sm:inset-x-auto sm:right-3 sm:w-[22rem]"
+              }
             >
               <p className="text-sm">{zh ? "手续费" : "Fees"}</p>
               <p className="mt-1 font-mono text-xs">0.20%</p>

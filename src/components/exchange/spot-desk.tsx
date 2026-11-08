@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { PhoneChrome, wantedPane, type PhonePane } from "@/components/exchange/phone-desk";
+import { SpotStats, dayVolume } from "@/components/exchange/spot-stats";
 import { formatUnits } from "viem";
 import { copy } from "@/lib/copy";
 import { useExchange } from "@/lib/exchange-store";
@@ -1041,6 +1042,26 @@ export function SpotDesk({
               >
                 TAPE/USDT0
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPairMenu(false);
+                  onJump?.({ kind: "pancake", pair: "fab" });
+                }}
+                className="block h-10 w-full px-3 text-left text-sm hover:bg-foil/70"
+              >
+                FAB/BEM
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPairMenu(false);
+                  onJump?.({ kind: "hash" });
+                }}
+                className="block h-10 w-full px-3 text-left text-sm hover:bg-foil/70"
+              >
+                TAPE算力/USDT0
+              </button>
               {(
                 [
                   ["btc", "BTC/USDT"],
@@ -1081,6 +1102,13 @@ export function SpotDesk({
           <p className={`font-mono text-sm ${change < 0 ? "text-sell" : "text-up"}`}>
             {midN > 0 ? `${change >= 0 ? "+" : ""}${(change * 100).toFixed(2)}%` : "—"}
           </p>
+          <SpotStats
+            zh={lang === "zh"}
+            cap={supply != null && midN > 0 ? supply * midN : null}
+            vol={dayVolume(bars)}
+            capUnit={quoteSym}
+            volUnit="USDT"
+          />
         </div>
         {lane === "lp" ? (
           <LpPanel />

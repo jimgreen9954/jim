@@ -24,7 +24,7 @@ import {
   type CircuitAsk,
   type CircuitPrint,
 } from "@/lib/tape-spot";
-import { claimSplitTape, joinCircuit, readSplit, splitCircuit } from "@/lib/circuit-split";
+import { claimSplitTape, joinCircuit, listSplitPieces, readShareSeats, readSplit, splitCircuit, type ShareSeat } from "@/lib/circuit-split";
 
 type Pace = { daily: bigint; weight: bigint };
 type Shape = { nIn: string; nOut: string; state: string; gates: string };
@@ -428,8 +428,8 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
                     : "Book"
                   : id === "mine"
                     ? zh
-                      ? `我的 ${owned.length + locked.length}`
-                      : "Mine"
+                      ? `我的电路 ${owned.length + locked.length}`
+                      : "Circuits"
                     : zh
                       ? "成交"
                       : "Prints"}
@@ -1346,10 +1346,31 @@ function Mine({
   onPick: (id: string) => void;
   onClaim: (id: string) => void;
 }) {
+  const [shares, setShares] = useState<ShareSeat[]>([]);
+  useEffect(() => {
+    if (!account) {
+      setShares([]);
+      return;
+    }
+    let dead = false;
+    listSplitPieces()
+      .then((pieces) => readShareSeats(account, pieces))
+      .then((rows) => {
+        if (!dead) setShares(rows.filter((row) => row.shares > 0n));
+      })
+      .catch(() => {
+        if (!dead) setShares([]);
+      });
+    return () => {
+      dead = true;
+    };
+  }, [account]);
+  const held = new Set(owned.map((row) => row.id));
+  const pieces = shares.filter((row) => !held.has(row.id));
   return (
     <>
       <ul className="mt-4 divide-y divide-gold/25 border-y border-gold/30 lg:hidden">
-        {owned.length + locked.length === 0 ? (
+        {owned.length + locked.length + pieces.length === 0 ? (
           <li className="py-8 text-center text-[13px] text-ink/45">
             {account
               ? zh
@@ -1367,7 +1388,10 @@ function Mine({
             onClick={() => onPick(row.id)}
           >
             <div>
-              <p className="font-mono text-[15px]">#{row.id}</p>
+              <p className="font-mono text-[15px]">
+                #{row.id}{" "}
+                <span className="border border-gold/50 px-1 py-0.5 text-[11px] font-sans text-ink/60">{zh ? "电路" : "Circuit"}</span>
+              </p>
               <p className="mt-0.5 text-[12px] text-ink/50">
                 {row.nIn}→{row.nOut} · {Number(row.gates).toLocaleString("en-US")} H
               </p>
@@ -1377,6 +1401,22 @@ function Mine({
               <SplitActs zh={zh} account={account} id={row.id} gates={row.gates} />
             </div>
             <span className="text-sm text-ink/70">{zh ? "挂出" : "List"}</span>
+          </li>
+        ))}
+        {pieces.map((row) => (
+          <li key={`share-${row.id}`} className="flex items-center justify-between gap-3 py-3">
+            <div>
+              <p className="font-mono text-[15px]">
+                #{row.id}{" "}
+                <span className="border border-gold/50 px-1 py-0.5 text-[11px] font-sans text-ink/60">{zh ? "算力" : "Hash"}</span>
+              </p>
+              <p className="mt-0.5 text-[12px] text-ink/50">
+                {row.shares.toLocaleString("en-US")} / {row.supply.toLocaleString("en-US")} H
+              </p>
+            </div>
+            <span className="text-right font-mono text-[12px] text-ink/60">
+              {row.pending > 0n ? `${cutTape(row.pending)} TAPE` : zh ? "份额" : "Shares"}
+            </span>
           </li>
         ))}
         {locked.map((row) => {
@@ -1454,7 +1494,7 @@ function Mine({
             </tr>
           </thead>
           <tbody>
-            {owned.length + locked.length === 0 ? (
+            {owned.length + locked.length + pieces.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-3 py-6 text-ink/55">
                   {account
@@ -1485,7 +1525,10 @@ function Mine({
                   className={`cursor-pointer border-t border-gold/20 ${pick === row.id ? "bg-foil/40" : ""}`}
                   onClick={() => onPick(row.id)}
                 >
-                  <td className="px-2 py-1.5 font-mono">#{row.id}</td>
+                  <td className="px-2 py-1.5 font-mono">
+                    #{row.id}{" "}
+                    <span className="border border-gold/50 px-1 py-0.5 font-sans text-[11px] text-ink/60">{zh ? "电路" : "NFT"}</span>
+                  </td>
                   <td className="px-2 py-1.5 font-mono">{shapeLine(shape)}</td>
                   <td className="px-2 py-1.5 font-mono">
                     {Number(shape.gates).toLocaleString("en-US")}
@@ -1536,6 +1579,20 @@ function Mine({
                 </tr>
               );
             })}
+            {pieces.map((row) => (
+              <tr key={`share-${row.id}`} className="border-t border-gold/20">
+                <td className="px-2 py-1.5 font-mono">
+                  #{row.id}{" "}
+                  <span className="border border-gold/50 px-1 py-0.5 font-sans text-[11px] text-ink/60">{zh ? "算力" : "Hash"}</span>
+                </td>
+                <td className="px-2 py-1.5 font-mono">—</td>
+                <td className="px-2 py-1.5 font-mono">{row.shares.toLocaleString("en-US")}</td>
+                <td className="px-2 py-1.5 font-mono">—</td>
+                <td className="px-2 py-1.5 font-mono">{row.pending > 0n ? cutTape(row.pending) : "—"}</td>
+                <td className="px-2 py-1.5">{zh ? "份额" : "Shares"}</td>
+                <td className="px-2 py-1.5 text-right text-ink/45">{zh ? "现货" : "Spot"}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -1612,15 +1669,21 @@ function SplitActs({
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [held, setHeld] = useState("");
+  const [due, setDue] = useState("");
   useEffect(() => {
     if (!account) return;
     let dead = false;
     readSplit(BigInt(id), account)
       .then((row) => {
-        if (!dead) setHeld(row.shares.toString());
+        if (dead) return;
+        setHeld(row.shares.toString());
+        setDue(row.pending > 0n ? cutTape(row.pending) : "");
       })
       .catch(() => {
-        if (!dead) setHeld("");
+        if (!dead) {
+          setHeld("");
+          setDue("");
+        }
       });
     return () => {
       dead = true;
@@ -1638,7 +1701,16 @@ function SplitActs({
       if (kind === "split") await splitCircuit(account, token);
       else if (kind === "join") await joinCircuit(account, token);
       else await claimSplitTape(account, token);
-      setNote(zh ? "已提交。拆开后这张继续产 TAPE。" : "Sent. It keeps mining after the split.");
+      if (kind === "split") window.dispatchEvent(new CustomEvent("tape-split", { detail: id }));
+      setNote(
+        kind === "split"
+          ? zh
+            ? "已拆开。这张离开钱包，算力记在这个地址上，持仓和现货会跟着刷新。"
+            : "Split. The circuit left the wallet. The shares stay on this address."
+          : zh
+            ? "已提交。"
+            : "Sent.",
+      );
     } catch {
       setNote(zh ? "没发出去。电路要在这个钱包里，不要直接转进拆分合约。" : "Not sent. Keep the circuit in this wallet.");
     } finally {
@@ -1658,7 +1730,12 @@ function SplitActs({
         {zh ? "领 TAPE" : "Claim"}
       </button>
       {held && held !== "0" ? (
-        <span className="font-mono text-[11px] text-ink/50">{zh ? `${held} 份` : `${held}`}</span>
+        <span className="font-mono text-[11px] text-ink/50">
+          {zh ? `${held} 份` : `${held}`}
+          {due ? ` · ${due} TAPE` : ""}
+        </span>
+      ) : due ? (
+        <span className="font-mono text-[11px] text-ink/50">{due} TAPE</span>
       ) : null}
       {note ? <span className="text-[11px] text-ink/60">{note}</span> : null}
     </div>

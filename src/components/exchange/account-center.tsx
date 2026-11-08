@@ -34,6 +34,8 @@ import {
 } from "@/lib/tape-pool";
 import { readOpenBook } from "@/lib/tape-open-candles";
 import { PayDesk } from "@/components/exchange/pay-desk";
+import { HashWallet } from "@/components/exchange/share-spot";
+import { listSplitPieces, readShareSeats, transferShare } from "@/lib/circuit-split";
 import { FeePass } from "@/components/exchange/fee-pass";
 import { RedGift } from "@/components/exchange/red-gift";
 import { tapeText } from "@/lib/tape-mine";
@@ -77,18 +79,19 @@ type Worth = {
   px: string;
   usd: number | null;
   chain: "bsc" | "xlayer" | "";
-  kind: "native" | "erc20" | "chip" | "locked";
+  kind: "native" | "erc20" | "chip" | "locked" | "hash";
   token?: string;
   decimals?: number;
   raw?: bigint;
   chipId?: 0 | 1;
   ours?: boolean;
+  shareId?: string;
 };
 
 const erc20Abi = parseAbi(["function transfer(address to, uint256 amount) returns (bool)"]);
 
 function place(rows: Worth[]): Worth[] {
-  const pin = (key: string) => (key === "tape" ? 0 : key === "bem" ? 1 : 2);
+  const pin = (key: string) => (key === "tape" ? 0 : key.startsWith("hash-") ? 1 : key === "bem" || key === "xbem" ? 2 : 3);
   return [...rows].sort((a, b) => {
     const rank = pin(a.key) - pin(b.key);
     if (rank) return rank;
@@ -103,7 +106,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
   const lang = useExchange((s) => s.lang);
   const zh = lang === "zh";
   const [account, setAccount] = useState<string | null>(currentAccount());
-  const [tab, setTab] = useState<"chips" | "circuits">("chips");
+  const [tab, setTab] = useState<"chips" | "circuits" | "hash">("chips");
   const [book, setBook] = useState<Holdings | null>(null);
   const [worth, setWorth] = useState<Worth[] | null>(null);
   const [worthAt, setWorthAt] = useState("");
@@ -145,10 +148,10 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
 
   useEffect(() => onAccount(setAccount), []);
 
-  const pull = (who: string) => {
+  const pull = (who: string, fresh = false) => {
     setFreshing(true);
     setBad(false);
-    getHoldings({ data: { account: who } })
+    getHoldings({ data: { account: who, fresh } })
       .then((next) => {
         setBook(next);
         setFreshAt(
@@ -185,7 +188,9 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
   useEffect(() => {
     if (!account) return;
     pull(account);
-    const id = window.setInterval(() => pull(account), 60000);
+    const id = window.setInterval(() => pull(account), 15000);
+    const onSplit = () => pull(account, true);
+    window.addEventListener("tape-split", onSplit);
     readBalances(account)
       .then(async (row) => {
         const [bem, bnb] = await Promise.all([
@@ -214,7 +219,10 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
         setPerp((prev) => `${prev} · X Layer ${mine}`);
       })
       .catch(() => undefined);
-    return () => window.clearInterval(id);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("tape-split", onSplit);
+    };
   }, [account, zh]);
 
   useEffect(() => {
@@ -407,6 +415,22 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
             kind: "locked",
           });
         }
+      }
+      const seats = await readShareSeats(account, await listSplitPieces().catch(() => [])).catch(() => []);
+      for (const seat of seats) {
+        if (seat.shares <= 0n) continue;
+        add({
+          key: `hash-${seat.id}`,
+          name: zh ? `电路算力 #${seat.id}` : `Hashrate #${seat.id}`,
+          qty: seat.shares.toLocaleString("en-US"),
+          px: zh ? "份" : "shares",
+          usd: null,
+          chain: "xlayer",
+          kind: "hash",
+          decimals: 0,
+          raw: seat.shares,
+          shareId: seat.id,
+        });
       }
       setWorth(place(lines));
       setWorthAt(
@@ -844,7 +868,9 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
             : `Signature ${i + 1} of ${jobs.length}. Stay on this page and confirm in the wallet.`,
         );
         let hash = "";
-        if (picked.kind === "chip") {
+        if (picked.kind === "hash") {
+          hash = await transferShare(account, BigInt(picked.shareId ?? "0"), job.to, job.amount);
+        } else if (picked.kind === "chip") {
           hash = picked.ours
             ? await transferTransistor(account, job.to, picked.chipId ?? 0, job.amount)
             : await transferBscTransistor(
@@ -1256,7 +1282,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
           <p className="text-xs text-ink/50">
             {book?.ok
               ? zh
-                ? `TapeOut ${book.scanned} 台，加本站。约一分钟重读。`
+                ? `TapeOut ${book.scanned} 台，加本站。约 15 秒重读，拆分后马上再读。`
                 : `${book.scanned} TapeOut processors, plus this site. About once a minute.`
               : zh
                 ? book
@@ -1267,11 +1293,12 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
                   : "Reading this address."}
           </p>
         </div>
-        <div className="grid grid-cols-2 border border-gold text-sm">
+        <div className="grid grid-cols-3 border border-gold text-sm">
           {(
             [
               ["chips", zh ? `晶体管 ${chips.length}` : `Chips ${chips.length}`],
               ["circuits", zh ? `电路 ${circuits.length}` : `Circuits ${circuits.length}`],
+              ["hash", zh ? "电路算力" : "Hashrate"],
             ] as const
           ).map(([id, label]) => (
             <button
@@ -1609,6 +1636,8 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
             </button>
           </div>
         ) : null}
+
+        {tab === "hash" ? <HashWallet zh={zh} account={account} /> : null}
         {note ? <p className={`text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
       </div>
     </section>

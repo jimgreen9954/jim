@@ -2,7 +2,7 @@ import { createPublicClient, formatEther, http, parseAbi } from "viem";
 import { bsc } from "viem/chains";
 import { BSC } from "./bsc";
 import type { ChipRow, CircuitRow, Holdings } from "./holdings";
-import { DEPLOYED, myCircuits, transistorHeld } from "./xlayer";
+import { DEPLOYED, myCircuits, recheckOwner, transistorHeld } from "./xlayer";
 
 type Cpu = { address: string; transistors: string; name: string };
 
@@ -30,10 +30,12 @@ async function processors(): Promise<Cpu[]> {
 
 const resultCache = new Map<string, { at: number; row: Holdings }>();
 
-export async function loadHoldings(account: `0x${string}` | string): Promise<Holdings> {
+export async function loadHoldings(account: `0x${string}` | string, fresh = false): Promise<Holdings> {
   const key = account.toLowerCase();
+  if (fresh) resultCache.delete(key);
   const hit = resultCache.get(key);
   if (hit && Date.now() - hit.at < 60_000) return hit.row;
+  if (fresh) await recheckOwner(account);
   const row = await readHoldings(account);
   if (row.ok) {
     resultCache.set(key, { at: Date.now(), row });

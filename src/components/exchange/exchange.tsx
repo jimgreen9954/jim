@@ -333,6 +333,10 @@ function TerminalBar({
         {zh ? "条款" : "Rules"}
       </a>
       <span className="ml-auto flex shrink-0 items-center gap-1">
+        <Suspense fallback={null}>
+          <FeeBook bar />
+        </Suspense>
+        <LocaleMenu bar />
         <ThemeButton night={night} setNight={setNight} />
       </span>
     </footer>
@@ -475,9 +479,8 @@ function Header({
   const reset = useExchange((s) => s.reset);
   const [arm, setArm] = useState(false);
   const [menu, setMenu] = useState(false);
-  const [wide, setWide] = useState(
-    () => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches,
-  );
+  const [wide, setWide] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [pane, setPane] = useState<"chart" | "ticket">("ticket");
   useEffect(() => {
     const chart = () => setPane("chart");
@@ -496,6 +499,7 @@ function Header({
     const query = window.matchMedia("(min-width: 1024px)");
     const apply = () => setWide(query.matches);
     apply();
+    setMounted(true);
     query.addEventListener("change", apply);
     return () => query.removeEventListener("change", apply);
   }, []);
@@ -650,11 +654,6 @@ function Header({
         <div className="ml-auto flex shrink-0 items-center gap-1">
           <ChainSwitch onJump={openDesk} />
           <ConnectButton />
-          {wide ? (
-            <Suspense fallback={null}>
-              <FeeBook />
-            </Suspense>
-          ) : null}
           {wide ? <SettingsMenu zh={zh} /> : null}
           {floor === "paper" ? (
             <button
@@ -671,7 +670,6 @@ function Header({
               {arm ? (zh ? "再点一次" : "Tap again") : zh ? "清除" : "Clear"}
             </button>
           ) : null}
-          <ThemeButton night={night} setNight={setNight} />
           <button
             type="button"
             className={`min-h-9 px-1.5 text-xs ${floor === "me" ? "text-ink" : "text-ink/70"}`}
@@ -682,7 +680,6 @@ function Header({
           >
             {zh ? "资产" : "Portfolio"}
           </button>
-          <LocaleMenu />
         </div>
       </div>
       <nav className="hidden items-center gap-0.5 overflow-x-auto border-t border-gold/30 py-1 lg:flex">
@@ -813,7 +810,7 @@ function Header({
             document.body,
           )
         : null}
-      {wide || typeof document === "undefined"
+      {!mounted || wide
         ? null
         : createPortal(
             <nav className="phone-tabbar fixed inset-x-0 bottom-0 z-[45] grid grid-cols-3 border-t border-gold bg-card pt-1.5 pb-[max(0.45rem,env(safe-area-inset-bottom))] text-ink">

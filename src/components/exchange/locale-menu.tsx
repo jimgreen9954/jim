@@ -30,7 +30,7 @@ const WORD = {
   reset: { zh: "重置", en: "Reset", fr: "Réinitialiser", ko: "재설정", es: "Restablecer" },
 } as const;
 
-export function LocaleMenu({ embedded = false }: { embedded?: boolean } = {}) {
+export function LocaleMenu({ embedded = false, bar = false }: { embedded?: boolean; bar?: boolean } = {}) {
   const locale = useExchange((s) => s.locale);
   const num = useExchange((s) => s.num);
   const setLocale = useExchange((s) => s.setLocale);
@@ -100,7 +100,7 @@ export function LocaleMenu({ embedded = false }: { embedded?: boolean } = {}) {
         type="button"
         aria-label={WORD.lang[locale]}
         aria-expanded={open}
-        className="grid size-9 place-items-center rounded-md text-ink/80 hover:bg-foil"
+        className={`grid place-items-center rounded-md text-ink/80 hover:bg-foil ${bar ? "size-7" : "size-9"}`}
         onClick={() => setOpen((on) => !on)}
       >
         <svg

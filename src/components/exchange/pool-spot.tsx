@@ -5,6 +5,7 @@ import { PairChevron } from "@/components/exchange/pair-chevron";
 import type { DeskView, TapePair } from "@/components/exchange/desk-chrome";
 import { PhoneChrome, wantedPane, type PhonePane } from "@/components/exchange/phone-desk";
 import { CoinMark } from "@/components/exchange/coin-mark";
+import { SpotStats } from "@/components/exchange/spot-stats";
 import { announceFill, readPrefs, useDeskPrefs } from "@/lib/desk-prefs";
 import { markDeskFill } from "@/lib/red-packet";
 import { tradeStepText } from "@/lib/trade-step";
@@ -14,6 +15,8 @@ import { currentAccount, onAccount } from "@/lib/wallet";
 import { useExchange } from "@/lib/exchange-store";
 import { fmt } from "@/lib/format";
 import { TradeLog } from "@/components/exchange/trade-foot";
+import { xCap } from "@/lib/okb";
+import { TAPE_TOKEN } from "@/lib/tape-pool";
 import {
   poolAmount,
   poolBalances,
@@ -253,12 +256,24 @@ export function PoolSpot({
   const prefs = useDeskPrefs();
   const [account, setAccount] = useState<string | null>(currentAccount());
   const [book, setBook] = useState<OpenBook | null>(null);
+  const [supply, setSupply] = useState<number | null>(null);
   const [bars, setBars] = useState<Bar[]>(seedBars);
   const [frame, setFrame] = useState<CandleFrame>("1h");
   const [mode, setMode] = useState<Mode>("market");
   const [menu, setMenu] = useState(false);
   const [side, setSide] = useState<Side>("buy");
   const [phone, setPhone] = useState<PhonePane>(wantedPane());
+  useEffect(() => {
+    let dead = false;
+    xCap(TAPE_TOKEN)
+      .then((n) => {
+        if (!dead) setSupply(n > 0 ? n : null);
+      })
+      .catch(() => undefined);
+    return () => {
+      dead = true;
+    };
+  }, []);
   useEffect(() => {
     const chart = () => setPhone("chart");
     const trade = () => setPhone("ticket");
@@ -987,6 +1002,26 @@ export function PoolSpot({
             >
               TAPE/USDT0
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPairMenu(false);
+                onJump?.({ kind: "pancake", pair: "fab" });
+              }}
+              className="block h-10 w-full px-3 text-left text-sm hover:bg-foil/70"
+            >
+              FAB/BEM
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPairMenu(false);
+                onJump?.({ kind: "hash" });
+              }}
+              className="block h-10 w-full px-3 text-left text-sm hover:bg-foil/70"
+            >
+              TAPE算力/USDT0
+            </button>
             {(
               [
                 ["btc", "BTC/USDT"],
@@ -1045,7 +1080,13 @@ export function PoolSpot({
         <p className={`font-mono text-sm ${(book?.change ?? 0) < 0 ? "text-sell" : "text-up"}`}>
           {book ? `${book.change >= 0 ? "+" : ""}${(book.change * 100).toFixed(2)}%` : "—"}
         </p>
-        <p className="font-mono text-sm text-ink/70">{book ? money(book.volume) : "—"}</p>
+        <SpotStats
+          zh={zh}
+          cap={supply != null && (book?.price ?? 0) > 0 ? supply * (book?.price ?? 0) : null}
+          vol={book ? book.volume : null}
+          capUnit="USDT"
+          volUnit="USDT"
+        />
         <button
           type="button"
           onClick={onOtc}
