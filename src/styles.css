@@ -610,6 +610,7 @@ html.day .gift-sheet {
   .ph-book .book-line { grid-template-columns: minmax(0, 1fr) auto; gap: 0; padding: 1px 6px; border-top: 0; }
   .ph-book .book-mid { justify-content: center; margin: 2px 0; font-size: 13px; }
   .phone-desk { padding-bottom: 0.5rem; max-width: 100%; overflow-x: hidden; }
+  .phone-tabs { position: relative; top: auto; background: var(--color-card); }
   .phone-desk[data-phone="chart"] .ph-book,
   .phone-desk[data-phone="chart"] .ph-ticket,
   .phone-desk[data-phone="book"] .ph-chart,

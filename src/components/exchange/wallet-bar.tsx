@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from "react";
+import QRCode from "qrcode";
 import { jumpChain } from "@/components/exchange/desk-home";
 import { currentDesk, type Desk } from "@/lib/perp";
 import {
   connectKind,
+  connectScan,
   currentAccount,
   disconnectWallet,
   onAccount,
   onOpenLink,
+  onPairUri,
   switchDeskChain,
 } from "@/lib/wallet";
 import { copy } from "@/lib/copy";
@@ -85,13 +88,49 @@ export function ChainSwitch({
 export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
   const lang = useExchange((s) => s.lang);
   const c = copy[lang];
+  const zh = lang === "zh";
   const [account, setAccount] = useState<string | null>(currentAccount());
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [link, setLink] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const [entered, setEntered] = useState(false);
+  const [pair, setPair] = useState<string | null>(null);
+  const codeRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => onAccount(setAccount), []);
   useEffect(() => onOpenLink(setLink), []);
-  if (link && !account) {
+  useEffect(() => onPairUri(setPair), []);
+  useEffect(() => {
+    const canvas = codeRef.current;
+    if (!canvas || !pair) return;
+    QRCode.toCanvas(canvas, pair, { width: 180, margin: 1, errorCorrectionLevel: "M" }).catch(
+      () => undefined,
+    );
+  }, [pair, open]);
+  const enter = () => {
+    setEntered(true);
+    setOpen(false);
+  };
+  const leave = () => {
+    setEntered(false);
+    setOpen(false);
+    void disconnectWallet();
+  };
+  const fail = (err: unknown) => {
+    if (err instanceof Error && err.message === "binanceapp") return;
+    const code = (err as { code?: number }).code;
+    const message = err instanceof Error ? err.message : "";
+    setNote(code === 4001 ? c.walletReject : message || c.walletNo);
+  };
+  const run = (job: () => Promise<string>) => {
+    setBusy(true);
+    setNote(null);
+    job()
+      .then(() => enter())
+      .catch(fail)
+      .finally(() => setBusy(false));
+  };
+  if (link && !account && compact) {
     const binance = link.includes("binance.com");
     return (
       <span className="flex max-w-[18rem] flex-wrap items-center gap-1 sm:max-w-none sm:gap-2">
@@ -101,21 +140,13 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
           rel="noreferrer"
           className="inline-flex min-h-11 items-center border border-gold bg-ink px-3 text-sm text-paper"
         >
-          {binance
-            ? lang === "zh"
-              ? "打开币安"
-              : "Open Binance"
-            : lang === "zh"
-              ? "去 OKX 确认"
-              : "Confirm in OKX"}
+          {binance ? (zh ? "打开币安" : "Open Binance") : zh ? "去 OKX 确认" : "Confirm in OKX"}
         </a>
-        <span className="text-[11px] leading-4 text-ink/55">
-          {lang === "zh" ? "这一页不跳走" : "This page stays"}
-        </span>
+        <span className="text-[11px] leading-4 text-ink/55">{zh ? "这一页不跳走" : "This page stays"}</span>
       </span>
     );
   }
-  if (account) {
+  if (account && (compact || entered)) {
     return (
       <span
         className={`flex items-center gap-1 ${compact ? "max-w-[6.2rem]" : "max-w-[18rem] flex-wrap sm:max-w-none sm:gap-2"}`}
@@ -132,16 +163,16 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
             rel="noreferrer"
             className="inline-flex min-h-10 items-center border border-gold bg-ink px-2 text-xs text-paper sm:min-h-11 sm:text-sm"
           >
-            {lang === "zh" ? "去 OKX 确认" : "Confirm in OKX"}
+            {zh ? "去 OKX 确认" : "Confirm in OKX"}
           </a>
         ) : null}
         {compact ? null : (
           <button
             type="button"
             className="min-h-8 shrink-0 px-1 text-xs text-ink/50 sm:min-h-11 sm:border sm:border-gold sm:px-3 sm:text-ink"
-            onClick={() => void disconnectWallet()}
+            onClick={leave}
           >
-            {lang === "zh" ? "退出" : "Out"}
+            {zh ? "退出" : "Out"}
           </button>
         )}
       </span>
@@ -153,52 +184,90 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
         type="button"
         className="h-8 rounded-md border border-gold px-3 text-xs disabled:opacity-40"
         disabled={busy}
-        onClick={() => {
-          setBusy(true);
-          connectKind("okx")
-            .catch(() => undefined)
-            .finally(() => setBusy(false));
-        }}
+        onClick={() => run(() => connectKind("okx"))}
       >
-        {lang === "zh" ? "连接" : "Connect"}
+        {zh ? "登录" : "Log in"}
       </button>
     );
   }
+  const binance = link?.includes("binance.com");
   return (
-    <span className="flex gap-1 sm:gap-2">
-      {(["okx", "binance"] as const).map((which) => (
-        <button
-          key={which}
-          type="button"
-          className={`min-h-9 rounded-md px-3 text-sm disabled:opacity-40 ${which === "okx" ? "bg-ink text-paper" : "border border-gold text-ink/80"}`}
-          disabled={busy}
-          onClick={() => {
-            setBusy(true);
-            setNote(
-              lang === "zh"
-                ? "停在这一页。去 OKX 点确认，不要让网站跳进去。"
-                : "Stay on this page. Confirm in OKX. Do not open the site inside it.",
-            );
-            connectKind(which)
-              .catch((err: unknown) => {
-                if (err instanceof Error && err.message === "binanceapp") return;
-                const code = (err as { code?: number }).code;
-                const message = err instanceof Error ? err.message : "";
-                setNote(code === 4001 ? c.walletReject : message || c.walletNo);
-              })
-              .finally(() => setBusy(false));
-          }}
-        >
-          {which === "okx"
-            ? lang === "zh"
-              ? "连接"
-              : "Connect"
-            : lang === "zh"
-              ? "币安"
-              : "Binance"}
-        </button>
-      ))}
-      {note ? <span className="self-center text-xs text-sell">{note}</span> : null}
+    <span className="relative">
+      <button
+        type="button"
+        className="min-h-9 rounded-md bg-ink px-3 text-sm text-paper"
+        onClick={() => setOpen((on) => !on)}
+      >
+        {zh ? "登录" : "Log in"}
+      </button>
+      {open ? (
+        <>
+          <button
+            type="button"
+            aria-label={zh ? "关闭" : "Close"}
+            className="fixed inset-0 z-30 cursor-default"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute right-0 top-full z-40 mt-2 w-60 border border-gold bg-card p-3 shadow-plate">
+            {account ? (
+              <div className="mb-3 border-b border-gold/40 pb-3">
+                <p className="font-mono text-xs">{short(account)}</p>
+                <div className="mt-2 flex gap-2">
+                  <button type="button" className="h-9 flex-1 bg-ink text-sm text-paper" onClick={enter}>
+                    {zh ? "进入" : "Enter"}
+                  </button>
+                  <button type="button" className="h-9 flex-1 border border-gold text-sm" onClick={leave}>
+                    {zh ? "退出" : "Out"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+            <button
+              type="button"
+              disabled={busy}
+              className="mb-2 h-10 w-full bg-ink text-sm text-paper disabled:opacity-40"
+              onClick={() => run(() => connectKind("okx"))}
+            >
+              {zh ? "浏览器钱包" : "Browser wallet"}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              className="mb-2 h-10 w-full border border-gold text-sm disabled:opacity-40"
+              onClick={() => run(() => connectScan())}
+            >
+              {zh ? "扫码登录" : "Scan to log in"}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              className="h-10 w-full border border-gold text-sm text-ink/80 disabled:opacity-40"
+              onClick={() => run(() => connectKind("binance"))}
+            >
+              {zh ? "币安" : "Binance"}
+            </button>
+            {pair ? (
+              <div className="mt-3 grid justify-items-center gap-1">
+                <canvas ref={codeRef} width={180} height={180} />
+                <p className="text-center text-[11px] leading-4 text-ink/55">
+                  {zh ? "用 Web3 钱包扫这个码" : "Scan with a Web3 wallet"}
+                </p>
+              </div>
+            ) : null}
+            {link ? (
+              <a
+                href={link}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 flex h-10 items-center justify-center border border-gold text-sm"
+              >
+                {binance ? (zh ? "打开币安" : "Open Binance") : zh ? "去 OKX 确认" : "Confirm in OKX"}
+              </a>
+            ) : null}
+            {note ? <p className="mt-2 text-xs text-sell">{note}</p> : null}
+          </div>
+        </>
+      ) : null}
     </span>
   );
 }

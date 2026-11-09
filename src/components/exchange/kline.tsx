@@ -688,7 +688,7 @@ export function Kline({
           ))}
         </div>
       </div>
-      <div ref={plotRef} className="relative">
+      <div ref={plotRef} className="relative max-xl:mb-2">
         <svg
           ref={svgRef}
           viewBox={`0 0 ${VB_W} ${VB_H}`}

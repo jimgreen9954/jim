@@ -37,7 +37,10 @@ export function PhoneChrome({
   ];
   return (
     <>
-      <div className="phone-tabs sticky top-[var(--desk-top)] z-20 flex border-b border-gold bg-card xl:hidden">
+      <div
+        className="phone-tabs relative z-20 flex border-b border-gold xl:hidden"
+        style={{ background: "var(--color-card)" }}
+      >
         {tabs.map((tab) => (
           <button
             key={tab.id}

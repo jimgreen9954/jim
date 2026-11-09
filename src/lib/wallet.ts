@@ -30,6 +30,20 @@ export function onOpenLink(cb: (next: string | null) => void): () => void {
   return () => linkListeners.delete(cb);
 }
 
+let pairUri: string | null = null;
+const pairListeners = new Set<(next: string | null) => void>();
+
+export function onPairUri(cb: (next: string | null) => void): () => void {
+  pairListeners.add(cb);
+  cb(pairUri);
+  return () => pairListeners.delete(cb);
+}
+
+function publishPair(next: string | null) {
+  pairUri = next;
+  pairListeners.forEach((cb) => cb(next));
+}
+
 function publishLink(next: string | null) {
   openLink = next;
   linkListeners.forEach((cb) => cb(next));
@@ -166,6 +180,7 @@ async function useInjected(eth: Eth): Promise<string> {
 const quiet = { redirect: "none" as const, openUniversalUrl: true };
 
 async function connectOkxRemote(): Promise<string> {
+  publishPair(null);
   const { OKXUniversalProvider, OpenAppLinkType } = await import("@okxconnect/universal-provider");
   const okx = await OKXUniversalProvider.init({
     dappMetaData: {
@@ -177,7 +192,10 @@ async function connectOkxRemote(): Promise<string> {
   stayOnPage();
   okx.on("display_uri", (uri: string) => {
     const text = String(uri);
-    if (text.toLowerCase().startsWith("wc:")) return;
+    if (text.toLowerCase().startsWith("wc:")) {
+      publishPair(text);
+      return;
+    }
     holdNavigation(text);
   });
   const signClient = (okx as { client?: { sessionConfig?: Record<string, unknown> } }).client;
@@ -240,6 +258,13 @@ async function connectOkxRemote(): Promise<string> {
   return next;
 }
 
+export async function connectScan(): Promise<string> {
+  kind = "okx";
+  publishPair(null);
+  stayOnPage();
+  return connectOkxRemote();
+}
+
 export async function connectKind(which: WalletKind): Promise<string> {
   kind = which;
   const plugged = which === "binance" ? binanceInjected() : okxInjected();
@@ -269,6 +294,7 @@ export async function disconnectWallet(): Promise<void> {
   }
   current = null;
   publishLink(null);
+  publishPair(null);
   remember(null);
   rememberChain(null);
 }
