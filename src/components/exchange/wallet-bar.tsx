@@ -131,6 +131,14 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
     if (err instanceof Error && err.message === "binanceapp") return;
     const code = (err as { code?: number }).code;
     const message = err instanceof Error ? err.message : "";
+    if (message === "nowallet") {
+      setNote(
+        zh
+          ? "没有连上。手机上要点确认，并允许这个页面看到地址。"
+          : "Not connected. Confirm on the phone and allow this page to see the address.",
+      );
+      return;
+    }
     setNote(code === 4001 ? c.walletReject : message || c.walletNo);
   };
   const run = (job: () => Promise<string>) => {
