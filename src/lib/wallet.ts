@@ -260,7 +260,9 @@ async function connectOkxRemote(): Promise<string> {
 
 let remote: { disconnect: () => Promise<void> } | null = null;
 
-const WC_PROJECT = (import.meta.env.VITE_WC_PROJECT_ID as string | undefined)?.trim() || "";
+const WC_PROJECT =
+  (import.meta.env.VITE_WC_PROJECT_ID as string | undefined)?.trim() ||
+  "7de890813641057dcfb68236748acae2";
 
 export async function connectScan(): Promise<string> {
   if (!WC_PROJECT) throw new Error("wc-project");
