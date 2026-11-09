@@ -1,8 +1,7 @@
 import { createPublicClient, encodeFunctionData, formatUnits, http, parseAbi, parseAbiItem, type Hex } from "viem";
 import { TxPending, XLAYER_SAFE, type PoolPrint, units, pretty } from "@/lib/bsc";
+import { sendFeeAndSwap } from "@/lib/fee-pack";
 import { deskParts } from "@/lib/invite-cut";
-import { sayTradeStep } from "@/lib/trade-step";
-import { rejected, sendUserBatch, type SignedCall } from "@/lib/one-sign";
 import { ensureProvider, grantedAccount, rememberAccount } from "@/lib/wallet";
 import { XLAYER } from "@/lib/xlayer";
 
@@ -258,77 +257,21 @@ export async function swapOkb(from: string, side: "buy" | "sell", amount: string
       functionName: "swapExactTokensForETH",
       args: [swapIn, minOut, [OKB.usdt, OKB.wokb], owner, deadline],
     });
-    const ref = parts.referrer;
-    const batch: SignedCall[] = [];
-    if (parts.reward > 0n && ref) {
-      batch.push({
-        to: OKB.usdt,
-        data: encodeFunctionData({ abi: erc20, functionName: "transfer", args: [ref, parts.reward] }),
-      });
-    }
-    if (parts.desk > 0n) {
-      batch.push({
-        to: OKB.usdt,
-        data: encodeFunctionData({ abi: erc20, functionName: "transfer", args: [XLAYER_SAFE, parts.desk] }),
-      });
-    }
-    batch.push({ to: OKB.router, data });
-    if (batch.length > 1) {
-      try {
-        sayTradeStep("both");
-        const hash = await sendUserBatch(from, XLAYER.chainId, batch);
-        remember(swapKey, hash);
-        await waitOkX(hash);
-        forget(swapKey);
-        forget(feeKey);
-        return hash;
-      } catch (err) {
-        if (rejected(err) || err instanceof TxPending) throw err;
-        if (!(err instanceof Error) || err.message !== "no-batch") throw err;
-      }
-    }
-    sayTradeStep("fill");
-    let hash: Hex;
-    try {
-      hash = await send(from, OKB.router, data);
-    } catch (err) {
-      throw err;
-    }
+    const hash = await sendFeeAndSwap({
+      from,
+      chainId: 196,
+      token: OKB.usdt,
+      safe: XLAYER_SAFE,
+      parts,
+      swapTo: OKB.router,
+      data,
+      value: 0n,
+      pull: swapIn,
+      spender: OKB.router,
+    });
     remember(swapKey, hash);
-    try {
-      await waitOkX(hash);
-    } catch (err) {
-      if (err instanceof TxPending) throw err;
-      if (err instanceof Error && err.message === "reverted") {
-        forget(swapKey);
-        throw new Error("reverted");
-      }
-      throw err;
-    }
+    await waitOkX(hash);
     forget(swapKey);
-    if (parts.reward > 0n || parts.desk > 0n) sayTradeStep("fee");
-    try {
-      const ref = parts.referrer;
-      if (parts.reward > 0n && ref) {
-        await stepX(`${feeKey}:ref`, () => send(from, OKB.usdt, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [ref, parts.reward] })));
-      }
-      if (parts.desk > 0n) {
-        let routed = false;
-        try {
-          const { routeDeskFee } = await import("@/lib/card-pool");
-          routed = await routeDeskFee("xlayer", from, parts.desk, 0);
-        } catch (err) {
-          if (err instanceof TxPending) throw err;
-          routed = false;
-        }
-        if (!routed) {
-          await stepX(feeKey, () => send(from, OKB.usdt, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [XLAYER_SAFE, parts.desk] })));
-        }
-      }
-    } catch (err) {
-      if (err instanceof TxPending) throw err;
-      throw new Error("fee-open");
-    }
     forget(feeKey);
     return hash;
   }
@@ -349,57 +292,26 @@ export async function swapOkb(from: string, side: "buy" | "sell", amount: string
     return already;
   }
   const minOut = slip(await quoteOkb("sell", swapIn));
-  const ref = parts.referrer;
   const data = encodeFunctionData({
     abi: routerAbi,
     functionName: "swapExactETHForTokens",
     args: [minOut, [OKB.wokb, OKB.usdt], owner, deadline],
   });
-  const batch: SignedCall[] = [];
-  if (parts.reward > 0n && ref) batch.push({ to: ref, data: "0x", value: parts.reward });
-  if (parts.desk > 0n) batch.push({ to: XLAYER_SAFE, data: "0x", value: parts.desk });
-  batch.push({ to: OKB.router, data, value: swapIn });
-  if (batch.length > 1) {
-    try {
-      sayTradeStep("both");
-      const hash = await sendUserBatch(from, XLAYER.chainId, batch);
-      remember(swapKey, hash);
-      await waitOkX(hash);
-      forget(swapKey);
-      forget(feeKey);
-      return hash;
-    } catch (err) {
-      if (rejected(err) || err instanceof TxPending) throw err;
-      if (!(err instanceof Error) || err.message !== "no-batch") throw err;
-    }
-  }
-  sayTradeStep("fill");
-  let hash: Hex;
-  try {
-    hash = await send(from, OKB.router, data, swapIn);
-  } catch (err) {
-    throw err;
-  }
+  const hash = await sendFeeAndSwap({
+    from,
+    chainId: 196,
+    token: null,
+    safe: XLAYER_SAFE,
+    parts,
+    swapTo: OKB.router,
+    data,
+    value: swapIn,
+    pull: 0n,
+    spender: OKB.router,
+  });
   remember(swapKey, hash);
-  try {
-    await waitOkX(hash);
-  } catch (err) {
-    if (err instanceof TxPending) throw err;
-    if (err instanceof Error && err.message === "reverted") {
-      forget(swapKey);
-      throw new Error("reverted");
-    }
-    throw err;
-  }
+  await waitOkX(hash);
   forget(swapKey);
-  if (parts.reward > 0n || parts.desk > 0n) sayTradeStep("fee");
-  try {
-    if (parts.reward > 0n && ref) await stepX(`${feeKey}:ref`, () => send(from, ref, "0x", parts.reward));
-    if (parts.desk > 0n) await stepX(feeKey, () => send(from, XLAYER_SAFE, "0x", parts.desk));
-  } catch (err) {
-    if (err instanceof TxPending) throw err;
-    throw new Error("fee-open");
-  }
   forget(feeKey);
   return hash;
 }
@@ -485,32 +397,19 @@ export async function swapBemOkb(from: string, side: "buy" | "sell", amount: str
       functionName: "exactInputSingle",
       args: [{ tokenIn: OKB.wokb, tokenOut: X_BEM, fee: 10000, recipient: owner, amountIn: parts.swapIn, amountOutMinimum: minOut, sqrtPriceLimitX96: 0n }],
     });
-    const batch: SignedCall[] = [];
-    if (parts.reward > 0n && parts.referrer) batch.push({ to: parts.referrer as Hex, data: "0x", value: parts.reward });
-    if (parts.desk > 0n) batch.push({ to: XLAYER_SAFE, data: "0x", value: parts.desk });
-    batch.push({ to: V3_ROUTER, data, value: parts.swapIn });
-    if (batch.length > 1) {
-      try {
-        sayTradeStep("both");
-        const hash = await sendUserBatch(from, XLAYER.chainId, batch);
-        await waitOkX(hash);
-        return hash;
-      } catch (err) {
-        if (rejected(err) || err instanceof TxPending) throw err;
-        if (!(err instanceof Error) || err.message !== "no-batch") throw err;
-      }
-    }
-    sayTradeStep("fill");
-    const hash = await send(from, V3_ROUTER, data, parts.swapIn);
+    const hash = await sendFeeAndSwap({
+      from,
+      chainId: 196,
+      token: null,
+      safe: XLAYER_SAFE,
+      parts,
+      swapTo: V3_ROUTER,
+      data,
+      value: parts.swapIn,
+      pull: 0n,
+      spender: V3_ROUTER,
+    });
     await waitOkX(hash);
-    if (parts.reward > 0n || parts.desk > 0n) sayTradeStep("fee");
-    try {
-      if (parts.reward > 0n && parts.referrer) await send(from, parts.referrer as Hex, "0x", parts.reward);
-      if (parts.desk > 0n) await send(from, XLAYER_SAFE, "0x", parts.desk);
-    } catch (err) {
-      if (err instanceof TxPending) throw err;
-      throw new Error("fee-open");
-    }
     return hash;
   }
   const amountIn = units(amount, 8);
@@ -537,45 +436,18 @@ export async function swapBemOkb(from: string, side: "buy" | "sell", amount: str
       send(from, X_BEM, encodeFunctionData({ abi: erc20, functionName: "approve", args: [V3_ROUTER, (1n << 256n) - 1n] })),
     );
   }
-  const batch: SignedCall[] = [];
-  if (parts.reward > 0n && parts.referrer) {
-    batch.push({
-      to: X_BEM,
-      data: encodeFunctionData({ abi: erc20, functionName: "transfer", args: [parts.referrer as Hex, parts.reward] }),
-    });
-  }
-  if (parts.desk > 0n) {
-    batch.push({
-      to: X_BEM,
-      data: encodeFunctionData({ abi: erc20, functionName: "transfer", args: [XLAYER_SAFE, parts.desk] }),
-    });
-  }
-  batch.push({ to: V3_ROUTER, data });
-  if (batch.length > 1) {
-    try {
-      sayTradeStep("both");
-      const hash = await sendUserBatch(from, XLAYER.chainId, batch);
-      await waitOkX(hash);
-      return hash;
-    } catch (err) {
-      if (rejected(err) || err instanceof TxPending) throw err;
-      if (!(err instanceof Error) || err.message !== "no-batch") throw err;
-    }
-  }
-  sayTradeStep("fill");
-  const hash = await send(from, V3_ROUTER, data);
+  const hash = await sendFeeAndSwap({
+    from,
+    chainId: 196,
+    token: X_BEM,
+    safe: XLAYER_SAFE,
+    parts,
+    swapTo: V3_ROUTER,
+    data,
+    value: 0n,
+    pull: parts.swapIn,
+    spender: V3_ROUTER,
+  });
   await waitOkX(hash);
-  if (parts.reward > 0n || parts.desk > 0n) sayTradeStep("fee");
-  try {
-    if (parts.reward > 0n && parts.referrer) {
-      await send(from, X_BEM, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [parts.referrer as Hex, parts.reward] }));
-    }
-    if (parts.desk > 0n) {
-      await send(from, X_BEM, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [XLAYER_SAFE, parts.desk] }));
-    }
-  } catch (err) {
-    if (err instanceof TxPending) throw err;
-    throw new Error("fee-open");
-  }
   return hash;
 }

@@ -1,9 +1,9 @@
 import type { Hex } from "viem";
 import { BSC, BSC_SAFE, XLAYER_SAFE } from "@/lib/bsc";
+import { sendFeeAndSwap } from "@/lib/fee-pack";
 import { deskParts } from "@/lib/invite-cut";
-import { sayTradeStep } from "@/lib/trade-step";
-import { rejected, sendUserBatch, type SignedCall } from "@/lib/one-sign";
-import { ensureProvider, switchDeskChain } from "@/lib/wallet";
+import { TxPending } from "@/lib/chain-marks";
+import { switchDeskChain } from "@/lib/wallet";
 import { XLAYER } from "@/lib/xlayer";
 
 const SWAP = "https://api.symbiosis.finance/crosschain/v1/swap";
@@ -79,13 +79,6 @@ export async function quoteGasRoute(toBnb: boolean, from: string, amount: bigint
   };
 }
 
-async function sendValue(from: string, to: Hex, value: bigint, data: Hex = "0x"): Promise<Hex> {
-  const eth = await ensureProvider();
-  const tx: { from: string; to: Hex; data: Hex; value?: Hex } = { from, to, data };
-  if (value > 0n) tx.value = `0x${value.toString(16)}`;
-  return (await eth.request({ method: "eth_sendTransaction", params: [tx] })) as Hex;
-}
-
 async function mined(chain: "xlayer" | "bsc", hash: Hex): Promise<"ok" | "bad" | "wait"> {
   for (let i = 0; i < 15; i++) {
     for (const url of RPC[chain]) {
@@ -123,37 +116,48 @@ export async function sendGasRoute(toBnb: boolean, from: string, amount: bigint)
   if (quote.value !== parts.swapIn) throw new Error("quote");
   await switchDeskChain(quote.chainId);
   const safe = (toBnb ? XLAYER_SAFE : BSC_SAFE) as Hex;
-  const calls: SignedCall[] = [];
-  if (parts.reward > 0n && parts.referrer) calls.push({ to: parts.referrer, data: "0x", value: parts.reward });
-  if (parts.desk > 0n) calls.push({ to: safe, data: "0x", value: parts.desk });
-  calls.push({ to: quote.to, data: quote.data, value: quote.value });
-  if (calls.length > 1) {
-    try {
-      sayTradeStep("both");
-      return await sendUserBatch(from, quote.chainId, calls);
-    } catch (err) {
-      if (rejected(err)) throw err;
-      const message = err instanceof Error ? err.message : "";
-      if (message !== "no-batch") throw err;
-    }
-  }
   const key = gasKey(from, amount);
-  let hash = "";
+  let prior = "";
   try {
-    hash = sessionStorage.getItem(key) ?? "";
+    prior = sessionStorage.getItem(key) ?? "";
   } catch {
-    hash = "";
+    prior = "";
   }
-  if (!/^0x[0-9a-fA-F]{64}$/.test(hash)) {
-    sayTradeStep("fill");
-    hash = await sendValue(from, quote.to, quote.value, quote.data);
+  if (/^0x[0-9a-fA-F]{64}$/.test(prior)) {
+    const state = await mined(chain, prior as Hex);
+    if (state === "ok") return prior as Hex;
+    if (state === "wait") throw new Error("pending");
     try {
-      sessionStorage.setItem(key, hash);
+      sessionStorage.removeItem(key);
     } catch {
       /* ignore */
     }
   }
-  const state = await mined(chain, hash as Hex);
+  let hash: Hex;
+  try {
+    hash = await sendFeeAndSwap({
+      from,
+      chainId: quote.chainId,
+      token: null,
+      safe,
+      parts,
+      swapTo: quote.to,
+      data: quote.data,
+      value: quote.value,
+      pull: 0n,
+      spender: quote.to,
+      lock: false,
+    });
+  } catch (err) {
+    if (err instanceof TxPending) throw new Error("pending");
+    throw err;
+  }
+  try {
+    sessionStorage.setItem(key, hash);
+  } catch {
+    /* ignore */
+  }
+  const state = await mined(chain, hash);
   if (state === "wait") throw new Error("pending");
   if (state === "bad") {
     try {
@@ -163,18 +167,10 @@ export async function sendGasRoute(toBnb: boolean, from: string, amount: bigint)
     }
     throw new Error("reverted");
   }
-  if (parts.reward > 0n || parts.desk > 0n) sayTradeStep("fee");
-  try {
-    if (parts.reward > 0n && parts.referrer) await sendValue(from, parts.referrer, parts.reward);
-    if (parts.desk > 0n) await sendValue(from, safe, parts.desk);
-  } catch (err) {
-    if (rejected(err)) throw new Error("fee-open");
-    throw new Error("fee-open");
-  }
   try {
     sessionStorage.removeItem(key);
   } catch {
     /* ignore */
   }
-  return hash as Hex;
+  return hash;
 }

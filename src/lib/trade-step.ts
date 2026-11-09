@@ -17,7 +17,5 @@ export function tradeStepText(step: string, zh: boolean): string {
       : "Filled. This confirmation is the 0.20% fee.";
   if (step === "trade")
     return zh ? "正在成交。" : "Filling now.";
-  return zh
-    ? "正在成交。成交后马上扣 0.20%。"
-    : "Filling now. The 0.20% is taken right after it succeeds.";
+  return zh ? "正在成交。" : "Filling now.";
 }

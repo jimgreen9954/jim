@@ -11,10 +11,12 @@ const abi = parseAbi([
   "function quoteSell(uint256 amountIn) view returns (uint256 wad, uint256 rest, uint256 gross, uint256 fee, uint256 net)",
   "function quoteBuyWithUSDT(uint256 amountIn) view returns (uint256 bemIn)",
   "function releasable(address account) view returns (uint256)",
+  "function pendingRelease(address account) view returns (uint256)",
   "function position(address account) view returns (uint256 budget, uint256 spent, uint256 opened, uint256 updated)",
   "function buy(uint256 amountIn, uint256 minOut)",
   "function sell(uint256 amountIn, uint256 minOut)",
   "function buyWithUSDT(uint256 amountIn, uint256 minOut, uint256 minBem)",
+  "function buyWithReleased(uint256 amount, uint256 minOut)",
   "function redeem(uint256 amount)",
 ]);
 
@@ -61,11 +63,37 @@ export async function quoteUpPoolUsdt(usdtIn: bigint) {
 
 export async function readUpRelease(account: string) {
   const who = account as Hex;
-  const [ready, position] = await Promise.all([
+  const [released, pending, position] = await Promise.all([
     client.readContract({ address: UP_POOL, abi, functionName: "releasable", args: [who] }),
+    client.readContract({ address: UP_POOL, abi, functionName: "pendingRelease", args: [who] }),
     client.readContract({ address: UP_POOL, abi, functionName: "position", args: [who] }),
   ]);
-  return { ready, budget: position[0], spent: position[1] };
+  return { released, pending, up: position[0] };
+}
+
+async function sendPool(from: string, data: Hex): Promise<Hex> {
+  const eth = await ensureProvider();
+  try {
+    await client.call({ account: from as Hex, to: UP_POOL, data });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    throw new Error(message || "revert");
+  }
+  const hash = (await eth.request({
+    method: "eth_sendTransaction",
+    params: [{ from, to: UP_POOL, data, value: "0x0" }],
+  })) as Hex;
+  const receipt = await client.waitForTransactionReceipt({ hash, timeout: 120_000 });
+  if (receipt.status !== "success") throw new Error("revert");
+  return hash;
+}
+
+export async function buyReleasedUp(from: string, amount: bigint): Promise<Hex> {
+  if (amount <= 0n) throw new Error("empty");
+  const quoted = await quoteUpPoolBuy(amount);
+  const minOut = (quoted.net * 99n) / 100n;
+  const data = encodeFunctionData({ abi, functionName: "buyWithReleased", args: [amount, minOut] });
+  return sendPool(from, data);
 }
 
 export function upBuyData(amountIn: bigint, minOut: bigint): Hex {
@@ -82,10 +110,6 @@ export function upUsdtBuyData(amountIn: bigint, minOut: bigint, minBem: bigint):
 
 export async function redeemUp(from: string, amount: bigint): Promise<Hex> {
   if (amount <= 0n) throw new Error("empty");
-  const eth = await ensureProvider();
   const data = encodeFunctionData({ abi, functionName: "redeem", args: [amount] });
-  return (await eth.request({
-    method: "eth_sendTransaction",
-    params: [{ from, to: UP_POOL, data, value: "0x0" }],
-  })) as Hex;
+  return sendPool(from, data);
 }

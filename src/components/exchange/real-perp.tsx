@@ -375,9 +375,11 @@ function DeskLadder({
 export function RealPerp({
   launch,
   onMarkets,
+  onJump,
 }: {
   launch?: { chain: Desk; coin: "bem" | "btc" | "eth" | "zec" | "up" | "tape" | "fab" };
   onMarkets?: () => void;
+  onJump?: (view: { kind: "pancake"; pair: "fab" }) => void;
 } = {}) {
   const lang = useExchange((s) => s.lang);
   const prefs = useDeskPrefs();
@@ -1384,11 +1386,6 @@ export function RealPerp({
                         <span className="lev-chip rounded px-1.5 py-0.5 font-mono text-[11px]">
                           {lev}×
                         </span>,
-                        coin === "fab" ? (
-                          <span className="text-[11px] text-ink/45">
-                            {lang === "zh" ? "标记走最大池 BEM/FAB 0.9%" : "Mark · deepest BEM/FAB 0.9%"}
-                          </span>
-                        ) : null,
                       ],
                     }),
                     markets && !onMarkets
@@ -1433,6 +1430,22 @@ export function RealPerp({
                                 },
                                 `${nextChain}-${nextCoin}`,
                               );
+                            }),
+                            /* @__PURE__ */ jsxs("button", {
+                              type: "button",
+                              onClick: () => {
+                                setMarkets(false);
+                                onJump?.({ kind: "pancake", pair: "fab" });
+                              },
+                              className: "flex w-full items-center gap-2 px-2 py-2 text-left text-sm hover:bg-foil/70",
+                              children: [
+                                /* @__PURE__ */ jsx(CoinMark, { id: "fab", className: "size-5" }),
+                                /* @__PURE__ */ jsx("span", { className: "mr-auto", children: "FAB/BEM" }),
+                                /* @__PURE__ */ jsx("span", {
+                                  className: "text-[11px] text-ink/50",
+                                  children: lang === "zh" ? "X Layer · 现货" : "X Layer · Spot",
+                                }),
+                              ],
                             }),
                           ],
                         })

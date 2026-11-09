@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   aprText,
   bpsText,
@@ -421,83 +421,68 @@ function BorrowBook({
           ) : rows.length === 0 ? (
             <p className="mt-2 text-xs text-ink/55">{zh ? "现在没有人欠款。" : "Nobody owes anything."}</p>
           ) : (
-            <div className="mt-2 overflow-x-auto">
-              <table className="w-full min-w-[40rem] text-left text-xs">
-                <thead>
-                  <tr className="text-ink/45">
-                    <th className="py-1 pr-2 font-normal">{zh ? "池子" : "Pool"}</th>
-                    <th className="py-1 pr-2 font-normal">{zh ? "地址" : "Address"}</th>
-                    <th className="py-1 pr-2 font-normal">{zh ? "欠款" : "Debt"}</th>
-                    <th className="py-1 pr-2 font-normal">{zh ? "抵押" : "Collateral"}</th>
-                    <th className="py-1 pr-2 font-normal">{zh ? "负债率" : "Ratio"}</th>
-                    <th className="py-1 font-normal">{zh ? "平仓" : "Liquidate"}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => {
-                    const spec = lendSpec(row.chain, row.asset);
-                    const mine = Boolean(account && account.toLowerCase() === row.account.toLowerCase());
-                    const seize = row.seize;
-                    const id = `${row.chain}-${row.asset}-${row.account}`;
-                    const shown = picked === id;
-                    return (
-                      <Fragment key={id}>
-                        <tr className="border-t border-gold/25 align-top">
-                          <td className="py-2 pr-2">
-                            {row.chain === "xlayer" ? "X Layer" : "BSC"} · {assetName(row.chain, row.asset)}
-                          </td>
-                          <td className="py-2 pr-2 font-mono" title={row.account}>
-                            {`${row.account.slice(0, 6)}…${row.account.slice(-4)}`}
-                          </td>
-                          <td className="py-2 pr-2">
-                            {lendText(row.debt, spec.usdtDec)} {spec.usdtSym}
-                          </td>
-                          <td className="py-2 pr-2">
-                            {lendText(row.posted, spec.collDec)} {spec.collSym}
-                          </td>
-                          <td className={`py-2 pr-2 ${row.open ? "text-sell" : ""}`}>{row.ratio == null ? "—" : bpsText(row.ratio)}</td>
-                          <td className="py-2">
-                            <button
-                              type="button"
-                              className={`min-h-8 px-2 ${shown ? "bg-ink text-paper" : "text-ink/70"}`}
-                              onClick={() => setPicked(shown ? null : id)}
-                            >
-                              {zh ? "平仓" : "Liquidate"}
-                            </button>
-                          </td>
-                        </tr>
-                        {shown ? (
-                          <tr className="text-[11px] leading-5 text-ink/70">
-                            <td colSpan={6} className="pb-2">
-                              {mine
-                                ? zh
-                                  ? "这是你自己的仓。请还款，不要平自己。"
-                                  : "This is your own position. Repay it. Do not liquidate yourself."
-                                : !row.open
-                                  ? zh
-                                    ? "负债率还没过 75%，现在点了也不会成交。过了 75% 之后，平仓的人替他还款，并多拿大约 5% 的抵押。他损失这 5%。平仓的人拿到的是抵押币，卖得出合约价才算赚到。"
-                                    : "The ratio is still at or under 75%, so the contract will refuse. Above 75%, the liquidator repays the debt and takes about 5% extra collateral. That 5% is the loss. The liquidator receives collateral, and it is profit only if it sells at the contract price."
-                                  : seize
-                                    ? zh
-                                      ? `你付出 ${lendText(seize.pay, spec.usdtDec)} ${spec.usdtSym}，得到 ${lendText(seize.seize, spec.collDec)} ${spec.collSym}。按合约价这些抵押值 ${lendText(seize.seizeValue, spec.usdtDec)} ${spec.usdtSym}，多出 ${lendText(seize.profit, spec.usdtDec)}。对方少了这份抵押，欠款勾掉 ${lendText(seize.wiped, spec.usdtDec)}。${seize.shortfall > 0n ? `还有 ${lendText(seize.shortfall, spec.usdtDec)} ${spec.usdtSym} 没人还，从存款里勾掉。` : ""}`
-                                      : `You pay ${lendText(seize.pay, spec.usdtDec)} ${spec.usdtSym} and receive ${lendText(seize.seize, spec.collDec)} ${spec.collSym}, worth ${lendText(seize.seizeValue, spec.usdtDec)}. The extra ${lendText(seize.profit, spec.usdtDec)} is the profit if you can sell it at that price. Their debt drops by ${lendText(seize.wiped, spec.usdtDec)}.${seize.shortfall > 0n ? ` ${lendText(seize.shortfall, spec.usdtDec)} ${spec.usdtSym} is written off the lenders.` : ""}`
-                                    : zh
-                                      ? "价格没读到，先不能算盈亏。"
-                                      : "The price did not load, so the result cannot be priced."}
-                              {row.open && !mine && seize ? (
-                                <button type="button" disabled={busy} className="mt-1 block min-h-8 bg-ink px-2 text-paper disabled:opacity-40" onClick={() => onLiquidate(row)}>
-                                  {zh ? "确认平仓" : "Confirm liquidation"}
-                                </button>
-                              ) : null}
-                            </td>
-                          </tr>
+            <ul className="mt-2">
+              {rows.map((row) => {
+                const spec = lendSpec(row.chain, row.asset);
+                const mine = Boolean(account && account.toLowerCase() === row.account.toLowerCase());
+                const seize = row.seize;
+                const id = `${row.chain}-${row.asset}-${row.account}`;
+                const shown = picked === id;
+                return (
+                  <li key={id} className="border-t border-gold/25 py-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 text-xs leading-5">
+                        <p>
+                          {row.chain === "xlayer" ? "X Layer" : "BSC"} · {assetName(row.chain, row.asset)}
+                        </p>
+                        <p className="truncate font-mono" title={row.account}>
+                          {`${row.account.slice(0, 6)}…${row.account.slice(-4)}`}
+                        </p>
+                        <p>
+                          {zh ? "欠" : "Owes"} {lendText(row.debt, spec.usdtDec)} {spec.usdtSym}
+                          {" · "}
+                          {zh ? "抵押" : "Locked"} {lendText(row.posted, spec.collDec)} {spec.collSym}
+                        </p>
+                        <p className={row.open ? "text-sell" : ""}>
+                          {zh ? "负债率" : "Ratio"} {row.ratio == null ? "—" : bpsText(row.ratio)}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className={`min-h-9 shrink-0 px-2 text-xs ${shown ? "bg-ink text-paper" : "border border-gold/40"}`}
+                        onClick={() => setPicked(shown ? null : id)}
+                      >
+                        {zh ? "平仓" : "Liquidate"}
+                      </button>
+                    </div>
+                    {shown ? (
+                      <div className="mt-2 text-[11px] leading-5 text-ink/70">
+                        {mine
+                          ? zh
+                            ? "这是你自己的仓。请还款，不要平自己。"
+                            : "This is your own position. Repay it. Do not liquidate yourself."
+                          : !row.open
+                            ? zh
+                              ? "负债率还没过 75%，现在点了也不会成交。过了 75% 之后，平仓的人替他还款，并多拿大约 5% 的抵押。他损失这 5%。平仓的人拿到的是抵押币，卖得出合约价才算赚到。"
+                              : "The ratio is still at or under 75%, so the contract will refuse. Above 75%, the liquidator repays the debt and takes about 5% extra collateral. That 5% is the loss. The liquidator receives collateral, and it is profit only if it sells at the contract price."
+                            : seize
+                              ? zh
+                                ? `你付出 ${lendText(seize.pay, spec.usdtDec)} ${spec.usdtSym}，得到 ${lendText(seize.seize, spec.collDec)} ${spec.collSym}。按合约价这些抵押值 ${lendText(seize.seizeValue, spec.usdtDec)} ${spec.usdtSym}，多出 ${lendText(seize.profit, spec.usdtDec)}。对方少了这份抵押，欠款勾掉 ${lendText(seize.wiped, spec.usdtDec)}。${seize.shortfall > 0n ? `还有 ${lendText(seize.shortfall, spec.usdtDec)} ${spec.usdtSym} 没人还，从存款里勾掉。` : ""}`
+                                : `You pay ${lendText(seize.pay, spec.usdtDec)} ${spec.usdtSym} and receive ${lendText(seize.seize, spec.collDec)} ${spec.collSym}, worth ${lendText(seize.seizeValue, spec.usdtDec)}. The extra ${lendText(seize.profit, spec.usdtDec)} is the profit if you can sell it at that price. Their debt drops by ${lendText(seize.wiped, spec.usdtDec)}.${seize.shortfall > 0n ? ` ${lendText(seize.shortfall, spec.usdtDec)} ${spec.usdtSym} is written off the lenders.` : ""}`
+                              : zh
+                                ? "价格没读到，先不能算盈亏。"
+                                : "The price did not load, so the result cannot be priced."}
+                        {row.open && !mine && seize ? (
+                          <button type="button" disabled={busy} className="mt-1 block min-h-9 bg-ink px-2 text-paper disabled:opacity-40" onClick={() => onLiquidate(row)}>
+                            {zh ? "确认平仓" : "Confirm liquidation"}
+                          </button>
                         ) : null}
-                      </Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </>
       ) : null}

@@ -6,6 +6,8 @@ import { RISK_BYTECODE } from "@/lib/risk-artifact";
 import { DESK_MARK_BYTECODE } from "@/lib/desk-mark-artifact";
 import { FAB_PERP_SHIP_BYTECODE, FAB_VIEW_QUOTER_BYTECODE } from "@/lib/fab-ship-artifact";
 import { MARK_BYTECODE } from "@/lib/mark-artifact";
+import { UP_MARK_BYTECODE } from "@/lib/up-mark-artifact";
+import { UP_SHIP_BYTECODE } from "@/lib/up-ship-artifact";
 import { FAB_QUOTER } from "@/lib/fab";
 import { getProvider } from "@/lib/wallet";
 import { XLAYER, connectXLayer } from "@/lib/xlayer";
@@ -1398,6 +1400,35 @@ export async function deployCoin(
     if (px === null || !markSane(coin, px)) throw new Error("price");
     window.localStorage.setItem(coinStore(spec.chain, coin), book);
     return { book, hash: bookHash };
+  } finally {
+    desk = was;
+  }
+}
+
+/** One signature. The mark reads the official UP pool, then the book is opened on that mark. */
+export async function deployUpOfficial(from: string): Promise<{ mark: string; book: string }> {
+  const safe = BSC_SAFE;
+  if (from.toLowerCase() !== safe.toLowerCase() && from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("fee");
+  const was = desk;
+  desk = "bsc";
+  try {
+    const rpc = await client();
+    const args = encodeAbiParameters(
+      [{ type: "bytes" }, { type: "bytes" }, { type: "address" }, { type: "uint256" }, { type: "address" }],
+      [UP_MARK_BYTECODE as Hex, RISK_BYTECODE as Hex, BSC.usdt, 10n ** 18n, safe],
+    );
+    const hash = await send(from, CREATE_CALL, createCallData((UP_SHIP_BYTECODE + args.slice(2)) as Hex), 14_000_000n);
+    const receipt = await rpc.getTransactionReceipt({ hash });
+    const topic = keccak256(stringToBytes("Book(address)"));
+    const log = receipt.logs.find((row) => row.topics[0]?.toLowerCase() === topic.toLowerCase());
+    const indexed = log?.topics[1];
+    if (!indexed || indexed.length !== 66) throw new Error("revert");
+    const book = getAddress(`0x${indexed.slice(26)}`);
+    const px = await readMark("bsc", book);
+    if (px === null || !markSane("up", px)) throw new Error("price");
+    if (typeof window !== "undefined") window.localStorage.setItem("tl-up-official-book", book);
+    const pool = await rpc.readContract({ address: book, abi: poolAbi, functionName: "pool" });
+    return { mark: pool, book };
   } finally {
     desk = was;
   }

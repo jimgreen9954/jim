@@ -62,6 +62,16 @@ const ROWS: Row[] = [
     find: "UP TapeUP",
   },
   {
+    id: "fabspot",
+    view: { kind: "pancake", pair: "fab" },
+    symbol: "FAB-BEM",
+    kind: "spot",
+    tag: "现货",
+    where: "最大池 · X Layer",
+    pin: true,
+    find: "FAB FabX BEM/FAB",
+  },
+  {
     id: "tape",
     view: { kind: "tape", market: 0, pair: "usdt" },
     symbol: "TAPE-USDT0",
@@ -124,16 +134,6 @@ const ROWS: Row[] = [
     tag: "现货",
     where: "Pancake · BSC",
     pin: true,
-  },
-  {
-    id: "fabspot",
-    view: { kind: "pancake", pair: "fab" },
-    symbol: "FAB-BEM",
-    kind: "spot",
-    tag: "现货",
-    where: "最大池 · X Layer",
-    pin: true,
-    find: "FAB FabX BEM/FAB",
   },
   {
     id: "bem",
@@ -337,7 +337,6 @@ export function MarketSheet({
   const [q, setQ] = useState("");
   const [strict, setStrict] = useState(false);
   const [px, setPx] = useState<Record<string, string>>({});
-  const [pool, setPool] = useState("");
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -360,9 +359,6 @@ export function MarketSheet({
         });
         write("tape", text);
         write("tapeperp", text);
-        const depth = Number(row.bemTape + row.okbTape) / 1e8;
-        if (depth > 0)
-          setPool(`${depth.toLocaleString("en-US", { maximumFractionDigits: 0 })} TAPE`);
       })
       .catch(() => undefined);
     readSpotBook(0)
@@ -518,9 +514,6 @@ export function MarketSheet({
                 <th className="hidden px-2 py-2 font-normal sm:table-cell">
                   {zh ? "8小时资金" : "8h funding"}
                 </th>
-                <th className="hidden px-2 py-2 font-normal sm:table-cell">
-                  {zh ? "这一本" : "Book"}
-                </th>
               </tr>
             </thead>
             <tbody>
@@ -567,22 +560,11 @@ export function MarketSheet({
                   <td className="hidden px-2 py-2 font-mono text-ink/55 sm:table-cell">
                     {row.kind === "perp" ? (zh ? "不收" : "None") : "—"}
                   </td>
-                  <td className="hidden px-2 py-2 text-ink/60 sm:table-cell">
-                    {row.where
-                      .replace("池子", zh ? "池子" : "Pool")
-                      .replace("订单簿", zh ? "订单簿" : "Book")
-                      .replace("工房挂单", zh ? "工房挂单" : "Workshop")}
-                    {row.id === "tape" && pool ? (
-                      <span className="ml-2 font-mono text-ink/40">
-                        {zh ? "池" : "Pool"} {pool}
-                      </span>
-                    ) : null}
-                  </td>
                 </tr>
               ))}
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-3 py-8 text-center text-ink/45">
+                  <td colSpan={3} className="px-3 py-8 text-center text-ink/45">
                     {zh ? "没有这一项。" : "Nothing matches."}
                   </td>
                 </tr>

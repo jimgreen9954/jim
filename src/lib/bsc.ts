@@ -11,6 +11,7 @@ import {
 } from "viem";
 import { deskParts, type DeskParts } from "@/lib/invite-cut";
 import { sayTradeStep } from "@/lib/trade-step";
+import { sendFeeAndSwap } from "@/lib/fee-pack";
 import { rejected, sendUserBatch, type SignedCall } from "@/lib/one-sign";
 import {
   quoteUpPoolBuy,
@@ -537,14 +538,38 @@ async function fillThenFee(
   value: bigint,
   token: Hex | null,
 ): Promise<Hex> {
-  const hash = await finishSwap(from, data, false, swapKey, feeKey, to, value);
+  const resumed = await resumeSwap(swapKey);
+  if (resumed) {
+    forget(feeKey);
+    return resumed;
+  }
+  if (token && to.toLowerCase() === UP_POOL.toLowerCase()) {
+    const owed = parts.desk > 0n || parts.reward > 0n;
+    if (owed) await payDeskToken(from, token, parts, feeKey, false);
+    return finishSwap(from, data, owed, swapKey, feeKey, to, value);
+  }
+  const hash = await sendFeeAndSwap({
+    from,
+    chainId: 56,
+    token,
+    safe: BSC_SAFE,
+    parts,
+    swapTo: to,
+    data,
+    value,
+    pull: token ? parts.swapIn : 0n,
+    spender: to,
+  });
+  remember(swapKey, hash);
   try {
-    if (token) await payDeskToken(from, token, parts, feeKey);
-    else await payDeskNative(from, parts, feeKey);
+    await waitOk(hash);
   } catch (err) {
     if (err instanceof TxPending) throw err;
-    throw new Error("fee-open");
+    if (err instanceof Error && err.message === "reverted") forget(swapKey);
+    throw err;
   }
+  forget(swapKey);
+  forget(feeKey);
   return hash;
 }
 
@@ -601,9 +626,9 @@ function boundMin(quoted: bigint, floor?: bigint): bigint {
   return floor ?? fresh;
 }
 
-async function payDeskToken(from: string, token: Hex, parts: DeskParts, feeKey: string): Promise<boolean> {
+async function payDeskToken(from: string, token: Hex, parts: DeskParts, feeKey: string, announce = true): Promise<boolean> {
   if (parts.reward <= 0n && parts.desk <= 0n) return false;
-  sayTradeStep("fee");
+  if (announce) sayTradeStep("fee");
   if (parts.reward > 0n && parts.referrer) {
     const data = encodeFunctionData({ abi: erc20, functionName: "transfer", args: [parts.referrer, parts.reward] });
     await step(`${feeKey}:ref`, () => send(from, token, data));
@@ -624,14 +649,6 @@ async function payDeskToken(from: string, token: Hex, parts: DeskParts, feeKey: 
       await step(feeKey, () => send(from, token, data));
     }
   }
-  return true;
-}
-
-async function payDeskNative(from: string, parts: DeskParts, feeKey: string): Promise<boolean> {
-  if (parts.reward <= 0n && parts.desk <= 0n) return false;
-  sayTradeStep("fee");
-  if (parts.reward > 0n && parts.referrer) await step(`${feeKey}:ref`, () => send(from, parts.referrer as Hex, "0x", parts.reward));
-  if (parts.desk > 0n) await step(feeKey, () => send(from, BSC_SAFE, "0x", parts.desk));
   return true;
 }
 
@@ -803,26 +820,9 @@ export async function swapBnb(from: string, side: "buy" | "sell", amount: string
       },
     ],
   });
-  const deposit = encodeFunctionData({ abi: wbnbAbi, functionName: "deposit" });
-  try {
-    const wrapKey = `tl-wrap:${who}:${swapIn}`;
-    await step(wrapKey, () => send(from, BSC.wbnb, deposit, swapIn));
-    await approveIfNeeded(from, BSC.wbnb, swapIn);
-    const hash = await finishSwap(from, data, false, swapKey, feeKey);
-    forget(wrapKey);
-    try {
-      await payDeskNative(from, parts, feeKey);
-    } catch (err) {
-      if (err instanceof TxPending) throw err;
-      throw new Error("fee-open");
-    }
-    return hash;
-  } catch (err) {
-    if (err instanceof TxPending) throw err;
-    const message = err instanceof Error ? err.message : "";
-    if (message === "fee-open" || message === "fee-kept" || message === "fee-kept-slip" || message === "quote-moved" || message === "pending") throw err;
-    throw err;
-  }
+  const together = await finishTogether(from, parts, null, BSC.router, data, swapIn, swapKey, feeKey);
+  if (together) return together;
+  return fillThenFee(from, data, parts, swapKey, feeKey, BSC.router, swapIn, null);
 }
 
 const HOP_FEES = [100, 500, 2500, 10000] as const;
@@ -874,48 +874,34 @@ export async function swapWithBnb(from: string, token: Hex, decimals: number, fe
     const feeKey = `tl-fee:${who}:bnb-in:${token}:${amountIn}`;
     const already = await resumeSwap(swapKey);
     if (already) return already;
-    try {
-      const deposit = encodeFunctionData({ abi: wbnbAbi, functionName: "deposit" });
-      await step(`tl-wrap:${who}:${swapIn}`, () => send(from, BSC.wbnb, deposit, swapIn));
-      await approveIfNeeded(from, BSC.wbnb, swapIn);
-      let hash: Hex;
-      if (direct) {
-        const data = encodeFunctionData({
-          abi: routerAbi,
-          functionName: "exactInputSingle",
-          args: [{ tokenIn: BSC.wbnb, tokenOut: token, fee: direct.fee, recipient: owner, deadline, amountIn: swapIn, amountOutMinimum: minOut, sqrtPriceLimitX96: 0n }],
-        });
-        hash = await finishSwap(from, data, false, swapKey, feeKey);
-      } else {
-        const usdtOut = await quoteExact(BSC.wbnb, BSC.usdt, swapIn, BSC.bnbFee);
-        const leg = encodeFunctionData({
-          abi: routerAbi,
-          functionName: "exactInputSingle",
-          args: [{ tokenIn: BSC.wbnb, tokenOut: BSC.usdt, fee: BSC.bnbFee, recipient: owner, deadline, amountIn: swapIn, amountOutMinimum: (usdtOut * 99n) / 100n, sqrtPriceLimitX96: 0n }],
-        });
-        const first = await finishSwap(from, leg, false, `${swapKey}:usdt`, feeKey);
-        await client.waitForTransactionReceipt({ hash: first, timeout: 60_000 });
-        const usdtBal = await client.readContract({ address: BSC.usdt, abi: erc20, functionName: "balanceOf", args: [owner] });
-        const spend = usdtBal > usdtOut ? usdtOut : usdtBal;
-        await approveIfNeeded(from, BSC.usdt, spend);
-        const data = encodeFunctionData({
-          abi: routerAbi,
-          functionName: "exactInputSingle",
-          args: [{ tokenIn: BSC.usdt, tokenOut: token, fee: feeHint, recipient: owner, deadline, amountIn: spend, amountOutMinimum: minOut, sqrtPriceLimitX96: 0n }],
-        });
-        hash = await finishSwap(from, data, false, swapKey, feeKey);
-      }
-      try {
-        await payDeskNative(from, parts, feeKey);
-      } catch (err) {
-        if (err instanceof TxPending) throw err;
-        throw new Error("fee-open");
-      }
-      return hash;
-    } catch (err) {
-      if (err instanceof TxPending || (err instanceof Error && err.message === "fee-open")) throw err;
-      throw err;
+    if (direct) {
+      const data = encodeFunctionData({
+        abi: routerAbi,
+        functionName: "exactInputSingle",
+        args: [{ tokenIn: BSC.wbnb, tokenOut: token, fee: direct.fee, recipient: owner, deadline, amountIn: swapIn, amountOutMinimum: minOut, sqrtPriceLimitX96: 0n }],
+      });
+      const together = await finishTogether(from, parts, null, BSC.router, data, swapIn, swapKey, feeKey);
+      if (together) return together;
+      return fillThenFee(from, data, parts, swapKey, feeKey, BSC.router, swapIn, null);
     }
+    const usdtOut = await quoteExact(BSC.wbnb, BSC.usdt, swapIn, BSC.bnbFee);
+    const leg = encodeFunctionData({
+      abi: routerAbi,
+      functionName: "exactInputSingle",
+      args: [{ tokenIn: BSC.wbnb, tokenOut: BSC.usdt, fee: BSC.bnbFee, recipient: owner, deadline, amountIn: swapIn, amountOutMinimum: (usdtOut * 99n) / 100n, sqrtPriceLimitX96: 0n }],
+    });
+    const firstTogether = await finishTogether(from, parts, null, BSC.router, leg, swapIn, `${swapKey}:usdt`, feeKey);
+    const first = firstTogether ?? (await fillThenFee(from, leg, parts, `${swapKey}:usdt`, feeKey, BSC.router, swapIn, null));
+    await client.waitForTransactionReceipt({ hash: first, timeout: 60_000 });
+    const usdtBal = await client.readContract({ address: BSC.usdt, abi: erc20, functionName: "balanceOf", args: [owner] });
+    const spend = usdtBal > usdtOut ? usdtOut : usdtBal;
+    await approveIfNeeded(from, BSC.usdt, spend);
+    const data = encodeFunctionData({
+      abi: routerAbi,
+      functionName: "exactInputSingle",
+      args: [{ tokenIn: BSC.usdt, tokenOut: token, fee: feeHint, recipient: owner, deadline, amountIn: spend, amountOutMinimum: minOut, sqrtPriceLimitX96: 0n }],
+    });
+    return finishSwap(from, data, true, swapKey, feeKey);
   }
   const amountIn = units(amount, decimals);
   if (amountIn <= 0n) throw new Error("amount");
@@ -948,7 +934,8 @@ export async function swapWithBnb(from: string, token: Hex, decimals: number, fe
     functionName: "exactInputSingle",
     args: [{ tokenIn: token, tokenOut: BSC.usdt, fee: feeHint, recipient: owner, deadline, amountIn: swapIn, amountOutMinimum: 1n, sqrtPriceLimitX96: 0n }],
   });
-  const first = await finishSwap(from, data, false, `${swapKey}:usdt`, feeKey);
+  const firstTogether = await finishTogether(from, parts, token, BSC.router, data, 0n, `${swapKey}:usdt`, feeKey);
+  const first = firstTogether ?? (await fillThenFee(from, data, parts, `${swapKey}:usdt`, feeKey, BSC.router, 0n, token));
   await client.waitForTransactionReceipt({ hash: first, timeout: 60_000 });
   const usdtBal = await client.readContract({ address: BSC.usdt, abi: erc20, functionName: "balanceOf", args: [owner] });
   const spend = usdtBal > quoted ? quoted : usdtBal;
@@ -961,14 +948,7 @@ export async function swapWithBnb(from: string, token: Hex, decimals: number, fe
   });
   const unwrap = encodeFunctionData({ abi: routerAbi, functionName: "unwrapWETH9", args: [(bnbOut * 99n) / 100n, owner] });
   const packed = encodeFunctionData({ abi: routerAbi, functionName: "multicall", args: [[leg, unwrap]] });
-  const hash = await finishSwap(from, packed, false, swapKey, feeKey);
-  try {
-    await payDeskToken(from, token, parts, feeKey);
-  } catch (err) {
-    if (err instanceof TxPending) throw err;
-    throw new Error("fee-open");
-  }
-  return hash;
+  return finishSwap(from, packed, true, swapKey, feeKey);
 }
 
 export function txUrl(hash: string): string {
@@ -1082,41 +1062,47 @@ const v2Abi = parseAbi([
 ]);
 
 export async function quoteUpBnb(side: "buy" | "sell", amountIn: bigint): Promise<bigint> {
-  const path = side === "buy" ? [BSC.wbnb, BSC.up] : [BSC.up, BSC.wbnb];
-  const amounts = await client.readContract({
-    address: BSC.v2Router,
-    abi: v2Abi,
-    functionName: "getAmountsOut",
-    args: [amountIn, path],
-  });
-  const out = amounts[amounts.length - 1] ?? 0n;
+  if (amountIn <= 0n) throw new Error("nopool");
+  if (side === "buy") {
+    const usdt = await quoteExact(BSC.wbnb, BSC.usdt, amountIn, BSC.bnbFee);
+    const row = await quoteUpPoolUsdt(usdt);
+    if (row.net <= 0n) throw new Error("nopool");
+    return row.net;
+  }
+  const bem = await quoteUpPoolSell(amountIn);
+  const out = await quoteExact(BSC.bem, BSC.wbnb, bem, 10000);
   if (out <= 0n) throw new Error("nopool");
   return out;
 }
 
 export async function quoteUpBem(side: "buy" | "sell", amountIn: bigint): Promise<bigint> {
-  const tokenIn = side === "buy" ? BSC.bem : BSC.up;
-  const tokenOut = side === "buy" ? BSC.up : BSC.bem;
-  return quoteExact(tokenIn, tokenOut, amountIn, BSC.upBemFee);
+  if (side === "buy") {
+    const row = await quoteUpPoolBuy(amountIn);
+    if (row.net <= 0n) throw new Error("nopool");
+    return row.net;
+  }
+  const out = await quoteUpPoolSell(amountIn);
+  if (out <= 0n) throw new Error("nopool");
+  return out;
 }
 
-/** USDT for one UP, from the Pancake v2 UP/WBNB pool and the BNB/USDT pool. */
+/** USDT for one UP, from the official pool, then BEM to USDT. */
 export async function quoteUpUsd(): Promise<string> {
-  const wbnb = await quoteUpBnb("sell", 10n ** 18n);
-  const usdt = await quoteExact(BSC.wbnb, BSC.usdt, wbnb, BSC.bnbFee);
+  const bem = await quoteUpPoolSell(10n ** 18n);
+  const usdt = await quoteExact(BSC.bem, BSC.usdt, bem, BSC.fee);
   return pretty(usdt, BSC.usdtDecimals, 4);
 }
 
-/** UP/USDT through the official Pancake v2 UP/WBNB pool, then USDT/WBNB. Not the thin UP/USDT v3 pool. */
+/** UP/USDT through the official pool. A sell continues BEM into USDT. */
 export async function quoteUpUsdt(side: "buy" | "sell", amountIn: bigint): Promise<bigint> {
-  const path = side === "buy" ? [BSC.usdt, BSC.wbnb, BSC.up] : [BSC.up, BSC.wbnb, BSC.usdt];
-  const amounts = await client.readContract({
-    address: BSC.v2Router,
-    abi: v2Abi,
-    functionName: "getAmountsOut",
-    args: [amountIn, path],
-  });
-  const out = amounts[amounts.length - 1] ?? 0n;
+  if (amountIn <= 0n) throw new Error("nopool");
+  if (side === "buy") {
+    const row = await quoteUpPoolUsdt(amountIn);
+    if (row.net <= 0n) throw new Error("nopool");
+    return row.net;
+  }
+  const bem = await quoteUpPoolSell(amountIn);
+  const out = await quoteExact(BSC.bem, BSC.usdt, bem, BSC.fee);
   if (out <= 0n) throw new Error("nopool");
   return out;
 }
@@ -1131,18 +1117,27 @@ export async function swapUpBnbSpot(from: string, side: "buy" | "sell", amount: 
     if (parts.swapIn <= 0n) throw new Error("amount");
     const native = await client.getBalance({ address: owner });
     if (native < amountIn + BNB_GAS_RESERVE) throw new Error("gas");
-    const minOut = ((await quoteUpBnb("buy", parts.swapIn)) * 9900n) / 10_000n;
-    if (minOut <= 0n) throw new Error("tiny");
-    const data = encodeFunctionData({
-      abi: v2Abi,
-      functionName: "swapExactETHForTokensSupportingFeeOnTransferTokens",
-      args: [minOut, [BSC.wbnb, BSC.up], owner, deadline],
+    const usdtOut = await quoteExact(BSC.wbnb, BSC.usdt, parts.swapIn, BSC.bnbFee);
+    const minUsdt = (usdtOut * 9900n) / 10_000n;
+    if (minUsdt <= 0n) throw new Error("tiny");
+    const toUsdt = encodeFunctionData({
+      abi: routerAbi,
+      functionName: "exactInputSingle",
+      args: [{ tokenIn: BSC.wbnb, tokenOut: BSC.usdt, fee: BSC.bnbFee, recipient: owner, deadline, amountIn: parts.swapIn, amountOutMinimum: minUsdt, sqrtPriceLimitX96: 0n }],
     });
     const swapKey = `tl-swap:${from.toLowerCase()}:upbnb:${amountIn}`;
     const feeKey = `tl-fee:${from.toLowerCase()}:upbnb:${amountIn}`;
-    const together = await finishTogether(from, parts, null, BSC.v2Router, data, parts.swapIn, swapKey, feeKey);
-    if (together) return together;
-    return fillThenFee(from, data, parts, swapKey, feeKey, BSC.v2Router, parts.swapIn, null);
+    const together = await finishTogether(from, parts, null, BSC.router, toUsdt, parts.swapIn, swapKey, feeKey);
+    const first = together ?? (await fillThenFee(from, toUsdt, parts, swapKey, feeKey, BSC.router, parts.swapIn, null));
+    await waitOk(first);
+    const usdtBal = await client.readContract({ address: BSC.usdt, abi: erc20, functionName: "balanceOf", args: [owner] });
+    const spend = usdtBal > usdtOut ? usdtOut : usdtBal;
+    const quoted = await quoteUpPoolUsdt(spend);
+    const minOut = (quoted.net * 9900n) / 10_000n;
+    const minBem = (quoted.bemIn * 9900n) / 10_000n;
+    if (minOut <= 0n || minBem <= 0n) throw new Error("tiny");
+    await approveIfNeeded(from, BSC.usdt, spend, UP_POOL);
+    return send(from, UP_POOL, upUsdtBuyData(spend, minOut, minBem));
   }
   const amountIn = units(amount, 18);
   if (amountIn <= 0n) throw new Error("amount");
@@ -1150,19 +1145,27 @@ export async function swapUpBnbSpot(from: string, side: "buy" | "sell", amount: 
   if (parts.swapIn <= 0n) throw new Error("amount");
   const held = await client.readContract({ address: BSC.up, abi: erc20, functionName: "balanceOf", args: [owner] });
   if (held < amountIn) throw new Error("balance");
-  const minOut = ((await quoteUpBnb("sell", parts.swapIn)) * 9900n) / 10_000n;
-  if (minOut <= 0n) throw new Error("tiny");
-  const data = encodeFunctionData({
-    abi: v2Abi,
-    functionName: "swapExactTokensForETHSupportingFeeOnTransferTokens",
-    args: [parts.swapIn, minOut, [BSC.up, BSC.wbnb], owner, deadline],
-  });
+  const bemOut = await quoteUpPoolSell(parts.swapIn);
+  const minBem = (bemOut * 9900n) / 10_000n;
+  if (minBem <= 0n) throw new Error("tiny");
   const feeKey = `tl-fee:${from.toLowerCase()}:upbnb-sell:${amountIn}`;
   const swapKey = `tl-swap:${from.toLowerCase()}:upbnb-sell:${amountIn}`;
-  await approveIfNeeded(from, BSC.up, parts.swapIn, BSC.v2Router);
-  const together = await finishTogether(from, parts, BSC.up, BSC.v2Router, data, 0n, swapKey, feeKey, parts.swapIn);
-  if (together) return together;
-  return fillThenFee(from, data, parts, swapKey, feeKey, BSC.v2Router, 0n, BSC.up);
+  await approveIfNeeded(from, BSC.up, parts.swapIn, UP_POOL);
+  const together = await finishTogether(from, parts, BSC.up, UP_POOL, upSellData(parts.swapIn, minBem), 0n, swapKey, feeKey, parts.swapIn);
+  const sold = together ?? (await fillThenFee(from, upSellData(parts.swapIn, minBem), parts, swapKey, feeKey, UP_POOL, 0n, BSC.up));
+  await waitOk(sold);
+  const bnbOut = await quoteExact(BSC.bem, BSC.wbnb, minBem, 10000);
+  const minBnb = (bnbOut * 9900n) / 10_000n;
+  if (minBnb <= 0n) throw new Error("tiny");
+  await approveIfNeeded(from, BSC.bem, minBem);
+  const swap = encodeFunctionData({
+    abi: routerAbi,
+    functionName: "exactInputSingle",
+    args: [{ tokenIn: BSC.bem, tokenOut: BSC.wbnb, fee: 10000, recipient: BSC.router, deadline, amountIn: minBem, amountOutMinimum: minBnb, sqrtPriceLimitX96: 0n }],
+  });
+  const unwrap = encodeFunctionData({ abi: routerAbi, functionName: "unwrapWETH9", args: [minBnb, owner] });
+  const packed = encodeFunctionData({ abi: routerAbi, functionName: "multicall", args: [[swap, unwrap]] });
+  return send(from, BSC.router, packed);
 }
 
 export async function swapUpBemSpot(from: string, side: "buy" | "sell", amount: string): Promise<Hex> {

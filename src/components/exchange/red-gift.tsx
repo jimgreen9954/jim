@@ -6,6 +6,7 @@ import {
   claimRed,
   fundRed,
   giftDeployer,
+  giftTasks,
   giftText,
   noteClaim,
   readClaimed,
@@ -24,6 +25,7 @@ import {
   sgDay,
   taskAsset,
   taskLine,
+  taskStake,
   tradeRed,
   tradedNow,
   walletHold,
@@ -246,7 +248,8 @@ export function RedGift({
         message === "connected" ||
         message === "switched" ||
         message === "approve" ||
-        message === "booth";
+        message === "booth" ||
+        message === "stamped";
       setBad(!calm);
       if (calm && message === "connected")
         setNote(
@@ -274,6 +277,12 @@ export function RedGift({
             : "The desk is in place. Tap Confirm once more. Only then does the prize enter the pool.",
         );
       }
+      else if (message === "stamped")
+        setNote(
+          zh
+            ? "做多已经盖章。再点一次领取，奖金才会进入这个钱包。"
+            : "The long fill is stamped. Tap Claim once more. Only then does the prize enter this wallet.",
+        );
       else if ((err as { code?: number }).code === 4001 || /user rejected|denied/i.test(detail))
         setNote(
           zh
@@ -358,6 +367,44 @@ export function RedGift({
             ? "上一笔刚领完。请等待三分钟后再领下一个。"
             : "Wait three minutes after the last claim.",
         );
+      else if (message === "desk")
+        setNote(
+          zh
+            ? "先在主页部署 X Layer 红包盖章。这一份还没上链，FAB 现货和算力的奖金发不出来。"
+            : "Deploy the X Layer packet stamp on the home page first. FAB spot and hash prizes cannot be paid yet.",
+        );
+      else if (message === "placed")
+        setNote(
+          zh
+            ? "算力单已经挂上。再点一次，红包才会盖章。"
+            : "The hash order is on the book. Tap once more so the packet can stamp it.",
+        );
+      else if (message === "desk-stamp")
+        setNote(
+          zh
+            ? "现货已经成交。这一份红包合约只认它自己发起的兑换，FAB 和算力这两笔它盖不了章，奖金发不出来。"
+            : "The spot trade filled. This packet contract only stamps its own swap, so it cannot pay out for FAB or hash.",
+        );
+      else if (message === "perp" || message === "perp-side" || message === "perp-margin")
+        setNote(
+          message === "perp-side"
+            ? zh
+              ? "成交方向反了。这份红包要的是另一边，做空盖不上做多，反过来也不行。按红包上写的方向再成交一笔。"
+              : "That fill is the other side. A short does not stamp a long task, or the other way around. Fill the side written on the packet."
+            : message === "perp-margin"
+              ? zh
+                ? "方向对了，保证金不够。要达到红包上写的数量，扣过手续费之后至少还剩 99%。"
+                : "Right side, but the margin is short. After the fee it still has to be at least 99% of the amount on the packet."
+              : zh
+                ? "还没有能盖章的合约成交。请先在这一对上开仓并成交，方向和保证金要达到任务，而且要在红包发出之后。成交后再回来点。"
+                : "No perp fill can be stamped yet. Open and fill that book, on the right side, with enough margin, after this packet was created. Then come back.",
+        );
+      else if (message === "up-pool")
+        setNote(
+          zh
+            ? "这份已经发出的 UP 现货，按一条链上没有的池子去换，交易发不出去，名额也是 0，领不了。请重新发一份 UP 现货。这一份里的 UP 要等倒计时结束才能取回。"
+            : "This UP spot packet swaps through a pool that is not on chain, so the trade cannot be sent, and it has no claim slots. Publish a new UP spot task. The UP in this one comes back when the timer ends.",
+        );
       else if (message === "task" || message === "buy" || message === "pull")
         setNote(
           zh
@@ -397,6 +444,12 @@ export function RedGift({
       else if (message === "bsc")
         setNote(
           zh ? "请先把钱包换到 BSC，再点一次。" : "Switch the wallet to BSC, then tap once more.",
+        );
+      else if (message === "revert")
+        setNote(
+          zh
+            ? "链上拒绝了这一步，钱包没有弹出。成交方向或保证金和红包写的不一致时就会这样。"
+            : "The chain rejected this step, so the wallet did not open. The side or the margin does not match the packet.",
         );
       else
         setNote(
@@ -453,6 +506,15 @@ export function RedGift({
     }
     void run(async () => {
       const from = await who();
+      if (taskStake(book.chain, book.hi).perp && !(await tradedNow(book.chain, from, book.lane, book.address))) {
+        setNote(
+          zh
+            ? "钱包正在弹出盖章。请确认。确认之后再点一次领取。"
+            : "The wallet is opening the stamp. Confirm it, then tap Claim once more.",
+        );
+        await tradeRed(book.chain, from, book.lane, book.address);
+        throw new Error("stamped");
+      }
       setNote(
         zh
           ? "钱包窗口正在弹出。请在窗口里点确认，奖金才会进入当前钱包。"
@@ -562,6 +624,7 @@ export function RedGift({
                       formatUnits(book.credit, asset.decimals),
                       asset,
                       book.lane,
+                      book.address,
                     );
                     setNote(zh ? "资金已经取回。" : "Funds received.");
                     return "ok" as const;
@@ -648,16 +711,7 @@ export function RedGift({
                   const asset =
                     GIFT_ASSETS[chain].find((row) => row.id === assetId) ?? GIFT_ASSETS[chain][0];
                   const task =
-                    GIFT_ASSETS[chain].find(
-                      (row) =>
-                        row.id === taskId &&
-                        row.id !== "usdt" &&
-                        row.id !== "okb" &&
-                        row.id !== "bnb",
-                    ) ??
-                    GIFT_ASSETS[chain].find(
-                      (row) => row.id !== "usdt" && row.id !== "okb" && row.id !== "bnb",
-                    );
+                    giftTasks(chain).find((row) => row.id === taskId) ?? giftTasks(chain)[0];
                   const total = payTotal(fixedText, packets);
                   void run(async () => {
                     const from = await who();
@@ -869,6 +923,18 @@ function ClaimBoard({
   const stamp = BigInt(now);
   const [showLive, setShowLive] = useState(true);
   const [showDone, setShowDone] = useState(false);
+  const mineLeft = books.some(
+    (book) =>
+      book.chain === chain &&
+      book.balance > 0n &&
+      book.endsAt > 0n &&
+      BigInt(now) > book.endsAt &&
+      self != null &&
+      book.maker.toLowerCase() === self.toLowerCase(),
+  );
+  useEffect(() => {
+    if (mineLeft) setShowDone(true);
+  }, [mineLeft]);
   const live = books
     .filter(
       (book) =>
@@ -1002,6 +1068,9 @@ function PacketCard({
   lift: (book: RedRule) => void;
   ended: boolean;
 }) {
+  const reclaim = Boolean(
+    self && book.maker.toLowerCase() === self.toLowerCase() && book.balance > 0n,
+  );
   const personal = book.lane === "volunteer";
   const owner = Boolean(self && book.credit > 0n);
   const maker = Boolean(self && book.maker.toLowerCase() === self.toLowerCase());
@@ -1011,8 +1080,9 @@ function PacketCard({
   const sum = purse(book, paid);
   const name = book.asset ? (zh ? book.asset.zh : book.asset.en) : "";
   const task = taskAsset(book.chain, book.hi);
+  const stake = taskStake(book.chain, book.hi);
   const taskName = task ? (zh ? task.zh : task.en) : name;
-  const unit = book.chain === "bsc" ? "BNB" : "OKB";
+  const unit = stake.perp ? stake.symbol : book.chain === "bsc" ? "BNB" : "OKB";
   const selling = book.gate === 1;
   const [got, setGot] = useState("");
   const line = taskLine(book.chain, book.hi, book.spotNeed, book.perpNeed, book.gate, zh, got);
@@ -1023,7 +1093,7 @@ function PacketCard({
   const gate = useRef(false);
   useEffect(() => {
     const need = book.spotNeed > book.perpNeed ? book.spotNeed : book.perpNeed;
-    if (need <= 0n || book.hi === 0n) return;
+    if (need <= 0n || book.hi === 0n || stake.perp) return;
     let dead = false;
     const job =
       book.gate === 1
@@ -1035,7 +1105,7 @@ function PacketCard({
     return () => {
       dead = true;
     };
-  }, [book.chain, book.hi, book.gate, book.spotNeed, book.perpNeed]);
+  }, [book.chain, book.hi, book.gate, book.spotNeed, book.perpNeed, stake.perp]);
   useEffect(() => {
     if (book.tradedDay === BigInt(sgDay()) && book.lastDay !== BigInt(sgDay()))
       setStep((now) => (now === "join" || now === "ask" || now === "go" ? "check" : now));
@@ -1051,14 +1121,9 @@ function PacketCard({
       return;
     }
     setStep("ask");
-    void walletHold(
-      book.chain,
-      self,
-      ((selling ? task?.token : "0x0000000000000000000000000000000000000000") ??
-        "0x0000000000000000000000000000000000000000") as `0x${string}`,
-    )
+    void walletHold(book.chain, self, (stake.perp ? stake.token : selling ? task?.token : "0x0000000000000000000000000000000000000000") ?? "0x0000000000000000000000000000000000000000")
       .then((raw) => {
-        setHold(formatUnits(raw, selling ? (task?.decimals ?? 18) : 18));
+        setHold(formatUnits(raw, stake.perp ? stake.decimals : selling ? (task?.decimals ?? 18) : 18));
       })
       .catch(() => setHold(""));
   };
@@ -1124,16 +1189,24 @@ function PacketCard({
         <p className="mt-1">{line}</p>
         {step === "join" ? (
           <p className="mt-1">
-            {zh
-              ? "先看清楚这一笔换成多少币。同意之后才会打开钱包。兑换完成并验证通过后，才能领取红包。"
-              : "Read how much this swap returns. The wallet opens only after you agree. Claim the packet only after the swap is checked."}
+            {stake.perp
+              ? zh
+                ? "先到这一对合约成交。同意之后，回来点交易，红包只核对那一笔成交并盖章，不会替你开仓。"
+                : "Fill that perpetual first. After you agree, the trade button only checks the fill and stamps it. It does not open a position."
+              : zh
+                ? "先看清楚这一笔换成多少币。同意之后才会打开钱包。兑换完成并验证通过后，才能领取红包。"
+                : "Read how much this swap returns. The wallet opens only after you agree. Claim the packet only after the swap is checked."}
           </p>
         ) : null}
         {step === "go" ? (
           <p className="mt-1">
-            {zh
-              ? "钱包只弹出这一笔兑换。成交后回来点验证。还没验证通过，不能领取红包。"
-              : "The wallet opens once, for this swap. Then check it. You cannot claim until the swap is verified."}
+            {stake.perp
+              ? zh
+                ? "钱包只弹出盖章。链上已经有符合条件的成交才会通过。还没成交就先去合约页开仓。"
+                : "The wallet only stamps. It passes only if a qualifying fill is already on chain. If not, open one on the perp page first."
+              : zh
+                ? "钱包只弹出这一笔兑换。成交后回来点验证。还没验证通过，不能领取红包。"
+                : "The wallet opens once, for this swap. Then check it. You cannot claim until the swap is verified."}
           </p>
         ) : null}
         {step === "check" ? (
@@ -1151,7 +1224,17 @@ function PacketCard({
           </p>
         ) : null}
       </Fold>
-      {ended && owner ? (
+      {reclaim ? (
+        <button
+          type="button"
+          className="gift-go disabled:opacity-40"
+          disabled={busy || !ended}
+          onClick={() => take(book)}
+        >
+          {ended ? (zh ? "取回" : "Take back") : zh ? "到期取回" : "Take back when it ends"}
+        </button>
+      ) : null}
+      {ended && owner && !reclaim ? (
         <button
           type="button"
           className="gift-go disabled:opacity-40"
@@ -1169,7 +1252,7 @@ function PacketCard({
         >
           {zh ? "重开" : "Reopen"}
         </button>
-      ) : ended || mineToday ? (
+      ) : (ended || mineToday) && !reclaim ? (
         <button
           type="button"
           className="gift-go"
@@ -1194,11 +1277,15 @@ function PacketCard({
           </p>
           <p className="font-mono text-xl text-ink">
             {hold ? Number(hold).toLocaleString("en-US", { maximumFractionDigits: 6 }) : zh ? "读取中" : "Reading"}{" "}
-            {selling ? taskName : unit}
+            {stake.perp ? stake.symbol : selling ? taskName : unit}
           </p>
           <Fold zh={zh}>
             <p>
-              {selling
+              {stake.perp
+                ? zh
+                  ? `用 ${stake.symbol} 在${taskName}按所选方向成交。保证金不够就点不同意。这一步只盖章，还不能领取红包。`
+                  : `Fill ${taskName} with ${stake.symbol} on the chosen side. Decline if the margin is short. This only stamps. It does not pay the packet.`
+                : selling
                 ? zh
                   ? `卖出 ${taskName}，按池子价格换回 ${unit}。余额不够就点不同意。这一步只完成兑换，还不能领取红包。`
                   : `Sell ${taskName} for ${unit} at the pool price. Decline if the balance is short. This swap does not pay the packet.`
@@ -1231,7 +1318,7 @@ function PacketCard({
           disabled={busy}
           onClick={goTrade}
         >
-          {zh ? "去交易" : "Trade"}
+          {stake.perp ? (zh ? "盖章" : "Stamp") : zh ? "去交易" : "Trade"}
         </button>
       ) : step === "check" ? (
         <button
@@ -1307,9 +1394,13 @@ function DeployerDesk({
   onSave: () => void;
 }) {
   const assets = GIFT_ASSETS[chain];
-  const tasks = assets.filter((row) => row.id !== "usdt" && row.id !== "okb" && row.id !== "bnb");
+  const tasks = giftTasks(chain);
+  const spots = tasks.filter((row) => !row.id.endsWith("perp"));
+  const perps = tasks.filter((row) => row.id.endsWith("perp"));
   const asset = assets.find((row) => row.id === assetId) ?? assets[0];
-  const task = tasks.find((row) => row.id === taskId) ?? tasks[0];
+  const task = tasks.find((row) => row.id === taskId) ?? spots[0];
+  const perp = task.id.endsWith("perp");
+  const cash = chain === "bsc" ? "USDT" : "USDT0";
   const total = payTotal(eachText, countText);
   const spot = Number(spotText);
   const ready = Boolean(total) && spot > 0;
@@ -1345,26 +1436,42 @@ function DeployerDesk({
         onPick={(id) => setLife(Number(id))}
       />
       <Wheel
-        label={zh ? "任务" : "Task"}
-        value={task.id}
-        options={tasks.map((row) => ({ id: row.id, text: zh ? row.zh : row.en }))}
-        onPick={setTaskId}
+        label={zh ? "现货" : "Spot"}
+        value={perp ? "off" : task.id}
+        options={[{ id: "off", text: zh ? "不选" : "None" }, ...spots.map((row) => ({ id: row.id, text: zh ? row.zh : row.en }))]}
+        onPick={(id) => {
+          if (id === "off") return;
+          setTaskId(id);
+        }}
+      />
+      <Wheel
+        label={zh ? "合约" : "Perp"}
+        value={perp ? task.id : "off"}
+        options={[{ id: "off", text: zh ? "不选" : "None" }, ...perps.map((row) => ({ id: row.id, text: zh ? row.zh : row.en }))]}
+        onPick={(id) => {
+          if (id === "off") {
+            if (perp) setTaskId(spots[0]?.id ?? "bem");
+            return;
+          }
+          setTaskId(id);
+          if (!(Number(spotText) >= 1)) setSpotText("1");
+        }}
       />
       <Wheel
         label={zh ? "方向" : "Side"}
         value={String(gate)}
         options={[
-          { id: "0", text: zh ? "买入" : "Buy" },
-          { id: "1", text: zh ? "卖出" : "Sell" },
+          { id: "0", text: zh ? (perp ? "做多" : "买入") : perp ? "Long" : "Buy" },
+          { id: "1", text: zh ? (perp ? "做空" : "卖出") : perp ? "Short" : "Sell" },
         ]}
         onPick={(id) => setGate(Number(id))}
       />
       <label className="gift-field">
-        <span>{chain === "bsc" ? "BNB" : "OKB"}</span>
+        <span>{perp ? cash : chain === "bsc" ? "BNB" : "OKB"}</span>
         <input value={spotText} onChange={(e) => setSpotText(e.target.value)} inputMode="decimal" className="h-10 min-w-0 flex-1 bg-transparent text-right font-mono text-lg text-ink outline-none" />
       </label>
       <Fold zh={zh}>
-        <p>{taskLine(chain, task.token === "0x0000000000000000000000000000000000000000" ? 1n : BigInt(task.token), (() => { try { return parseUnits(spotText.trim() || "0", 18); } catch { return 0n; } })(), 0n, gate, zh)}</p>
+        <p>{taskLine(chain, task.token === "0x0000000000000000000000000000000000000000" ? 1n : BigInt(task.token), (() => { try { return parseUnits(spotText.trim() || "0", perp ? task.decimals : 18); } catch { return 0n; } })(), 0n, gate, zh)}</p>
         <p className="mt-1">{zh ? "确认后，这些奖金划入这一份红包。没领完的，到期后可以取回。" : "After you confirm, this prize is locked in the packet. What nobody claims can be taken back after it ends."}</p>
       </Fold>
       <button type="button" className="gift-go disabled:opacity-40" disabled={busy || !ready} onClick={onSave}>
@@ -1477,7 +1584,7 @@ function MineFunds({
   who: () => Promise<string>;
   setNote: (v: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const rows = books
     .filter((book) => book.asset && self && book.credit > 0n)
     .sort((a, b) => (a.endsAt < b.endsAt ? -1 : 1));
@@ -1517,6 +1624,7 @@ function MineFunds({
                           formatUnits(book.credit, asset.decimals),
                           asset,
                           book.lane,
+                          book.address,
                         );
                         setNote(zh ? "资金已经取回。" : "Funds received.");
                         return "ok" as const;

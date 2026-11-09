@@ -65,7 +65,7 @@ import {
   swapBemOkb,
   xCap,
 } from "@/lib/okb";
-import { XLAYER } from "@/lib/xlayer";
+import { FAB, fabBemPrice, quoteFab, readFab, swapFab } from "@/lib/fab";
 import { currentAccount, connectKind, onAccount, onOpenLink } from "@/lib/wallet";
 import { markDeskFill } from "@/lib/red-packet";
 import { rememberFill, TradeLog } from "@/components/exchange/trade-foot";
@@ -77,11 +77,12 @@ import { LpPanel } from "@/components/exchange/lp-desk";
 import { useFeeLock } from "@/lib/fee-lock";
 import { SideRail } from "@/components/exchange/side-rail";
 
-type SpotPairId = "bem" | "bembnb" | "bemokb" | "upbnb" | "upbem" | "upusdt" | "bnb" | "okb" | ErcKey;
+type SpotPairId = "bem" | "bembnb" | "bemokb" | "fab" | "upbnb" | "upbem" | "upusdt" | "bnb" | "okb" | ErcKey;
 
 function nativeSpot(pair: string): { base: string; quote: string; baseDec: number; quoteDec: number } | null {
   if (pair === "bembnb") return { base: "BEM", quote: "BNB", baseDec: BSC.bemDecimals, quoteDec: 18 };
   if (pair === "bemokb") return { base: "BEM", quote: "OKB", baseDec: BSC.bemDecimals, quoteDec: 18 };
+  if (pair === "fab") return { base: "FAB", quote: "BEM", baseDec: 8, quoteDec: 8 };
   if (pair === "upbnb") return { base: "UP", quote: "BNB", baseDec: 18, quoteDec: 18 };
   if (pair === "upbem") return { base: "UP", quote: "BEM", baseDec: 18, quoteDec: BSC.bemDecimals };
   if (pair === "upusdt") return { base: "UP", quote: "USDT", baseDec: 18, quoteDec: 18 };
@@ -120,7 +121,7 @@ function limitMin(
 ): bigint | undefined {
   const n = Number(qty);
   if (!(px > 0) || !(n > 0) || (nextUnit === "bnb" && nextSide === "buy")) return undefined;
-  if (nextPair === "bembnb" || nextPair === "bemokb" || nextPair === "upbnb" || nextPair === "upbem" || nextPair === "upusdt") {
+  if (nextPair === "bembnb" || nextPair === "bemokb" || nextPair === "fab" || nextPair === "upbnb" || nextPair === "upbem" || nextPair === "upusdt") {
     const nat = nativeSpot(nextPair);
     const raw = nextSide === "buy" ? n / px : n * px;
     if (!nat || !(raw > 0) || !Number.isFinite(raw)) return undefined;
@@ -249,7 +250,9 @@ export function SpotDesk({
           ? async () => pretty((await quoteBemBnb("sell", 10n ** 8n)).out, 18, 6)
           : pair === "bemokb"
             ? async () => pretty(await quoteBemOkb("sell", 10n ** 8n), 18, 6)
-            : pair === "upbnb"
+            : pair === "fab"
+              ? fabBemPrice
+              : pair === "upbnb"
               ? async () => pretty(await quoteUpBnb("sell", 10n ** 18n), 18, 8)
               : pair === "upbem"
                 ? async () => pretty(await quoteUpBem("sell", 10n ** 18n), BSC.bemDecimals, 6)
@@ -267,7 +270,7 @@ export function SpotDesk({
           if (!dead) setPrice(text);
         })
         .catch(() => undefined);
-      if (pair === "bembnb" || pair === "bemokb" || pair === "upbnb" || pair === "upbem" || pair === "upusdt") {
+      if (pair === "bembnb" || pair === "bemokb" || pair === "fab" || pair === "upbnb" || pair === "upbem" || pair === "upusdt") {
         if (!dead) setPrints([]);
       } else {
         const printsOf = pair === "okb" ? okbPrints() : recentPrints(pair);
@@ -278,16 +281,23 @@ export function SpotDesk({
           .catch(() => undefined);
       }
       const who = account ?? currentAccount();
-      if (who && (pair === "okb" || pair === "bemokb")) {
+      if (who && (pair === "okb" || pair === "bemokb" || pair === "fab")) {
         readOkbPurse(who)
           .then((next) => {
             if (!dead) setOkbBal(next);
           })
           .catch(() => undefined);
-        if (pair === "bemokb") {
+        if (pair === "bemokb" || pair === "fab") {
           readXBem(who)
             .then((next) => {
               if (!dead) setXBem(next);
+            })
+            .catch(() => undefined);
+        }
+        if (pair === "fab") {
+          readFab(who)
+            .then((next) => {
+              if (!dead) setAssetBal(next);
             })
             .catch(() => undefined);
         }
@@ -326,6 +336,18 @@ export function SpotDesk({
         dead = true;
       };
     }
+    if (pair === "fab") {
+      getCoinCandles({ data: { coin: "fab", frame } })
+        .then((rows) => {
+          if (!dead) setBars(rows);
+        })
+        .catch(() => {
+          if (!dead) setBars([]);
+        });
+      return () => {
+        dead = true;
+      };
+    }
     if (pair === "bembnb" || pair === "bemokb") {
       setBars([]);
       return;
@@ -344,7 +366,9 @@ export function SpotDesk({
     let dead = false;
     const listed = isErcKey(pair) ? ERC_BOOKS[pair].token : null;
     const job =
-      pair === "bemokb"
+      pair === "fab"
+        ? xCap(FAB)
+        : pair === "bemokb"
         ? xCap("0x60e62Efa9405d6873C5deaBD4E6CC91c25363952")
         : pair === "okb"
           ? xCap(OKB.wokb)
@@ -381,6 +405,8 @@ export function SpotDesk({
             ? quoteWithBnb(BSC.bem, 10000, side, swapIn)
             : pair === "bemokb"
               ? quoteBemOkb(side, swapIn)
+              : pair === "fab"
+                ? quoteFab(side, swapIn)
               : pair === "upbnb"
                 ? quoteUpBnb(side, swapIn)
                 : pair === "upusdt" && side === "buy"
@@ -526,6 +552,12 @@ export function SpotDesk({
           ? "滑点超过 1%，兑换取消。若台费已划走，只少了那一笔，其余还在钱包。"
           : "Slippage was over 1% and the swap was cancelled. If the fee already moved, only that fee left the wallet.",
       );
+    else if (message === "no-batch")
+      setNote(
+        lang === "zh"
+          ? "没有成交。手续费和兑换必须在同一笔里，这一笔没有发出去。"
+          : "No fill. The fee and the swap have to be one transaction, and this one was not sent.",
+      );
     else if (message === "reverted")
       setNote(
         lang === "zh"
@@ -542,17 +574,21 @@ export function SpotDesk({
     else if (message === "gas")
       setNote(
         lang === "zh"
-          ? pair === "bemokb"
+          ? pair === "bemokb" || pair === "okb" || pair === "fab"
             ? "OKB 不够付这笔，再留一点当 gas。"
             : "BNB 不够付这笔，再留一点当 gas。"
-          : pair === "bemokb"
+          : pair === "bemokb" || pair === "okb" || pair === "fab"
             ? "Not enough OKB for this and gas."
             : "Not enough BNB for this and gas.",
       );
     else if (message === "balance")
       setNote(
         lang === "zh"
-          ? pair === "upusdt" && side === "buy"
+          ? pair === "fab" && side === "buy"
+            ? "这个钱包的 BEM 不够。"
+            : pair === "fab"
+              ? "这个钱包的 FAB 不够。"
+              : pair === "upusdt" && side === "buy"
             ? "这个钱包的 USDT 不够。"
             : pair === "upbem" && side === "buy"
               ? "这个钱包的 BEM 不够。"
@@ -565,7 +601,11 @@ export function SpotDesk({
               ? "This wallet does not have enough BEM."
               : pair === "upbnb" || pair === "upbem" || pair === "upusdt"
                 ? "This wallet does not have enough UP."
-                : "This wallet does not have enough BEM.",
+                : pair === "fab" && side === "buy"
+                  ? "This wallet does not have enough BEM."
+                  : pair === "fab"
+                    ? "This wallet does not have enough FAB."
+                    : "This wallet does not have enough BEM.",
       );
     else if (message === "tiny")
       setNote(lang === "zh" ? "池子报不出价，没有发出去。" : "The pool did not quote. Nothing was sent.");
@@ -580,7 +620,7 @@ export function SpotDesk({
     setNote(lang === "zh" ? "正在打开钱包…" : "Opening the wallet…");
     try {
       const from = await connectKind(which);
-      if (pair === "okb" || pair === "bemokb") await connectX();
+      if (pair === "okb" || pair === "bemokb" || pair === "fab") await connectX();
       else await connectBsc();
       setAccount(from);
       setNote(null);
@@ -609,7 +649,7 @@ export function SpotDesk({
           : side === "buy"
             ? `Pay ${amount} ${payUnit}, buy${out ? ` ${out}` : ""} ${base}`
             : `Sell ${amount} ${base}, receive${out ? ` ${out}` : ""} ${recvUnit}`,
-        pair === "okb" || pair === "bemokb" ? okbTxUrl(tx) : txUrl(tx),
+        pair === "okb" || pair === "bemokb" || pair === "fab" ? okbTxUrl(tx) : txUrl(tx),
       );
       setNote(null);
     } catch (err) {
@@ -628,11 +668,16 @@ export function SpotDesk({
     nextPair: typeof pair,
   ) => {
     const from =
-      nextPair === "okb" || nextPair === "bemokb"
+      nextPair === "okb" || nextPair === "bemokb" || nextPair === "fab"
         ? account ?? (await connectX())
         : account ?? (await connectBsc());
     setAccount(from);
     if (!nextAmount.trim()) throw new Error("amount");
+    if (nextPair === "fab") {
+      const tx = await swapFab(from, nextSide, nextAmount, min);
+      markDeskFill("xlayer", from, "spot", Number(nextAmount) || 0, "fab");
+      return tx;
+    }
     if (nextPair === "bemokb") {
       const tx = await swapBemOkb(from, nextSide, nextAmount);
       markDeskFill("xlayer", from, "spot", Number(nextAmount) || 0, "bemokb");
@@ -700,6 +745,12 @@ export function SpotDesk({
               : balances.usdt
           : (assetBal ?? 0n);
       setAmount(sized(raw, side === "buy" ? nat.quoteDec : nat.baseDec, pct));
+      return;
+    }
+    if (pair === "fab") {
+      const raw = side === "buy" ? xBem : assetBal;
+      if (raw == null) return;
+      setAmount(sized(raw, 8, pct));
       return;
     }
     const native = pair === "bembnb" || pair === "bemokb";
@@ -796,7 +847,11 @@ export function SpotDesk({
   const usdtDec = nat ? nat.quoteDec : pair === "okb" ? OKB.usdtDecimals : BSC.usdtDecimals;
   const payingBnb = !nat && pair !== "okb" && pair !== "bnb" && unit === "bnb";
   const payRaw =
-    pair === "upbnb"
+    pair === "fab"
+      ? side === "buy"
+        ? (xBem ?? 0n)
+        : (assetBal ?? 0n)
+      : pair === "upbnb"
       ? side === "buy"
         ? balances && balances.bnb > BNB_GAS_RESERVE
           ? balances.bnb - BNB_GAS_RESERVE
@@ -891,7 +946,11 @@ export function SpotDesk({
   }
   const deskFee = typed > 0n ? splitDeskFee(typed) : null;
   const over =
-    (pair === "bemokb"
+    (pair === "fab"
+      ? side === "buy"
+        ? xBem != null
+        : assetBal != null
+      : pair === "bemokb"
       ? side === "buy"
         ? Boolean(okbBal)
         : xBem != null
@@ -951,7 +1010,7 @@ export function SpotDesk({
               : hit.side === "buy"
                 ? `Pay ${hit.amount} ${hit.unit === "bnb" ? "BNB" : hit.pair === "okb" ? "USDT0" : "USDT"}, buy ${base}`
                 : `Sell ${hit.amount} ${base}, receive ${hit.unit === "bnb" ? "BNB" : hit.pair === "okb" ? "USDT0" : "USDT"}`,
-            hit.pair === "okb" || hit.pair === "bemokb" ? okbTxUrl(tx) : txUrl(tx),
+            hit.pair === "okb" || hit.pair === "bemokb" || hit.pair === "fab" ? okbTxUrl(tx) : txUrl(tx),
           );
           setNote(null);
         })
@@ -1018,6 +1077,7 @@ export function SpotDesk({
                 [
                   ["bem", "BEM/USDT"],
                   ["upusdt", "UP/USDT"],
+                  ["fab", "FAB/BEM"],
                 ] as const
               ).map(([id, label]) => (
                 <button
@@ -1041,16 +1101,6 @@ export function SpotDesk({
                 className="block h-10 w-full px-3 text-left text-sm hover:bg-foil/70"
               >
                 TAPE/USDT0
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setPairMenu(false);
-                  onJump?.({ kind: "pancake", pair: "fab" });
-                }}
-                className="block h-10 w-full px-3 text-left text-sm hover:bg-foil/70"
-              >
-                FAB/BEM
               </button>
               <button
                 type="button"
@@ -1135,7 +1185,7 @@ export function SpotDesk({
               <div className="ph-chart order-1 min-w-0">
                 <Kline
                   bars={bars}
-                  mark={midN}
+                  mark={pair === "fab" ? bars.at(-1)?.c || midN : midN}
                   lang={lang}
                   desk="spot"
                   frame={frame}
@@ -1445,7 +1495,7 @@ export function SpotDesk({
                 {hash ? (
                   <a
                     className="mt-2 block text-xs underline"
-                    href={pair === "okb" || pair === "bemokb" ? okbTxUrl(hash) : txUrl(hash)}
+                    href={pair === "okb" || pair === "bemokb" || pair === "fab" ? okbTxUrl(hash) : txUrl(hash)}
                     target="_blank"
                     rel="noreferrer"
                   >

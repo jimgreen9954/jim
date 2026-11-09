@@ -65,7 +65,20 @@ export async function pullPaper(frame: PaperFrame): Promise<Ohlc[]> {
   try {
     const url = `https://api.geckoterminal.com/api/v2/networks/bsc/pools/0x3098d7a051045000d68ec0360753a40c8cabea31/ohlcv/${item.path}?aggregate=${item.aggregate}&limit=${item.limit}&currency=usd`;
     const res = await fetch(url, { headers: { accept: "application/json" } });
-    if (!res.ok) return hit?.rows ?? [];
+    if (!res.ok) {
+      const { fallbackCandles } = await import("@/lib/chain-candles");
+      const span = item.bucket > 1 ? item.aggregate * (item.path === "minute" ? 60 : item.path === "hour" ? 3600 : 86400) * item.bucket : item.aggregate * (item.path === "minute" ? 60 : item.path === "hour" ? 3600 : 86400);
+      const next = (await fallbackCandles(
+        "https://api.geckoterminal.com/api/v2/networks/bsc/pools/0x3098d7a051045000d68ec0360753a40c8cabea31/ohlcv",
+        span,
+        item.limit,
+      )).flatMap((row) => (row.t ? [{ t: row.t, o: row.o, h: row.h, l: row.l, c: row.c, v: row.v ?? 0 }] : []));
+      if (next.length) {
+        cache.set(data, { at: Date.now(), rows: next });
+        return next;
+      }
+      return hit?.rows ?? [];
+    }
     const body = (await res.json()) as { data?: { attributes?: { ohlcv_list?: number[][] } } };
     const next = bucket(parse(body.data?.attributes?.ohlcv_list).reverse(), item.bucket);
     if (next.length === 0) return hit?.rows ?? [];

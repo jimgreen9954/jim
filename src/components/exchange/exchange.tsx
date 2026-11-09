@@ -551,8 +551,12 @@ function Header({
     go("desk", "spot");
     setDesk("spot");
   };
+  const spots = () => {
+    window.dispatchEvent(new CustomEvent("tape-home", { detail: "tape" }));
+    go("desk", "spot");
+    setDesk("spot");
+  };
   const perps = () => {
-    rememberDesk({ kind: "perp", chain: "xlayer", coin: "bem" });
     window.dispatchEvent(new CustomEvent("tape-home", { detail: "tape-perp" }));
     go("desk", "perp");
     setDesk("perp");
@@ -561,7 +565,7 @@ function Header({
     setMenu(false);
     if (floor !== "desk") {
       if (desk === "perp") perps();
-      else home();
+      else spots();
     }
     askChart();
   };
@@ -569,7 +573,7 @@ function Header({
     setMenu(false);
     if (floor !== "desk") {
       if (desk === "perp") perps();
-      else home();
+      else spots();
     }
     askTrade();
   };
@@ -636,7 +640,7 @@ function Header({
           <span className="text-[15px] font-medium tracking-tight">TAPELIQUID</span>
         </button>
         <nav className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
-          {item(zh ? "现货" : "Spot", floor === "desk" && desk === "spot", home)}
+          {item(zh ? "现货" : "Spot", floor === "desk" && desk === "spot", spots)}
           {item(zh ? "合约" : "Perps", floor === "desk" && desk === "perp", perps)}
           {item(zh ? "赚取" : "Earn", claimOn, () => go("mine", "earn"))}
           {wide ? (
@@ -712,7 +716,7 @@ function Header({
                 onClick={() => setMenu(false)}
               />
               <nav className="phone-menu absolute inset-y-0 left-0 flex w-[min(16.5rem,78vw)] flex-col overflow-y-auto bg-card pb-[calc(4.5rem+env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] text-ink shadow-plate">
-                {row(zh ? "现货" : "Spot", floor === "desk" && desk === "spot", home)}
+                {row(zh ? "现货" : "Spot", floor === "desk" && desk === "spot", spots)}
                 {row(zh ? "合约" : "Perps", floor === "desk" && desk === "perp", perps)}
                 {row(zh ? "赚取" : "Earn", claimOn, () => go("mine", "earn"))}
                 <div className="px-1">

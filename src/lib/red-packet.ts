@@ -12,11 +12,16 @@ import {
   parseAbi,
   parseAbiItem,
   parseUnits,
+  stringToHex,
   type Hex,
 } from "viem";
-import { BSC, connectBsc, quoteExact, quoteWithBnb } from "@/lib/bsc";
-import { BSC_SAFE, TxPending, XLAYER_SAFE } from "@/lib/chain-marks";
-import { OKB } from "@/lib/okb";
+import { BSC, connectBsc, quoteExact, quoteUpBnb, quoteWithBnb, splitDeskFee } from "@/lib/bsc";
+import { BSC_SAFE, FEE_TO, TxPending, XLAYER_SAFE } from "@/lib/chain-marks";
+import { FAB, FAB_BEM, quoteFab, swapFab } from "@/lib/fab";
+import { OKB, quoteBemOkb } from "@/lib/okb";
+import { CIRCUIT_SPLIT, placeShare, readShareBook, readShareOrders } from "@/lib/circuit-split";
+import { RED_DESK_BYTECODE } from "@/lib/red-desk-artifact";
+import { RED_PERP_BYTECODE } from "@/lib/red-perp-artifact";
 import { RED_PACKET_ABI, RED_PACKET_BYTECODE } from "@/lib/red-packet-artifact";
 import { RED_OPEN_ABI, RED_OPEN_BYTECODE } from "@/lib/red-packet-open-artifact";
 import { RED_NEXT_ABI, RED_NEXT_BYTECODE } from "@/lib/red-packet-next-artifact";
@@ -46,6 +51,11 @@ const DESK = {
   xlayer: { router: OKB.router, quote: OKB.usdt, wrapped: OKB.wokb, tapePool: OPEN_POOL, tapeQuote: TAPE_USDT, tapeToken: TAPE_TOKEN, tapeBem: TAPE_BEM, scale: 1n, kind: 1 },
 } as const;
 
+const X_BEM_BOOK = "0xE8Ed0fE7a7aaEF822b2e5Ce9679ccACcF3aEFF56" as Hex;
+const BSC_BEM_BOOK = "0xdA4aA9E0aaad6F91835cD19345D49a8fcA8d019A" as Hex;
+const X_FAB_BOOK = "0x6Bd480BF658FaB7A2cb758c0408A7b3B5B94B431" as Hex;
+const X_TAPE_BOOK = "0x9b17D0F6431957661AdD30051de2615cb08A3886" as Hex;
+const BSC_UP_BOOK = "0x7aaf00Dab91e0e6dDDb6093323D0140c11C55aD3" as Hex;
 const USDT0 = "0x779Ded0c9e1022225f8E0630b35a9b54bE713736" as Hex;
 const TAPE = "0x8f2d517D3d62019CD8D7F08ae178Be05BBb6EBE3" as Hex;
 const X_BEM = "0x60e62Efa9405d6873C5deaBD4E6CC91c25363952" as Hex;
@@ -57,11 +67,14 @@ export const GIFT_ASSETS: Record<GiftChain, GiftAsset[]> = {
     { id: "okb", zh: "OKB", en: "OKB", token: ZERO, decimals: 18 },
     { id: "tape", zh: "TAPE", en: "TAPE", token: TAPE, decimals: 8 },
     { id: "bem", zh: "BEM", en: "BEM", token: X_BEM, decimals: 8 },
+    { id: "fab", zh: "FAB现货", en: "FAB spot", token: FAB, decimals: 8 },
+    { id: "hash", zh: "TAPE算力", en: "TAPE hash", token: CIRCUIT_SPLIT, decimals: 0 },
     { id: "usdt", zh: "USDT0", en: "USDT0", token: USDT0, decimals: 6 },
   ],
   bsc: [
     { id: "bnb", zh: "BNB", en: "BNB", token: ZERO, decimals: 18 },
     { id: "bem", zh: "BEM", en: "BEM", token: BSC.bem, decimals: 8 },
+    { id: "up", zh: "UP现货", en: "UP spot", token: BSC.up, decimals: 18 },
     { id: "usdt", zh: "USDT", en: "USDT", token: BSC.usdt, decimals: 18 },
     { id: "btc", zh: "比特币", en: "BTC", token: BSC.btcb, decimals: 18 },
     { id: "xau", zh: "黄金", en: "Gold", token: BSC.xaut, decimals: 6 },
@@ -69,6 +82,23 @@ export const GIFT_ASSETS: Record<GiftChain, GiftAsset[]> = {
     { id: "eth", zh: "ETH", en: "ETH", token: BSC.eth, decimals: 18 },
   ],
 };
+
+export function giftTasks(chain: GiftChain): GiftAsset[] {
+  const spot = GIFT_ASSETS[chain].filter((row) => row.id !== "usdt" && row.id !== "okb" && row.id !== "bnb");
+  if (chain === "xlayer") {
+    return [
+      ...spot,
+      { id: "bemperp", zh: "BEM合约", en: "BEM perp", token: X_BEM_BOOK, decimals: 6 },
+      { id: "fabperp", zh: "FAB合约", en: "FAB perp", token: X_FAB_BOOK, decimals: 6 },
+      { id: "tapeperp", zh: "TAPE合约", en: "TAPE perp", token: X_TAPE_BOOK, decimals: 6 },
+    ];
+  }
+  return [
+    ...spot,
+    { id: "bemperp", zh: "BEM合约", en: "BEM perp", token: BSC_BEM_BOOK, decimals: 18 },
+    { id: "upperp", zh: "UP合约", en: "UP perp", token: BSC_UP_BOOK, decimals: 18 },
+  ];
+}
 
 const xClient = createPublicClient({
   transport: fallback([
@@ -189,10 +219,23 @@ export function taskAsset(chain: GiftChain, hi: bigint): GiftAsset | null {
   if (hi <= 1n) return null;
   try {
     const addr = getAddress(`0x${hi.toString(16).padStart(40, "0")}`);
-    return GIFT_ASSETS[chain].find((row) => row.token.toLowerCase() === addr.toLowerCase()) ?? null;
+    return giftTasks(chain).find((row) => row.token.toLowerCase() === addr.toLowerCase()) ?? null;
   } catch {
     return null;
   }
+}
+
+export function taskStake(chain: GiftChain, hi: bigint): { token: Hex; decimals: number; symbol: string; perp: boolean } {
+  const task = taskAsset(chain, hi);
+  if (task?.id.endsWith("perp")) {
+    return {
+      token: chain === "bsc" ? BSC.usdt : USDT0,
+      decimals: task.decimals,
+      symbol: chain === "bsc" ? "USDT" : "USDT0",
+      perp: true,
+    };
+  }
+  return { token: ZERO, decimals: 18, symbol: chain === "bsc" ? "BNB" : "OKB", perp: false };
 }
 
 export function taskLine(
@@ -210,12 +253,42 @@ export function taskLine(
   const name = task ? (zh ? task.zh : task.en) : "";
   const verbBuy = gate !== 1;
   const unit = chain === "bsc" ? "BNB" : "OKB";
+  if (task?.id.endsWith("perp")) {
+    const margin = Number(formatUnits(raw, task.decimals));
+    if (!(margin > 0)) return zh ? "还没写下保证金" : "No margin yet";
+    const shown = margin.toLocaleString("en-US", { maximumFractionDigits: 6 });
+    const cash = chain === "bsc" ? "USDT" : "USDT0";
+    const side = verbBuy ? (zh ? "做多" : "long") : zh ? "做空" : "short";
+    return zh
+      ? `在${name}成交一笔${side}，保证金至少 ${shown} ${cash}。必须是这份红包发出之后的新成交，完成之后才能领取。`
+      : `Fill one ${side} on ${name}, margin at least ${shown} ${cash}, opened after this packet. Then it can be claimed.`;
+  }
   if (!name || !(buy > 0)) return zh ? "还没选要兑换的币" : "No coin yet";
   const shown = buy.toLocaleString("en-US", { maximumFractionDigits: 6 });
   const got = received ? (zh ? `约 ${received} ${name}` : `about ${received} ${name}`) : name;
   const tail = zh
     ? "完成这笔兑换之后，才能领取红包。"
     : "Finish this swap before the packet can be claimed.";
+  if (task?.id === "fab")
+    return zh
+      ? verbBuy
+        ? `在 FAB/BEM 现货用 BEM 买入 FAB，规模约 ${shown} OKB，约得 ${got}。${tail}`
+        : `在 FAB/BEM 现货把 FAB 卖成 BEM，换回约 ${shown} OKB。${tail}`
+      : verbBuy
+        ? `Buy FAB with BEM on FAB/BEM spot, about ${shown} OKB, for ${got}. ${tail}`
+        : `Sell FAB for BEM on FAB/BEM spot, back to about ${shown} OKB. ${tail}`;
+  if (task?.id === "hash")
+    return zh
+      ? `在 TAPE 算力现货按盘口挂 1 份${verbBuy ? "买单" : "卖单"}。${tail}`
+      : `Place one ${verbBuy ? "bid" : "ask"} on TAPE hash spot. ${tail}`;
+  if (task?.id === "up")
+    return zh
+      ? verbBuy
+        ? `在 UP 现货用 ${shown} BNB 买入 ${got}。${tail}`
+        : `在 UP 现货卖出 ${got}，换回 ${shown} BNB。${tail}`
+      : verbBuy
+        ? `Buy ${got} with ${shown} BNB on UP spot. ${tail}`
+        : `Sell ${got} for ${shown} BNB on UP spot. ${tail}`;
   if (!verbBuy)
     return zh
       ? `卖出 ${got}，换回 ${shown} ${unit}。${tail}`
@@ -314,7 +387,7 @@ async function send(chain: GiftChain, from: string, to: Hex, data: Hex, value = 
   } catch (err) {
     const text = err instanceof Error ? err.message : "";
     if (/exceeds the balance|insufficient funds/i.test(text)) throw new Error("funds");
-    const known = ["deployer", "creator", "amount", "life", "mode", "range", "packets", "dust", "rule", "late", "empty", "day", "cap", "early", "credit", "token", "native", "bot", "pace", "task", "buy", "fee", "pull", "prize", "closed", "begun"];
+    const known = ["deployer", "creator", "amount", "life", "mode", "range", "packets", "dust", "rule", "late", "empty", "day", "cap", "early", "credit", "token", "native", "bot", "pace", "task", "buy", "fee", "pull", "prize", "closed", "begun", "desk", "placed"];
     const hit = known.find((item) => text === item || text.includes(`: ${item}`) || text.includes(`"${item}"`));
     if (hit) throw new Error(hit);
     throw new Error("net");
@@ -336,7 +409,7 @@ async function preflight(chain: GiftChain, from: string, to: Hex, data: Hex, val
     if (which === "ok" || which === "slow") return;
     const text = which instanceof Error ? which.message : "";
     if (/exceeds the balance|insufficient funds/i.test(text)) throw new Error("funds");
-    const known = ["deployer", "creator", "amount", "life", "mode", "range", "packets", "dust", "rule", "late", "empty", "day", "cap", "early", "credit", "token", "native", "bot", "pace", "task", "buy", "fee", "pull", "prize", "closed"];
+    const known = ["deployer", "creator", "amount", "life", "mode", "range", "packets", "dust", "rule", "late", "empty", "day", "cap", "early", "credit", "token", "native", "bot", "pace", "task", "buy", "fee", "pull", "prize", "closed", "desk", "placed"];
     const hit = known.find((item) => text === item || text.includes(`: ${item}`) || text.includes(`"${item}"`));
     throw new Error(hit ?? "revert");
   } finally {
@@ -385,10 +458,63 @@ function nextInit(chain: GiftChain): Hex {
   return `${RED_NEXT_BYTECODE}${args.slice(2)}`;
 }
 
-function predictSpawn(chain: GiftChain, index: bigint): Hex {
+function predictSpawn(chain: GiftChain, index: bigint, init: Hex = nextInit(chain)): Hex {
   const salt = keccak256(encodeAbiParameters([{ type: "uint256" }], [index]));
-  const hash = keccak256(concat(["0xff", boothOf(chain), salt, keccak256(nextInit(chain))]));
+  const hash = keccak256(concat(["0xff", boothOf(chain), salt, keccak256(init)]));
   return getAddress(`0x${hash.slice(-40)}`);
+}
+
+const DESK_SALT = keccak256(stringToHex("TAPELIQUID-red-desk-v1"));
+const deskAbi = parseAbi([
+  "function desk() view returns (bool)",
+  "function used(uint64) view returns (bool)",
+]);
+const orderAbi = parseAbi([
+  "function orders(uint64 id) view returns (address user, uint256 tokenId, bool bid, uint128 price, uint128 size, uint128 left, uint256 prev, uint256 next)",
+]);
+
+export function deskInit(): Hex {
+  const args = encodeAbiParameters([{ type: "address" }], [XLAYER_SAFE]);
+  return `${RED_DESK_BYTECODE}${args.slice(2)}` as Hex;
+}
+
+function perpInit(chain: GiftChain): Hex {
+  const args = encodeAbiParameters([{ type: "address" }], [giftDeployer(chain)]);
+  return `${RED_PERP_BYTECODE}${args.slice(2)}` as Hex;
+}
+
+const RED_DESK_LIVE = "0xB49E7788C29E03BEF071D2d70b9f4Bd7f8379271" as Hex;
+
+export function redDeskAddress(): Hex {
+  const init = deskInit();
+  const hash = keccak256(concat(["0xff", FACTORY, DESK_SALT, keccak256(init)]));
+  return getAddress(`0x${hash.slice(-40)}`);
+}
+
+export async function deskLive(): Promise<boolean> {
+  for (const addr of [RED_DESK_LIVE, redDeskAddress()]) {
+    const code = await xClient.getBytecode({ address: addr });
+    if (code && code !== "0x") return true;
+  }
+  return false;
+}
+
+export async function deployDesk(from: string): Promise<Hex> {
+  const addr = redDeskAddress();
+  if (await deskLive()) return addr;
+  if (from.toLowerCase() !== FEE_TO.toLowerCase() && from.toLowerCase() !== XLAYER_SAFE.toLowerCase()) throw new Error("fee");
+  const hash = await send("xlayer", from, FACTORY, concat([DESK_SALT, deskInit()]));
+  await wait("xlayer", hash);
+  if (!(await deskLive())) throw new Error("deploy");
+  return addr;
+}
+
+async function isDeskPacket(chain: GiftChain, pool: Hex): Promise<boolean> {
+  try {
+    return await client(chain).readContract({ address: pool, abi: deskAbi, functionName: "desk" });
+  } catch {
+    return false;
+  }
 }
 
 export async function boothReady(chain: GiftChain): Promise<boolean> {
@@ -414,6 +540,12 @@ export async function readSpawned(chain: GiftChain, account: string | null): Pro
   return rows;
 }
 
+function taskNeed(chain: GiftChain, hi: bigint, text: string): bigint {
+  const task = taskAsset(chain, hi);
+  const decimals = task?.id.endsWith("perp") ? task.decimals : 18;
+  return parseUnits(text.trim() || "0", decimals);
+}
+
 export async function openAnother(
   chain: GiftChain,
   from: string,
@@ -426,6 +558,10 @@ export async function openAnother(
   taskHi: bigint,
 ): Promise<Hex> {
   const booth = boothOf(chain);
+  const deskTask = chain === "xlayer" && (taskHi === BigInt(FAB) || taskHi === BigInt(CIRCUIT_SPLIT));
+  const perp = taskAsset(chain, taskHi)?.id.endsWith("perp") === true;
+  if (deskTask && !(await deskLive())) throw new Error("desk");
+  const init = perp ? perpInit(chain) : deskTask ? deskInit() : nextInit(chain);
   const code = await client(chain).getBytecode({ address: booth });
   if (!code || code === "0x") {
     const hash = await send(chain, from, FACTORY, concat([BOOTH_SALT, RED_BOOTH_BYTECODE]));
@@ -433,7 +569,7 @@ export async function openAnother(
     throw new Error("booth");
   }
   const count = await client(chain).readContract({ address: booth, abi: RED_BOOTH_ABI, functionName: "count" });
-  const packet = predictSpawn(chain, count);
+  const packet = predictSpawn(chain, count, init);
   const fixedAmt = parseUnits(eachText.trim() || "0", asset.decimals);
   const fundAmt = parseUnits(totalText.trim() || "0", asset.decimals);
   if (fixedAmt <= 0n || fundAmt <= 0n) throw new Error("amount");
@@ -441,9 +577,9 @@ export async function openAnother(
   const beginData = encodeFunctionData({
     abi: RED_NEXT_ABI,
     functionName: "begin",
-    args: [asset.token, fixedAmt, taskHi, parseUnits(spotText.trim() || "0", 18), gate, BigInt(life), swapFeeOf(chain, taskHi), fundAmt],
+    args: [asset.token, fixedAmt, taskHi, taskNeed(chain, taskHi, spotText), gate, BigInt(life), swapFeeOf(chain, taskHi), fundAmt],
   });
-  const data = encodeFunctionData({ abi: RED_BOOTH_ABI, functionName: "open", args: [nextInit(chain), beginData] });
+  const data = encodeFunctionData({ abi: RED_BOOTH_ABI, functionName: "open", args: [init, beginData] });
   const value = asset.token === ZERO ? fundAmt : 0n;
   await preflight(chain, from, booth, data, value);
   const hash = await send(chain, from, booth, data, value);
@@ -676,6 +812,7 @@ export function swapFeeOf(chain: GiftChain, hi: bigint): number {
   const task = taskAsset(chain, hi);
   if (chain !== "bsc" || !task) return 0;
   if (task.id === "bem") return 10000;
+  if (task.id === "up") return 10000;
   if (task.id === "eth" || task.id === "xau") return 500;
   return 100;
 }
@@ -700,13 +837,19 @@ async function spotOut(zeroForOne: boolean, amountIn: bigint): Promise<bigint> {
 
 async function quoteBuy(chain: GiftChain, hi: bigint, amountIn: bigint): Promise<bigint> {
   const task = taskAsset(chain, hi);
-  if (!task || amountIn <= 0n) return 0n;
+  if (!task || amountIn <= 0n || task.id.endsWith("perp")) return 0n;
   if (chain === "xlayer" && task.id === "bem") return spotOut(false, amountIn);
+  if (chain === "xlayer" && task.id === "fab") {
+    const bem = await quoteBemOkb("buy", amountIn);
+    return bem > 0n ? quoteFab("buy", bem) : 0n;
+  }
+  if (chain === "xlayer" && task.id === "hash") return 1n;
   if (chain === "xlayer" && task.id === "tape") {
     const first = await xClient.readContract({ address: OPEN_POOL, abi: previewAbi, functionName: "previewSwap", args: [1, false, amountIn] });
     return first[1];
   }
   if (chain === "bsc") {
+    if (task.id === "up") return quoteUpBnb("buy", amountIn);
     const out = task.token === ZERO ? BSC.wbnb : task.token;
     return out.toLowerCase() === BSC.usdt.toLowerCase()
       ? quoteExact(BSC.wbnb, BSC.usdt, amountIn, 100)
@@ -760,7 +903,43 @@ export async function walletHold(chain: GiftChain, from: string, token: Hex): Pr
 
 export async function tradedNow(chain: GiftChain, from: string, lane: GiftLane = "volunteer", pool: Hex = packetOf(chain, lane)): Promise<boolean> {
   const day = await client(chain).readContract({ address: pool, abi: RED_PACKET_ABI, functionName: "tradedDay", args: [from as Hex] });
-  return day === BigInt(sgDay());
+  return day === BigInt(sgDay()) || deskTaskNoted(chain, from, pool);
+}
+
+function deskTaskKey(chain: GiftChain, from: string, pool: Hex) {
+  return `tl-red-desk:${chain}:${sgDay()}:${from.toLowerCase()}:${pool.toLowerCase()}`;
+}
+
+export function noteDeskTask(chain: GiftChain, from: string, pool: Hex) {
+  try {
+    localStorage.setItem(deskTaskKey(chain, from, pool), "1");
+  } catch {
+    /* ignore */
+  }
+}
+
+export function deskTaskNoted(chain: GiftChain, from: string, pool: Hex): boolean {
+  try {
+    return localStorage.getItem(deskTaskKey(chain, from, pool)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+async function fillDeskTask(from: string, gate: number, need: bigint, id: "fab" | "hash"): Promise<Hex> {
+  if (id === "hash") {
+    const book = await readShareBook(80n);
+    const px = (gate === 1 ? book.asks[0]?.price : book.bids[0]?.price) ?? book.bids[0]?.price ?? book.asks[0]?.price ?? 0n;
+    if (px <= 0n) throw new Error("price");
+    return placeShare(from, 80n, gate !== 1, px, 1n);
+  }
+  if (gate === 1) {
+    const amountIn = await sellAmount("xlayer", BigInt(FAB), need);
+    return swapFab(from, "sell", formatUnits(amountIn, 8));
+  }
+  const bem = await quoteBemOkb("buy", need);
+  if (bem <= 0n) throw new Error("buy");
+  return swapFab(from, "buy", formatUnits(bem, 8));
 }
 
 const outQuoteAbi = parseAbi([
@@ -795,6 +974,7 @@ async function sellAmount(chain: GiftChain, hi: bigint, need: bigint): Promise<b
   const task = taskAsset(chain, hi);
   if (!task || task.token === ZERO) throw new Error("task");
   if (chain === "bsc") {
+    if (task.id === "up") return sellSearch(need, (amount) => quoteUpBnb("sell", amount), 10n ** 18n / 100n);
     if (task.token.toLowerCase() === BSC.usdt.toLowerCase()) {
       const quoted = await bscClient.readContract({
         address: "0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997",
@@ -809,6 +989,12 @@ async function sellAmount(chain: GiftChain, hi: bigint, need: bigint): Promise<b
     return sellSearch(need, (amount) => quoteWithBnb(task.token, swapFeeOf(chain, hi), "sell", amount), 10n ** BigInt(task.decimals) / 100n);
   }
   if (chain === "xlayer" && task.id === "bem") return sellSearch(need, (amount) => spotOut(true, amount), 10n ** 6n);
+  if (task.id === "fab") {
+    return sellSearch(need, async (amount) => {
+      const bem = await quoteFab("sell", amount);
+      return bem > 0n ? quoteBemOkb("sell", bem) : 0n;
+    }, 10n ** 8n);
+  }
   if (task.id === "tape") {
     return sellSearch(need, async (amount) => {
       const row = await xClient.readContract({ address: OPEN_POOL, abi: previewAbi, functionName: "previewSwap", args: [1, true, amount] });
@@ -829,7 +1015,7 @@ function shownAmount(raw: bigint, decimals: number): string {
 
 export async function sellPreview(chain: GiftChain, hi: bigint, need: bigint): Promise<{ sold: string; back: string }> {
   const task = taskAsset(chain, hi);
-  if (!task || task.token === ZERO || need <= 0n) return { sold: "", back: "" };
+  if (!task || task.token === ZERO || need <= 0n || task.id.endsWith("perp")) return { sold: "", back: "" };
   const amountIn = await sellAmount(chain, hi, need);
   let native = 0n;
   try {
@@ -837,6 +1023,10 @@ export async function sellPreview(chain: GiftChain, hi: bigint, need: bigint): P
       ? await quoteExact(BSC.usdt, BSC.wbnb, amountIn, 100)
       : await quoteWithBnb(task.token, swapFeeOf(chain, hi), "sell", amountIn);
     else if (task.id === "bem") native = await spotOut(true, amountIn);
+    else if (task.id === "fab") {
+      const bem = await quoteFab("sell", amountIn);
+      native = bem > 0n ? await quoteBemOkb("sell", bem) : 0n;
+    }
     else if (task.id === "tape") {
       const row = await xClient.readContract({ address: OPEN_POOL, abi: previewAbi, functionName: "previewSwap", args: [1, true, amountIn] });
       native = row[1];
@@ -850,18 +1040,143 @@ export async function sellPreview(chain: GiftChain, hi: bigint, need: bigint): P
   return { sold: shownAmount(amountIn, task.decimals), back: native > 0n ? shownAmount(native, 18) : "" };
 }
 
+async function freshHashOrder(from: string, gate: number, pool: Hex): Promise<bigint> {
+  const mine = await readShareOrders(from);
+  for (const id of mine) {
+    const row = await xClient.readContract({ address: CIRCUIT_SPLIT, abi: orderAbi, functionName: "orders", args: [id] });
+    const [user, tokenId, bid, price, size] = row;
+    if (user.toLowerCase() !== from.toLowerCase() || tokenId !== 80n || price <= 0n || size < 1n) continue;
+    if (gate === 1 ? bid : !bid) continue;
+    const spent = await xClient.readContract({ address: pool, abi: deskAbi, functionName: "used", args: [id] }).catch(() => true);
+    if (spent) continue;
+    return id;
+  }
+  const book = await readShareBook(80n);
+  const px = (gate === 1 ? book.asks[0]?.price : book.bids[0]?.price) ?? book.bids[0]?.price ?? book.asks[0]?.price ?? 0n;
+  if (px <= 0n) throw new Error("price");
+  const tx = await placeShare(from, 80n, gate !== 1, px, 1n);
+  await xClient.waitForTransactionReceipt({ hash: tx, timeout: 90_000 });
+  throw new Error("placed");
+}
+
+async function tradeDesk(chain: GiftChain, from: string, gate: number, need: bigint, id: "fab" | "hash", pool: Hex): Promise<Hex> {
+  let raw = 0n;
+  let min = 0n;
+  if (id === "hash") {
+    raw = await freshHashOrder(from, gate, pool);
+  } else {
+    const buy = gate !== 1;
+    if (buy) {
+      raw = await quoteBemOkb("buy", need);
+      if (raw <= 0n) throw new Error("buy");
+      const quoted = await quoteFab("buy", splitDeskFee(raw).swapIn);
+      min = (quoted * 99n) / 100n;
+      await approveSpend(chain, from, FAB_BEM, pool, raw);
+    } else {
+      raw = await sellAmount(chain, BigInt(FAB), need);
+      const quoted = await quoteFab("sell", splitDeskFee(raw).swapIn);
+      min = (quoted * 99n) / 100n;
+      await approveSpend(chain, from, FAB, pool, raw);
+    }
+    if (min <= 0n) throw new Error("buy");
+  }
+  const data = encodeFunctionData({ abi: RED_PACKET_ABI, functionName: "trade", args: [raw, min] });
+  await preflight(chain, from, pool, data);
+  const hash = await send(chain, from, pool, data);
+  await wait(chain, hash);
+  return hash;
+}
+
+const perpDealAbi = parseAbi([
+  "function nextDeal() view returns (uint256)",
+  "function deals(uint256) view returns (address long, address short, uint96 marginL, uint96 marginS, uint128 base, uint128 entry, bool open, uint16 levL, uint16 levS)",
+]);
+
+async function tradePerp(chain: GiftChain, from: string, gate: number, need: bigint, hi: bigint, cursor: bigint, pool: Hex): Promise<Hex> {
+  const book = getAddress(`0x${hi.toString(16).padStart(40, "0")}`);
+  const live = client(chain);
+  const next = await live.readContract({ address: book, abi: perpDealAbi, functionName: "nextDeal" });
+  if (next === 0n || next < cursor) throw new Error("perp");
+  let found: bigint | null = null;
+  let wrongSide = false;
+  let shortMargin = false;
+  let end = next;
+  for (let hop = 0; hop < 4 && found == null && end >= cursor && end > 0n; hop++) {
+    const start = end - 49n > cursor ? end - 49n : cursor;
+    const floor = start < 1n ? 1n : start;
+    if (floor > end) break;
+    const ids: bigint[] = [];
+    for (let id = end; id >= floor; id--) ids.push(id);
+    const rows = await live.multicall({
+      allowFailure: true,
+      multicallAddress: "0xcA11bde05977b3631167028862bE2a173976CA11",
+      contracts: ids.map((id) => ({ address: book, abi: perpDealAbi, functionName: "deals" as const, args: [id] })),
+    });
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      if (row.status !== "success") continue;
+      const [long, short, marginL, marginS] = row.result;
+      const mineLong = long.toLowerCase() === from.toLowerCase();
+      const mineShort = short.toLowerCase() === from.toLowerCase();
+      if (!mineLong && !mineShort) continue;
+      const onSide = gate === 1 ? mineShort : mineLong;
+      const margin = onSide ? (gate === 1 ? marginS : marginL) : (mineShort ? marginS : marginL);
+      if (!onSide) {
+        wrongSide = true;
+        continue;
+      }
+      if (BigInt(margin) * 100n < need * 99n) {
+        shortMargin = true;
+        continue;
+      }
+      found = ids[i];
+      break;
+    }
+    if (start === cursor) break;
+    end = start;
+  }
+  if (found == null) throw new Error(wrongSide ? "perp-side" : shortMargin ? "perp-margin" : "perp");
+  const data = encodeFunctionData({ abi: RED_PACKET_ABI, functionName: "trade", args: [found, 0n] });
+  await preflight(chain, from, pool, data);
+  const hash = await send(chain, from, pool, data);
+  await wait(chain, hash);
+  return hash;
+}
+
 export async function tradeRed(chain: GiftChain, from: string, lane: GiftLane = "volunteer", pool: Hex = packetOf(chain, lane)): Promise<Hex> {
   const here = pool.toLowerCase() === packetOf(chain, lane).toLowerCase() ? await readRed(chain, from, lane) : await readLive(chain, from, pool, lane);
   if (here.lastDay === BigInt(sgDay())) throw new Error("day");
   if (await tradedNow(chain, from, lane, pool)) throw new Error("traded");
   const need = here.spotNeed > here.perpNeed ? here.spotNeed : here.perpNeed;
   if (need <= 0n || here.hi === 0n) throw new Error("task");
+  const deskTask = taskAsset(chain, here.hi);
+  if (deskTask?.id.endsWith("perp")) {
+    const hash = await tradePerp(chain, from, here.gate, need, here.hi, here.lo, pool);
+    markDeskFill(chain, from, "perp", Number(formatUnits(need, deskTask.decimals)) || 0, deskTask.id);
+    return hash;
+  }
+  if (deskTask?.id === "fab" || deskTask?.id === "hash") {
+    if (await isDeskPacket(chain, pool)) {
+      const hash = await tradeDesk(chain, from, here.gate, need, deskTask.id, pool);
+      markDeskFill(chain, from, "spot", Number(formatUnits(need, 18)) || 0, deskTask.id);
+      return hash;
+    }
+    const hash = await fillDeskTask(from, here.gate, need, deskTask.id);
+    noteDeskTask(chain, from, pool);
+    markDeskFill(chain, from, "spot", Number(formatUnits(need, 18)) || 0, deskTask.id);
+    return hash;
+  }
   if (here.gate === 0) {
     const bal = await client(chain).getBalance({ address: from as Hex });
     if (bal < need) throw new Error("funds");
     const minOut = await buyMin(chain, here.hi, need);
     const data = encodeFunctionData({ abi: RED_PACKET_ABI, functionName: "trade", args: [0n, minOut] });
-    await preflight(chain, from, pool, data, need);
+    try {
+      await preflight(chain, from, pool, data, need);
+    } catch (err) {
+      if (deskTask?.id === "up" && err instanceof Error && err.message === "buy") throw new Error("up-pool");
+      throw err;
+    }
     const hash = await send(chain, from, pool, data, need);
     await wait(chain, hash);
     return hash;
@@ -871,7 +1186,12 @@ export async function tradeRed(chain: GiftChain, from: string, lane: GiftLane = 
   if (!task || task.token === ZERO) throw new Error("task");
   await approveSpend(chain, from, task.token, pool, amountIn);
   const data = encodeFunctionData({ abi: RED_PACKET_ABI, functionName: "trade", args: [amountIn, need] });
-  await preflight(chain, from, pool, data);
+  try {
+    await preflight(chain, from, pool, data);
+  } catch (err) {
+    if (task.id === "up" && err instanceof Error && err.message === "buy") throw new Error("up-pool");
+    throw err;
+  }
   const hash = await send(chain, from, pool, data);
   await wait(chain, hash);
   return hash;
@@ -885,7 +1205,14 @@ export async function claimRed(chain: GiftChain, from: string, lane: GiftLane = 
   if (need <= 0n || here.hi === 0n) throw new Error("task");
   if (!(await tradedNow(chain, from, lane, pool))) throw new Error("task");
   const data = encodeFunctionData({ abi: RED_PACKET_ABI, functionName: "claim" });
-  await preflight(chain, from, pool, data);
+  try {
+    await preflight(chain, from, pool, data);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    if (deskTaskNoted(chain, from, pool) && (message === "task" || message === "buy" || message === "fee" || message === "revert"))
+      throw new Error("desk-stamp");
+    throw err;
+  }
   const hash = await send(chain, from, pool, data);
   let receipt;
   try {

@@ -42,7 +42,17 @@ export async function pullSpot(pair: SpotPair, frame: SpotFrame): Promise<Candle
     const res = await geckoFetch(
       `https://api.geckoterminal.com/api/v2/networks/${pool.network}/pools/${pool.pool}/ohlcv/${spec.path}?aggregate=${spec.aggregate}&limit=120&currency=usd`,
     );
-    if (!res.ok) return hit?.rows ?? [];
+    if (!res.ok) {
+      const { fallbackCandles } = await import("@/lib/chain-candles");
+      const span = spec.path === "minute" ? spec.aggregate * 60 : spec.path === "hour" ? 3600 : 86400;
+      const rows = await fallbackCandles(
+        `https://api.geckoterminal.com/api/v2/networks/${pool.network}/pools/${pool.pool}/ohlcv`,
+        span,
+        120,
+      );
+      if (rows.length) cache.set(key, { at: Date.now(), rows });
+      return rows.length ? rows : hit?.rows ?? [];
+    }
     const body = (await res.json()) as { data?: { attributes?: { ohlcv_list?: number[][] } } };
     const rows = (body.data?.attributes?.ohlcv_list ?? [])
       .slice(0, 120)

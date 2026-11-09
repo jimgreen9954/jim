@@ -39,13 +39,19 @@ async function fetchXOhlcv(path: string, aggregate: number, limit: number): Prom
 }
 
 async function fetchBook(base: string, path: string, aggregate: number, limit: number, extra: string): Promise<Candle[]> {
-  const res = await geckoFetch(`${base}/${path}?aggregate=${aggregate}&limit=${limit}&currency=usd${extra}`);
-  if (!res.ok) {
-    if (limit > 300) return fetchBook(base, path, aggregate, 300, extra);
-    return [];
+  const span = (path === "second" ? 1 : path === "minute" ? 60 : path === "hour" ? 3600 : 86400) * aggregate;
+  try {
+    const res = await geckoFetch(`${base}/${path}?aggregate=${aggregate}&limit=${limit}&currency=usd${extra}`);
+    if (res.ok) {
+      const body = (await res.json()) as { data?: { attributes?: { ohlcv_list?: number[][] } } };
+      const rows = parse(body.data?.attributes?.ohlcv_list);
+      if (rows.length) return rows;
+    }
+  } catch {
+    /* Gecko is down. The pool itself still has a chart. */
   }
-  const body = (await res.json()) as { data?: { attributes?: { ohlcv_list?: number[][] } } };
-  return parse(body.data?.attributes?.ohlcv_list);
+  const { fallbackCandles } = await import("@/lib/chain-candles");
+  return fallbackCandles(base, span, Math.min(limit, 300));
 }
 
 function sgtDate(t: number): { y: number; m: number; d: number } {

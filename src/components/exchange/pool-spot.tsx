@@ -577,6 +577,8 @@ export function PoolSpot({
           ? "OKB 还在钱包里。再点一次卖出，下一笔签名换成 USDT0。"
           : "The OKB is still in the wallet. Tap sell again. The next signature pays USDT0.",
       );
+    else if (message === "no-batch")
+      setNote(zh ? "没有成交。手续费和兑换必须在同一笔里。" : "No fill. The fee and the swap have to be one transaction.");
     else if (message === "fee-open")
       setNote(zh ? "成交了，手续费没扣上。再点一次补上。" : "Filled. The fee was not taken. Tap again to pay it.");
     else if (message === "fee")
@@ -995,22 +997,22 @@ export function PoolSpot({
             <button
               type="button"
               onClick={() => {
-                onPair?.("usdt");
-                setPairMenu(false);
-              }}
-              className={`block h-10 w-full px-3 text-left text-sm ${active === "usdt" ? "bg-foil" : "hover:bg-foil/70"}`}
-            >
-              TAPE/USDT0
-            </button>
-            <button
-              type="button"
-              onClick={() => {
                 setPairMenu(false);
                 onJump?.({ kind: "pancake", pair: "fab" });
               }}
               className="block h-10 w-full px-3 text-left text-sm hover:bg-foil/70"
             >
               FAB/BEM
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onPair?.("usdt");
+                setPairMenu(false);
+              }}
+              className={`block h-10 w-full px-3 text-left text-sm ${active === "usdt" ? "bg-foil" : "hover:bg-foil/70"}`}
+            >
+              TAPE/USDT0
             </button>
             <button
               type="button"

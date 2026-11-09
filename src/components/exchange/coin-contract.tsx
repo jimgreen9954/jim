@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ercPrice, ERC_BOOKS, type ErcKey } from "@/lib/bsc";
 import { Kline } from "@/components/exchange/kline";
 
-const SYMBOL = { btc: "BTCUSDT", eth: "ETHUSDT", zec: "ZECUSDT" } as const;
+const SYMBOL = { btc: "BTC_USDT", eth: "ETH_USDT", zec: "ZEC_USDT" } as const;
 const NAME = { btc: "BTC", eth: "ETH", zec: "ZEC" } as const;
 
 type Bar = { t: number; o: number; h: number; l: number; c: number; v: number };
@@ -35,19 +35,19 @@ export function CoinContract({ coin, lang }: { coin: "btc" | "eth" | "zec"; lang
         .catch(() => undefined);
     };
     const pullBars = () => {
-      fetch(`https://api.binance.com/api/v3/klines?symbol=${SYMBOL[coin]}&interval=1h&limit=48`)
+      fetch(`https://api.gateio.ws/api/v4/spot/candlesticks?currency_pair=${SYMBOL[coin]}&interval=1h&limit=48`)
         .then((res) => res.json())
         .then((rows: unknown) => {
           if (dead || !Array.isArray(rows)) return;
           const next = rows.flatMap((row) => {
             if (!Array.isArray(row)) return [];
-            const t = Number(row[0]) / 1000;
-            const o = Number(row[1]);
-            const h = Number(row[2]);
-            const l = Number(row[3]);
-            const c = Number(row[4]);
-            const v = Number(row[5]);
-            if (![t, o, h, l, c].every((n) => Number.isFinite(n))) return [];
+            const t = Number(row[0]);
+            const c = Number(row[2]);
+            const h = Number(row[3]);
+            const l = Number(row[4]);
+            const o = Number(row[5]);
+            const v = Number(row[6]);
+            if (![t, o, h, l, c].every((n) => Number.isFinite(n) && n > 0)) return [];
             return [{ t, o, h, l, c, v }];
           });
           if (next.length) setBars(next);

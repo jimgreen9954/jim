@@ -29,7 +29,7 @@ const XL = {
 };
 
 const TAPE_V4 = {
-  router: "0x1cd182C94fcF42277B80DBB9060F88024809E61E" as Hex,
+  router: "0xda00ae15d3a71466517129255255db7c0c0956d3" as Hex,
   quoter: "0x8928074ca1b241d8ec02815881c1af11e8bc5219" as Hex,
   permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3" as Hex,
   fee: 150000,

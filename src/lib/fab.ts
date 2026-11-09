@@ -9,6 +9,7 @@ import {
 import { pretty, units, XLAYER_SAFE } from "@/lib/bsc";
 import { deskParts } from "@/lib/invite-cut";
 import { quoteBemOkb, quoteOkb } from "@/lib/okb";
+import { sayTradeStep } from "@/lib/trade-step";
 import { connectXLayer, xClient } from "@/lib/xlayer";
 import { ensureProvider } from "@/lib/wallet";
 
@@ -16,7 +17,7 @@ export const FAB = "0x72f349b1eee7833b26f8c81a8410775a4e231ed2" as Hex;
 export const FAB_BEM = "0x60e62Efa9405d6873C5deaBD4E6CC91c25363952" as Hex;
 export const FAB_QUOTER = "0x8928074CA1b241D8Ec02815881c1Af11E8bC5219" as Hex;
 
-const ROUTER = "0x1cd182C94fcF42277B80DBB9060F88024809E61E" as Hex;
+const ROUTER = "0xda00ae15d3a71466517129255255db7c0c0956d3" as Hex;
 const PERMIT2 = "0x000000000022D473030F116dDEE9F6B43aC78BA3" as Hex;
 const SLIP = 100;
 
@@ -57,7 +58,17 @@ async function v4Out(buy: boolean, amountIn: bigint): Promise<bigint> {
   return out;
 }
 
-function swapCall(buy: boolean, amountIn: bigint, minOut: bigint): Hex {
+function feeInput(token: Hex, to: Hex, amount: bigint): Hex {
+  return encodeAbiParameters([{ type: "address" }, { type: "address" }, { type: "uint160" }], [token, to, amount]);
+}
+
+function swapCall(
+  buy: boolean,
+  amountIn: bigint,
+  minOut: bigint,
+  fees: { to: Hex; amount: bigint }[],
+  feeToken: Hex,
+): Hex {
   const input = buy ? FAB_BEM : FAB;
   const output = buy ? FAB : FAB_BEM;
   const swapParam = encodeAbiParameters(
@@ -88,10 +99,19 @@ function swapCall(buy: boolean, amountIn: bigint, minOut: bigint): Hex {
   const settle = encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [input, amountIn]);
   const take = encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [output, minOut]);
   const payload = encodeAbiParameters([{ type: "bytes" }, { type: "bytes[]" }], ["0x060c0f", [swapParam, settle, take]]);
+  const inputs: Hex[] = [];
+  let commands = "0x";
+  for (const fee of fees) {
+    if (fee.amount <= 0n) continue;
+    commands += "02";
+    inputs.push(feeInput(feeToken, fee.to, fee.amount));
+  }
+  commands += "10";
+  inputs.push(payload);
   return encodeFunctionData({
     abi: routerAbi,
     functionName: "execute",
-    args: ["0x10", [payload], BigInt(Math.floor(Date.now() / 1000) + 20 * 60)],
+    args: [commands as Hex, inputs, BigInt(Math.floor(Date.now() / 1000) + 20 * 60)],
   });
 }
 
@@ -170,18 +190,12 @@ export async function swapFab(from: string, side: "buy" | "sell", amount: string
   const min = (quoted * BigInt(10_000 - SLIP)) / 10_000n;
   if (floor != null && min < floor) throw new Error("quote-moved");
   if (min <= 0n) throw new Error("tiny");
-  await allow(from, token, swapIn);
-  const hash = await send(from, ROUTER, swapCall(side === "buy", swapIn, floor ?? min));
+  await allow(from, token, raw);
+  const fees: { to: Hex; amount: bigint }[] = [];
+  if (parts.reward > 0n && parts.referrer) fees.push({ to: parts.referrer, amount: parts.reward });
+  if (parts.desk > 0n) fees.push({ to: XLAYER_SAFE, amount: parts.desk });
+  sayTradeStep("both");
+  const hash = await send(from, ROUTER, swapCall(side === "buy", swapIn, floor ?? min, fees, token));
   await xClient.waitForTransactionReceipt({ hash, timeout: 90_000 });
-  if (parts.reward > 0n && parts.referrer) {
-    await send(from, token, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [parts.referrer, parts.reward] }));
-  }
-  if (parts.desk > 0n) {
-    try {
-      await send(from, token, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [XLAYER_SAFE, parts.desk] }));
-    } catch {
-      throw new Error("fee-open");
-    }
-  }
   return hash;
 }
