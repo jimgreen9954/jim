@@ -128,10 +128,6 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
       );
       return;
     }
-    if (err instanceof Error && err.message === "rescan") {
-      setNote(zh ? "请退出，再扫一次。这次要点允许签名。" : "Log out and scan again. Allow signing this time.");
-      return;
-    }
     if (err instanceof Error && err.message === "binanceapp") return;
     const code = (err as { code?: number }).code;
     const message = err instanceof Error ? err.message : "";

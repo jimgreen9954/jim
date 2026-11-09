@@ -288,21 +288,6 @@ const WC_PROJECT =
   (import.meta.env.VITE_WC_PROJECT_ID as string | undefined)?.trim() ||
   "7de890813641057dcfb68236748acae2";
 
-type ScanSession = {
-  namespaces?: Record<string, { methods?: string[]; chains?: string[]; accounts?: string[] }>;
-  peer?: { metadata?: { name?: string; redirect?: { universal?: string; native?: string } } };
-};
-
-function sessionCanSign(session: ScanSession | undefined): boolean {
-  const ns = session?.namespaces?.eip155;
-  if (!ns?.methods?.length) return true;
-  const onBsc =
-    ns.chains?.includes("eip155:56") ||
-    ns.accounts?.some((row) => row.startsWith("eip155:56:")) ||
-    false;
-  return onBsc && ns.methods.includes("eth_sendTransaction");
-}
-
 export async function connectScan(): Promise<string> {
   if (!WC_PROJECT) throw new Error("wc-project");
   const { EthereumProvider } = await import("@walletconnect/ethereum-provider");
@@ -341,21 +326,12 @@ export async function connectScan(): Promise<string> {
   };
   provider.signer.on("default_chain_changed", syncChain);
   provider.on("display_uri", (uri: string) => publishPair(String(uri)));
-  if (provider.session && !sessionCanSign(provider.session)) {
-    try {
-      await provider.disconnect();
-    } catch {
-      /* Replace a session that cannot sign. */
-    }
-  }
   if (!provider.session) await provider.connect();
-  if (!sessionCanSign(provider.session)) throw new Error("rescan");
   const next = provider.accounts[0];
   if (!next) throw new Error("nowallet");
   const wrapped: Eth = {
     request: async (args) => {
       const phone = PHONE_METHODS.has(args.method);
-      if (phone && !sessionCanSign(provider.session)) throw new Error("rescan");
       if (phone) {
         const meta = provider.session?.peer?.metadata;
         publishPhone(meta?.name || "手机钱包");
