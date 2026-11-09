@@ -288,6 +288,24 @@ const WC_PROJECT =
   (import.meta.env.VITE_WC_PROJECT_ID as string | undefined)?.trim() ||
   "7de890813641057dcfb68236748acae2";
 
+function addressFromSession(session: {
+  namespaces?: Record<string, { accounts?: string[] }>;
+} | undefined): { address: string; chainId: number } | null {
+  const found: { address: string; chainId: number }[] = [];
+  for (const group of Object.values(session?.namespaces ?? {})) {
+    for (const row of group.accounts ?? []) {
+      const parts = row.split(":");
+      if (parts.length < 3 || parts[0] !== "eip155") continue;
+      const chainId = Number(parts[1]);
+      const address = parts.slice(2).join(":");
+      if (!Number.isFinite(chainId) || !address.startsWith("0x")) continue;
+      found.push({ address, chainId });
+    }
+  }
+  if (!found.length) return null;
+  return found.find((row) => row.chainId === 56) ?? found.find((row) => row.chainId === 196) ?? found[0];
+}
+
 export async function connectScan(): Promise<string> {
   if (!WC_PROJECT) throw new Error("wc-project");
   const { EthereumProvider } = await import("@walletconnect/ethereum-provider");
@@ -327,8 +345,13 @@ export async function connectScan(): Promise<string> {
   provider.signer.on("default_chain_changed", syncChain);
   provider.on("display_uri", (uri: string) => publishPair(String(uri)));
   if (!provider.session) await provider.connect();
-  const next = provider.accounts[0];
+  const picked = addressFromSession(provider.session);
+  const next = provider.accounts[0] || picked?.address;
   if (!next) throw new Error("nowallet");
+  if (!provider.accounts[0] && picked) {
+    provider.chainId = picked.chainId;
+    provider.accounts = [picked.address];
+  }
   const wrapped: Eth = {
     request: async (args) => {
       const phone = PHONE_METHODS.has(args.method);
