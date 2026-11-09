@@ -44,7 +44,6 @@ import {
   type PoolPrint,
 } from "@/lib/bsc";
 import { UpRelease, UpSpotNotice } from "@/components/exchange/up-notice";
-import { quoteUpPoolBuy, quoteUpPoolSell, quoteUpPoolUsdt } from "@/lib/up-official";
 import { tradeStepText } from "@/lib/trade-step";
 import { STOCK_KEYS, STOCKS, type StockKey } from "@/lib/stocks";
 import { getCoinCandles, getSpotCandles } from "@/lib/candles";
@@ -409,15 +408,11 @@ export function SpotDesk({
                 ? quoteFab(side, swapIn)
               : pair === "upbnb"
                 ? quoteUpBnb(side, swapIn)
-                : pair === "upusdt" && side === "buy"
-                  ? quoteUpPoolUsdt(swapIn).then((row) => row.net)
-                  : pair === "upusdt"
-                    ? quoteUpPoolSell(swapIn).then((bem) => quoteExact(BSC.bem, BSC.usdt, bem, BSC.fee))
-                    : pair === "upbem" && side === "buy"
-                      ? quoteUpPoolBuy(swapIn).then((row) => row.net)
-                      : pair === "upbem"
-                        ? quoteUpPoolSell(swapIn)
-                        : quoteUpBem(side, swapIn);
+                : pair === "upusdt"
+                  ? quoteUpUsdt(side, swapIn)
+                  : pair === "upbem"
+                    ? quoteUpBem(side, swapIn)
+                    : quoteUpBem(side, swapIn);
         quoted
           .then((value) => {
             if (dead) return;
