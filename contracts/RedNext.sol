@@ -41,6 +41,8 @@ interface ISwapV2 {
 
 interface IUp {
     function buyWithUSDT(uint256 amountIn, uint256 minOut, uint256 minBem) external;
+    function assetOf(address account) external view returns (uint256);
+    function redeem(uint256 amount) external;
     function deposit(uint256 amount) external;
     function sell(uint256 amountIn, uint256 minOut) external;
 }
@@ -385,8 +387,11 @@ contract RedNext {
         uint256 usdt = _exact(wrapped, quote, HOP, amountIn, address(this), 1);
         require(usdt > 0, "buy");
         _approve(quote, UP_POOL, usdt);
+        IUp(UP_POOL).buyWithUSDT(usdt, 0, 1);
+        uint256 out = IUp(UP_POOL).assetOf(address(this));
+        require(out >= minOut && out > 0, "buy");
         uint256 beforeUp = IERC20(UP_TOKEN).balanceOf(address(this));
-        IUp(UP_POOL).buyWithUSDT(usdt, minOut, 1);
+        IUp(UP_POOL).redeem(out);
         uint256 got = IERC20(UP_TOKEN).balanceOf(address(this)) - beforeUp;
         require(got >= minOut, "buy");
         _push(UP_TOKEN, msg.sender, got);

@@ -402,8 +402,8 @@ export function RedGift({
       else if (message === "up-pool")
         setNote(
           zh
-            ? "这份已经发出的 UP 现货，交易里向官方池要报价，池子拒绝了，所以钱包不会弹出。请重新发一份。这一份里的 UP 等倒计时结束再取回。"
-            : "This published UP spot packet asks the official pool for a quote during the trade, and the pool rejects it, so the wallet does not open. Publish a new one. The UP in this one comes back when the timer ends.",
+            ? "这份已经发出的 UP 现货，买入后 UP 还在官方池账上，没有提出来，所以交易过不了，领不了。请再重新发一份。这两份里的 UP 等倒计时结束再取回。"
+            : "This published UP spot packet leaves the bought UP inside the official pool, so the trade cannot finish and the prize cannot be claimed. Publish it once more. The UP in these ones comes back when the timer ends.",
         );
       else if (message === "task" || message === "buy" || message === "pull")
         setNote(
