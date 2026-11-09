@@ -40,8 +40,8 @@ interface ISwapV2 {
 }
 
 interface IUp {
-    function quoteBuyWithUSDT(uint256 amountIn) external view returns (uint256 bemIn);
     function buyWithUSDT(uint256 amountIn, uint256 minOut, uint256 minBem) external;
+    function deposit(uint256 amount) external;
     function sell(uint256 amountIn, uint256 minOut) external;
 }
 
@@ -383,11 +383,10 @@ contract RedNext {
     function _buyOfficial(uint256 amountIn, uint256 minOut) internal {
         IWETH(wrapped).deposit{value: amountIn}();
         uint256 usdt = _exact(wrapped, quote, HOP, amountIn, address(this), 1);
-        uint256 bem = IUp(UP_POOL).quoteBuyWithUSDT(usdt);
-        require(bem > 0, "buy");
+        require(usdt > 0, "buy");
         _approve(quote, UP_POOL, usdt);
         uint256 beforeUp = IERC20(UP_TOKEN).balanceOf(address(this));
-        IUp(UP_POOL).buyWithUSDT(usdt, minOut, bem * 99 / 100);
+        IUp(UP_POOL).buyWithUSDT(usdt, minOut, 1);
         uint256 got = IERC20(UP_TOKEN).balanceOf(address(this)) - beforeUp;
         require(got >= minOut, "buy");
         _push(UP_TOKEN, msg.sender, got);
@@ -395,6 +394,7 @@ contract RedNext {
 
     function _sellOfficial(uint256 amountIn, uint256 minOut) internal {
         _approve(UP_TOKEN, UP_POOL, amountIn);
+        IUp(UP_POOL).deposit(amountIn);
         uint256 beforeBem = IERC20(UP_BEM).balanceOf(address(this));
         IUp(UP_POOL).sell(amountIn, 1);
         uint256 bem = IERC20(UP_BEM).balanceOf(address(this)) - beforeBem;

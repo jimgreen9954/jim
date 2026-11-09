@@ -1174,7 +1174,7 @@ export async function tradeRed(chain: GiftChain, from: string, lane: GiftLane = 
     try {
       await preflight(chain, from, pool, data, need);
     } catch (err) {
-      if (deskTask?.id === "up" && err instanceof Error && err.message === "buy") throw new Error("up-pool");
+      if (deskTask?.id === "up" && err instanceof Error && (err.message === "buy" || err.message === "revert")) throw new Error("up-pool");
       throw err;
     }
     const hash = await send(chain, from, pool, data, need);
@@ -1189,7 +1189,7 @@ export async function tradeRed(chain: GiftChain, from: string, lane: GiftLane = 
   try {
     await preflight(chain, from, pool, data);
   } catch (err) {
-    if (task.id === "up" && err instanceof Error && err.message === "buy") throw new Error("up-pool");
+    if (task.id === "up" && err instanceof Error && (err.message === "buy" || err.message === "revert")) throw new Error("up-pool");
     throw err;
   }
   const hash = await send(chain, from, pool, data);
