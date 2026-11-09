@@ -19,6 +19,7 @@ import {
   quoteUpPoolUsdt,
   UP_POOL,
   upBuyData,
+  upSellData,
   upUsdtBuyData,
 } from "@/lib/up-official";
 
@@ -1068,13 +1069,8 @@ export async function quoteUpBnb(side: "buy" | "sell", amountIn: bigint): Promis
     if (row.net <= 0n) throw new Error("nopool");
     return row.net;
   }
-  const amounts = await client.readContract({
-    address: BSC.v2Router,
-    abi: v2Abi,
-    functionName: "getAmountsOut",
-    args: [amountIn, [BSC.up, BSC.wbnb]],
-  });
-  const out = amounts[amounts.length - 1] ?? 0n;
+  const bem = await quoteUpPoolSell(amountIn);
+  const out = await quoteExact(BSC.bem, BSC.wbnb, bem, 10000);
   if (out <= 0n) throw new Error("nopool");
   return out;
 }
@@ -1085,7 +1081,7 @@ export async function quoteUpBem(side: "buy" | "sell", amountIn: bigint): Promis
     if (row.net <= 0n) throw new Error("nopool");
     return row.net;
   }
-  const out = await quoteExact(BSC.up, BSC.bem, amountIn, BSC.upBemFee);
+  const out = await quoteUpPoolSell(amountIn);
   if (out <= 0n) throw new Error("nopool");
   return out;
 }
@@ -1105,13 +1101,8 @@ export async function quoteUpUsdt(side: "buy" | "sell", amountIn: bigint): Promi
     if (row.net <= 0n) throw new Error("nopool");
     return row.net;
   }
-  const amounts = await client.readContract({
-    address: BSC.v2Router,
-    abi: v2Abi,
-    functionName: "getAmountsOut",
-    args: [amountIn, [BSC.up, BSC.wbnb, BSC.usdt]],
-  });
-  const out = amounts[amounts.length - 1] ?? 0n;
+  const bem = await quoteUpPoolSell(amountIn);
+  const out = await quoteExact(BSC.bem, BSC.usdt, bem, BSC.fee);
   if (out <= 0n) throw new Error("nopool");
   return out;
 }
@@ -1154,20 +1145,27 @@ export async function swapUpBnbSpot(from: string, side: "buy" | "sell", amount: 
   if (parts.swapIn <= 0n) throw new Error("amount");
   const held = await client.readContract({ address: BSC.up, abi: erc20, functionName: "balanceOf", args: [owner] });
   if (held < amountIn) throw new Error("balance");
-  const bnbOut = await quoteUpBnb("sell", parts.swapIn);
-  const minBnb = (bnbOut * 9900n) / 10_000n;
-  if (minBnb <= 0n) throw new Error("tiny");
-  const data = encodeFunctionData({
-    abi: v2Abi,
-    functionName: "swapExactTokensForETHSupportingFeeOnTransferTokens",
-    args: [parts.swapIn, minBnb, [BSC.up, BSC.wbnb], owner, deadline],
-  });
+  const bemOut = await quoteUpPoolSell(parts.swapIn);
+  const minBem = (bemOut * 9900n) / 10_000n;
+  if (minBem <= 0n) throw new Error("tiny");
   const feeKey = `tl-fee:${from.toLowerCase()}:upbnb-sell:${amountIn}`;
   const swapKey = `tl-swap:${from.toLowerCase()}:upbnb-sell:${amountIn}`;
-  await approveIfNeeded(from, BSC.up, parts.swapIn, BSC.v2Router);
-  const together = await finishTogether(from, parts, BSC.up, BSC.v2Router, data, 0n, swapKey, feeKey, parts.swapIn);
-  if (together) return together;
-  return fillThenFee(from, data, parts, swapKey, feeKey, BSC.v2Router, 0n, BSC.up);
+  await approveIfNeeded(from, BSC.up, parts.swapIn, UP_POOL);
+  const together = await finishTogether(from, parts, BSC.up, UP_POOL, upSellData(parts.swapIn, minBem), 0n, swapKey, feeKey, parts.swapIn);
+  const sold = together ?? (await fillThenFee(from, upSellData(parts.swapIn, minBem), parts, swapKey, feeKey, UP_POOL, 0n, BSC.up));
+  await waitOk(sold);
+  const bnbOut = await quoteExact(BSC.bem, BSC.wbnb, minBem, 10000);
+  const minBnb = (bnbOut * 9900n) / 10_000n;
+  if (minBnb <= 0n) throw new Error("tiny");
+  await approveIfNeeded(from, BSC.bem, minBem);
+  const swap = encodeFunctionData({
+    abi: routerAbi,
+    functionName: "exactInputSingle",
+    args: [{ tokenIn: BSC.bem, tokenOut: BSC.wbnb, fee: 10000, recipient: BSC.router, deadline, amountIn: minBem, amountOutMinimum: minBnb, sqrtPriceLimitX96: 0n }],
+  });
+  const unwrap = encodeFunctionData({ abi: routerAbi, functionName: "unwrapWETH9", args: [minBnb, owner] });
+  const packed = encodeFunctionData({ abi: routerAbi, functionName: "multicall", args: [[swap, unwrap]] });
+  return send(from, BSC.router, packed);
 }
 
 export async function swapUpBemSpot(from: string, side: "buy" | "sell", amount: string): Promise<Hex> {
@@ -1191,26 +1189,13 @@ export async function swapUpBemSpot(from: string, side: "buy" | "sell", amount: 
     if (together) return together;
     return fillThenFee(from, data, parts, swapKey, feeKey, UP_POOL, 0n, pay);
   }
-  const minOut = ((await quoteExact(BSC.up, BSC.bem, parts.swapIn, BSC.upBemFee)) * 9900n) / 10_000n;
+  const minOut = ((await quoteUpPoolSell(parts.swapIn)) * 9900n) / 10_000n;
   if (minOut <= 0n) throw new Error("tiny");
-  const data = encodeFunctionData({
-    abi: routerAbi,
-    functionName: "exactInputSingle",
-    args: [{
-      tokenIn: BSC.up,
-      tokenOut: BSC.bem,
-      fee: BSC.upBemFee,
-      recipient: owner,
-      deadline: BigInt(Math.floor(Date.now() / 1000) + 60 * 20),
-      amountIn: parts.swapIn,
-      amountOutMinimum: minOut,
-      sqrtPriceLimitX96: 0n,
-    }],
-  });
-  await approveIfNeeded(from, BSC.up, parts.swapIn);
-  const together = await finishTogether(from, parts, BSC.up, BSC.router, data, 0n, swapKey, feeKey, parts.swapIn);
+  const data = upSellData(parts.swapIn, minOut);
+  await approveIfNeeded(from, BSC.up, parts.swapIn, UP_POOL);
+  const together = await finishTogether(from, parts, BSC.up, UP_POOL, data, 0n, swapKey, feeKey, parts.swapIn);
   if (together) return together;
-  return fillThenFee(from, data, parts, swapKey, feeKey, BSC.router, 0n, BSC.up);
+  return fillThenFee(from, data, parts, swapKey, feeKey, UP_POOL, 0n, BSC.up);
 }
 
 export async function swapUpUsdtSpot(from: string, side: "buy" | "sell", amount: string): Promise<Hex> {
@@ -1236,16 +1221,30 @@ export async function swapUpUsdtSpot(from: string, side: "buy" | "sell", amount:
     if (together) return together;
     return fillThenFee(from, data, parts, swapKey, feeKey, UP_POOL, 0n, pay);
   }
-  const quoted = await quoteUpUsdt("sell", parts.swapIn);
-  const minOut = (quoted * 9900n) / 10_000n;
-  if (minOut <= 0n) throw new Error("tiny");
-  const data = encodeFunctionData({
-    abi: v2Abi,
-    functionName: "swapExactTokensForTokensSupportingFeeOnTransferTokens",
-    args: [parts.swapIn, minOut, [BSC.up, BSC.wbnb, BSC.usdt], owner, BigInt(Math.floor(Date.now() / 1000) + 60 * 20)],
+  const bemOut = await quoteUpPoolSell(parts.swapIn);
+  const minBem = (bemOut * 9900n) / 10_000n;
+  if (minBem <= 0n) throw new Error("tiny");
+  const data = upSellData(parts.swapIn, minBem);
+  await approveIfNeeded(from, BSC.up, parts.swapIn, UP_POOL);
+  const together = await finishTogether(from, parts, BSC.up, UP_POOL, data, 0n, swapKey, feeKey, parts.swapIn);
+  const sold = together ?? (await fillThenFee(from, data, parts, swapKey, feeKey, UP_POOL, 0n, BSC.up));
+  await waitOk(sold);
+  const usdtMin = ((await quoteExact(BSC.bem, BSC.usdt, minBem, BSC.fee)) * 9900n) / 10_000n;
+  if (usdtMin <= 0n) throw new Error("tiny");
+  await approveIfNeeded(from, BSC.bem, minBem);
+  const toUsdt = encodeFunctionData({
+    abi: routerAbi,
+    functionName: "exactInputSingle",
+    args: [{
+      tokenIn: BSC.bem,
+      tokenOut: BSC.usdt,
+      fee: BSC.fee,
+      recipient: owner,
+      deadline: BigInt(Math.floor(Date.now() / 1000) + 60 * 20),
+      amountIn: minBem,
+      amountOutMinimum: usdtMin,
+      sqrtPriceLimitX96: 0n,
+    }],
   });
-  await approveIfNeeded(from, BSC.up, parts.swapIn, BSC.v2Router);
-  const together = await finishTogether(from, parts, BSC.up, BSC.v2Router, data, 0n, swapKey, feeKey, parts.swapIn);
-  if (together) return together;
-  return fillThenFee(from, data, parts, swapKey, feeKey, BSC.v2Router, 0n, BSC.up);
+  return send(from, BSC.router, toUsdt);
 }
