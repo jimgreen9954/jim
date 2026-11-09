@@ -3,7 +3,7 @@ type Eth = {
   on?: (event: string, cb: (accounts: string[]) => void) => void;
 };
 
-export type WalletKind = "okx" | "binance";
+export type WalletKind = "okx" | "binance" | "scan";
 export type DeskChain = 56 | 196;
 
 let openLink: string | null = null;
@@ -258,14 +258,75 @@ async function connectOkxRemote(): Promise<string> {
   return next;
 }
 
+let remote: { disconnect: () => Promise<void> } | null = null;
+
+const WC_PROJECT = (import.meta.env.VITE_WC_PROJECT_ID as string | undefined)?.trim() || "";
+
 export async function connectScan(): Promise<string> {
-  kind = "okx";
-  publishPair(null);
+  if (!WC_PROJECT) throw new Error("wc-project");
+  const { EthereumProvider } = await import("@walletconnect/ethereum-provider");
   stayOnPage();
-  return connectOkxRemote();
+  publishPair(null);
+  if (remote) {
+    try {
+      await remote.disconnect();
+    } catch {
+      /* The old phone session is already gone. */
+    }
+    remote = null;
+  }
+  const provider = await EthereumProvider.init({
+    projectId: WC_PROJECT,
+    optionalChains: [56, 196],
+    showQrModal: false,
+    rpcMap: {
+      56: "https://bsc-dataseed.binance.org",
+      196: "https://rpc.xlayer.tech",
+    },
+    metadata: {
+      name: "TAPELIQUID",
+      description: "TAPELIQUID",
+      url: window.location.origin,
+      icons: [`${window.location.origin}/mark.jpg`],
+    },
+    methods: [
+      "eth_sendTransaction",
+      "personal_sign",
+      "eth_signTypedData_v4",
+      "eth_sign",
+      "wallet_switchEthereumChain",
+      "wallet_addEthereumChain",
+    ],
+    events: ["chainChanged", "accountsChanged"],
+  });
+  provider.on("display_uri", (uri: string) => publishPair(String(uri)));
+  if (!provider.session) await provider.connect();
+  const next = provider.accounts[0];
+  if (!next) throw new Error("nowallet");
+  const wrapped: Eth = {
+    request: (args) => provider.request(args),
+  };
+  remote = { disconnect: () => provider.disconnect() };
+  current = wrapped;
+  dropped = false;
+  kind = "scan";
+  remember(next);
+  provider.on("accountsChanged", (rows: string[]) => remember(rows?.[0] ?? null));
+  provider.on("chainChanged", (hex: string) => rememberChain(parseChainId(hex)));
+  provider.on("disconnect", () => {
+    if (current !== wrapped) return;
+    current = null;
+    remote = null;
+    remember(null);
+    rememberChain(null);
+  });
+  publishPair(null);
+  void refreshChain(wrapped);
+  return next;
 }
 
 export async function connectKind(which: WalletKind): Promise<string> {
+  if (which === "scan") return connectScan();
   kind = which;
   const plugged = which === "binance" ? binanceInjected() : okxInjected();
   if (plugged) return useInjected(plugged);
@@ -287,6 +348,12 @@ export function getProvider(): Eth | null {
 export async function disconnectWallet(): Promise<void> {
   const eth = current;
   dropped = true;
+  try {
+    await remote?.disconnect();
+  } catch {
+    /* The phone may already have dropped the session. */
+  }
+  remote = null;
   try {
     await eth?.request({ method: "wallet_revokePermissions", params: [{ eth_accounts: {} }] });
   } catch {
@@ -310,6 +377,11 @@ export async function grantedAccount(eth: Eth): Promise<string | null> {
 
 export async function ensureProvider(): Promise<Eth> {
   if (current) return current;
+  if (kind === "scan") {
+    await connectScan();
+    if (!current) throw new Error("nowallet");
+    return current;
+  }
   const plugged = kind === "binance" ? binanceInjected() : okxInjected();
   const eth = plugged ?? host().ethereum ?? null;
   if (eth) {
@@ -370,7 +442,9 @@ export function currentChain(): number | null {
 }
 
 export function walletLabel(): string {
-  return kind === "binance" ? "币安" : "OKX";
+  if (kind === "binance") return "币安";
+  if (kind === "scan") return "手机钱包";
+  return "OKX";
 }
 
 export function onChain(cb: (next: number | null) => void): () => void {

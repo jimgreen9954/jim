@@ -117,6 +117,14 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
     void disconnectWallet();
   };
   const fail = (err: unknown) => {
+    if (err instanceof Error && err.message === "wc-project") {
+      setNote(
+        zh
+          ? "扫码还差 WalletConnect 项目号。配上之后，OKX、小狐狸、币安都能扫，每一笔都在手机上确认。"
+          : "Scan needs a WalletConnect project id. OKX, MetaMask and Binance then confirm every trade on the phone.",
+      );
+      return;
+    }
     if (err instanceof Error && err.message === "binanceapp") return;
     const code = (err as { code?: number }).code;
     const message = err instanceof Error ? err.message : "";
@@ -250,7 +258,9 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
               <div className="mt-3 grid justify-items-center gap-1">
                 <canvas ref={codeRef} width={180} height={180} />
                 <p className="text-center text-[11px] leading-4 text-ink/55">
-                  {zh ? "用 Web3 钱包扫这个码" : "Scan with a Web3 wallet"}
+                  {zh
+                    ? "OKX、小狐狸或币安扫这个码。连上之后，每一笔都在手机上点确认。"
+                    : "Scan with OKX, MetaMask or Binance. Every trade then confirms on the phone."}
                 </p>
               </div>
             ) : null}
