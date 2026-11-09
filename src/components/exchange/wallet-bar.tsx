@@ -10,6 +10,7 @@ import {
   onAccount,
   onOpenLink,
   onPairUri,
+  onPhoneAsk,
   switchDeskChain,
 } from "@/lib/wallet";
 import { copy } from "@/lib/copy";
@@ -96,10 +97,12 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
   const [open, setOpen] = useState(false);
   const [entered, setEntered] = useState(false);
   const [pair, setPair] = useState<string | null>(null);
+  const [phone, setPhone] = useState<string | null>(null);
   const codeRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => onAccount(setAccount), []);
   useEffect(() => onOpenLink(setLink), []);
   useEffect(() => onPairUri(setPair), []);
+  useEffect(() => onPhoneAsk(setPhone), []);
   useEffect(() => {
     const canvas = codeRef.current;
     if (!canvas || !pair) return;
@@ -123,6 +126,10 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
           ? "扫码还差 WalletConnect 项目号。配上之后，OKX、小狐狸、币安都能扫，每一笔都在手机上确认。"
           : "Scan needs a WalletConnect project id. OKX, MetaMask and Binance then confirm every trade on the phone.",
       );
+      return;
+    }
+    if (err instanceof Error && err.message === "rescan") {
+      setNote(zh ? "请退出，再扫一次。这次要点允许签名。" : "Log out and scan again. Allow signing this time.");
       return;
     }
     if (err instanceof Error && err.message === "binanceapp") return;
@@ -164,16 +171,21 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
         >
           {short(account)}
         </span>
-        {compact ? null : link ? (
+        {compact || !phone ? null : (
+          <span className="inline-flex min-h-10 items-center border border-gold bg-ink px-2 text-xs text-paper">
+            {zh ? `打开${phone}点确认` : `Confirm in ${phone}`}
+          </span>
+        )}
+        {compact || !link ? null : (
           <a
             href={link}
             target="_blank"
             rel="noreferrer"
             className="inline-flex min-h-10 items-center border border-gold bg-ink px-2 text-xs text-paper sm:min-h-11 sm:text-sm"
           >
-            {zh ? "去 OKX 确认" : "Confirm in OKX"}
+            {zh ? "打开钱包" : "Open wallet"}
           </a>
-        ) : null}
+        )}
         {compact ? null : (
           <button
             type="button"

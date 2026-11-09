@@ -259,15 +259,53 @@ async function connectOkxRemote(): Promise<string> {
 }
 
 let remote: { disconnect: () => Promise<void> } | null = null;
+let phoneAsk: string | null = null;
+const phoneListeners = new Set<(next: string | null) => void>();
+
+export function onPhoneAsk(cb: (next: string | null) => void): () => void {
+  phoneListeners.add(cb);
+  cb(phoneAsk);
+  return () => phoneListeners.delete(cb);
+}
+
+function publishPhone(next: string | null) {
+  phoneAsk = next;
+  phoneListeners.forEach((cb) => cb(next));
+}
+
+const PHONE_METHODS = new Set([
+  "eth_sendTransaction",
+  "personal_sign",
+  "eth_sign",
+  "eth_signTypedData",
+  "eth_signTypedData_v3",
+  "eth_signTypedData_v4",
+  "wallet_switchEthereumChain",
+  "wallet_addEthereumChain",
+]);
 
 const WC_PROJECT =
   (import.meta.env.VITE_WC_PROJECT_ID as string | undefined)?.trim() ||
   "7de890813641057dcfb68236748acae2";
 
+type ScanSession = {
+  namespaces?: Record<string, { methods?: string[]; chains?: string[]; accounts?: string[] }>;
+  peer?: { metadata?: { name?: string; redirect?: { universal?: string; native?: string } } };
+};
+
+function sessionCanSign(session: ScanSession | undefined): boolean {
+  const ns = session?.namespaces?.eip155;
+  if (!ns?.methods?.length) return true;
+  const onBsc =
+    ns.chains?.includes("eip155:56") ||
+    ns.accounts?.some((row) => row.startsWith("eip155:56:")) ||
+    false;
+  return onBsc && ns.methods.includes("eth_sendTransaction");
+}
+
 export async function connectScan(): Promise<string> {
   if (!WC_PROJECT) throw new Error("wc-project");
   const { EthereumProvider } = await import("@walletconnect/ethereum-provider");
-  stayOnPage();
   publishPair(null);
   if (remote) {
     try {
@@ -279,7 +317,8 @@ export async function connectScan(): Promise<string> {
   }
   const provider = await EthereumProvider.init({
     projectId: WC_PROJECT,
-    optionalChains: [56, 196],
+    chains: [56],
+    optionalChains: [196],
     showQrModal: false,
     rpcMap: {
       56: "https://bsc-dataseed.binance.org",
@@ -291,22 +330,47 @@ export async function connectScan(): Promise<string> {
       url: window.location.origin,
       icons: [`${window.location.origin}/mark.jpg`],
     },
-    methods: [
-      "eth_sendTransaction",
-      "personal_sign",
-      "eth_signTypedData_v4",
-      "eth_sign",
-      "wallet_switchEthereumChain",
-      "wallet_addEthereumChain",
-    ],
+    methods: ["eth_sendTransaction", "personal_sign", "eth_signTypedData_v4"],
     events: ["chainChanged", "accountsChanged"],
   });
+  const syncChain = (caip: string) => {
+    const id = Number(String(caip).split(":")[1]);
+    if (!Number.isFinite(id)) return;
+    provider.chainId = id;
+    rememberChain(id);
+  };
+  provider.signer.on("default_chain_changed", syncChain);
   provider.on("display_uri", (uri: string) => publishPair(String(uri)));
+  if (provider.session && !sessionCanSign(provider.session)) {
+    try {
+      await provider.disconnect();
+    } catch {
+      /* Replace a session that cannot sign. */
+    }
+  }
   if (!provider.session) await provider.connect();
+  if (!sessionCanSign(provider.session)) throw new Error("rescan");
   const next = provider.accounts[0];
   if (!next) throw new Error("nowallet");
   const wrapped: Eth = {
-    request: (args) => provider.request(args),
+    request: async (args) => {
+      const phone = PHONE_METHODS.has(args.method);
+      if (phone && !sessionCanSign(provider.session)) throw new Error("rescan");
+      if (phone) {
+        const meta = provider.session?.peer?.metadata;
+        publishPhone(meta?.name || "手机钱包");
+        const link = meta?.redirect?.universal || meta?.redirect?.native || null;
+        if (link) publishLink(link);
+      }
+      try {
+        return await provider.request(args);
+      } finally {
+        if (phone) {
+          publishPhone(null);
+          publishLink(null);
+        }
+      }
+    },
   };
   remote = { disconnect: () => provider.disconnect() };
   current = wrapped;
@@ -319,11 +383,12 @@ export async function connectScan(): Promise<string> {
     if (current !== wrapped) return;
     current = null;
     remote = null;
+    publishPhone(null);
     remember(null);
     rememberChain(null);
   });
   publishPair(null);
-  void refreshChain(wrapped);
+  rememberChain(provider.chainId);
   return next;
 }
 
