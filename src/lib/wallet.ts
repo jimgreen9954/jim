@@ -306,6 +306,19 @@ function addressFromSession(session: {
   return found.find((row) => row.chainId === 56) ?? found.find((row) => row.chainId === 196) ?? found[0];
 }
 
+function sessionChainIds(session: {
+  namespaces?: Record<string, { accounts?: string[]; chains?: string[] }>;
+} | undefined): Set<number> {
+  const ids = new Set<number>();
+  for (const group of Object.values(session?.namespaces ?? {})) {
+    for (const row of [...(group.accounts ?? []), ...(group.chains ?? [])]) {
+      const id = Number(String(row).split(":")[1]);
+      if (Number.isFinite(id)) ids.add(id);
+    }
+  }
+  return ids;
+}
+
 export async function connectScan(): Promise<string> {
   if (!WC_PROJECT) throw new Error("wc-project");
   const { EthereumProvider } = await import("@walletconnect/ethereum-provider");
@@ -320,8 +333,7 @@ export async function connectScan(): Promise<string> {
   }
   const provider = await EthereumProvider.init({
     projectId: WC_PROJECT,
-    chains: [56],
-    optionalChains: [196],
+    chains: [56, 196],
     showQrModal: false,
     rpcMap: {
       56: "https://bsc-dataseed.binance.org",
@@ -333,7 +345,13 @@ export async function connectScan(): Promise<string> {
       url: window.location.origin,
       icons: [`${window.location.origin}/mark.jpg`],
     },
-    methods: ["eth_sendTransaction", "personal_sign", "eth_signTypedData_v4"],
+    methods: [
+      "eth_sendTransaction",
+      "personal_sign",
+      "eth_signTypedData_v4",
+      "wallet_switchEthereumChain",
+      "wallet_addEthereumChain",
+    ],
     events: ["chainChanged", "accountsChanged"],
   });
   const syncChain = (caip: string) => {
@@ -344,7 +362,17 @@ export async function connectScan(): Promise<string> {
   };
   provider.signer.on("default_chain_changed", syncChain);
   provider.on("display_uri", (uri: string) => publishPair(String(uri)));
-  if (!provider.session) await provider.connect();
+  const approved = sessionChainIds(provider.session);
+  if (provider.session && !(approved.has(56) && approved.has(196))) {
+    try {
+      await provider.disconnect();
+    } catch {
+      /* The old scan only had one chain. Ask for both. */
+    }
+  }
+  if (!sessionChainIds(provider.session).has(56) || !sessionChainIds(provider.session).has(196)) {
+    await provider.connect();
+  }
   const picked = addressFromSession(provider.session);
   const next = provider.accounts[0] || picked?.address;
   if (!next) throw new Error("nowallet");
@@ -355,6 +383,15 @@ export async function connectScan(): Promise<string> {
   const wrapped: Eth = {
     request: async (args) => {
       const phone = PHONE_METHODS.has(args.method);
+      const requested = parseChainId(
+        (args.params as { chainId?: string }[] | undefined)?.[0]?.chainId,
+      );
+      if (
+        (args.method === "eth_sendTransaction" || args.method === "wallet_switchEthereumChain") &&
+        (requested === 56 || requested === 196)
+      ) {
+        provider.chainId = requested;
+      }
       if (phone) {
         const meta = provider.session?.peer?.metadata;
         publishPhone(meta?.name || "手机钱包");
@@ -362,7 +399,15 @@ export async function connectScan(): Promise<string> {
         if (link) publishLink(link);
       }
       try {
-        return await provider.request(args);
+        const result = await provider.request(args);
+        if (
+          (args.method === "wallet_switchEthereumChain" || args.method === "wallet_addEthereumChain") &&
+          (requested === 56 || requested === 196)
+        ) {
+          provider.chainId = requested;
+          rememberChain(requested);
+        }
+        return result;
       } finally {
         if (phone) {
           publishPhone(null);

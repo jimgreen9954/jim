@@ -275,8 +275,8 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
                 <canvas ref={codeRef} width={180} height={180} />
                 <p className="text-center text-[11px] leading-4 text-ink/55">
                   {zh
-                    ? "OKX、小狐狸或币安扫这个码。连上之后，每一笔都在手机上点确认。"
-                    : "Scan with OKX, MetaMask or Binance. Every trade then confirms on the phone."}
+                    ? "OKX、小狐狸或币安扫一次。连上之后，BSC 和 X Layer 都在手机上签名。"
+                    : "One scan with OKX, MetaMask or Binance. BSC and X Layer then both sign on the phone."}
                 </p>
               </div>
             ) : null}
