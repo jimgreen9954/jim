@@ -13,7 +13,9 @@ Spot fills on PancakeSwap V3 (BSC). BEM uses the 1% pool. BNB uses the 0.01% poo
 | Bitcoin perpetual | BSC | `0x81A35fDaaEe7dE3dcDa195F312279Bb2aDc0b8B4` |
 | ETH perpetual | BSC | `0x564C9f5aa89430ca4f2945b466e34BE8705ee0B8` |
 | ZEC perpetual | BSC | `0xdAd8E211ec6c8b43eCe19Da2519C9505CDCbF229` |
-| UP perpetual | BSC | `0x5f913f7AFa71c51d69F472b0fE4c3EC74b1132F8` |
+| UP perpetual | BSC | `0x7aaf00Dab91e0e6dDDb6093323D0140c11C55aD3` |
+| Previous UP perpetual | BSC | `0x5f913f7AFa71c51d69F472b0fE4c3EC74b1132F8` |
+| UP mark | BSC | `0xB1e9FCCa14429b067466bd67bbF68939230d0678` |
 | TAPE perpetual | X Layer | `0x9b17D0F6431957661AdD30051de2615cb08A3886` |
 | Mark | X Layer | `0xba5234cd46ec5eB0DFdf4ac329FF42EB3062B4eA` |
 | Transistor perpetual | BSC | `0x798637b6d18cE053D69CfC0B08Ead105de352c11` |
@@ -29,7 +31,7 @@ Spot fills on PancakeSwap V3 (BSC). BEM uses the 1% pool. BNB uses the 0.01% poo
 | BEM bridge | BSC | `0xa84B8D3893De6e9922f2B29bE1e1b115845F5E72` |
 | BEM | X Layer | `0x60e62Efa9405d6873C5deaBD4E6CC91c25363952` |
 
-Bitcoin, ETH, ZEC and UP each settle on their own BSC book. TAPE settles on its own X Layer book. The 0.20 percent on those five goes to that chain's multisig. None has an admin. An open price cannot exceed 100000. Hot spot and perps list BEM/USDT, UP/USDT, then TAPE/USDT, and the majors after that.
+Bitcoin, ETH, ZEC and UP each settle on their own BSC book. The live UP book is `0x7aaf00Dab91e0e6dDDb6093323D0140c11C55aD3`. Its mark `0xB1e9FCCa14429b067466bd67bbF68939230d0678` reads the official pool `0xDf40529fa3E797c992272e27B811E59E5f1827Ae` and quotes that into USDT. The previous UP book `0x5f913f7AFa71c51d69F472b0fE4c3EC74b1132F8` keeps old positions and takes no new ones. UP spot also fills through that official pool. TAPE settles on its own X Layer book. The 0.20 percent on those books goes to that chain's multisig. None has an admin. An open price cannot exceed 100000. Hot spot and perps list BEM/USDT, UP/USDT, then TAPE/USDT, and the majors after that. Red-packet tasks can require a spot fill or a perpetual fill on the same day: X Layer can require FAB spot, TAPE hashrate, or a BEM, FAB or TAPE perpetual; BSC can require UP spot, or a BEM or UP perpetual.
 
 The rulebook is the whitepaper on the site: [/whitepaper](https://trade.yizhantoken.com/whitepaper). It wins over this file. If a rule changes, update the page and this README the same day.
 

@@ -465,7 +465,7 @@ const COIN_MARK: Record<Exclude<CoinBook, "fab">, Hex> = {
 export const BTC_COIN_BOOK = "0x81A35fDaaEe7dE3dcDa195F312279Bb2aDc0b8B4" as Hex;
 export const ETH_COIN_BOOK = "0x564C9f5aa89430ca4f2945b466e34BE8705ee0B8" as Hex;
 export const ZEC_COIN_BOOK = "0xdAd8E211ec6c8b43eCe19Da2519C9505CDCbF229" as Hex;
-export const UP_COIN_BOOK = "0x5f913f7AFa71c51d69F472b0fE4c3EC74b1132F8" as Hex;
+export const UP_COIN_BOOK = "0x7aaf00Dab91e0e6dDDb6093323D0140c11C55aD3" as Hex;
 export const TAPE_COIN_BOOK = "0x9b17D0F6431957661AdD30051de2615cb08A3886" as Hex;
 export const FAB_COIN_BOOK = "0x6Bd480BF658FaB7A2cb758c0408A7b3B5B94B431" as Hex;
 
