@@ -252,7 +252,7 @@ const ROWS: Row[] = [
     kind: "spot",
     tag: "现货",
     where: "Pancake · BSC",
-    pin: false,
+    pin: true,
     find: "UP TapeUP",
   },
   {

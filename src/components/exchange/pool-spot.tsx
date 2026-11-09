@@ -998,6 +998,16 @@ export function PoolSpot({
               type="button"
               onClick={() => {
                 setPairMenu(false);
+                onJump?.({ kind: "pancake", pair: "upbem" });
+              }}
+              className="block h-10 w-full px-3 text-left text-sm hover:bg-foil/70"
+            >
+              UP/BEM
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPairMenu(false);
                 onJump?.({ kind: "pancake", pair: "fab" });
               }}
               className="block h-10 w-full px-3 text-left text-sm hover:bg-foil/70"

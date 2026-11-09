@@ -751,6 +751,7 @@ export function HashSpot({
             <p className="px-3 pt-2 text-[10px] text-ink/40">{zh ? "热门" : "Hot"}</p>
             <button type="button" className="block h-10 w-full px-3 text-left text-sm hover:bg-foil/70" onClick={() => { setPairMenu(false); onJump?.({ kind: "pancake", pair: "bem" }); }}>BEM/USDT</button>
             <button type="button" className="block h-10 w-full px-3 text-left text-sm hover:bg-foil/70" onClick={() => { setPairMenu(false); onJump?.({ kind: "pancake", pair: "upusdt" }); }}>UP/USDT</button>
+            <button type="button" className="block h-10 w-full px-3 text-left text-sm hover:bg-foil/70" onClick={() => { setPairMenu(false); onJump?.({ kind: "pancake", pair: "upbem" }); }}>UP/BEM</button>
             <button type="button" className="block h-10 w-full px-3 text-left text-sm hover:bg-foil/70" onClick={() => { setPairMenu(false); onJump?.({ kind: "pancake", pair: "fab" }); }}>FAB/BEM</button>
             <button type="button" className="block h-10 w-full px-3 text-left text-sm hover:bg-foil/70" onClick={() => { setPairMenu(false); onJump?.({ kind: "tape", market: 0, pair: "usdt" }); }}>TAPE/USDT0</button>
             <button type="button" className="block h-10 w-full bg-foil px-3 text-left text-sm" onClick={() => setPairMenu(false)}>TAPE算力/USDT0</button>

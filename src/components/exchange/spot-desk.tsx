@@ -1072,6 +1072,7 @@ export function SpotDesk({
                 [
                   ["bem", "BEM/USDT"],
                   ["upusdt", "UP/USDT"],
+                  ["upbem", "UP/BEM"],
                   ["fab", "FAB/BEM"],
                 ] as const
               ).map(([id, label]) => (

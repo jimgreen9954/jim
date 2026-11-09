@@ -1447,6 +1447,22 @@ export function RealPerp({
                                 }),
                               ],
                             }),
+                            /* @__PURE__ */ jsxs("button", {
+                              type: "button",
+                              onClick: () => {
+                                setMarkets(false);
+                                onJump?.({ kind: "pancake", pair: "upbem" });
+                              },
+                              className: "flex w-full items-center gap-2 px-2 py-2 text-left text-sm hover:bg-foil/70",
+                              children: [
+                                /* @__PURE__ */ jsx(CoinMark, { id: "up", className: "size-5" }),
+                                /* @__PURE__ */ jsx("span", { className: "mr-auto", children: "UP/BEM" }),
+                                /* @__PURE__ */ jsx("span", {
+                                  className: "text-[11px] text-ink/50",
+                                  children: lang === "zh" ? "BSC · 现货" : "BSC · Spot",
+                                }),
+                              ],
+                            }),
                           ],
                         })
                       : null,
