@@ -379,7 +379,7 @@ export function RealPerp({
 }: {
   launch?: { chain: Desk; coin: "bem" | "btc" | "eth" | "zec" | "up" | "tape" | "fab" };
   onMarkets?: () => void;
-  onJump?: (view: { kind: "pancake"; pair: "fab" }) => void;
+  onJump?: (view: { kind: "pancake"; pair: "fab" | "upbem" }) => void;
 } = {}) {
   const lang = useExchange((s) => s.lang);
   const prefs = useDeskPrefs();
