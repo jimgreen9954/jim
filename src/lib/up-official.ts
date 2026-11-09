@@ -15,6 +15,8 @@ const abi = parseAbi([
   "function position(address account) view returns (uint256 budget, uint256 spent, uint256 opened, uint256 updated)",
   "function buy(uint256 amountIn, uint256 minOut)",
   "function sell(uint256 amountIn, uint256 minOut)",
+  "function deposit(uint256 amount)",
+  "function assetOf(address account) view returns (uint256)",
   "function buyWithUSDT(uint256 amountIn, uint256 minOut, uint256 minBem)",
   "function buyWithReleased(uint256 amount, uint256 minOut)",
   "function redeem(uint256 amount)",
@@ -102,6 +104,10 @@ export function upBuyData(amountIn: bigint, minOut: bigint): Hex {
 
 export function upSellData(amountIn: bigint, minOut: bigint): Hex {
   return encodeFunctionData({ abi, functionName: "sell", args: [amountIn, minOut] });
+}
+
+export function upDepositData(amountIn: bigint): Hex {
+  return encodeFunctionData({ abi, functionName: "deposit", args: [amountIn] });
 }
 
 export function upUsdtBuyData(amountIn: bigint, minOut: bigint, minBem: bigint): Hex {

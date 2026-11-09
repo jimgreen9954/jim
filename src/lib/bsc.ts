@@ -19,6 +19,7 @@ import {
   quoteUpPoolUsdt,
   UP_POOL,
   upBuyData,
+  upDepositData,
   upSellData,
   upUsdtBuyData,
 } from "@/lib/up-official";
@@ -1107,6 +1108,44 @@ export async function quoteUpUsdt(side: "buy" | "sell", amountIn: bigint): Promi
   return out;
 }
 
+/** The official pool sells only UP it has already credited. Deposit, then sell. */
+async function sellDepositedUp(from: string, parts: DeskParts, swapKey: string, feeKey: string, minBem: bigint): Promise<Hex> {
+  const owner = from as Hex;
+  await approveIfNeeded(from, BSC.up, parts.swapIn, UP_POOL);
+  const credited = await client.readContract({
+    address: UP_POOL,
+    abi: parseAbi(["function assetOf(address) view returns (uint256)"]),
+    functionName: "assetOf",
+    args: [owner],
+  });
+  const depositData = upDepositData(parts.swapIn);
+  const sellData = upSellData(parts.swapIn, minBem);
+  const resumed = await resumeSwap(swapKey);
+  if (resumed) {
+    forget(feeKey);
+    return resumed;
+  }
+  const calls = feeTransferCalls(parts, BSC.up);
+  if (credited < parts.swapIn) calls.push({ to: UP_POOL, data: depositData });
+  calls.push({ to: UP_POOL, data: sellData });
+  sayTradeStep("both");
+  try {
+    const hash = await sendUserBatch(from, BSC.chainId, calls);
+    remember(swapKey, hash);
+    await waitOk(hash);
+    forget(swapKey);
+    forget(feeKey);
+    return hash;
+  } catch (err) {
+    if (rejected(err) || err instanceof TxPending) throw err;
+    const message = err instanceof Error ? err.message : "";
+    if (message !== "no-batch") throw err;
+  }
+  const paid = await payDeskToken(from, BSC.up, parts, feeKey, false);
+  if (credited < parts.swapIn) await step(`${swapKey}:dep`, () => send(from, UP_POOL, depositData));
+  return finishSwap(from, sellData, paid, swapKey, feeKey, UP_POOL, 0n);
+}
+
 export async function swapUpBnbSpot(from: string, side: "buy" | "sell", amount: string): Promise<Hex> {
   const owner = from as Hex;
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20);
@@ -1150,9 +1189,7 @@ export async function swapUpBnbSpot(from: string, side: "buy" | "sell", amount: 
   if (minBem <= 0n) throw new Error("tiny");
   const feeKey = `tl-fee:${from.toLowerCase()}:upbnb-sell:${amountIn}`;
   const swapKey = `tl-swap:${from.toLowerCase()}:upbnb-sell:${amountIn}`;
-  await approveIfNeeded(from, BSC.up, parts.swapIn, UP_POOL);
-  const together = await finishTogether(from, parts, BSC.up, UP_POOL, upSellData(parts.swapIn, minBem), 0n, swapKey, feeKey, parts.swapIn);
-  const sold = together ?? (await fillThenFee(from, upSellData(parts.swapIn, minBem), parts, swapKey, feeKey, UP_POOL, 0n, BSC.up));
+  const sold = await sellDepositedUp(from, parts, swapKey, feeKey, minBem);
   await waitOk(sold);
   const bnbOut = await quoteExact(BSC.bem, BSC.wbnb, minBem, 10000);
   const minBnb = (bnbOut * 9900n) / 10_000n;
@@ -1191,11 +1228,7 @@ export async function swapUpBemSpot(from: string, side: "buy" | "sell", amount: 
   }
   const minOut = ((await quoteUpPoolSell(parts.swapIn)) * 9900n) / 10_000n;
   if (minOut <= 0n) throw new Error("tiny");
-  const data = upSellData(parts.swapIn, minOut);
-  await approveIfNeeded(from, BSC.up, parts.swapIn, UP_POOL);
-  const together = await finishTogether(from, parts, BSC.up, UP_POOL, data, 0n, swapKey, feeKey, parts.swapIn);
-  if (together) return together;
-  return fillThenFee(from, data, parts, swapKey, feeKey, UP_POOL, 0n, BSC.up);
+  return sellDepositedUp(from, parts, swapKey, feeKey, minOut);
 }
 
 export async function swapUpUsdtSpot(from: string, side: "buy" | "sell", amount: string): Promise<Hex> {
@@ -1224,10 +1257,7 @@ export async function swapUpUsdtSpot(from: string, side: "buy" | "sell", amount:
   const bemOut = await quoteUpPoolSell(parts.swapIn);
   const minBem = (bemOut * 9900n) / 10_000n;
   if (minBem <= 0n) throw new Error("tiny");
-  const data = upSellData(parts.swapIn, minBem);
-  await approveIfNeeded(from, BSC.up, parts.swapIn, UP_POOL);
-  const together = await finishTogether(from, parts, BSC.up, UP_POOL, data, 0n, swapKey, feeKey, parts.swapIn);
-  const sold = together ?? (await fillThenFee(from, data, parts, swapKey, feeKey, UP_POOL, 0n, BSC.up));
+  const sold = await sellDepositedUp(from, parts, swapKey, feeKey, minBem);
   await waitOk(sold);
   const usdtMin = ((await quoteExact(BSC.bem, BSC.usdt, minBem, BSC.fee)) * 9900n) / 10_000n;
   if (usdtMin <= 0n) throw new Error("tiny");
