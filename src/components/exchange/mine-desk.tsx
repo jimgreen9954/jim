@@ -179,7 +179,9 @@ export function MineDesk() {
   const chosen = liveSeats.filter((row) => picked[row.id] !== false);
   const myWeight =
     tape?.seats.reduce((sum, row) => sum + (row.on ? BigInt(row.gates) : 0n), 0n) ?? 0n;
-  const myShare = tape && tape.weight > 0n ? (tape.daily * myWeight) / tape.weight : 0n;
+  const shareWeight = shareRows.reduce((sum, row) => sum + row.shares, 0n);
+  const myHash = myWeight + shareWeight;
+  const myShare = tape && tape.weight > 0n ? (tape.daily * myHash) / tape.weight : 0n;
   const jump = (hash: string, next: "claim" | "stake" | "ash" | "bid" | "copy" | "lend") => {
     setSheet(next);
     const url = `#${hash}`;
@@ -224,6 +226,14 @@ export function MineDesk() {
   const era = tape ? tapeEra(tape.start) : null;
   const share = (part: bigint, whole: bigint) =>
     whole > 0n ? `${(Number((part * 10000n) / whole) / 100).toFixed(2)}%` : "—";
+  const weightShare = (part: bigint, whole: bigint) => {
+    if (whole <= 0n) return "—";
+    if (part <= 0n) return "0%";
+    const fine = (part * 1_000_000n) / whole;
+    if (fine === 0n) return "<0.0001%";
+    if (fine >= 10_000n) return `${(Number((part * 10000n) / whole) / 100).toFixed(2)}%`;
+    return `${(Number(fine) / 10_000).toFixed(4)}%`;
+  };
   const when = (sec: bigint) =>
     new Intl.DateTimeFormat(zh ? "zh-CN" : "en-GB", {
       timeZone: "Asia/Singapore",
@@ -358,6 +368,14 @@ export function MineDesk() {
               <Line
                 k={zh ? "全网算力" : "Network weight"}
                 v={tape.scanOk ? tape.weight.toLocaleString("en-US") : "—"}
+              />
+              <Line
+                k={zh ? "这地址占全网" : "This address"}
+                v={
+                  account && tape.scanOk
+                    ? `${myHash.toLocaleString("en-US")} · ${weightShare(myHash, tape.weight)}`
+                    : "—"
+                }
               />
               <Line
                 k={zh ? "质押算力" : "Staked weight"}
@@ -658,8 +676,12 @@ export function MineDesk() {
                   }
                 />
                 <Cell
-                  k={zh ? "这地址权重" : "Weight here"}
-                  v={account && tape ? myWeight.toLocaleString("en-US") : "—"}
+                  k={zh ? "算力占全网" : "Share of network"}
+                  v={
+                    account && tape && tape.weight > 0n
+                      ? `${myHash.toLocaleString("en-US")} · ${weightShare(myHash, tape.weight)}`
+                      : "—"
+                  }
                 />
                 <Cell
                   k={zh ? "这地址约占今日" : "About today"}
@@ -909,7 +931,7 @@ function Cell({ k, v }: { k: string; v: string }) {
   return (
     <div className="min-w-0 border-l border-gold/20 px-3 py-2 first:border-l-0 [&:nth-child(3n+1)]:border-l-0">
       <dt className="truncate text-[10px] tracking-wide text-ink/40">{k}</dt>
-      <dd className="mt-0.5 truncate font-mono text-[13px] tabular-nums">{v}</dd>
+      <dd className="mt-0.5 font-mono text-[13px] tabular-nums break-words">{v}</dd>
     </div>
   );
 }
