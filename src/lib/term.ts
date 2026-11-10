@@ -106,10 +106,13 @@ function storageKey(chain: TermChain) {
   return `tapeliquid-termbook-${chain}`;
 }
 
+const TERM_BOOK: Record<TermChain, Hex> = {
+  xlayer: "0x683fb58ee77172626D5B49087DdAc71eF7825d20",
+  bsc: "0xBa427D94b001FA1cf0f85E1E54c1E392e9a07610",
+};
+
 export function termAddress(chain: TermChain): Hex | null {
-  if (typeof window === "undefined") return null;
-  const saved = window.localStorage.getItem(storageKey(chain)) ?? "";
-  return /^0x[a-fA-F0-9]{40}$/.test(saved) ? (saved as Hex) : null;
+  return TERM_BOOK[chain];
 }
 
 export function forgetTerm(chain: TermChain) {

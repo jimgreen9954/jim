@@ -3,7 +3,6 @@ import {
   addTermColl,
   aprText,
   depositTerm,
-  forgetTerm,
   freshAt,
   hourlyWad,
   liquidateTerm,
@@ -15,7 +14,6 @@ import {
   pokeTerm,
   readTerm,
   repayTerm,
-  termAddress,
   termAsset,
   termAssets,
   TERM_ROWS,
@@ -168,7 +166,6 @@ export function TermDesk({ zh, account }: { zh: boolean; account: string | null 
   };
 
   const live = Boolean(snap?.live && snap.address && !snap.mismatch);
-  const saved = termAddress(chain);
   const lenderPnl = pool && pool.supply > 0n ? pool.supply - pool.basis : pool?.supply === 0n ? 0n : null;
   const preview = openPreview(collText, debtText, collAsset.decimals, debtAsset.decimals, collPool, debtPool, debtAsset.kind, term, now);
 
@@ -198,32 +195,8 @@ export function TermDesk({ zh, account }: { zh: boolean; account: string | null 
           <li>{zh ? "价格每 10 分钟最多动 0.5%。要连续记到现货价和记下的价相差不超过 2%，才能新借或平仓。超过 30 分钟没记，这两件事停下。还款和加抵押不受影响。稳定币记成 1 美元。直接转进合约的取不回。" : "A posted price moves at most 0.5% every 10 minutes. New loans and liquidations wait until the spot is within 2% of the posted price. After 30 minutes they pause. Repayment and added collateral do not. Stables post at $1. A raw transfer into the contract is lost."}</li>
         </ul>
         {snap?.address ? <p className="mt-2 break-all font-mono text-xs text-ink/80">{snap.address}</p> : null}
-        {!saved ? (
-          <p className="mt-3 text-xs leading-5 text-ink/70">
-            {zh ? "还没部署。去交易台主页签。每条链一份，签完把地址发回来。" : "Not deployed. Sign it on the desk home. One book per chain. Send the address back."}
-          </p>
-        ) : null}
         {snap?.mismatch ? (
-          <div className="mt-2">
-            <p className="text-xs text-sell">{zh ? "这个地址对不上期贷合约。别人还不能用。可以忘掉它再部署一次。" : "This address is not the term book. Forget it and deploy again."}</p>
-            <button
-              type="button"
-              className="mt-1 min-h-9 text-xs underline"
-              onClick={() => {
-                forgetTerm(chain);
-                setSnap(null);
-                setNote(zh ? "已忘掉这个地址。" : "That address is forgotten.");
-                setBad(false);
-              }}
-            >
-              {zh ? "忘掉这个地址" : "Forget this address"}
-            </button>
-          </div>
-        ) : null}
-        {saved && !snap?.mismatch ? (
-          <p className="mt-2 text-xs leading-5 text-ink/55">
-            {zh ? "地址先记在这台浏览器。把它发回来，我才写进网站，别人才能用。" : "The address is saved in this browser. Send it back and it will be written into the site for everyone else."}
-          </p>
+          <p className="mt-2 text-xs text-sell">{zh ? "链上这份对不上期贷合约。" : "The contract on chain is not this term book."}</p>
         ) : null}
         {miss && !snap ? <p className="mt-2 text-xs text-sell">{zh ? "链上没读到。不写成 0。" : "The chain did not answer. This is not shown as zero."}</p> : null}
       </article>
