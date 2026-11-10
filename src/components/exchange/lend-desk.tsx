@@ -209,11 +209,14 @@ export function LendDesk({ zh, account }: { zh: boolean; account: string | null 
             <p className="mt-1 font-mono text-xl tabular-nums">
               {money(view?.supply)} <span className="text-sm text-ink/50">{market.usdtSym}</span>
             </p>
-            <p className="mt-1 text-xs leading-5 text-ink/55">
-              {zh
-                ? `这是你现在能取回的数，利息已经加进去，年化 ${view ? aprText(view.supplyApr) : "—"}。合约只记份额，不记你存入时的本金，所以不另写一笔盈亏。`
-                : `This is what you can withdraw now. Interest is already inside it, at ${view ? aprText(view.supplyApr) : "—"}. The contract stores shares, not your original deposit, so it does not invent a profit figure.`}
-            </p>
+            <details className="mt-1 text-xs text-ink/55">
+              <summary className="min-h-11 cursor-pointer">{zh ? "说明" : "Note"}</summary>
+              <p className="mt-1 leading-5">
+                {zh
+                  ? `这是你现在能取回的数，利息已经加进去，年化 ${view ? aprText(view.supplyApr) : "—"}。合约只记份额，不记你存入时的本金，所以不另写一笔盈亏。`
+                  : `This is what you can withdraw now. Interest is already inside it, at ${view ? aprText(view.supplyApr) : "—"}. The contract stores shares, not your original deposit, so it does not invent a profit figure.`}
+              </p>
+            </details>
           </article>
           <article className="border border-gold/40 px-3 py-3">
             <p className="text-[11px] tracking-[0.14em] text-ink/45">{zh ? "抵押" : "Collateral"}</p>
@@ -234,11 +237,14 @@ export function LendDesk({ zh, account }: { zh: boolean; account: string | null 
             {view && view.posted > 0n && !view.price ? (
               <p className="mt-2 text-xs text-sell">{zh ? "抵押价这次没读到。市值、负债率先空着，不当成 0。" : "The collateral price did not load. Mark and ratio are left blank, not shown as zero."}</p>
             ) : null}
-            <p className="mt-2 text-xs leading-5 text-ink/55">
-              {zh
-                ? "净值 = 抵押市值 − 欠款。借款上限是 50%。负债率过 75%，别人可以替你还一笔，并按合约价多拿走大约 5% 的抵押。"
-                : "Equity is collateral value minus debt. New borrows stop at 50%. Above 75%, someone can repay for you and take about 5% extra collateral."}
-            </p>
+            <details className="mt-2 text-xs text-ink/55">
+              <summary className="min-h-11 cursor-pointer">{zh ? "说明" : "Note"}</summary>
+              <p className="mt-1 leading-5">
+                {zh
+                  ? "净值 = 抵押市值 − 欠款。借款上限是 50%。负债率过 75%，别人可以替你还一笔，并按合约价多拿走大约 5% 的抵押。"
+                  : "Equity is collateral value minus debt. New borrows stop at 50%. Above 75%, someone can repay for you and take about 5% extra collateral."}
+              </p>
+            </details>
             {book && book.ratio != null && book.ratio > 5000n ? (
               <div className={`mt-2 border px-2 py-2 text-xs leading-5 ${book.ratio > 7500n ? "border-sell text-sell" : "border-gold text-ink"}`}>
                 {book.ratio > 7500n

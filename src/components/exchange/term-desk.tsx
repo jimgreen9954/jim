@@ -182,18 +182,21 @@ export function TermDesk({ zh, account }: { zh: boolean; account: string | null 
             ))}
           </div>
         </div>
-        <p className="mt-2 text-xs leading-5 text-ink/70">
-          {zh
-            ? "这是另一本账，不是借贷，也不是期限质押。利率写死。利息按整点、按剩余本金计，不满一小时不计。到期不还，之后每个小时按两倍计，直到还清或被平仓。没还的利息不滚进本金。"
-            : "This is a separate book. It is not Lend, and it is not timed stake. The rate is fixed. Interest ticks on the hour, on the remaining principal. A partial hour is not charged. After the due hour it ticks at twice the rate until repayment or liquidation. Unpaid interest is not added to principal."}
-        </p>
-        <ul className="mt-2 grid gap-1 text-xs leading-5 text-ink/60">
-          <li>{zh ? "八档按整天算：24 小时、3 天、7 天、30 天、90 天、180 天、270 天、365 天。不是日历月。" : "Eight terms, in exact days: 24 hours, 3, 7, 30, 90, 180, 270, 365. Not calendar months."}</li>
-          <li>{zh ? "基础年化：USDT、USDT0 是 8%，BNB、OKB 是 12%，BEM、UP、TAPE、FAB 是 18%。期限越长乘 1、1.05、1.10、1.20、1.35、1.50、1.65、1.80。逾期再乘 2。" : "Base APR: USDT and USDT0 8%, BNB and OKB 12%, BEM, UP, TAPE and FAB 18%. Longer terms multiply by 1, 1.05, 1.10, 1.20, 1.35, 1.50, 1.65, 1.80. Overdue doubles that."}</li>
-          <li>{zh ? "新开最多借到抵押品的 50%，单笔至少 10 美元。负债率过 75%，别人可以代还，并多拿走大约 5% 的抵押。同一枚不能既抵押又借出。一个人最多 16 笔。" : "New loans stop at 50% of collateral, and at least $10. Above 75%, someone may repay and take about 5% extra collateral. One asset cannot be both sides. Sixteen open loans at most."}</li>
-          <li>{zh ? "利息的 10% 记成这条链多签的存款份额，90% 留给存款人。本金不另收费。别人还没还的利息还不在可取余额里。已经借出的本金，现金不够时取不出。" : "Ten percent of interest is credited to that chain's multisig. Lenders keep 90%. Principal is not charged. Unpaid interest is not withdrawable until a repayment or a liquidation. Borrowed principal cannot be withdrawn while cash is short."}</li>
-          <li>{zh ? "价格每 10 分钟最多动 0.5%。要连续记到现货价和记下的价相差不超过 2%，才能新借或平仓。超过 30 分钟没记，这两件事停下。还款和加抵押不受影响。稳定币记成 1 美元。直接转进合约的取不回。" : "A posted price moves at most 0.5% every 10 minutes. New loans and liquidations wait until the spot is within 2% of the posted price. After 30 minutes they pause. Repayment and added collateral do not. Stables post at $1. A raw transfer into the contract is lost."}</li>
-        </ul>
+        <details className="mt-2 text-xs text-ink/60">
+          <summary className="min-h-11 cursor-pointer text-ink/70">{zh ? "规则" : "Rules"}</summary>
+          <p className="mt-2 leading-5 text-ink/70">
+            {zh
+              ? "这是另一本账，不是借贷，也不是期限质押。利率写死。利息按整点、按剩余本金计，不满一小时不计。到期不还，之后每个小时按两倍计，直到还清或被平仓。没还的利息不滚进本金。"
+              : "This is a separate book. It is not Lend, and it is not timed stake. The rate is fixed. Interest ticks on the hour, on the remaining principal. A partial hour is not charged. After the due hour it ticks at twice the rate until repayment or liquidation. Unpaid interest is not added to principal."}
+          </p>
+          <ul className="mt-2 grid gap-1 leading-5">
+            <li>{zh ? "八档按整天算：24 小时、3 天、7 天、30 天、90 天、180 天、270 天、365 天。不是日历月。" : "Eight terms, in exact days: 24 hours, 3, 7, 30, 90, 180, 270, 365. Not calendar months."}</li>
+            <li>{zh ? "基础年化：USDT、USDT0 是 8%，BNB、OKB 是 12%，BEM、UP、TAPE、FAB 是 18%。期限越长乘 1、1.05、1.10、1.20、1.35、1.50、1.65、1.80。逾期再乘 2。" : "Base APR: USDT and USDT0 8%, BNB and OKB 12%, BEM, UP, TAPE and FAB 18%. Longer terms multiply by 1, 1.05, 1.10, 1.20, 1.35, 1.50, 1.65, 1.80. Overdue doubles that."}</li>
+            <li>{zh ? "新开最多借到抵押品的 50%，单笔至少 10 美元。负债率过 75%，别人可以代还，并多拿走大约 5% 的抵押。同一枚不能既抵押又借出。一个人最多 16 笔。" : "New loans stop at 50% of collateral, and at least $10. Above 75%, someone may repay and take about 5% extra collateral. One asset cannot be both sides. Sixteen open loans at most."}</li>
+            <li>{zh ? "利息的 10% 记成这条链多签的存款份额，90% 留给存款人。本金不另收费。别人还没还的利息还不在可取余额里。已经借出的本金，现金不够时取不出。" : "Ten percent of interest is credited to that chain's multisig. Lenders keep 90%. Principal is not charged. Unpaid interest is not withdrawable until a repayment or a liquidation. Borrowed principal cannot be withdrawn while cash is short."}</li>
+            <li>{zh ? "价格每 10 分钟最多动 0.5%。要连续记到现货价和记下的价相差不超过 2%，才能新借或平仓。超过 30 分钟没记，这两件事停下。还款和加抵押不受影响。稳定币记成 1 美元。直接转进合约的取不回。" : "A posted price moves at most 0.5% every 10 minutes. New loans and liquidations wait until the spot is within 2% of the posted price. After 30 minutes they pause. Repayment and added collateral do not. Stables post at $1. A raw transfer into the contract is lost."}</li>
+          </ul>
+        </details>
         {snap?.address ? <p className="mt-2 break-all font-mono text-xs text-ink/80">{snap.address}</p> : null}
         {snap?.mismatch ? (
           <p className="mt-2 text-xs text-sell">{zh ? "链上这份对不上期贷合约。" : "The contract on chain is not this term book."}</p>
@@ -203,15 +206,18 @@ export function TermDesk({ zh, account }: { zh: boolean; account: string | null 
 
       <article className="border border-gold bg-card px-3 py-3">
         <p className="text-[11px] tracking-[0.14em] text-ink/45">{zh ? "记账" : "Post"}</p>
-        <p className="mt-1 text-xs leading-5 text-ink/55">
-          {chain === "xlayer"
-            ? zh
-              ? "先记 USDT0 和 OKB。BEM 要等 OKB 可用。FAB 要等 BEM 可用。TAPE 可以单独记。"
-              : "Post USDT0 and OKB first. BEM waits for a usable OKB price. FAB waits for BEM. TAPE can be posted on its own."
-            : zh
-              ? "先记 USDT、BNB 和 BEM。UP 要等 BEM 可用。"
-              : "Post USDT, BNB and BEM first. UP waits for a usable BEM price."}
-        </p>
+        <details className="mt-1 text-xs text-ink/55">
+          <summary className="min-h-11 cursor-pointer">{zh ? "说明" : "Note"}</summary>
+          <p className="mt-1 leading-5">
+            {chain === "xlayer"
+              ? zh
+                ? "先记 USDT0 和 OKB。BEM 要等 OKB 可用。FAB 要等 BEM 可用。TAPE 可以单独记。"
+                : "Post USDT0 and OKB first. BEM waits for a usable OKB price. FAB waits for BEM. TAPE can be posted on its own."
+              : zh
+                ? "先记 USDT、BNB 和 BEM。UP 要等 BEM 可用。"
+                : "Post USDT, BNB and BEM first. UP waits for a usable BEM price."}
+          </p>
+        </details>
         <div className="mt-2 flex flex-wrap gap-1">
           {assets.map((row) => {
             const book = snap?.pools.find((item) => item.id === row.id);
@@ -250,11 +256,14 @@ export function TermDesk({ zh, account }: { zh: boolean; account: string | null 
           {pool && pool.price > 0n ? `1 ${picked.symbol} = ${termText(pool.price, 18, 4)} USD` : zh ? "还没有价格。" : "No price yet."}
           {ageText(pool, now, zh)}
         </p>
-        <p className="mt-1 text-xs leading-5 text-ink/55">
-          {zh
-            ? "存款盈亏 = 现在能取回的数量 − 还记在你名下的成本。别人没还的利息还没算进来。取出会按比例减成本。已经借出的部分，要等还回来才取得出。"
-            : "Supply PnL is what you can take back now, minus the cost still booked to you. Interest nobody has repaid yet is not in it. A withdrawal reduces the cost in proportion. Borrowed funds come out only after they are repaid."}
-        </p>
+        <details className="mt-1 text-xs text-ink/55">
+          <summary className="min-h-11 cursor-pointer">{zh ? "盈亏怎么算" : "How PnL is counted"}</summary>
+          <p className="mt-1 leading-5">
+            {zh
+              ? "存款盈亏 = 现在能取回的数量 − 还记在你名下的成本。别人没还的利息还没算进来。取出会按比例减成本。已经借出的部分，要等还回来才取得出。"
+              : "Supply PnL is what you can take back now, minus the cost still booked to you. Interest nobody has repaid yet is not in it. A withdrawal reduces the cost in proportion. Borrowed funds come out only after they are repaid."}
+          </p>
+        </details>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           <label className="text-xs text-ink/55">
             {zh ? "存入" : "Supply"} · {zh ? "可用" : "Available"} {pool ? termText(pool.wallet, picked.decimals) : "—"} {picked.symbol}
@@ -329,11 +338,14 @@ export function TermDesk({ zh, account }: { zh: boolean; account: string | null 
         >
           {zh ? "开仓" : "Open"}
         </button>
-        <p className="mt-2 text-xs leading-5 text-ink/55">
-          {zh
-            ? `这一档年化 ${aprText(debtAsset.kind, TERM_ROWS[term]?.mul ?? 10000)}。逾期后小时利息变成两倍。开仓时的净值会记下来，下面的盈亏用现在的净值去减它。`
-            : `This term is ${aprText(debtAsset.kind, TERM_ROWS[term]?.mul ?? 10000)} APR. After it is due, the hourly interest doubles. Equity at open is stored. PnL below is equity now minus that.`}
-        </p>
+        <details className="mt-2 text-xs text-ink/55">
+          <summary className="min-h-11 cursor-pointer">{zh ? "这一档" : "This term"}</summary>
+          <p className="mt-1 leading-5">
+            {zh
+              ? `这一档年化 ${aprText(debtAsset.kind, TERM_ROWS[term]?.mul ?? 10000)}。逾期后小时利息变成两倍。开仓时的净值会记下来，下面的盈亏用现在的净值去减它。`
+              : `This term is ${aprText(debtAsset.kind, TERM_ROWS[term]?.mul ?? 10000)} APR. After it is due, the hourly interest doubles. Equity at open is stored. PnL below is equity now minus that.`}
+          </p>
+        </details>
       </article>
 
       <article className="border border-gold bg-card px-3 py-3">
@@ -544,15 +556,18 @@ function LoanCard({
         <Cell k={zh ? "下一小时利息" : "Next tick"} v={`${termText(nextAdd, debt.decimals, 6)} ${debt.symbol}`} />
         <Cell k={zh ? "抵押平仓价" : "Close"} v={closePx ? `${termText(closePx, 18, 4)} USD` : "—"} />
       </dl>
-      <p className="mt-2 text-xs leading-5 text-ink/55">
-        {overdue
-          ? zh
-            ? "已经过期。接下来每个整点按两倍计息，直到还清或负债率过 75% 被平仓。"
-            : "Past due. Each new hour is charged at twice the rate until you repay or the ratio passes 75%."
-          : zh
-            ? "利息只在整点加上。这一小时里面欠款不变，倒计时在走。"
-            : "Interest is added only on the hour. During this hour the debt stays put. The timer is what moves."}
-      </p>
+      <details className="mt-2 text-xs text-ink/55">
+        <summary className="min-h-11 cursor-pointer">{zh ? "计息" : "Interest"}</summary>
+        <p className="mt-1 leading-5">
+          {overdue
+            ? zh
+              ? "已经过期。接下来每个整点按两倍计息，直到还清或负债率过 75% 被平仓。"
+              : "Past due. Each new hour is charged at twice the rate until you repay or the ratio passes 75%."
+            : zh
+              ? "利息只在整点加上。这一小时里面欠款不变，倒计时在走。"
+              : "Interest is added only on the hour. During this hour the debt stays put. The timer is what moves."}
+        </p>
+      </details>
       {ratio != null && ratio > 7500n ? <p className="mt-1 text-xs text-sell">{zh ? "负债率已经超过 75%。现在就可以被平仓。" : "The ratio is over 75%. Liquidation is allowed."}</p> : null}
       <div className="mt-2 grid gap-2 sm:grid-cols-2">
         <label className="text-xs text-ink/55">
