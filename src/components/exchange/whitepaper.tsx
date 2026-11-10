@@ -51,7 +51,7 @@ const zhBody: Section[] = [
   {
     h: "工房",
     ps: [
-      "先铸造 NAND 或 LATCH，再流片。流片烧掉网表里的晶体管，不能撤回，也不能再铸回来。一张最多 18,000 个 NAND，或 30,000 个 LATCH。更大的网表会失败，晶体管还在钱包里。",
+      "先铸造 NAND 或 LATCH，再流片。流片页标题下写 TAPELIQUID 的晶体管总量、已铸造，以及已经流片烧掉的颗数。NAND 和 LATCH 共用这一个总量。烧掉的按种类分开，不算另外打进黑洞的。流片烧掉网表里的晶体管，不能撤回，也不能再铸回来。一张最多 18,000 个 NAND，或 30,000 个 LATCH。更大的网表会失败，晶体管还在钱包里。",
       "NAND 和 LATCH 在 X Layer 铸造，共用额度 2,100,000。未流片的库存可以转让，不算算力。额度用完后只剩转让。",
       "晶体管合约在工房里，不在交易台。保证金是 BSC 的 USDT。结算参照收费地址写下的 10 分钟均价，不是 TapeOut 页面上的另一口价。六个标的各自一本。",
       "TapeOut 的晶体管现货只同步买单。卖出就是吃其中一档，写明买价、剩余和总额。TapeOut 的电路页读公开盘口。官方盘和已经签名的卖单都能买。日产能价是卖价除以预计 24 小时 BEM。算力是计入挖矿的权重。带虚线的字，鼠标停上出说明，移开消失。本站另收 0.20%，先付。后面那笔没有成交，这一笔不退。",
@@ -256,7 +256,7 @@ const en: Section[] = [
   {
     h: "Workshop",
     ps: [
-      "Mint NAND or LATCH, then tape out. Tape-out burns the transistors in the netlist. It cannot be undone or minted back. One sheet holds at most 18,000 NAND or 30,000 LATCH. A larger netlist fails, and the transistors stay in the wallet.",
+      "Mint NAND or LATCH, then tape out. The tape-out page shows the TAPELIQUID transistor cap, how many have been minted, and how many tape-out has burned. NAND and LATCH share that cap. The burned count is split by kind and does not include transfers into the dead address. Tape-out burns the transistors in the netlist. It cannot be undone or minted back. One sheet holds at most 18,000 NAND or 30,000 LATCH. A larger netlist fails, and the transistors stay in the wallet.",
       "NAND and LATCH mint on X Layer under one cap of 2,100,000. Untaped stock can be transferred and is not hashrate. After the cap, only transfers remain.",
       "Transistor perps live in the workshop, not on the desk. Margin is BSC USDT. Settlement uses the 10-minute average posted by the fee address, not a second price from the TapeOut page. There are six markets.",
       "The TapeOut transistor book lists bids only. Selling fills one of them, with the bid, the size left, and the total. The TapeOut circuit page reads the public book. An official listing and a signed ask can both be bought. The day-output price is the ask divided by estimated BEM over 24 hours. Hash is the weight counted for mining. A dotted word shows a note while the pointer is on it, and the note hides when the pointer leaves. This site charges an extra 0.20%, paid first. If the later fill does not happen, that fee is not returned.",

@@ -4,10 +4,12 @@ import { compile, simulate, type CNode, type CWire, type Kind } from "@/lib/canv
 import { useExchange } from "@/lib/exchange-store";
 import {
   connectXLayer,
+  catchKindSupply,
   readProcessor,
   recipeNetlist,
   SEAL_NETLIST,
   TAPE_SHEET,
+  type KindSupply,
   type ProcessorStatus,
 } from "@/lib/xlayer";
 import { connectBsc } from "@/lib/bsc";
@@ -145,6 +147,7 @@ export function TapeCanvas() {
   const [latch, setLatch] = useState<Record<string, boolean>>({});
   const [recipe, setRecipe] = useState<[number, number] | null>(null);
   const [cpu, setCpu] = useState<ProcessorStatus | null>(null);
+  const [kinds, setKinds] = useState<KindSupply | null>(null);
   const [fee, setFee] = useState("0.0013");
   const [rows, setRows] = useState<
     { id: string; nIn: string; nOut: string; gates: string; owner: string }[]
@@ -198,6 +201,23 @@ export function TapeCanvas() {
     return () => {
       dead = true;
       window.clearInterval(id);
+    };
+  }, [target]);
+
+  useEffect(() => {
+    if (!target.ours) {
+      setKinds(null);
+      return;
+    }
+    let dead = false;
+    const timer = window.setTimeout(() => {
+      catchKindSupply((row) => {
+        if (!dead) setKinds(row);
+      }).catch(() => undefined);
+    }, 800);
+    return () => {
+      dead = true;
+      window.clearTimeout(timer);
     };
   }, [target]);
 
@@ -500,6 +520,33 @@ export function TapeCanvas() {
               ? `流片 ${target.ours ? "TAPELIQUID" : "TapeOut"} ${target.name}`
               : `Tape ${target.ours ? "TAPELIQUID" : "TapeOut"} ${target.name}`}
           </h2>
+          {target.ours ? (
+            <dl className="mt-3 grid grid-cols-3 gap-2">
+              <div className="border border-gold/40 px-2 py-2">
+                <dt className="text-[10px] tracking-wide text-ink/45">{zh ? "晶体管总量" : "Transistor cap"}</dt>
+                <dd className="font-mono text-lg tabular-nums">{cpu ? Number(cpu.cap).toLocaleString("en-US") : "—"}</dd>
+                <p className="text-[11px] leading-4 text-ink/45">{zh ? "NAND 和 LATCH 共用" : "NAND and LATCH share it"}</p>
+              </div>
+              <div className="border border-gold/40 px-2 py-2">
+                <dt className="text-[10px] tracking-wide text-ink/45">{zh ? "已铸造" : "Minted"}</dt>
+                <dd className="font-mono text-lg tabular-nums">{cpu ? Number(cpu.minted).toLocaleString("en-US") : "—"}</dd>
+                <p className="text-[11px] leading-4 text-ink/45">{zh ? "两种加在一起" : "Both kinds together"}</p>
+              </div>
+              <div className="border border-gold/40 px-2 py-2">
+                <dt className="text-[10px] tracking-wide text-ink/45">{zh ? "已流片烧掉" : "Burned by tape-out"}</dt>
+                <dd className="font-mono text-lg tabular-nums">
+                  {kinds ? Number(kinds.nandBurn + kinds.latchBurn).toLocaleString("en-US") : "—"}
+                </dd>
+                <p className="text-[11px] leading-4 text-ink/45">
+                  {kinds
+                    ? `NAND ${Number(kinds.nandBurn).toLocaleString("en-US")} · LATCH ${Number(kinds.latchBurn).toLocaleString("en-US")}${kinds.fresh ? "" : zh ? " · 还在对日志" : " · still catching up"}`
+                    : zh
+                      ? "正在对铸币日志"
+                      : "Reading mint logs"}
+                </p>
+              </div>
+            </dl>
+          ) : null}
           <div className="mt-3 grid grid-cols-2 gap-2">
             <Hold
               n={held?.nand ?? null}
