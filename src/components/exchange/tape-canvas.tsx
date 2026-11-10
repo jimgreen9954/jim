@@ -517,8 +517,12 @@ export function TapeCanvas() {
           </p>
           <h2 className="font-display text-3xl italic">
             {zh
-              ? `流片 ${target.ours ? "TAPELIQUID" : "TapeOut"} ${target.name}`
-              : `Tape ${target.ours ? "TAPELIQUID" : "TapeOut"} ${target.name}`}
+              ? target.ours
+                ? "流片 TAPELIQUID"
+                : `流片 TapeOut ${target.name}`
+              : target.ours
+                ? "Tape TAPELIQUID"
+                : `Tape-out ${target.name}`}
           </h2>
           {target.ours ? (
             <dl className="mt-3 grid grid-cols-3 gap-2">
