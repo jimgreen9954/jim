@@ -139,6 +139,10 @@ contract TermBook {
         return chain == 56 ? 4 : 5;
     }
 
+    function edition() external pure returns (uint8) {
+        return 2;
+    }
+
     function nativeId() public pure returns (uint8) {
         return 1;
     }
@@ -269,8 +273,8 @@ contract TermBook {
             return;
         }
         if (chain == 56 && id == 3 && !fresh(2)) revert Stale();
-        if (chain == 196 && id == 4 && !fresh(2)) revert Stale();
         if (chain == 196 && id == 2 && !fresh(1)) revert Stale();
+        if (chain == 196 && (id == 3 || id == 4) && !fresh(2)) revert Stale();
         uint256 spotPx = _spot(id);
         if (spotPx == 0) revert Bad();
         uint256 prev = px[id];
@@ -398,6 +402,7 @@ contract TermBook {
     function liquidate(uint256 id) external payable lock {
         Loan storage row = loans[id];
         if (!row.open) revert ClosedBook();
+        if (msg.sender == row.user) revert Bad();
         if (!fresh(row.coll) || !fresh(row.debt)) revert Stale();
         _accrue(row);
         uint256 owed = row.principal + row.interest;
@@ -616,7 +621,12 @@ contract TermBook {
             uint256 okb = _v3(0x976183AC3d09840D243A88c0268BADb3B3e3259f, 0x60e62Efa9405d6873C5deaBD4E6CC91c25363952, 0xe538905cf8410324e03A5A23C1c177a474D59b2b, 10000, 1e8);
             return okb * px[1] / WAD;
         }
-        if (id == 3) return _tape(1e8) * 1e12;
+        if (id == 3) {
+            if (px[2] == 0) revert Bad();
+            uint256 bemOut = _tape(1e8);
+            if (bemOut == 0) revert Bad();
+            return bemOut * px[2] / 1e8;
+        }
         if (id == 4) {
             if (px[2] == 0) revert Bad();
             uint256 bem = _fab(1e8);
@@ -640,6 +650,7 @@ contract TermBook {
         return amounts[amounts.length - 1];
     }
 
+    /// Open-pool quote 0 pays BEM (8 decimals), not USDT0.
     function _tape(uint256 amountIn) internal view returns (uint256) {
         (, uint256 out) = ITapePool(0x58eaD5b41Cfd3627791D439402dd65571c286484).previewSwap(0, true, amountIn);
         return out;

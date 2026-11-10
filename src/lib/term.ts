@@ -42,6 +42,7 @@ const X_BEM = "0x60e62Efa9405d6873C5deaBD4E6CC91c25363952" as Hex;
 const abi = parseAbi([
   "function safe() view returns (address)",
   "function count() view returns (uint8)",
+  "function edition() view returns (uint8)",
   "function tokenOf(uint8) view returns (address)",
   "function pool(uint8) view returns (uint256 cashAmt, uint256 outAmt, uint256 sharesAmt, uint256 price, uint64 at, uint8 stamp, bool ready)",
   "function account(uint8,address) view returns (uint256 supply, uint256 basis, uint256 shareAmt)",
@@ -290,8 +291,12 @@ export async function readTerm(chain: TermChain, account: string | null): Promis
   }
   let mismatch = false;
   try {
-    const [safe, count] = await Promise.all([read<string>(chain, book, "safe"), read<number>(chain, book, "count")]);
-    if (safe.toLowerCase() !== BOOK[chain].safe.toLowerCase() || Number(count) !== assets.length) mismatch = true;
+    const [safe, count, edition] = await Promise.all([
+      read<string>(chain, book, "safe"),
+      read<number>(chain, book, "count"),
+      read<number>(chain, book, "edition"),
+    ]);
+    if (safe.toLowerCase() !== BOOK[chain].safe.toLowerCase() || Number(count) !== assets.length || Number(edition) !== 2) mismatch = true;
     const tokens = await Promise.all(
       assets.filter((asset) => !asset.native).map(async (asset) => {
         const token = await read<string>(chain, book, "tokenOf", [asset.id]);
@@ -693,8 +698,12 @@ export async function liquidateTerm(chain: TermChain, loan: TermLoan, pay: bigin
 export async function pokeTerm(chain: TermChain, id: number) {
   const from = await signer(chain);
   const book = need(chain);
-  if ((chain === "bsc" && id === 3) || (chain === "xlayer" && (id === 2 || id === 4))) {
-    const needId = chain === "xlayer" && id === 2 ? 1 : 2;
+  if (chain === "bsc" && id === 3) {
+    const pool = await read<readonly [bigint, bigint, bigint, bigint, bigint, number, boolean]>(chain, book, "pool", [2]);
+    if (!pool[6]) throw new Error("price");
+  }
+  if (chain === "xlayer" && (id === 2 || id === 3 || id === 4)) {
+    const needId = id === 2 ? 1 : 2;
     const pool = await read<readonly [bigint, bigint, bigint, bigint, bigint, number, boolean]>(chain, book, "pool", [needId]);
     if (!pool[6]) throw new Error("price");
   }

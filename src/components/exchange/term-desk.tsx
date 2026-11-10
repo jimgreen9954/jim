@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import {
   addTermColl,
   aprText,
-  deployTerm,
   depositTerm,
   forgetTerm,
   freshAt,
@@ -200,9 +199,9 @@ export function TermDesk({ zh, account }: { zh: boolean; account: string | null 
         </ul>
         {snap?.address ? <p className="mt-2 break-all font-mono text-xs text-ink/80">{snap.address}</p> : null}
         {!saved ? (
-          <button type="button" disabled={busy} className="mt-3 min-h-11 w-full bg-ink text-paper disabled:opacity-40" onClick={() => run(() => deployTerm(chain).then(() => undefined), zh ? "已部署。把上面的地址发回来，才会写进网站。现在只有这台浏览器看得到。" : "Deployed. Send this address back before it is written into the site. Only this browser can see it now.")}>
-            {zh ? "部署这一本" : "Deploy this book"}
-          </button>
+          <p className="mt-3 text-xs leading-5 text-ink/70">
+            {zh ? "还没部署。去交易台主页签。每条链一份，签完把地址发回来。" : "Not deployed. Sign it on the desk home. One book per chain. Send the address back."}
+          </p>
         ) : null}
         {snap?.mismatch ? (
           <div className="mt-2">
