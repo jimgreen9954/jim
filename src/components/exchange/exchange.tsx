@@ -133,6 +133,7 @@ export function Exchange({
         named === "stake" ||
         named === "vault" ||
         named === "lend" ||
+        named === "term" ||
         named === "bid" ||
         named === "ash"
       )
@@ -543,6 +544,7 @@ function Header({
     place !== "stake" &&
     place !== "vault" &&
     place !== "lend" &&
+    place !== "term" &&
     place !== "bid" &&
     place !== "ash";
   const home = () => {
@@ -701,6 +703,7 @@ function Header({
           go("mine", "vault"),
         )}
         {item(zh ? "借贷" : "Lend", floor === "mine" && place === "lend", () => go("mine", "lend"))}
+        {item(zh ? "期贷" : "Term", floor === "mine" && place === "term", () => go("mine", "term"))}
         {item(zh ? "质押" : "Stake", floor === "mine" && place === "stake", () =>
           go("mine", "stake"),
         )}
@@ -747,6 +750,7 @@ function Header({
                   () => go("mine", "vault"),
                 )}
                 {row(zh ? "借贷" : "Lend", floor === "mine" && place === "lend", () => go("mine", "lend"))}
+                {row(zh ? "期贷" : "Term", floor === "mine" && place === "term", () => go("mine", "term"))}
                 {row(zh ? "质押" : "Stake", floor === "mine" && place === "stake", () =>
                   go("mine", "stake"),
                 )}

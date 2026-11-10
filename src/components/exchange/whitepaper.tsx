@@ -172,6 +172,18 @@ const zhBody: Section[] = [
     ],
   },
   {
+    h: "期贷",
+    ps: [
+      "期贷是另一本账，不是上面的借贷，也不是期限质押。一条链一本，BSC 和 X Layer 各一份，同一份代码。没有管理员，不能升级。利率写死，不跟资金使用率变。",
+      "期限八档，按整天，不是日历月：24 小时、3 天、7 天、30 天、90 天、180 天、270 天、365 天。利息每个整点按剩余本金计一次，不满一小时不计。提前还清只收已经走完的小时。到期不还，从到期之后的小时起按两倍计，直到还清或被平仓。没还的利息不滚进本金。",
+      "BSC 可以抵押和借出 USDT、BNB、BEM、UP。X Layer 可以抵押和借出 USDT0、OKB、BEM、TAPE、FAB。同一枚不能既当抵押又当借出的资产。USDT 和 USDT0 不是同一枚。基础年化：USDT、USDT0 是 8%，BNB、OKB 是 12%，BEM、UP、TAPE、FAB 是 18%。八档再乘 1、1.05、1.10、1.20、1.35、1.50、1.65、1.80。逾期在这之上再乘 2。这是单利。",
+      "新开仓最多借到抵押品价值的 50%，单笔至少 10 美元。负债率过 75%，别人可以代还，并按当时记下的价格多拿走大约 5% 的抵押。代还先付债务。付的没有覆盖全部时，按付的比例拿抵押，剩下的抵押退回借款人，没付掉的本金由存款人承担。一个人最多同时 16 笔没还的。",
+      "利息的 10% 记成该链多签的存款份额，90% 留给存款人。本金不另收费。别人还没还的利息还不在可取余额里，等还款或平仓才进来。已经借出的本金，在现金不够时取不出。借款人的盈亏等于现在的净值减去开仓时的净值。净值等于抵押市值减去欠款。存款人的盈亏等于现在能取回的数量减去还记着的成本。页面按秒刷新倒计时。利息只在整点增加。",
+      "价格谁都可以记账。稳定币记成 1 美元。其余每 10 分钟最多走动 0.5%。连续记账，而且当时池子价和记下的价相差不超过 2%，这笔价格才算可用。可用的价格超过 30 分钟，不能新借，也不能平仓。还款和加抵押不受影响。UP 用官方池换成 BEM，再乘已经可用的 BEM 价。FAB 用 BEM/FAB 池换成 BEM。X Layer 的 BEM 用已经可用的 OKB 价。TAPE 用开盘池换成 USDT0。OKB 用 WOKB 到 USDT0。BNB 和 BSC 的 BEM 用 Pancake 报价。",
+      "直接把币转到合约、不走存入、抵押、还款或平仓的，取不回。合约不收裸转。期贷由该链多签从页面部署。地址先留在部署的那台浏览器。发回两条链的地址之后，才会写进网站，别人才能用。",
+    ],
+  },
+  {
     h: "奖励",
     ps: [
       "每一份新红包都是一份新合约。官方创建只有该链的部署地址能看见、能开。其他人只看见个人创建，任何人都能开。交易台页眉切换 BSC 和 X Layer。手机上红包在左上角菜单里，链仍用右上角切换。红包另选自己的链。发出时选定可领时间：24 小时、一星期或一个月。创建时把奖金打进这一份。卡片写明已领多少、还剩多少。已领按链上计算：读到入账时，用入账减去池中余额；读不到入账时，把这一份的领取记录加总。同一份里，一个地址每个新加坡日只能领一次。另一份新红包不受这一次影响，可以再参加。时间过了就不能再领，没领完的由放钱的人取回自己的那一份。",
@@ -377,6 +389,18 @@ const en: Section[] = [
       "Ten percent of lending interest is credited to the multisig. Suppliers keep 90 percent. Principal is not charged. The 5 percent liquidation bonus goes to the caller. There is no admin.",
       "X Layer, OKB collateral: 0x57228158cba08c61710ab2644e583c328ec86ea7, lending USDT0. X Layer, TAPE collateral: 0x425285da21ed3eabe64550d1be7dcabcf6f9e851. X Layer, BEM collateral: 0x5ed8551f90acc6395810d8274b019bf13ef1f696. BSC, BNB collateral: 0xd8d981d32b12ea85b739bb667946975d25b0ab53, lending USDT. BSC, BEM collateral: 0xd2c7150f7779ded403c3f81a68dab5164b54df28.",
       "A deposit lends the stablecoin. What is still borrowed cannot be withdrawn. Borrowing requires collateral first, up to 50 percent of its value. Debt grows at the borrow rate, from 2 percent to 50 percent. Collateral comes back only after the debt is repaid. Above 75 percent of the collateral value, someone else may repay and take a 5 percent bonus from the collateral. OKB and BNB use about a 30-minute pool average. TAPE and BEM prices move at most 0.5 percent every 30 seconds. After 30 minutes without an update, new borrows pause. Old debt is still valued at the last posted price. Assets sent straight in, outside a deposit or a lock, cannot be recovered.",
+    ],
+  },
+  {
+    h: "Term loans",
+    ps: [
+      "Term loans are a separate book. They are not the lending pools above, and they are not timed stake. One contract per chain, BSC and X Layer, from the same code. There is no admin and no upgrade. The rate is fixed. It does not follow utilization.",
+      "There are eight terms, counted in exact days, not calendar months: 24 hours, 3 days, 7 days, 30 days, 90 days, 180 days, 270 days and 365 days. Interest is charged on the remaining principal once each completed hour. A partial hour is not charged. Repaying early pays only the hours already completed. After the due hour, each new hour is charged at twice the rate until the loan is repaid or liquidated. Unpaid interest is not added to principal.",
+      "BSC can post and borrow USDT, BNB, BEM and UP. X Layer can post and borrow USDT0, OKB, BEM, TAPE and FAB. One asset cannot be both the collateral and the debt. USDT and USDT0 are not the same token. Base APR is 8 percent for USDT and USDT0, 12 percent for BNB and OKB, and 18 percent for BEM, UP, TAPE and FAB. The eight terms multiply that by 1, 1.05, 1.10, 1.20, 1.35, 1.50, 1.65 and 1.80. Overdue doubles the hourly rate again. The interest is simple.",
+      "A new loan can borrow at most 50 percent of the collateral value, and at least 10 dollars. Above a 75 percent ratio, someone else may repay and take about 5 percent extra collateral at the posted price. That caller pays the debt first. If the payment does not cover the debt, collateral is seized in proportion, the rest goes back to the borrower, and lenders absorb the unpaid principal. One address can have 16 open loans.",
+      "Ten percent of interest is credited as deposit shares to that chain's multisig. Lenders keep 90 percent. Principal is not charged. Interest that has not been repaid is not withdrawable yet. It arrives on repayment or liquidation. Principal that has been borrowed cannot be withdrawn while cash is short. A borrower's PnL is equity now minus equity at open. Equity is collateral value minus debt. A lender's PnL is what can be withdrawn now minus the cost still booked to them. The page refreshes the countdown every second. Interest increases only on the hour.",
+      "Anyone can post a price. A stablecoin posts at one dollar. Anything else moves at most 0.5 percent every 10 minutes. The price becomes usable only after repeated posts, and only while the spot is within 2 percent of the posted price. After 30 minutes it cannot be used for a new loan or a liquidation. Repayment and added collateral still work. UP is converted to BEM on the official pool, then multiplied by a usable BEM price. FAB is converted to BEM on the BEM/FAB pool. X Layer BEM uses a usable OKB price. TAPE uses the open pool into USDT0. OKB uses WOKB to USDT0. BNB and BSC BEM use the Pancake quote.",
+      "Assets sent straight to the contract, outside a deposit, a collateral lock, a repayment or a liquidation, cannot be recovered. The contract rejects a raw transfer. The book is deployed from the page by that chain's multisig. The address stays in the browser that deployed it. After both chain addresses are sent back, they are written into the site and other people can use them.",
     ],
   },
   {
