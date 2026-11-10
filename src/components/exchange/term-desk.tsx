@@ -171,7 +171,7 @@ export function TermDesk({ zh, account }: { zh: boolean; account: string | null 
   const live = Boolean(snap?.live && snap.address && !snap.mismatch);
   const saved = termAddress(chain);
   const lenderPnl = pool && pool.supply > 0n ? pool.supply - pool.basis : pool?.supply === 0n ? 0n : null;
-  const preview = openPreview(collText, debtText, collAsset.decimals, debtAsset.decimals, collPool, debtPool, debtAsset.kind, term);
+  const preview = openPreview(collText, debtText, collAsset.decimals, debtAsset.decimals, collPool, debtPool, debtAsset.kind, term, now);
 
   return (
     <section className="grid gap-3">
@@ -486,6 +486,7 @@ function openPreview(
   debtPool: TermPool | undefined,
   kind: "stable" | "gas" | "coin",
   term: number,
+  now: number,
 ): { ltv: bigint | null; debtUsd: bigint | null; hour: bigint | null; due: number; warn: string } {
   const collAmt = parseAmt(collText, collDec);
   const principal = parseAmt(debtText, debtDec);
@@ -503,7 +504,7 @@ function openPreview(
   if (debtUsd < MIN_USD) warn = "min";
   else if (collUsd * 5000n < debtUsd * 10000n) warn = "ltv";
   else if (principal > debtPool.cash) warn = "dry";
-  else if (!collPool.ready || !debtPool.ready) warn = "price";
+  else if (!freshAt(collPool, now) || !freshAt(debtPool, now)) warn = "price";
   return { ltv, debtUsd, hour, due, warn };
 }
 
