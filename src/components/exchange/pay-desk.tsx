@@ -11,6 +11,7 @@ import {
 import QRCode from "qrcode";
 import jsQR from "jsqr";
 import { BSC, BNB_GAS_RESERVE, connectBsc } from "@/lib/bsc";
+import { FAB } from "@/lib/fab";
 import { OKB } from "@/lib/okb";
 import { TAPE_BEM, TAPE_TOKEN } from "@/lib/tape-pool";
 import { currentAccount, getProvider, onAccount } from "@/lib/wallet";
@@ -23,7 +24,7 @@ const erc20 = parseAbi([
 const xClient = createPublicClient({ transport: http(XLAYER.rpc, { timeout: 12_000 }) });
 const bscClient = createPublicClient({ transport: http(BSC.rpc, { timeout: 12_000 }) });
 
-type AssetId = "TAPE" | "XBEM" | "BBEM" | "OKB" | "BNB";
+type AssetId = "TAPE" | "FAB" | "XBEM" | "BBEM" | "UP" | "OKB" | "BNB";
 
 const ASSETS: {
   id: AssetId;
@@ -48,6 +49,17 @@ const ASSETS: {
     explorer: XLAYER.explorer,
   },
   {
+    id: "FAB",
+    name: "FAB",
+    chain: "xlayer",
+    chainName: "X Layer",
+    chainId: XLAYER.chainId,
+    hex: XLAYER.hex,
+    decimals: 8,
+    token: FAB,
+    explorer: XLAYER.explorer,
+  },
+  {
     id: "XBEM",
     name: "BEM",
     chain: "xlayer",
@@ -67,6 +79,17 @@ const ASSETS: {
     hex: BSC.hex,
     decimals: 8,
     token: BSC.bem,
+    explorer: BSC.explorer,
+  },
+  {
+    id: "UP",
+    name: "UP",
+    chain: "bsc",
+    chainName: "BSC",
+    chainId: BSC.chainId,
+    hex: BSC.hex,
+    decimals: 18,
+    token: BSC.up,
     explorer: BSC.explorer,
   },
   {
@@ -119,7 +142,7 @@ function parseBill(raw: string): Bill | { error: string } {
     return { error: "这不是本站的收款码。可以贴地址，或贴 TAPELIQUID 开头的那一行。" };
   if (parts[1] !== "1") return { error: "这张码的版本本页还不认识。" };
   const asset = ASSETS.find((row) => row.id === parts[3] && String(row.chainId) === parts[2]);
-  if (!asset) return { error: "码里的币或链对不上。TAPE、BEM、OKB、BNB 不能混链。" };
+  if (!asset) return { error: "码里的币或链对不上。TAPE、FAB、BEM、UP、OKB、BNB 不能混链。" };
   if (!/^0x[a-fA-F0-9]{40}$/.test(parts[4] ?? "")) return { error: "码里的收款地址不对。" };
   const amount = (parts[5] ?? "").trim();
   if (amount && !/^\d+(\.\d+)?$/.test(amount)) return { error: "码里的数量不是数字。" };
@@ -187,6 +210,12 @@ export function PayDesk({ zh, account }: { zh: boolean; account: string | null }
           args: [who as Hex],
         }),
         xClient.readContract({
+          address: FAB,
+          abi: erc20,
+          functionName: "balanceOf",
+          args: [who as Hex],
+        }),
+        xClient.readContract({
           address: TAPE_BEM,
           abi: erc20,
           functionName: "balanceOf",
@@ -198,11 +227,17 @@ export function PayDesk({ zh, account }: { zh: boolean; account: string | null }
           functionName: "balanceOf",
           args: [who as Hex],
         }),
+        bscClient.readContract({
+          address: BSC.up,
+          abi: erc20,
+          functionName: "balanceOf",
+          args: [who as Hex],
+        }),
         xClient.getBalance({ address: who as Hex }),
         bscClient.getBalance({ address: who as Hex }),
       ])
-        .then(([tape, xbem, bbem, okb, bnb]) => {
-          if (!dead) setBalances({ TAPE: tape, XBEM: xbem, BBEM: bbem, OKB: okb, BNB: bnb });
+        .then(([tape, fab, xbem, bbem, up, okb, bnb]) => {
+          if (!dead) setBalances({ TAPE: tape, FAB: fab, XBEM: xbem, BBEM: bbem, UP: up, OKB: okb, BNB: bnb });
         })
         .catch(() => undefined);
     };
@@ -475,8 +510,8 @@ export function PayDesk({ zh, account }: { zh: boolean; account: string | null }
       <div className="border-b border-gold/40 px-3 pb-3">
         <p className="text-xs leading-5 text-ink/55">
           {zh
-            ? "TAPE、BEM、OKB、BNB。X Layer 的 BEM 和 BSC 的 BEM 是两份币。BNB 是 BSC 的原生币，OKB 是 X Layer 的原生币，不能混。"
-            : "TAPE, BEM, OKB and BNB. X Layer BEM and BSC BEM are different coins. BNB is native on BSC. OKB is native on X Layer."}
+            ? "TAPE、FAB、BEM、UP、OKB、BNB。FAB 在 X Layer。UP 在 BSC。两条链的 BEM 不是同一份。OKB 和 BNB 是各自链上的原生币，不能混。"
+            : "TAPE, FAB, BEM, UP, OKB and BNB. FAB is on X Layer. UP is on BSC. The two BEM tokens are different. OKB and BNB are the native coins of their own chains."}
         </p>
       </div>
       <div className="grid grid-cols-2 border-b border-gold text-sm">
