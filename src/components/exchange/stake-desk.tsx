@@ -219,7 +219,7 @@ export function StakeDesk() {
 
       <details className="stake-bem border p-3">
         <summary className="flex min-h-11 cursor-pointer items-center gap-2 font-display text-2xl italic">
-          <span className="stake-pip" style={{ background: "var(--color-up)" }} />
+          <span className="stake-pip" style={{ background: "#8fbfb4" }} />
           {zh ? "BEM / TAPE 官方池" : "Official BEM / TAPE"}
         </summary>
         <p className="mt-1 break-all font-mono text-xs text-ink/60">
@@ -423,7 +423,7 @@ export function StakeDesk() {
 
       <details className="stake-okb border p-3">
         <summary className="flex min-h-11 cursor-pointer items-center gap-2 font-display text-2xl italic">
-          <span className="stake-pip" style={{ background: "#7aa2ff" }} />
+          <span className="stake-pip" style={{ background: "#9eb0d4" }} />
           {zh ? "OKB / TAPE 官方池" : "Official OKB / TAPE"}
         </summary>
         <p className="mt-1 break-all font-mono text-xs text-ink/60">
@@ -553,7 +553,7 @@ export function StakeDesk() {
 
       <article className="stake-wafer border p-3">
         <h3 className="flex items-center gap-2 font-display text-2xl italic">
-          <span className="stake-pip" style={{ background: "#d4b878" }} />
+          <span className="stake-pip" style={{ background: "#cbb892" }} />
           {zh ? "晶圆" : "Wafers"}
         </h3>
         <p className="mt-1 text-xs text-ink/60">
@@ -692,7 +692,7 @@ export function StakeDesk() {
 
       <article className="stake-circuit border p-3">
         <h3 className="flex items-center gap-2 font-display text-2xl italic">
-          <span className="stake-pip" style={{ background: "#c084fc" }} />
+          <span className="stake-pip" style={{ background: "#b7a8c9" }} />
           {zh ? "电路" : "Circuits"}
         </h3>
         <p className="mt-1 text-xs leading-5 text-ink/60">
