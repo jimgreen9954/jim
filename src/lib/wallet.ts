@@ -60,13 +60,13 @@ export async function resumeSession(): Promise<void> {
   const eth = okxInjected() ?? binanceInjected() ?? host().ethereum ?? null;
   if (!eth) return;
   try {
-    const accounts = (await eth.request({ method: "eth_accounts" })) as string[];
-    const next = accounts?.[0];
+    const accounts = await eth.request({ method: "eth_accounts" });
+    const next = accountOf(accounts);
     if (!next) return;
     current = eth;
     kind = eth === binanceInjected() ? "binance" : "okx";
     remember(next);
-    eth.on?.("accountsChanged", (rows: string[]) => remember(rows?.[0] ?? null));
+    eth.on?.("accountsChanged", ((rows: unknown) => remember(accountOf(rows))) as (accounts: string[]) => void);
     eth.on?.("chainChanged", ((hex: unknown) => rememberChain(parseChainId(hex))) as (accounts: string[]) => void);
     void refreshChain(eth);
   } catch {
@@ -80,12 +80,47 @@ export function rememberAccount(next: string) {
 
 type Host = Window & {
   okxwallet?: Eth;
-  binancew3w?: { ethereum?: Eth };
-  ethereum?: Eth & { isOkxWallet?: boolean; isBinance?: boolean };
+  binancew3w?: { ethereum?: Eth; request?: Eth["request"] };
+  BinanceChain?: Eth;
+  ethereum?: Eth & {
+    isOkxWallet?: boolean;
+    isBinance?: boolean;
+    isBinanceWallet?: boolean;
+    providers?: Array<Eth & { isBinance?: boolean; isBinanceWallet?: boolean }>;
+  };
 };
+
+type Announced = { info?: { rdns?: string; name?: string }; provider?: Eth };
+
+const announced: Announced[] = [];
+let watched = false;
+
+function watchWallets() {
+  if (typeof window === "undefined" || watched) return;
+  watched = true;
+  window.addEventListener("eip6963:announceProvider", ((event: Event) => {
+    const detail = (event as CustomEvent<Announced>).detail;
+    if (!detail?.provider) return;
+    if (!announced.some((row) => row.provider === detail.provider)) announced.push(detail);
+  }) as EventListener);
+  window.dispatchEvent(new Event("eip6963:requestProvider"));
+}
 
 function host(): Host {
   return window as Host;
+}
+
+export function accountOf(value: unknown): string | null {
+  if (typeof value === "string" && /^0x[a-fA-F0-9]{40}$/.test(value)) return value;
+  if (!Array.isArray(value)) return null;
+  for (const row of value) {
+    if (typeof row === "string" && /^0x[a-fA-F0-9]{40}$/.test(row)) return row;
+  }
+  return null;
+}
+
+function binanceMark(eth: (Eth & { isBinance?: boolean; isBinanceWallet?: boolean }) | null | undefined): boolean {
+  return Boolean(eth && (eth.isBinance || eth.isBinanceWallet));
 }
 
 export function okxInjected(): Eth | null {
@@ -96,9 +131,31 @@ export function okxInjected(): Eth | null {
 }
 
 export function binanceInjected(): Eth | null {
+  watchWallets();
   const w = host();
-  if (w.binancew3w?.ethereum) return w.binancew3w.ethereum;
-  if (w.ethereum?.isBinance) return w.ethereum;
+  if (w.binancew3w?.ethereum?.request) return w.binancew3w.ethereum;
+  if (w.binancew3w && typeof w.binancew3w.request === "function") return w.binancew3w as Eth;
+  if (w.BinanceChain?.request) return w.BinanceChain;
+  if (binanceMark(w.ethereum)) return w.ethereum ?? null;
+  const listed = w.ethereum?.providers?.find((row) => row.isBinance || row.isBinanceWallet);
+  if (listed) return listed;
+  const found = announced.find((row) => {
+    const name = `${row.info?.rdns ?? ""} ${row.info?.name ?? ""}`.toLowerCase();
+    return name.includes("binance");
+  });
+  return found?.provider ?? null;
+}
+
+async function waitBinance(): Promise<Eth | null> {
+  const ready = binanceInjected();
+  if (ready) return ready;
+  watchWallets();
+  window.dispatchEvent(new Event("eip6963:requestProvider"));
+  for (let i = 0; i < 8; i += 1) {
+    await new Promise((resolve) => window.setTimeout(resolve, 150));
+    const next = binanceInjected();
+    if (next) return next;
+  }
   return null;
 }
 
@@ -167,11 +224,11 @@ let armed = false;
 async function useInjected(eth: Eth): Promise<string> {
   dropped = false;
   current = eth;
-  const accounts = (await eth.request({ method: "eth_requestAccounts" })) as string[];
-  const next = accounts[0];
+  const accounts = await eth.request({ method: "eth_requestAccounts" });
+  const next = accountOf(accounts);
   if (!next) throw new Error("nowallet");
   remember(next);
-  eth.on?.("accountsChanged", (rows) => remember(rows[0] ?? null));
+  eth.on?.("accountsChanged", ((rows: unknown) => remember(accountOf(rows))) as (accounts: string[]) => void);
   eth.on?.("chainChanged", ((hex: unknown) => rememberChain(parseChainId(hex))) as (accounts: string[]) => void);
   void refreshChain(eth);
   return next;
@@ -438,14 +495,15 @@ export async function connectScan(): Promise<string> {
 export async function connectKind(which: WalletKind): Promise<string> {
   if (which === "scan") return connectScan();
   kind = which;
-  const plugged = which === "binance" ? binanceInjected() : okxInjected();
+  if (which === "binance") {
+    const plugged = await waitBinance();
+    if (plugged) return useInjected(plugged);
+    publishLink(`https://app.binance.com/cedefi/dapp?url=${encodeURIComponent(window.location.href)}`);
+    return connectScan();
+  }
+  const plugged = okxInjected();
   if (plugged) return useInjected(plugged);
   const eth = host().ethereum;
-  if (which === "binance") {
-    if (eth?.isBinance) return useInjected(eth);
-    publishLink(`https://app.binance.com/cedefi/dapp?url=${encodeURIComponent(window.location.href)}`);
-    throw new Error("binanceapp");
-  }
   if (eth) return useInjected(eth);
   stayOnPage();
   return connectOkxRemote();
@@ -478,8 +536,8 @@ export async function disconnectWallet(): Promise<void> {
 
 export async function grantedAccount(eth: Eth): Promise<string | null> {
   try {
-    const rows = (await eth.request({ method: "eth_accounts" })) as string[];
-    return rows?.[0] || null;
+    const rows = await eth.request({ method: "eth_accounts" });
+    return accountOf(rows);
   } catch {
     return null;
   }
@@ -492,13 +550,17 @@ export async function ensureProvider(): Promise<Eth> {
     if (!current) throw new Error("nowallet");
     return current;
   }
-  const plugged = kind === "binance" ? binanceInjected() : okxInjected();
+  const plugged = kind === "binance" ? await waitBinance() : okxInjected();
   const eth = plugged ?? host().ethereum ?? null;
-  if (eth) {
+  if (eth && (kind !== "binance" || plugged)) {
     current = eth;
     return eth;
   }
-  if (kind === "binance") throw new Error("binanceapp");
+  if (kind === "binance") {
+    await connectScan();
+    if (!current) throw new Error("nowallet");
+    return current;
+  }
   await connectOkxRemote();
   if (!current) throw new Error("nowallet");
   return current;
@@ -603,14 +665,14 @@ export async function resumeInjected(): Promise<string | null> {
   const raw = okx ?? binance ?? host().ethereum ?? null;
   if (!raw) return null;
   try {
-    const accounts = (await raw.request({ method: "eth_accounts" })) as string[];
-    const next = accounts[0];
+    const accounts = await raw.request({ method: "eth_accounts" });
+    const next = accountOf(accounts);
     if (!next) return null;
     kind = raw === binance || host().ethereum?.isBinance ? "binance" : "okx";
     current = raw;
     dropped = false;
     remember(next);
-    raw.on?.("accountsChanged", (rows) => remember(rows[0] ?? null));
+    raw.on?.("accountsChanged", ((rows: unknown) => remember(accountOf(rows))) as (accounts: string[]) => void);
     raw.on?.("chainChanged", ((hex: unknown) => rememberChain(parseChainId(hex))) as (accounts: string[]) => void);
     await refreshChain(raw);
     return next;
@@ -644,8 +706,13 @@ export async function switchDeskChain(id: DeskChain): Promise<void> {
     } catch (addErr) {
       if (chainRejected(addErr)) throw addErr;
     }
+    try {
+      await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: row.hex }] });
+    } catch (again) {
+      if (chainRejected(again)) throw again;
+    }
   }
-  for (let i = 0; i < 10; i += 1) {
+  for (let i = 0; i < 20; i += 1) {
     if ((await read().catch(() => null)) === id) {
       rememberChain(id);
       return;

@@ -128,7 +128,14 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
       );
       return;
     }
-    if (err instanceof Error && err.message === "binanceapp") return;
+    if (err instanceof Error && err.message === "binanceapp") {
+      setNote(
+        zh
+          ? "没有检测到币安钱包。用币安 App 打开这个页面，或点扫码登录，用币安扫。"
+          : "Binance Wallet was not found. Open this page in the Binance app, or scan with Binance.",
+      );
+      return;
+    }
     const code = (err as { code?: number }).code;
     const message = err instanceof Error ? err.message : "";
     if (message === "nowallet") {

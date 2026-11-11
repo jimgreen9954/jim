@@ -44,7 +44,7 @@ async function ensureX() {
 async function send(from: string, to: Hex, data: Hex, value = 0n): Promise<Hex> {
   const eth = await ensureProvider();
   await ensureX();
-  const tx: { from: string; to: Hex; data: Hex; chainId: Hex; value?: Hex } = { from, to, data, chainId: XLAYER.hex };
+  const tx: { from: string; to: Hex; data: Hex; value?: Hex } = { from, to, data };
   if (value > 0n) tx.value = `0x${value.toString(16)}`;
   return await eth.request({
     method: "eth_sendTransaction",
