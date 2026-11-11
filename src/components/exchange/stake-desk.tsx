@@ -183,35 +183,6 @@ export function StakeDesk() {
   };
   const slice = (shares: bigint, total: bigint, reserve: bigint) =>
     typeof shares === "bigint" && total > 0n ? (shares * reserve) / total : 0n;
-  const lpTape = lp.reduce(
-    (sum, row) =>
-      sum +
-      slice(
-        row.shares,
-        row.quote === 0 ? reserves.usdtShares : reserves.bemShares,
-        row.quote === 0 ? reserves.usdtTape : reserves.bemTape,
-      ),
-    0n,
-  );
-  const lpUsdt = lp.reduce(
-    (sum, row) =>
-      row.quote === 0 ? sum + slice(row.shares, reserves.usdtShares, reserves.usdtQuote) : sum,
-    0n,
-  );
-  const lpBem = lp.reduce(
-    (sum, row) =>
-      row.quote === 1 ? sum + slice(row.shares, reserves.bemShares, reserves.bemQuote) : sum,
-    0n,
-  );
-  const lockedNand = seats
-    .filter((row) => row.kind === 0)
-    .reduce((sum, row) => sum + row.amount, 0n);
-  const lockedLatch = seats
-    .filter((row) => row.kind === 1)
-    .reduce((sum, row) => sum + row.amount, 0n);
-  const circuits = fresh;
-  const lockedGates = circuits.reduce((sum, row) => sum + row.gates, 0n);
-  const share = weight > 0n ? Number((lockedGates * 10000n) / weight) / 100 : 0;
   const nextUnlock = [
     ...lp.map((row) => row.unlock),
     ...openRows.map((row) => row.unlock),
@@ -229,43 +200,7 @@ export function StakeDesk() {
       <div>
         <p className="text-xs tracking-widest text-gold">X Layer · TAPELIQUID</p>
         <h2 className="font-display text-3xl italic">{zh ? "质押" : "Stake"}</h2>
-        <p className="mt-2 max-w-3xl text-sm leading-relaxed">
-          {zh
-            ? "官方池可以新加 BEM/TAPE。四档是三个月、六个月、一年、两年。旧池只撤回。晶圆和电路仍可新开。时间是新加坡时间。到期前不能提前取出。合约没有管理员。"
-            : "The official pool can take a new BEM/TAPE deposit. The four terms are 3 months, 6 months, 1 year and 2 years. The earlier pool only withdraws. Wafers and circuits can still be locked. Times are Singapore time. Nothing comes out early. The contracts have no admin."}
-        </p>
       </div>
-      <div className="border border-sell/50 px-3 py-3 text-sm leading-6">
-        <p className="text-xs tracking-widest text-sell">
-          {zh ? "签名前看这三句" : "Read this before you sign"}
-        </p>
-        <p>
-          {zh
-            ? "到期前不能取。合约没有提前解锁，也没有人能帮你改日期。"
-            : "Nothing comes out early. The contract has no early exit, and nobody can change the date."}
-        </p>
-        <p>
-          {zh
-            ? "只签这一页写出来的池子和锁仓。转到别的地址，谁都取不回。"
-            : "Sign only the pool and the lock shown on this page. Anything sent to another address cannot be recovered."}
-        </p>
-        <p>
-          {zh
-            ? "晶圆锁上不能流片。电路锁着仍占全网算力，到期后 TAPE 和电路分开领。"
-            : "Locked wafers cannot be taped. A locked circuit keeps its weight. After unlock, TAPE and the circuit are claimed apart."}
-        </p>
-      </div>
-      <dl className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
-        <Cell k={zh ? "池中 TAPE" : "TAPE in pool"} v={amt(lpTape)} />
-        <Cell k={zh ? "池中 USDT0" : "USDT0 in pool"} v={showQuote(0, lpUsdt)} />
-        <Cell k={zh ? "池中 BEM" : "BEM in pool"} v={amt(lpBem)} />
-        <Cell k={zh ? "锁着的 NAND" : "Locked NAND"} v={lockedNand.toLocaleString("en-US")} />
-        <Cell k={zh ? "锁着的 LATCH" : "Locked LATCH"} v={lockedLatch.toLocaleString("en-US")} />
-        <Cell
-          k={zh ? "锁着的电路 / 全网算力" : "Locked circuits / weight"}
-          v={`${circuits.length} · ${share.toLocaleString("en-US", { maximumFractionDigits: 2 })}%`}
-        />
-      </dl>
       <p className="text-xs text-ink/60">
         {zh ? "下一笔解锁" : "Next unlock"}{" "}
         {nextUnlock ? sgt(nextUnlock) : zh ? "没有未到期的仓" : "Nothing is still locked"} ·{" "}
