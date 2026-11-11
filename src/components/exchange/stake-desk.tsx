@@ -203,15 +203,23 @@ export function StakeDesk() {
         <p className="text-xs tracking-widest text-gold">X Layer · TAPELIQUID</p>
         <h2 className="font-display text-3xl italic">{zh ? "质押" : "Stake"}</h2>
       </div>
-      <p className="text-xs text-ink/60">
-        {zh ? "下一笔解锁" : "Next unlock"}{" "}
-        {nextUnlock ? sgt(nextUnlock) : zh ? "没有未到期的仓" : "Nothing is still locked"} ·{" "}
-        {zh ? "钱包 NAND" : "Wallet NAND"} {nand.toLocaleString("en-US")} · LATCH{" "}
-        {latch.toLocaleString("en-US")}
+      <p className="flex flex-wrap items-center gap-x-3 gap-y-1 border border-gold/50 bg-card px-3 py-2 text-xs text-ink/70">
+        <span>
+          {zh ? "下一笔解锁" : "Next unlock"}{" "}
+          <span className="font-mono text-ink">{nextUnlock ? sgt(nextUnlock) : zh ? "没有未到期的仓" : "Nothing is still locked"}</span>
+        </span>
+        <span className="text-ink/30">/</span>
+        <span>
+          NAND <span className="font-mono text-ink">{nand.toLocaleString("en-US")}</span>
+        </span>
+        <span>
+          LATCH <span className="font-mono text-ink">{latch.toLocaleString("en-US")}</span>
+        </span>
       </p>
 
-      <details className="border border-gold p-3">
-        <summary className="min-h-11 cursor-pointer font-display text-2xl italic">
+      <details className="stake-bem border p-3">
+        <summary className="flex min-h-11 cursor-pointer items-center gap-2 font-display text-2xl italic">
+          <span className="stake-pip" style={{ background: "var(--color-up)" }} />
           {zh ? "BEM / TAPE 官方池" : "Official BEM / TAPE"}
         </summary>
         <p className="mt-1 break-all font-mono text-xs text-ink/60">
@@ -413,8 +421,9 @@ export function StakeDesk() {
         </form>
       </details>
 
-      <details className="border border-gold p-3">
-        <summary className="min-h-11 cursor-pointer font-display text-2xl italic">
+      <details className="stake-okb border p-3">
+        <summary className="flex min-h-11 cursor-pointer items-center gap-2 font-display text-2xl italic">
+          <span className="stake-pip" style={{ background: "#7aa2ff" }} />
           {zh ? "OKB / TAPE 官方池" : "Official OKB / TAPE"}
         </summary>
         <p className="mt-1 break-all font-mono text-xs text-ink/60">
@@ -477,8 +486,9 @@ export function StakeDesk() {
         </ul>
       </details>
 
-      <details className="border border-gold/40 p-3">
-        <summary className="cursor-pointer text-sm">
+      <details className="stake-old border p-3">
+        <summary className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
+          <span className="stake-pip bg-ink/35" />
           {zh ? "以前的池子质押" : "Earlier pool stake"}
         </summary>
         <ul className="mt-2 max-h-64 overflow-auto border border-gold/40">
@@ -541,8 +551,11 @@ export function StakeDesk() {
         </ul>
       </details>
 
-      <article className="border border-gold p-3">
-        <h3 className="font-display text-2xl italic">{zh ? "晶圆" : "Wafers"}</h3>
+      <article className="stake-wafer border p-3">
+        <h3 className="flex items-center gap-2 font-display text-2xl italic">
+          <span className="stake-pip" style={{ background: "#d4b878" }} />
+          {zh ? "晶圆" : "Wafers"}
+        </h3>
         <p className="mt-1 text-xs text-ink/60">
           {zh
             ? "只锁 TAPELIQUID 的 NAND 和 LATCH。锁着不能流片，也不算算力。NAND 和 LATCH 分开记账。"
@@ -677,8 +690,11 @@ export function StakeDesk() {
         </form>
       </article>
 
-      <article className="border border-gold p-3">
-        <h3 className="font-display text-2xl italic">{zh ? "电路" : "Circuits"}</h3>
+      <article className="stake-circuit border p-3">
+        <h3 className="flex items-center gap-2 font-display text-2xl italic">
+          <span className="stake-pip" style={{ background: "#c084fc" }} />
+          {zh ? "电路" : "Circuits"}
+        </h3>
         <p className="mt-1 text-xs leading-5 text-ink/60">
           {zh
             ? "到期后，电路和还没领的 TAPE 都可以领出来。到期前两样都不能领。到期后可以只点「领 TAPE」，电路继续锁着，算力还在。点「领电路」时，电路回到这个钱包，没领走的 TAPE 在同一笔里一起进来，矿池席位也在这一笔里关掉。锁着的时候算力记在电路锁仓上，继续占全网权重，继续挖。"
@@ -939,7 +955,7 @@ export function StakeDesk() {
 
 function Cell({ k, v }: { k: string; v: string }) {
   return (
-    <div className="border border-gold/40 px-2 py-2">
+    <div className="border border-gold/40 bg-paper/40 px-2 py-2">
       <dt className="text-xs text-ink/50">{k}</dt>
       <dd className="mt-1 font-mono text-sm">{v}</dd>
     </div>
