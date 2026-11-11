@@ -25,6 +25,20 @@ import {
   TAPE_TERMS,
   type TapePosition,
 } from "@/lib/tape-pool";
+import {
+  addOpenLp,
+  matchBem,
+  openLpDays,
+  OPEN_LP_TERMS,
+  openPlain,
+  openText,
+  openUnits,
+  readOpenLp,
+  removeOpenLp,
+  type OpenLpPosition,
+  type OpenSide,
+} from "@/lib/tape-open-lp";
+import { OPEN_POOL } from "@/lib/tape-open-swap";
 import { connectXLayer, transistorHeld, XLAYER } from "@/lib/xlayer";
 import { currentAccount, onAccount } from "@/lib/wallet";
 
@@ -64,6 +78,14 @@ export function StakeDesk() {
   const [circuitTerm, setCircuitTerm] = useState(0);
   const [ackCircuit, setAckCircuit] = useState(false);
   const [lp, setLp] = useState<TapePosition[]>([]);
+  const [openSide, setOpenSide] = useState<OpenSide>({ tape: 0n, quote: 0n, shares: 0n });
+  const [openRows, setOpenRows] = useState<OpenLpPosition[]>([]);
+  const [openTapeBal, setOpenTapeBal] = useState(0n);
+  const [openBemBal, setOpenBemBal] = useState(0n);
+  const [openTapeAmt, setOpenTapeAmt] = useState("");
+  const [openBemAmt, setOpenBemAmt] = useState("");
+  const [openTerm, setOpenTerm] = useState(0);
+  const [ackOpen, setAckOpen] = useState(false);
   const [reserves, setReserves] = useState({
     usdtTape: 0n,
     usdtQuote: 0n,
@@ -107,6 +129,15 @@ export function StakeDesk() {
             bemQuote: row.bem.quote,
             bemShares: row.bem.shares,
           });
+        })
+        .catch(() => undefined);
+      readOpenLp(account)
+        .then((row) => {
+          if (dead) return;
+          setOpenSide(row.bem);
+          setOpenRows(row.positions);
+          setOpenTapeBal(row.tapeBal);
+          setOpenBemBal(row.bemBal);
         })
         .catch(() => undefined);
       readTapeMine(account)
@@ -180,7 +211,11 @@ export function StakeDesk() {
   const circuits = fresh;
   const lockedGates = circuits.reduce((sum, row) => sum + row.gates, 0n);
   const share = weight > 0n ? Number((lockedGates * 10000n) / weight) / 100 : 0;
-  const nextUnlock = [...lp.map((row) => row.unlock), ...seats.map((row) => row.unlock)]
+  const nextUnlock = [
+    ...lp.map((row) => row.unlock),
+    ...openRows.map((row) => row.unlock),
+    ...seats.map((row) => row.unlock),
+  ]
     .filter((ts) => ts * 1000 > Date.now())
     .sort((a, b) => a - b)[0];
   const now = Math.floor(Date.now() / 1000);
@@ -195,8 +230,8 @@ export function StakeDesk() {
         <h2 className="font-display text-3xl italic">{zh ? "质押" : "Stake"}</h2>
         <p className="mt-2 max-w-3xl text-sm leading-relaxed">
           {zh
-            ? "晶圆锁仓和电路锁仓仍可新开。TAPE 现货在工房订单簿，这一页不再接受新的 TAPE 池加仓。已经在池里的仓位，到期后仍可在下面撤回。期限是 90 天到 3 年。时间是新加坡时间。到期前不能提前取出。合约没有管理员。"
-            : "Wafers and circuits can still be locked. TAPE spot is the workshop book, so this page takes no new TAPE pool deposits. A position already in the pool can still be withdrawn below after it expires. Terms are 90 days to 3 years. Times are Singapore time. Nothing comes out early. The contracts have no admin."}
+            ? "官方池可以新加 BEM/TAPE。四档是三个月、六个月、一年、两年。旧池只撤回。晶圆和电路仍可新开。时间是新加坡时间。到期前不能提前取出。合约没有管理员。"
+            : "The official pool can take a new BEM/TAPE deposit. The four terms are 3 months, 6 months, 1 year and 2 years. The earlier pool only withdraws. Wafers and circuits can still be locked. Times are Singapore time. Nothing comes out early. The contracts have no admin."}
         </p>
       </div>
       <div className="border border-sell/50 px-3 py-3 text-sm leading-6">
@@ -236,6 +271,171 @@ export function StakeDesk() {
         {zh ? "钱包 NAND" : "Wallet NAND"} {nand.toLocaleString("en-US")} · LATCH{" "}
         {latch.toLocaleString("en-US")}
       </p>
+
+      <article className="border border-gold p-3">
+        <h3 className="font-display text-2xl italic">{zh ? "BEM / TAPE 官方池" : "Official BEM / TAPE"}</h3>
+        <p className="mt-1 break-all font-mono text-xs text-ink/60">
+          <a className="underline" href={`${XLAYER.explorer}/address/${OPEN_POOL}`} target="_blank" rel="noreferrer">
+            {OPEN_POOL}
+          </a>
+        </p>
+        <dl className="mt-2 grid grid-cols-2 gap-2 text-sm">
+          <Cell k={zh ? "池中 BEM" : "BEM in pool"} v={openText(openSide.quote)} />
+          <Cell k={zh ? "池中 TAPE" : "TAPE in pool"} v={openText(openSide.tape)} />
+        </dl>
+        <details className="mt-2 text-xs text-ink/60">
+          <summary className="min-h-11 cursor-pointer">{zh ? "说明" : "Note"}</summary>
+          <p className="mt-1 leading-5">
+            {zh
+              ? "只加这一口官方池的 BEM 和 TAPE。按现在的池子比例两边一起加。加进去先扣千分之二。四个期限：三个月、六个月、一年、两年。合约里还有三年，这一页不开放。到期前不能取。旧池只撤回。"
+              : "This adds only BEM and TAPE to the official pool, on both sides at the current ratio. A 0.20 percent fee is taken first. The four terms are 3 months, 6 months, 1 year and 2 years. The contract also has 3 years, and this page does not offer it. Nothing comes out early. The earlier pool only withdraws."}
+          </p>
+        </details>
+        <ul className="mt-2 max-h-64 overflow-auto border border-gold/40">
+          {openRows.map((row) => {
+            const due = row.unlock * 1000 <= Date.now();
+            const term = OPEN_LP_TERMS[row.term];
+            const tape =
+              openSide.shares > 0n ? (row.shares * openSide.tape) / openSide.shares : 0n;
+            const bem =
+              openSide.shares > 0n ? (row.shares * openSide.quote) / openSide.shares : 0n;
+            const days = openLpDays(row.term);
+            return (
+              <li
+                key={row.id}
+                className="grid gap-2 border-t border-gold/30 px-2 py-2 text-xs sm:grid-cols-[1fr_auto] sm:items-center"
+              >
+                <span className="min-w-0 break-all">
+                  <span className="block">
+                    #{row.id} BEM/TAPE · {term ? (zh ? term.zh : term.en) : zh ? `${days} 天` : `${days} days`}
+                  </span>
+                  <span className="mt-1 block font-mono">
+                    {openText(bem)} BEM · {openText(tape)} TAPE
+                  </span>
+                  <span className="mt-1 block font-mono text-ink/50">
+                    {sgt(row.unlock - days * 86400)} → {sgt(row.unlock)}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  disabled={busy || !due || !account}
+                  className="min-h-8 border border-gold px-2 disabled:opacity-40"
+                  onClick={() => {
+                    if (!account) return;
+                    setBusy(true);
+                    removeOpenLp(account, BigInt(row.id))
+                      .then(() => say(zh ? "官方池仓位已撤回。" : "The official position is out."))
+                      .catch(fail)
+                      .finally(() => setBusy(false));
+                  }}
+                >
+                  {due ? (zh ? "撤回" : "Remove") : zh ? "未到期" : "Locked"}
+                </button>
+              </li>
+            );
+          })}
+          {account && openRows.length === 0 ? (
+            <li className="px-2 py-3 text-sm text-ink/60">
+              {zh ? "这个地址还没有官方池的 BEM/TAPE。" : "This address has no official BEM/TAPE position."}
+            </li>
+          ) : null}
+        </ul>
+        <form
+          className="mt-3 grid gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!account) return;
+            setBusy(true);
+            addOpenLp(account, openTerm, openUnits(openTapeAmt), openUnits(openBemAmt))
+              .then(() => {
+                setOpenTapeAmt("");
+                setOpenBemAmt("");
+                setAckOpen(false);
+                say(zh ? "已加进官方池。到期才能撤回。" : "Added to the official pool. It stays until the date.");
+              })
+              .catch((error) => {
+                const message = error instanceof Error ? error.message : "";
+                if (message === "amount") {
+                  say(zh ? "两边都要填大于 0 的数量。" : "Both amounts have to be above zero.", true);
+                  return;
+                }
+                fail(error);
+              })
+              .finally(() => setBusy(false));
+          }}
+        >
+          <label className="text-xs text-ink/55">
+            TAPE · {zh ? "可用" : "Available"} {openText(openTapeBal)}
+            <input
+              value={openTapeAmt}
+              onChange={(event) => {
+                setOpenTapeAmt(event.target.value.replace(/[^\d.]/g, ""));
+                setAckOpen(false);
+              }}
+              inputMode="decimal"
+              className="mt-1 min-h-11 w-full border border-gold bg-transparent px-2 font-mono text-sm text-ink outline-none"
+            />
+          </label>
+          <label className="text-xs text-ink/55">
+            BEM · {zh ? "可用" : "Available"} {openText(openBemBal)}
+            <input
+              value={openBemAmt}
+              onChange={(event) => {
+                setOpenBemAmt(event.target.value.replace(/[^\d.]/g, ""));
+                setAckOpen(false);
+              }}
+              inputMode="decimal"
+              className="mt-1 min-h-11 w-full border border-gold bg-transparent px-2 font-mono text-sm text-ink outline-none"
+            />
+          </label>
+          <button
+            type="button"
+            className="min-h-8 justify-self-start text-xs underline"
+            onClick={() => {
+              try {
+                const bem = matchBem(openUnits(openTapeAmt), openSide.tape, openSide.quote);
+                if (bem > 0n) setOpenBemAmt(openPlain(bem));
+              } catch {
+                setOpenBemAmt("");
+              }
+              setAckOpen(false);
+            }}
+          >
+            {zh ? "按池子比例填 BEM" : "Fill BEM at the pool ratio"}
+          </button>
+          <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
+            {OPEN_LP_TERMS.map((row) => (
+              <button
+                key={row.id}
+                type="button"
+                onClick={() => {
+                  setOpenTerm(row.id);
+                  setAckOpen(false);
+                }}
+                className={`min-h-10 border px-1 text-xs ${openTerm === row.id ? "border-ink bg-ink text-paper" : "border-gold"}`}
+              >
+                {zh ? row.zh : row.en}
+              </button>
+            ))}
+          </div>
+          <p className="border border-sell/40 px-2 py-2 text-xs leading-5">
+            {zh
+              ? `锁到 ${sgt(now + (OPEN_LP_TERMS[openTerm]?.days ?? 0) * 86400)}（新加坡）。到期前不能取。`
+              : `Locked until ${sgt(now + (OPEN_LP_TERMS[openTerm]?.days ?? 0) * 86400)} Singapore time. Nothing comes out early.`}
+          </p>
+          <label className="flex gap-2 text-xs">
+            <input type="checkbox" checked={ackOpen} onChange={(event) => setAckOpen(event.target.checked)} />
+            {zh ? "我知道到期前不能取" : "I know this cannot come out early"}
+          </label>
+          <button
+            type="submit"
+            disabled={busy || !account || !ackOpen}
+            className="min-h-11 bg-ink text-paper disabled:opacity-40"
+          >
+            {zh ? "签名并加入官方池" : "Sign and add to the official pool"}
+          </button>
+        </form>
+      </article>
 
       <details className="border border-gold/40 p-3">
         <summary className="cursor-pointer text-sm">
@@ -682,6 +882,15 @@ export function StakeDesk() {
           rel="noreferrer"
         >
           {zh ? "旧 TAPE 池 · 只撤回" : "Old TAPE pool · withdraw only"} {TAPE_POOL}
+        </a>
+        {" · "}
+        <a
+          className="underline"
+          href={`${XLAYER.explorer}/address/${OPEN_POOL}`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          {zh ? "官方池 BEM/TAPE" : "Official BEM/TAPE"} {OPEN_POOL}
         </a>
       </p>
     </section>
