@@ -210,20 +210,19 @@ export function StakeDesk() {
         {latch.toLocaleString("en-US")}
       </p>
 
-      <article className="border border-gold p-3">
-        <h3 className="font-display text-2xl italic">{zh ? "BEM / TAPE 官方池" : "Official BEM / TAPE"}</h3>
+      <details className="border border-gold p-3">
+        <summary className="min-h-11 cursor-pointer font-display text-2xl italic">
+          {zh ? "BEM / TAPE 官方池" : "Official BEM / TAPE"}
+        </summary>
         <p className="mt-1 break-all font-mono text-xs text-ink/60">
           <a className="underline" href={`${XLAYER.explorer}/address/${OPEN_POOL}`} target="_blank" rel="noreferrer">
             {OPEN_POOL}
           </a>
         </p>
-        <details className="mt-2 text-sm">
-          <summary className="min-h-11 cursor-pointer text-xs text-ink/70">{zh ? "池子" : "Pool"}</summary>
-          <dl className="mt-2 grid grid-cols-2 gap-2">
-            <Cell k={zh ? "池中 BEM" : "BEM in pool"} v={openText(openSide.quote)} />
-            <Cell k={zh ? "池中 TAPE" : "TAPE in pool"} v={openText(openSide.tape)} />
-          </dl>
-        </details>
+        <dl className="mt-2 grid grid-cols-2 gap-2 text-sm">
+          <Cell k={zh ? "池中 BEM" : "BEM in pool"} v={openText(openSide.quote)} />
+          <Cell k={zh ? "池中 TAPE" : "TAPE in pool"} v={openText(openSide.tape)} />
+        </dl>
         <details className="mt-2 text-xs text-ink/60">
           <summary className="min-h-11 cursor-pointer">{zh ? "说明" : "Note"}</summary>
           <p className="mt-1 leading-5">
@@ -412,22 +411,21 @@ export function StakeDesk() {
             {zh ? "签名并加入官方池" : "Sign and add to the official pool"}
           </button>
         </form>
-      </article>
+      </details>
 
-      <article className="border border-gold p-3">
-        <h3 className="font-display text-2xl italic">{zh ? "OKB / TAPE 官方池" : "Official OKB / TAPE"}</h3>
+      <details className="border border-gold p-3">
+        <summary className="min-h-11 cursor-pointer font-display text-2xl italic">
+          {zh ? "OKB / TAPE 官方池" : "Official OKB / TAPE"}
+        </summary>
         <p className="mt-1 break-all font-mono text-xs text-ink/60">
           <a className="underline" href={`${XLAYER.explorer}/address/${OPEN_POOL}`} target="_blank" rel="noreferrer">
             {OPEN_POOL}
           </a>
         </p>
-        <details className="mt-2 text-sm">
-          <summary className="min-h-11 cursor-pointer text-xs text-ink/70">{zh ? "池子" : "Pool"}</summary>
-          <dl className="mt-2 grid grid-cols-2 gap-2">
-            <Cell k={zh ? "池中 OKB" : "OKB in pool"} v={openText(openOkb.quote, 4, 18)} />
-            <Cell k={zh ? "池中 TAPE" : "TAPE in pool"} v={openText(openOkb.tape)} />
-          </dl>
-        </details>
+        <dl className="mt-2 grid grid-cols-2 gap-2 text-sm">
+          <Cell k={zh ? "池中 OKB" : "OKB in pool"} v={openText(openOkb.quote, 4, 18)} />
+          <Cell k={zh ? "池中 TAPE" : "TAPE in pool"} v={openText(openOkb.tape)} />
+        </dl>
         <ul className="mt-2 max-h-64 overflow-auto border border-gold/40">
           {openRows
             .filter((row) => row.quote === 1)
@@ -477,7 +475,7 @@ export function StakeDesk() {
             </li>
           ) : null}
         </ul>
-      </article>
+      </details>
 
       <details className="border border-gold/40 p-3">
         <summary className="cursor-pointer text-sm">
