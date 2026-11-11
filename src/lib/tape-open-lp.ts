@@ -45,9 +45,9 @@ export function openUnits(text: string): bigint {
   return parseUnits(clean, 8);
 }
 
-export function openText(amount: bigint, digits = 4): string {
-  const n = Number(formatUnits(amount, 8));
-  return Number.isFinite(n) ? n.toLocaleString("en-US", { maximumFractionDigits: digits }) : formatUnits(amount, 8);
+export function openText(amount: bigint, digits = 4, decimals = 8): string {
+  const n = Number(formatUnits(amount, decimals));
+  return Number.isFinite(n) ? n.toLocaleString("en-US", { maximumFractionDigits: digits }) : formatUnits(amount, decimals);
 }
 
 export function openPlain(amount: bigint): string {
@@ -63,15 +63,19 @@ export function matchBem(tapeIn: bigint, poolTape: bigint, poolBem: bigint): big
 
 export async function readOpenLp(account: string | null): Promise<{
   bem: OpenSide;
+  okb: OpenSide;
   tapeBal: bigint;
   bemBal: bigint;
+  okbBal: bigint;
   positions: OpenLpPosition[];
 }> {
   const who = account as Hex | null;
-  const [bem, tapeBal, bemBal, count] = await Promise.all([
+  const [bem, okb, tapeBal, bemBal, okbBal, count] = await Promise.all([
     client.readContract({ address: OPEN_POOL, abi, functionName: "bemPool" }),
+    client.readContract({ address: OPEN_POOL, abi, functionName: "okbPool" }),
     who ? client.readContract({ address: TAPE_TOKEN, abi: erc20, functionName: "balanceOf", args: [who] }) : Promise.resolve(0n),
     who ? client.readContract({ address: TAPE_BEM, abi: erc20, functionName: "balanceOf", args: [who] }) : Promise.resolve(0n),
+    who ? client.getBalance({ address: who }) : Promise.resolve(0n),
     who ? client.readContract({ address: OPEN_POOL, abi, functionName: "ownedCount", args: [who] }) : Promise.resolve(0n),
   ]);
   const positions: OpenLpPosition[] = [];
@@ -87,10 +91,11 @@ export async function readOpenLp(account: string | null): Promise<{
       ids.map((id) => client.readContract({ address: OPEN_POOL, abi, functionName: "position", args: [id] })),
     );
     rows.forEach((row, i) => {
-      if (Number(row[1]) !== 0 || row[4] === 0n) return;
+      const quote = Number(row[1]);
+      if ((quote !== 0 && quote !== 1) || row[4] === 0n) return;
       positions.push({
         id: ids[i].toString(),
-        quote: Number(row[1]),
+        quote,
         term: Number(row[2]),
         unlock: Number(row[3]),
         shares: row[4],
@@ -99,8 +104,10 @@ export async function readOpenLp(account: string | null): Promise<{
   }
   return {
     bem: { tape: bem[0], quote: bem[1], shares: bem[2] },
+    okb: { tape: okb[0], quote: okb[1], shares: okb[2] },
     tapeBal,
     bemBal,
+    okbBal,
     positions,
   };
 }

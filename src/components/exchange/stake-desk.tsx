@@ -79,6 +79,7 @@ export function StakeDesk() {
   const [ackCircuit, setAckCircuit] = useState(false);
   const [lp, setLp] = useState<TapePosition[]>([]);
   const [openSide, setOpenSide] = useState<OpenSide>({ tape: 0n, quote: 0n, shares: 0n });
+  const [openOkb, setOpenOkb] = useState<OpenSide>({ tape: 0n, quote: 0n, shares: 0n });
   const [openRows, setOpenRows] = useState<OpenLpPosition[]>([]);
   const [openTapeBal, setOpenTapeBal] = useState(0n);
   const [openBemBal, setOpenBemBal] = useState(0n);
@@ -136,6 +137,7 @@ export function StakeDesk() {
         .then((row) => {
           if (dead) return;
           setOpenSide(row.bem);
+          setOpenOkb(row.okb);
           setOpenRows(row.positions);
           setOpenTapeBal(row.tapeBal);
           setOpenBemBal(row.bemBal);
@@ -208,8 +210,10 @@ export function StakeDesk() {
         {latch.toLocaleString("en-US")}
       </p>
 
-      <article className="border border-gold p-3">
-        <h3 className="font-display text-2xl italic">{zh ? "BEM / TAPE 官方池" : "Official BEM / TAPE"}</h3>
+      <details className="border border-gold p-3">
+        <summary className="cursor-pointer font-display text-2xl italic">
+          {zh ? "BEM / TAPE 官方池" : "Official BEM / TAPE"}
+        </summary>
         <p className="mt-1 break-all font-mono text-xs text-ink/60">
           <a className="underline" href={`${XLAYER.explorer}/address/${OPEN_POOL}`} target="_blank" rel="noreferrer">
             {OPEN_POOL}
@@ -228,7 +232,9 @@ export function StakeDesk() {
           </p>
         </details>
         <ul className="mt-2 max-h-64 overflow-auto border border-gold/40">
-          {openRows.map((row) => {
+          {openRows
+            .filter((row) => row.quote === 0)
+            .map((row) => {
             const due = row.unlock * 1000 <= Date.now();
             const term = OPEN_LP_TERMS[row.term];
             const tape =
@@ -270,7 +276,7 @@ export function StakeDesk() {
               </li>
             );
           })}
-          {account && openRows.length === 0 ? (
+          {account && openRows.every((row) => row.quote !== 0) ? (
             <li className="px-2 py-3 text-sm text-ink/60">
               {zh ? "这个地址还没有官方池的 BEM/TAPE。" : "This address has no official BEM/TAPE position."}
             </li>
@@ -405,7 +411,71 @@ export function StakeDesk() {
             {zh ? "签名并加入官方池" : "Sign and add to the official pool"}
           </button>
         </form>
-      </article>
+      </details>
+
+      <details className="border border-gold p-3">
+        <summary className="cursor-pointer font-display text-2xl italic">
+          {zh ? "OKB / TAPE 官方池" : "Official OKB / TAPE"}
+        </summary>
+        <p className="mt-1 break-all font-mono text-xs text-ink/60">
+          <a className="underline" href={`${XLAYER.explorer}/address/${OPEN_POOL}`} target="_blank" rel="noreferrer">
+            {OPEN_POOL}
+          </a>
+        </p>
+        <dl className="mt-2 grid grid-cols-2 gap-2 text-sm">
+          <Cell k={zh ? "池中 OKB" : "OKB in pool"} v={openText(openOkb.quote, 4, 18)} />
+          <Cell k={zh ? "池中 TAPE" : "TAPE in pool"} v={openText(openOkb.tape)} />
+        </dl>
+        <ul className="mt-2 max-h-64 overflow-auto border border-gold/40">
+          {openRows
+            .filter((row) => row.quote === 1)
+            .map((row) => {
+              const due = row.unlock * 1000 <= Date.now();
+              const term = OPEN_LP_TERMS[row.term];
+              const tape = openOkb.shares > 0n ? (row.shares * openOkb.tape) / openOkb.shares : 0n;
+              const okb = openOkb.shares > 0n ? (row.shares * openOkb.quote) / openOkb.shares : 0n;
+              const days = openLpDays(row.term);
+              return (
+                <li
+                  key={row.id}
+                  className="grid gap-2 border-t border-gold/30 px-2 py-2 text-xs sm:grid-cols-[1fr_auto] sm:items-center"
+                >
+                  <span className="min-w-0 break-all">
+                    <span className="block">
+                      #{row.id} OKB/TAPE · {term ? (zh ? term.zh : term.en) : zh ? `${days} 天` : `${days} days`}
+                    </span>
+                    <span className="mt-1 block font-mono">
+                      {openText(okb, 4, 18)} OKB · {openText(tape)} TAPE
+                    </span>
+                    <span className="mt-1 block font-mono text-ink/50">
+                      {sgt(row.unlock - days * 86400)} → {sgt(row.unlock)}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    disabled={busy || !due || !account}
+                    className="min-h-8 border border-gold px-2 disabled:opacity-40"
+                    onClick={() => {
+                      if (!account) return;
+                      setBusy(true);
+                      removeOpenLp(account, BigInt(row.id))
+                        .then(() => say(zh ? "官方池仓位已撤回。" : "The official position is out."))
+                        .catch(fail)
+                        .finally(() => setBusy(false));
+                    }}
+                  >
+                    {due ? (zh ? "撤回" : "Remove") : zh ? "未到期" : "Locked"}
+                  </button>
+                </li>
+              );
+            })}
+          {account && openRows.every((row) => row.quote !== 1) ? (
+            <li className="px-2 py-3 text-sm text-ink/60">
+              {zh ? "这个地址还没有官方池的 OKB/TAPE。" : "This address has no official OKB/TAPE position."}
+            </li>
+          ) : null}
+        </ul>
+      </details>
 
       <details className="border border-gold/40 p-3">
         <summary className="cursor-pointer text-sm">
