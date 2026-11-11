@@ -27,7 +27,9 @@ import {
 } from "@/lib/tape-pool";
 import {
   addOpenLp,
+  addOpenOkb,
   matchBem,
+  OKB_GAS,
   openLpDays,
   OPEN_LP_TERMS,
   openPlain,
@@ -81,13 +83,20 @@ export function StakeDesk() {
   const [openSide, setOpenSide] = useState<OpenSide>({ tape: 0n, quote: 0n, shares: 0n });
   const [openOkb, setOpenOkb] = useState<OpenSide>({ tape: 0n, quote: 0n, shares: 0n });
   const [openRows, setOpenRows] = useState<OpenLpPosition[]>([]);
+  const [feeRows, setFeeRows] = useState<OpenLpPosition[]>([]);
   const [openTapeBal, setOpenTapeBal] = useState(0n);
   const [openBemBal, setOpenBemBal] = useState(0n);
+  const [openOkbBal, setOpenOkbBal] = useState(0n);
   const [openTapeAmt, setOpenTapeAmt] = useState("");
   const [openBemAmt, setOpenBemAmt] = useState("");
   const [openTerm, setOpenTerm] = useState(0);
   const [ackOpen, setAckOpen] = useState(false);
   const [ratioNote, setRatioNote] = useState<string | null>(null);
+  const [okbTapeAmt, setOkbTapeAmt] = useState("");
+  const [okbAmt, setOkbAmt] = useState("");
+  const [okbTerm, setOkbTerm] = useState(0);
+  const [ackOkb, setAckOkb] = useState(false);
+  const [okbNote, setOkbNote] = useState<string | null>(null);
   const [reserves, setReserves] = useState({
     usdtTape: 0n,
     usdtQuote: 0n,
@@ -141,6 +150,12 @@ export function StakeDesk() {
           setOpenRows(row.positions);
           setOpenTapeBal(row.tapeBal);
           setOpenBemBal(row.bemBal);
+          setOpenOkbBal(row.okbBal);
+        })
+        .catch(() => undefined);
+      readOpenLp(FEE_TO)
+        .then((row) => {
+          if (!dead) setFeeRows(row.positions);
         })
         .catch(() => undefined);
       readTapeMine(account)
@@ -196,6 +211,15 @@ export function StakeDesk() {
   const waferUntil = sgt(now + (LOCK_TERMS[waferTerm]?.sec ?? 0));
   const circuitUntil = sgt(now + (LOCK_TERMS[circuitTerm]?.sec ?? 0));
   const ready = circuitLockReady();
+  const feeHere = account?.toLowerCase() === FEE_TO.toLowerCase();
+  const bemList = [
+    ...openRows.filter((row) => row.quote === 0).map((row) => ({ ...row, fee: false })),
+    ...(feeHere ? [] : feeRows.filter((row) => row.quote === 0).map((row) => ({ ...row, fee: true }))),
+  ];
+  const okbList = [
+    ...openRows.filter((row) => row.quote === 1).map((row) => ({ ...row, fee: false })),
+    ...(feeHere ? [] : feeRows.filter((row) => row.quote === 1).map((row) => ({ ...row, fee: true }))),
+  ];
 
   return (
     <section className="flex flex-col gap-4">
@@ -240,9 +264,7 @@ export function StakeDesk() {
           </p>
         </details>
         <ul className="mt-2 max-h-64 overflow-auto border border-gold/40">
-          {openRows
-            .filter((row) => row.quote === 0)
-            .map((row) => {
+          {bemList.map((row) => {
             const due = row.unlock * 1000 <= Date.now();
             const term = OPEN_LP_TERMS[row.term];
             const tape =
@@ -257,7 +279,7 @@ export function StakeDesk() {
               >
                 <span className="min-w-0 break-all">
                   <span className="block">
-                    #{row.id} BEM/TAPE · {term ? (zh ? term.zh : term.en) : zh ? `${days} 天` : `${days} days`}
+                    #{row.id} BEM/TAPE{row.fee ? (zh ? " · 收费地址" : " · fee address") : ""} · {term ? (zh ? term.zh : term.en) : zh ? `${days} 天` : `${days} days`}
                   </span>
                   <span className="mt-1 block font-mono">
                     {openText(bem)} BEM · {openText(tape)} TAPE
@@ -268,10 +290,10 @@ export function StakeDesk() {
                 </span>
                 <button
                   type="button"
-                  disabled={busy || !due || !account}
+                  disabled={busy || !due || !account || row.fee}
                   className="min-h-8 border border-gold px-2 disabled:opacity-40"
                   onClick={() => {
-                    if (!account) return;
+                    if (!account || row.fee) return;
                     setBusy(true);
                     removeOpenLp(account, BigInt(row.id))
                       .then(() => say(zh ? "官方池仓位已撤回。" : "The official position is out."))
@@ -279,12 +301,12 @@ export function StakeDesk() {
                       .finally(() => setBusy(false));
                   }}
                 >
-                  {due ? (zh ? "撤回" : "Remove") : zh ? "未到期" : "Locked"}
+                  {row.fee ? (zh ? "收费地址" : "Fee address") : due ? (zh ? "撤回" : "Remove") : zh ? "未到期" : "Locked"}
                 </button>
               </li>
             );
           })}
-          {account && openRows.every((row) => row.quote !== 0) ? (
+          {account && bemList.every((row) => row.fee) ? (
             <li className="px-2 py-3 text-sm text-ink/60">
               {zh ? "这个地址还没有官方池的 BEM/TAPE。" : "This address has no official BEM/TAPE position."}
             </li>
@@ -436,54 +458,186 @@ export function StakeDesk() {
           <Cell k={zh ? "池中 TAPE" : "TAPE in pool"} v={openText(openOkb.tape)} />
         </dl>
         <ul className="mt-2 max-h-64 overflow-auto border border-gold/40">
-          {openRows
-            .filter((row) => row.quote === 1)
-            .map((row) => {
-              const due = row.unlock * 1000 <= Date.now();
-              const term = OPEN_LP_TERMS[row.term];
-              const tape = openOkb.shares > 0n ? (row.shares * openOkb.tape) / openOkb.shares : 0n;
-              const okb = openOkb.shares > 0n ? (row.shares * openOkb.quote) / openOkb.shares : 0n;
-              const days = openLpDays(row.term);
-              return (
-                <li
-                  key={row.id}
-                  className="grid gap-2 border-t border-gold/30 px-2 py-2 text-xs sm:grid-cols-[1fr_auto] sm:items-center"
-                >
-                  <span className="min-w-0 break-all">
-                    <span className="block">
-                      #{row.id} OKB/TAPE · {term ? (zh ? term.zh : term.en) : zh ? `${days} 天` : `${days} days`}
-                    </span>
-                    <span className="mt-1 block font-mono">
-                      {openText(okb, 4, 18)} OKB · {openText(tape)} TAPE
-                    </span>
-                    <span className="mt-1 block font-mono text-ink/50">
-                      {sgt(row.unlock - days * 86400)} → {sgt(row.unlock)}
-                    </span>
+          {okbList.map((row) => {
+            const due = row.unlock * 1000 <= Date.now();
+            const term = OPEN_LP_TERMS[row.term];
+            const tape = openOkb.shares > 0n ? (row.shares * openOkb.tape) / openOkb.shares : 0n;
+            const okb = openOkb.shares > 0n ? (row.shares * openOkb.quote) / openOkb.shares : 0n;
+            const days = openLpDays(row.term);
+            return (
+              <li
+                key={row.id}
+                className="grid gap-2 border-t border-gold/30 px-2 py-2 text-xs sm:grid-cols-[1fr_auto] sm:items-center"
+              >
+                <span className="min-w-0 break-all">
+                  <span className="block">
+                    #{row.id} OKB/TAPE{row.fee ? (zh ? " · 收费地址" : " · fee address") : ""} · {term ? (zh ? term.zh : term.en) : zh ? `${days} 天` : `${days} days`}
                   </span>
-                  <button
-                    type="button"
-                    disabled={busy || !due || !account}
-                    className="min-h-8 border border-gold px-2 disabled:opacity-40"
-                    onClick={() => {
-                      if (!account) return;
-                      setBusy(true);
-                      removeOpenLp(account, BigInt(row.id))
-                        .then(() => say(zh ? "官方池仓位已撤回。" : "The official position is out."))
-                        .catch(fail)
-                        .finally(() => setBusy(false));
-                    }}
-                  >
-                    {due ? (zh ? "撤回" : "Remove") : zh ? "未到期" : "Locked"}
-                  </button>
-                </li>
-              );
-            })}
-          {account && openRows.every((row) => row.quote !== 1) ? (
+                  <span className="mt-1 block font-mono">
+                    {openText(okb, 4, 18)} OKB · {openText(tape)} TAPE
+                  </span>
+                  <span className="mt-1 block font-mono text-ink/50">
+                    {sgt(row.unlock - days * 86400)} → {sgt(row.unlock)}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  disabled={busy || !due || !account || row.fee}
+                  className="min-h-8 border border-gold px-2 disabled:opacity-40"
+                  onClick={() => {
+                    if (!account || row.fee) return;
+                    setBusy(true);
+                    removeOpenLp(account, BigInt(row.id))
+                      .then(() => say(zh ? "官方池仓位已撤回。" : "The official position is out."))
+                      .catch(fail)
+                      .finally(() => setBusy(false));
+                  }}
+                >
+                  {row.fee ? (zh ? "收费地址" : "Fee address") : due ? (zh ? "撤回" : "Remove") : zh ? "未到期" : "Locked"}
+                </button>
+              </li>
+            );
+          })}
+          {account && okbList.every((row) => row.fee) ? (
             <li className="px-2 py-3 text-sm text-ink/60">
               {zh ? "这个地址还没有官方池的 OKB/TAPE。" : "This address has no official OKB/TAPE position."}
             </li>
           ) : null}
         </ul>
+        <form
+          className="mt-3 grid gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!account) return;
+            setBusy(true);
+            addOpenOkb(account, okbTerm, openUnits(okbTapeAmt), openUnits(okbAmt, 18))
+              .then(() => {
+                setOkbTapeAmt("");
+                setOkbAmt("");
+                setAckOkb(false);
+                say(zh ? "已加进官方池。到期才能撤回。" : "Added to the official pool. It stays until the date.");
+              })
+              .catch((error) => {
+                const message = error instanceof Error ? error.message : "";
+                if (message === "amount") {
+                  say(zh ? "两边都要填大于 0 的数量。" : "Both amounts have to be above zero.", true);
+                  return;
+                }
+                if (message === "gas") {
+                  say(zh ? "OKB 要留下手续费。" : "Keep some OKB for gas.", true);
+                  return;
+                }
+                fail(error);
+              })
+              .finally(() => setBusy(false));
+          }}
+        >
+          <label className="text-xs text-ink/55">
+            TAPE · {zh ? "可用" : "Available"} {openText(openTapeBal)}
+            <input
+              value={okbTapeAmt}
+              onChange={(event) => {
+                setOkbTapeAmt(event.target.value.replace(/[^\d.]/g, ""));
+                setAckOkb(false);
+              }}
+              inputMode="decimal"
+              className="mt-1 min-h-11 w-full border border-gold bg-transparent px-2 font-mono text-sm text-ink outline-none"
+            />
+          </label>
+          <label className="text-xs text-ink/55">
+            OKB · {zh ? "可用" : "Available"} {openText(openOkbBal > OKB_GAS ? openOkbBal - OKB_GAS : 0n, 4, 18)}
+            <input
+              value={okbAmt}
+              onChange={(event) => {
+                setOkbAmt(event.target.value.replace(/[^\d.]/g, ""));
+                setAckOkb(false);
+              }}
+              inputMode="decimal"
+              className="mt-1 min-h-11 w-full border border-gold bg-transparent px-2 font-mono text-sm text-ink outline-none"
+            />
+          </label>
+          <button
+            type="button"
+            className="min-h-11 justify-self-start text-left text-xs underline"
+            onClick={(event) => {
+              event.preventDefault();
+              const tell = (text: string) => setOkbNote(text);
+              const spend = openOkbBal > OKB_GAS ? openOkbBal - OKB_GAS : 0n;
+              if (openOkb.tape <= 0n || openOkb.quote <= 0n) {
+                tell(zh ? "池子比例还没读到。稍等再点。" : "The pool ratio has not loaded. Wait and tap again.");
+                return;
+              }
+              try {
+                let tape = openUnits(okbTapeAmt);
+                let okb = openUnits(okbAmt, 18);
+                if (tape <= 0n && okb <= 0n) {
+                  tape = openTapeBal;
+                  okb = matchBem(tape, openOkb.tape, openOkb.quote);
+                  if (spend > 0n && okb > spend) {
+                    okb = spend;
+                    tape = (okb * openOkb.tape) / openOkb.quote;
+                  }
+                } else if (tape > 0n) {
+                  okb = matchBem(tape, openOkb.tape, openOkb.quote);
+                } else {
+                  tape = (okb * openOkb.tape) / openOkb.quote;
+                }
+                if (tape <= 0n || okb <= 0n) {
+                  tell(
+                    zh
+                      ? "按比例算出来是 0。先填一边的数量，或钱包里要有 TAPE 和 OKB。"
+                      : "The ratio rounds to zero. Enter one side, or hold TAPE and OKB.",
+                  );
+                  return;
+                }
+                setOkbTapeAmt(openPlain(tape));
+                setOkbAmt(openPlain(okb, 18));
+                setAckOkb(false);
+                tell(
+                  zh
+                    ? `已填 ${openPlain(okb, 18)} OKB 对 ${openPlain(tape)} TAPE。`
+                    : `Filled ${openPlain(okb, 18)} OKB against ${openPlain(tape)} TAPE.`,
+                );
+              } catch {
+                tell(zh ? "数量不对。" : "That amount is not valid.");
+              }
+            }}
+          >
+            {zh ? "按池子比例填" : "Fill at the pool ratio"}
+          </button>
+          {okbNote ? <p className="text-xs leading-5 text-ink/70">{okbNote}</p> : null}
+          <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
+            {OPEN_LP_TERMS.map((row) => (
+              <button
+                key={row.id}
+                type="button"
+                onClick={() => {
+                  setOkbTerm(row.id);
+                  setAckOkb(false);
+                }}
+                className={`min-h-10 border px-1 text-xs ${okbTerm === row.id ? "border-ink bg-ink text-paper" : "border-gold"}`}
+              >
+                {zh ? row.zh : row.en}
+              </button>
+            ))}
+          </div>
+          <p className="border border-sell/40 px-2 py-2 text-xs leading-5">
+            {zh
+              ? `锁到 ${sgt(now + (OPEN_LP_TERMS[okbTerm]?.days ?? 0) * 86400)}（新加坡）。到期前不能取。OKB 直接付进池子。`
+              : `Locked until ${sgt(now + (OPEN_LP_TERMS[okbTerm]?.days ?? 0) * 86400)} Singapore time. Nothing comes out early. OKB is paid straight into the pool.`}
+          </p>
+          <label className="flex gap-2 text-xs">
+            <input type="checkbox" checked={ackOkb} onChange={(event) => setAckOkb(event.target.checked)} />
+            {zh ? "我知道到期前不能取" : "I know this cannot come out early"}
+          </label>
+          <button
+            type="submit"
+            disabled={busy || !account || !ackOkb}
+            className="min-h-11 bg-ink text-paper disabled:opacity-40"
+          >
+            {zh ? "签名并加入官方池" : "Sign and add to the official pool"}
+          </button>
+        </form>
       </details>
 
       <details className="stake-old border p-3">

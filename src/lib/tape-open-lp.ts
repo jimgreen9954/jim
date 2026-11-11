@@ -38,11 +38,13 @@ export function openLpDays(term: number): number {
   return TERM_DAYS[term] ?? 0;
 }
 
-export function openUnits(text: string): bigint {
+export const OKB_GAS = 2_000_000_000_000_000n;
+
+export function openUnits(text: string, decimals = 8): bigint {
   const clean = text.trim();
   if (!clean) return 0n;
   if (!/^\d+(\.\d+)?$/.test(clean)) throw new Error("amount");
-  return parseUnits(clean, 8);
+  return parseUnits(clean, decimals);
 }
 
 export function openText(amount: bigint, digits = 4, decimals = 8): string {
@@ -50,8 +52,8 @@ export function openText(amount: bigint, digits = 4, decimals = 8): string {
   return Number.isFinite(n) ? n.toLocaleString("en-US", { maximumFractionDigits: digits }) : formatUnits(amount, decimals);
 }
 
-export function openPlain(amount: bigint): string {
-  const [whole, frac = ""] = formatUnits(amount, 8).split(".");
+export function openPlain(amount: bigint, decimals = 8): string {
+  const [whole, frac = ""] = formatUnits(amount, decimals).split(".");
   const trimmed = frac.replace(/0+$/, "");
   return trimmed ? `${whole}.${trimmed}` : whole;
 }
@@ -112,13 +114,15 @@ export async function readOpenLp(account: string | null): Promise<{
   };
 }
 
-async function send(from: string, to: Hex, data: Hex): Promise<Hex> {
+async function send(from: string, to: Hex, data: Hex, value = 0n): Promise<Hex> {
   await connectXLayer();
   const eth = getProvider();
   if (!eth) throw new Error("nowallet");
+  const tx: { from: string; to: Hex; data: Hex; value?: Hex } = { from, to, data };
+  if (value > 0n) tx.value = `0x${value.toString(16)}`;
   const hash = (await eth.request({
     method: "eth_sendTransaction",
-    params: [{ from, to, data }],
+    params: [tx],
   })) as Hex;
   const receipt = await client.waitForTransactionReceipt({ hash, timeout: 180_000 });
   if (receipt.status !== "success") throw new Error("revert");
@@ -146,6 +150,16 @@ export async function addOpenLp(from: string, term: number, tapeIn: bigint, bemI
   const data = encodeFunctionData({ abi, functionName: "add", args: [0, term, tapeIn, bemIn] });
   await client.call({ account: from as Hex, to: OPEN_POOL, data });
   return send(from, OPEN_POOL, data);
+}
+
+export async function addOpenOkb(from: string, term: number, tapeIn: bigint, okbIn: bigint): Promise<Hex> {
+  if (term < 0 || term > 3 || tapeIn <= 0n || okbIn <= 0n) throw new Error("amount");
+  const held = await client.getBalance({ address: from as Hex });
+  if (held < okbIn + OKB_GAS) throw new Error("gas");
+  await approve(from, TAPE_TOKEN, tapeIn);
+  const data = encodeFunctionData({ abi, functionName: "add", args: [1, term, tapeIn, okbIn] });
+  await client.call({ account: from as Hex, to: OPEN_POOL, data, value: okbIn });
+  return send(from, OPEN_POOL, data, okbIn);
 }
 
 export async function removeOpenLp(from: string, id: bigint): Promise<Hex> {
