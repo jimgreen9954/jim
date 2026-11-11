@@ -1449,6 +1449,11 @@ export function SpotDesk({
                       ? `${side === "buy" ? "买入" : "卖出"} ${base} · ${side === "buy" ? "付" : "收"} ${side === "buy" ? payUnit : recvUnit}`
                       : `${side === "buy" ? "Buy" : "Sell"} ${base}`}
                 </button>
+                {openLink ? (
+                  <a href={openLink} target="_blank" rel="noreferrer" className="mt-2 flex h-10 items-center justify-center border border-gold text-sm">
+                    {lang === "zh" ? "打开币安确认" : "Confirm in Binance"}
+                  </a>
+                ) : null}
                 {note ? <p className={`mt-2 text-xs ${bad ? "text-sell" : ""}`}>{note}</p> : null}
                 {mineRests.map((row) => (
                   <p

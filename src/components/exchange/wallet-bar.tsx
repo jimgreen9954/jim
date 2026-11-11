@@ -131,8 +131,8 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
     if (err instanceof Error && err.message === "binanceapp") {
       setNote(
         zh
-          ? "没有检测到币安钱包。用币安 App 打开这个页面，或点扫码登录，用币安扫。"
-          : "Binance Wallet was not found. Open this page in the Binance app, or scan with Binance.",
+          ? "没有自动打开币安。允许弹出窗口，或点「打开币安」。连上之后，买卖会再到币安里点确认。"
+          : "Binance did not open. Allow pop-ups, or tap Open Binance. After it connects, each trade asks Binance to confirm.",
       );
       return;
     }
@@ -187,14 +187,14 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
             {zh ? `打开${phone}点确认` : `Confirm in ${phone}`}
           </span>
         )}
-        {compact || !link ? null : (
+        {!link ? null : (
           <a
             href={link}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex min-h-10 items-center border border-gold bg-ink px-2 text-xs text-paper sm:min-h-11 sm:text-sm"
+            className="inline-flex min-h-9 shrink-0 items-center border border-gold bg-ink px-2 text-xs text-paper"
           >
-            {zh ? "打开钱包" : "Open wallet"}
+            {zh ? "去确认" : "Confirm"}
           </a>
         )}
         {compact ? null : (

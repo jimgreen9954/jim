@@ -375,7 +375,27 @@ function sessionChainIds(session: {
   return ids;
 }
 
-export async function connectScan(): Promise<string> {
+function phoneBrowser(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+export function binanceWcLink(uri?: string): string {
+  if (!uri) return "https://app.binance.com/cedefi/";
+  return `https://app.binance.com/cedefi/wc?uri=${encodeURIComponent(uri)}`;
+}
+
+function jumpBinance(uri: string, door: Window | null) {
+  const link = binanceWcLink(uri);
+  publishLink(link);
+  if (door && !door.closed) {
+    door.location.href = link;
+    return;
+  }
+  if (phoneBrowser()) window.location.href = link;
+}
+
+export async function connectScan(onUri?: (uri: string) => void, asKind?: WalletKind): Promise<string> {
   if (!WC_PROJECT) throw new Error("wc-project");
   const { EthereumProvider } = await import("@walletconnect/ethereum-provider");
   publishPair(null);
@@ -417,7 +437,11 @@ export async function connectScan(): Promise<string> {
     rememberChain(id);
   };
   provider.signer.on("default_chain_changed", syncChain);
-  provider.on("display_uri", (uri: string) => publishPair(String(uri)));
+  provider.on("display_uri", (uri: string) => {
+    const text = String(uri);
+    publishPair(text);
+    onUri?.(text);
+  });
   const approved = sessionChainIds(provider.session);
   if (provider.session && !(approved.has(56) && approved.has(196))) {
     try {
@@ -450,9 +474,12 @@ export async function connectScan(): Promise<string> {
       }
       if (phone) {
         const meta = provider.session?.peer?.metadata;
-        publishPhone(meta?.name || "手机钱包");
-        const link = meta?.redirect?.universal || meta?.redirect?.native || null;
+        publishPhone(meta?.name || (asKind === "binance" ? "币安" : "手机钱包"));
+        const link = meta?.redirect?.universal || meta?.redirect?.native || (asKind === "binance" ? binanceWcLink() : null);
         if (link) publishLink(link);
+        if (asKind === "binance" && phoneBrowser()) {
+          window.open("bnc://app.binance.com/cedefi/", "_blank");
+        }
       }
       try {
         const result = await provider.request(args);
@@ -475,7 +502,7 @@ export async function connectScan(): Promise<string> {
   remote = { disconnect: () => provider.disconnect() };
   current = wrapped;
   dropped = false;
-  kind = "scan";
+  kind = asKind ?? "scan";
   remember(next);
   provider.on("accountsChanged", (rows: string[]) => remember(rows?.[0] ?? null));
   provider.on("chainChanged", (hex: string) => rememberChain(parseChainId(hex)));
@@ -496,10 +523,19 @@ export async function connectKind(which: WalletKind): Promise<string> {
   if (which === "scan") return connectScan();
   kind = which;
   if (which === "binance") {
-    const plugged = await waitBinance();
-    if (plugged) return useInjected(plugged);
-    publishLink(`https://app.binance.com/cedefi/dapp?url=${encodeURIComponent(window.location.href)}`);
-    return connectScan();
+    const ready = binanceInjected();
+    const door = !ready && phoneBrowser() ? window.open("", "_blank") : null;
+    try {
+      const plugged = ready ?? (await waitBinance());
+      if (plugged) {
+        door?.close();
+        return useInjected(plugged);
+      }
+      return await connectScan((uri) => jumpBinance(uri, door), "binance");
+    } catch (err) {
+      door?.close();
+      throw err;
+    }
   }
   const plugged = okxInjected();
   if (plugged) return useInjected(plugged);
