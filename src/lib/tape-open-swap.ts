@@ -1,5 +1,4 @@
 import { createPublicClient, encodeFunctionData, formatUnits, http, parseAbi, parseUnits, type Hex } from "viem";
-import { sendFeeAndSwap } from "@/lib/fee-pack";
 import { FEE_TO, TxPending, XLAYER, XLAYER_SAFE } from "@/lib/chain-marks";
 import { deskParts } from "@/lib/invite-cut";
 import { ensureProvider } from "@/lib/wallet";
@@ -171,41 +170,37 @@ export async function buyOkbWithUsdt0(from: string, usdtIn: bigint): Promise<big
   if (parts.swapIn <= 0n) throw new Error("amount");
   const out = await quoteUsdt0Okb("buy", parts.swapIn);
   if (out <= 0n) throw new Error("empty");
+  if (parts.desk > 0n) {
+    await wait(await send(from, USDT, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [XLAYER_SAFE, parts.desk] })));
+  }
+  if (parts.reward > 0n && parts.referrer) {
+    await wait(await send(from, USDT, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [parts.referrer, parts.reward] })));
+  }
   await approveToken(from, USDT, parts.swapIn);
   const minOut = (out * 99n) / 100n;
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20);
-  const data = encodeFunctionData({
-    abi: v2,
-    functionName: "swapExactTokensForETH",
-    args: [parts.swapIn, minOut, [USDT, WOKB], from as Hex, deadline],
-  });
   const before = await client.getBalance({ address: from as Hex });
-  await wait(
-    await sendFeeAndSwap({
-      from,
-      chainId: 196,
-      token: USDT,
-      safe: XLAYER_SAFE,
-      parts,
-      swapTo: ROUTER,
-      data,
-      value: 0n,
-      pull: parts.swapIn,
-      spender: ROUTER,
+  await wait(await send(
+    from,
+    ROUTER,
+    encodeFunctionData({
+      abi: v2,
+      functionName: "swapExactTokensForETH",
+      args: [parts.swapIn, minOut, [USDT, WOKB], from as Hex, deadline],
     }),
-  );
+  ));
   const after = await client.getBalance({ address: from as Hex });
   const gained = after > before ? after - before : 0n;
-  if (gained <= 0n) throw new Error("empty");
-  return gained;
+  return gained > 10n ** 14n ? gained : out;
 }
 
-const HOP_KEY = "tl-tape-usdt-hop";
+const SELL_HOP = "tl-tape-usdt-hop";
+const BUY_HOP = "tl-tape-usdt-buy";
 
-function readHop(from: string): bigint | null {
+function readHop(key: string, from: string): bigint | null {
   if (typeof sessionStorage === "undefined") return null;
   try {
-    const raw = sessionStorage.getItem(HOP_KEY);
+    const raw = sessionStorage.getItem(key);
     if (!raw) return null;
     const row = JSON.parse(raw) as { from?: string; okb?: string };
     if (!row.from || row.from.toLowerCase() !== from.toLowerCase() || !row.okb) return null;
@@ -216,14 +211,14 @@ function readHop(from: string): bigint | null {
   }
 }
 
-function writeHop(from: string, okb: bigint) {
+function writeHop(key: string, from: string, okb: bigint) {
   if (typeof sessionStorage === "undefined") return;
-  sessionStorage.setItem(HOP_KEY, JSON.stringify({ from, okb: okb.toString() }));
+  sessionStorage.setItem(key, JSON.stringify({ from, okb: okb.toString() }));
 }
 
-function clearHop() {
+function clearHop(key: string) {
   if (typeof sessionStorage === "undefined") return;
-  sessionStorage.removeItem(HOP_KEY);
+  sessionStorage.removeItem(key);
 }
 
 async function unwindOkb(from: string, want: bigint): Promise<Hex> {
@@ -240,19 +235,36 @@ async function unwindOkb(from: string, want: bigint): Promise<Hex> {
   });
   const hash = await send(from, ROUTER, data, spend);
   await wait(hash);
-  clearHop();
+  clearHop(SELL_HOP);
+  return hash;
+}
+
+/** Buy TAPE with USDT0. OKB is only the middle. A rejected second signature can be finished by tapping buy again. */
+export async function buyTapeWithUsdt0(from: string, usdtIn: bigint, okbIn: bigint): Promise<Hex> {
+  let pending = readHop(BUY_HOP, from);
+  if (!pending) {
+    pending = await buyOkbWithUsdt0(from, usdtIn);
+    writeHop(BUY_HOP, from, pending);
+  }
+  const bal = await client.getBalance({ address: from as Hex });
+  const room = bal > OKB_RESERVE ? bal - OKB_RESERVE : 0n;
+  const spend = pending < okbIn ? pending : okbIn;
+  const capped = spend < room ? spend : room;
+  if (capped <= 10n ** 14n) throw new Error("leg");
+  const hash = await swapPool(from, 1, false, capped);
+  clearHop(BUY_HOP);
   return hash;
 }
 
 /** Sell TAPE into the OKB pool, then turn that OKB into USDT0. The wallet shows OKB on the first signature. */
 export async function sellTapeForUsdt0(from: string, tapeIn: bigint): Promise<Hex> {
-  const pending = readHop(from);
+  const pending = readHop(SELL_HOP, from);
   if (pending) return unwindOkb(from, pending);
   const before = await client.getBalance({ address: from as Hex });
   await swapPool(from, 1, true, tapeIn);
   const after = await client.getBalance({ address: from as Hex });
   const gained = after > before ? after - before : 0n;
   if (gained <= 10n ** 14n) throw new Error("leg");
-  writeHop(from, gained);
+  writeHop(SELL_HOP, from, gained);
   return unwindOkb(from, gained);
 }

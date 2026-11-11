@@ -23,7 +23,7 @@ import {
   poolText,
   previewPool,
   swapPool,
-  buyOkbWithUsdt0,
+  buyTapeWithUsdt0,
   quoteUsdt0Okb,
   sellTapeForUsdt0,
   type PoolQuote,
@@ -574,9 +574,13 @@ export function PoolSpot({
       setNote(zh ? "先连接钱包。现货只走 X Layer。" : "Connect a wallet. Spot is on X Layer.");
     else if (message === "leg")
       setNote(
-        zh
-          ? "OKB 还在钱包里。再点一次卖出，下一笔签名换成 USDT0。"
-          : "The OKB is still in the wallet. Tap sell again. The next signature pays USDT0.",
+        side === "buy"
+          ? zh
+            ? "OKB 已经在钱包里。再点一次买入，下一笔才换成 TAPE。"
+            : "The OKB is already in the wallet. Tap buy again. The next signature buys TAPE."
+          : zh
+            ? "OKB 还在钱包里。再点一次卖出，下一笔签名换成 USDT0。"
+            : "The OKB is still in the wallet. Tap sell again. The next signature pays USDT0.",
       );
     else if (message === "no-batch")
       setNote(zh ? "没有成交。手续费和兑换必须在同一笔里。" : "No fill. The fee and the swap have to be one transaction.");
@@ -630,16 +634,9 @@ export function PoolSpot({
         if (got >= need) break;
         usdt = got > 0n ? (usdt * (need + got / 20n)) / got : usdt * 2n;
       }
-      const bought = await buyOkbWithUsdt0(from, usdt);
-      try {
-        const spend = bought > okbIn ? okbIn : bought;
-        if (spend <= 0n) throw new Error("empty");
-        await swapPool(from, 1, false, spend);
-      } catch {
-        throw new Error("leg");
-      }
+      const bought = await buyTapeWithUsdt0(from, usdt, okbIn);
       markDeskFill("xlayer", from, "spot", Number(formatUnits(usdt, 6)), "tape");
-      return;
+      return bought;
     }
     const nextQuote: PoolQuote = which === "okb" ? 1 : 0;
     const live = bookRef.current;
@@ -805,18 +802,26 @@ export function PoolSpot({
       );
       return;
     }
-    if (mode === "market") {
+    const limitPx = Number(mode === "chase" ? chase : price);
+    const crossed =
+      (mode === "limit" || mode === "chase") &&
+      limitPx > 0 &&
+      midRef.current > 0 &&
+      (side === "buy" ? midRef.current <= limitPx : midRef.current >= limitPx);
+    if (mode === "market" || crossed) {
       setBusy(true);
       setNote(
         pairRef.current === "usdt" && side === "sell"
           ? zh
-            ? "第一笔是池子付 OKB。签完后下一笔才换成 USDT0。"
-            : "The first signature pays OKB. The next one turns it into USDT0."
+            ? "第一笔是池子付 OKB。签完后下一笔才换成 USDT0。两笔都签完才成交。"
+            : "The first signature pays OKB. The next one turns it into USDT0. Both have to be signed."
           : pairRef.current === "usdt"
-            ? tradeStepText("fill", zh)
+            ? zh
+              ? "第一笔把 USDT0 换成 OKB。签完后下一笔买入 TAPE。两笔都签完才成交。"
+              : "The first signature turns USDT0 into OKB. The next one buys TAPE. Both have to be signed."
             : zh
-              ? "这一笔里扣 0.20% 并成交。失败则都不发生。"
-              : "This confirmation takes the 0.20% and the fill together. If it reverts, neither happens.",
+              ? "这一笔直接打进池子。钱包签完才成交。"
+              : "This goes straight into the pool. It fills when the wallet signs.",
       );
       try {
         const from = account ?? (await connectHere());
