@@ -314,6 +314,7 @@ export function PoolSpot({
   const pairRef = useRef<TapePair>(pair);
   const midRef = useRef(0);
   const lock = useRef(false);
+  const halt = useRef(false);
   ordersRef.current = orders;
   bookRef.current = book;
 
@@ -674,7 +675,7 @@ export function PoolSpot({
     }, 4_000);
     return () => window.clearInterval(id);
     async function run() {
-      if (lock.current) return;
+      if (lock.current || halt.current) return;
       const from = currentAccount();
       const midNow = midRef.current;
       if (!from || !(midNow > 0)) return;
@@ -732,6 +733,9 @@ export function PoolSpot({
         setBad(false);
         setNote("");
       } catch (err) {
+        const code = (err as { code?: number }).code;
+        const message = err instanceof Error ? err.message : "";
+        if (code === 4001 || /reject|denied|cancel/i.test(message)) halt.current = true;
         fail(err);
       } finally {
         lock.current = false;
@@ -754,6 +758,7 @@ export function PoolSpot({
   };
 
   const submit = async () => {
+    halt.current = false;
     setBad(false);
     setArmed(false);
     setNote("");

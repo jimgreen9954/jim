@@ -449,9 +449,11 @@ export async function connectBsc(): Promise<string> {
 async function send(from: string, to: Hex, data: Hex, value = 0n): Promise<Hex> {
   const eth = await ensureProvider();
   await ensureBsc();
+  const tx: { from: string; to: Hex; data: Hex; value?: Hex } = { from, to, data };
+  if (value > 0n) tx.value = `0x${value.toString(16)}`;
   return (await eth.request({
     method: "eth_sendTransaction",
-    params: [{ from, to, data, value: `0x${value.toString(16)}` }],
+    params: [tx],
   })) as Hex;
 }
 
@@ -463,16 +465,18 @@ async function approveIfNeeded(from: string, token: Hex, need: bigint, spender: 
     args: [from as Hex, spender],
   });
   if (allowance >= need) return;
-  if (allowance > 0n) {
-    const reset = encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, 0n] });
-    await waitOk(await send(from, token, reset));
-  }
-  const approveData = encodeFunctionData({
+  const grant = encodeFunctionData({
     abi: erc20,
     functionName: "approve",
     args: [spender, (1n << 256n) - 1n],
   });
-  await waitOk(await send(from, token, approveData));
+  try {
+    await waitOk(await send(from, token, grant));
+  } catch (err) {
+    if (!(err instanceof Error) || err.message !== "reverted") throw err;
+    await waitOk(await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, 0n] })));
+    await waitOk(await send(from, token, grant));
+  }
 }
 
 function feeTransferCalls(parts: DeskParts, token: Hex | null): SignedCall[] {

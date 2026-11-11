@@ -12,6 +12,7 @@ const USDT = "0x779Ded0c9e1022225f8E0630b35a9b54bE713736" as const;
 const ROUTER = "0x881fB2f98c13d521009464e7D1CBf16E1b394e8E" as const;
 const WOKB = "0xe538905cf8410324e03A5A23C1c177a474D59b2b" as const;
 const OKB_RESERVE = 2_000_000_000_000_000n;
+const MAX = (1n << 256n) - 1n;
 
 const client = createPublicClient({ transport: http(XLAYER.rpc, { timeout: 12_000 }) });
 const poolAbi = parseAbi([
@@ -43,9 +44,11 @@ async function ensureX() {
 async function send(from: string, to: Hex, data: Hex, value = 0n): Promise<Hex> {
   const eth = await ensureProvider();
   await ensureX();
+  const tx: { from: string; to: Hex; data: Hex; chainId: Hex; value?: Hex } = { from, to, data, chainId: XLAYER.hex };
+  if (value > 0n) tx.value = `0x${value.toString(16)}`;
   return await eth.request({
     method: "eth_sendTransaction",
-    params: [{ from, to, data, value: `0x${value.toString(16)}` }],
+    params: [tx],
   }) as Hex;
 }
 
@@ -92,6 +95,32 @@ export function poolText(amount: bigint, decimals: number): string {
   return trimmed ? `${whole}.${trimmed}` : whole;
 }
 
+function walletRejected(err: unknown): boolean {
+  const code = typeof err === "object" && err ? Number((err as { code?: number }).code) : NaN;
+  if (code === 4001) return true;
+  const message = err instanceof Error ? err.message : String(err ?? "");
+  return /reject|denied|cancel/i.test(message);
+}
+
+async function allow(from: string, token: Hex, spender: Hex, need: bigint) {
+  const allowance = await client.readContract({
+    address: token,
+    abi: erc20,
+    functionName: "allowance",
+    args: [from as Hex, spender],
+  });
+  if (allowance >= need) return;
+  const grant = encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, MAX] });
+  try {
+    await wait(await send(from, token, grant));
+  } catch (err) {
+    if (walletRejected(err) || err instanceof TxPending) throw err;
+    if (!(err instanceof Error) || err.message !== "reverted") throw err;
+    await wait(await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, 0n] })));
+    await wait(await send(from, token, grant));
+  }
+}
+
 /** Swap against the open TAPE pool. Limit orders stay on the workshop book. */
 export async function swapPool(from: string, quote: PoolQuote, tapeIn: boolean, amountIn: bigint): Promise<Hex> {
   const feeTo = await client.readContract({ address: OPEN_POOL, abi: poolAbi, functionName: "FEE_TO" });
@@ -100,13 +129,7 @@ export async function swapPool(from: string, quote: PoolQuote, tapeIn: boolean, 
   if (out <= 0n) throw new Error("empty");
   const minOut = out * 99n / 100n;
   const token = tapeIn ? TAPE : quote === 0 ? BEM : null;
-  if (token) {
-    const allowance = await client.readContract({ address: token, abi: erc20, functionName: "allowance", args: [from as Hex, OPEN_POOL] });
-    if (allowance < amountIn) {
-      if (allowance > 0n) await wait(await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [OPEN_POOL, 0n] })));
-      await wait(await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [OPEN_POOL, amountIn] })));
-    }
-  }
+  if (token) await allow(from, token, OPEN_POOL, amountIn);
   const value = quote === 1 && !tapeIn ? amountIn : 0n;
   if (value > 0n) {
     const okb = await client.getBalance({ address: from as Hex });
@@ -132,10 +155,7 @@ export async function swapPool(from: string, quote: PoolQuote, tapeIn: boolean, 
 }
 
 async function approveToken(from: string, token: Hex, need: bigint) {
-  const allowance = await client.readContract({ address: token, abi: erc20, functionName: "allowance", args: [from as Hex, ROUTER] });
-  if (allowance >= need) return;
-  if (allowance > 0n) await wait(await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [ROUTER, 0n] })));
-  await wait(await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [ROUTER, need] })));
+  await allow(from, token, ROUTER, need);
 }
 
 /** USDT0 on X Layer. This is the balance the ticket shows, not the other USDT. */

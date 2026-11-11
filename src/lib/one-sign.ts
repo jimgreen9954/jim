@@ -160,12 +160,11 @@ async function bundled(eth: Eth, from: string, chainId: number, calls: SignedCal
   const before = await txCount(eth, from);
   let sent: unknown;
   for (const version of ["2.0.0", "1.0.0"]) {
-    const started = Date.now();
     try {
       sent = await eth.request({ method: "wallet_sendCalls", params: [pack(version)] });
       break;
     } catch (err) {
-      if (rejected(err) && Date.now() - started >= 800) throw err;
+      if (rejected(err)) throw err;
       sent = undefined;
     }
   }
@@ -242,10 +241,9 @@ export async function sendUserBatch(from: string, chainId: number, calls: Signed
   await onChain(eth, chainId);
   if (live.length === 1) {
     const call = live[0];
-    return (await eth.request({
-      method: "eth_sendTransaction",
-      params: [{ from, to: call.to, data: call.data || "0x", value: hexVal(call.value ?? 0n) }],
-    })) as Hex;
+    const tx: { from: string; to: Hex; data: Hex; value?: Hex } = { from, to: call.to, data: call.data || "0x" };
+    if ((call.value ?? 0n) > 0n) tx.value = hexVal(call.value ?? 0n);
+    return (await eth.request({ method: "eth_sendTransaction", params: [tx] })) as Hex;
   }
   if (!(await atomicReady(eth, from, chainId))) throw new Error("no-batch");
   return bundled(eth, from, chainId, live);
@@ -259,10 +257,9 @@ export async function sendTogether(from: string, chainId: number, calls: SignedC
   await onChain(eth, chainId);
   if (live.length === 1) {
     const call = live[0];
-    return (await eth.request({
-      method: "eth_sendTransaction",
-      params: [{ from, to: call.to, data: call.data || "0x", value: hexVal(call.value ?? 0n) }],
-    })) as Hex;
+    const tx: { from: string; to: Hex; data: Hex; value?: Hex } = { from, to: call.to, data: call.data || "0x" };
+    if ((call.value ?? 0n) > 0n) tx.value = hexVal(call.value ?? 0n);
+    return (await eth.request({ method: "eth_sendTransaction", params: [tx] })) as Hex;
   }
   if (live.every((call) => (call.value ?? 0n) > 0n)) return sendAsMulticall(from, live, chainId);
   if (!(await atomicReady(eth, from, chainId))) throw new Error("no-batch");

@@ -117,12 +117,15 @@ async function ensureAllowance(from: string, chainId: 56 | 196, token: Hex, need
     args: [from as Hex, DESK_LOCK],
   });
   if (current >= need) return;
-  if (current > 0n) {
-    const reset = await sendTx(from, chainId, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [DESK_LOCK, 0n] }));
-    await mined(chainId, reset);
+  const grant = encodeFunctionData({ abi: erc20, functionName: "approve", args: [DESK_LOCK, MAX] });
+  try {
+    await mined(chainId, await sendTx(from, chainId, token, grant));
+  } catch (err) {
+    if (!(err instanceof Error) || err.message !== "reverted") throw err;
+    const reset = encodeFunctionData({ abi: erc20, functionName: "approve", args: [DESK_LOCK, 0n] });
+    await mined(chainId, await sendTx(from, chainId, token, reset));
+    await mined(chainId, await sendTx(from, chainId, token, grant));
   }
-  const hash = await sendTx(from, chainId, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [DESK_LOCK, MAX] }));
-  await mined(chainId, hash);
 }
 
 export type FeeSwap = {
