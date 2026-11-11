@@ -86,6 +86,7 @@ export function StakeDesk() {
   const [openBemAmt, setOpenBemAmt] = useState("");
   const [openTerm, setOpenTerm] = useState(0);
   const [ackOpen, setAckOpen] = useState(false);
+  const [ratioNote, setRatioNote] = useState<string | null>(null);
   const [reserves, setReserves] = useState({
     usdtTape: 0n,
     usdtQuote: 0n,
@@ -390,19 +391,53 @@ export function StakeDesk() {
           </label>
           <button
             type="button"
-            className="min-h-8 justify-self-start text-xs underline"
-            onClick={() => {
-              try {
-                const bem = matchBem(openUnits(openTapeAmt), openSide.tape, openSide.quote);
-                if (bem > 0n) setOpenBemAmt(openPlain(bem));
-              } catch {
-                setOpenBemAmt("");
+            className="min-h-11 justify-self-start text-left text-xs underline"
+            onClick={(event) => {
+              event.preventDefault();
+              const tell = (text: string) => setRatioNote(text);
+              if (openSide.tape <= 0n || openSide.quote <= 0n) {
+                tell(zh ? "池子比例还没读到。稍等再点。" : "The pool ratio has not loaded. Wait and tap again.");
+                return;
               }
-              setAckOpen(false);
+              try {
+                let tape = openUnits(openTapeAmt);
+                let bem = openUnits(openBemAmt);
+                if (tape <= 0n && bem <= 0n) {
+                  tape = openTapeBal;
+                  bem = matchBem(tape, openSide.tape, openSide.quote);
+                  if (openBemBal > 0n && bem > openBemBal) {
+                    bem = openBemBal;
+                    tape = (bem * openSide.tape) / openSide.quote;
+                  }
+                } else if (tape > 0n) {
+                  bem = matchBem(tape, openSide.tape, openSide.quote);
+                } else {
+                  tape = (bem * openSide.tape) / openSide.quote;
+                }
+                if (tape <= 0n || bem <= 0n) {
+                  tell(
+                    zh
+                      ? "按比例算出来是 0。先填一边的数量，或钱包里要有 TAPE 和 BEM。"
+                      : "The ratio rounds to zero. Enter one side, or hold TAPE and BEM.",
+                  );
+                  return;
+                }
+                setOpenTapeAmt(openPlain(tape));
+                setOpenBemAmt(openPlain(bem));
+                setAckOpen(false);
+                tell(
+                  zh
+                    ? `已填 ${openPlain(bem)} BEM 对 ${openPlain(tape)} TAPE。`
+                    : `Filled ${openPlain(bem)} BEM against ${openPlain(tape)} TAPE.`,
+                );
+              } catch {
+                tell(zh ? "数量不对。" : "That amount is not valid.");
+              }
             }}
           >
-            {zh ? "按池子比例填 BEM" : "Fill BEM at the pool ratio"}
+            {zh ? "按池子比例填" : "Fill at the pool ratio"}
           </button>
+          {ratioNote ? <p className="text-xs leading-5 text-ink/70">{ratioNote}</p> : null}
           <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
             {OPEN_LP_TERMS.map((row) => (
               <button
