@@ -230,7 +230,7 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
                   {openText}
                 </a>
               ) : null}
-              {pair ? (
+              {pair && !account ? (
                 <div className="mt-3 grid justify-items-center gap-1">
                   <canvas ref={codeRef} width={180} height={180} />
                   <p className="text-center text-[11px] leading-4 text-ink/55">

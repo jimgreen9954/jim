@@ -249,7 +249,7 @@ async function connectOkxRemote(): Promise<string> {
   okx.on("display_uri", (uri: string) => {
     const text = String(uri);
     if (text.toLowerCase().startsWith("wc:")) {
-      publishPair(text);
+      if (!account) publishPair(text);
       return;
     }
     holdNavigation(text);
@@ -259,8 +259,8 @@ async function connectOkxRemote(): Promise<string> {
   if (!okx.connected()) {
     await new Promise((resolve, reject) => {
       const timer = window.setTimeout(() => {
-        if (!openLink) reject(new Error("nowallet"));
-      }, 12000);
+        if (!openLink && !account) reject(new Error("nowallet"));
+      }, 300000);
       okx
         .connect({
           namespaces: {
@@ -362,19 +362,6 @@ function addressFromSession(session: {
   return found.find((row) => row.chainId === 56) ?? found.find((row) => row.chainId === 196) ?? found[0];
 }
 
-function sessionChainIds(session: {
-  namespaces?: Record<string, { accounts?: string[]; chains?: string[] }>;
-} | undefined): Set<number> {
-  const ids = new Set<number>();
-  for (const group of Object.values(session?.namespaces ?? {})) {
-    for (const row of [...(group.accounts ?? []), ...(group.chains ?? [])]) {
-      const id = Number(String(row).split(":")[1]);
-      if (Number.isFinite(id)) ids.add(id);
-    }
-  }
-  return ids;
-}
-
 function phoneBrowser(): boolean {
   if (typeof navigator === "undefined") return false;
   return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -453,20 +440,10 @@ export async function connectScan(onUri?: (uri: string) => void, asKind?: Wallet
   provider.signer.on("default_chain_changed", syncChain);
   provider.on("display_uri", (uri: string) => {
     const text = String(uri);
-    publishPair(text);
+    if (!account) publishPair(text);
     onUri?.(text);
   });
-  const approved = sessionChainIds(provider.session);
-  if (provider.session && !(approved.has(56) && approved.has(196))) {
-    try {
-      await provider.disconnect();
-    } catch {
-      /* The old scan only had one chain. Ask for both. */
-    }
-  }
-  if (!sessionChainIds(provider.session).has(56) || !sessionChainIds(provider.session).has(196)) {
-    await provider.connect();
-  }
+  if (!provider.session) await provider.connect();
   const picked = addressFromSession(provider.session);
   const next = provider.accounts[0] || picked?.address;
   if (!next) throw new Error("nowallet");
@@ -542,6 +519,7 @@ export async function connectScan(onUri?: (uri: string) => void, asKind?: Wallet
 }
 
 export async function connectKind(which: WalletKind): Promise<string> {
+  if (account && current && (kind === which || which === "scan")) return account;
   if (which === "scan") return connectScan();
   kind = which;
   if (which === "binance") {
