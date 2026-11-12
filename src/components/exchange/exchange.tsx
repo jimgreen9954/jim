@@ -4,7 +4,7 @@ import { copy } from "@/lib/copy";
 import { startPersistence, useExchange } from "@/lib/exchange-store";
 import { fmtPct, fmtPx, fmtUsd } from "@/lib/format";
 import { equity, sessionChange } from "@/lib/match-engine";
-import { DeskHome, RedPocket, openOtcDesk, rememberDesk } from "@/components/exchange/desk-home";
+import { DeskHome, RedPocket, RevokeLocks, openOtcDesk, rememberDesk } from "@/components/exchange/desk-home";
 import { ConnectButton, ChainSwitch } from "@/components/exchange/wallet-bar";
 import { SettingsMenu } from "@/components/exchange/settings-menu";
 import { LocaleMenu } from "@/components/exchange/locale-menu";
@@ -86,6 +86,7 @@ export function Exchange({
   const [place, setPlace] = useState("");
   const { night, setNight } = useNight();
   const num = useExchange((s) => s.num);
+  const lang = useExchange((s) => s.lang);
   useEffect(() => {
     let stop = () => {};
     const id = window.setTimeout(() => {
@@ -167,6 +168,9 @@ export function Exchange({
             setShop={setShop}
             setGiftOpen={setGiftOpen}
           />
+          <div className="px-2 pt-2 sm:px-3">
+            <RevokeLocks zh={lang === "zh"} />
+          </div>
           <div
             key={`${floor}-${shop}`}
             className={`flex flex-col gap-3 px-2 pt-2 sm:px-3 ${floor === "paper" ? "pb-6" : ""}`}

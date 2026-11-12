@@ -108,7 +108,7 @@ function announceChain(view: DeskView) {
   window.dispatchEvent(new CustomEvent("tape-desk-chain", { detail: chain }));
 }
 
-function RevokeBem({ zh }: { zh: boolean }) {
+export function RevokeLocks({ zh }: { zh: boolean }) {
   const [account, setAccount] = useState<string | null>(currentAccount());
   const [open, setOpen] = useState<number[]>([]);
   const [busy, setBusy] = useState<number | null>(null);
@@ -284,7 +284,6 @@ export function DeskHome({
   return (
     <>
       <HomeBooks zh={zh} />
-      <RevokeBem zh={zh} />
       <ArriveHint zh={zh} />
       {showPerp ? (
         <Suspense fallback={null}>
