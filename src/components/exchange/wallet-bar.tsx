@@ -162,10 +162,7 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
       .finally(() => setBusy(false));
   };
   if (compact) {
-    const binance =
-      ask === "binance" ||
-      Boolean(link && (link.includes("binance.com") || link.startsWith("bnc:"))) ||
-      walletLabel() === "币安";
+    const binance = ask === "scan" ? false : ask === "binance" || (ask !== "okx" && walletLabel() === "币安");
     const openText = binance ? (zh ? "打开币安钱包" : "Open Binance Wallet") : zh ? "打开OKX钱包" : "Open OKX Wallet";
     return (
       <span className="relative flex items-center gap-1">

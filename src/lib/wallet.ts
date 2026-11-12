@@ -68,7 +68,15 @@ export function showWalletJump() {
     publishPhone("扫码钱包");
     return;
   }
-  if (kind === "binance") publishLink(phoneBrowser() ? "bnc://app.binance.com/cedefi/" : binanceWcLink());
+  if (kind === "binance") {
+    const link = phoneBrowser() ? "bnc://app.binance.com/cedefi/" : binanceWcLink();
+    publishLink(link);
+    if (phoneBrowser()) window.location.assign(link);
+    return;
+  }
+  if (kind === "okx" && openLink && /^(okx|okxwallet|okxweb3):/i.test(openLink)) {
+    window.location.assign(openLink);
+  }
 }
 
 export function hideWalletJump() {
@@ -196,6 +204,11 @@ async function waitBinance(): Promise<Eth | null> {
 function rememberWalletLink(url: string) {
   const next = url.trim();
   if (!next) return;
+  const text = next.toLowerCase();
+  const binance = text.startsWith("bnc:") || text.includes("binance.com");
+  const okx = text.startsWith("okx") || text.includes("okx.com");
+  if (kind === "binance" && !binance) return;
+  if (kind === "okx" && !okx) return;
   const native = /^(okx|okxwallet|okxweb3|bnc):/i.test(next);
   const kept = openLink != null && /^(okx|okxwallet|okxweb3|bnc):/i.test(openLink);
   if (!native && kept) return;
@@ -204,15 +217,22 @@ function rememberWalletLink(url: string) {
 
 function holdNavigation(url: string): boolean {
   const text = url.toLowerCase();
-  const wallet =
+  const native =
     text.startsWith("okx://") ||
     text.startsWith("okxwallet://") ||
     text.startsWith("okxweb3://") ||
+    text.startsWith("bnc:");
+  if (native) {
+    rememberWalletLink(url);
+    return false;
+  }
+  const wallet =
     text.includes("link.okx.com") ||
     text.includes("web3.okx.com") ||
     text.includes("web3link.okx.com") ||
     text.includes("okx.com/download") ||
-    text.includes("/ul/connect");
+    text.includes("/ul/connect") ||
+    text.includes("app.binance.com");
   if (!wallet && !text.includes("dapp/url") && !text.includes("dappurl=")) return false;
   rememberWalletLink(url);
   return true;
