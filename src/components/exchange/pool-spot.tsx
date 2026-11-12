@@ -572,6 +572,8 @@ export function PoolSpot({
       );
     else if (message === "nowallet" || message === "binanceapp")
       setNote(zh ? "先连接钱包。现货只走 X Layer。" : "Connect a wallet. Spot is on X Layer.");
+    else if (message === "next")
+      setNote(zh ? "授权好了。再点一次买入，下一笔才换成 OKB。" : "Approved. Tap buy again. The next signature turns it into OKB.");
     else if (message === "leg")
       setNote(
         side === "buy"
@@ -817,7 +819,7 @@ export function PoolSpot({
             : "The first signature pays OKB. The next one turns it into USDT0. Both have to be signed."
           : pairRef.current === "usdt"
             ? zh
-              ? "第一笔把 USDT0 换成 OKB。签完后下一笔买入 TAPE。两笔都签完才成交。"
+              ? "第一笔把 USDT0 换成 OKB。签完再点一次买入，下一笔才是 TAPE。每次只弹一次钱包。"
               : "The first signature turns USDT0 into OKB. The next one buys TAPE. Both have to be signed."
             : zh
               ? "这一笔直接打进池子。钱包签完才成交。"

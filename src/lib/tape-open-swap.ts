@@ -1,5 +1,5 @@
 import { createPublicClient, encodeFunctionData, formatUnits, http, parseAbi, parseUnits, type Hex } from "viem";
-import { FEE_TO, TxPending, XLAYER, XLAYER_SAFE } from "@/lib/chain-marks";
+import { FEE_TO, TxPending, XLAYER } from "@/lib/chain-marks";
 import { deskParts } from "@/lib/invite-cut";
 import { ensureProvider } from "@/lib/wallet";
 import { rememberOpenPrint } from "@/lib/tape-open-candles";
@@ -47,6 +47,12 @@ async function ensureX() {
   await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: XLAYER.hex }] });
 }
 
+function hexWei(n: bigint): Hex {
+  let body = n.toString(16);
+  if (body.length % 2) body = `0${body}`;
+  return `0x${body}`;
+}
+
 async function send(from: string, to: Hex, data: Hex, value = 0n): Promise<Hex> {
   const eth = await ensureProvider();
   await ensureX();
@@ -56,7 +62,7 @@ async function send(from: string, to: Hex, data: Hex, value = 0n): Promise<Hex> 
     data,
     chainId: XLAYER.hex,
   };
-  if (value > 0n) tx.value = `0x${value.toString(16)}`;
+  if (value > 0n) tx.value = hexWei(value);
   return (await eth.request({
     method: "eth_sendTransaction",
     params: [tx],
@@ -144,7 +150,7 @@ export async function swapPool(from: string, quote: PoolQuote, tapeIn: boolean, 
   const value = quote === 1 && !tapeIn ? amountIn : 0n;
   if (value > 0n) {
     const okb = await client.getBalance({ address: from as Hex });
-    if (okb < value + OKB_RESERVE) throw new Error("gas");
+    if (okb <= value) throw new Error("gas");
   }
   const hash = await send(
     from,
@@ -165,10 +171,6 @@ export async function swapPool(from: string, quote: PoolQuote, tapeIn: boolean, 
   return hash;
 }
 
-async function approveToken(from: string, token: Hex, need: bigint) {
-  await allow(from, token, ROUTER, need);
-}
-
 /** USDT0 on X Layer. This is the balance the ticket shows, not the other USDT. */
 export async function quoteUsdt0Okb(side: "buy" | "sell", amountIn: bigint): Promise<bigint> {
   if (amountIn <= 0n) return 0n;
@@ -182,13 +184,6 @@ export async function buyOkbWithUsdt0(from: string, usdtIn: bigint): Promise<big
   if (parts.swapIn <= 0n) throw new Error("amount");
   const out = await quoteUsdt0Okb("buy", parts.swapIn);
   if (out <= 0n) throw new Error("empty");
-  if (parts.desk > 0n) {
-    await wait(await send(from, USDT, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [XLAYER_SAFE, parts.desk] })));
-  }
-  if (parts.reward > 0n && parts.referrer) {
-    await wait(await send(from, USDT, encodeFunctionData({ abi: erc20, functionName: "transfer", args: [parts.referrer, parts.reward] })));
-  }
-  await approveToken(from, USDT, parts.swapIn);
   const minOut = (out * 99n) / 100n;
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20);
   const before = await client.getBalance({ address: from as Hex });
@@ -251,21 +246,35 @@ async function unwindOkb(from: string, want: bigint): Promise<Hex> {
   return hash;
 }
 
-/** Buy TAPE with USDT0. OKB is only the middle. A rejected second signature can be finished by tapping buy again. */
+/** One wallet confirmation per tap. OKX on a phone drops the later signatures if they are sent together. */
 export async function buyTapeWithUsdt0(from: string, usdtIn: bigint, okbIn: bigint): Promise<Hex> {
-  let pending = readHop(BUY_HOP, from);
-  if (!pending) {
-    pending = await buyOkbWithUsdt0(from, usdtIn);
-    writeHop(BUY_HOP, from, pending);
+  const pending = readHop(BUY_HOP, from);
+  if (pending) {
+    const bal = await client.getBalance({ address: from as Hex });
+    const hold = 50_000_000_000_000n;
+    const room = bal > hold ? bal - hold : 0n;
+    const spend = pending < okbIn ? pending : okbIn;
+    const capped = spend < room ? spend : room;
+    if (capped <= 10n ** 14n) throw new Error("leg");
+    const hash = await swapPool(from, 1, false, capped);
+    clearHop(BUY_HOP);
+    return hash;
   }
-  const bal = await client.getBalance({ address: from as Hex });
-  const room = bal > OKB_RESERVE ? bal - OKB_RESERVE : 0n;
-  const spend = pending < okbIn ? pending : okbIn;
-  const capped = spend < room ? spend : room;
-  if (capped <= 10n ** 14n) throw new Error("leg");
-  const hash = await swapPool(from, 1, false, capped);
-  clearHop(BUY_HOP);
-  return hash;
+  const parts = await deskParts("xlayer", from, usdtIn);
+  if (parts.swapIn <= 0n) throw new Error("amount");
+  const allowance = await client.readContract({
+    address: USDT,
+    abi: erc20,
+    functionName: "allowance",
+    args: [from as Hex, ROUTER],
+  });
+  if (allowance < parts.swapIn) {
+    await allow(from, USDT, ROUTER, parts.swapIn);
+    throw new Error("next");
+  }
+  const got = await buyOkbWithUsdt0(from, usdtIn);
+  writeHop(BUY_HOP, from, got);
+  throw new Error("leg");
 }
 
 /** Sell TAPE into the OKB pool, then turn that OKB into USDT0. The wallet shows OKB on the first signature. */
