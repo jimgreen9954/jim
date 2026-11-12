@@ -69,19 +69,6 @@ export function showWalletJump() {
   }
 }
 
-function openConnectedApp() {
-  if (!phoneBrowser() || mode === "scan") return;
-  window.setTimeout(() => {
-    const link =
-      kind === "binance"
-        ? "bnc://app.binance.com/cedefi/"
-        : openLink && /^(okx|okxwallet|okxweb3):/i.test(openLink)
-          ? openLink
-          : "";
-    if (link) window.location.assign(link);
-  }, 800);
-}
-
 export function hideWalletJump() {
   jumpHeld = false;
   publishPhone(null);
@@ -208,42 +195,48 @@ function rememberWalletLink(url: string) {
   const next = url.trim();
   if (!next) return;
   const text = next.toLowerCase();
-  const binance = text.startsWith("bnc:") || text.includes("binance.com");
-  const okx = text.startsWith("okx") || text.includes("okx.com");
+  const binance = text.startsWith("bnc:") || text.includes("binance.com") || text.startsWith("intent:");
+  const okx = text.startsWith("okx") || text.includes("okx.com") || text.startsWith("intent:");
   if (kind === "binance" && !binance) return;
   if (kind === "okx" && !okx) return;
-  const native = /^(okx|okxwallet|okxweb3|bnc):/i.test(next);
+  const payload = /[?&](param|topic|uri)=/i.test(next);
   const kept = openLink ?? "";
-  const keptNative = /^(okx|okxwallet|okxweb3|bnc):/i.test(kept);
-  const keptShort = /okx\.com|binance\.com/i.test(kept) && kept.length < 1500;
-  if (native && next.length > 1500 && keptShort) return;
-  if (!native && keptNative && kept.length > 1500) {
+  const keptPayload = /[?&](param|topic|uri)=/i.test(kept);
+  if (!payload && keptPayload) return;
+  const ios = typeof navigator !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const web = /okx\.com|binance\.com/i.test(next);
+  if (ios && web && payload) {
     publishLink(next);
     return;
   }
-  if (!native && keptNative && kept.length <= 1500) return;
-  publishLink(next);
+  if (ios && payload && keptPayload && /okx\.com|binance\.com/i.test(kept)) return;
+  publishLink(tappableLink(next));
+}
+
+function tappableLink(url: string): string {
+  const android = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
+  if (!android || !/^(okx|okxwallet|okxweb3):/i.test(url)) return url;
+  const scheme = url.slice(0, url.indexOf(":"));
+  const body = url.slice(scheme.length + 3);
+  return `intent://${body}#Intent;scheme=${scheme};package=com.okinc.okex.gp;end`;
 }
 
 function holdNavigation(url: string): boolean {
   const text = url.toLowerCase();
-  const native =
+  const wallet =
     text.startsWith("okx://") ||
     text.startsWith("okxwallet://") ||
     text.startsWith("okxweb3://") ||
-    text.startsWith("bnc:");
-  if (native) {
-    rememberWalletLink(url);
-    return false;
-  }
-  const wallet =
+    text.startsWith("bnc:") ||
     text.includes("link.okx.com") ||
     text.includes("web3.okx.com") ||
     text.includes("web3link.okx.com") ||
     text.includes("okx.com/download") ||
     text.includes("/ul/connect") ||
-    text.includes("app.binance.com");
-  if (!wallet && !text.includes("dapp/url") && !text.includes("dappurl=")) return false;
+    text.includes("app.binance.com") ||
+    text.includes("dapp/url") ||
+    text.includes("dappurl=");
+  if (!wallet) return false;
   rememberWalletLink(url);
   return true;
 }
@@ -380,7 +373,6 @@ async function connectOkxRemote(): Promise<string> {
       const chain = id === 56 || id === 196 ? `eip155:${id}` : undefined;
       const ask = okx.request as (payload: typeof args, chainId?: string) => Promise<unknown>;
       try {
-        if (args.method === "eth_sendTransaction") openConnectedApp();
         if (!chain) return await ask(args);
         try {
           return await ask(args, chain);
@@ -495,7 +487,8 @@ export async function connectScan(onUri?: (uri: string) => void, asKind?: Wallet
   }
   const provider = await EthereumProvider.init({
     projectId: WC_PROJECT,
-    chains: [56, 196],
+    chains: [56],
+    optionalChains: [196],
     showQrModal: false,
     rpcMap: {
       56: "https://bsc-dataseed.binance.org",
@@ -545,10 +538,7 @@ export async function connectScan(onUri?: (uri: string) => void, asKind?: Wallet
       if (args.method === "eth_sendTransaction") {
         const tx = (args.params as { chainId?: string }[] | undefined)?.[0];
         const wanted = requested ?? provider.chainId;
-        if (tx && (wanted === 56 || wanted === 196)) {
-          provider.chainId = wanted;
-          tx.chainId = `0x${wanted.toString(16)}`;
-        }
+        if (tx && (wanted === 56 || wanted === 196)) tx.chainId = `0x${wanted.toString(16)}`;
       }
       if (args.method === "wallet_switchEthereumChain" && requested === 56) {
         provider.chainId = 56;
@@ -567,7 +557,6 @@ export async function connectScan(onUri?: (uri: string) => void, asKind?: Wallet
         }
       }
       try {
-        if ((args.method === "eth_sendTransaction" || requested === 196) && mode !== "scan") openConnectedApp();
         const result = await provider.request(args);
         if (
           (args.method === "wallet_switchEthereumChain" || args.method === "wallet_addEthereumChain") &&
@@ -706,7 +695,7 @@ const DESK_CHAINS: Record<DeskChain, { hex: string; add: Record<string, unknown>
       chainName: "X Layer",
       nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
       rpcUrls: ["https://rpc.xlayer.tech", "https://xlayerrpc.okx.com"],
-      blockExplorerUrls: ["https://www.oklink.com/xlayer"],
+      blockExplorerUrls: ["https://www.okx.com/web3/explorer/xlayer"],
     },
   },
 };
@@ -811,6 +800,25 @@ export async function switchDeskChain(id: DeskChain): Promise<void> {
   if (!current) current = eth;
   const row = DESK_CHAINS[id];
   const read = async () => parseChainId(await eth.request({ method: "eth_chainId" }));
+  if (remoteWallet() && id === 196) {
+    const held = jumpHeld;
+    showWalletJump();
+    if (kind === "binance") publishLink("bnc://app.binance.com/cedefi/");
+    try {
+      await eth.request({ method: "wallet_addEthereumChain", params: [row.add] });
+    } catch (err) {
+      if (chainRejected(err)) throw err;
+    }
+    try {
+      await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: row.hex }] });
+    } catch (err) {
+      if (chainRejected(err)) throw err;
+      throw new Error("xlayer");
+    }
+    rememberChain(196);
+    if (!held) hideWalletJump();
+    return;
+  }
   if ((await read().catch(() => null)) === id) {
     rememberChain(id);
     return;
