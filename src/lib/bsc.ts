@@ -97,7 +97,7 @@ const swapEvent = parseAbiItem(
 );
 
 import { STOCKS, type StockKey } from "@/lib/stocks";
-import { ensureProvider, getProvider, grantedAccount, rememberAccount } from "@/lib/wallet";
+import { ensureProvider, getProvider, grantedAccount, rememberAccount, remoteWallet } from "@/lib/wallet";
 
 export function hasWallet(): boolean {
   return Boolean(getProvider());
@@ -448,7 +448,7 @@ export async function connectBsc(): Promise<string> {
 
 async function send(from: string, to: Hex, data: Hex, value = 0n): Promise<Hex> {
   const eth = await ensureProvider();
-  await ensureBsc();
+  if (!remoteWallet()) await ensureBsc();
   const tx: { from: string; to: Hex; data: Hex; chainId: Hex; value?: Hex } = { from, to, data, chainId: BSC.hex as Hex };
   if (value > 0n) tx.value = `0x${value.toString(16)}`;
   return (await eth.request({

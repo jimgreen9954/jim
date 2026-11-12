@@ -52,7 +52,7 @@ async function hasCode(chainId: number, address: Hex): Promise<boolean> {
 
 async function sendTx(from: string, chainId: 56 | 196, to: Hex, data: Hex, value = 0n): Promise<Hex> {
   const eth = await ensureProvider();
-  await switchDeskChain(chainId);
+  if (!remoteWallet()) await switchDeskChain(chainId);
   const tx: { from: string; to: Hex; data: Hex; chainId: Hex; value?: Hex } = {
     from,
     to,
@@ -148,14 +148,11 @@ export type FeeSwap = {
   lock?: boolean;
 };
 
-/** Fee and the fill. A phone wallet signs the same router call as the desktop, one transaction at a time. */
+/** One signature. The phone wallet sees the same router call as the desktop, not a chain switch plus a fee plus a swap. */
 export async function sendFeeAndSwap(args: FeeSwap): Promise<Hex> {
   const { from, chainId, token, safe, parts, swapTo, data, value, pull, spender } = args;
   if (remoteWallet()) {
     sayTradeStep("fill");
-    for (const call of feeCalls(token, safe, parts)) {
-      await mined(chainId, await sendTx(from, chainId, call.to, call.data || "0x", call.value ?? 0n));
-    }
     return sendTx(from, chainId, swapTo, data, value);
   }
   const calls = feeCalls(token, safe, parts);
