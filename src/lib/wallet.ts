@@ -49,6 +49,25 @@ function publishLink(next: string | null) {
   linkListeners.forEach((cb) => cb(next));
 }
 
+let jumpHeld = false;
+
+export function showWalletJump() {
+  jumpHeld = true;
+  if (kind === "binance") publishLink(binanceOpenLink());
+}
+
+export function hideWalletJump() {
+  jumpHeld = false;
+  publishPhone(null);
+  publishLink(null);
+}
+
+function releaseLink() {
+  if (jumpHeld) return;
+  publishPhone(null);
+  publishLink(null);
+}
+
 function remember(next: string | null) {
   if (dropped && next) return;
   account = next;
@@ -308,7 +327,7 @@ async function connectOkxRemote(): Promise<string> {
       try {
         return chain ? await ask(args, chain) : await ask(args);
       } finally {
-        publishLink(null);
+        releaseLink();
       }
     },
   };
@@ -498,10 +517,7 @@ export async function connectScan(onUri?: (uri: string) => void, asKind?: Wallet
         }
         return result;
       } finally {
-        if (phone) {
-          publishPhone(null);
-          publishLink(null);
-        }
+        if (phone) releaseLink();
       }
     },
   };

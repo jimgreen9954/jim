@@ -95,7 +95,7 @@ async function send(from: string, to: Hex, data: Hex, value = 0n): Promise<Hex> 
   await ensureX();
   return (await eth.request({
     method: "eth_sendTransaction",
-    params: [{ from, to, data, value: `0x${value.toString(16)}` }],
+    params: [{ from, to, data, chainId: XLAYER.hex, value: `0x${value.toString(16)}` }],
   })) as Hex;
 }
 
@@ -414,8 +414,6 @@ export async function swapBemOkb(from: string, side: "buy" | "sell", amount: str
   }
   const amountIn = units(amount, 8);
   if (amountIn <= 0n) throw new Error("amount");
-  const held = await xClient.readContract({ address: X_BEM, abi: erc20, functionName: "balanceOf", args: [owner] });
-  if (held < amountIn) throw new Error("balance");
   const parts = await deskParts("xlayer", from, amountIn);
   if (parts.swapIn <= 0n) throw new Error("amount");
   const allowance = await xClient.readContract({ address: X_BEM, abi: erc20, functionName: "allowance", args: [owner, V3_ROUTER] });

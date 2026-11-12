@@ -184,8 +184,6 @@ export async function swapFab(from: string, side: "buy" | "sell", amount: string
   const swapIn = parts.swapIn;
   if (swapIn <= 0n) throw new Error("amount");
   const token = side === "buy" ? FAB_BEM : FAB;
-  const have = await xClient.readContract({ address: token, abi: erc20, functionName: "balanceOf", args: [from as Hex] });
-  if (have < raw) throw new Error("balance");
   const quoted = await quoteFab(side, swapIn);
   const min = (quoted * BigInt(10_000 - SLIP)) / 10_000n;
   if (floor != null && min < floor) throw new Error("quote-moved");

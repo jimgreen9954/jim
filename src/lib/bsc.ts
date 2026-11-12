@@ -449,7 +449,7 @@ export async function connectBsc(): Promise<string> {
 async function send(from: string, to: Hex, data: Hex, value = 0n): Promise<Hex> {
   const eth = await ensureProvider();
   await ensureBsc();
-  const tx: { from: string; to: Hex; data: Hex; value?: Hex } = { from, to, data };
+  const tx: { from: string; to: Hex; data: Hex; chainId: Hex; value?: Hex } = { from, to, data, chainId: BSC.hex as Hex };
   if (value > 0n) tx.value = `0x${value.toString(16)}`;
   return (await eth.request({
     method: "eth_sendTransaction",
@@ -1040,8 +1040,6 @@ export async function swapBemBnbSpot(from: string, side: "buy" | "sell", amount:
   if (amountIn <= 0n) throw new Error("amount");
   const parts = await partsOf(amountIn);
   if (parts.swapIn <= 0n) throw new Error("amount");
-  const held = await client.readContract({ address: BSC.bem, abi: erc20, functionName: "balanceOf", args: [owner] });
-  if (held < amountIn) throw new Error("balance");
   const minOut = ((await quoteExact(BSC.bem, BSC.wbnb, parts.swapIn, 10000)) * 9900n) / 10_000n;
   if (minOut <= 0n) throw new Error("tiny");
   const swapData = encodeFunctionData({
@@ -1186,8 +1184,6 @@ export async function swapUpBnbSpot(from: string, side: "buy" | "sell", amount: 
   if (amountIn <= 0n) throw new Error("amount");
   const parts = await deskParts("bsc", from, amountIn);
   if (parts.swapIn <= 0n) throw new Error("amount");
-  const held = await client.readContract({ address: BSC.up, abi: erc20, functionName: "balanceOf", args: [owner] });
-  if (held < amountIn) throw new Error("balance");
   const bemOut = await quoteUpPoolSell(parts.swapIn);
   const minBem = (bemOut * 9900n) / 10_000n;
   if (minBem <= 0n) throw new Error("tiny");
@@ -1210,15 +1206,12 @@ export async function swapUpBnbSpot(from: string, side: "buy" | "sell", amount: 
 }
 
 export async function swapUpBemSpot(from: string, side: "buy" | "sell", amount: string): Promise<Hex> {
-  const owner = from as Hex;
   const buy = side === "buy";
   const amountIn = units(amount, buy ? BSC.bemDecimals : 18);
   if (amountIn <= 0n) throw new Error("amount");
   const parts = await deskParts("bsc", from, amountIn);
   if (parts.swapIn <= 0n) throw new Error("amount");
   const pay = buy ? BSC.bem : BSC.up;
-  const held = await client.readContract({ address: pay, abi: erc20, functionName: "balanceOf", args: [owner] });
-  if (held < amountIn) throw new Error("balance");
   const feeKey = `tl-fee:${from.toLowerCase()}:upbem:${side}:${amountIn}`;
   const swapKey = `tl-swap:${from.toLowerCase()}:upbem:${side}:${amountIn}`;
   if (buy) {
@@ -1243,8 +1236,6 @@ export async function swapUpUsdtSpot(from: string, side: "buy" | "sell", amount:
   const parts = await deskParts("bsc", from, amountIn);
   if (parts.swapIn <= 0n) throw new Error("amount");
   const pay = buy ? BSC.usdt : BSC.up;
-  const held = await client.readContract({ address: pay, abi: erc20, functionName: "balanceOf", args: [owner] });
-  if (held < amountIn) throw new Error("balance");
   const feeKey = `tl-fee:${from.toLowerCase()}:upusdt:${side}:${amountIn}`;
   const swapKey = `tl-swap:${from.toLowerCase()}:upusdt:${side}:${amountIn}`;
   if (buy) {

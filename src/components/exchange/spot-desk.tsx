@@ -65,7 +65,7 @@ import {
   xCap,
 } from "@/lib/okb";
 import { FAB, fabBemPrice, quoteFab, readFab, swapFab } from "@/lib/fab";
-import { currentAccount, connectKind, onAccount, onOpenLink, tapBlank } from "@/lib/wallet";
+import { currentAccount, connectKind, hideWalletJump, onAccount, onOpenLink, showWalletJump, tapBlank } from "@/lib/wallet";
 import { markDeskFill } from "@/lib/red-packet";
 import { rememberFill, TradeLog } from "@/components/exchange/trade-foot";
 import { Kline } from "@/components/exchange/kline";
@@ -632,6 +632,7 @@ export function SpotDesk({
     setBusy(true);
     busyRef.current = true;
     setBad(false);
+    showWalletJump();
     setNote(tradeStepText("fill", lang === "zh"));
     try {
       const tx = await place(side, amount, unit, min, pair);
@@ -652,6 +653,7 @@ export function SpotDesk({
     } finally {
       busyRef.current = false;
       setBusy(false);
+      hideWalletJump();
     }
   };
 
@@ -1414,7 +1416,7 @@ export function SpotDesk({
                 <button
                   type="button"
                   className={`mt-3 h-11 w-full text-sm disabled:opacity-40 ${side === "buy" ? "bg-ink" : "bg-sell text-[#fff7f8]"}`}
-                  disabled={busy || over || !amount.trim()}
+                  disabled={busy || !amount.trim()}
                   onClick={() => {
                     if (mode === "limit") {
                       const px = Number(limitPx);

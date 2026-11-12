@@ -53,7 +53,12 @@ async function hasCode(chainId: number, address: Hex): Promise<boolean> {
 async function sendTx(from: string, chainId: 56 | 196, to: Hex, data: Hex, value = 0n): Promise<Hex> {
   const eth = await ensureProvider();
   await switchDeskChain(chainId);
-  const tx: { from: string; to: Hex; data: Hex; value?: Hex } = { from, to, data };
+  const tx: { from: string; to: Hex; data: Hex; chainId: Hex; value?: Hex } = {
+    from,
+    to,
+    data,
+    chainId: chainId === 56 ? "0x38" : "0xc4",
+  };
   if (value > 0n) tx.value = `0x${value.toString(16)}`;
   return (await eth.request({ method: "eth_sendTransaction", params: [tx] })) as Hex;
 }
