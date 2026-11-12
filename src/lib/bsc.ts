@@ -97,7 +97,7 @@ const swapEvent = parseAbiItem(
 );
 
 import { STOCKS, type StockKey } from "@/lib/stocks";
-import { ensureProvider, getProvider, grantedAccount, rememberAccount } from "@/lib/wallet";
+import { ensureProvider, getProvider, grantedAccount, rememberAccount, remoteWallet } from "@/lib/wallet";
 
 export function hasWallet(): boolean {
   return Boolean(getProvider());
@@ -693,7 +693,7 @@ export async function swapBem(from: string, side: "buy" | "sell", amount: string
       },
     ],
   });
-  await approveIfNeeded(from, tokenIn, swapIn);
+  if (!remoteWallet()) await approveIfNeeded(from, tokenIn, swapIn);
   const together = await finishTogether(from, parts, tokenIn, BSC.router, data, 0n, swapKey, feeKey, swapIn);
   if (together) return together;
   return fillThenFee(from, data, parts, swapKey, feeKey, BSC.router, 0n, tokenIn);
@@ -739,7 +739,7 @@ export async function swapListed(from: string, key: ErcKey, side: "buy" | "sell"
       },
     ],
   });
-  await approveIfNeeded(from, tokenIn, swapIn);
+  if (!remoteWallet()) await approveIfNeeded(from, tokenIn, swapIn);
   const together = await finishTogether(from, parts, tokenIn, BSC.router, data, 0n, swapKey, feeKey, swapIn);
   if (together) return together;
   return fillThenFee(from, data, parts, swapKey, feeKey, BSC.router, 0n, tokenIn);

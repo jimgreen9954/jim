@@ -171,6 +171,12 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
             href={link}
             {...(tapBlank(link) ? { target: "_blank", rel: "noreferrer" } : {})}
             className="inline-flex h-8 items-center border border-gold bg-ink px-2 text-xs text-paper"
+            onClick={(event) => {
+              if (/^(okx|okxwallet|okxweb3|bnc):/i.test(link)) {
+                event.preventDefault();
+                window.location.href = link;
+              }
+            }}
           >
             {openText}
           </a>
@@ -265,6 +271,12 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
                     href={link}
                     {...(tapBlank(link) ? { target: "_blank", rel: "noreferrer" } : {})}
                     className="mt-2 flex h-11 items-center justify-center bg-ink text-sm text-paper"
+                    onClick={(event) => {
+                      if (/^(okx|okxwallet|okxweb3|bnc):/i.test(link)) {
+                        event.preventDefault();
+                        window.location.href = link;
+                      }
+                    }}
                   >
                     {openText}
                   </a>

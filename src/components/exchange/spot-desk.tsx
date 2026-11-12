@@ -1452,7 +1452,17 @@ export function SpotDesk({
                       : `${side === "buy" ? "Buy" : "Sell"} ${base}`}
                 </button>
                 {openLink ? (
-                  <a href={openLink} {...(tapBlank(openLink) ? { target: "_blank", rel: "noreferrer" } : {})} className="mt-2 flex h-10 items-center justify-center border border-gold text-sm">
+                  <a
+                    href={openLink}
+                    {...(tapBlank(openLink) ? { target: "_blank", rel: "noreferrer" } : {})}
+                    className="mt-2 flex h-10 items-center justify-center border border-gold text-sm"
+                    onClick={(event) => {
+                      if (/^(okx|okxwallet|okxweb3|bnc):/i.test(openLink)) {
+                        event.preventDefault();
+                        window.location.href = openLink;
+                      }
+                    }}
+                  >
                     {lang === "zh" ? (openLink.includes("binance.com") || openLink.startsWith("bnc:") ? "打开币安钱包" : "打开OKX钱包") : openLink.includes("binance.com") || openLink.startsWith("bnc:") ? "Open Binance Wallet" : "Open OKX Wallet"}
                   </a>
                 ) : null}

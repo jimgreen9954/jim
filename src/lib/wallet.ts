@@ -466,6 +466,7 @@ export function tapBlank(link: string): boolean {
     link.startsWith("intent:") ||
     link.startsWith("bnc:") ||
     link.startsWith("okx") ||
+    link.includes("okx.com") ||
     link.includes("app.binance.com")
   ) {
     return false;
@@ -542,12 +543,9 @@ export async function connectScan(onUri?: (uri: string) => void, asKind?: Wallet
           tx.chainId = `0x${wanted.toString(16)}`;
         }
       }
-      if (
-        args.method === "wallet_switchEthereumChain" &&
-        (requested === 56 || requested === 196)
-      ) {
-        provider.chainId = requested;
-        rememberChain(requested);
+      if (args.method === "wallet_switchEthereumChain" && requested === 56) {
+        provider.chainId = 56;
+        rememberChain(56);
         return null;
       }
       if (phone) {
@@ -562,7 +560,7 @@ export async function connectScan(onUri?: (uri: string) => void, asKind?: Wallet
         }
       }
       try {
-        if (args.method === "eth_sendTransaction" && mode !== "scan") openConnectedApp();
+        if ((args.method === "eth_sendTransaction" || requested === 196) && mode !== "scan") openConnectedApp();
         const result = await provider.request(args);
         if (
           (args.method === "wallet_switchEthereumChain" || args.method === "wallet_addEthereumChain") &&
