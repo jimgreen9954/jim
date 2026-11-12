@@ -83,8 +83,8 @@ export function showWalletJump() {
     publishPhone("扫码钱包");
     return;
   }
-  const openApp = kind === "binance" ? "bnc://app.binance.com/cedefi/" : tappableLink("okxweb3://web3?stack=true");
-  if (!openLink || !/[?&](param|topic|uri)=/i.test(openLink)) publishLink(openApp);
+  const openApp = kind === "binance" ? "bnc://app.binance.com/cedefi/" : null;
+  if (openApp && (!openLink || !/[?&](param|topic|uri)=/i.test(openLink))) publishLink(openApp);
 }
 
 export function dismissWalletPrompt() {
@@ -323,7 +323,7 @@ async function useInjected(eth: Eth): Promise<string> {
   return next;
 }
 
-const quiet = { redirect: "none" as const, openUniversalUrl: true };
+const quiet = { openUniversalUrl: true as const };
 
 async function connectOkxRemote(): Promise<string> {
   publishPair(null);
@@ -379,34 +379,38 @@ async function connectOkxRemote(): Promise<string> {
   const wrapped: Eth = {
     request: async (args) => {
       stayOnPage();
-      if (signClient) signClient.sessionConfig = { ...(signClient.sessionConfig ?? {}), ...quiet };
-      if (args.method === "wallet_switchEthereumChain" || args.method === "eth_sendTransaction") {
-        const row = (args.params as { chainId?: string }[] | { chainId?: string } | undefined);
-        const first = Array.isArray(row) ? row[0] : row;
-        const hex = first?.chainId;
-        if (hex && hex.startsWith("0x")) {
-          const id = Number.parseInt(hex, 16);
-          if (id === 56 || id === 196) okx.setDefaultChain(String(id));
-        }
-      }
-      if (args.method === "wallet_switchEthereumChain") return null;
+      if (signClient) signClient.sessionConfig = { ...(signClient.sessionConfig ?? {}), openUniversalUrl: true };
       const row = (args.params as { chainId?: string }[] | { chainId?: string } | undefined);
       const first = Array.isArray(row) ? row[0] : row;
       const hex = first?.chainId;
       const id = hex && hex.startsWith("0x") ? Number.parseInt(hex, 16) : 0;
-      const chain = id === 56 || id === 196 ? `eip155:${id}` : undefined;
+      const known = id === 56 || id === 196;
+      if (known) okx.setDefaultChain(String(id));
+      const chain = known ? `eip155:${id}` : undefined;
       const ask = okx.request as (payload: typeof args, chainId?: string) => Promise<unknown>;
+      const signing =
+        args.method === "eth_sendTransaction" ||
+        args.method === "wallet_switchEthereumChain" ||
+        args.method === "wallet_addEthereumChain";
       try {
-        if (args.method === "eth_sendTransaction") showWalletJump();
-        if (!chain) return await ask(args);
-        try {
-          return await ask(args, chain);
-        } catch (err) {
-          const code = typeof err === "object" && err ? Number((err as { code?: number }).code) : NaN;
-          const msg = err instanceof Error ? err.message : String(err);
-          if (code === 4001 || /user rejected|user denied/i.test(msg)) throw err;
-          return await ask(args);
+        if (signing) showWalletJump();
+        if (args.method === "wallet_switchEthereumChain" && known) {
+          try {
+            await ask(args, chain);
+          } catch (err) {
+            const code = typeof err === "object" && err ? Number((err as { code?: number }).code) : NaN;
+            const msg = err instanceof Error ? err.message : String(err);
+            if (code === 4001 || /user rejected|user denied/i.test(msg)) throw err;
+            await ask(
+              { method: "wallet_addEthereumChain", params: [DESK_CHAINS[id as DeskChain].add] },
+              chain,
+            );
+          }
+          okx.setDefaultChain(String(id));
+          return null;
         }
+        if (!chain) return await ask(args);
+        return await ask(args, chain);
       } finally {
         releaseLink();
       }
