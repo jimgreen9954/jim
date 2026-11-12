@@ -7,6 +7,7 @@ import {
   connectScan,
   currentAccount,
   disconnectWallet,
+  followBinance,
   onAccount,
   onOpenLink,
   onPairUri,
@@ -165,6 +166,9 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
           <a
             href={link}
             {...(tapBlank(link) ? { target: "_blank", rel: "noreferrer" } : {})}
+            onClick={(event) => {
+              if (followBinance(link)) event.preventDefault();
+            }}
             className="inline-flex h-8 items-center border border-gold bg-ink px-2 text-xs text-paper"
           >
             {binance ? (zh ? "打开币安" : "Open Binance") : zh ? "去 OKX" : "Open OKX"}
@@ -211,6 +215,9 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
                 <a
                   href={link}
                   {...(tapBlank(link) ? { target: "_blank", rel: "noreferrer" } : {})}
+                  onClick={(event) => {
+                    if (followBinance(link)) event.preventDefault();
+                  }}
                   className="mt-2 flex h-10 items-center justify-center bg-ink text-sm text-paper"
                 >
                   {binance ? (zh ? "打开币安" : "Open Binance") : zh ? "去 OKX 确认" : "Confirm in OKX"}
@@ -250,6 +257,9 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
           <a
             href={link}
             {...(tapBlank(link) ? { target: "_blank", rel: "noreferrer" } : {})}
+            onClick={(event) => {
+              if (followBinance(link)) event.preventDefault();
+            }}
             className="inline-flex min-h-9 shrink-0 items-center border border-gold bg-ink px-2 text-xs text-paper"
           >
             {zh ? "去确认" : "Confirm"}
@@ -340,6 +350,9 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
               <a
                 href={link}
                 {...(tapBlank(link) ? { target: "_blank", rel: "noreferrer" } : {})}
+                onClick={(event) => {
+                  if (followBinance(link)) event.preventDefault();
+                }}
                 className="mt-2 flex h-10 items-center justify-center border border-gold text-sm"
               >
                 {binance ? (zh ? "打开币安" : "Open Binance") : zh ? "去 OKX 确认" : "Confirm in OKX"}

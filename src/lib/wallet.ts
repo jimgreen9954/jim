@@ -389,19 +389,29 @@ function androidPhone(): boolean {
 }
 
 export function binanceOpenLink(uri?: string): string {
-  const https = binanceWcLink(uri);
-  if (!phoneBrowser()) return https;
-  if (androidPhone()) {
-    const path = uri
-      ? `app.binance.com/cedefi/wc?uri=${encodeURIComponent(uri)}`
-      : "app.binance.com/cedefi/wc";
-    return `intent://${path}#Intent;scheme=bnc;package=com.binance.dev;S.browser_fallback_url=${encodeURIComponent(https)};end`;
-  }
-  return https;
+  if (!phoneBrowser()) return binanceWcLink(uri);
+  if (!uri) return androidPhone() ? "bnc://app.binance.com/cedefi/" : "https://app.binance.com/cedefi/";
+  const encoded = encodeURIComponent(uri);
+  if (androidPhone()) return `bnc://app.binance.com/cedefi/wc?uri=${encoded}`;
+  return `https://app.binance.com/cedefi/wc?uri=${encoded}`;
+}
+
+export function followBinance(link: string): boolean {
+  if (!phoneBrowser()) return false;
+  if (!link.startsWith("bnc:") && !link.includes("app.binance.com")) return false;
+  window.location.assign(link);
+  return true;
 }
 
 export function tapBlank(link: string): boolean {
-  if (link.startsWith("intent:") || link.startsWith("bnc:") || link.startsWith("okx")) return false;
+  if (
+    link.startsWith("intent:") ||
+    link.startsWith("bnc:") ||
+    link.startsWith("okx") ||
+    link.includes("app.binance.com")
+  ) {
+    return false;
+  }
   return true;
 }
 
