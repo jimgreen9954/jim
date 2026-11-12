@@ -11,6 +11,7 @@ const linkListeners = new Set<(next: string | null) => void>();
 let current: Eth | null = null;
 let account: string | null = null;
 let kind: WalletKind = "okx";
+let mode: "jump" | "scan" = "jump";
 let dropped = false;
 const listeners = new Set<(next: string | null) => void>();
 
@@ -51,8 +52,17 @@ function publishLink(next: string | null) {
 
 let jumpHeld = false;
 
+export function walletMode(): "jump" | "scan" {
+  return mode;
+}
+
 export function showWalletJump() {
   jumpHeld = true;
+  if (mode === "scan") {
+    publishLink(null);
+    publishPhone("扫码钱包");
+    return;
+  }
   if (kind === "binance") {
     publishLink(phoneBrowser() ? "bnc://app.binance.com/cedefi/" : binanceWcLink());
     return;
@@ -283,7 +293,7 @@ async function connectOkxRemote(): Promise<string> {
   okx.on("display_uri", (uri: string) => {
     const text = String(uri);
     if (text.toLowerCase().startsWith("wc:")) {
-      if (!account && !phoneBrowser()) publishPair(text);
+      if (!account && (mode === "scan" || !phoneBrowser())) publishPair(text);
       return;
     }
     holdNavigation(text);
@@ -475,8 +485,8 @@ export async function connectScan(onUri?: (uri: string) => void, asKind?: Wallet
   provider.signer.on("default_chain_changed", syncChain);
   provider.on("display_uri", (uri: string) => {
     const text = String(uri);
-    if (!account && !phoneBrowser()) publishPair(text);
-    onUri?.(text);
+    if (!account && (mode === "scan" || !phoneBrowser())) publishPair(text);
+    if (mode !== "scan") onUri?.(text);
   });
   if (!provider.session) await provider.connect();
   const picked = addressFromSession(provider.session);
@@ -508,12 +518,14 @@ export async function connectScan(onUri?: (uri: string) => void, asKind?: Wallet
       }
       if (phone) {
         const meta = provider.session?.peer?.metadata;
-        publishPhone(meta?.name || (asKind === "binance" ? "币安" : "手机钱包"));
-        const link =
-          asKind === "binance"
-            ? binanceOpenLink()
-            : meta?.redirect?.universal || meta?.redirect?.native || null;
-        if (link) publishLink(link);
+        publishPhone(mode === "scan" ? "扫码钱包" : meta?.name || (asKind === "binance" ? "币安" : "手机钱包"));
+        if (mode !== "scan") {
+          const link =
+            asKind === "binance"
+              ? binanceOpenLink()
+              : meta?.redirect?.universal || meta?.redirect?.native || null;
+          if (link) publishLink(link);
+        }
       }
       try {
         const result = await provider.request(args);
@@ -551,8 +563,13 @@ export async function connectScan(onUri?: (uri: string) => void, asKind?: Wallet
 }
 
 export async function connectKind(which: WalletKind): Promise<string> {
-  if (account && current && (kind === which || which === "scan")) return account;
-  if (which === "scan") return connectScan();
+  if (account && current && kind === which) return account;
+  if (which === "scan") {
+    mode = "scan";
+    publishLink(null);
+    return connectScan();
+  }
+  mode = "jump";
   kind = which;
   if (which === "binance") {
     const plugged = binanceInjected() ?? (await waitBinance());
@@ -586,6 +603,7 @@ export async function disconnectWallet(): Promise<void> {
     /* OKX and Binance often refuse. The page still drops the session. */
   }
   current = null;
+  mode = "jump";
   publishLink(null);
   publishPair(null);
   remember(null);

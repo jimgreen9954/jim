@@ -14,6 +14,7 @@ import {
   switchDeskChain,
   tapBlank,
   walletLabel,
+  walletMode,
 } from "@/lib/wallet";
 import { copy } from "@/lib/copy";
 import { useExchange } from "@/lib/exchange-store";
@@ -100,7 +101,7 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
   const [entered, setEntered] = useState(false);
   const [pair, setPair] = useState<string | null>(null);
   const [phone, setPhone] = useState<string | null>(null);
-  const [ask, setAsk] = useState<null | "binance" | "okx">(null);
+  const [ask, setAsk] = useState<null | "binance" | "okx" | "scan">(null);
   const codeRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => onAccount(setAccount), []);
   useEffect(() => onOpenLink(setLink), []);
@@ -112,7 +113,7 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
     QRCode.toCanvas(canvas, pair, { width: 180, margin: 1, errorCorrectionLevel: "M" }).catch(
       () => undefined,
     );
-  }, [pair, open]);
+  }, [pair, open, ask]);
   const enter = () => {
     setEntered(true);
     setOpen(false);
@@ -207,49 +208,76 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
                   run(() => connectKind("okx"));
                 }}
               >
-                OKX
+                {zh ? "打开OKX钱包" : "Open OKX Wallet"}
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                className="mb-2 h-10 w-full border border-gold text-sm disabled:opacity-40"
+                onClick={() => {
+                  setAsk("binance");
+                  run(() => connectKind("binance"));
+                }}
+              >
+                {zh ? "打开币安钱包" : "Open Binance Wallet"}
               </button>
               <button
                 type="button"
                 disabled={busy}
                 className="h-10 w-full border border-gold text-sm disabled:opacity-40"
                 onClick={() => {
-                  setAsk("binance");
-                  run(() => connectKind("binance"));
+                  setAsk("scan");
+                  run(() => connectKind("scan"));
                 }}
               >
-                {zh ? "币安" : "Binance"}
+                {zh ? "扫码登录" : "Scan to log in"}
               </button>
               {note ? <p className="mt-2 text-xs text-sell">{note}</p> : null}
             </div>
           </>
         ) : null}
-        {ask || link ? (
+        {ask || link || (phone && walletMode() === "scan") ? (
           <div className="fixed inset-x-3 bottom-[4.5rem] z-[70] border border-gold bg-card p-3 shadow-plate">
-            <p className="text-sm">
-              {link
-                ? zh
-                  ? "点下面去钱包里确认。这一页留着，确认后回来。"
-                  : "Open the wallet below. This page stays. Come back after you confirm."
-                : zh
-                  ? "正在连接钱包…"
-                  : "Connecting the wallet…"}
-            </p>
-            {link ? (
-              <a
-                href={link}
-                {...(tapBlank(link) ? { target: "_blank", rel: "noreferrer" } : {})}
-                className="mt-2 flex h-11 items-center justify-center bg-ink text-sm text-paper"
-              >
-                {openText}
-              </a>
-            ) : null}
+            {ask === "scan" || (walletMode() === "scan" && !link) ? (
+              <>
+                <p className="text-sm">
+                  {account
+                    ? zh
+                      ? "打开刚才扫码的那个钱包，点确认。不要再扫新的码。"
+                      : "Open the wallet you scanned with and confirm. Do not scan a new code."
+                    : zh
+                      ? "用 OKX 或币安扫这个码。这一页不要关。"
+                      : "Scan this code with OKX or Binance. Leave this page open."}
+                </p>
+                {!account && pair ? (
+                  <canvas ref={codeRef} width={180} height={180} className="mx-auto mt-3" />
+                ) : null}
+                {!account && !pair ? (
+                  <p className="mt-2 text-xs text-ink/55">{zh ? "正在生成二维码…" : "Making the code…"}</p>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <p className="text-sm">
+                  {zh
+                    ? "点下面去钱包里确认。这一页留着，确认后回来。"
+                    : "Open the wallet below. This page stays. Come back after you confirm."}
+                </p>
+                {link ? (
+                  <a
+                    href={link}
+                    {...(tapBlank(link) ? { target: "_blank", rel: "noreferrer" } : {})}
+                    className="mt-2 flex h-11 items-center justify-center bg-ink text-sm text-paper"
+                  >
+                    {openText}
+                  </a>
+                ) : (
+                  <p className="mt-2 text-xs text-ink/55">{zh ? "正在连接钱包…" : "Connecting the wallet…"}</p>
+                )}
+              </>
+            )}
             {note ? <p className="mt-2 text-xs text-sell">{note}</p> : null}
-            <button
-              type="button"
-              className="mt-2 h-9 w-full text-xs text-ink/55"
-              onClick={() => setAsk(null)}
-            >
+            <button type="button" className="mt-2 h-9 w-full text-xs text-ink/55" onClick={() => setAsk(null)}>
               {zh ? "取消" : "Cancel"}
             </button>
           </div>
