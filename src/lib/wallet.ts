@@ -381,7 +381,7 @@ function phoneBrowser(): boolean {
 }
 
 export function binanceWcLink(uri?: string): string {
-  if (!uri) return "https://app.binance.com/cedefi/";
+  if (!uri) return "https://app.binance.com/cedefi/wc";
   return `https://app.binance.com/cedefi/wc?uri=${encodeURIComponent(uri)}`;
 }
 
@@ -466,8 +466,16 @@ export async function connectScan(onUri?: (uri: string) => void, asKind?: Wallet
       const requested = parseChainId(
         (args.params as { chainId?: string }[] | undefined)?.[0]?.chainId,
       );
+      if (args.method === "eth_sendTransaction") {
+        const tx = (args.params as { chainId?: string }[] | undefined)?.[0];
+        const wanted = requested ?? provider.chainId;
+        if (tx && (wanted === 56 || wanted === 196)) {
+          provider.chainId = wanted;
+          tx.chainId = `0x${wanted.toString(16)}`;
+        }
+      }
       if (
-        (args.method === "eth_sendTransaction" || args.method === "wallet_switchEthereumChain") &&
+        (args.method === "wallet_switchEthereumChain") &&
         (requested === 56 || requested === 196)
       ) {
         provider.chainId = requested;
@@ -477,9 +485,6 @@ export async function connectScan(onUri?: (uri: string) => void, asKind?: Wallet
         publishPhone(meta?.name || (asKind === "binance" ? "币安" : "手机钱包"));
         const link = meta?.redirect?.universal || meta?.redirect?.native || (asKind === "binance" ? binanceWcLink() : null);
         if (link) publishLink(link);
-        if (asKind === "binance" && phoneBrowser()) {
-          window.open("bnc://app.binance.com/cedefi/", "_blank");
-        }
       }
       try {
         const result = await provider.request(args);
