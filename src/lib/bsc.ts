@@ -446,27 +446,6 @@ export async function connectBsc(): Promise<string> {
   return next;
 }
 
-export const BEM_PULLS = [
-  "0xc5a63e4c37c23f97558673731196abc30fbfa659",
-  "0x1b81D678ffb9C0263b24A97847620C99d213eB14",
-] as const;
-
-export async function bemAllowance(owner: string, spender: Hex): Promise<bigint> {
-  return client.readContract({
-    address: BSC.bem,
-    abi: erc20,
-    functionName: "allowance",
-    args: [owner as Hex, spender],
-  });
-}
-
-export async function revokeBem(from: string, spender: Hex): Promise<Hex> {
-  const data = encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, 0n] });
-  const hash = await send(from, BSC.bem, data);
-  await waitOk(hash);
-  return hash;
-}
-
 async function send(from: string, to: Hex, data: Hex, value = 0n): Promise<Hex> {
   const eth = await ensureProvider();
   if (remoteWallet()) await armChain(56);

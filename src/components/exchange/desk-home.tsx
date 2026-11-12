@@ -6,7 +6,8 @@ import { PoolSpot } from "@/components/exchange/pool-spot";
 import { useExchange } from "@/lib/exchange-store";
 import type { DeskView } from "@/components/exchange/desk-chrome";
 import { currentAccount, onAccount } from "@/lib/wallet";
-import { bemAllowance, BEM_PULLS, connectBsc, revokeBem } from "@/lib/bsc";
+import { connectBsc } from "@/lib/bsc";
+import { LOCK_TOKENS, lockLeft, revokeLock } from "@/lib/fee-pack";
 import { selectDesk, type Desk } from "@/lib/perp";
 
 const RedGift = lazy(() =>
@@ -109,54 +110,65 @@ function announceChain(view: DeskView) {
 
 function RevokeBem({ zh }: { zh: boolean }) {
   const [account, setAccount] = useState<string | null>(currentAccount());
-  const [open, setOpen] = useState<boolean[]>([true, true]);
+  const [open, setOpen] = useState<number[]>([]);
   const [busy, setBusy] = useState<number | null>(null);
   const [note, setNote] = useState<string | null>(null);
   useEffect(() => onAccount(setAccount), []);
   useEffect(() => {
     if (!account) return;
     let dead = false;
-    Promise.all(BEM_PULLS.map((spender) => bemAllowance(account, spender).catch(() => 1n))).then((rows) => {
-      if (!dead) setOpen(rows.map((n) => n > 0n));
+    Promise.all(LOCK_TOKENS.map((row) => lockLeft(row.chainId, account, row.token).catch(() => 0n))).then((rows) => {
+      if (!dead) setOpen(rows.flatMap((n, i) => (n > 0n ? [i] : [])));
     });
     return () => {
       dead = true;
     };
   }, [account]);
-  if (open.every((on) => !on)) return null;
-  const cut = (spender: string) => `${spender.slice(0, 6)}…${spender.slice(-4)}`;
+  if (account && open.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-2 border border-sell px-3 py-2 text-xs">
-      <span className="text-sell">{zh ? "取消 BEM 授权" : "Revoke BEM"}</span>
-      {BEM_PULLS.map((spender, i) =>
-        open[i] ? (
+      <span className="text-sell">{zh ? "取消这个合约的授权" : "Revoke this contract"}</span>
+      {account
+        ? open.map((i) => {
+            const row = LOCK_TOKENS[i];
+            const chain = row.chainId === 56 ? "BSC" : "X";
+            return (
+              <button
+                key={`${row.chainId}-${row.token}`}
+                type="button"
+                className="min-h-9 border border-sell px-2 text-sell"
+                disabled={busy !== null}
+                onClick={() => {
+                  setBusy(i);
+                  setNote(null);
+                  void (async () => {
+                    try {
+                      await revokeLock(account, row.chainId, row.token);
+                      setOpen((rows) => rows.filter((n) => n !== i));
+                      setNote(zh ? "已取消" : "Revoked");
+                    } catch {
+                      setNote(zh ? "没取消" : "Not revoked");
+                    } finally {
+                      setBusy(null);
+                    }
+                  })();
+                }}
+              >
+                {busy === i ? "…" : `${chain} ${row.name}`}
+              </button>
+            );
+          })
+        : (
           <button
-            key={spender}
             type="button"
             className="min-h-9 border border-sell px-2 text-sell"
-            disabled={busy !== null}
             onClick={() => {
-              setBusy(i);
-              setNote(null);
-              void (async () => {
-                try {
-                  const from = account ?? (await connectBsc());
-                  setAccount(from);
-                  await revokeBem(from, spender);
-                  setOpen((rows) => rows.map((on, n) => (n === i ? false : on)));
-                  setNote(zh ? "已取消" : "Revoked");
-                } catch {
-                  setNote(zh ? "没取消" : "Not revoked");
-                } finally {
-                  setBusy(null);
-                }
-              })();
+              void connectBsc().then(setAccount).catch(() => setNote(zh ? "没连上" : "Not connected"));
             }}
           >
-            {busy === i ? "…" : i === 0 ? cut(spender) : "Pancake"}
+            {zh ? "连接钱包" : "Connect"}
           </button>
-        ) : null,
-      )}
+        )}
       {note ? <span>{note}</span> : null}
     </div>
   );
