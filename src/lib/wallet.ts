@@ -355,10 +355,17 @@ async function connectOkxRemote(): Promise<string> {
         .connect({
           namespaces: {
             eip155: {
-              chains: ["eip155:56", "eip155:196"],
+              chains: ["eip155:56"],
               defaultChain: "56",
               rpcMap: {
                 "56": "https://bsc-dataseed.binance.org",
+              },
+            },
+          },
+          optionalNamespaces: {
+            eip155: {
+              chains: ["eip155:196"],
+              rpcMap: {
                 "196": "https://rpc.xlayer.tech",
               },
             },
@@ -422,6 +429,15 @@ async function connectOkxRemote(): Promise<string> {
   const next = accounts[0];
   if (!next) throw new Error("nowallet");
   remember(next);
+  if (!sessionHasChain(okx.session, 196)) {
+    try {
+      await wrapped.request({ method: "wallet_addEthereumChain", params: [DESK_CHAINS[196].add] });
+    } catch (err) {
+      const code = typeof err === "object" && err ? Number((err as { code?: number }).code) : NaN;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (code === 4001 || /user rejected|user denied/i.test(msg)) throw err;
+    }
+  }
   return next;
 }
 
@@ -454,6 +470,18 @@ const PHONE_METHODS = new Set([
 const WC_PROJECT =
   (import.meta.env.VITE_WC_PROJECT_ID as string | undefined)?.trim() ||
   "7de890813641057dcfb68236748acae2";
+
+function sessionHasChain(
+  session: { namespaces?: Record<string, { accounts?: string[] }> } | undefined,
+  id: number,
+): boolean {
+  for (const group of Object.values(session?.namespaces ?? {})) {
+    for (const row of group.accounts ?? []) {
+      if (row.startsWith(`eip155:${id}:`)) return true;
+    }
+  }
+  return false;
+}
 
 function addressFromSession(session: {
   namespaces?: Record<string, { accounts?: string[] }>;
@@ -516,7 +544,7 @@ export async function connectScan(onUri?: (uri: string) => void, asKind?: Wallet
   }
   const provider = await EthereumProvider.init({
     projectId: WC_PROJECT,
-    chains: [56, 196],
+    chains: [56],
     optionalChains: [196],
     showQrModal: false,
     rpcMap: {
@@ -616,6 +644,15 @@ export async function connectScan(onUri?: (uri: string) => void, asKind?: Wallet
   });
   publishPair(null);
   rememberChain(provider.chainId);
+  if (!sessionHasChain(provider.session, 196)) {
+    try {
+      await wrapped.request({ method: "wallet_addEthereumChain", params: [DESK_CHAINS[196].add] });
+    } catch (err) {
+      const code = typeof err === "object" && err ? Number((err as { code?: number }).code) : NaN;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (code === 4001 || /user rejected|user denied/i.test(msg)) throw err;
+    }
+  }
   return next;
 }
 
