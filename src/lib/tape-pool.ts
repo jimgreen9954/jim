@@ -110,7 +110,7 @@ async function send(from: string, to: Hex, data: Hex): Promise<Hex> {
   if (!eth) throw new Error("nowallet");
   const hash = (await eth.request({
     method: "eth_sendTransaction",
-    params: [{ from, to, data }],
+    params: [{ from, to, data, chainId: XLAYER.hex }],
   })) as Hex;
   const receipt = await client.waitForTransactionReceipt({ hash, timeout: 180_000 });
   if (receipt.status !== "success") throw new Error("revert");

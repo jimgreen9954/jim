@@ -150,10 +150,13 @@ async function ensureXLayer(): Promise<void> {
       if ((addErr as { code?: number }).code === 4001) throw addErr;
     }
     if (!(await onXLayer())) {
-      await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: XLAYER.hex }] });
+      try {
+        await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: XLAYER.hex }] });
+      } catch (again) {
+        if ((again as { code?: number }).code === 4001) throw again;
+      }
     }
   }
-  if (!(await onXLayer())) throw new Error("chain");
 }
 
 export async function connectXLayer(): Promise<string> {

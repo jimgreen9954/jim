@@ -3,7 +3,7 @@ import { TxPending } from "@/lib/chain-marks";
 import type { DeskParts } from "@/lib/invite-cut";
 import { rejected, sendAsMulticall, sendUserBatch, type SignedCall } from "@/lib/one-sign";
 import { sayTradeStep } from "@/lib/trade-step";
-import { ensureProvider, switchDeskChain } from "@/lib/wallet";
+import { ensureProvider, remoteWallet, switchDeskChain } from "@/lib/wallet";
 
 /** CREATE2 via the canonical deployer. The first packed trade on a chain deploys it. */
 export const DESK_LOCK = "0xC5A63E4c37c23F97558673731196abC30FBFa659" as Hex;
@@ -148,9 +148,16 @@ export type FeeSwap = {
   lock?: boolean;
 };
 
-/** Fee and the fill in one transaction. Rejecting it does neither. */
+/** Fee and the fill. A phone wallet signs the same router call as the desktop, one transaction at a time. */
 export async function sendFeeAndSwap(args: FeeSwap): Promise<Hex> {
   const { from, chainId, token, safe, parts, swapTo, data, value, pull, spender } = args;
+  if (remoteWallet()) {
+    sayTradeStep("fill");
+    for (const call of feeCalls(token, safe, parts)) {
+      await mined(chainId, await sendTx(from, chainId, call.to, call.data || "0x", call.value ?? 0n));
+    }
+    return sendTx(from, chainId, swapTo, data, value);
+  }
   const calls = feeCalls(token, safe, parts);
   calls.push({ to: swapTo, data, value });
   if (parts.desk <= 0n && parts.reward <= 0n) {
