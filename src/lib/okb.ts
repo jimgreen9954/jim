@@ -2,7 +2,7 @@ import { createPublicClient, encodeFunctionData, formatUnits, http, parseAbi, pa
 import { TxPending, XLAYER_SAFE, type PoolPrint, units, pretty } from "@/lib/bsc";
 import { sendFeeAndSwap } from "@/lib/fee-pack";
 import { deskParts } from "@/lib/invite-cut";
-import { ensureProvider, grantedAccount, rememberAccount, remoteWallet } from "@/lib/wallet";
+import { armChain, ensureProvider, grantedAccount, rememberAccount, remoteWallet } from "@/lib/wallet";
 import { XLAYER } from "@/lib/xlayer";
 
 export const OKB = {
@@ -97,7 +97,8 @@ async function ensureX(): Promise<void> {
 
 async function send(from: string, to: Hex, data: Hex, value = 0n): Promise<Hex> {
   const eth = await ensureProvider();
-  if (!remoteWallet()) await ensureX();
+  if (remoteWallet()) await armChain(196);
+  else await ensureX();
   return (await eth.request({
     method: "eth_sendTransaction",
     params: [{ from, to, data, chainId: XLAYER.hex, value: `0x${value.toString(16)}` }],

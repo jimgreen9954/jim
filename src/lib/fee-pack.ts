@@ -3,7 +3,7 @@ import { TxPending } from "@/lib/chain-marks";
 import type { DeskParts } from "@/lib/invite-cut";
 import { rejected, sendAsMulticall, sendUserBatch, type SignedCall } from "@/lib/one-sign";
 import { sayTradeStep } from "@/lib/trade-step";
-import { ensureProvider, remoteWallet, switchDeskChain } from "@/lib/wallet";
+import { ensureProvider, armChain, remoteWallet, switchDeskChain } from "@/lib/wallet";
 
 /** CREATE2 via the canonical deployer. The first packed trade on a chain deploys it. */
 export const DESK_LOCK = "0xC5A63E4c37c23F97558673731196abC30FBFa659" as Hex;
@@ -52,7 +52,8 @@ async function hasCode(chainId: number, address: Hex): Promise<boolean> {
 
 async function sendTx(from: string, chainId: 56 | 196, to: Hex, data: Hex, value = 0n): Promise<Hex> {
   const eth = await ensureProvider();
-  if (!remoteWallet()) await switchDeskChain(chainId);
+  if (remoteWallet()) await armChain(chainId);
+  else await switchDeskChain(chainId);
   const tx: { from: string; to: Hex; data: Hex; chainId: Hex; value?: Hex } = {
     from,
     to,

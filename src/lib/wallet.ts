@@ -429,15 +429,6 @@ async function connectOkxRemote(): Promise<string> {
   const next = accounts[0];
   if (!next) throw new Error("nowallet");
   remember(next);
-  if (!sessionHasChain(okx.session, 196)) {
-    try {
-      await wrapped.request({ method: "wallet_addEthereumChain", params: [DESK_CHAINS[196].add] });
-    } catch (err) {
-      const code = typeof err === "object" && err ? Number((err as { code?: number }).code) : NaN;
-      const msg = err instanceof Error ? err.message : String(err);
-      if (code === 4001 || /user rejected|user denied/i.test(msg)) throw err;
-    }
-  }
   return next;
 }
 
@@ -471,16 +462,10 @@ const WC_PROJECT =
   (import.meta.env.VITE_WC_PROJECT_ID as string | undefined)?.trim() ||
   "7de890813641057dcfb68236748acae2";
 
-function sessionHasChain(
-  session: { namespaces?: Record<string, { accounts?: string[] }> } | undefined,
-  id: number,
-): boolean {
-  for (const group of Object.values(session?.namespaces ?? {})) {
-    for (const row of group.accounts ?? []) {
-      if (row.startsWith(`eip155:${id}:`)) return true;
-    }
-  }
-  return false;
+let remotePeerOkx = false;
+
+function peerIsOkx(meta?: { name?: string; url?: string }): boolean {
+  return /okx|okex/i.test(`${meta?.name ?? ""} ${meta?.url ?? ""}`);
 }
 
 function addressFromSession(session: {
@@ -644,15 +629,7 @@ export async function connectScan(onUri?: (uri: string) => void, asKind?: Wallet
   });
   publishPair(null);
   rememberChain(provider.chainId);
-  if (!sessionHasChain(provider.session, 196)) {
-    try {
-      await wrapped.request({ method: "wallet_addEthereumChain", params: [DESK_CHAINS[196].add] });
-    } catch (err) {
-      const code = typeof err === "object" && err ? Number((err as { code?: number }).code) : NaN;
-      const msg = err instanceof Error ? err.message : String(err);
-      if (code === 4001 || /user rejected|user denied/i.test(msg)) throw err;
-    }
-  }
+  remotePeerOkx = peerIsOkx(provider.session?.peer?.metadata);
   return next;
 }
 
@@ -896,4 +873,26 @@ export async function switchDeskChain(id: DeskChain): Promise<void> {
     return;
   }
   throw new Error(id === 196 ? "xlayer" : "bsc");
+}
+
+/** OKX's scan session signs on the chain the app is showing. Switch only when that chain is wrong, then the trade is one confirmation. */
+export async function armChain(id: DeskChain): Promise<void> {
+  if (!remotePeerOkx) return;
+  if (currentChain() === id) return;
+  const eth = current;
+  if (!eth) return;
+  const row = DESK_CHAINS[id];
+  try {
+    await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: row.hex }] });
+    rememberChain(id);
+    return;
+  } catch (err) {
+    if (chainRejected(err)) throw err;
+  }
+  try {
+    await eth.request({ method: "wallet_addEthereumChain", params: [row.add] });
+    rememberChain(id);
+  } catch (addErr) {
+    if (chainRejected(addErr)) throw addErr;
+  }
 }
