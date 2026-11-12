@@ -162,8 +162,7 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
       <span className="flex max-w-[18rem] flex-wrap items-center gap-1 sm:max-w-none sm:gap-2">
         <a
           href={link}
-          target="_blank"
-          rel="noreferrer"
+          {...(link.startsWith("bnc:") ? {} : { target: "_blank", rel: "noreferrer" })}
           className="inline-flex min-h-11 items-center border border-gold bg-ink px-3 text-sm text-paper"
         >
           {binance ? (zh ? "打开币安" : "Open Binance") : zh ? "去 OKX 确认" : "Confirm in OKX"}
@@ -190,8 +189,7 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
         {!link ? null : (
           <a
             href={link}
-            target="_blank"
-            rel="noreferrer"
+            {...(link.startsWith("bnc:") ? {} : { target: "_blank", rel: "noreferrer" })}
             className="inline-flex min-h-9 shrink-0 items-center border border-gold bg-ink px-2 text-xs text-paper"
           >
             {zh ? "去确认" : "Confirm"}
@@ -274,7 +272,7 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
               disabled={busy}
               className="h-10 w-full border border-gold text-sm text-ink/80 disabled:opacity-40"
               onClick={() => {
-                setNote(zh ? "正在打开币安…" : "Opening Binance…");
+                setNote(zh ? "点打开币安。这一页留着，确认后回来。" : "Tap Open Binance. This page stays. Come back after you confirm.");
                 run(() => connectKind("binance"));
               }}
             >
@@ -293,8 +291,7 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
             {link ? (
               <a
                 href={link}
-                target="_blank"
-                rel="noreferrer"
+                {...(link.startsWith("bnc:") ? {} : { target: "_blank", rel: "noreferrer" })}
                 className="mt-2 flex h-10 items-center justify-center border border-gold text-sm"
               >
                 {binance ? (zh ? "打开币安" : "Open Binance") : zh ? "去 OKX 确认" : "Confirm in OKX"}

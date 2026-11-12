@@ -1450,7 +1450,7 @@ export function SpotDesk({
                       : `${side === "buy" ? "Buy" : "Sell"} ${base}`}
                 </button>
                 {openLink ? (
-                  <a href={openLink} target="_blank" rel="noreferrer" className="mt-2 flex h-10 items-center justify-center border border-gold text-sm">
+                  <a href={openLink} {...(openLink.startsWith("bnc:") ? {} : { target: "_blank", rel: "noreferrer" })} className="mt-2 flex h-10 items-center justify-center border border-gold text-sm">
                     {lang === "zh" ? "打开币安确认" : "Confirm in Binance"}
                   </a>
                 ) : null}

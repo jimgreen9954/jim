@@ -591,7 +591,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
                 disabled={binanceBusy}
                 onClick={() => {
                   setBinanceBusy(true);
-                  setBinanceNote(zh ? "正在打开币安…" : "Opening Binance…");
+                  setBinanceNote(zh ? "点下面的打开币安。确认后回到这一页，不要关。" : "Tap Open Binance below. Come back to this page after you confirm.");
                   void connectKind("binance")
                     .then(() => setBinanceNote(null))
                     .catch(() =>
@@ -611,8 +611,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
             {openLink ? (
               <a
                 href={openLink}
-                target="_blank"
-                rel="noreferrer"
+                {...(openLink.startsWith("bnc:") ? {} : { target: "_blank", rel: "noreferrer" })}
                 className="mt-3 flex h-11 items-center justify-center bg-ink text-sm text-paper"
               >
                 {zh ? "打开币安" : "Open Binance"}

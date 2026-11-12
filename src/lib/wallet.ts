@@ -385,15 +385,10 @@ export function binanceWcLink(uri?: string): string {
   return `https://app.binance.com/cedefi/wc?uri=${encodeURIComponent(uri)}`;
 }
 
-function jumpBinance(uri: string, door: Window | null) {
-  const link = binanceWcLink(uri);
-  publishLink(link);
-  if (door && !door.closed) {
-    door.location.href = link;
-    return;
-  }
-  const opened = window.open(link, "_blank");
-  if (!opened && phoneBrowser()) window.location.assign(link);
+function binanceOpenLink(uri?: string): string {
+  if (!phoneBrowser()) return binanceWcLink(uri);
+  if (!uri) return "bnc://app.binance.com/cedefi/";
+  return `bnc://app.binance.com/cedefi/wc?uri=${encodeURIComponent(uri)}`;
 }
 
 export async function connectScan(onUri?: (uri: string) => void, asKind?: WalletKind): Promise<string> {
@@ -484,7 +479,12 @@ export async function connectScan(onUri?: (uri: string) => void, asKind?: Wallet
       if (phone) {
         const meta = provider.session?.peer?.metadata;
         publishPhone(meta?.name || (asKind === "binance" ? "币安" : "手机钱包"));
-        const link = meta?.redirect?.universal || meta?.redirect?.native || (asKind === "binance" ? binanceWcLink() : null);
+        const link =
+          asKind === "binance"
+            ? phoneBrowser()
+              ? meta?.redirect?.native || binanceOpenLink()
+              : meta?.redirect?.universal || binanceWcLink()
+            : meta?.redirect?.universal || meta?.redirect?.native || null;
         if (link) publishLink(link);
       }
       try {
@@ -529,27 +529,9 @@ export async function connectKind(which: WalletKind): Promise<string> {
   if (which === "scan") return connectScan();
   kind = which;
   if (which === "binance") {
-    const ready = binanceInjected();
-    const door = ready ? null : window.open("", "_blank");
-    if (door) {
-      try {
-        door.document.title = "Binance";
-        door.document.body.textContent = "正在打开币安…";
-      } catch {
-        /* The blank tab can still be pointed at Binance once the code is ready. */
-      }
-    }
-    try {
-      const plugged = ready ?? (await waitBinance());
-      if (plugged) {
-        door?.close();
-        return useInjected(plugged);
-      }
-      return await connectScan((uri) => jumpBinance(uri, door), "binance");
-    } catch (err) {
-      door?.close();
-      throw err;
-    }
+    const plugged = binanceInjected() ?? (await waitBinance());
+    if (plugged) return useInjected(plugged);
+    return connectScan((uri) => publishLink(binanceOpenLink(uri)), "binance");
   }
   const plugged = okxInjected();
   if (plugged) return useInjected(plugged);
