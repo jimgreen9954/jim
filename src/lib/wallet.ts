@@ -568,11 +568,6 @@ export async function connectScan(onUri?: (uri: string) => void, asKind?: Wallet
           tx.chainId = `0x${wanted.toString(16)}`;
         }
       }
-      if (args.method === "wallet_switchEthereumChain" && requested === 56) {
-        provider.chainId = 56;
-        rememberChain(56);
-        return null;
-      }
       if (phone) {
         const meta = provider.session?.peer?.metadata;
         publishPhone(mode === "scan" ? "扫码钱包" : meta?.name || (asKind === "binance" ? "币安" : "手机钱包"));
