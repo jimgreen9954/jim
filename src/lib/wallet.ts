@@ -66,17 +66,20 @@ export function showWalletJump() {
   if (mode === "scan") {
     publishLink(null);
     publishPhone("扫码钱包");
-    return;
   }
-  if (kind === "binance") {
-    const link = phoneBrowser() ? "bnc://app.binance.com/cedefi/" : binanceWcLink();
-    publishLink(link);
-    if (phoneBrowser()) window.location.assign(link);
-    return;
-  }
-  if (kind === "okx" && openLink && /^(okx|okxwallet|okxweb3):/i.test(openLink)) {
-    window.location.assign(openLink);
-  }
+}
+
+function openConnectedApp() {
+  if (!phoneBrowser() || mode === "scan") return;
+  window.setTimeout(() => {
+    const link =
+      kind === "binance"
+        ? "bnc://app.binance.com/cedefi/"
+        : openLink && /^(okx|okxwallet|okxweb3):/i.test(openLink)
+          ? openLink
+          : "";
+    if (link) window.location.assign(link);
+  }, 800);
 }
 
 export function hideWalletJump() {
@@ -362,6 +365,7 @@ async function connectOkxRemote(): Promise<string> {
           if (id === 56 || id === 196) okx.setDefaultChain(String(id));
         }
       }
+      if (args.method === "wallet_switchEthereumChain") return null;
       const row = (args.params as { chainId?: string }[] | { chainId?: string } | undefined);
       const first = Array.isArray(row) ? row[0] : row;
       const hex = first?.chainId;
@@ -369,6 +373,7 @@ async function connectOkxRemote(): Promise<string> {
       const chain = id === 56 || id === 196 ? `eip155:${id}` : undefined;
       const ask = okx.request as (payload: typeof args, chainId?: string) => Promise<unknown>;
       try {
+        if (args.method === "eth_sendTransaction") openConnectedApp();
         if (!chain) return await ask(args);
         try {
           return await ask(args, chain);
@@ -538,10 +543,12 @@ export async function connectScan(onUri?: (uri: string) => void, asKind?: Wallet
         }
       }
       if (
-        (args.method === "wallet_switchEthereumChain") &&
+        args.method === "wallet_switchEthereumChain" &&
         (requested === 56 || requested === 196)
       ) {
         provider.chainId = requested;
+        rememberChain(requested);
+        return null;
       }
       if (phone) {
         const meta = provider.session?.peer?.metadata;
@@ -555,6 +562,7 @@ export async function connectScan(onUri?: (uri: string) => void, asKind?: Wallet
         }
       }
       try {
+        if (args.method === "eth_sendTransaction" && mode !== "scan") openConnectedApp();
         const result = await provider.request(args);
         if (
           (args.method === "wallet_switchEthereumChain" || args.method === "wallet_addEthereumChain") &&
