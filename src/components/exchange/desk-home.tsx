@@ -6,6 +6,7 @@ import { PoolSpot } from "@/components/exchange/pool-spot";
 import { useExchange } from "@/lib/exchange-store";
 import type { DeskView } from "@/components/exchange/desk-chrome";
 import { currentAccount, onAccount } from "@/lib/wallet";
+import { bemAllowance, BEM_PULLS, connectBsc, revokeBem } from "@/lib/bsc";
 import { selectDesk, type Desk } from "@/lib/perp";
 
 const RedGift = lazy(() =>
@@ -104,6 +105,61 @@ function announceChain(view: DeskView) {
   const chain = deskChain(view);
   selectDesk(chain);
   window.dispatchEvent(new CustomEvent("tape-desk-chain", { detail: chain }));
+}
+
+function RevokeBem({ zh }: { zh: boolean }) {
+  const [account, setAccount] = useState<string | null>(currentAccount());
+  const [open, setOpen] = useState<boolean[]>([true, true]);
+  const [busy, setBusy] = useState<number | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  useEffect(() => onAccount(setAccount), []);
+  useEffect(() => {
+    if (!account) return;
+    let dead = false;
+    Promise.all(BEM_PULLS.map((spender) => bemAllowance(account, spender).catch(() => 1n))).then((rows) => {
+      if (!dead) setOpen(rows.map((n) => n > 0n));
+    });
+    return () => {
+      dead = true;
+    };
+  }, [account]);
+  if (open.every((on) => !on)) return null;
+  const cut = (spender: string) => `${spender.slice(0, 6)}…${spender.slice(-4)}`;
+  return (
+    <div className="flex flex-wrap items-center gap-2 border border-sell px-3 py-2 text-xs">
+      <span className="text-sell">{zh ? "取消 BEM 授权" : "Revoke BEM"}</span>
+      {BEM_PULLS.map((spender, i) =>
+        open[i] ? (
+          <button
+            key={spender}
+            type="button"
+            className="min-h-9 border border-sell px-2 text-sell"
+            disabled={busy !== null}
+            onClick={() => {
+              setBusy(i);
+              setNote(null);
+              void (async () => {
+                try {
+                  const from = account ?? (await connectBsc());
+                  setAccount(from);
+                  await revokeBem(from, spender);
+                  setOpen((rows) => rows.map((on, n) => (n === i ? false : on)));
+                  setNote(zh ? "已取消" : "Revoked");
+                } catch {
+                  setNote(zh ? "没取消" : "Not revoked");
+                } finally {
+                  setBusy(null);
+                }
+              })();
+            }}
+          >
+            {busy === i ? "…" : i === 0 ? cut(spender) : "Pancake"}
+          </button>
+        ) : null,
+      )}
+      {note ? <span>{note}</span> : null}
+    </div>
+  );
 }
 
 export function DeskHome({
@@ -216,6 +272,7 @@ export function DeskHome({
   return (
     <>
       <HomeBooks zh={zh} />
+      <RevokeBem zh={zh} />
       <ArriveHint zh={zh} />
       {showPerp ? (
         <Suspense fallback={null}>
