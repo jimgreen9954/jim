@@ -171,7 +171,6 @@ function holdNavigation(url: string): boolean {
     text.includes("okx.com/download") ||
     text.includes("/ul/connect");
   if (!wallet && !text.includes("dapp/url") && !text.includes("dappurl=")) return false;
-  if (text.includes("dapp/url") || text.includes("dappurl=") || text.includes("wallet/dapp")) return true;
   publishLink(url);
   return true;
 }

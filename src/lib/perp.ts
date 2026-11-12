@@ -271,14 +271,12 @@ async function send(from: string, to: Hex | undefined, data: Hex, gasLimit?: big
     const plain: {
       from: string;
       data: Hex;
-      value: "0x0";
       chainId: string;
       gas: string;
       to?: Hex;
     } = {
       from,
       data,
-      value: "0x0",
       chainId: XLAYER.hex,
       gas: `0x${gas}`,
     };
@@ -292,7 +290,6 @@ async function send(from: string, to: Hex | undefined, data: Hex, gasLimit?: big
   const tx: {
     from: string;
     data: Hex;
-    value: "0x0";
     chainId: string;
     gas: string;
     maxFeePerGas: Hex;
@@ -301,7 +298,6 @@ async function send(from: string, to: Hex | undefined, data: Hex, gasLimit?: big
   } = {
     from,
     data,
-    value: "0x0",
     chainId: BSC.hex,
     gas: `0x${gas}`,
     maxFeePerGas: fee,

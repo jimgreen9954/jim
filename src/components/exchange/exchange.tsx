@@ -627,6 +627,7 @@ function Header({
         </button>
         <div className="ml-auto flex items-center">
           <ChainSwitch compact onJump={openDesk} />
+          <ConnectButton compact />
         </div>
       </div>
       <div className="hidden h-12 items-center gap-1 lg:flex">
