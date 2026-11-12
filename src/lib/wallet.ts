@@ -243,7 +243,7 @@ async function connectOkxRemote(): Promise<string> {
       name: "TAPELIQUID",
       icon: `${window.location.origin}/mark.jpg`,
     },
-    openAppLinkType: OpenAppLinkType.UniversalLink,
+    openAppLinkType: OpenAppLinkType.DeepLink,
   });
   stayOnPage();
   okx.on("display_uri", (uri: string) => {
@@ -291,15 +291,22 @@ async function connectOkxRemote(): Promise<string> {
       stayOnPage();
       if (signClient) signClient.sessionConfig = { ...(signClient.sessionConfig ?? {}), ...quiet };
       if (args.method === "wallet_switchEthereumChain" || args.method === "eth_sendTransaction") {
-        const hex =
-          args.method === "wallet_switchEthereumChain"
-            ? (args.params as { chainId?: string }[] | undefined)?.[0]?.chainId
-            : (args.params as { chainId?: string }[] | undefined)?.[0]?.chainId;
-        if (hex) okx.setDefaultChain(String(Number.parseInt(hex, 16)));
+        const row = (args.params as { chainId?: string }[] | { chainId?: string } | undefined);
+        const first = Array.isArray(row) ? row[0] : row;
+        const hex = first?.chainId;
+        if (hex && hex.startsWith("0x")) {
+          const id = Number.parseInt(hex, 16);
+          if (id === 56 || id === 196) okx.setDefaultChain(String(id));
+        }
       }
-      if (PHONE_METHODS.has(args.method) && !openLink) publishLink("okx://wallet");
+      const row = (args.params as { chainId?: string }[] | { chainId?: string } | undefined);
+      const first = Array.isArray(row) ? row[0] : row;
+      const hex = first?.chainId;
+      const id = hex && hex.startsWith("0x") ? Number.parseInt(hex, 16) : 0;
+      const chain = id === 56 || id === 196 ? `eip155:${id}` : undefined;
+      const ask = okx.request as (payload: typeof args, chainId?: string) => Promise<unknown>;
       try {
-        return await okx.request(args);
+        return chain ? await ask(args, chain) : await ask(args);
       } finally {
         publishLink(null);
       }
