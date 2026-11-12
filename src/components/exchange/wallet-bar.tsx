@@ -7,11 +7,13 @@ import {
   connectKind,
   connectScan,
   currentAccount,
+  dismissWalletPrompt,
   disconnectWallet,
   onAccount,
   onOpenLink,
   onPairUri,
   onPhoneAsk,
+  onTradePrompt,
   switchDeskChain,
   tapBlank,
   walletLabel,
@@ -103,11 +105,13 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
   const [pair, setPair] = useState<string | null>(null);
   const [phone, setPhone] = useState<string | null>(null);
   const [ask, setAsk] = useState<null | "binance" | "okx" | "scan">(null);
+  const [tradePrompt, setTradePrompt] = useState(false);
   const codeRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => onAccount(setAccount), []);
   useEffect(() => onOpenLink(setLink), []);
   useEffect(() => onPairUri(setPair), []);
   useEffect(() => onPhoneAsk(setPhone), []);
+  useEffect(() => onTradePrompt(setTradePrompt), []);
   useEffect(() => {
     const canvas = codeRef.current;
     if (!canvas || !pair) return;
@@ -240,7 +244,7 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
               document.body,
             )
           : null}
-        {(ask || link || (phone && walletMode() === "scan")) && typeof document !== "undefined"
+        {(ask || tradePrompt) && typeof document !== "undefined"
           ? createPortal(
               <div className="fixed inset-x-3 bottom-[4.5rem] z-[90] border border-gold bg-card p-3 shadow-plate">
                 {ask === "scan" || (walletMode() === "scan" && !link) ? (
@@ -264,9 +268,13 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
                 ) : (
                   <>
                     <p className="text-sm">
-                      {zh
-                        ? "点下面去钱包里确认。这一页留着，确认后回来。"
-                        : "Open the wallet below. This page stays. Come back after you confirm."}
+                      {account
+                        ? zh
+                          ? "这笔要到钱包里确认。点下面打开，确认后回来。这个窗口可以关掉。"
+                          : "Confirm this trade in the wallet. You can close this window."
+                        : zh
+                          ? "点下面去钱包里确认。这一页留着，确认后回来。这个窗口可以关掉。"
+                          : "Open the wallet below. This page stays. You can close this window."}
                     </p>
                     {link ? (
                       <a
@@ -282,8 +290,15 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
                   </>
                 )}
                 {note ? <p className="mt-2 text-xs text-sell">{note}</p> : null}
-                <button type="button" className="mt-2 h-9 w-full text-xs text-ink/55" onClick={() => setAsk(null)}>
-                  {zh ? "取消" : "Cancel"}
+                <button
+                  type="button"
+                  className="mt-2 h-9 w-full text-xs text-ink/55"
+                  onClick={() => {
+                    setAsk(null);
+                    dismissWalletPrompt();
+                  }}
+                >
+                  {zh ? "关闭" : "Close"}
                 </button>
               </div>,
               document.body,

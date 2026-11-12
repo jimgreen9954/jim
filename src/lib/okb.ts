@@ -71,20 +71,25 @@ async function ensureX(): Promise<void> {
   } catch (err) {
     const code = (err as { code?: number }).code;
     const message = err instanceof Error ? err.message : "";
-    if (code === 4902 || message.includes("Unrecognized")) {
-      await eth.request({
-        method: "wallet_addEthereumChain",
-        params: [
-          {
-            chainId: XLAYER.hex,
-            chainName: XLAYER.name,
-            rpcUrls: [XLAYER.rpc],
-            nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
-            blockExplorerUrls: [XLAYER.explorer],
-          },
-        ],
-      });
-    } else {
+    if (code === 4902 || message.includes("Unrecognized") || message === "xlayer") {
+      try {
+        await eth.request({
+          method: "wallet_addEthereumChain",
+          params: [
+            {
+              chainId: XLAYER.hex,
+              chainName: XLAYER.name,
+              rpcUrls: [XLAYER.rpc],
+              nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
+              blockExplorerUrls: [XLAYER.explorer],
+            },
+          ],
+        });
+      } catch (addErr) {
+        const addCode = (addErr as { code?: number }).code;
+        if (addCode === 4001) throw addErr;
+      }
+    } else if (code === 4001 || /user rejected|user denied/i.test(message)) {
       throw err;
     }
   }

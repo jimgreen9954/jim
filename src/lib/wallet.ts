@@ -51,6 +51,19 @@ function publishLink(next: string | null) {
 }
 
 let jumpHeld = false;
+let tradePrompt = false;
+const promptListeners = new Set<(open: boolean) => void>();
+
+export function onTradePrompt(cb: (open: boolean) => void): () => void {
+  promptListeners.add(cb);
+  cb(tradePrompt);
+  return () => promptListeners.delete(cb);
+}
+
+function publishPrompt(open: boolean) {
+  tradePrompt = open;
+  promptListeners.forEach((cb) => cb(open));
+}
 
 export function walletMode(): "jump" | "scan" {
   return mode;
@@ -63,14 +76,25 @@ export function remoteWallet(): boolean {
 
 export function showWalletJump() {
   jumpHeld = true;
+  if (!phoneBrowser()) return;
+  publishPrompt(true);
   if (mode === "scan") {
     publishLink(null);
     publishPhone("扫码钱包");
+    return;
   }
+  const openApp = kind === "binance" ? "bnc://app.binance.com/cedefi/" : tappableLink("okxweb3://web3?stack=true");
+  if (!openLink || !/[?&](param|topic|uri)=/i.test(openLink)) publishLink(openApp);
+}
+
+export function dismissWalletPrompt() {
+  publishPrompt(false);
+  if (!jumpHeld) publishLink(null);
 }
 
 export function hideWalletJump() {
   jumpHeld = false;
+  publishPrompt(false);
   publishPhone(null);
   publishLink(null);
 }
@@ -373,6 +397,7 @@ async function connectOkxRemote(): Promise<string> {
       const chain = id === 56 || id === 196 ? `eip155:${id}` : undefined;
       const ask = okx.request as (payload: typeof args, chainId?: string) => Promise<unknown>;
       try {
+        if (args.method === "eth_sendTransaction") showWalletJump();
         if (!chain) return await ask(args);
         try {
           return await ask(args, chain);
@@ -487,7 +512,7 @@ export async function connectScan(onUri?: (uri: string) => void, asKind?: Wallet
   }
   const provider = await EthereumProvider.init({
     projectId: WC_PROJECT,
-    chains: [56],
+    chains: [56, 196],
     optionalChains: [196],
     showQrModal: false,
     rpcMap: {
@@ -538,7 +563,10 @@ export async function connectScan(onUri?: (uri: string) => void, asKind?: Wallet
       if (args.method === "eth_sendTransaction") {
         const tx = (args.params as { chainId?: string }[] | undefined)?.[0];
         const wanted = requested ?? provider.chainId;
-        if (tx && (wanted === 56 || wanted === 196)) tx.chainId = `0x${wanted.toString(16)}`;
+        if (tx && (wanted === 56 || wanted === 196)) {
+          provider.chainId = wanted;
+          tx.chainId = `0x${wanted.toString(16)}`;
+        }
       }
       if (args.method === "wallet_switchEthereumChain" && requested === 56) {
         provider.chainId = 56;
@@ -556,6 +584,7 @@ export async function connectScan(onUri?: (uri: string) => void, asKind?: Wallet
           if (link) publishLink(link);
         }
       }
+      if (args.method === "eth_sendTransaction") showWalletJump();
       try {
         const result = await provider.request(args);
         if (
@@ -800,25 +829,6 @@ export async function switchDeskChain(id: DeskChain): Promise<void> {
   if (!current) current = eth;
   const row = DESK_CHAINS[id];
   const read = async () => parseChainId(await eth.request({ method: "eth_chainId" }));
-  if (remoteWallet() && id === 196) {
-    const held = jumpHeld;
-    showWalletJump();
-    if (kind === "binance") publishLink("bnc://app.binance.com/cedefi/");
-    try {
-      await eth.request({ method: "wallet_addEthereumChain", params: [row.add] });
-    } catch (err) {
-      if (chainRejected(err)) throw err;
-    }
-    try {
-      await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: row.hex }] });
-    } catch (err) {
-      if (chainRejected(err)) throw err;
-      throw new Error("xlayer");
-    }
-    rememberChain(196);
-    if (!held) hideWalletJump();
-    return;
-  }
   if ((await read().catch(() => null)) === id) {
     rememberChain(id);
     return;
@@ -844,6 +854,10 @@ export async function switchDeskChain(id: DeskChain): Promise<void> {
       return;
     }
     await new Promise((resolve) => window.setTimeout(resolve, 300));
+  }
+  if (remoteWallet() && (id === 196 || id === 56)) {
+    rememberChain(id);
+    return;
   }
   throw new Error(id === 196 ? "xlayer" : "bsc");
 }
