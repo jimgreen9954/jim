@@ -881,6 +881,12 @@ export function RealPerp({
           ? `${chain === "xlayer" ? "USDT0" : "USDT"} 不够，没有打开钱包。`
           : `Not enough ${chain === "xlayer" ? "USDT0" : "USDT"}. The wallet was not opened.`,
       );
+    else if (message === "next")
+      setNote(
+        lang === "zh"
+          ? "保证金授权好了。再点一次开仓，这一次才是仓位。"
+          : "Margin is approved. Tap open again. That signature is the position.",
+      );
     else if (message === "revert")
       setNote(
         lang === "zh" ? "这笔合约过不了，没有打开钱包。" : "That call would fail. The wallet was not opened.",

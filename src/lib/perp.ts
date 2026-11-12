@@ -253,6 +253,12 @@ async function client() {
   return createPublicClient({ transport: http(XLAYER.rpc, { timeout: 8_000 }) });
 }
 
+function hexQty(n: bigint): Hex {
+  let body = n.toString(16);
+  if (body.length % 2) body = `0${body}`;
+  return `0x${body}`;
+}
+
 async function send(from: string, to: Hex | undefined, data: Hex, gasLimit?: bigint): Promise<Hex> {
   if (desk === "xlayer") await connectXLayer();
   else await connectBsc();
@@ -266,7 +272,7 @@ async function send(from: string, to: Hex | undefined, data: Hex, gasLimit?: big
     price = desk === "xlayer" ? 1_000_000n : 50_000_000n;
   }
   if (desk === "bsc" && price < 50_000_000n) price = 50_000_000n;
-  const gas = (gasLimit ?? (to ? 800_000n : 2_200_000n)).toString(16);
+  const gas = hexQty(gasLimit ?? (to ? 800_000n : 2_200_000n));
   if (desk === "xlayer") {
     const plain: {
       from: string;
@@ -278,7 +284,7 @@ async function send(from: string, to: Hex | undefined, data: Hex, gasLimit?: big
       from,
       data,
       chainId: XLAYER.hex,
-      gas: `0x${gas}`,
+      gas,
     };
     if (to) plain.to = to;
     const hash = (await eth.request({ method: "eth_sendTransaction", params: [plain] })) as Hex;
@@ -286,7 +292,7 @@ async function send(from: string, to: Hex | undefined, data: Hex, gasLimit?: big
     if (receipt.status !== "success") throw new Error("revert");
     return hash;
   }
-  const fee = `0x${(price * 2n).toString(16)}` as Hex;
+  const fee = hexQty(price * 2n);
   const tx: {
     from: string;
     data: Hex;
@@ -299,7 +305,7 @@ async function send(from: string, to: Hex | undefined, data: Hex, gasLimit?: big
     from,
     data,
     chainId: BSC.hex,
-    gas: `0x${gas}`,
+    gas,
     maxFeePerGas: fee,
     maxPriorityFeePerGas: fee,
   };
@@ -966,27 +972,6 @@ export async function readPerp(perp: string, account: string | null): Promise<Pe
   };
 }
 
-async function ensureAllowance(from: string, perp: string, amount: bigint) {
-  const c = await client();
-  const token = tokenAddress();
-  const allowance = await c.readContract({
-    address: token,
-    abi: erc20,
-    functionName: "allowance",
-    args: [from as Hex, perp as Hex],
-  });
-  const max = (1n << 256n) - 1n;
-  if (allowance > max / 2n) return;
-  if (allowance > 0n) {
-    const reset = encodeFunctionData({ abi: erc20, functionName: "approve", args: [perp as Hex, 0n] });
-    const resetHash = await send(from, token, reset);
-    await (await client()).waitForTransactionReceipt({ hash: resetHash, timeout: 60_000 });
-  }
-  const data = encodeFunctionData({ abi: erc20, functionName: "approve", args: [perp as Hex, max] });
-  const hash = await send(from, token, data);
-  await (await client()).waitForTransactionReceipt({ hash, timeout: 60_000 });
-}
-
 async function openWouldRevert(from: string, perp: Hex, data: Hex): Promise<boolean> {
   const c = await client();
   try {
@@ -1008,7 +993,17 @@ async function sendOpen(from: string, perp: string, amount: bigint, data: Hex): 
     functionName: "allowance",
     args: [from as Hex, perp as Hex],
   });
-  if (allowance < amount) await ensureAllowance(from, perp, amount);
+  const max = (1n << 256n) - 1n;
+  if (allowance < amount) {
+    if (allowance > 0n && allowance <= max / 2n) {
+      const reset = encodeFunctionData({ abi: erc20, functionName: "approve", args: [perp as Hex, 0n] });
+      await send(from, token, reset);
+      throw new Error("next");
+    }
+    const grant = encodeFunctionData({ abi: erc20, functionName: "approve", args: [perp as Hex, max] });
+    await send(from, token, grant);
+    throw new Error("next");
+  }
   if (await openWouldRevert(from, perp as Hex, data)) {
     const held = desk === "xlayer" ? await readDeskUsdt(from) : (await readBalances(from)).usdt;
     throw new Error(held < amount ? "usdt" : "revert");
