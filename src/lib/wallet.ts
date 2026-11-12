@@ -213,8 +213,15 @@ function rememberWalletLink(url: string) {
   if (kind === "binance" && !binance) return;
   if (kind === "okx" && !okx) return;
   const native = /^(okx|okxwallet|okxweb3|bnc):/i.test(next);
-  const kept = openLink != null && /^(okx|okxwallet|okxweb3|bnc):/i.test(openLink);
-  if (!native && kept) return;
+  const kept = openLink ?? "";
+  const keptNative = /^(okx|okxwallet|okxweb3|bnc):/i.test(kept);
+  const keptShort = /okx\.com|binance\.com/i.test(kept) && kept.length < 1500;
+  if (native && next.length > 1500 && keptShort) return;
+  if (!native && keptNative && kept.length > 1500) {
+    publishLink(next);
+    return;
+  }
+  if (!native && keptNative && kept.length <= 1500) return;
   publishLink(next);
 }
 
@@ -479,12 +486,12 @@ export async function connectScan(onUri?: (uri: string) => void, asKind?: Wallet
   const { EthereumProvider } = await import("@walletconnect/ethereum-provider");
   publishPair(null);
   if (remote) {
-    try {
-      await remote.disconnect();
-    } catch {
-      /* The old phone session is already gone. */
-    }
+    const old = remote;
     remote = null;
+    await Promise.race([
+      old.disconnect().catch(() => undefined),
+      new Promise((resolve) => window.setTimeout(resolve, 800)),
+    ]);
   }
   const provider = await EthereumProvider.init({
     projectId: WC_PROJECT,
@@ -611,8 +618,10 @@ export async function connectKind(which: WalletKind): Promise<string> {
   }
   const plugged = okxInjected();
   if (plugged) return useInjected(plugged);
-  const eth = host().ethereum;
-  if (eth) return useInjected(eth);
+  if (!phoneBrowser()) {
+    const eth = host().ethereum;
+    if (eth) return useInjected(eth);
+  }
   stayOnPage();
   return connectOkxRemote();
 }

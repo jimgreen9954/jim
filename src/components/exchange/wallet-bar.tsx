@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import QRCode from "qrcode";
 import { jumpChain } from "@/components/exchange/desk-home";
 import { currentDesk, type Desk } from "@/lib/perp";
@@ -171,12 +172,6 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
             href={link}
             {...(tapBlank(link) ? { target: "_blank", rel: "noreferrer" } : {})}
             className="inline-flex h-8 items-center border border-gold bg-ink px-2 text-xs text-paper"
-            onClick={(event) => {
-              if (/^(okx|okxwallet|okxweb3|bnc):/i.test(link)) {
-                event.preventDefault();
-                window.location.href = link;
-              }
-            }}
           >
             {openText}
           </a>
@@ -188,109 +183,112 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
         >
           {account ? short(account) : zh ? "登录" : "Log in"}
         </button>
-        {open ? (
-          <>
-            <button
-              type="button"
-              aria-label={zh ? "关闭" : "Close"}
-              className="fixed inset-0 z-30 cursor-default"
-              onClick={() => setOpen(false)}
-            />
-            <div className="absolute right-0 top-full z-40 mt-2 w-60 border border-gold bg-card p-3 shadow-plate">
-              {account ? (
-                <button type="button" className="mb-2 h-10 w-full border border-gold text-sm" onClick={leave}>
-                  {zh ? "退出" : "Log out"}
-                </button>
-              ) : null}
-              <button
-                type="button"
-                disabled={busy}
-                className="mb-2 h-10 w-full bg-ink text-sm text-paper disabled:opacity-40"
-                onClick={() => {
-                  setAsk("okx");
-                  run(() => connectKind("okx"));
-                }}
-              >
-                {zh ? "打开OKX钱包" : "Open OKX Wallet"}
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                className="mb-2 h-10 w-full border border-gold text-sm disabled:opacity-40"
-                onClick={() => {
-                  setAsk("binance");
-                  run(() => connectKind("binance"));
-                }}
-              >
-                {zh ? "打开币安钱包" : "Open Binance Wallet"}
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                className="h-10 w-full border border-gold text-sm disabled:opacity-40"
-                onClick={() => {
-                  setAsk("scan");
-                  run(() => connectKind("scan"));
-                }}
-              >
-                {zh ? "扫码登录" : "Scan to log in"}
-              </button>
-              {note ? <p className="mt-2 text-xs text-sell">{note}</p> : null}
-            </div>
-          </>
-        ) : null}
-        {ask || link || (phone && walletMode() === "scan") ? (
-          <div className="fixed inset-x-3 bottom-[4.5rem] z-[70] border border-gold bg-card p-3 shadow-plate">
-            {ask === "scan" || (walletMode() === "scan" && !link) ? (
-              <>
-                <p className="text-sm">
-                  {account
-                    ? zh
-                      ? "打开刚才扫码的那个钱包，点确认。不要再扫新的码。"
-                      : "Open the wallet you scanned with and confirm. Do not scan a new code."
-                    : zh
-                      ? "用 OKX 或币安扫这个码。这一页不要关。"
-                      : "Scan this code with OKX or Binance. Leave this page open."}
-                </p>
-                {!account && pair ? (
-                  <canvas ref={codeRef} width={180} height={180} className="mx-auto mt-3" />
-                ) : null}
-                {!account && !pair ? (
-                  <p className="mt-2 text-xs text-ink/55">{zh ? "正在生成二维码…" : "Making the code…"}</p>
-                ) : null}
-              </>
-            ) : (
-              <>
-                <p className="text-sm">
-                  {zh
-                    ? "点下面去钱包里确认。这一页留着，确认后回来。"
-                    : "Open the wallet below. This page stays. Come back after you confirm."}
-                </p>
-                {link ? (
-                  <a
-                    href={link}
-                    {...(tapBlank(link) ? { target: "_blank", rel: "noreferrer" } : {})}
-                    className="mt-2 flex h-11 items-center justify-center bg-ink text-sm text-paper"
-                    onClick={(event) => {
-                      if (/^(okx|okxwallet|okxweb3|bnc):/i.test(link)) {
-                        event.preventDefault();
-                        window.location.href = link;
-                      }
+        {open && typeof document !== "undefined"
+          ? createPortal(
+              <div className="fixed inset-0 z-[80]">
+                <button
+                  type="button"
+                  aria-label={zh ? "关闭" : "Close"}
+                  className="absolute inset-0 bg-ink/30"
+                  onClick={() => setOpen(false)}
+                />
+                <div className="absolute inset-x-3 bottom-[4.5rem] border border-gold bg-card p-3 shadow-plate">
+                  {account ? (
+                    <button type="button" className="mb-2 h-11 w-full border border-gold text-sm" onClick={leave}>
+                      {zh ? "退出" : "Log out"}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="mb-2 h-11 w-full bg-ink text-sm text-paper disabled:opacity-40"
+                    onClick={() => {
+                      setAsk("okx");
+                      setOpen(false);
+                      run(() => connectKind("okx"));
                     }}
                   >
-                    {openText}
-                  </a>
+                    {zh ? "打开OKX钱包" : "Open OKX Wallet"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="mb-2 h-11 w-full border border-gold text-sm disabled:opacity-40"
+                    onClick={() => {
+                      setAsk("binance");
+                      setOpen(false);
+                      run(() => connectKind("binance"));
+                    }}
+                  >
+                    {zh ? "打开币安钱包" : "Open Binance Wallet"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="h-11 w-full border border-gold text-sm disabled:opacity-40"
+                    onClick={() => {
+                      setAsk("scan");
+                      setOpen(false);
+                      run(() => connectKind("scan"));
+                    }}
+                  >
+                    {zh ? "扫码登录" : "Scan to log in"}
+                  </button>
+                  {note ? <p className="mt-2 text-xs text-sell">{note}</p> : null}
+                </div>
+              </div>,
+              document.body,
+            )
+          : null}
+        {(ask || link || (phone && walletMode() === "scan")) && typeof document !== "undefined"
+          ? createPortal(
+              <div className="fixed inset-x-3 bottom-[4.5rem] z-[90] border border-gold bg-card p-3 shadow-plate">
+                {ask === "scan" || (walletMode() === "scan" && !link) ? (
+                  <>
+                    <p className="text-sm">
+                      {account
+                        ? zh
+                          ? "打开刚才扫码的那个钱包，点确认。不要再扫新的码。"
+                          : "Open the wallet you scanned with and confirm. Do not scan a new code."
+                        : zh
+                          ? "用 OKX 或币安扫这个码。这一页不要关。"
+                          : "Scan this code with OKX or Binance. Leave this page open."}
+                    </p>
+                    {!account && pair ? (
+                      <canvas ref={codeRef} width={180} height={180} className="mx-auto mt-3" />
+                    ) : null}
+                    {!account && !pair ? (
+                      <p className="mt-2 text-xs text-ink/55">{zh ? "正在生成二维码…" : "Making the code…"}</p>
+                    ) : null}
+                  </>
                 ) : (
-                  <p className="mt-2 text-xs text-ink/55">{zh ? "正在连接钱包…" : "Connecting the wallet…"}</p>
+                  <>
+                    <p className="text-sm">
+                      {zh
+                        ? "点下面去钱包里确认。这一页留着，确认后回来。"
+                        : "Open the wallet below. This page stays. Come back after you confirm."}
+                    </p>
+                    {link ? (
+                      <a
+                        href={link}
+                        {...(tapBlank(link) ? { target: "_blank", rel: "noreferrer" } : {})}
+                        className="mt-2 flex h-11 items-center justify-center bg-ink text-sm text-paper"
+                      >
+                        {openText}
+                      </a>
+                    ) : (
+                      <p className="mt-2 text-xs text-ink/55">{zh ? "正在连接钱包…" : "Connecting the wallet…"}</p>
+                    )}
+                  </>
                 )}
-              </>
-            )}
-            {note ? <p className="mt-2 text-xs text-sell">{note}</p> : null}
-            <button type="button" className="mt-2 h-9 w-full text-xs text-ink/55" onClick={() => setAsk(null)}>
-              {zh ? "取消" : "Cancel"}
-            </button>
-          </div>
-        ) : null}
+                {note ? <p className="mt-2 text-xs text-sell">{note}</p> : null}
+                <button type="button" className="mt-2 h-9 w-full text-xs text-ink/55" onClick={() => setAsk(null)}>
+                  {zh ? "取消" : "Cancel"}
+                </button>
+              </div>,
+              document.body,
+            )
+          : null}
       </span>
     );
   }
