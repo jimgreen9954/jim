@@ -392,7 +392,8 @@ function jumpBinance(uri: string, door: Window | null) {
     door.location.href = link;
     return;
   }
-  if (phoneBrowser()) window.location.href = link;
+  const opened = window.open(link, "_blank");
+  if (!opened && phoneBrowser()) window.location.assign(link);
 }
 
 export async function connectScan(onUri?: (uri: string) => void, asKind?: WalletKind): Promise<string> {
@@ -529,7 +530,15 @@ export async function connectKind(which: WalletKind): Promise<string> {
   kind = which;
   if (which === "binance") {
     const ready = binanceInjected();
-    const door = !ready && phoneBrowser() ? window.open("", "_blank") : null;
+    const door = ready ? null : window.open("", "_blank");
+    if (door) {
+      try {
+        door.document.title = "Binance";
+        door.document.body.textContent = "正在打开币安…";
+      } catch {
+        /* The blank tab can still be pointed at Binance once the code is ready. */
+      }
+    }
     try {
       const plugged = ready ?? (await waitBinance());
       if (plugged) {

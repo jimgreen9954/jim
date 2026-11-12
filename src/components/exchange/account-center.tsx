@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import QRCode from "qrcode";
 import { encodeFunctionData, formatEther, formatUnits, parseAbi, parseUnits, type Hex } from "viem";
 import {
   bemPrice,
@@ -19,7 +20,7 @@ import { getOfficialBooks } from "@/lib/official-books";
 import { transferBscCircuit, transferBscTransistor } from "@/lib/official-trade";
 import { okbPrice, OKB, readOkbPurse } from "@/lib/okb";
 import { BSC_REBATE, KNOWN_XPERP, readPerp } from "@/lib/perp";
-import { connectKind, currentAccount, disconnectWallet, getProvider, onAccount } from "@/lib/wallet";
+import { connectKind, currentAccount, disconnectWallet, getProvider, onAccount, onOpenLink, onPairUri } from "@/lib/wallet";
 import { connectXLayer, transferCircuit, transferTransistor, XLAYER } from "@/lib/xlayer";
 import { LOCK_TERMS, readLocks, type LockSeat } from "@/lib/tape-lock";
 import {
@@ -145,6 +146,18 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
   const [sendAck, setSendAck] = useState(false);
   const [sent, setSent] = useState<string[]>([]);
   const [holdTick, setHoldTick] = useState(0);
+  const [pair, setPair] = useState<string | null>(null);
+  const [openLink, setOpenLink] = useState<string | null>(null);
+  const [binanceNote, setBinanceNote] = useState<string | null>(null);
+  const [binanceBusy, setBinanceBusy] = useState(false);
+  const codeRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => onPairUri(setPair), []);
+  useEffect(() => onOpenLink(setOpenLink), []);
+  useEffect(() => {
+    const canvas = codeRef.current;
+    if (!canvas || !pair) return;
+    QRCode.toCanvas(canvas, pair, { width: 180, margin: 1, errorCorrectionLevel: "M" }).catch(() => undefined);
+  }, [pair, account]);
 
   useEffect(() => onAccount(setAccount), []);
 
@@ -574,12 +587,45 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
               </button>
               <button
                 type="button"
-                className="min-h-11 border border-gold text-sm"
-                onClick={() => void connectKind("binance").catch(() => undefined)}
+                className="min-h-11 border border-gold text-sm disabled:opacity-40"
+                disabled={binanceBusy}
+                onClick={() => {
+                  setBinanceBusy(true);
+                  setBinanceNote(zh ? "正在打开币安…" : "Opening Binance…");
+                  void connectKind("binance")
+                    .then(() => setBinanceNote(null))
+                    .catch(() =>
+                      setBinanceNote(
+                        zh
+                          ? "币安没有自动打开。点下面的打开币安，或用币安扫二维码。"
+                          : "Binance did not open. Use the button below, or scan the code.",
+                      ),
+                    )
+                    .finally(() => setBinanceBusy(false));
+                }}
               >
                 {zh ? "连接币安" : "Connect Binance"}
               </button>
             </div>
+            {binanceNote ? <p className="mt-3 text-xs">{binanceNote}</p> : null}
+            {openLink ? (
+              <a
+                href={openLink}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 flex h-11 items-center justify-center bg-ink text-sm text-paper"
+              >
+                {zh ? "打开币安" : "Open Binance"}
+              </a>
+            ) : null}
+            {pair ? (
+              <div className="mt-3 grid justify-items-center gap-1">
+                <canvas ref={codeRef} width={180} height={180} />
+                <p className="text-center text-[11px] leading-4 text-ink/55">
+                  {zh ? "用币安扫这个码。这一页留着，不要关掉。" : "Scan this with Binance. Leave this page open."}
+                </p>
+              </div>
+            ) : null}
           </div>
         </div>
         <PayDesk zh={zh} account={null} />

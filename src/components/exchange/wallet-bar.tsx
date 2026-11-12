@@ -273,7 +273,10 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
               type="button"
               disabled={busy}
               className="h-10 w-full border border-gold text-sm text-ink/80 disabled:opacity-40"
-              onClick={() => run(() => connectKind("binance"))}
+              onClick={() => {
+                setNote(zh ? "正在打开币安…" : "Opening Binance…");
+                run(() => connectKind("binance"));
+              }}
             >
               {zh ? "币安" : "Binance"}
             </button>
