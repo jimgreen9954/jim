@@ -876,11 +876,7 @@ export function RealPerp({
     const message = err instanceof Error ? err.message : "";
     if (message === "nowallet") setNote(c.walletNo);
     else if (message === "usdt")
-      setNote(
-        lang === "zh"
-          ? `${chain === "xlayer" ? "USDT0" : "USDT"} 不够，没有打开钱包。`
-          : `Not enough ${chain === "xlayer" ? "USDT0" : "USDT"}. The wallet was not opened.`,
-      );
+      setNote(lang === "zh" ? `${chain === "xlayer" ? "USDT0" : "USDT"} 不够` : `Not enough ${chain === "xlayer" ? "USDT0" : "USDT"}`);
     else if (message === "next")
       setNote(
         lang === "zh"
@@ -1320,10 +1316,7 @@ export function RealPerp({
   const opensMargin = !reduceOnly && planned.net !== "close" && orderStyle !== "trail";
   const usdtShort = Boolean(bal) && opensMargin && needLock > freeN + 0.009;
   const walletUsdt = bal ? freeN.toFixed(2) : "—";
-  const shortLine =
-    lang === "zh"
-      ? `${chain === "xlayer" ? "USDT0" : "USDT"} 不够。这一笔要 ${needLock.toFixed(2)}，钱包里只有 ${walletUsdt}。没有打开钱包。`
-      : `Not enough ${chain === "xlayer" ? "USDT0" : "USDT"}. This order needs ${needLock.toFixed(2)} and the wallet has ${walletUsdt}. The wallet was not opened.`;
+  const shortLine = lang === "zh" ? `${chain === "xlayer" ? "USDT0" : "USDT"} 不够` : `Not enough ${chain === "xlayer" ? "USDT0" : "USDT"}`;
   const place = (side) => {
     setIntent(side);
     if (busy) return;
@@ -2782,12 +2775,6 @@ export function RealPerp({
                                         children: c.badPrice,
                                       })
                                     : null,
-                                  usdtShort
-                                    ? /* @__PURE__ */ jsx("p", {
-                                        className: "text-xs leading-snug text-sell",
-                                        children: shortLine,
-                                      })
-                                    : null,
                                   <button
                                     type="button"
                                     className={`min-h-11 w-full text-sm ${intent === "short" ? "hl-sell" : "hl-buy"}`}
@@ -3188,12 +3175,6 @@ export function RealPerp({
                           /* @__PURE__ */ jsxs("div", {
                             className: "ticket-well",
                             children: [
-                              usdtShort
-                                ? /* @__PURE__ */ jsx("p", {
-                                    className: "text-xs leading-snug text-sell",
-                                    children: shortLine,
-                                  })
-                                : null,
                               /* @__PURE__ */ jsxs("div", {
                                 className: "grid grid-cols-3 gap-2 font-mono text-[11px]",
                                 children: [
@@ -3654,12 +3635,6 @@ export function RealPerp({
                 </p>
               </aside>
             </div>,
-            note
-              ? /* @__PURE__ */ jsx("p", {
-                  className: `text-xs xl:col-span-12 ${bad ? "text-sell" : "text-ink/70"}`,
-                  children: note,
-                })
-              : null,
             hash
               ? /* @__PURE__ */ jsx("a", {
                   className: "desk-extra",
