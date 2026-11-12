@@ -20,7 +20,7 @@ import { getOfficialBooks } from "@/lib/official-books";
 import { transferBscCircuit, transferBscTransistor } from "@/lib/official-trade";
 import { okbPrice, OKB, readOkbPurse } from "@/lib/okb";
 import { BSC_REBATE, KNOWN_XPERP, readPerp } from "@/lib/perp";
-import { connectKind, currentAccount, disconnectWallet, followBinance, getProvider, onAccount, onOpenLink, onPairUri, tapBlank } from "@/lib/wallet";
+import { connectKind, currentAccount, disconnectWallet, getProvider, onAccount, onOpenLink, onPairUri, tapBlank } from "@/lib/wallet";
 import { connectXLayer, transferCircuit, transferTransistor, XLAYER } from "@/lib/xlayer";
 import { LOCK_TERMS, readLocks, type LockSeat } from "@/lib/tape-lock";
 import {
@@ -612,9 +612,6 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
               <a
                 href={openLink}
                 {...(tapBlank(openLink) ? { target: "_blank", rel: "noreferrer" } : {})}
-                onClick={(event) => {
-                  if (followBinance(openLink)) event.preventDefault();
-                }}
                 className="mt-3 flex h-11 items-center justify-center bg-ink text-sm text-paper"
               >
                 {zh ? "打开币安" : "Open Binance"}

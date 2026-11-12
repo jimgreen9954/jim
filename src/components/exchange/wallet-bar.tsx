@@ -7,7 +7,7 @@ import {
   connectScan,
   currentAccount,
   disconnectWallet,
-  followBinance,
+  binanceWcLink,
   onAccount,
   onOpenLink,
   onPairUri,
@@ -100,6 +100,7 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
   const [entered, setEntered] = useState(false);
   const [pair, setPair] = useState<string | null>(null);
   const [phone, setPhone] = useState<string | null>(null);
+  const [ask, setAsk] = useState<null | "binance">(null);
   const codeRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => onAccount(setAccount), []);
   useEffect(() => onOpenLink(setLink), []);
@@ -115,6 +116,7 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
   const enter = () => {
     setEntered(true);
     setOpen(false);
+    setAsk(null);
   };
   const leave = () => {
     setEntered(false);
@@ -166,9 +168,6 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
           <a
             href={link}
             {...(tapBlank(link) ? { target: "_blank", rel: "noreferrer" } : {})}
-            onClick={(event) => {
-              if (followBinance(link)) event.preventDefault();
-            }}
             className="inline-flex h-8 items-center border border-gold bg-ink px-2 text-xs text-paper"
           >
             {binance ? (zh ? "打开币安" : "Open Binance") : zh ? "去 OKX" : "Open OKX"}
@@ -207,7 +206,10 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
                 type="button"
                 disabled={busy}
                 className="h-10 w-full border border-gold text-sm disabled:opacity-40"
-                onClick={() => run(() => connectKind("binance"))}
+                onClick={() => {
+                  setAsk("binance");
+                  run(() => connectKind("binance"));
+                }}
               >
                 {zh ? "币安" : "Binance"}
               </button>
@@ -215,9 +217,6 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
                 <a
                   href={link}
                   {...(tapBlank(link) ? { target: "_blank", rel: "noreferrer" } : {})}
-                  onClick={(event) => {
-                    if (followBinance(link)) event.preventDefault();
-                  }}
                   className="mt-2 flex h-10 items-center justify-center bg-ink text-sm text-paper"
                 >
                   {binance ? (zh ? "打开币安" : "Open Binance") : zh ? "去 OKX 确认" : "Confirm in OKX"}
@@ -234,6 +233,39 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
               {note ? <p className="mt-2 text-xs text-sell">{note}</p> : null}
             </div>
           </>
+        ) : null}
+        {ask === "binance" && !account ? (
+          <div className="fixed inset-x-3 bottom-[4.5rem] z-[70] border border-gold bg-card p-3 shadow-plate">
+            <p className="text-sm">
+              {pair
+                ? zh
+                  ? "点下面打开币安钱包。授权后回到这一页。"
+                  : "Open Binance Wallet below. Come back after you approve."
+                : zh
+                  ? "正在连接币安…"
+                  : "Connecting Binance…"}
+            </p>
+            {pair ? (
+              <div className="mt-2 grid gap-2">
+                <a
+                  href={`bnc://app.binance.com/cedefi/wc?uri=${encodeURIComponent(pair)}`}
+                  className="flex h-11 items-center justify-center bg-ink text-sm text-paper"
+                >
+                  {zh ? "打开币安钱包" : "Open Binance Wallet"}
+                </a>
+                <a
+                  href={binanceWcLink(pair)}
+                  className="flex h-11 items-center justify-center border border-gold text-sm"
+                >
+                  {zh ? "打不开就点这里" : "If that did not open"}
+                </a>
+              </div>
+            ) : null}
+            {note ? <p className="mt-2 text-xs text-sell">{note}</p> : null}
+            <button type="button" className="mt-2 h-9 w-full text-xs text-ink/55" onClick={() => setAsk(null)}>
+              {zh ? "取消" : "Cancel"}
+            </button>
+          </div>
         ) : null}
       </span>
     );
@@ -257,9 +289,6 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
           <a
             href={link}
             {...(tapBlank(link) ? { target: "_blank", rel: "noreferrer" } : {})}
-            onClick={(event) => {
-              if (followBinance(link)) event.preventDefault();
-            }}
             className="inline-flex min-h-9 shrink-0 items-center border border-gold bg-ink px-2 text-xs text-paper"
           >
             {zh ? "去确认" : "Confirm"}
@@ -350,9 +379,6 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
               <a
                 href={link}
                 {...(tapBlank(link) ? { target: "_blank", rel: "noreferrer" } : {})}
-                onClick={(event) => {
-                  if (followBinance(link)) event.preventDefault();
-                }}
                 className="mt-2 flex h-10 items-center justify-center border border-gold text-sm"
               >
                 {binance ? (zh ? "打开币安" : "Open Binance") : zh ? "去 OKX 确认" : "Confirm in OKX"}

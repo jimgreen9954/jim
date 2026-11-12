@@ -396,13 +396,6 @@ export function binanceOpenLink(uri?: string): string {
   return `https://app.binance.com/cedefi/wc?uri=${encoded}`;
 }
 
-export function followBinance(link: string): boolean {
-  if (!phoneBrowser()) return false;
-  if (!link.startsWith("bnc:") && !link.includes("app.binance.com")) return false;
-  window.location.assign(link);
-  return true;
-}
-
 export function tapBlank(link: string): boolean {
   if (
     link.startsWith("intent:") ||

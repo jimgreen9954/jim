@@ -65,7 +65,7 @@ import {
   xCap,
 } from "@/lib/okb";
 import { FAB, fabBemPrice, quoteFab, readFab, swapFab } from "@/lib/fab";
-import { currentAccount, connectKind, followBinance, onAccount, onOpenLink, tapBlank } from "@/lib/wallet";
+import { currentAccount, connectKind, onAccount, onOpenLink, tapBlank } from "@/lib/wallet";
 import { markDeskFill } from "@/lib/red-packet";
 import { rememberFill, TradeLog } from "@/components/exchange/trade-foot";
 import { Kline } from "@/components/exchange/kline";
@@ -1450,7 +1450,7 @@ export function SpotDesk({
                       : `${side === "buy" ? "Buy" : "Sell"} ${base}`}
                 </button>
                 {openLink ? (
-                  <a href={openLink} {...(tapBlank(openLink) ? { target: "_blank", rel: "noreferrer" } : {})} onClick={(event) => { if (followBinance(openLink)) event.preventDefault(); }} className="mt-2 flex h-10 items-center justify-center border border-gold text-sm">
+                  <a href={openLink} {...(tapBlank(openLink) ? { target: "_blank", rel: "noreferrer" } : {})} className="mt-2 flex h-10 items-center justify-center border border-gold text-sm">
                     {lang === "zh" ? "打开币安确认" : "Confirm in Binance"}
                   </a>
                 ) : null}
