@@ -7,7 +7,6 @@ import {
   connectScan,
   currentAccount,
   disconnectWallet,
-  binanceWcLink,
   onAccount,
   onOpenLink,
   onPairUri,
@@ -221,23 +220,6 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
               >
                 {zh ? "币安" : "Binance"}
               </button>
-              {link ? (
-                <a
-                  href={link}
-                  {...(tapBlank(link) ? { target: "_blank", rel: "noreferrer" } : {})}
-                  className="mt-2 flex h-10 items-center justify-center bg-ink text-sm text-paper"
-                >
-                  {openText}
-                </a>
-              ) : null}
-              {pair && !account ? (
-                <div className="mt-3 grid justify-items-center gap-1">
-                  <canvas ref={codeRef} width={180} height={180} />
-                  <p className="text-center text-[11px] leading-4 text-ink/55">
-                    {zh ? "用币安或 OKX 扫这个码。这一页不要关。" : "Scan with Binance or OKX. Leave this page open."}
-                  </p>
-                </div>
-              ) : null}
               {note ? <p className="mt-2 text-xs text-sell">{note}</p> : null}
             </div>
           </>
@@ -260,14 +242,6 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
                 className="mt-2 flex h-11 items-center justify-center bg-ink text-sm text-paper"
               >
                 {openText}
-              </a>
-            ) : null}
-            {pair && binance ? (
-              <a
-                href={binanceWcLink(pair)}
-                className="mt-2 flex h-11 items-center justify-center border border-gold text-sm"
-              >
-                {zh ? "打不开就点这里" : "If that did not open"}
               </a>
             ) : null}
             {note ? <p className="mt-2 text-xs text-sell">{note}</p> : null}

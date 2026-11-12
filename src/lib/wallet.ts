@@ -53,7 +53,13 @@ let jumpHeld = false;
 
 export function showWalletJump() {
   jumpHeld = true;
-  if (kind === "binance") publishLink(binanceOpenLink());
+  if (kind === "binance") {
+    publishLink(phoneBrowser() ? "bnc://app.binance.com/cedefi/" : binanceWcLink());
+    return;
+  }
+  if (phoneBrowser() && !(openLink && /^(okx|okxwallet|okxweb3):/i.test(openLink))) {
+    publishLink("okxweb3://web3/wallet/connect");
+  }
 }
 
 export function hideWalletJump() {
@@ -178,6 +184,15 @@ async function waitBinance(): Promise<Eth | null> {
   return null;
 }
 
+function rememberWalletLink(url: string) {
+  const next = url.trim();
+  if (!next) return;
+  const native = /^(okx|okxwallet|okxweb3|bnc):/i.test(next);
+  const kept = openLink != null && /^(okx|okxwallet|okxweb3|bnc):/i.test(openLink);
+  if (!native && kept) return;
+  publishLink(next);
+}
+
 function holdNavigation(url: string): boolean {
   const text = url.toLowerCase();
   const wallet =
@@ -190,7 +205,7 @@ function holdNavigation(url: string): boolean {
     text.includes("okx.com/download") ||
     text.includes("/ul/connect");
   if (!wallet && !text.includes("dapp/url") && !text.includes("dappurl=")) return false;
-  publishLink(url);
+  rememberWalletLink(url);
   return true;
 }
 
@@ -268,7 +283,7 @@ async function connectOkxRemote(): Promise<string> {
   okx.on("display_uri", (uri: string) => {
     const text = String(uri);
     if (text.toLowerCase().startsWith("wc:")) {
-      if (!account) publishPair(text);
+      if (!account && !phoneBrowser()) publishPair(text);
       return;
     }
     holdNavigation(text);
@@ -398,16 +413,10 @@ export function binanceWcLink(uri?: string): string {
   return `https://app.binance.com/cedefi/wc?uri=${encodeURIComponent(uri)}`;
 }
 
-function androidPhone(): boolean {
-  return typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
-}
-
 export function binanceOpenLink(uri?: string): string {
   if (!phoneBrowser()) return binanceWcLink(uri);
-  if (!uri) return androidPhone() ? "bnc://app.binance.com/cedefi/" : "https://app.binance.com/cedefi/";
-  const encoded = encodeURIComponent(uri);
-  if (androidPhone()) return `bnc://app.binance.com/cedefi/wc?uri=${encoded}`;
-  return `https://app.binance.com/cedefi/wc?uri=${encoded}`;
+  if (!uri) return "bnc://app.binance.com/cedefi/";
+  return `bnc://app.binance.com/cedefi/wc?uri=${encodeURIComponent(uri)}`;
 }
 
 export function tapBlank(link: string): boolean {
@@ -466,7 +475,7 @@ export async function connectScan(onUri?: (uri: string) => void, asKind?: Wallet
   provider.signer.on("default_chain_changed", syncChain);
   provider.on("display_uri", (uri: string) => {
     const text = String(uri);
-    if (!account) publishPair(text);
+    if (!account && !phoneBrowser()) publishPair(text);
     onUri?.(text);
   });
   if (!provider.session) await provider.connect();
