@@ -9,6 +9,7 @@ import {
   currentAccount,
   dismissWalletPrompt,
   disconnectWallet,
+  inWalletBrowser,
   onAccount,
   onOpenLink,
   onPairUri,
@@ -171,7 +172,7 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
     const openText = binance ? (zh ? "打开币安钱包" : "Open Binance Wallet") : zh ? "打开OKX钱包" : "Open OKX Wallet";
     return (
       <span className="relative flex items-center gap-1">
-        {link ? (
+        {link && !inWalletBrowser() ? (
           <a
             href={link}
             {...(tapBlank(link) ? { target: "_blank", rel: "noreferrer" } : {})}
@@ -207,8 +208,8 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
                     disabled={busy}
                     className="mb-2 h-11 w-full bg-ink text-sm text-paper disabled:opacity-40"
                     onClick={() => {
-                      setAsk("okx");
                       setOpen(false);
+                      if (!inWalletBrowser()) setAsk("okx");
                       run(() => connectKind("okx"));
                     }}
                   >
@@ -219,8 +220,8 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
                     disabled={busy}
                     className="mb-2 h-11 w-full border border-gold text-sm disabled:opacity-40"
                     onClick={() => {
-                      setAsk("binance");
                       setOpen(false);
+                      if (!inWalletBrowser()) setAsk("binance");
                       run(() => connectKind("binance"));
                     }}
                   >
@@ -244,7 +245,7 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
               document.body,
             )
           : null}
-        {(ask || tradePrompt) && typeof document !== "undefined"
+        {(ask || tradePrompt) && !inWalletBrowser() && typeof document !== "undefined"
           ? createPortal(
               <div className="fixed inset-x-3 bottom-[4.5rem] z-[90] border border-gold bg-card p-3 shadow-plate">
                 {ask === "scan" || (walletMode() === "scan" && !link) ? (

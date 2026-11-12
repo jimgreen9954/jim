@@ -70,11 +70,19 @@ export function walletMode(): "jump" | "scan" {
 }
 
 export function remoteWallet(): boolean {
+  if (okxInjected() || binanceInjected()) return false;
   if (mode === "scan" || kind === "binance") return true;
   return kind === "okx" && !okxInjected();
 }
 
+export function inWalletBrowser(): boolean {
+  if (!phoneBrowser()) return false;
+  if (okxInjected() || binanceInjected()) return true;
+  return /OKApp|OKEx|BinanceWallet|BNC\//i.test(navigator.userAgent);
+}
+
 export function showWalletJump() {
+  if (inWalletBrowser()) return;
   jumpHeld = true;
   if (!phoneBrowser()) return;
   publishPrompt(true);

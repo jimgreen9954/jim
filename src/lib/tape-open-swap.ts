@@ -33,22 +33,34 @@ const v2 = parseAbi([
 
 export type PoolQuote = 0 | 1;
 
+function chainNum(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const text = String(value ?? "").trim();
+  if (!text) return 0;
+  return Number.parseInt(text, text.startsWith("0x") || text.startsWith("0X") ? 16 : 10);
+}
+
 async function ensureX() {
   const eth = await ensureProvider();
-  const chain = await eth.request({ method: "eth_chainId" }) as string;
-  if (Number(chain) === XLAYER.chainId) return;
+  const chain = await eth.request({ method: "eth_chainId" });
+  if (chainNum(chain) === XLAYER.chainId) return;
   await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: XLAYER.hex }] });
 }
 
 async function send(from: string, to: Hex, data: Hex, value = 0n): Promise<Hex> {
   const eth = await ensureProvider();
   await ensureX();
-  const tx: { from: string; to: Hex; data: Hex; value?: Hex } = { from, to, data };
+  const tx: { from: string; to: Hex; data: Hex; chainId: Hex; value?: Hex } = {
+    from,
+    to,
+    data,
+    chainId: XLAYER.hex,
+  };
   if (value > 0n) tx.value = `0x${value.toString(16)}`;
-  return await eth.request({
+  return (await eth.request({
     method: "eth_sendTransaction",
     params: [tx],
-  }) as Hex;
+  })) as Hex;
 }
 
 async function wait(hash: Hex) {
