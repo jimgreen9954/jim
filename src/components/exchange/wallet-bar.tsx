@@ -157,19 +157,81 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
       .catch(fail)
       .finally(() => setBusy(false));
   };
-  if (link && compact) {
-    const binance = link.includes("binance.com") || link.startsWith("bnc:");
+  if (compact) {
+    const binance = Boolean(link && (link.includes("binance.com") || link.startsWith("bnc:") || link.startsWith("intent:")));
     return (
-      <a
-        href={link}
-        {...(tapBlank(link) ? { target: "_blank", rel: "noreferrer" } : {})}
-        className="inline-flex min-h-11 items-center border border-gold bg-ink px-3 text-sm text-paper"
-      >
-        {binance ? (zh ? "打开币安" : "Open Binance") : zh ? "去 OKX 确认" : "Confirm in OKX"}
-      </a>
+      <span className="relative flex items-center gap-1">
+        {link ? (
+          <a
+            href={link}
+            {...(tapBlank(link) ? { target: "_blank", rel: "noreferrer" } : {})}
+            className="inline-flex h-8 items-center border border-gold bg-ink px-2 text-xs text-paper"
+          >
+            {binance ? (zh ? "打开币安" : "Open Binance") : zh ? "去 OKX" : "Open OKX"}
+          </a>
+        ) : null}
+        <button
+          type="button"
+          className="h-8 max-w-[5.5rem] truncate rounded-md border border-gold px-2 text-xs"
+          onClick={() => setOpen((on) => !on)}
+        >
+          {account ? short(account) : zh ? "登录" : "Log in"}
+        </button>
+        {open ? (
+          <>
+            <button
+              type="button"
+              aria-label={zh ? "关闭" : "Close"}
+              className="fixed inset-0 z-30 cursor-default"
+              onClick={() => setOpen(false)}
+            />
+            <div className="absolute right-0 top-full z-40 mt-2 w-60 border border-gold bg-card p-3 shadow-plate">
+              {account ? (
+                <button type="button" className="mb-2 h-10 w-full border border-gold text-sm" onClick={leave}>
+                  {zh ? "退出" : "Log out"}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                disabled={busy}
+                className="mb-2 h-10 w-full bg-ink text-sm text-paper disabled:opacity-40"
+                onClick={() => run(() => connectKind("okx"))}
+              >
+                OKX
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                className="h-10 w-full border border-gold text-sm disabled:opacity-40"
+                onClick={() => run(() => connectKind("binance"))}
+              >
+                {zh ? "币安" : "Binance"}
+              </button>
+              {link ? (
+                <a
+                  href={link}
+                  {...(tapBlank(link) ? { target: "_blank", rel: "noreferrer" } : {})}
+                  className="mt-2 flex h-10 items-center justify-center bg-ink text-sm text-paper"
+                >
+                  {binance ? (zh ? "打开币安" : "Open Binance") : zh ? "去 OKX 确认" : "Confirm in OKX"}
+                </a>
+              ) : null}
+              {pair ? (
+                <div className="mt-3 grid justify-items-center gap-1">
+                  <canvas ref={codeRef} width={180} height={180} />
+                  <p className="text-center text-[11px] leading-4 text-ink/55">
+                    {zh ? "用币安或 OKX 扫这个码。这一页不要关。" : "Scan with Binance or OKX. Leave this page open."}
+                  </p>
+                </div>
+              ) : null}
+              {note ? <p className="mt-2 text-xs text-sell">{note}</p> : null}
+            </div>
+          </>
+        ) : null}
+      </span>
     );
   }
-  if (account && (compact || entered)) {
+  if (account && entered) {
     return (
       <span
         className={`flex items-center gap-1 ${compact ? "max-w-[6.2rem]" : "max-w-[18rem] flex-wrap sm:max-w-none sm:gap-2"}`}
@@ -202,31 +264,6 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
             {zh ? "退出" : "Out"}
           </button>
         )}
-      </span>
-    );
-  }
-  if (compact) {
-    return (
-      <span className="flex items-center gap-1">
-        <button
-          type="button"
-          className="h-8 rounded-md border border-gold px-2 text-xs disabled:opacity-40"
-          disabled={busy}
-          onClick={() => run(() => connectKind("okx"))}
-        >
-          OKX
-        </button>
-        <button
-          type="button"
-          className="h-8 rounded-md border border-gold px-2 text-xs disabled:opacity-40"
-          disabled={busy}
-          onClick={() => {
-            setNote(zh ? "点打开币安。这一页留着，确认后回来。" : "Tap Open Binance. This page stays. Come back after you confirm.");
-            run(() => connectKind("binance"));
-          }}
-        >
-          {zh ? "币安" : "Binance"}
-        </button>
       </span>
     );
   }

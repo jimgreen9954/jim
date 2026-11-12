@@ -388,13 +388,6 @@ function androidPhone(): boolean {
   return typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
 }
 
-function inWalletBrowser(): boolean {
-  if (typeof navigator === "undefined") return false;
-  return /OKApp|OKEx|TokenPocket|imToken|MetaMask|Trust|BitKeep|Bitget|Bybit|MicroMessenger|FBAN|Instagram|wv\)/i.test(
-    navigator.userAgent,
-  );
-}
-
 export function binanceOpenLink(uri?: string): string {
   const https = binanceWcLink(uri);
   if (!phoneBrowser()) return https;
@@ -409,7 +402,6 @@ export function binanceOpenLink(uri?: string): string {
 
 export function tapBlank(link: string): boolean {
   if (link.startsWith("intent:") || link.startsWith("bnc:") || link.startsWith("okx")) return false;
-  if (link.includes("app.binance.com") && phoneBrowser() && !androidPhone() && !inWalletBrowser()) return false;
   return true;
 }
 
