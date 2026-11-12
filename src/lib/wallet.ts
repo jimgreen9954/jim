@@ -56,6 +56,11 @@ export function walletMode(): "jump" | "scan" {
   return mode;
 }
 
+export function remoteWallet(): boolean {
+  if (mode === "scan" || kind === "binance") return true;
+  return kind === "okx" && !okxInjected();
+}
+
 export function showWalletJump() {
   jumpHeld = true;
   if (mode === "scan") {
@@ -63,13 +68,7 @@ export function showWalletJump() {
     publishPhone("扫码钱包");
     return;
   }
-  if (kind === "binance") {
-    publishLink(phoneBrowser() ? "bnc://app.binance.com/cedefi/" : binanceWcLink());
-    return;
-  }
-  if (phoneBrowser() && !(openLink && /^(okx|okxwallet|okxweb3):/i.test(openLink))) {
-    publishLink("okxweb3://web3/wallet/connect");
-  }
+  if (kind === "binance") publishLink(phoneBrowser() ? "bnc://app.binance.com/cedefi/" : binanceWcLink());
 }
 
 export function hideWalletJump() {
@@ -350,7 +349,15 @@ async function connectOkxRemote(): Promise<string> {
       const chain = id === 56 || id === 196 ? `eip155:${id}` : undefined;
       const ask = okx.request as (payload: typeof args, chainId?: string) => Promise<unknown>;
       try {
-        return chain ? await ask(args, chain) : await ask(args);
+        if (!chain) return await ask(args);
+        try {
+          return await ask(args, chain);
+        } catch (err) {
+          const code = typeof err === "object" && err ? Number((err as { code?: number }).code) : NaN;
+          const msg = err instanceof Error ? err.message : String(err);
+          if (code === 4001 || /user rejected|user denied/i.test(msg)) throw err;
+          return await ask(args);
+        }
       } finally {
         releaseLink();
       }

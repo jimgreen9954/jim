@@ -1,5 +1,5 @@
 import { encodeFunctionData, parseAbi, type Hex } from "viem";
-import { ensureProvider } from "@/lib/wallet";
+import { ensureProvider, remoteWallet } from "@/lib/wallet";
 
 export type SignedCall = { to: Hex; data: Hex; value?: bigint };
 
@@ -27,6 +27,17 @@ const CHAINS: Record<number, { hex: Hex; name: string; rpc: string[]; symbol: st
 
 function hexVal(value: bigint): Hex {
   return `0x${value.toString(16)}` as Hex;
+}
+
+function deskTx(from: string, chainId: number | undefined, to: Hex, data: Hex, value = 0n) {
+  const tx: { from: string; to: Hex; data: Hex; value?: Hex; chainId?: Hex } = {
+    from,
+    to,
+    data: data && data !== "0x" ? data : "0x",
+  };
+  if (value > 0n) tx.value = hexVal(value);
+  if (chainId && CHAINS[chainId]) tx.chainId = CHAINS[chainId].hex;
+  return tx;
 }
 
 export function rejected(err: unknown): boolean {
@@ -83,8 +94,9 @@ function atomicStatus(caps: unknown, chainId: number): string {
   return row?.atomic?.status ?? "";
 }
 
-/** Only wallets that actually report atomic batches. A missing method must not block the trade. */
+/** Only wallets that actually report atomic batches. A phone wallet gets one real transaction. */
 async function atomicReady(eth: Eth, from: string, chainId: number): Promise<boolean> {
+  if (remoteWallet()) return false;
   const saved = readCap(chainId);
   if (saved === "0") return false;
   if (saved === "1") return true;
@@ -223,12 +235,14 @@ export async function sendAsMulticall(from: string, calls: SignedCall[], chainId
       })),
     ],
   });
-  const tx = { from, to: MULTI, data, value: hexVal(value) };
-  try {
-    await eth.request({ method: "eth_call", params: [tx, "latest"] });
-  } catch (err) {
-    if (rejected(err)) throw err;
-    throw new Error("no-batch");
+  const tx = deskTx(from, chainId, MULTI, data, value);
+  if (!remoteWallet()) {
+    try {
+      await eth.request({ method: "eth_call", params: [tx, "latest"] });
+    } catch (err) {
+      if (rejected(err)) throw err;
+      throw new Error("no-batch");
+    }
   }
   return (await eth.request({ method: "eth_sendTransaction", params: [tx] })) as Hex;
 }
@@ -237,13 +251,15 @@ export async function sendAsMulticall(from: string, calls: SignedCall[], chainId
 export async function sendUserBatch(from: string, chainId: number, calls: SignedCall[]): Promise<Hex> {
   const live = calls.filter((call) => (call.value ?? 0n) > 0n || (call.data && call.data !== "0x"));
   if (live.length === 0) throw new Error("amount");
+  if (remoteWallet() && live.length !== 1) throw new Error("no-batch");
   const eth = await ensureProvider();
   await onChain(eth, chainId);
   if (live.length === 1) {
     const call = live[0];
-    const tx: { from: string; to: Hex; data: Hex; value?: Hex } = { from, to: call.to, data: call.data || "0x" };
-    if ((call.value ?? 0n) > 0n) tx.value = hexVal(call.value ?? 0n);
-    return (await eth.request({ method: "eth_sendTransaction", params: [tx] })) as Hex;
+    return (await eth.request({
+      method: "eth_sendTransaction",
+      params: [deskTx(from, chainId, call.to, call.data || "0x", call.value ?? 0n)],
+    })) as Hex;
   }
   if (!(await atomicReady(eth, from, chainId))) throw new Error("no-batch");
   return bundled(eth, from, chainId, live);
@@ -253,13 +269,15 @@ export async function sendUserBatch(from: string, chainId: number, calls: Signed
 export async function sendTogether(from: string, chainId: number, calls: SignedCall[]): Promise<Hex> {
   const live = calls.filter((call) => (call.value ?? 0n) > 0n || (call.data && call.data !== "0x"));
   if (live.length === 0) throw new Error("amount");
+  if (remoteWallet() && live.length !== 1 && !live.every((call) => (call.value ?? 0n) > 0n)) throw new Error("no-batch");
   const eth = await ensureProvider();
   await onChain(eth, chainId);
   if (live.length === 1) {
     const call = live[0];
-    const tx: { from: string; to: Hex; data: Hex; value?: Hex } = { from, to: call.to, data: call.data || "0x" };
-    if ((call.value ?? 0n) > 0n) tx.value = hexVal(call.value ?? 0n);
-    return (await eth.request({ method: "eth_sendTransaction", params: [tx] })) as Hex;
+    return (await eth.request({
+      method: "eth_sendTransaction",
+      params: [deskTx(from, chainId, call.to, call.data || "0x", call.value ?? 0n)],
+    })) as Hex;
   }
   if (live.every((call) => (call.value ?? 0n) > 0n)) return sendAsMulticall(from, live, chainId);
   if (!(await atomicReady(eth, from, chainId))) throw new Error("no-batch");
