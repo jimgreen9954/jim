@@ -384,10 +384,33 @@ export function binanceWcLink(uri?: string): string {
   return `https://app.binance.com/cedefi/wc?uri=${encodeURIComponent(uri)}`;
 }
 
-function binanceOpenLink(uri?: string): string {
-  if (!phoneBrowser()) return binanceWcLink(uri);
-  if (!uri) return "bnc://app.binance.com/cedefi/";
-  return `bnc://app.binance.com/cedefi/wc?uri=${encodeURIComponent(uri)}`;
+function androidPhone(): boolean {
+  return typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
+}
+
+function inWalletBrowser(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /OKApp|OKEx|TokenPocket|imToken|MetaMask|Trust|BitKeep|Bitget|Bybit|MicroMessenger|FBAN|Instagram|wv\)/i.test(
+    navigator.userAgent,
+  );
+}
+
+export function binanceOpenLink(uri?: string): string {
+  const https = binanceWcLink(uri);
+  if (!phoneBrowser()) return https;
+  if (androidPhone()) {
+    const path = uri
+      ? `app.binance.com/cedefi/wc?uri=${encodeURIComponent(uri)}`
+      : "app.binance.com/cedefi/wc";
+    return `intent://${path}#Intent;scheme=bnc;package=com.binance.dev;S.browser_fallback_url=${encodeURIComponent(https)};end`;
+  }
+  return https;
+}
+
+export function tapBlank(link: string): boolean {
+  if (link.startsWith("intent:") || link.startsWith("bnc:") || link.startsWith("okx")) return false;
+  if (link.includes("app.binance.com") && phoneBrowser() && !androidPhone() && !inWalletBrowser()) return false;
+  return true;
 }
 
 export async function connectScan(onUri?: (uri: string) => void, asKind?: WalletKind): Promise<string> {
@@ -480,9 +503,7 @@ export async function connectScan(onUri?: (uri: string) => void, asKind?: Wallet
         publishPhone(meta?.name || (asKind === "binance" ? "币安" : "手机钱包"));
         const link =
           asKind === "binance"
-            ? phoneBrowser()
-              ? meta?.redirect?.native || binanceOpenLink()
-              : meta?.redirect?.universal || binanceWcLink()
+            ? binanceOpenLink()
             : meta?.redirect?.universal || meta?.redirect?.native || null;
         if (link) publishLink(link);
       }

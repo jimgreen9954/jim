@@ -12,6 +12,7 @@ import {
   onPairUri,
   onPhoneAsk,
   switchDeskChain,
+  tapBlank,
 } from "@/lib/wallet";
 import { copy } from "@/lib/copy";
 import { useExchange } from "@/lib/exchange-store";
@@ -161,7 +162,7 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
     return (
       <a
         href={link}
-        {...(link.startsWith("bnc:") ? {} : { target: "_blank", rel: "noreferrer" })}
+        {...(tapBlank(link) ? { target: "_blank", rel: "noreferrer" } : {})}
         className="inline-flex min-h-11 items-center border border-gold bg-ink px-3 text-sm text-paper"
       >
         {binance ? (zh ? "打开币安" : "Open Binance") : zh ? "去 OKX 确认" : "Confirm in OKX"}
@@ -186,7 +187,7 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
         {!link ? null : (
           <a
             href={link}
-            {...(link.startsWith("bnc:") ? {} : { target: "_blank", rel: "noreferrer" })}
+            {...(tapBlank(link) ? { target: "_blank", rel: "noreferrer" } : {})}
             className="inline-flex min-h-9 shrink-0 items-center border border-gold bg-ink px-2 text-xs text-paper"
           >
             {zh ? "去确认" : "Confirm"}
@@ -301,7 +302,7 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
             {link ? (
               <a
                 href={link}
-                {...(link.startsWith("bnc:") ? {} : { target: "_blank", rel: "noreferrer" })}
+                {...(tapBlank(link) ? { target: "_blank", rel: "noreferrer" } : {})}
                 className="mt-2 flex h-10 items-center justify-center border border-gold text-sm"
               >
                 {binance ? (zh ? "打开币安" : "Open Binance") : zh ? "去 OKX 确认" : "Confirm in OKX"}
