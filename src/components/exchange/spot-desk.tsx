@@ -1451,7 +1451,7 @@ export function SpotDesk({
                 </button>
                 {openLink ? (
                   <a href={openLink} {...(tapBlank(openLink) ? { target: "_blank", rel: "noreferrer" } : {})} className="mt-2 flex h-10 items-center justify-center border border-gold text-sm">
-                    {lang === "zh" ? "打开币安确认" : "Confirm in Binance"}
+                    {lang === "zh" ? (openLink.includes("binance.com") || openLink.startsWith("bnc:") ? "打开币安钱包" : "打开OKX钱包") : openLink.includes("binance.com") || openLink.startsWith("bnc:") ? "Open Binance Wallet" : "Open OKX Wallet"}
                   </a>
                 ) : null}
                 {note ? <p className={`mt-2 text-xs ${bad ? "text-sell" : ""}`}>{note}</p> : null}

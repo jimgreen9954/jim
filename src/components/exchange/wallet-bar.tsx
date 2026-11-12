@@ -14,6 +14,7 @@ import {
   onPhoneAsk,
   switchDeskChain,
   tapBlank,
+  walletLabel,
 } from "@/lib/wallet";
 import { copy } from "@/lib/copy";
 import { useExchange } from "@/lib/exchange-store";
@@ -100,7 +101,7 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
   const [entered, setEntered] = useState(false);
   const [pair, setPair] = useState<string | null>(null);
   const [phone, setPhone] = useState<string | null>(null);
-  const [ask, setAsk] = useState<null | "binance">(null);
+  const [ask, setAsk] = useState<null | "binance" | "okx">(null);
   const codeRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => onAccount(setAccount), []);
   useEffect(() => onOpenLink(setLink), []);
@@ -161,7 +162,11 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
       .finally(() => setBusy(false));
   };
   if (compact) {
-    const binance = Boolean(link && (link.includes("binance.com") || link.startsWith("bnc:") || link.startsWith("intent:")));
+    const binance =
+      ask === "binance" ||
+      Boolean(link && (link.includes("binance.com") || link.startsWith("bnc:"))) ||
+      walletLabel() === "币安";
+    const openText = binance ? (zh ? "打开币安钱包" : "Open Binance Wallet") : zh ? "打开OKX钱包" : "Open OKX Wallet";
     return (
       <span className="relative flex items-center gap-1">
         {link ? (
@@ -170,7 +175,7 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
             {...(tapBlank(link) ? { target: "_blank", rel: "noreferrer" } : {})}
             className="inline-flex h-8 items-center border border-gold bg-ink px-2 text-xs text-paper"
           >
-            {binance ? (zh ? "打开币安" : "Open Binance") : zh ? "去 OKX" : "Open OKX"}
+            {openText}
           </a>
         ) : null}
         <button
@@ -198,7 +203,10 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
                 type="button"
                 disabled={busy}
                 className="mb-2 h-10 w-full bg-ink text-sm text-paper disabled:opacity-40"
-                onClick={() => run(() => connectKind("okx"))}
+                onClick={() => {
+                  setAsk("okx");
+                  run(() => connectKind("okx"));
+                }}
               >
                 OKX
               </button>
@@ -219,7 +227,7 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
                   {...(tapBlank(link) ? { target: "_blank", rel: "noreferrer" } : {})}
                   className="mt-2 flex h-10 items-center justify-center bg-ink text-sm text-paper"
                 >
-                  {binance ? (zh ? "打开币安" : "Open Binance") : zh ? "去 OKX 确认" : "Confirm in OKX"}
+                  {openText}
                 </a>
               ) : null}
               {pair ? (
@@ -234,35 +242,40 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
             </div>
           </>
         ) : null}
-        {ask === "binance" && !account ? (
+        {ask || link ? (
           <div className="fixed inset-x-3 bottom-[4.5rem] z-[70] border border-gold bg-card p-3 shadow-plate">
             <p className="text-sm">
-              {pair
+              {link
                 ? zh
-                  ? "点下面打开币安钱包。授权后回到这一页。"
-                  : "Open Binance Wallet below. Come back after you approve."
+                  ? "点下面去钱包里确认。这一页留着，确认后回来。"
+                  : "Open the wallet below. This page stays. Come back after you confirm."
                 : zh
-                  ? "正在连接币安…"
-                  : "Connecting Binance…"}
+                  ? "正在连接钱包…"
+                  : "Connecting the wallet…"}
             </p>
-            {pair ? (
-              <div className="mt-2 grid gap-2">
-                <a
-                  href={`bnc://app.binance.com/cedefi/wc?uri=${encodeURIComponent(pair)}`}
-                  className="flex h-11 items-center justify-center bg-ink text-sm text-paper"
-                >
-                  {zh ? "打开币安钱包" : "Open Binance Wallet"}
-                </a>
-                <a
-                  href={binanceWcLink(pair)}
-                  className="flex h-11 items-center justify-center border border-gold text-sm"
-                >
-                  {zh ? "打不开就点这里" : "If that did not open"}
-                </a>
-              </div>
+            {link ? (
+              <a
+                href={link}
+                {...(tapBlank(link) ? { target: "_blank", rel: "noreferrer" } : {})}
+                className="mt-2 flex h-11 items-center justify-center bg-ink text-sm text-paper"
+              >
+                {openText}
+              </a>
+            ) : null}
+            {pair && binance ? (
+              <a
+                href={binanceWcLink(pair)}
+                className="mt-2 flex h-11 items-center justify-center border border-gold text-sm"
+              >
+                {zh ? "打不开就点这里" : "If that did not open"}
+              </a>
             ) : null}
             {note ? <p className="mt-2 text-xs text-sell">{note}</p> : null}
-            <button type="button" className="mt-2 h-9 w-full text-xs text-ink/55" onClick={() => setAsk(null)}>
+            <button
+              type="button"
+              className="mt-2 h-9 w-full text-xs text-ink/55"
+              onClick={() => setAsk(null)}
+            >
               {zh ? "取消" : "Cancel"}
             </button>
           </div>
@@ -381,7 +394,7 @@ export function ConnectButton({ compact = false }: { compact?: boolean } = {}) {
                 {...(tapBlank(link) ? { target: "_blank", rel: "noreferrer" } : {})}
                 className="mt-2 flex h-10 items-center justify-center border border-gold text-sm"
               >
-                {binance ? (zh ? "打开币安" : "Open Binance") : zh ? "去 OKX 确认" : "Confirm in OKX"}
+                {binance ? (zh ? "打开币安钱包" : "Open Binance Wallet") : zh ? "打开OKX钱包" : "Open OKX Wallet"}
               </a>
             ) : null}
             {note ? <p className="mt-2 text-xs text-sell">{note}</p> : null}

@@ -297,6 +297,7 @@ async function connectOkxRemote(): Promise<string> {
             : (args.params as { chainId?: string }[] | undefined)?.[0]?.chainId;
         if (hex) okx.setDefaultChain(String(Number.parseInt(hex, 16)));
       }
+      if (PHONE_METHODS.has(args.method) && !openLink) publishLink("okx://wallet");
       try {
         return await okx.request(args);
       } finally {

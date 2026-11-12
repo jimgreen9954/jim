@@ -614,7 +614,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
                 {...(tapBlank(openLink) ? { target: "_blank", rel: "noreferrer" } : {})}
                 className="mt-3 flex h-11 items-center justify-center bg-ink text-sm text-paper"
               >
-                {zh ? "打开币安" : "Open Binance"}
+                {zh ? "打开币安钱包" : "Open Binance Wallet"}
               </a>
             ) : null}
             {pair ? (
