@@ -1,46 +1,64 @@
 # TAPELIQUID
 
-BEM and BNB spot, a two-chain perpetual, a TapeOut wafer on X Layer, and TAPE, the processor token.
+BEM and BNB spot, two-chain perpetuals, a TapeOut wafer on X Layer, and TAPE, the only platform token.
 
-Spot fills on PancakeSwap V3 (BSC). BEM uses the 1% pool. BNB uses the 0.01% pool and settles as native BNB. The paper book stays in the browser. Each perpetual is one shared contract, so people on that chain can see and take each other's orders. BSC margin is USDT. X Layer margin is USDT0 and gas is OKB. The wafer does not settle PnL. TAPE, its pool, and the wafer and circuit lock are on X Layer. None of those three has an admin.
+Spot on BSC uses PancakeSwap. OKB uses PotatoSwap on X Layer and pays USDT0. The desk fee is 0.20% of the amount paid, on top of the pool fee, in the same confirmation as the swap. New desk fees go to that chain's multisig. Older pools and the previous perpetual still pay the old fee address. A new contract can be deployed only by that chain's multisig.
 
-## Locked addresses
+The rulebook is the live page: [app.tapeliquid.net/whitepaper](https://app.tapeliquid.net/whitepaper). The same text is in [TAPELIQUID-white-paper](https://github.com/jimgreen9954/TAPELIQUID-white-paper). If the page and this file disagree, the page and the chain win.
+
+## Live addresses
+
+Taken from the site on 13 November 2026.
 
 | What | Chain | Address |
 |---|---|---|
-| Perpetual | BSC | `0xce3511b6e909c9694826cfd5dbe434d457920eba` |
-| Perpetual | X Layer | `0xF771BECD373af1d062169E42AB7b3B1fadE2b11b` |
+| Multisig | BSC | `0xE51C19aE6E4261Ed329CC54F1120Cf0Ae09364Bd` |
+| Multisig | X Layer | `0xb4D6039394c8B97C3AC3234aa07011B564Fcb88c` |
+| Old fee address, previous books only | BSC | `0x823b9F6A93Ac44Ce5A469823A336c15b6117054D` |
+| Old trade lock, cancel approval, do not use | both | `0xC5A63E4c37c23F97558673731196abC30FBFa659` |
+| BEM perpetual, live | BSC | `0xdA4aA9E0aaad6F91835cD19345D49a8fcA8d019A` |
+| BEM perpetual, previous | BSC | `0xce3511b6e909c9694826cfd5dbe434d457920eba` |
+| BEM perpetual, live | X Layer | `0xE8Ed0fE7a7aaEF822b2e5Ce9679ccACcF3aEFF56` |
+| BEM perpetual, previous | X Layer | `0xCAC69F02c06bfCa3bFDb1eaF1F4a60e17e718081` |
+| Mark, live | X Layer | `0xb4B2ee90D10ECfC7ed36A58e96e03074fA8731Eb` |
+| Mark, previous | X Layer | `0xba5234cd46ec5eB0DFdf4ac329FF42EB3062B4eA` |
 | Bitcoin perpetual | BSC | `0x81A35fDaaEe7dE3dcDa195F312279Bb2aDc0b8B4` |
 | ETH perpetual | BSC | `0x564C9f5aa89430ca4f2945b466e34BE8705ee0B8` |
 | ZEC perpetual | BSC | `0xdAd8E211ec6c8b43eCe19Da2519C9505CDCbF229` |
-| UP perpetual | BSC | `0x7aaf00Dab91e0e6dDDb6093323D0140c11C55aD3` |
-| Previous UP perpetual | BSC | `0x5f913f7AFa71c51d69F472b0fE4c3EC74b1132F8` |
+| UP perpetual, live | BSC | `0x7aaf00Dab91e0e6dDDb6093323D0140c11C55aD3` |
+| UP perpetual, previous | BSC | `0x5f913f7AFa71c51d69F472b0fE4c3EC74b1132F8` |
 | UP mark | BSC | `0xB1e9FCCa14429b067466bd67bbF68939230d0678` |
 | TAPE perpetual | X Layer | `0x9b17D0F6431957661AdD30051de2615cb08A3886` |
-| Mark | X Layer | `0xba5234cd46ec5eB0DFdf4ac329FF42EB3062B4eA` |
-| Transistor perpetual | BSC | `0x798637b6d18cE053D69CfC0B08Ead105de352c11` |
-| Circuits | X Layer | `0x69F663931209096037474d7C20402232E5C762cA` |
-| Transistors | X Layer | `0x3FA393d3081AcCff9E7989619B688235F6d3EE3F` |
-| Fee recipient | spot and the three books | `0x823b9F6A93Ac44Ce5A469823A336c15b6117054D` |
-| Seal claim | X Layer, BSC | X Layer `0x863AA822fE2EDde5Ae0b8ca949Ed5dd25f772DdD`, BSC `0x864EBcf258855f674255D78195598B2fbFAaB8Db` |
+| FAB perpetual | X Layer | `0x6Bd480BF658FaB7A2cb758c0408A7b3B5B94B431` |
+| Transistor perpetual | BSC | `0x2b909Ecc36a24D3dD3695a38B11Cb40302454899` |
 | TAPE | X Layer | `0x8f2d517D3d62019CD8D7F08ae178Be05BBb6EBE3` |
 | TAPE mine | X Layer | `0x60b1b7cae1bbd0e84ac3e1e43f933712f3ab67e8` |
-| TAPE pool | X Layer | `0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641` |
-| Wafer and circuit lock | X Layer | wafer `0xA28390924607F08aaD8d03F512B41b6a1c012Ace`, circuit `0x06c877cc158d9ca3547220f9fc156f39bce7013c` |
-| Starter gift | X Layer NAND, BSC BEM | NAND `0x5374DFfD3186FfEDAC46Cc6c9545B9e9e2CEF45b`, BEM `0xa29f86319E66DAdF1e30548bcC593fa91CBB7278` |
+| TAPE pool, live | X Layer | `0x58eaD5b41Cfd3627791D439402dd65571c286484` |
+| TAPE pool, previous | X Layer | `0x96dA5acDf8Fb8d3A6Ab742871CEA6167694a8641` |
+| Workshop spot, live | X Layer | `0x68F66fAf7b29E30D0740934F81EB266F6ff17428` |
+| Workshop spot, previous | X Layer | `0x154E82c6a2ac121906D29af0EE81131E93B57860` |
+| Wafer lock | X Layer | `0xA28390924607F08aaD8d03F512B41b6a1c012Ace` |
+| Circuit lock | X Layer | `0x06c877cc158d9ca3547220f9fc156f39bce7013c` |
+| Buyback | X Layer | `0x53fa6A76ce9A3fE08698E04a4E9A674bd77a9DfF` |
+| Timed stake, live | X Layer | `0x9D603A45321a3aDbFcAD0E49Fd944Cc281Baa833` |
+| Timed stake, previous | X Layer | `0x957a7CC82D42C31E79Ee4C668898AA30EC259c0A` |
+| Term book | X Layer | `0x683fb58ee77172626D5B49087DdAc71eF7825d20` |
+| Term book | BSC | `0xBa427D94b001FA1cf0f85E1E54c1E392e9a07610` |
+| Lend, OKB | X Layer | `0x57228158cba08c61710ab2644e583c328ec86ea7` |
+| Lend, TAPE | X Layer | `0x425285da21ed3eabe64550d1be7dcabcf6f9e851` |
+| Lend, BEM | X Layer | `0x5ed8551f90acc6395810d8274b019bf13ef1f696` |
+| Lend, BNB | BSC | `0xd8d981d32b12ea85b739bb667946975d25b0ab53` |
+| Lend, BEM | BSC | `0xd2c7150f7779ded403c3f81a68dab5164b54df28` |
+| Circuits | X Layer | `0x69F663931209096037474d7C20402232E5C762cA` |
+| Transistors | X Layer | `0x3FA393d3081AcCff9E7989619B688235F6d3EE3F` |
 | BEM bridge | BSC | `0xa84B8D3893De6e9922f2B29bE1e1b115845F5E72` |
+| BEM | BSC | `0x5ce033B2bFCa3Af30b3e8C8457DeaF776A8b695a` |
 | BEM | X Layer | `0x60e62Efa9405d6873C5deaBD4E6CC91c25363952` |
 
-Bitcoin, ETH, ZEC and UP each settle on their own BSC book. The live UP book is `0x7aaf00Dab91e0e6dDDb6093323D0140c11C55aD3`. Its mark `0xB1e9FCCa14429b067466bd67bbF68939230d0678` reads the official pool `0xDf40529fa3E797c992272e27B811E59E5f1827Ae` and quotes that into USDT. The previous UP book `0x5f913f7AFa71c51d69F472b0fE4c3EC74b1132F8` keeps old positions and takes no new ones. UP spot also fills through that official pool. TAPE settles on its own X Layer book. The 0.20 percent on those books goes to that chain's multisig. None has an admin. An open price cannot exceed 100000. Hot spot and perps list BEM/USDT, UP/USDT, then TAPE/USDT, and the majors after that. Red-packet tasks can require a spot fill or a perpetual fill on the same day: X Layer can require FAB spot, TAPE hashrate, or a BEM, FAB or TAPE perpetual; BSC can require UP spot, or a BEM or UP perpetual.
-
-The rulebook is the whitepaper on the site: [/whitepaper](https://trade.yizhantoken.com/whitepaper). It wins over this file. If a rule changes, update the page and this README the same day.
+The mine emits 7,200 TAPE a day from deployment. It has no admin and no rate switch. The cap is 21,000,000. Circuit Punk cards are made at nft.tapeliquid.net. The same wallet then confirms identity at app.tapeliquid.net. An order still charges 0.20% until the monthly rebate is claimed.
 
 X: https://x.com/TAPELIQUID
 Telegram: https://t.me/+JN0c8XGQpIkxNTRh
-
-The fee address on the page, in the contracts, and here is `0x823b9F6A93Ac44Ce5A469823A336c15b6117054D`. The mark accepts a price only from the fee address. Each post moves at most 0.5 percent and waits at least 30 seconds. Settlement uses a 10-minute average. Spot is PancakeSwap on BSC, except OKB, which is PotatoSwap on X Layer. The desk fee is 0.20% of the input, on top of the pool fee. A Circuit Punk card is crafted and confirmed at nft.tapeliquid.net before the same wallet confirms identity at app.tapeliquid.net and trades. The desk fee then falls from 0.20% to copper 0.16% (0.14% on its main desk), silver 0.12% (0.10%), gold 0.08% (0.06%), extreme ultraviolet 0.06% (0.04%), or faux extreme ultraviolet 0.08%. The rebate is claimed once each calendar month, only during the first seven days of the next month, Singapore time, and only while the pool still has a balance. Anyone, including the project, can fund that pool. A missed week is gone. NFT sales stay at the 0.2% already in the Circuit Punk contract. Crafting locks those Circuit Punks. They are not burned and cannot be transferred while locked. After a split, the pieces thaw for 48 hours and cannot be transferred, and those ids cannot be crafted again for 30 days. The account page does not craft and does not change the 0.20% charged on an order. Identity is a personal_sign of tapeliquid-fee-pass plus the Circuit Punks that wallet holds at 0xB5ac1dddc158a639D4499aad2d8F393989D4bD34 on X Layer. The highest valid card wins. A browser confirm on the NFT site is not proof. The rebate is desk fees paid that month times (20 minus the card basis points) divided by 20. Claim once a month, only in the first seven days of the next month, Singapore time, first come first served, from a pool anyone can fund. Until that pool contract exists, show the amount and do not send it.
-
-The two perpetuals are separate contracts. The wafer and tape-out are on X Layer: minting spends OKB, tape-out burns NAND and LATCH and pays the protocol fee (0.0013 OKB), not the desk fee address. One sheet stores at most 18,000 NAND or 30,000 LATCH. A larger netlist reverts and the transistors stay put. TAPE is deployed. Its mine has no admin and emits 7,200 a day from deployment, weighted by gate count. The written schedule, a start at 1,000 and one later change to 7,200, is not in that contract. The TAPE pool and the wafer and circuit lock have no admin, no upgrade, and no rescue. An add that does not match the pool ratio refunds the extra. A circuit cannot be locked twice. Official BEM still bridges at tapeout.net/bridge. This site does not custody that bridge. Official transistor and circuit spot follow the tapeout.net snapshot and settle on BSC; the extra 0.20% is paid first and is not returned if the official fill fails. Account reads balances and prices. It does not custody. Maker rewards and points have not started.
 
 ## Run
 
@@ -50,5 +68,3 @@ npm run dev
 ```
 
 Contracts are in `contracts/`. They are not upgradeable. Do not send a key to this repository.
-# redeploy trigger Sat Nov  7 09:54:20 UTC 2026
-
