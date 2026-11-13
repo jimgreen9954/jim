@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FEE_TO, BSC_SAFE, XLAYER_SAFE } from "@/lib/chain-marks";
+import { BSC_SAFE, XLAYER_SAFE } from "@/lib/chain-marks";
 import { coinBook, deployCoin, type CoinBook } from "@/lib/perp";
 import { connectBsc } from "@/lib/bsc";
 import { connectXLayer } from "@/lib/xlayer";
@@ -37,9 +37,9 @@ export function HomeBooks({ zh }: { zh: boolean }) {
     void (async () => {
       try {
         const from = row.chain === "xlayer" ? await connectXLayer() : await connectBsc();
-        const allow = [FEE_TO, row.chain === "xlayer" ? XLAYER_SAFE : BSC_SAFE];
+        const allow = [row.chain === "xlayer" ? XLAYER_SAFE : BSC_SAFE];
         if (!allow.some((who) => who.toLowerCase() === from.toLowerCase())) {
-          setNote(zh ? "只有收费地址能签。" : "Only the fee address can sign.");
+          setNote(zh ? "只有多签钱包能部署。" : "Only the multisig can deploy.");
           return;
         }
         const { book } = await deployCoin(from, row.coin, setStep);
@@ -55,8 +55,8 @@ export function HomeBooks({ zh }: { zh: boolean }) {
         setNote(
           code === "fee"
             ? zh
-              ? "只有收费地址能签。"
-              : "Only the fee address can sign."
+              ? "只有多签钱包能部署。"
+              : "Only the multisig can deploy."
             : code === "price"
               ? zh
                 ? "标记价对不上，这一本没部署。"

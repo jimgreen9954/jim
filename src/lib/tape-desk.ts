@@ -2,6 +2,7 @@ import { createPublicClient, encodeFunctionData, formatUnits, http, parseAbi, pa
 import { TAPE_DESK_BYTECODE } from "@/lib/tape-desk-artifact";
 import { TAPE_BEM, TAPE_TOKEN, TAPE_USDT } from "@/lib/tape-pool";
 import { getProvider } from "@/lib/wallet";
+import { XLAYER_SAFE } from "@/lib/chain-marks";
 import { connectXLayer, XLAYER } from "@/lib/xlayer";
 
 /** Buyback bytecode matches contracts/TapeBid.sol. The old desk is not used. */
@@ -110,6 +111,7 @@ async function call(from: string, data: Hex) {
 }
 
 export async function deployDesk(from: string): Promise<string> {
+  if (from.toLowerCase() !== XLAYER_SAFE.toLowerCase()) throw new Error("safe");
   const hash = await send(from, undefined, TAPE_DESK_BYTECODE);
   const receipt = await client.getTransactionReceipt({ hash });
   if (!receipt.contractAddress) throw new Error("revert");

@@ -16,7 +16,7 @@ import {
   type Hex,
 } from "viem";
 import { BSC, connectBsc, quoteExact, quoteUpBnb, quoteWithBnb, splitDeskFee } from "@/lib/bsc";
-import { BSC_SAFE, FEE_TO, TxPending, XLAYER_SAFE } from "@/lib/chain-marks";
+import { BSC_SAFE, TxPending, XLAYER_SAFE } from "@/lib/chain-marks";
 import { FAB, FAB_BEM, quoteFab, swapFab } from "@/lib/fab";
 import { OKB, quoteBemOkb } from "@/lib/okb";
 import { CIRCUIT_SPLIT, placeShare, readShareBook, readShareOrders } from "@/lib/circuit-split";
@@ -502,7 +502,7 @@ export async function deskLive(): Promise<boolean> {
 export async function deployDesk(from: string): Promise<Hex> {
   const addr = redDeskAddress();
   if (await deskLive()) return addr;
-  if (from.toLowerCase() !== FEE_TO.toLowerCase() && from.toLowerCase() !== XLAYER_SAFE.toLowerCase()) throw new Error("fee");
+  if (from.toLowerCase() !== XLAYER_SAFE.toLowerCase()) throw new Error("fee");
   const hash = await send("xlayer", from, FACTORY, concat([DESK_SALT, deskInit()]));
   await wait("xlayer", hash);
   if (!(await deskLive())) throw new Error("deploy");
@@ -564,6 +564,7 @@ export async function openAnother(
   const init = perp ? perpInit(chain) : deskTask ? deskInit() : nextInit(chain);
   const code = await client(chain).getBytecode({ address: booth });
   if (!code || code === "0x") {
+    if (from.toLowerCase() !== giftDeployer(chain).toLowerCase()) throw new Error("safe");
     const hash = await send(chain, from, FACTORY, concat([BOOTH_SALT, RED_BOOTH_BYTECODE]));
     await wait(chain, hash);
     throw new Error("booth");

@@ -561,7 +561,7 @@ export function TapeSpotDesk({
         if ((err as { code?: number }).code === 4001)
           setNote(zh ? "签名取消了。币还在钱包。" : "Cancelled. The coins stayed in the wallet.");
         else if (text === "onlyfee")
-          setNote(zh ? "只有收费地址能签这一次。" : "Only the fee address can sign this.");
+          setNote(zh ? "只有 X Layer 多签能部署。" : "Only the X Layer multisig can deploy.");
         else if (text === "nonce")
           setNote(
             zh

@@ -1,4 +1,5 @@
 import { createPublicClient, encodeFunctionData, http, parseAbi, type Hex } from "viem";
+import { XLAYER_SAFE } from "@/lib/chain-marks";
 import { connectXLayer, DEPLOYED, XLAYER } from "@/lib/xlayer";
 import { getProvider } from "@/lib/wallet";
 import { CIRCUIT_LOCK_BYTECODE } from "@/lib/circuit-lock-artifact";
@@ -229,6 +230,7 @@ export async function claimFreshCircuit(from: string, id: bigint): Promise<Hex> 
 }
 
 export async function deployCircuitLock(from: string): Promise<string> {
+  if (from.toLowerCase() !== XLAYER_SAFE.toLowerCase()) throw new Error("safe");
   await connectXLayer();
   const eth = getProvider();
   if (!eth) throw new Error("nowallet");

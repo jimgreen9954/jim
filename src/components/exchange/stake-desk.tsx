@@ -15,7 +15,7 @@ import {
   type CircuitSeat,
   type LockSeat,
 } from "@/lib/tape-lock";
-import { FEE_TO } from "@/lib/bsc";
+import { FEE_TO, XLAYER_SAFE } from "@/lib/bsc";
 import { tapeText, readTapeMine, type TapeSeat } from "@/lib/tape-mine";
 import {
   readTapePool,
@@ -858,8 +858,8 @@ export function StakeDesk() {
           <div className="mt-2 border border-gold/40 px-2 py-2 text-xs leading-5">
             <p>
               {zh
-                ? "电路锁仓还没部署。收费地址签一笔之后，这一页才能锁电路。"
-                : "The circuit lock is not deployed. This page can lock a circuit after the fee address signs once."}
+                ? "电路锁仓还没部署。X Layer 多签签一笔之后，这一页才能锁电路。"
+                : "The circuit lock is not deployed. This page can lock a circuit after the X Layer multisig signs once."}
             </p>
             <button
               type="button"
@@ -871,11 +871,11 @@ export function StakeDesk() {
                   try {
                     const from = account ?? (await connectXLayer());
                     setAccount(from);
-                    if (from.toLowerCase() !== FEE_TO.toLowerCase()) {
+                    if (from.toLowerCase() !== XLAYER_SAFE.toLowerCase()) {
                       say(
                         zh
-                          ? `只有收费地址能部署。当前是 ${from}`
-                          : `Only the fee address can deploy. This wallet is ${from}`,
+                          ? `只有多签能部署。当前是 ${from}`
+                          : `Only the multisig can deploy. This wallet is ${from}`,
                         true,
                       );
                       return;

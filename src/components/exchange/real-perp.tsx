@@ -889,10 +889,10 @@ export function RealPerp({
       );
     else if (message === "nochain") setNote(c.perpNoChain);
     else if (message === "fee")
-      setNote(lang === "zh" ? "只有收费地址能部署。" : "Only the fee address can deploy.");
+      setNote(lang === "zh" ? "只有多签能部署。" : "Only the multisig can deploy.");
     else if (message === "oracle")
       setNote(
-        lang === "zh" ? "只有收费地址能写标记价。" : "Only the fee address can post the mark.",
+        lang === "zh" ? "只有多签能写标记价。" : "Only the multisig can post the mark.",
       );
     else if (chain === "xlayer" && /revert|execution|Bad/i.test(message))
       setNote(lang === "zh" ? "没开成。" : "It did not open.");

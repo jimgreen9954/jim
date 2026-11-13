@@ -11,9 +11,10 @@ import { connectBrowser, connectInjected, connectKind, currentAccount, currentCh
 import { bootGenesis } from "@/lib/genesis-desk";
 import { getTapeCode, tapeImage } from "@/lib/okx-tape";
 import { bookError, buyTapeOnSite, getTapeBook, listTapeOnSite, type BookOrder } from "@/lib/tape-book";
-import { createAbi, factoryCreateData, factoryDeployData, FACTORY, FACTORY_PLATFORM } from "@/lib/tape-factory-deploy";
+import { createAbi, factoryCreateData, factoryDeployData, FACTORY } from "@/lib/tape-factory-deploy";
 import { previewPathPrefix } from "@/lib/preview-path-prefix";
 import { TAPE_BEM, TAPE_TOKEN, TAPE_USDT } from "@/lib/tape-pool";
+import { XLAYER_SAFE } from "@/lib/chain-marks";
 import { connectXLayer, txUrl, xRpc } from "@/lib/xlayer";
 import { bootCpunk, cpunkActivity } from "@/lib/cpunk-desk";
 import { bscRpc, connectBsc } from "@/lib/bsc";
@@ -2880,8 +2881,8 @@ export function bootLaunch(host: HTMLElement): () => void {
         return;
       }
       const from = await connectXLayer();
-      if (from.toLowerCase() !== FACTORY_PLATFORM.toLowerCase()) {
-        if (msg) msg.textContent = `部署和收费都只用 ${FACTORY_PLATFORM}。请换成这个钱包再签名。`;
+      if (from.toLowerCase() !== XLAYER_SAFE.toLowerCase()) {
+        if (msg) msg.textContent = `只有多签 ${XLAYER_SAFE} 能部署。请换成这个钱包再签名。`;
         return;
       }
       const seed = parseEther((host.querySelector<HTMLInputElement>("#factory-okb")?.value ?? "").trim());

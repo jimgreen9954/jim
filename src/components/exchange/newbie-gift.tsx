@@ -44,8 +44,8 @@ export function GiftDeploy({ account, zh }: { account: string | null; zh: boolea
         setBad(true);
         setNote(
           zh
-            ? "没有部署。只有收费地址能签，Gas Limit 填 3000000。"
-            : "It did not deploy. Only the fee address can sign. Set Gas Limit to 3000000.",
+            ? "没有部署。只有对应链的多签能签，Gas Limit 填 3000000。"
+            : "It did not deploy. Only that chain's multisig can sign. Set Gas Limit to 3000000.",
         );
       })
       .finally(() => setBusy(false));

@@ -1,7 +1,7 @@
 import { createPublicClient, encodeFunctionData, http, parseAbi, type Hex } from "viem";
 import { TAPE_TERM_BYTECODE } from "@/lib/tape-term-artifact";
 import { CREATE_CALL, createCallData, createdAddress } from "@/lib/create-call";
-import { XLAYER_SAFE, FEE_TO } from "@/lib/bsc";
+import { XLAYER_SAFE } from "@/lib/bsc";
 import { TAPE_BEM, TAPE_TOKEN } from "@/lib/tape-pool";
 import { getProvider } from "@/lib/wallet";
 import { connectXLayer, XLAYER } from "@/lib/xlayer";
@@ -157,7 +157,7 @@ async function call(from: string, data: Hex) {
 }
 
 export async function deployTerm(from: string): Promise<string> {
-  if (from.toLowerCase() !== XLAYER_SAFE.toLowerCase() && from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("onlyfee");
+  if (from.toLowerCase() !== XLAYER_SAFE.toLowerCase()) throw new Error("onlyfee");
   const hash = await send(from, CREATE_CALL, createCallData(TAPE_TERM_BYTECODE));
   const receipt = await client.getTransactionReceipt({ hash });
   const landed = createdAddress(receipt.logs);

@@ -50,8 +50,8 @@ export function RiskBar({
       setNote(
         message === "fee"
           ? zh
-            ? "只有收费地址能部署。"
-            : "Only the fee address can deploy."
+            ? "只有多签能部署。"
+            : "Only the multisig can deploy."
           : zh
             ? "没有部署。"
             : "Not deployed.",

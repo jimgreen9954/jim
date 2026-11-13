@@ -13,6 +13,7 @@ import {
   type Hex,
 } from "viem";
 import { BSC, connectBsc } from "@/lib/bsc";
+import { assertSafeDeployer } from "@/lib/chain-marks";
 import { X_USDT } from "@/lib/perp";
 import { SEAL_REBATE_BYTECODE } from "@/lib/seal-rebate-artifact";
 import { getProvider } from "@/lib/wallet";
@@ -125,6 +126,7 @@ export async function deployRebate(chain: RebateChain): Promise<string> {
   const existing = await client(chain).getBytecode({ address });
   if (existing && existing !== "0x") return address;
   const from = chain === "xlayer" ? await connectXLayer() : await connectBsc();
+  assertSafeDeployer(chain, from);
   const data = concat([REBATE_SALT, initOf(chain)]);
   await send(chain, from, FACTORY, data, 8_000_000n);
   const code = await client(chain).getBytecode({ address });

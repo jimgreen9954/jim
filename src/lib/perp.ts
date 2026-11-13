@@ -1,5 +1,5 @@
 import { encodeAbiParameters, encodeFunctionData, getAddress, keccak256, stringToBytes, type Hex } from "viem";
-import { BSC, BSC_SAFE, FEE_TO, XLAYER_SAFE, bscClient, connectBsc, pretty, readBalances, units, waitReceipt } from "@/lib/bsc";
+import { BSC, BSC_SAFE, XLAYER_SAFE, bscClient, connectBsc, pretty, readBalances, units, waitReceipt } from "@/lib/bsc";
 import { CREATE_CALL, createCallData, createdAddress } from "@/lib/create-call";
 import { PERP_BYTECODE } from "@/lib/perp-artifact";
 import { RISK_BYTECODE } from "@/lib/risk-artifact";
@@ -507,7 +507,7 @@ export function pickBook(which: Desk, coin: string): string {
 /** Deploys the funding book. Stake, mine and the old perp are not called. */
 export async function deployRisk(from: string, which: Desk): Promise<string> {
   const safe = which === "xlayer" ? XLAYER_SAFE : BSC_SAFE;
-  if (from.toLowerCase() !== safe.toLowerCase() && from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("fee");
+  if (from.toLowerCase() !== safe.toLowerCase()) throw new Error("fee");
   const was = desk;
   desk = which;
   try {
@@ -565,6 +565,7 @@ export async function xReady(perp: string): Promise<boolean> {
 }
 
 export async function deployBscBook(from: string): Promise<string> {
+  if (from.toLowerCase() !== BSC_SAFE.toLowerCase()) throw new Error("fee");
   const was = desk;
   desk = "bsc";
   try {
@@ -670,6 +671,7 @@ export async function resumeDeploy(): Promise<{ address: string; hash: string }>
 }
 
 export async function deployPerp(from: string): Promise<string> {
+  if (from.toLowerCase() !== BSC_SAFE.toLowerCase()) throw new Error("fee");
   const args = encodeAbiParameters(
     [{ type: "address" }, { type: "address" }, { type: "uint256" }],
     [BSC.usdt, BSC.pool, 10n ** 18n],
@@ -1327,7 +1329,7 @@ export async function deployCoin(
 ): Promise<{ book: string; hash: Hex }> {
   const spec = COIN_SPEC[coin];
   const safe = spec.chain === "xlayer" ? XLAYER_SAFE : BSC_SAFE;
-  if (from.toLowerCase() !== safe.toLowerCase() && from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("fee");
+  if (from.toLowerCase() !== safe.toLowerCase()) throw new Error("fee");
   const was = desk;
   desk = spec.chain;
   try {
@@ -1399,7 +1401,7 @@ export async function deployCoin(
 /** One signature. The mark reads the official UP pool, then the book is opened on that mark. */
 export async function deployUpOfficial(from: string): Promise<{ mark: string; book: string }> {
   const safe = BSC_SAFE;
-  if (from.toLowerCase() !== safe.toLowerCase() && from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("fee");
+  if (from.toLowerCase() !== safe.toLowerCase()) throw new Error("fee");
   const was = desk;
   desk = "bsc";
   try {
@@ -1433,7 +1435,7 @@ export async function pokeBook(from: string, perp: string): Promise<Hex> {
 
 /** New mark from the BEM/WOKB 1% pool, then a new book. The old book cannot change its mark. */
 export async function shipXBook(from: string): Promise<{ mark: string; book: string }> {
-  if (from.toLowerCase() !== FEE_TO.toLowerCase() && from.toLowerCase() !== XLAYER_SAFE.toLowerCase()) throw new Error("fee");
+  if (from.toLowerCase() !== XLAYER_SAFE.toLowerCase()) throw new Error("fee");
   const was = desk;
   desk = "xlayer";
   try {
@@ -1519,7 +1521,7 @@ export const cancelTwapPerp = (from: string, perp: string, id: bigint) => riskCa
 export const pokeTrailPerp = (from: string, perp: string, id: bigint) => riskCall(from, perp, "pokeTrail", id);
 
 export async function deployXLayer(from: string, onStep?: (step: 1 | 2 | 3) => void): Promise<string> {
-  if (from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("oracle");
+  if (from.toLowerCase() !== XLAYER_SAFE.toLowerCase()) throw new Error("oracle");
   const was = desk;
   desk = "xlayer";
   try {
@@ -1556,7 +1558,7 @@ export async function deployXLayer(from: string, onStep?: (step: 1 | 2 | 3) => v
 
 /** Deploy a mark that keeps the last price, then the X Layer book on it. */
 export async function deployFixedX(from: string): Promise<string> {
-  if (from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("oracle");
+  if (from.toLowerCase() !== XLAYER_SAFE.toLowerCase()) throw new Error("oracle");
   const was = desk;
   desk = "xlayer";
   try {
@@ -1591,7 +1593,7 @@ export async function deployFixedX(from: string): Promise<string> {
   }
 }
 export async function deployLockedPair(from: string): Promise<{ mark: string; perp: string }> {
-  if (from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("oracle");
+  if (from.toLowerCase() !== XLAYER_SAFE.toLowerCase()) throw new Error("oracle");
   const was = desk;
   desk = "xlayer";
   try {

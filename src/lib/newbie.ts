@@ -1,5 +1,5 @@
 import { createPublicClient, encodeFunctionData, http, parseAbi, type Hex } from "viem";
-import { BSC, connectBsc, FEE_TO } from "@/lib/bsc";
+import { BSC, BSC_SAFE, connectBsc, XLAYER_SAFE } from "@/lib/bsc";
 import { GATE as LIVE_GATE } from "@/lib/gate-chain";
 import { BEM_GIFT_BYTECODE, NAND_GIFT_BYTECODE } from "@/lib/newbie-artifact";
 import { KNOWN_XPERP } from "@/lib/perp";
@@ -116,7 +116,7 @@ async function send(chain: "x" | "b", from: string, to: Hex | undefined, data: H
 }
 
 export async function deployNandGift(from: string): Promise<string> {
-  if (from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("fee");
+  if (from.toLowerCase() !== XLAYER_SAFE.toLowerCase()) throw new Error("fee");
   const hash = await send("x", from, undefined, NAND_GIFT_BYTECODE, 3_000_000n);
   const receipt = await x.getTransactionReceipt({ hash });
   if (!receipt.contractAddress) throw new Error("revert");
@@ -125,7 +125,7 @@ export async function deployNandGift(from: string): Promise<string> {
 }
 
 export async function deployBemGift(from: string): Promise<string> {
-  if (from.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("fee");
+  if (from.toLowerCase() !== BSC_SAFE.toLowerCase()) throw new Error("fee");
   const hash = await send("b", from, undefined, BEM_GIFT_BYTECODE, 3_000_000n);
   const receipt = await b.getTransactionReceipt({ hash });
   if (!receipt.contractAddress) throw new Error("revert");
