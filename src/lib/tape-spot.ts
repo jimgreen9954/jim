@@ -20,6 +20,7 @@ const abi = parseAbi([
   "function listCircuit(uint256,uint128)",
   "function cancelCircuit(uint256)",
   "function buyCircuit(uint256)",
+  "function lists(uint256) view returns (address seller, uint128 price)",
   "function book(uint8,bool,uint256) view returns (uint256 count, uint128[] price, uint128[] size, uint32[] lots)",
   "function myOrders(address) view returns (uint64[] ids, uint8[] markets, bool[] bids, uint128[] prices, uint128[] lefts)",
   "function listingCount() view returns (uint256)",
@@ -384,7 +385,24 @@ export async function cancelSpotCircuit(from: string, id: bigint) {
 }
 
 export async function buySpotCircuit(from: string, id: bigint, price: bigint) {
-  await approveErc20(from, TAPE_USDT, price);
+  const spot = spotAddress();
+  if (!spot) throw new Error("spot");
+  const row = await client.readContract({ address: spot, abi, functionName: "lists", args: [id] });
+  if (row[0] === "0x0000000000000000000000000000000000000000" || row[1] !== price) throw new Error("price");
+  const allowance = await client.readContract({
+    address: TAPE_USDT,
+    abi: erc20,
+    functionName: "allowance",
+    args: [from as Hex, spot],
+  });
+  if (allowance !== price) {
+    if (allowance > 0n) {
+      await send(from, TAPE_USDT, encodeFunctionData({ abi: erc20, functionName: "approve", args: [spot, 0n] }));
+    }
+    await send(from, TAPE_USDT, encodeFunctionData({ abi: erc20, functionName: "approve", args: [spot, price] }));
+  }
+  const again = await client.readContract({ address: spot, abi, functionName: "lists", args: [id] });
+  if (again[1] !== price) throw new Error("price");
   return call(from, encodeFunctionData({ abi, functionName: "buyCircuit", args: [id] }));
 }
 

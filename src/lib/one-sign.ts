@@ -117,14 +117,6 @@ async function atomicReady(eth: Eth, from: string, chainId: number): Promise<boo
   return ok;
 }
 
-async function txCount(eth: Eth, from: string): Promise<string | null> {
-  try {
-    return String(await eth.request({ method: "eth_getTransactionCount", params: [from, "pending"] }));
-  } catch {
-    return null;
-  }
-}
-
 async function onChain(eth: Eth, chainId: number) {
   const row = CHAINS[chainId];
   if (!row) return;
@@ -156,6 +148,14 @@ async function onChain(eth: Eth, chainId: number) {
   }
 }
 
+function unsupported(err: unknown): boolean {
+  const code = typeof err === "object" && err ? Number((err as { code?: number }).code) : NaN;
+  if (code === -32601) return true;
+  const msg = err instanceof Error ? err.message : String(err ?? "");
+  if (/timeout|timed out|already known|nonce/i.test(msg)) return false;
+  return /method not found|method not available|does not exist|not supported|unsupported method/i.test(msg);
+}
+
 async function bundled(eth: Eth, from: string, chainId: number, calls: SignedCall[]): Promise<Hex> {
   const key = `0x${chainId.toString(16)}`;
   const pack = (version: string) => ({
@@ -169,7 +169,6 @@ async function bundled(eth: Eth, from: string, chainId: number, calls: SignedCal
       value: hexVal(call.value ?? 0n),
     })),
   });
-  const before = await txCount(eth, from);
   let sent: unknown;
   for (const version of ["2.0.0", "1.0.0"]) {
     try {
@@ -177,6 +176,7 @@ async function bundled(eth: Eth, from: string, chainId: number, calls: SignedCal
       break;
     } catch (err) {
       if (rejected(err)) throw err;
+      if (!unsupported(err)) throw new Error("pending");
       sent = undefined;
     }
   }
@@ -185,35 +185,22 @@ async function bundled(eth: Eth, from: string, chainId: number, calls: SignedCal
     throw new Error("no-batch");
   }
   const id = typeof sent === "string" ? sent : (sent as { id?: string } | null)?.id;
-  if (!id) {
-    writeCap(chainId, false);
-    throw new Error("no-batch");
-  }
-  if (/^0x[a-fA-F0-9]{64}$/.test(id)) return id as Hex;
+  if (!id) throw new Error("pending");
   for (let i = 0; i < 20; i++) {
     let row: { status?: number | string; receipts?: { transactionHash?: Hex }[] };
     try {
       row = (await eth.request({ method: "wallet_getCallsStatus", params: [id] })) as typeof row;
     } catch {
-      const after = await txCount(eth, from);
-      if (before && after && before !== after) throw new Error("pending");
-      writeCap(chainId, false);
-      throw new Error("no-batch");
+      throw new Error("pending");
     }
     const hash = row?.receipts?.find((receipt) => receipt.transactionHash)?.transactionHash;
     const code = Number(row?.status);
     if (hash && (!Number.isFinite(code) || code === 200 || code === 0)) return hash;
     if (Number.isFinite(code) && code >= 500) throw new Error("reverted");
-    if (Number.isFinite(code) && code >= 400) {
-      writeCap(chainId, false);
-      throw new Error("no-batch");
-    }
+    if (Number.isFinite(code) && code >= 400) throw new Error("pending");
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
-  const after = await txCount(eth, from);
-  if (before && after && before !== after) throw new Error("pending");
-  writeCap(chainId, false);
-  throw new Error("no-batch");
+  throw new Error("pending");
 }
 
 /** One confirmation. The caller is Multicall3, so only use this when every call still works that way. */

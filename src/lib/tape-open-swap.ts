@@ -139,7 +139,7 @@ async function allow(from: string, token: Hex, spender: Hex, need: bigint) {
 }
 
 /** Swap against the open TAPE pool. Limit orders stay on the workshop book. */
-export async function swapPool(from: string, quote: PoolQuote, tapeIn: boolean, amountIn: bigint): Promise<Hex> {
+export async function swapPool(from: string, quote: PoolQuote, tapeIn: boolean, amountIn: bigint, hold = false): Promise<Hex> {
   const feeTo = await client.readContract({ address: OPEN_POOL, abi: poolAbi, functionName: "FEE_TO" });
   if (feeTo.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("fee");
   const out = await previewPool(quote, tapeIn, amountIn);
@@ -158,6 +158,7 @@ export async function swapPool(from: string, quote: PoolQuote, tapeIn: boolean, 
     encodeFunctionData({ abi: poolAbi, functionName: "swap", args: [quote, tapeIn, amountIn, minOut] }),
     value,
   );
+  if (hold) return hash;
   await wait(hash);
   rememberOpenPrint({
     t: Math.floor(Date.now() / 1000),
@@ -187,7 +188,7 @@ export async function buyOkbWithUsdt0(from: string, usdtIn: bigint): Promise<big
   const minOut = (out * 99n) / 100n;
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20);
   const before = await client.getBalance({ address: from as Hex });
-  await wait(await send(
+  const hash = await send(
     from,
     ROUTER,
     encodeFunctionData({
@@ -195,32 +196,37 @@ export async function buyOkbWithUsdt0(from: string, usdtIn: bigint): Promise<big
       functionName: "swapExactTokensForETH",
       args: [parts.swapIn, minOut, [USDT, WOKB], from as Hex, deadline],
     }),
-  ));
+  );
+  writeHop(BUY_HOP, { from, hash, before: before.toString() });
+  await wait(hash);
   const after = await client.getBalance({ address: from as Hex });
   const gained = after > before ? after - before : 0n;
-  return gained > 10n ** 14n ? gained : out;
+  const okb = gained > 10n ** 14n ? gained : out;
+  writeHop(BUY_HOP, { from, okb: okb.toString() });
+  return okb;
 }
 
 const SELL_HOP = "tl-tape-usdt-hop";
 const BUY_HOP = "tl-tape-usdt-buy";
 
-function readHop(key: string, from: string): bigint | null {
+type Hop = { from: string; hash?: string; before?: string; okb?: string; unwind?: string };
+
+function readHop(key: string, from: string): Hop | null {
   if (typeof sessionStorage === "undefined") return null;
   try {
     const raw = sessionStorage.getItem(key);
     if (!raw) return null;
-    const row = JSON.parse(raw) as { from?: string; okb?: string };
-    if (!row.from || row.from.toLowerCase() !== from.toLowerCase() || !row.okb) return null;
-    const n = BigInt(row.okb);
-    return n > 0n ? n : null;
+    const row = JSON.parse(raw) as Hop;
+    if (!row.from || row.from.toLowerCase() !== from.toLowerCase()) return null;
+    return row;
   } catch {
     return null;
   }
 }
 
-function writeHop(key: string, from: string, okb: bigint) {
+function writeHop(key: string, row: Hop) {
   if (typeof sessionStorage === "undefined") return;
-  sessionStorage.setItem(key, JSON.stringify({ from, okb: okb.toString() }));
+  sessionStorage.setItem(key, JSON.stringify(row));
 }
 
 function clearHop(key: string) {
@@ -241,6 +247,7 @@ async function unwindOkb(from: string, want: bigint): Promise<Hex> {
     args: [out * 97n / 100n, [WOKB, USDT], from as Hex, BigInt(Math.floor(Date.now() / 1000) + 60 * 20)],
   });
   const hash = await send(from, ROUTER, data, spend);
+  writeHop(SELL_HOP, { from, unwind: hash, okb: want.toString() });
   await wait(hash);
   clearHop(SELL_HOP);
   return hash;
@@ -250,10 +257,28 @@ async function unwindOkb(from: string, want: bigint): Promise<Hex> {
 export async function buyTapeWithUsdt0(from: string, usdtIn: bigint, okbIn: bigint): Promise<Hex> {
   const pending = readHop(BUY_HOP, from);
   if (pending) {
+    let okb = pending.okb ? BigInt(pending.okb) : 0n;
+    if (pending.hash && okb <= 0n) {
+      try {
+        await wait(pending.hash as Hex);
+      } catch (err) {
+        if (err instanceof Error && err.message === "reverted") clearHop(BUY_HOP);
+        throw err;
+      }
+      const after = await client.getBalance({ address: from as Hex });
+      const before = BigInt(pending.before ?? "0");
+      const gained = after > before ? after - before : 0n;
+      if (gained <= 10n ** 14n) {
+        clearHop(BUY_HOP);
+        throw new Error("leg");
+      }
+      okb = gained;
+      writeHop(BUY_HOP, { from, okb: okb.toString() });
+    }
     const bal = await client.getBalance({ address: from as Hex });
     const hold = 50_000_000_000_000n;
     const room = bal > hold ? bal - hold : 0n;
-    const spend = pending < okbIn ? pending : okbIn;
+    const spend = okb < okbIn ? okb : okbIn;
     const capped = spend < room ? spend : room;
     if (capped <= 10n ** 14n) throw new Error("leg");
     const hash = await swapPool(from, 1, false, capped);
@@ -273,19 +298,44 @@ export async function buyTapeWithUsdt0(from: string, usdtIn: bigint, okbIn: bigi
     throw new Error("next");
   }
   const got = await buyOkbWithUsdt0(from, usdtIn);
-  writeHop(BUY_HOP, from, got);
+  if (got <= 10n ** 14n) throw new Error("leg");
+  writeHop(BUY_HOP, { from, okb: got.toString() });
   throw new Error("leg");
 }
 
 /** Sell TAPE into the OKB pool, then turn that OKB into USDT0. The wallet shows OKB on the first signature. */
 export async function sellTapeForUsdt0(from: string, tapeIn: bigint): Promise<Hex> {
   const pending = readHop(SELL_HOP, from);
-  if (pending) return unwindOkb(from, pending);
+  if (pending?.unwind) {
+    await wait(pending.unwind as Hex);
+    clearHop(SELL_HOP);
+    return pending.unwind as Hex;
+  }
+  if (pending?.okb) return unwindOkb(from, BigInt(pending.okb));
+  if (pending?.hash) {
+    try {
+      await wait(pending.hash as Hex);
+    } catch (err) {
+      if (err instanceof Error && err.message === "reverted") clearHop(SELL_HOP);
+      throw err;
+    }
+    const after = await client.getBalance({ address: from as Hex });
+    const before = BigInt(pending.before ?? "0");
+    const gained = after > before ? after - before : 0n;
+    if (gained <= 10n ** 14n) {
+      clearHop(SELL_HOP);
+      throw new Error("leg");
+    }
+    writeHop(SELL_HOP, { from, okb: gained.toString() });
+    return unwindOkb(from, gained);
+  }
   const before = await client.getBalance({ address: from as Hex });
-  await swapPool(from, 1, true, tapeIn);
+  const hash = await swapPool(from, 1, true, tapeIn, true);
+  writeHop(SELL_HOP, { from, hash, before: before.toString() });
+  await wait(hash);
   const after = await client.getBalance({ address: from as Hex });
   const gained = after > before ? after - before : 0n;
   if (gained <= 10n ** 14n) throw new Error("leg");
-  writeHop(SELL_HOP, from, gained);
+  writeHop(SELL_HOP, { from, okb: gained.toString() });
   return unwindOkb(from, gained);
 }
