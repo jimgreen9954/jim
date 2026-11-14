@@ -88,8 +88,9 @@ contract DeskMark {
                 cumulatives[i] = nowCum;
                 continue;
             }
-            if (ago > nowT) revert Bad();
-            cumulatives[i] = _at(nowT - ago);
+        if (ago > nowT) revert Bad();
+        if (nowT > head.time + 1800) revert Bad();
+        cumulatives[i] = _at(nowT - ago);
         }
     }
 
@@ -142,7 +143,7 @@ contract DeskMark {
         uint8 oldestI = last;
         for (uint8 n = 1; n < count; n++) oldestI = oldestI == 0 ? SLOTS - 1 : oldestI - 1;
         Obs memory oldest = obs[oldestI];
-        if (target < oldest.time) return oldest.cum - int56(oldest.tick) * int56(uint56(oldest.time - target));
+        if (target < oldest.time) revert Bad();
         uint8 i = last;
         for (uint8 n = 0; n < count; n++) {
             Obs memory row = obs[i];

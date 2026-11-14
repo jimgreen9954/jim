@@ -25,7 +25,7 @@ import {
   type CandleFrame,
 } from "@/lib/candles";
 import { previewFrame, readCandleBook, writeCandleBook } from "@/lib/bem-ohlcv";
-import { currentAccount, onAccount, onOpenLink } from "@/lib/wallet";
+import { BSC_SAFE, XLAYER_SAFE } from "@/lib/chain-marks";
 import { useExchange } from "@/lib/exchange-store";
 import { SignCard } from "@/components/exchange/sign-card";
 import { useFeeLock } from "@/lib/fee-lock";
@@ -51,6 +51,7 @@ import {
   bookOf,
   pickBook,
   deployCoin,
+  deployCoinV2,
   pokeBook,
   liquidatePerp,
   openPerp,
@@ -893,6 +894,12 @@ export function RealPerp({
     else if (message === "oracle")
       setNote(
         lang === "zh" ? "只有多签能写标记价。" : "Only the multisig can post the mark.",
+      );
+    else if (message === "warm")
+      setNote(
+        lang === "zh"
+          ? "新合约已经在，标记价还没攒满 10 分钟。这段时间不能开仓，旧仓可以平。"
+          : "The new book is up. The mark still needs 10 minutes. Opens wait. Old positions can still be closed.",
       );
     else if (message === "halt")
       setNote(
@@ -2779,6 +2786,32 @@ export function RealPerp({
                                     ? /* @__PURE__ */ jsx("p", {
                                         className: "desk-extra",
                                         children: c.badPrice,
+                                      })
+                                    : null,
+                                  account &&
+                                  ownCoin &&
+                                  coin !== "fab" &&
+                                  account.toLowerCase() === (chain === "xlayer" ? XLAYER_SAFE : BSC_SAFE).toLowerCase()
+                                    ? /* @__PURE__ */ jsx("button", {
+                                        type: "button",
+                                        className: "min-h-11 w-full border border-line text-sm",
+                                        disabled: busy,
+                                        onClick: () => {
+                                          run(async (from) => {
+                                            const { book, hash } = await deployCoinV2(from, coin);
+                                            setPerp(book);
+                                            queueMicrotask(() => {
+                                              setBad(false);
+                                              setNote(
+                                                lang === "zh"
+                                                  ? `新合约 ${book}。别人挂 10、你吃 1，剩下的 9 还留在这张单上。标记价要攒满 10 分钟才能开仓。旧仓还在旧合约，可以平。把这行地址发我。`
+                                                  : `New book ${book}. A 10 taken for 1 leaves 9 on the quote. The mark needs 10 minutes before an open. Old positions stay on the previous book.`,
+                                              );
+                                            });
+                                            return hash;
+                                          });
+                                        },
+                                        children: lang === "zh" ? "部署新合约" : "Deploy the new book",
                                       })
                                     : null,
                                   <button

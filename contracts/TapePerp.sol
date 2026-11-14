@@ -117,6 +117,10 @@ contract TapePerp {
         return true;
     }
 
+    function bookV2() external pure returns (bool) {
+        return true;
+    }
+
     function register(bytes32 code) external {
         if (code == bytes32(0) || codeOwner[code] != address(0) || codeOf[msg.sender] != bytes32(0)) revert Bad();
         codeOwner[code] = msg.sender;
@@ -147,6 +151,7 @@ contract TapePerp {
         mark();
         _check(margin, lev);
         if (price < 1e16 || price > 100_000 ether) revert Bad();
+        _band(price);
         _take(msg.sender, margin);
         uint256 id = ++nextQuote;
         quotes[id] = Quote(msg.sender, long, uint96(margin), lev, true, uint128(price));
@@ -158,9 +163,10 @@ contract TapePerp {
         Quote memory q = quotes[quoteId];
         if (!q.open || q.user == msg.sender) revert Bad();
         _check(margin, lev);
-        quotes[quoteId].open = false;
+        _band(q.price);
         _take(msg.sender, margin);
-        _match(q, quoteId, msg.sender, !q.long, margin, lev);
+        uint256 usedQ = _match(q, quoteId, msg.sender, !q.long, margin, lev);
+        _rest(quoteId, q.user, uint256(q.margin), usedQ);
     }
 
     function cancel(uint256 quoteId) external nonReentrant {
@@ -189,6 +195,23 @@ contract TapePerp {
         if (margin < MIN_MARGIN || margin > MAX_MARGIN) revert Bad();
     }
 
+    function _band(uint256 price) internal view {
+        uint256 px = mark();
+        uint256 slip = px / 100;
+        if (price < px - slip || price > px + slip) revert Bad();
+    }
+
+    function _rest(uint256 quoteId, address maker, uint256 posted, uint256 used) internal {
+        uint256 left = posted - used;
+        if (left < MIN_MARGIN) {
+            quotes[quoteId].open = false;
+            quotes[quoteId].margin = 0;
+            if (left > 0) _pay(maker, left);
+        } else {
+            quotes[quoteId].margin = uint96(left);
+        }
+    }
+
     function _match(
         Quote memory q,
         uint256 quoteId,
@@ -196,14 +219,14 @@ contract TapePerp {
         bool takerLong,
         uint256 takerMargin,
         uint16 takerLev
-    ) internal {
+    ) internal returns (uint256 usedQ) {
         uint256 px = q.price;
         if (px == 0) revert Bad();
         uint256 baseQ = uint256(q.margin) * q.lev * 1e18 / px;
         uint256 baseT = takerMargin * takerLev * 1e18 / px;
         uint256 base = baseQ < baseT ? baseQ : baseT;
         if (base == 0) revert Bad();
-        uint256 usedQ = base * px / (uint256(q.lev) * 1e18);
+        usedQ = base * px / (uint256(q.lev) * 1e18);
         uint256 usedT = base * px / (uint256(takerLev) * 1e18);
         if (usedQ > q.margin || usedT > takerMargin) revert Bad();
         uint256 feeQ = _feeSplit(q.user, usedQ * FEE_NUM / FEE_DEN);
@@ -218,7 +241,6 @@ contract TapePerp {
         uint16 levS = takerLong ? q.lev : takerLev;
         uint256 id = ++nextDeal;
         deals[id] = Deal(long, short, uint96(marginL), uint96(marginS), uint128(base), uint128(px), true, levL, levS);
-        if (q.margin > usedQ) _pay(q.user, uint256(q.margin) - usedQ);
         if (takerMargin > usedT) _pay(taker, takerMargin - usedT);
         emit Matched(id, quoteId, long, short, base, px, feeQ + feeT);
     }

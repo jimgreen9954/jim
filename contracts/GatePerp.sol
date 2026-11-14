@@ -166,6 +166,7 @@ contract GatePerp {
         if (market > 5) revert Bad();
         markOf(market);
         _check(margin, lev, price);
+        _band(market, price);
         _take(msg.sender, margin);
         uint256 id = ++nextQuote;
         quotes[id] = Quote(msg.sender, market, long, uint96(margin), lev, true, uint128(price));
@@ -176,9 +177,17 @@ contract GatePerp {
         if (!q.open || q.user == msg.sender) revert Bad();
         markOf(q.market);
         _check(margin, lev, q.price);
-        quotes[quoteId].open = false;
+        _band(q.market, q.price);
         _take(msg.sender, margin);
-        _match(q, msg.sender, !q.long, margin, lev);
+        uint256 usedQ = _match(q, msg.sender, !q.long, margin, lev);
+        uint256 left = uint256(q.margin) - usedQ;
+        if (left < MIN_MARGIN) {
+            quotes[quoteId].open = false;
+            quotes[quoteId].margin = 0;
+            if (left > 0) _pay(q.user, left);
+        } else {
+            quotes[quoteId].margin = uint96(left);
+        }
     }
 
     function cancel(uint256 quoteId) external nonReentrant {
@@ -201,13 +210,23 @@ contract GatePerp {
         if (price == 0 || price > 1000 ether) revert Bad();
     }
 
-    function _match(Quote memory q, address taker, bool takerLong, uint256 takerMargin, uint16 takerLev) internal {
+    function _band(uint8 market, uint256 price) internal view {
+        uint256 px = markOf(market);
+        uint256 slip = px / 100;
+        if (px == 0 || price < px - slip || price > px + slip) revert Bad();
+    }
+
+    function bookV2() external pure returns (bool) {
+        return true;
+    }
+
+    function _match(Quote memory q, address taker, bool takerLong, uint256 takerMargin, uint16 takerLev) internal returns (uint256 usedQ) {
         uint256 px = q.price;
         uint256 baseQ = uint256(q.margin) * q.lev * 1e18 / px;
         uint256 baseT = takerMargin * takerLev * 1e18 / px;
         uint256 base = baseQ < baseT ? baseQ : baseT;
         if (base == 0) revert Bad();
-        uint256 usedQ = base * px / (uint256(q.lev) * 1e18);
+        usedQ = base * px / (uint256(q.lev) * 1e18);
         uint256 usedT = base * px / (uint256(takerLev) * 1e18);
         uint256 feeQ = _feeSplit(q.user, usedQ * FEE_NUM / FEE_DEN);
         uint256 feeT = _feeSplit(taker, usedT * FEE_NUM / FEE_DEN);
@@ -226,7 +245,6 @@ contract GatePerp {
             takerLong ? takerLev : q.lev,
             takerLong ? q.lev : takerLev
         );
-        if (q.margin > usedQ) _pay(q.user, uint256(q.margin) - usedQ);
         if (takerMargin > usedT) _pay(taker, takerMargin - usedT);
     }
 

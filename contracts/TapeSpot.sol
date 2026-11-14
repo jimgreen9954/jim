@@ -138,9 +138,14 @@ contract TapeSpot {
         emit Delisted(id, msg.sender);
     }
 
-    function buyCircuit(uint256 id) external lock {
+    function spotV2() external pure returns (bool) {
+        return true;
+    }
+
+    function buyCircuit(uint256 id, uint128 maxPrice) external lock {
         Listing memory row = lists[id];
         require(row.seller != address(0) && row.seller != msg.sender, "list");
+        require(maxPrice > 0 && row.price <= maxPrice, "price");
         uint256 fee = uint256(row.price) * FEE_BPS / 10000;
         require(fee > 0 && fee < row.price, "fee");
         _forget(id);

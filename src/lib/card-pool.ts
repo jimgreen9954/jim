@@ -155,8 +155,28 @@ export async function withdrawPool(chain: PoolChain, from: string, text: string)
   return hash;
 }
 
-export async function claimPool(_chain: PoolChain, _from: string, _month: number, _bps: DeskBps): Promise<Hex> {
-  throw new Error("halt");
+export async function claimPool(chain: PoolChain, from: string, month: number, _bps: DeskBps): Promise<Hex> {
+  const pool = CARD_POOL[chain];
+  let fresh = false;
+  try {
+    fresh = await client(chain).readContract({
+      address: pool,
+      abi: [{ name: "poolV2", type: "function", stateMutability: "pure", inputs: [], outputs: [{ type: "bool" }] }] as const,
+      functionName: "poolV2",
+    });
+  } catch {
+    fresh = false;
+  }
+  if (!fresh) throw new Error("halt");
+  const copper = [16, 16, 16, 16] as DeskBps;
+  const hash = await send(
+    chain,
+    from,
+    pool,
+    encodeFunctionData({ abi: CARD_POOL_ABI, functionName: "claim", args: [BigInt(month), copper] }),
+  );
+  await wait(chain, hash);
+  return hash;
 }
 
 /** Pulls the multisig share, records that amount, forwards all of it. Returns false if this pool is not deployed. */

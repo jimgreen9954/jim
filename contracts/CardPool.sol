@@ -58,9 +58,14 @@ contract CardPool {
         _push(safe, amount);
     }
 
+    function poolV2() external pure returns (bool) {
+        return true;
+    }
+
     function claim(uint256 month, uint16[4] calldata bps) external {
         require(!didClaim[msg.sender][month], "once");
         require(inWindow(month), "window");
+        for (uint256 i; i < 4; i++) require(bps[i] == 16, "tier");
         _bps(bps);
         uint256 owed = _owed(msg.sender, month, bps);
         require(owed > 0, "none");

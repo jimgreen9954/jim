@@ -146,6 +146,7 @@ contract TapeRisk {
     function priced() external pure returns (bool) { return true; }
     function rebates() external pure returns (bool) { return true; }
     function riskBook() external pure returns (bool) { return true; }
+    function bookV2() external pure returns (bool) { return true; }
 
     /// 8h rate, 1e18 = 100%. Positive means longs pay shorts. Capped at 0.05%.
     function fundingRate() public view returns (int256) {
@@ -185,6 +186,7 @@ contract TapeRisk {
         mark();
         _check(margin, lev);
         if (price < 1e16 || price > 100_000 ether) revert Bad();
+        _band(price);
         _take(msg.sender, margin);
         uint256 id = ++nextQuote;
         quotes[id] = Quote(msg.sender, long, uint96(margin), lev, true, uint128(price));
@@ -196,9 +198,10 @@ contract TapeRisk {
         Quote memory q = quotes[quoteId];
         if (!q.open || q.user == msg.sender) revert Bad();
         _check(margin, lev);
-        quotes[quoteId].open = false;
+        _band(q.price);
         _take(msg.sender, margin);
-        _match(q, quoteId, msg.sender, !q.long, margin, lev);
+        uint256 usedQ = _match(q, quoteId, msg.sender, !q.long, margin, lev);
+        _rest(quoteId, q.user, uint256(q.margin), usedQ);
     }
 
     function cancel(uint256 quoteId) external nonReentrant {
@@ -216,6 +219,7 @@ contract TapeRisk {
         mark();
         _check(margin, lev);
         if (price < 1e16 || price > 100_000 ether) revert Bad();
+        _band(price);
         if (_crossed(long, price)) revert Bad();
         _take(msg.sender, margin);
         uint256 id = ++nextQuote;
@@ -235,6 +239,7 @@ contract TapeRisk {
         for (uint8 i = 0; i < count; i++) {
             uint256 px = lo + (hi - lo) * i / (count - 1);
             if (px < 1e16 || px > 100_000 ether) revert Bad();
+            _band(px);
             uint256 id = ++nextQuote;
             quotes[id] = Quote(msg.sender, long, uint96(each), lev, true, uint128(px));
             emit Posted(id, msg.sender, long, each, lev, px);
@@ -343,14 +348,32 @@ contract TapeRisk {
         if (margin < MIN_MARGIN || margin > MAX_MARGIN) revert Bad();
     }
 
-    function _match(Quote memory q, uint256 quoteId, address taker, bool takerLong, uint256 takerMargin, uint16 takerLev) internal {
+    function _band(uint256 price) internal view {
+        uint256 px = mark();
+        uint256 slip = px / 100;
+        if (price < px - slip || price > px + slip) revert Bad();
+    }
+
+    /// A smaller take leaves the unused margin on the same quote. Dust below the minimum is returned.
+    function _rest(uint256 quoteId, address maker, uint256 posted, uint256 used) internal {
+        uint256 left = posted - used;
+        if (left < MIN_MARGIN) {
+            quotes[quoteId].open = false;
+            quotes[quoteId].margin = 0;
+            if (left > 0) _pay(maker, left);
+        } else {
+            quotes[quoteId].margin = uint96(left);
+        }
+    }
+
+    function _match(Quote memory q, uint256 quoteId, address taker, bool takerLong, uint256 takerMargin, uint16 takerLev) internal returns (uint256 usedQ) {
         uint256 px = q.price;
         if (px == 0) revert Bad();
         uint256 baseQ = uint256(q.margin) * q.lev * 1e18 / px;
         uint256 baseT = takerMargin * takerLev * 1e18 / px;
         uint256 base = baseQ < baseT ? baseQ : baseT;
         if (base == 0) revert Bad();
-        uint256 usedQ = base * px / (uint256(q.lev) * 1e18);
+        usedQ = base * px / (uint256(q.lev) * 1e18);
         uint256 usedT = base * px / (uint256(takerLev) * 1e18);
         if (usedQ > q.margin || usedT > takerMargin) revert Bad();
         uint256 feeQ = _feeSplit(q.user, usedQ * FEE_NUM / FEE_DEN);
@@ -363,7 +386,6 @@ contract TapeRisk {
         deals[id] = Deal(long, short, uint96(takerLong ? usedT - feeT : usedQ - feeQ), uint96(takerLong ? usedQ - feeQ : usedT - feeT), uint128(base), uint128(px), true, levL, levS);
         fundedAt[id] = uint32(block.timestamp);
         lastPrice = px;
-        if (q.margin > usedQ) _pay(q.user, uint256(q.margin) - usedQ);
         if (takerMargin > usedT) _pay(taker, takerMargin - usedT);
         emit Matched(id, quoteId, long, short, base, px, feeQ + feeT);
     }
@@ -445,15 +467,15 @@ contract TapeRisk {
         uint256 bounty;
         if (mustLiq) {
             (bounty, eqL, eqS) = _slice(eqL, eqS, weakL, weakS);
+            (uint256 gap, bool winnerLong) = _gap(d, px);
+            uint256 cover = gap > insurance ? insurance : gap;
+            insurance -= cover;
+            uint256 adl;
+            if (gap > cover) adl = _adl(id, winnerLong, gap - cover, px);
+            if (winnerLong) eqL += cover + adl;
+            else eqS += cover + adl;
+            if (cover + adl > 0) emit Covered(id, cover, adl);
         }
-        (uint256 gap, bool winnerLong) = _gap(d, px);
-        uint256 cover = gap > insurance ? insurance : gap;
-        insurance -= cover;
-        uint256 adl;
-        if (mustLiq && gap > cover) adl = _adl(id, winnerLong, gap - cover, px);
-        if (winnerLong) eqL += cover + adl;
-        else eqS += cover + adl;
-        if (cover + adl > 0) emit Covered(id, cover, adl);
         if (bounty > 0) _pay(msg.sender, bounty);
         _pay(d.long, eqL);
         _pay(d.short, eqS);
