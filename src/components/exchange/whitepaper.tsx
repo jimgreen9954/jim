@@ -35,6 +35,7 @@ const zhBody: Section[] = [
       "练习只存在于本机浏览器，不进入上述合约。止盈与止损要求本页保持打开，并由钱包完成签名。拒签之后不会自动再次请求，需要再次提交。",
       "代码仓库公开，不等于已经通过独立审计。开仓前应以本页与钱包中的合约地址核对。",
       "页顶红条是取消旧交易授权。旧合约 0xC5A63E4c37c23F97558673731196abC30FBFa659 不再使用。网站不再部署它，也不再授权给它。授过的人要在这一条上取消，BSC 和 X Layer 各一次。新合约只能由该链多签部署。",
+      "永续新开仓、吃单、晶体管新开仓、电路买入和返佣领取先停。已有仓位可以平，挂单可以撤，电路可以撤下自己的卖单。现货兑换照旧。停的原因是保险赔付、标记价和返佣等级还不能在已部署的合约里改。",
     ],
   },
   {
@@ -253,6 +254,7 @@ const en: Section[] = [
       "Practice remains in this browser and does not enter those contracts. A take-profit or stop-loss requires this page to stay open and a wallet signature. After a rejection, the wallet is not prompted again until the order is submitted again.",
       "A public repository is not an independent audit. Before opening a position, match this page with the contract address shown in the wallet.",
       "The red bar at the top cancels the old trade approval. Contract 0xC5A63E4c37c23F97558673731196abC30FBFa659 is no longer used. The site does not deploy it and does not approve it. A wallet that approved it cancels once on BSC and once on X Layer. A new contract can be deployed only by that chain's multisig.",
+      "New perpetual opens, takes, transistor opens, circuit buys and rebate claims are paused. Open positions can still be closed, resting orders cancelled, and your own circuit listing taken down. Spot swaps stay. The pause is because insurance, the mark and the rebate tier cannot be changed inside the contracts already deployed.",
     ],
   },
   {

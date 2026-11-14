@@ -155,18 +155,8 @@ export async function withdrawPool(chain: PoolChain, from: string, text: string)
   return hash;
 }
 
-export async function claimPool(chain: PoolChain, from: string, month: number, bps: DeskBps): Promise<Hex> {
-  const pool = CARD_POOL[chain];
-  if (!(await poolCode(chain))) throw new Error("deploy");
-  const args = bps.map((n) => n) as DeskBps;
-  const hash = await send(
-    chain,
-    from,
-    pool,
-    encodeFunctionData({ abi: CARD_POOL_ABI, functionName: "claim", args: [BigInt(month), args] }),
-  );
-  await wait(chain, hash);
-  return hash;
+export async function claimPool(_chain: PoolChain, _from: string, _month: number, _bps: DeskBps): Promise<Hex> {
+  throw new Error("halt");
 }
 
 /** Pulls the multisig share, records that amount, forwards all of it. Returns false if this pool is not deployed. */

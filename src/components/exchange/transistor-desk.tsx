@@ -196,11 +196,16 @@ export function TransistorDesk() {
       setNote(
         zh ? "已挂上。对手来了才会成交。" : "Posted. It fills when someone takes the other side.",
       );
-    } catch {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
       setNote(
-        zh
-          ? "没有开成。十分钟均价还没写满，或保证金不够。"
-          : "It did not open. The ten-minute average may not be ready, or the margin is short.",
+        message === "halt"
+          ? zh
+            ? "晶体管新开仓先停。已有仓可以平，挂单可以撤。"
+            : "New transistor opens are paused. Open positions can still be closed, and resting orders cancelled."
+          : zh
+            ? "没有开成。十分钟均价还没写满，或保证金不够。"
+            : "It did not open. The ten-minute average may not be ready, or the margin is short.",
       );
     } finally {
       setBusy(false);
@@ -217,11 +222,16 @@ export function TransistorDesk() {
       setOrders(next.orders);
       setDeals(next.deals);
       setNote(zh ? "已吃到。" : "Taken.");
-    } catch {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
       setNote(
-        zh
-          ? "没有吃成。十分钟均价还没写满，或保证金不够。"
-          : "The take did not fill. The average may not be ready, or the margin is short.",
+        message === "halt"
+          ? zh
+            ? "晶体管新开仓先停。已有仓可以平，挂单可以撤。"
+            : "New transistor opens are paused. Open positions can still be closed, and resting orders cancelled."
+          : zh
+            ? "没有吃成。十分钟均价还没写满，或保证金不够。"
+            : "The take did not fill. The average may not be ready, or the margin is short.",
       );
     } finally {
       setBusy(false);

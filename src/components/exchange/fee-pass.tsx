@@ -104,7 +104,13 @@ export function FeePass({ account, zh }: { account: string | null; zh: boolean }
   const hold = (err: unknown) => {
     const message = err instanceof Error ? err.message : "";
     setBad(true);
-    if (message === "safe")
+    if (message === "halt")
+      setNote(
+        zh
+          ? "返佣领取先停。链上还不能核对卡的等级，不能按自报费率领。"
+          : "Rebate claims are paused. The contract cannot check the card tier.",
+      );
+    else if (message === "safe")
       setNote(
         zh ? "部署要昨天的多签钱包来签。" : "Deploy has to be signed by yesterday's multisig.",
       );

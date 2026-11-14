@@ -894,6 +894,12 @@ export function RealPerp({
       setNote(
         lang === "zh" ? "只有多签能写标记价。" : "Only the multisig can post the mark.",
       );
+    else if (message === "halt")
+      setNote(
+        lang === "zh"
+          ? "新开仓先停。已有仓位可以平仓，挂单可以撤。保险和标记价还没换新合约。"
+          : "New opens are paused. Open positions can still be closed, and resting orders can be cancelled.",
+      );
     else if (chain === "xlayer" && /revert|execution|Bad/i.test(message))
       setNote(lang === "zh" ? "没开成。" : "It did not open.");
     else if (code === 4001) setNote(c.walletReject);

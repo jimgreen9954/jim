@@ -315,32 +315,12 @@ function marginOf(chain: VaultChain, margin: string): bigint {
   return amount;
 }
 
-export async function openVault(chain: VaultChain, long: boolean, margin: string, lev: number, price: string): Promise<void> {
-  if (lev < 1 || lev > 1000) throw new Error("lev");
-  const amount = marginOf(chain, margin);
-  const px = units(price, 18);
-  if (px < 10n ** 16n || px > 100_000n * 10n ** 18n) throw new Error("price");
-  const from = await signer(chain);
-  if (from.toLowerCase() !== vaultLeader(chain).toLowerCase()) throw new Error("leader");
-  const data = encodeFunctionData({
-    abi: vaultAbi,
-    functionName: "open",
-    args: [long, amount, lev, px],
-  });
-  await wait(chain, await send(from, vaultAddress(chain), data));
+export async function openVault(_chain: VaultChain, _long: boolean, _margin: string, _lev: number, _price: string): Promise<void> {
+  throw new Error("halt");
 }
 
-export async function takeVault(chain: VaultChain, quoteId: bigint, margin: string, lev: number): Promise<void> {
-  if (lev < 1 || lev > 1000) throw new Error("lev");
-  const amount = marginOf(chain, margin);
-  const from = await signer(chain);
-  if (from.toLowerCase() !== vaultLeader(chain).toLowerCase()) throw new Error("leader");
-  const data = encodeFunctionData({
-    abi: vaultAbi,
-    functionName: "take",
-    args: [quoteId, amount, lev],
-  });
-  await wait(chain, await send(from, vaultAddress(chain), data));
+export async function takeVault(_chain: VaultChain, _quoteId: bigint, _margin: string, _lev: number): Promise<void> {
+  throw new Error("halt");
 }
 
 export async function cancelVault(chain: VaultChain, quoteId: bigint): Promise<void> {

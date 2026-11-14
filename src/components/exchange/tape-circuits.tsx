@@ -351,7 +351,11 @@ export function TapeCircuits({ zh }: { zh: boolean }) {
         const text = err instanceof Error ? err.message : "";
         setBad(true);
         setNote(
-          /4001|rejected|denied/i.test(text)
+          text === "halt"
+            ? zh
+              ? "电路买入先停。合约还不能把价格锁进这一笔。撤下自己的挂单不受影响。"
+              : "Circuit buys are paused. The contract cannot lock the price into the purchase. Cancelling your own listing still works."
+            : /4001|rejected|denied/i.test(text)
             ? zh
               ? "签名取消了。"
               : "Cancelled."
