@@ -88,6 +88,7 @@ import { readXBem, xCap } from "@/lib/okb";
 import { SideRail } from "@/components/exchange/side-rail";
 import { fundingPreview, pct } from "@/lib/risk-rules";
 import { fabUsd } from "@/lib/fab";
+import { currentAccount, onAccount, onOpenLink } from "@/lib/wallet";
 
 function short(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;

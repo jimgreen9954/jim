@@ -49,11 +49,20 @@ export type LendAsset = "gas" | "tape" | "bem";
 
 const PIN: Partial<Record<`${LendChain}:${LendAsset}`, Hex>> = {
   "xlayer:gas": "0x57228158cba08c61710ab2644e583c328ec86ea7",
-  "xlayer:tape": "0x425285da21ed3eabe64550d1be7dcabcf6f9e851",
-  "xlayer:bem": "0x5ed8551f90acc6395810d8274b019bf13ef1f696",
+  "xlayer:tape": "0xa49970ffafa28a0e596745e08993df611170f96f",
+  "xlayer:bem": "0x8d3074bdf9412d77269f59cc506e318e5da27914",
   "bsc:gas": "0xd8d981d32b12ea85b739bb667946975d25b0ab53",
   "bsc:bem": "0xd2c7150f7779ded403c3f81a68dab5164b54df28",
 };
+
+const PRIOR: Partial<Record<`${LendChain}:${LendAsset}`, Hex>> = {
+  "xlayer:tape": "0x425285da21ed3eabe64550d1be7dcabcf6f9e851",
+  "xlayer:bem": "0x5ed8551f90acc6395810d8274b019bf13ef1f696",
+};
+
+export function priorLend(chain: LendChain, asset: LendAsset): Hex | null {
+  return PRIOR[`${chain}:${asset}`] ?? null;
+}
 
 export function lendChoices(chain: LendChain): LendAsset[] {
   return chain === "xlayer" ? ["gas", "tape", "bem"] : ["gas", "bem"];
@@ -215,9 +224,9 @@ function empty(chain: LendChain): LendView {
   };
 }
 
-export async function readLend(chain: LendChain, asset: LendAsset, account: string | null): Promise<LendView> {
+export async function readLend(chain: LendChain, asset: LendAsset, account: string | null, book?: Hex | null): Promise<LendView> {
   const spec = lendSpec(chain, asset);
-  const lend = lendAddress(chain, asset);
+  const lend = book === undefined ? lendAddress(chain, asset) : book;
   const who = (account || ZERO) as Hex;
   const [walletUsdt, walletGas, walletColl] = await Promise.all([
     read<bigint>(chain, spec.usdt, "balanceOf", [who], erc20).catch(() => 0n),
@@ -309,7 +318,8 @@ async function allowToken(chain: LendChain, from: string, token: Hex, amount: bi
   await wait(chain, await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [lend, amount] })));
 }
 
-function need(chain: LendChain, asset: LendAsset): Hex {
+function need(chain: LendChain, asset: LendAsset, book?: Hex): Hex {
+  if (book) return book;
   const lend = lendAddress(chain, asset);
   if (!lend) throw new Error("live");
   return lend;
@@ -378,7 +388,7 @@ export async function deployLend(chain: LendChain, asset: LendAsset): Promise<st
   const inner = createCallData(init);
   const hash =
     who === spec.safe.toLowerCase()
-      ? await send(from, CREATE_CALL, inner, 0n, 4_000_000n)
+      ? await send(from, CREATE_CALL, inner, 0n, 8_000_000n)
       : await sendSafe(chain, spec.safe, spec.chainId, from, inner);
   const receipt = await wait(chain, hash);
   const landed = born(receipt.logs);
@@ -493,12 +503,12 @@ export async function depositLend(chain: LendChain, asset: LendAsset, amount: st
   await wait(chain, await send(from, lend, encodeFunctionData({ abi, functionName: "deposit", args: [qty] })));
 }
 
-export async function withdrawLend(chain: LendChain, asset: LendAsset, amount: string) {
+export async function withdrawLend(chain: LendChain, asset: LendAsset, amount: string, book?: Hex) {
   const spec = lendSpec(chain, asset);
   const qty = units(amount, spec.usdtDec);
   if (qty === 0n) throw new Error("amount");
   const from = await signer(chain);
-  const lend = need(chain, asset);
+  const lend = need(chain, asset, book);
   const [supply, haveShares, total, poolAssets, poolCash] = await Promise.all([
     read<bigint>(chain, lend, "supplyOf", [from as Hex]),
     read<bigint>(chain, lend, "shares", [from as Hex]),
@@ -533,12 +543,12 @@ export async function lockLend(chain: LendChain, asset: LendAsset, amount: strin
   await wait(chain, await send(from, lend, encodeFunctionData({ abi, functionName: "lock", args: [qty] })));
 }
 
-export async function unlockLend(chain: LendChain, asset: LendAsset, amount: string) {
+export async function unlockLend(chain: LendChain, asset: LendAsset, amount: string, book?: Hex) {
   const spec = lendSpec(chain, asset);
   const qty = units(amount, spec.collDec);
   if (qty === 0n) throw new Error("amount");
   const from = await signer(chain);
-  await wait(chain, await send(from, need(chain, asset), encodeFunctionData({ abi, functionName: "unlock", args: [qty] })));
+  await wait(chain, await send(from, need(chain, asset, book), encodeFunctionData({ abi, functionName: "unlock", args: [qty] })));
 }
 
 export async function borrowLend(chain: LendChain, asset: LendAsset, amount: string) {
@@ -560,14 +570,14 @@ export async function borrowLend(chain: LendChain, asset: LendAsset, amount: str
   await wait(chain, await send(from, lend, encodeFunctionData({ abi, functionName: "borrow", args: [qty] })));
 }
 
-export async function repayLend(chain: LendChain, asset: LendAsset, amount: string) {
+export async function repayLend(chain: LendChain, asset: LendAsset, amount: string, book?: Hex) {
   const spec = lendSpec(chain, asset);
   const qty = units(amount, spec.usdtDec);
   if (qty === 0n) throw new Error("amount");
   const from = await signer(chain);
   const have = await read<bigint>(chain, spec.usdt, "balanceOf", [from as Hex], erc20);
   if (have < qty) throw new Error("usdt");
-  const lend = need(chain, asset);
+  const lend = need(chain, asset, book);
   await allowToken(chain, from, spec.usdt, qty, lend);
   await wait(chain, await send(from, lend, encodeFunctionData({ abi, functionName: "repay", args: [qty] })));
 }

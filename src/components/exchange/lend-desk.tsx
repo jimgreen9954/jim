@@ -15,6 +15,7 @@ import {
   liquidateLend,
   lockLend,
   pokeLend,
+  priorLend,
   readDebtors,
   readLend,
   repayLend,
@@ -59,7 +60,8 @@ export function LendDesk({ zh, account }: { zh: boolean; account: string | null 
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const [bad, setBad] = useState(false);
-  const [seats, setSeats] = useState<{ chain: LendChain; asset: LendAsset; view: LendView }[]>([]);
+  const [seats, setSeats] = useState<{ chain: LendChain; asset: LendAsset; view: LendView; prior: boolean }[]>([]);
+  const [prior, setPrior] = useState(false);
   const market = lendSpec(chain, asset);
   const collMode = mode === "lock" || mode === "free";
   const live = Boolean(lendAddress(chain, asset));
@@ -67,7 +69,7 @@ export function LendDesk({ zh, account }: { zh: boolean; account: string | null 
   useEffect(() => {
     let dead = false;
     const pull = () => {
-      readLend(chain, asset, account)
+      readLend(chain, asset, account, prior ? priorLend(chain, asset) : undefined)
         .then((row) => {
           if (!dead) setView(row);
         })
@@ -81,7 +83,7 @@ export function LendDesk({ zh, account }: { zh: boolean; account: string | null 
       dead = true;
       window.clearInterval(id);
     };
-  }, [chain, asset, account, busy]);
+  }, [chain, asset, account, busy, prior]);
 
   useEffect(() => {
     if (!account) {
@@ -93,15 +95,22 @@ export function LendDesk({ zh, account }: { zh: boolean; account: string | null 
       const jobs = (["xlayer", "bsc"] as const).flatMap((id) =>
         lendChoices(id).map((next) =>
           readLend(id, next, account)
-            .then((row) => ({ chain: id, asset: next, view: row }))
+            .then((row) => ({ chain: id, asset: next, view: row, prior: false }))
             .catch(() => null),
         ),
       );
-      Promise.all(jobs).then((rows) => {
+      const old = (["tape", "bem"] as const).map((next) => {
+        const book = priorLend("xlayer", next);
+        if (!book) return Promise.resolve(null);
+        return readLend("xlayer", next, account, book)
+          .then((row) => ({ chain: "xlayer" as const, asset: next, view: row, prior: true }))
+          .catch(() => null);
+      });
+      Promise.all([...jobs, ...old]).then((rows) => {
         if (dead) return;
         setSeats(
           rows.filter(
-            (row): row is { chain: LendChain; asset: LendAsset; view: LendView } =>
+            (row): row is { chain: LendChain; asset: LendAsset; view: LendView; prior: boolean } =>
               Boolean(row && row.view.live && (row.view.supply > 0n || row.view.posted > 0n || row.view.debt > 0n)),
           ),
         );
@@ -149,12 +158,14 @@ export function LendDesk({ zh, account }: { zh: boolean; account: string | null 
   })();
 
   const act = () => {
+    const book = prior ? priorLend(chain, asset) ?? undefined : undefined;
+    if (prior && (mode === "in" || mode === "lock" || mode === "borrow")) throw new Error("live");
     if (mode === "in") return depositLend(chain, asset, amount);
-    if (mode === "out") return withdrawLend(chain, asset, amount);
+    if (mode === "out") return withdrawLend(chain, asset, amount, book);
     if (mode === "lock") return lockLend(chain, asset, amount);
-    if (mode === "free") return unlockLend(chain, asset, amount);
+    if (mode === "free") return unlockLend(chain, asset, amount, book);
     if (mode === "borrow") return borrowLend(chain, asset, amount);
-    return repayLend(chain, asset, amount);
+    return repayLend(chain, asset, amount, book);
   };
   const book = view ? positionOf(chain, asset, view) : null;
   const goRepay = () => {
@@ -176,6 +187,7 @@ export function LendDesk({ zh, account }: { zh: boolean; account: string | null 
                 className={`min-h-9 px-2 text-xs ${chain === id ? "bg-foil text-ink" : "text-ink/60"}`}
                 onClick={() => {
                   setChain(id);
+                  setPrior(false);
                   if (id === "bsc" && asset === "tape") setAsset("gas");
                 }}
               >
@@ -190,7 +202,10 @@ export function LendDesk({ zh, account }: { zh: boolean; account: string | null 
               key={id}
               type="button"
               className={`min-h-9 px-2 text-xs ${asset === id ? "bg-ink text-paper" : "text-ink/60"}`}
-              onClick={() => setAsset(id)}
+              onClick={() => {
+                setAsset(id);
+                setPrior(false);
+              }}
             >
               {id === "gas" ? marketLabel(chain) : id === "tape" ? "TAPE" : "BEM"}
             </button>
@@ -277,19 +292,22 @@ export function LendDesk({ zh, account }: { zh: boolean; account: string | null 
             <ul className="mt-1">
               {seats.map((seat) => {
                 const row = positionOf(seat.chain, seat.asset, seat.view);
-                const on = seat.chain === chain && seat.asset === asset;
+                const on = seat.chain === chain && seat.asset === asset && seat.prior === prior;
                 return (
-                  <li key={`${seat.chain}-${seat.asset}`} className="border-t border-gold/20 py-2 text-xs first:border-t-0">
+                  <li key={`${seat.chain}-${seat.asset}-${seat.prior ? "old" : "new"}`} className="border-t border-gold/20 py-2 text-xs first:border-t-0">
                     <button
                       type="button"
                       className={`text-left ${on ? "text-ink" : "text-ink/70"}`}
                       onClick={() => {
                         setChain(seat.chain);
                         setAsset(seat.asset);
+                        setPrior(seat.prior);
+                        if (seat.prior && (mode === "in" || mode === "lock" || mode === "borrow")) setMode("out");
                       }}
                     >
                       <span className="font-mono">
                         {seat.chain === "xlayer" ? "X Layer" : "BSC"} · {assetName(seat.chain, seat.asset)}
+                        {seat.prior ? (zh ? " · 旧池" : " · previous") : ""}
                       </span>
                       {seat.view.supply > 0n ? (
                         <span className="mt-0.5 block">
@@ -328,7 +346,13 @@ export function LendDesk({ zh, account }: { zh: boolean; account: string | null 
             ["borrow", zh ? "借入" : "Borrow"],
             ["repay", zh ? "还款" : "Repay"],
           ] as const).map(([id, label]) => (
-            <button key={id} type="button" className={`min-h-9 px-2 text-xs ${mode === id ? "bg-ink text-paper" : "text-ink/60"}`} onClick={() => setMode(id)}>
+            <button
+              key={id}
+              type="button"
+              disabled={prior && (id === "in" || id === "lock" || id === "borrow")}
+              className={`min-h-9 px-2 text-xs ${mode === id ? "bg-ink text-paper" : "text-ink/60"} disabled:opacity-30`}
+              onClick={() => setMode(id)}
+            >
               {label}
             </button>
           ))}
@@ -365,6 +389,13 @@ export function LendDesk({ zh, account }: { zh: boolean; account: string | null 
           >
             {zh ? "记账" : "Post"}
           </button>
+        ) : null}
+        {prior ? (
+          <p className="mt-2 text-xs text-ink/70">
+            {zh
+              ? "这是旧池。只能取出、取回抵押和还款。新的存入和借款走上面的新池。"
+              : "This is the previous pool. You can only withdraw, unlock and repay. New deposits and borrows use the new pool."}
+          </p>
         ) : null}
         {note ? <p className={`mt-2 text-xs ${bad ? "text-down" : "text-ink/70"}`}>{note}</p> : null}
       </article>

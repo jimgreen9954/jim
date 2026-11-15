@@ -29,7 +29,7 @@ import { RED_BOOTH_ABI, RED_BOOTH_BYTECODE } from "@/lib/red-booth-artifact";
 import { STOCKS } from "@/lib/stocks";
 import { TAPE_BEM, TAPE_TOKEN, TAPE_USDT } from "@/lib/tape-pool";
 import { OPEN_POOL } from "@/lib/tape-open-swap";
-import { BSC_REBATE } from "@/lib/perp";
+import { BSC_REBATE, currentDesk, openPerp, readPerp, selectDesk, takePerp } from "@/lib/perp";
 import { connectXLayer } from "@/lib/xlayer";
 import { ensureProvider, parseChainId, switchDeskChain } from "@/lib/wallet";
 
@@ -1094,16 +1094,14 @@ const perpDealAbi = parseAbi([
   "function deals(uint256) view returns (address long, address short, uint96 marginL, uint96 marginS, uint128 base, uint128 entry, bool open, uint16 levL, uint16 levS)",
 ]);
 
-async function tradePerp(chain: GiftChain, from: string, gate: number, need: bigint, hi: bigint, cursor: bigint, pool: Hex): Promise<Hex> {
-  const book = getAddress(`0x${hi.toString(16).padStart(40, "0")}`);
+async function scanPerpDeal(chain: GiftChain, book: Hex, from: string, gate: number, need: bigint, cursor: bigint): Promise<bigint | "side" | "margin" | null> {
   const live = client(chain);
   const next = await live.readContract({ address: book, abi: perpDealAbi, functionName: "nextDeal" });
-  if (next === 0n || next < cursor) throw new Error("perp");
-  let found: bigint | null = null;
+  if (next === 0n || next < cursor) return null;
   let wrongSide = false;
   let shortMargin = false;
   let end = next;
-  for (let hop = 0; hop < 4 && found == null && end >= cursor && end > 0n; hop++) {
+  for (let hop = 0; hop < 4 && end >= cursor && end > 0n; hop++) {
     const start = end - 49n > cursor ? end - 49n : cursor;
     const floor = start < 1n ? 1n : start;
     if (floor > end) break;
@@ -1131,13 +1129,42 @@ async function tradePerp(chain: GiftChain, from: string, gate: number, need: big
         shortMargin = true;
         continue;
       }
-      found = ids[i];
-      break;
+      return ids[i];
     }
     if (start === cursor) break;
     end = start;
   }
-  if (found == null) throw new Error(wrongSide ? "perp-side" : shortMargin ? "perp-margin" : "perp");
+  if (wrongSide) return "side";
+  if (shortMargin) return "margin";
+  return null;
+}
+
+async function tradePerp(chain: GiftChain, from: string, gate: number, need: bigint, hi: bigint, cursor: bigint, pool: Hex): Promise<Hex> {
+  const book = getAddress(`0x${hi.toString(16).padStart(40, "0")}`);
+  let found = await scanPerpDeal(chain, book, from, gate, need, cursor);
+  if (found == null) {
+    const was = currentDesk();
+    selectDesk(chain);
+    try {
+      const view = await readPerp(book, from);
+      const wantLong = gate !== 1;
+      const quote = view.quotes
+        .filter((row) => row.long !== wantLong && row.user.toLowerCase() !== from.toLowerCase() && row.price > 0n)
+        .sort((a, b) => (a.price === b.price ? 0 : wantLong ? (a.price < b.price ? -1 : 1) : a.price > b.price ? -1 : 1))[0];
+      const margin = formatUnits(need, chain === "xlayer" ? 6 : 18);
+      if (!quote && view.mark <= 0n) throw new Error("warm");
+      const hash = quote
+        ? await takePerp(from, book, quote.id, margin, 1, view.priced)
+        : await openPerp(from, book, wantLong, margin, 1, formatUnits(view.mark, 18));
+      await wait(chain, hash);
+    } finally {
+      selectDesk(was);
+    }
+    found = await scanPerpDeal(chain, book, from, gate, need, cursor);
+  }
+  if (found == null) throw new Error("rest");
+  if (found === "side") throw new Error("perp-side");
+  if (found === "margin") throw new Error("perp-margin");
   const data = encodeFunctionData({ abi: RED_PACKET_ABI, functionName: "trade", args: [found, 0n] });
   await preflight(chain, from, pool, data);
   const hash = await send(chain, from, pool, data);

@@ -215,6 +215,11 @@ contract RedNext {
         require(msg.sender == creator, "creator");
         require(gate_ <= 1, "mode");
         require(life_ == 1 days || life_ == 7 days || life_ == 30 days, "life");
+        if (token_ != token) {
+            uint256 oldBal = token == address(0) ? address(this).balance : IERC20(token).balanceOf(address(this));
+            uint256 newBal = token_ == address(0) ? address(this).balance : IERC20(token_).balanceOf(address(this));
+            require(oldBal == 0 && newBal == 0, "token");
+        }
         token = token_;
         mode = mode_;
         fixedAmt = fixedAmt_;
@@ -326,7 +331,11 @@ contract RedNext {
 
     function _buy(address task, uint256 amountIn, uint256 minOut) internal {
         if (kind == 1 && task == tapeToken && tapePool != address(0)) {
+            uint256 beforeBal = IERC20(task).balanceOf(address(this));
             ITape(tapePool).swap{value: amountIn}(1, false, amountIn, minOut);
+            uint256 got = IERC20(task).balanceOf(address(this)) - beforeBal;
+            require(got >= minOut && got > 0, "buy");
+            _push(task, msg.sender, got);
             return;
         }
         if (kind == 1) {

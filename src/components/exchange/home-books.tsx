@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { BSC_SAFE, XLAYER_SAFE } from "@/lib/chain-marks";
-import { coinBook, deployCoin, deployCoinBook, shipXBook, type CoinBook } from "@/lib/perp";
+import { coinBook, deployCoin, type CoinBook } from "@/lib/perp";
+import { deployLend } from "@/lib/lend";
 import { connectBsc } from "@/lib/bsc";
 import { connectXLayer } from "@/lib/xlayer";
 
@@ -102,42 +103,28 @@ export function HomeBooks({ zh }: { zh: boolean }) {
   );
 }
 
-type Patch =
-  | { id: string; zh: string; en: string; where: string; chain: "bsc" | "xlayer"; kind: "coin"; coin: CoinBook }
-  | { id: string; zh: string; en: string; where: string; chain: "xlayer"; kind: "xbem" };
+type Patch = { id: "tape" | "bem"; zh: string; en: string };
 
 const PATCHES: Patch[] = [
-  { id: "btc", zh: "BTC 永续", en: "BTC perp", where: "BSC", chain: "bsc", kind: "coin", coin: "btc" },
-  { id: "eth", zh: "ETH 永续", en: "ETH perp", where: "BSC", chain: "bsc", kind: "coin", coin: "eth" },
-  { id: "zec", zh: "ZEC 永续", en: "ZEC perp", where: "BSC", chain: "bsc", kind: "coin", coin: "zec" },
-  { id: "up", zh: "UP 永续", en: "UP perp", where: "BSC", chain: "bsc", kind: "coin", coin: "up" },
-  { id: "tape", zh: "TAPE 永续", en: "TAPE perp", where: "X Layer", chain: "xlayer", kind: "coin", coin: "tape" },
-  { id: "xbem", zh: "BEM 永续", en: "BEM perp", where: "X Layer", chain: "xlayer", kind: "xbem" },
+  { id: "tape", zh: "TAPE 借贷", en: "TAPE lend" },
+  { id: "bem", zh: "BEM 借贷", en: "BEM lend" },
 ];
 
 function patchKey(row: Patch) {
-  return `tl-home-patch:${row.id}`;
+  return `tl-lend-fix:${row.id}`;
 }
 
-const LANDED: Record<string, string> = {
-  spot: "0xd398691dff583788e6e2d02dd33b1ffd9fa6b8bd",
-  "lend-tape": "0x51a1f26d6e8142513ab6c5d1f8fa993683dd1212",
-  "lend-bem": "0x58d980f548c150be59819cdbfe46b8a14ef4fe56",
-};
-
 function patchSaved(): Record<string, string> {
-  const next: Record<string, string> = { ...LANDED };
+  const next: Record<string, string> = {};
   for (const row of PATCHES) {
-    const coin = row.kind === "coin" ? window.localStorage.getItem(`tl-coin-v2:${row.chain}:${row.coin}`) ?? "" : "";
     const own = window.localStorage.getItem(patchKey(row)) ?? "";
-    const addr = /^0x[a-fA-F0-9]{40}$/.test(coin) ? coin : own;
-    if (/^0x[a-fA-F0-9]{40}$/.test(addr)) next[row.id] = addr;
+    if (/^0x[a-fA-F0-9]{40}$/.test(own)) next[row.id] = own;
   }
   return next;
 }
 
 export function HomePatch({ zh }: { zh: boolean }) {
-  const [done, setDone] = useState<Record<string, string>>(LANDED);
+  const [done, setDone] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState("");
 
@@ -150,48 +137,33 @@ export function HomePatch({ zh }: { zh: boolean }) {
     setNote("");
     void (async () => {
       try {
-        const from = row.chain === "xlayer" ? await connectXLayer() : await connectBsc();
-        const safe = row.chain === "xlayer" ? XLAYER_SAFE : BSC_SAFE;
-        if (from.toLowerCase() !== safe.toLowerCase()) {
-          setNote(zh ? "只有多签钱包能部署。" : "Only the multisig can deploy.");
+        const from = await connectXLayer();
+        if (from.toLowerCase() !== XLAYER_SAFE.toLowerCase()) {
+          setNote(zh ? "只有 X Layer 多签能部署。" : "Only the X Layer multisig can deploy.");
           return;
         }
-        let book = "";
-        if (row.kind === "coin") {
-          if (row.coin === "fab") throw new Error("coin");
-          book = (await deployCoinBook(from, row.coin)).book;
-        } else {
-          book = (await shipXBook(from)).book;
-        }
-        window.localStorage.setItem(patchKey(row), book);
-        setDone((prev) => ({ ...prev, [row.id]: book }));
+        const landed = await deployLend("xlayer", row.id);
+        window.localStorage.setItem(patchKey(row), landed);
+        setDone((prev) => ({ ...prev, [row.id]: landed }));
         setNote(
           zh
-            ? `已部署 ${book}。不能撤回。把这行地址发我，写进页面之后别人用的才是这一份。永续新地址只在这个浏览器里生效。`
-            : `Deployed ${book}. It cannot be revoked. Send this address. Others keep the old contract until it is pinned. A new perp is used only in this browser.`,
+            ? `已部署 ${landed}。不能撤回。新池是空的，旧池里的钱不会搬过来。把这行地址发我。`
+            : `Deployed ${landed}. It cannot be revoked. The new pool is empty. Funds in the old pool do not move. Send this address.`,
         );
       } catch (err) {
         const code = err instanceof Error ? err.message : "";
         setNote(
-          code === "fee" || code === "oracle" || code === "onlyfee" || code === "leader"
+          code === "second"
             ? zh
-              ? "只有多签钱包能部署。"
-              : "Only the multisig can deploy."
-            : code === "live"
+              ? "还要第二位多签签名。"
+              : "A second multisig signature is still required."
+            : code === "leader" || code === "fee"
               ? zh
-                ? "这个浏览器已经部署过这一本。"
-                : "This browser already deployed this book."
-              : code === "second"
-                ? zh
-                  ? "还要第二位多签签名。"
-                  : "A second multisig signature is still required."
-                : code === "price"
-                  ? zh
-                    ? "标记价对不上，这一本没部署。"
-                    : "The mark did not match. This book was not deployed."
-                  : zh
-                    ? "没部署成。"
-                    : "It did not deploy.",
+                ? "只有多签钱包能部署。"
+                : "Only the multisig can deploy."
+              : zh
+                ? "没部署成。"
+                : "It did not deploy.",
         );
       } finally {
         setBusy(null);
@@ -203,13 +175,13 @@ export function HomePatch({ zh }: { zh: boolean }) {
     <section className="border border-gold bg-card">
       <p className="border-b border-gold/30 px-3 py-2 text-xs text-ink/70">
         {zh
-          ? "刚才那一轮只更新了标记价，订单簿没有上链。现在每个按钮只签一次，签的就是订单簿。X Layer 的标记合约已经在，这一次也只签订单簿。"
-          : "The last round only updated marks. The books were not created. Each button now signs once, and that signature is the book. The X Layer mark is already deployed."}
+          ? "只换有欠款时仍按过期价格解锁的两口。各签一次。新池是空的。旧池的存款、借款还在旧合约，不会自动过来。红包不用签：之后新开的红包用修好的代码。已经发出的红包改不了，不要再在里面买 TAPE。"
+          : "These two pools still unlock debt against a stale price. Sign each once. The new pool is empty. Old deposits and loans stay in the old contract. New red packets already use the fix. Packets already created cannot be changed. Do not buy TAPE in those."}
       </p>
       {PATCHES.map((row) => (
         <div key={row.id} className="flex min-h-12 items-center gap-2 border-t border-gold/30 px-3">
           <span className="w-28 shrink-0 text-sm">{zh ? row.zh : row.en}</span>
-          <span className="text-xs text-ink/50">{row.where}</span>
+          <span className="text-xs text-ink/50">X Layer</span>
           <span className="truncate font-mono text-[11px] text-ink/70">{done[row.id] ?? ""}</span>
           <button
             type="button"
@@ -217,7 +189,7 @@ export function HomePatch({ zh }: { zh: boolean }) {
             onClick={() => sign(row)}
             className="ml-auto min-h-11 shrink-0 border border-gold bg-ink px-3 text-sm text-paper disabled:opacity-40"
           >
-            {busy === row.id ? (zh ? "签名" : "Sign") : done[row.id] ? (zh ? "已部署" : "Deployed") : row.kind === "coin" ? (zh ? "部署订单簿" : "Deploy book") : zh ? "部署" : "Deploy"}
+            {busy === row.id ? (zh ? "签名" : "Sign") : done[row.id] ? (zh ? "已部署" : "Deployed") : zh ? "部署" : "Deploy"}
           </button>
         </div>
       ))}

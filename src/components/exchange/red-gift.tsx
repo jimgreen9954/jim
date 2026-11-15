@@ -385,6 +385,24 @@ export function RedGift({
             ? "现货已经成交。这一份红包合约只认它自己发起的兑换，FAB 和算力这两笔它盖不了章，奖金发不出来。"
             : "The spot trade filled. This packet contract only stamps its own swap, so it cannot pay out for FAB or hash.",
         );
+      else if (message === "warm")
+        setNote(
+          zh
+            ? "这本订单簿还没有标记价，交易台开不了仓。"
+            : "This book has no mark yet, so the desk cannot open.",
+        );
+      else if (message === "rest")
+        setNote(
+          zh
+            ? "单已经挂到交易台这本订单簿上。有人吃到、变成成交之后，再点一次，红包才会盖章。"
+            : "The order is on the platform book. Come back after someone takes it, then the packet can stamp the fill.",
+        );
+      else if (message === "halt")
+        setNote(
+          zh
+            ? "这份红包认的是旧订单簿。交易台不在旧本上新开仓，也不再部署新的。"
+            : "This packet is tied to an old book. The desk does not open there, and no new book is being deployed.",
+        );
       else if (message === "perp" || message === "perp-side" || message === "perp-margin")
         setNote(
           message === "perp-side"

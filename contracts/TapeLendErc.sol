@@ -157,6 +157,7 @@ contract TapeLendErc {
     function unlock(uint256 amount) external guarded {
         if (amount == 0 || amount > collateral[msg.sender]) revert Bad();
         _accrue();
+        if (debtShares[msg.sender] != 0 && !fresh()) revert Bad();
         collateral[msg.sender] -= amount;
         _solvent(msg.sender);
         _push(IERC20(coll), msg.sender, amount);
@@ -199,6 +200,7 @@ contract TapeLendErc {
         uint256 debt = _debt(user);
         uint256 posted = collateral[user];
         if (have == 0 || debt == 0 || posted == 0) revert Bad();
+        if (!fresh()) revert Bad();
         if (debt * 10000 <= _usdt(posted) * LIQ) revert Bad();
         uint256 cover = _usdt(posted * 10000 / (10000 + BONUS));
         uint256 maxPay = cover < debt ? cover : debt;
