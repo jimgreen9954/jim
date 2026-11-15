@@ -29,6 +29,7 @@ import { RED_BOOTH_ABI, RED_BOOTH_BYTECODE } from "@/lib/red-booth-artifact";
 import { STOCKS } from "@/lib/stocks";
 import { TAPE_BEM, TAPE_TOKEN, TAPE_USDT } from "@/lib/tape-pool";
 import { OPEN_POOL } from "@/lib/tape-open-swap";
+import { BSC_REBATE } from "@/lib/perp";
 import { connectXLayer } from "@/lib/xlayer";
 import { ensureProvider, parseChainId, switchDeskChain } from "@/lib/wallet";
 
@@ -52,7 +53,7 @@ const DESK = {
 } as const;
 
 const X_BEM_BOOK = "0xE8Ed0fE7a7aaEF822b2e5Ce9679ccACcF3aEFF56" as Hex;
-const BSC_BEM_BOOK = "0xdA4aA9E0aaad6F91835cD19345D49a8fcA8d019A" as Hex;
+const BSC_BEM_BOOK = BSC_REBATE as Hex;
 const X_FAB_BOOK = "0x6Bd480BF658FaB7A2cb758c0408A7b3B5B94B431" as Hex;
 const X_TAPE_BOOK = "0x9b17D0F6431957661AdD30051de2615cb08A3886" as Hex;
 const BSC_UP_BOOK = "0x7aaf00Dab91e0e6dDDb6093323D0140c11C55aD3" as Hex;

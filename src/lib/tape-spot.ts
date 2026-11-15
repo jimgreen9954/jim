@@ -7,7 +7,7 @@ import { getProvider } from "@/lib/wallet";
 import { DEPLOYED, connectXLayer, XLAYER } from "@/lib/xlayer";
 
 /** X Layer order book. Creation bytecode matches contracts/TapeSpot.sol. No admin. */
-export const TAPE_SPOT = "0x68F66fAf7b29E30D0740934F81EB266F6ff17428" as const;
+export const TAPE_SPOT = "0xd398691dff583788e6e2d02dd33b1ffd9fa6b8bd" as const;
 export const SPOT_FEE = XLAYER_SAFE;
 
 const KEY = "tapeliquid-spot";

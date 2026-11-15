@@ -114,10 +114,10 @@ async function send(from: string, to: Hex | undefined, data: Hex, gasLimit: bigi
 export async function deployGate(from: string): Promise<string> {
   if (from.toLowerCase() !== BSC_SAFE.toLowerCase()) throw new Error("oracle");
   const args = encodeAbiParameters([{ type: "address" }], [USDT]);
-  const data = (GATE_BYTECODE + args.slice(2)) as Hex;
-  const hash = await send(from, undefined, data, 6_000_000n);
+  const data = createCallData((GATE_BYTECODE + args.slice(2)) as Hex);
+  const hash = await send(from, CREATE_CALL, data, 8_000_000n);
   const receipt = await (await client()).getTransactionReceipt({ hash });
-  const addr = receipt.contractAddress ?? "";
+  const addr = receipt.status === "success" ? createdAddress(receipt.logs) : "";
   if (!addr) throw new Error("revert");
   window.localStorage.setItem(KEY, addr);
   return addr;

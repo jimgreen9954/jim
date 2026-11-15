@@ -182,7 +182,8 @@ don't scaffold from stale priors — and keep each contract:
   `createRouter` export or an `app/` directory is rejected by the plugin)
   passing `defaultErrorComponent: AppErrorComponent`. Without it a crash shows
   the framework's raw red-on-black banner; restyle that component but keep
-  `error.message` visible.
+  `error.message` visible. Keep `rewrite: previewPathRewrite()` too, or
+  path-based previews render Not Found.
 - **`src/routes/__root.tsx`** — the document shell; keep `<AuthProvider>` and
   rule 3's bridge.
 - **`src/routes/index.tsx`** — `createFileRoute("/")({ component: Home })`.

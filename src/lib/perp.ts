@@ -56,8 +56,8 @@ function tokenUnit(): bigint {
   return 10n ** BigInt(tokenDecimals());
 }
 export const KNOWN_PERP = "0xB98D14333a93D49a4E05478d002FC3944D88A3b7";
-export const BSC_REBATE = "0xdA4aA9E0aaad6F91835cD19345D49a8fcA8d019A";
-export const PREV_BSC = "0xce3511b6e909c9694826cfd5dbe434d457920eba";
+export const BSC_REBATE = "0x0a81a426b29991a777e038d9e4ecce1783804aa0";
+export const PREV_BSC = "0xdA4aA9E0aaad6F91835cD19345D49a8fcA8d019A";
 export const KNOWN_XPERP = "0xE8Ed0fE7a7aaEF822b2e5Ce9679ccACcF3aEFF56";
 export const KNOWN_XMARK = "0xb4B2ee90D10ECfC7ed36A58e96e03074fA8731Eb";
 export const PREV_XPERP = "0xCAC69F02c06bfCa3bFDb1eaF1F4a60e17e718081";
@@ -532,7 +532,7 @@ export async function deployRisk(from: string, which: Desk): Promise<string> {
 
 function pinned(perp: string): void {
   const want = perp.toLowerCase();
-  const rows = [bookOf("bsc"), bookOf("xlayer"), coinBook("bsc", "btc"), coinBook("bsc", "eth"), coinBook("bsc", "zec"), coinBook("bsc", "up"), coinBook("xlayer", "tape"), coinBook("xlayer", "fab"), BTC_COIN_BOOK, ETH_COIN_BOOK, ZEC_COIN_BOOK, UP_COIN_BOOK, TAPE_COIN_BOOK, FAB_COIN_BOOK];
+  const rows = [bookOf("bsc"), bookOf("xlayer"), PREV_BSC, coinBook("bsc", "btc"), coinBook("bsc", "eth"), coinBook("bsc", "zec"), coinBook("bsc", "up"), coinBook("xlayer", "tape"), coinBook("xlayer", "fab"), BTC_COIN_BOOK, ETH_COIN_BOOK, ZEC_COIN_BOOK, UP_COIN_BOOK, TAPE_COIN_BOOK, FAB_COIN_BOOK];
   if (!rows.some((row) => row.length === 42 && row.toLowerCase() === want)) throw new Error("book");
 }
 
@@ -623,6 +623,7 @@ export async function readMine(account: string): Promise<MineRow[]> {
   const who = account.toLowerCase();
   const books = [
     ["bsc", "bem", BSC_REBATE],
+    ["bsc", "bem", PREV_BSC],
     ["xlayer", "bem", KNOWN_XPERP],
     ["bsc", "btc", BTC_COIN_BOOK],
     ["bsc", "eth", ETH_COIN_BOOK],
@@ -676,17 +677,25 @@ export async function resumeDeploy(): Promise<{ address: string; hash: string }>
 
 export async function deployPerp(from: string): Promise<string> {
   if (from.toLowerCase() !== BSC_SAFE.toLowerCase()) throw new Error("fee");
-  const args = encodeAbiParameters(
-    [{ type: "address" }, { type: "address" }, { type: "uint256" }],
-    [BSC.usdt, BSC.pool, 10n ** 18n],
-  );
-  const data = (PERP_BYTECODE + args.slice(2)) as Hex;
-  const hash = await send(from, undefined, data);
-  const receipt = await (await client()).getTransactionReceipt({ hash });
-  if (receipt?.status !== "success" || !receipt.contractAddress) throw new Error("revert");
-  window.localStorage.setItem(REBATE_KEY, receipt.contractAddress);
-  window.localStorage.removeItem(TX_KEY);
-  return receipt.contractAddress;
+  const was = desk;
+  desk = "bsc";
+  try {
+    const args = encodeAbiParameters(
+      [{ type: "address" }, { type: "address" }, { type: "uint256" }],
+      [BSC.usdt, BSC.pool, 10n ** 18n],
+    );
+    const init = (PERP_BYTECODE + args.slice(2)) as Hex;
+    const hash = await send(from, CREATE_CALL, createCallData(init), 8_000_000n);
+    const receipt = await (await client()).getTransactionReceipt({ hash });
+    if (receipt?.status !== "success") throw new Error("revert");
+    const addr = createdAddress(receipt.logs);
+    if (!addr) throw new Error("revert");
+    window.localStorage.setItem(REBATE_KEY, addr);
+    window.localStorage.removeItem(TX_KEY);
+    return addr;
+  } finally {
+    desk = was;
+  }
 }
 
 export type BookQuote = {
@@ -1477,7 +1486,40 @@ export async function deployCoinV2(from: string, coin: CoinBook): Promise<{ book
   }
 }
 
-/** One signature. The mark reads the official UP pool, then the book is opened on that mark. */
+const FRESH_MARK = {
+  btc: "0x2f1ce1f6ee25758f24059eb491658bee899a6623",
+  eth: "0x11a33e3b83655f62df5a3ca02b5e2e4c9e402080",
+  zec: "0xffbf1b20112667aee9b945431df341fe2760256f",
+  up: "0xc740d8642a56a4361af80aed3b5515ed8b080e40",
+  tape: "0xac57590a40995e1a19c20a43d15c9e4dee026c88",
+} as const;
+
+/** The mark is already on chain and already poked. One signature creates the book. */
+export async function deployCoinBook(from: string, coin: keyof typeof FRESH_MARK): Promise<{ book: string; hash: Hex }> {
+  const spec = COIN_SPEC[coin];
+  const safe = spec.chain === "xlayer" ? XLAYER_SAFE : BSC_SAFE;
+  if (from.toLowerCase() !== safe.toLowerCase()) throw new Error("fee");
+  const key = `tl-coin-v2:${spec.chain}:${coin}`;
+  if (typeof window !== "undefined" && /^0x[a-fA-F0-9]{40}$/.test(window.localStorage.getItem(key) ?? "")) throw new Error("live");
+  const mark = FRESH_MARK[coin];
+  const was = desk;
+  desk = spec.chain;
+  try {
+    const rpc = await client();
+    const bookArgs = encodeAbiParameters(
+      [{ type: "address" }, { type: "address" }, { type: "uint256" }, { type: "address" }],
+      [spec.chain === "xlayer" ? X_USDT : BSC.usdt, mark, spec.chain === "xlayer" ? 1_000_000n : 10n ** 18n, safe],
+    );
+    const bookHash = await send(from, CREATE_CALL, createCallData((RISK_BYTECODE + bookArgs.slice(2)) as Hex), 8_000_000n);
+    const bookReceipt = await rpc.waitForTransactionReceipt({ hash: bookHash, timeout: 180_000, pollingInterval: 2_000 });
+    const book = createdAddress(bookReceipt.logs);
+    if (!book) throw new Error("revert");
+    window.localStorage.setItem(key, book);
+    return { book, hash: bookHash };
+  } finally {
+    desk = was;
+  }
+}
 export async function deployUpOfficial(from: string): Promise<{ mark: string; book: string }> {
   const safe = BSC_SAFE;
   if (from.toLowerCase() !== safe.toLowerCase()) throw new Error("fee");
@@ -1520,21 +1562,27 @@ export async function shipXBook(from: string): Promise<{ mark: string; book: str
   try {
     const have = freshXBook();
     const savedMark = typeof window !== "undefined" ? window.localStorage.getItem(FRESH_X_MARK) ?? "" : "";
-    if (have && (await xBookState(have)) === "ready") return { mark: savedMark, book: have };
+    if (have && (await xBookState(have)) !== "down") return { mark: savedMark, book: have };
     const rpc = await client();
-    const markHash = await send(from, CREATE_CALL, createCallData(MARK_BYTECODE as Hex), 3_000_000n);
-    const markReceipt = await rpc.getTransactionReceipt({ hash: markHash });
-    const mark = createdAddress(markReceipt.logs);
-    const poke = encodeFunctionData({ abi: pokeAbi, functionName: "poke" });
-    await send(from, mark as Hex, poke, 500_000n);
+    const known = "0x706c4ab8b20f4045623fcc91b24e4746f9776e01";
+    const knownCode = await rpc.getBytecode({ address: known as Hex });
+    const mark = knownCode && knownCode !== "0x" ? known : "";
+    if (!mark) {
+      const markHash = await send(from, CREATE_CALL, createCallData(MARK_BYTECODE as Hex), 3_000_000n);
+      const markReceipt = await rpc.waitForTransactionReceipt({ hash: markHash, timeout: 180_000, pollingInterval: 2_000 });
+      const made = createdAddress(markReceipt.logs);
+      if (!made) throw new Error("revert");
+      window.localStorage.setItem(FRESH_X_MARK, made);
+      throw new Error("mark");
+    }
     const args = encodeAbiParameters(
       [{ type: "address" }, { type: "address" }, { type: "uint256" }, { type: "address" }],
       [X_USDT, mark as Hex, 1_000_000n, XLAYER_SAFE],
     );
     const bookHash = await send(from, CREATE_CALL, createCallData((RISK_BYTECODE + args.slice(2)) as Hex), 8_000_000n);
-    const bookReceipt = await rpc.getTransactionReceipt({ hash: bookHash });
+    const bookReceipt = await rpc.waitForTransactionReceipt({ hash: bookHash, timeout: 180_000, pollingInterval: 2_000 });
     const book = createdAddress(bookReceipt.logs);
-    if ((await xBookState(book)) !== "ready") throw new Error("revert");
+    if (!book) throw new Error("revert");
     window.localStorage.setItem(FRESH_X_MARK, mark);
     window.localStorage.setItem(FRESH_X_BOOK, book);
     return { mark, book };

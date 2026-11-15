@@ -425,7 +425,7 @@ async function allowToken(chain: TermChain, from: string, token: Hex, amount: bi
   const allowance = await read<bigint>(chain, token, "allowance", [from as Hex, spender], erc20);
   if (allowance >= amount) return;
   if (allowance > 0n) await wait(chain, await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, 0n] })));
-  await wait(chain, await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, 2n ** 256n - 1n] })));
+  await wait(chain, await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, amount] })));
 }
 
 async function nativeBal(chain: TermChain, who: string): Promise<bigint> {

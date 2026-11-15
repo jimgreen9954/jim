@@ -306,7 +306,7 @@ async function allowToken(chain: LendChain, from: string, token: Hex, amount: bi
   const allowance = await read<bigint>(chain, token, "allowance", [from as Hex, lend], erc20);
   if (allowance >= amount) return;
   if (allowance > 0n) await wait(chain, await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [lend, 0n] })));
-  await wait(chain, await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [lend, 2n ** 256n - 1n] })));
+  await wait(chain, await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [lend, amount] })));
 }
 
 function need(chain: LendChain, asset: LendAsset): Hex {
