@@ -1175,7 +1175,13 @@ async function tradePerp(chain: GiftChain, from: string, gate: number, need: big
 export async function tradeRed(chain: GiftChain, from: string, lane: GiftLane = "volunteer", pool: Hex = packetOf(chain, lane)): Promise<Hex> {
   const here = pool.toLowerCase() === packetOf(chain, lane).toLowerCase() ? await readRed(chain, from, lane) : await readLive(chain, from, pool, lane);
   if (here.lastDay === BigInt(sgDay())) throw new Error("day");
+  if (here.endsAt > 0n && here.endsAt <= BigInt(Math.floor(Date.now() / 1000))) throw new Error("late");
   if (await tradedNow(chain, from, lane, pool)) throw new Error("traded");
+  if (here.gate === 0 && here.hi === BigInt(TAPE)) {
+    const code = await client(chain).getBytecode({ address: pool });
+    const marks = code ? code.toLowerCase().split("70a08231").length - 1 : 0;
+    if (marks < 9) throw new Error("tape-old");
+  }
   const need = here.spotNeed > here.perpNeed ? here.spotNeed : here.perpNeed;
   if (need <= 0n || here.hi === 0n) throw new Error("task");
   const deskTask = taskAsset(chain, here.hi);

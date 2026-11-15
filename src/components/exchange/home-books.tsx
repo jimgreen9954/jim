@@ -111,7 +111,7 @@ const PATCHES: Patch[] = [
 ];
 
 function patchKey(row: Patch) {
-  return `tl-lend-fix:${row.id}`;
+  return `tl-lend-fix2:${row.id}`;
 }
 
 function patchSaved(): Record<string, string> {
@@ -175,8 +175,8 @@ export function HomePatch({ zh }: { zh: boolean }) {
     <section className="border border-gold bg-card">
       <p className="border-b border-gold/30 px-3 py-2 text-xs text-ink/70">
         {zh
-          ? "只换有欠款时仍按过期价格解锁的两口。各签一次。新池是空的。旧池的存款、借款还在旧合约，不会自动过来。红包不用签：之后新开的红包用修好的代码。已经发出的红包改不了，不要再在里面买 TAPE。"
-          : "These two pools still unlock debt against a stale price. Sign each once. The new pool is empty. Old deposits and loans stay in the old contract. New red packets already use the fix. Packets already created cannot be changed. Do not buy TAPE in those."}
+          ? "刚才两口只挡住了过期时间。价格每次最多走 0.5%，时间却被记成新的，还能按偏高的价借款。这两口是空的。再各签一次。旧池里已有的钱不会搬过来。"
+          : "The two pools just signed only reject an old timestamp. A price that is still walking toward the market is treated as fresh, so a borrow can use a high value. Both pools are empty. Sign each once more. Money already in an older pool does not move."}
       </p>
       {PATCHES.map((row) => (
         <div key={row.id} className="flex min-h-12 items-center gap-2 border-t border-gold/30 px-3">

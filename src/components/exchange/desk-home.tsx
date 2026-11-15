@@ -1,6 +1,7 @@
 import { Component, lazy, Suspense, type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArriveHint } from "@/components/exchange/phone-desk";
+import { HomePatch } from "@/components/exchange/home-books";
 import { PoolSpot } from "@/components/exchange/pool-spot";
 import { useExchange } from "@/lib/exchange-store";
 import type { DeskView } from "@/components/exchange/desk-chrome";
@@ -300,6 +301,7 @@ export function DeskHome({
 
   return (
     <>
+      <HomePatch zh={zh} />
       <ArriveHint zh={zh} />
       {showPerp ? (
         <Suspense fallback={null}>

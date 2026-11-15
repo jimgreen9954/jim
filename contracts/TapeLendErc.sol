@@ -55,6 +55,7 @@ contract TapeLendErc {
     uint256 public lastAccrue;
     uint256 public stored;
     uint32 public stamp;
+    bool public lag;
     mapping(address => uint256) public shares;
     mapping(address => uint256) public debtShares;
     mapping(address => uint256) public collateral;
@@ -105,7 +106,7 @@ contract TapeLendErc {
 
     function fresh() public view returns (bool) {
         if (mode == 0) return true;
-        return stored != 0 && block.timestamp <= uint256(stamp) + WINDOW;
+        return stored != 0 && !lag && block.timestamp <= uint256(stamp) + WINDOW;
     }
 
     function price() public view returns (uint256) {
@@ -121,9 +122,16 @@ contract TapeLendErc {
         if (spot == 0 || stored == 0) revert Bad();
         uint256 step = stored * STEP / 10000;
         if (step == 0) step = 1;
-        if (spot > stored + step) stored += step;
-        else if (spot + step < stored) stored -= step;
-        else stored = spot;
+        if (spot > stored + step) {
+            stored += step;
+            lag = true;
+        } else if (spot + step < stored) {
+            stored -= step;
+            lag = true;
+        } else {
+            stored = spot;
+            lag = false;
+        }
         stamp = uint32(block.timestamp);
     }
 

@@ -575,11 +575,20 @@ export async function repayLend(chain: LendChain, asset: LendAsset, amount: stri
   const qty = units(amount, spec.usdtDec);
   if (qty === 0n) throw new Error("amount");
   const from = await signer(chain);
-  const have = await read<bigint>(chain, spec.usdt, "balanceOf", [from as Hex], erc20);
-  if (have < qty) throw new Error("usdt");
   const lend = need(chain, asset, book);
-  await allowToken(chain, from, spec.usdt, qty, lend);
-  await wait(chain, await send(from, lend, encodeFunctionData({ abi, functionName: "repay", args: [qty] })));
+  let owed = await read<bigint>(chain, lend, "debtOf", [from as Hex]);
+  const closing = owed > 0n && qty >= owed;
+  for (let pass = 0; pass < 2 && owed > 0n; pass++) {
+    const have = await read<bigint>(chain, spec.usdt, "balanceOf", [from as Hex], erc20);
+    let pay = closing ? owed + owed / 1000n + 1n : qty;
+    if (pay > have) pay = have;
+    if (pay === 0n || (!closing && pay < qty)) throw new Error("usdt");
+    await allowToken(chain, from, spec.usdt, pay, lend);
+    await wait(chain, await send(from, lend, encodeFunctionData({ abi, functionName: "repay", args: [pay] })));
+    if (!closing) return;
+    owed = await read<bigint>(chain, lend, "debtOf", [from as Hex]);
+  }
+  if (owed > 0n) throw new Error("usdt");
 }
 
 export async function pokeLend(chain: LendChain, asset: LendAsset) {

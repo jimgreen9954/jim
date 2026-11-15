@@ -349,6 +349,12 @@ export function RedGift({
         );
       else if (message === "late")
         setNote(zh ? "领取期限已过，这个红包不能再领。" : "The claim window is over.");
+      else if (message === "tape-old")
+        setNote(
+          zh
+            ? "这是旧红包。买到的 TAPE 会留在合约里，不会进钱包。请换一份新开的。"
+            : "This is an old packet. TAPE bought here stays in the contract. Use a newly opened one.",
+        );
       else if (message === "life")
         setNote(
           zh

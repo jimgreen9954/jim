@@ -56,6 +56,7 @@ const abi = parseAbi([
   "function open(uint8,uint8,uint8,uint256,uint256)",
   "function addColl(uint256,uint256)",
   "function repay(uint256,uint256)",
+  "function debtOf(uint256) view returns (uint256)",
   "function liquidate(uint256)",
   "function poke(uint8)",
 ]);
@@ -666,17 +667,29 @@ export async function repayTerm(chain: TermChain, id: bigint, debt: number, amou
   if (qty <= 0n) throw new Error("amount");
   const from = await signer(chain);
   const book = need(chain);
-  const data = encodeFunctionData({ abi, functionName: "repay", args: [id, qty] });
-  if (asset.native) {
-    const gas = await nativeBal(chain, from);
-    if (gas < qty + BOOK[chain].reserve) throw new Error("gas");
-    await wait(chain, await send(from, book, data, qty));
-    return;
+  let owed = await read<bigint>(chain, book, "debtOf", [id]);
+  const closing = owed > 0n && qty >= owed;
+  for (let pass = 0; pass < 2 && owed > 0n; pass++) {
+    let pay = closing ? owed + owed / 1000n + 1n : qty;
+    if (asset.native) {
+      const gas = await nativeBal(chain, from);
+      const room = gas > BOOK[chain].reserve ? gas - BOOK[chain].reserve : 0n;
+      if (pay > room) pay = room;
+      if (pay === 0n || (!closing && pay < qty)) throw new Error("gas");
+      const data = encodeFunctionData({ abi, functionName: "repay", args: [id, pay] });
+      await wait(chain, await send(from, book, data, pay));
+    } else {
+      const have = await read<bigint>(chain, asset.token as Hex, "balanceOf", [from as Hex], erc20);
+      if (pay > have) pay = have;
+      if (pay === 0n || (!closing && pay < qty)) throw new Error("balance");
+      const data = encodeFunctionData({ abi, functionName: "repay", args: [id, pay] });
+      await allowToken(chain, from, asset.token as Hex, pay, book);
+      await wait(chain, await send(from, book, data));
+    }
+    if (!closing) return;
+    owed = await read<bigint>(chain, book, "debtOf", [id]);
   }
-  const have = await read<bigint>(chain, asset.token as Hex, "balanceOf", [from as Hex], erc20);
-  if (have < qty) throw new Error("balance");
-  await allowToken(chain, from, asset.token as Hex, qty, book);
-  await wait(chain, await send(from, book, data));
+  if (owed > 0n) throw new Error(asset.native ? "gas" : "balance");
 }
 
 export async function liquidateTerm(chain: TermChain, loan: TermLoan, pay: bigint) {
