@@ -186,15 +186,20 @@ async function approveUsdt(from: string, need: bigint) {
     functionName: "allowance",
     args: [from as Hex, OKB.router],
   });
-  if (allowance >= need) return;
-  const max = (1n << 256n) - 1n;
-  if (allowance > 0n)
-    await waitOkX(
-      await send(from, OKB.usdt, encodeFunctionData({ abi: erc20, functionName: "approve", args: [OKB.router, 0n] })),
-    );
-  await waitOkX(
-    await send(from, OKB.usdt, encodeFunctionData({ abi: erc20, functionName: "approve", args: [OKB.router, max] })),
-  );
+  if (allowance === need) return;
+  const exact = encodeFunctionData({ abi: erc20, functionName: "approve", args: [OKB.router, need] });
+  if (allowance > 0n) {
+    try {
+      await waitOkX(await send(from, OKB.usdt, exact));
+      return;
+    } catch (err) {
+      if (!(err instanceof Error) || err.message !== "reverted") throw err;
+      await waitOkX(
+        await send(from, OKB.usdt, encodeFunctionData({ abi: erc20, functionName: "approve", args: [OKB.router, 0n] })),
+      );
+    }
+  }
+  await waitOkX(await send(from, OKB.usdt, exact));
 }
 
 export async function quoteOkb(side: "buy" | "sell", amountIn: bigint): Promise<bigint> {
@@ -435,10 +440,21 @@ export async function swapBemOkb(from: string, side: "buy" | "sell", amount: str
     functionName: "multicall",
     args: [deadline, [swapData, encodeFunctionData({ abi: v3Router, functionName: "unwrapWETH9", args: [minOut, owner] })]],
   });
-  if (allowance < parts.swapIn) {
-    await stepX(`tl-approve:bemokb:${from.toLowerCase()}`, () =>
-      send(from, X_BEM, encodeFunctionData({ abi: erc20, functionName: "approve", args: [V3_ROUTER, (1n << 256n) - 1n] })),
-    );
+  if (allowance !== parts.swapIn) {
+    const exact = encodeFunctionData({ abi: erc20, functionName: "approve", args: [V3_ROUTER, parts.swapIn] });
+    if (allowance > 0n) {
+      try {
+        await waitOkX(await send(from, X_BEM, exact));
+      } catch (err) {
+        if (!(err instanceof Error) || err.message !== "reverted") throw err;
+        await waitOkX(
+          await send(from, X_BEM, encodeFunctionData({ abi: erc20, functionName: "approve", args: [V3_ROUTER, 0n] })),
+        );
+        await waitOkX(await send(from, X_BEM, exact));
+      }
+    } else {
+      await waitOkX(await send(from, X_BEM, exact));
+    }
   }
   const hash = await sendFeeAndSwap({
     from,

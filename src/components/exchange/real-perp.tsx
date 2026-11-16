@@ -878,11 +878,17 @@ export function RealPerp({
     if (message === "nowallet") setNote(c.walletNo);
     else if (message === "usdt")
       setNote(lang === "zh" ? `${chain === "xlayer" ? "USDT0" : "USDT"} 不够` : `Not enough ${chain === "xlayer" ? "USDT0" : "USDT"}`);
+    else if (message === "clear")
+      setNote(
+        lang === "zh"
+          ? "旧的无限授权先取消了。再点一次，只授这一笔保证金。"
+          : "The old unlimited approval is cleared. Tap again to approve only this margin.",
+      );
     else if (message === "next")
       setNote(
         lang === "zh"
-          ? "保证金授权好了。再点一次开仓，这一次才是仓位。"
-          : "Margin is approved. Tap open again. That signature is the position.",
+          ? "只授了这一笔保证金。再点一次开仓，这一次才是仓位。"
+          : "Only this margin is approved. Tap open again. That signature is the position.",
       );
     else if (message === "revert")
       setNote(

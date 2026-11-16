@@ -5,7 +5,6 @@ import { startPersistence, useExchange } from "@/lib/exchange-store";
 import { fmtPct, fmtPx, fmtUsd } from "@/lib/format";
 import { equity, sessionChange } from "@/lib/match-engine";
 import { DeskHome, RedPocket, RevokeLocks, openOtcDesk, rememberDesk } from "@/components/exchange/desk-home";
-import { HomeNext } from "@/components/exchange/home-next";
 import { ConnectButton, ChainSwitch } from "@/components/exchange/wallet-bar";
 import { SettingsMenu } from "@/components/exchange/settings-menu";
 import { LocaleMenu } from "@/components/exchange/locale-menu";
@@ -171,7 +170,6 @@ export function Exchange({
           />
           <div className="px-2 pt-2 sm:px-3">
             <RevokeLocks zh={lang === "zh"} />
-            <HomeNext zh={lang === "zh"} />
           </div>
           <div
             key={`${floor}-${shop}`}

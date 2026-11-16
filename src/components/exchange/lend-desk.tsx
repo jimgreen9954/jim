@@ -103,11 +103,13 @@ export function LendDesk({ zh, account }: { zh: boolean; account: string | null 
             .catch(() => null),
         ),
       );
-      const old = (["tape", "bem"] as const).flatMap((next) =>
-        priorLends("xlayer", next).map((book) =>
-          readLend("xlayer", next, account, book)
-            .then((row) => ({ chain: "xlayer" as const, asset: next, view: row, prior: true, book }))
-            .catch(() => null),
+      const old = (["xlayer", "bsc"] as const).flatMap((id) =>
+        (["tape", "bem"] as const).flatMap((next) =>
+          priorLends(id, next).map((book) =>
+            readLend(id, next, account, book)
+              .then((row) => ({ chain: id, asset: next, view: row, prior: true, book }))
+              .catch(() => null),
+          ),
         ),
       );
       Promise.all([...jobs, ...old]).then((rows) => {

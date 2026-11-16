@@ -11,7 +11,6 @@ const USDT = "0x779Ded0c9e1022225f8E0630b35a9b54bE713736" as const;
 const ROUTER = "0x881fB2f98c13d521009464e7D1CBf16E1b394e8E" as const;
 const WOKB = "0xe538905cf8410324e03A5A23C1c177a474D59b2b" as const;
 const OKB_RESERVE = 2_000_000_000_000_000n;
-const MAX = (1n << 256n) - 1n;
 
 const client = createPublicClient({ transport: http(XLAYER.rpc, { timeout: 12_000 }) });
 const poolAbi = parseAbi([
@@ -126,16 +125,20 @@ async function allow(from: string, token: Hex, spender: Hex, need: bigint) {
     functionName: "allowance",
     args: [from as Hex, spender],
   });
-  if (allowance >= need) return;
-  const grant = encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, MAX] });
-  try {
-    await wait(await send(from, token, grant));
-  } catch (err) {
-    if (walletRejected(err) || err instanceof TxPending) throw err;
-    if (!(err instanceof Error) || err.message !== "reverted") throw err;
-    await wait(await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, 0n] })));
-    await wait(await send(from, token, grant));
+  if (allowance === need) return;
+  const exact = encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, need] });
+  const zero = encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, 0n] });
+  if (allowance > 0n) {
+    try {
+      await wait(await send(from, token, exact));
+      return;
+    } catch (err) {
+      if (walletRejected(err) || err instanceof TxPending) throw err;
+      if (!(err instanceof Error) || err.message !== "reverted") throw err;
+      await wait(await send(from, token, zero));
+    }
   }
+  await wait(await send(from, token, exact));
 }
 
 /** Swap against the open TAPE pool. Limit orders stay on the workshop book. */
@@ -293,7 +296,7 @@ export async function buyTapeWithUsdt0(from: string, usdtIn: bigint, okbIn: bigi
     functionName: "allowance",
     args: [from as Hex, ROUTER],
   });
-  if (allowance < parts.swapIn) {
+  if (allowance !== parts.swapIn) {
     await allow(from, USDT, ROUTER, parts.swapIn);
     throw new Error("next");
   }

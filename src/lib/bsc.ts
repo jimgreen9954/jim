@@ -465,19 +465,23 @@ async function approveIfNeeded(from: string, token: Hex, need: bigint, spender: 
     functionName: "allowance",
     args: [from as Hex, spender],
   });
-  if (allowance >= need) return;
-  const grant = encodeFunctionData({
+  if (allowance === need) return;
+  const exact = encodeFunctionData({
     abi: erc20,
     functionName: "approve",
-    args: [spender, (1n << 256n) - 1n],
+    args: [spender, need],
   });
-  try {
-    await waitOk(await send(from, token, grant));
-  } catch (err) {
-    if (!(err instanceof Error) || err.message !== "reverted") throw err;
-    await waitOk(await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, 0n] })));
-    await waitOk(await send(from, token, grant));
+  const zero = encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, 0n] });
+  if (allowance > 0n) {
+    try {
+      await waitOk(await send(from, token, exact));
+      return;
+    } catch (err) {
+      if (!(err instanceof Error) || err.message !== "reverted") throw err;
+      await waitOk(await send(from, token, zero));
+    }
   }
+  await waitOk(await send(from, token, exact));
 }
 
 function feeTransferCalls(parts: DeskParts, token: Hex | null): SignedCall[] {

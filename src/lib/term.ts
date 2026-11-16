@@ -108,8 +108,8 @@ function storageKey(chain: TermChain) {
 }
 
 const TERM_BOOK: Record<TermChain, Hex> = {
-  xlayer: "0x683fb58ee77172626D5B49087DdAc71eF7825d20",
-  bsc: "0xBa427D94b001FA1cf0f85E1E54c1E392e9a07610",
+  xlayer: "0x087E68a1C6c5978Aab73056f7DCd69fc55d72839",
+  bsc: "0x285e93b48e80A7d22CdE47056579074A3842fBcD",
 };
 
 export function termAddress(chain: TermChain): Hex | null {

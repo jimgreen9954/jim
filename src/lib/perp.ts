@@ -1003,16 +1003,14 @@ async function sendOpen(from: string, perp: string, amount: bigint, data: Hex): 
     functionName: "allowance",
     args: [from as Hex, perp as Hex],
   });
-  const max = (1n << 256n) - 1n;
-  if (allowance < amount) {
-    if (allowance > 0n && allowance <= max / 2n) {
-      const reset = encodeFunctionData({ abi: erc20, functionName: "approve", args: [perp as Hex, 0n] });
-      await send(from, token, reset);
-      throw new Error("next");
-    }
-    const grant = encodeFunctionData({ abi: erc20, functionName: "approve", args: [perp as Hex, max] });
+  if (allowance !== amount) {
+    const grant = encodeFunctionData({
+      abi: erc20,
+      functionName: "approve",
+      args: [perp as Hex, allowance > 0n ? 0n : amount],
+    });
     await send(from, token, grant);
-    throw new Error("next");
+    throw new Error(allowance > 0n ? "clear" : "next");
   }
   if (await openWouldRevert(from, perp as Hex, data)) {
     const held = desk === "xlayer" ? await readDeskUsdt(from) : (await readBalances(from)).usdt;
