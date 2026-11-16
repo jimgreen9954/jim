@@ -413,32 +413,43 @@ contract TermBook {
         uint256 wantUsd = debtUsd < coverUsd ? debtUsd : coverUsd;
         uint256 pay = _usdToAmt(row.debt, wantUsd);
         if (pay > owed) pay = owed;
-        if (pay == 0) revert Bad();
-        _collect(row.debt, pay);
-        _credit(row.debt, pay, row);
-        uint256 paidUsd = usd(row.debt, pay);
-        uint256 seize = coverUsd == 0 ? row.collAmt : row.collAmt * paidUsd / coverUsd;
+        uint256 seize = pay == 0 || coverUsd == 0 ? 0 : row.collAmt * usd(row.debt, pay) / coverUsd;
         if (seize > row.collAmt) seize = row.collAmt;
+        if (row.collAmt > seize && usd(row.coll, row.collAmt - seize) == 0) seize = row.collAmt;
+        if (pay == 0 && seize == 0) revert Bad();
+        if (pay > 0) {
+            _collect(row.debt, pay);
+            _credit(row.debt, pay, row);
+        } else if (msg.value != 0) {
+            revert Bad();
+        }
         uint8 coll = row.coll;
-        uint8 debt = row.debt;
+        uint8 debtId = row.debt;
         address user = row.user;
         row.collAmt -= seize;
-        if (row.principal > 0) {
-            principalOut[debt] -= row.principal;
-            row.principal = 0;
-            row.interest = 0;
+        uint256 leftDebt = row.principal + row.interest;
+        if (leftDebt == 0 || (row.collAmt == 0 && usd(debtId, leftDebt) <= 5e16)) {
+            if (row.principal > 0) {
+                principalOut[debtId] -= row.principal;
+                row.principal = 0;
+                row.interest = 0;
+            }
+            uint256 left = row.collAmt;
+            row.collAmt = 0;
+            row.open = false;
+            _finish(id, user);
+            if (seize > 0) _push(coll, msg.sender, seize);
+            if (left > 0) _push(coll, user, left);
+            emit Liquidated(id, user, msg.sender, pay, seize);
+            emit Closed(id);
+            return;
         }
-        uint256 left = row.collAmt;
-        row.collAmt = 0;
-        row.open = false;
-        _finish(id, user);
         if (seize > 0) _push(coll, msg.sender, seize);
-        if (left > 0) _push(coll, user, left);
         emit Liquidated(id, user, msg.sender, pay, seize);
-        emit Closed(id);
     }
 
     function _owed(Loan memory row) internal view returns (uint256) {
+        if (row.collAmt == 0) return row.principal + row.interest;
         uint256 done = (block.timestamp - row.start) / HOUR;
         uint256 was = (uint256(row.marked) - row.start) / HOUR;
         if (done <= was) return row.principal + row.interest;
@@ -455,7 +466,7 @@ contract TermBook {
     }
 
     function _accrue(Loan storage row) internal {
-        if (!row.open) return;
+        if (!row.open || row.collAmt == 0) return;
         uint256 done = (block.timestamp - row.start) / HOUR;
         uint256 was = (uint256(row.marked) - row.start) / HOUR;
         if (done <= was) return;

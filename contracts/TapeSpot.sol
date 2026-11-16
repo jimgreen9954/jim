@@ -248,13 +248,21 @@ contract TapeSpot {
             _push(USDT, FEE, fee);
         }
         emit Take(id, msg.sender, maker.maker, maker.market, maker.price, fill, uint128(cost), uint128(fee));
-        if (maker.left == 0) {
+        if (maker.left == 0 || _cost(maker.market, maker.left, maker.price) * FEE_BPS / 10000 == 0) {
+            uint128 rest = maker.left;
             uint128 dust = maker.escrow;
             address who = maker.maker;
+            uint8 market = maker.market;
+            bool bid = maker.bid;
+            maker.left = 0;
+            maker.escrow = 0;
             _unlink(id);
             _dropMine(who, id);
-            maker.escrow = 0;
-            if (dust > 0) _push(USDT, who, dust);
+            if (bid) {
+                if (dust > 0) _push(USDT, who, dust);
+            } else if (rest > 0) {
+                _pushBase(market, who, rest);
+            }
         }
     }
 

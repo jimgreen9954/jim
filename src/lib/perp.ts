@@ -56,13 +56,15 @@ function tokenUnit(): bigint {
   return 10n ** BigInt(tokenDecimals());
 }
 export const KNOWN_PERP = "0xB98D14333a93D49a4E05478d002FC3944D88A3b7";
-export const BSC_REBATE = "0x0a81a426b29991a777e038d9e4ecce1783804aa0";
-export const PREV_BSC = "0xdA4aA9E0aaad6F91835cD19345D49a8fcA8d019A";
-export const KNOWN_XPERP = "0xE8Ed0fE7a7aaEF822b2e5Ce9679ccACcF3aEFF56";
+export const BSC_REBATE = "0x89b2f4a2e0C07864172fB47fbDEa14411AF2e0E0";
+export const PREV_BSC = "0x0a81a426b29991a777e038d9e4ecce1783804aa0";
+export const OLDER_BSC = "0xdA4aA9E0aaad6F91835cD19345D49a8fcA8d019A";
+export const KNOWN_XPERP = "0x9fD9Ade0272646cc3aD36F1699Fd42CcFE8927c2";
 export const KNOWN_XMARK = "0xb4B2ee90D10ECfC7ed36A58e96e03074fA8731Eb";
-export const PREV_XPERP = "0xCAC69F02c06bfCa3bFDb1eaF1F4a60e17e718081";
+export const PREV_XPERP = "0xE8Ed0fE7a7aaEF822b2e5Ce9679ccACcF3aEFF56";
+export const OLDER_XPERP = "0xCAC69F02c06bfCa3bFDb1eaF1F4a60e17e718081";
 export const PREV_XMARK = "0xba5234cd46ec5eB0DFdf4ac329FF42EB3062B4eA";
-export const NEXT_XMARK = KNOWN_XMARK;
+const X_SPOT_MARK = "0x706c4ab8b20f4045623fcc91b24e4746f9776e01" as Hex;
 export const BOARD = [KNOWN_PERP];
 
 const abi = [
@@ -436,7 +438,7 @@ export function revertXBook(): void {
 }
 
 export function bookOf(which: Desk = desk): string {
-  if (which === "xlayer") return freshXBook() || KNOWN_XPERP;
+  if (which === "xlayer") return KNOWN_XPERP;
   return BSC_REBATE;
 }
 
@@ -517,7 +519,7 @@ export async function deployRisk(from: string, which: Desk): Promise<string> {
   try {
     const args = encodeAbiParameters(
       [{ type: "address" }, { type: "address" }, { type: "uint256" }, { type: "address" }],
-      [which === "xlayer" ? X_USDT : BSC.usdt, which === "xlayer" ? KNOWN_XMARK : BSC.pool, which === "xlayer" ? 1_000_000n : 10n ** 18n, safe],
+      [which === "xlayer" ? X_USDT : BSC.usdt, which === "xlayer" ? X_SPOT_MARK : BSC.pool, which === "xlayer" ? 1_000_000n : 10n ** 18n, safe],
     );
     const hash = await send(from, CREATE_CALL, createCallData((RISK_BYTECODE + args.slice(2)) as Hex), 8_000_000n);
     const receipt = await (await client()).waitForTransactionReceipt({ hash, timeout: 180_000, pollingInterval: 2_000 });
@@ -532,7 +534,7 @@ export async function deployRisk(from: string, which: Desk): Promise<string> {
 
 function pinned(perp: string): void {
   const want = perp.toLowerCase();
-  const rows = [bookOf("bsc"), bookOf("xlayer"), PREV_BSC, coinBook("bsc", "btc"), coinBook("bsc", "eth"), coinBook("bsc", "zec"), coinBook("bsc", "up"), coinBook("xlayer", "tape"), coinBook("xlayer", "fab"), BTC_COIN_BOOK, ETH_COIN_BOOK, ZEC_COIN_BOOK, UP_COIN_BOOK, TAPE_COIN_BOOK, FAB_COIN_BOOK];
+  const rows = [bookOf("bsc"), bookOf("xlayer"), PREV_BSC, OLDER_BSC, PREV_XPERP, OLDER_XPERP, coinBook("bsc", "btc"), coinBook("bsc", "eth"), coinBook("bsc", "zec"), coinBook("bsc", "up"), coinBook("xlayer", "tape"), coinBook("xlayer", "fab"), BTC_COIN_BOOK, ETH_COIN_BOOK, ZEC_COIN_BOOK, UP_COIN_BOOK, TAPE_COIN_BOOK, FAB_COIN_BOOK];
   if (!rows.some((row) => row.length === 42 && row.toLowerCase() === want)) throw new Error("book");
 }
 
@@ -623,14 +625,7 @@ export async function readMine(account: string): Promise<MineRow[]> {
   const who = account.toLowerCase();
   const books = [
     ["bsc", "bem", BSC_REBATE],
-    ["bsc", "bem", PREV_BSC],
-    ["xlayer", "bem", KNOWN_XPERP],
-    ["bsc", "btc", BTC_COIN_BOOK],
-    ["bsc", "eth", ETH_COIN_BOOK],
-    ["bsc", "zec", ZEC_COIN_BOOK],
-    ["bsc", "up", UP_COIN_BOOK],
-    ["xlayer", "tape", TAPE_COIN_BOOK],
-    ["xlayer", "fab", FAB_COIN_BOOK],
+    ["xlayer", "bem", bookOf("xlayer")],
   ] as const;
   const out: MineRow[] = [];
   const was = desk;
@@ -1051,7 +1046,17 @@ async function pullMargin(from: string, perp: string, margin: string, lev: numbe
 
 const bookV2Abi = [{ name: "bookV2", type: "function", stateMutability: "pure", inputs: [], outputs: [{ type: "bool" }] }] as const;
 
-/** Old books stay closed. A v2 book can open once its mark has a real 10 minute window. */
+function xBemPerp(perp: string): boolean {
+  if (desk !== "xlayer") return false;
+  const want = perp.toLowerCase();
+  for (const coin of ["tape", "fab"] as const) {
+    const row = coinBook("xlayer", coin);
+    if (row && row.toLowerCase() === want) return false;
+  }
+  return true;
+}
+
+/** Old books stay closed. A v2 book can open once its mark is near the spot pools. */
 async function assertV2(perp: string) {
   pinned(perp);
   let fresh = false;
@@ -1061,14 +1066,22 @@ async function assertV2(perp: string) {
     fresh = false;
   }
   if (!fresh) throw new Error("halt");
+  let px = 0n;
   try {
-    await (await client()).readContract({
+    px = await (await client()).readContract({
       address: perp as Hex,
       abi: [{ name: "mark", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] }] as const,
       functionName: "mark",
     });
   } catch {
     throw new Error("warm");
+  }
+  if (desk === "xlayer" && xBemPerp(perp)) {
+    const pool = await (await client()).readContract({ address: perp as Hex, abi: poolAbi, functionName: "pool" });
+    if (pool.toLowerCase() === KNOWN_XMARK.toLowerCase()) throw new Error("stale");
+    const spot = await xPoolPrice().catch(() => 0);
+    const on = Number(px) / 1e18;
+    if (!(spot > 0) || on <= 0 || on / spot > 1.15 || spot / on > 1.15) throw new Error("stale");
   }
 }
 
@@ -1555,26 +1568,37 @@ export async function pokeBook(from: string, perp: string): Promise<Hex> {
 }
 
 /** New mark from the BEM/WOKB 1% pool, then a new book. The old book cannot change its mark. */
-export async function shipXBook(from: string): Promise<{ mark: string; book: string }> {
+export async function shipXBook(from: string): Promise<{ mark: string; book: string; hash: Hex }> {
   if (from.toLowerCase() !== XLAYER_SAFE.toLowerCase()) throw new Error("fee");
   const was = desk;
   desk = "xlayer";
   try {
     const have = freshXBook();
     const savedMark = typeof window !== "undefined" ? window.localStorage.getItem(FRESH_X_MARK) ?? "" : "";
-    if (have && (await xBookState(have)) !== "down") return { mark: savedMark, book: have };
+    if (have && (await xBookState(have)) === "ready") {
+      const live = await readMark("xlayer", have);
+      const spot = await xPoolPrice().catch(() => 0);
+      const on = live === null ? 0 : Number(live) / 1e18;
+      if (spot > 0 && on > 0 && on / spot <= 1.15 && spot / on <= 1.15) return { mark: savedMark, book: have, hash: "0x" };
+    }
     const rpc = await client();
-    const known = "0x706c4ab8b20f4045623fcc91b24e4746f9776e01";
-    const knownCode = await rpc.getBytecode({ address: known as Hex });
-    const mark = knownCode && knownCode !== "0x" ? known : "";
+    const knownCode = await rpc.getBytecode({ address: X_SPOT_MARK });
+    let mark = knownCode && knownCode !== "0x" ? X_SPOT_MARK : "";
     if (!mark) {
       const markHash = await send(from, CREATE_CALL, createCallData(MARK_BYTECODE as Hex), 3_000_000n);
       const markReceipt = await rpc.waitForTransactionReceipt({ hash: markHash, timeout: 180_000, pollingInterval: 2_000 });
       const made = createdAddress(markReceipt.logs);
       if (!made) throw new Error("revert");
-      window.localStorage.setItem(FRESH_X_MARK, made);
-      throw new Error("mark");
+      mark = made;
     }
+    const count = await rpc
+      .readContract({
+        address: mark as Hex,
+        abi: [{ name: "count", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint8" }] }] as const,
+        functionName: "count",
+      })
+      .catch(() => 0);
+    if (count === 0) await send(from, mark as Hex, encodeFunctionData({ abi: pokeAbi, functionName: "poke" }), 500_000n);
     const args = encodeAbiParameters(
       [{ type: "address" }, { type: "address" }, { type: "uint256" }, { type: "address" }],
       [X_USDT, mark as Hex, 1_000_000n, XLAYER_SAFE],
@@ -1583,9 +1607,13 @@ export async function shipXBook(from: string): Promise<{ mark: string; book: str
     const bookReceipt = await rpc.waitForTransactionReceipt({ hash: bookHash, timeout: 180_000, pollingInterval: 2_000 });
     const book = createdAddress(bookReceipt.logs);
     if (!book) throw new Error("revert");
+    const live = await readMark("xlayer", book);
+    const spot = await xPoolPrice().catch(() => 0);
+    const on = live === null ? 0 : Number(live) / 1e18;
+    if (live === null || !(spot > 0) || on / spot > 1.15 || spot / on > 1.15) throw new Error("price");
     window.localStorage.setItem(FRESH_X_MARK, mark);
     window.localStorage.setItem(FRESH_X_BOOK, book);
-    return { mark, book };
+    return { mark, book, hash: bookHash };
   } finally {
     desk = was;
   }
@@ -1725,7 +1753,7 @@ export async function deployLockedPair(from: string): Promise<{ mark: string; pe
   desk = "xlayer";
   try {
     const rpc = await client();
-    const mark = NEXT_XMARK;
+    const mark = X_SPOT_MARK;
     const args = encodeAbiParameters(
       [{ type: "address" }, { type: "address" }, { type: "uint256" }],
       [X_USDT, mark, 1_000_000n],

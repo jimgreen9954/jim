@@ -819,7 +819,7 @@ export function TapeTerminal({
                         const from = account ?? (await connectXLayer());
                         setAccount(from);
                         let last: `0x${string}` = "0x";
-                        for (const row of orders) last = await cancelSpot(from, row.id);
+                        for (const row of orders) last = await cancelSpot(from, row.id, row.book);
                         return last;
                       },
                       zhUi ? "已全撤。" : "Cancelled.",
@@ -830,7 +830,7 @@ export function TapeTerminal({
                 </button>
                 {orders.map((row) => (
                   <div
-                    key={row.id.toString()}
+                    key={`${row.book}-${row.id.toString()}`}
                     className="flex flex-wrap items-center gap-3 font-mono"
                   >
                     <span>{row.bid ? (zhUi ? "买" : "Bid") : zhUi ? "卖" : "Ask"}</span>
@@ -845,7 +845,7 @@ export function TapeTerminal({
                           async () => {
                             const from = account ?? (await connectXLayer());
                             setAccount(from);
-                            return cancelSpot(from, row.id);
+                            return cancelSpot(from, row.id, row.book);
                           },
                           zhUi ? "已撤。" : "Cancelled.",
                         )

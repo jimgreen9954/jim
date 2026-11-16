@@ -51,6 +51,7 @@ import {
   pickBook,
   deployCoin,
   pokeBook,
+  shipXBook,
   liquidatePerp,
   openPerp,
   openPostPerp,
@@ -894,6 +895,12 @@ export function RealPerp({
       setNote(
         lang === "zh" ? "只有多签能写标记价。" : "Only the multisig can post the mark.",
       );
+    else if (message === "stale")
+      setNote(
+        lang === "zh"
+          ? "标记价还是旧池，大约是现货的两倍。新开仓停了。多签部署新本之后才能开。"
+          : "The mark still reads the old pool and is about twice spot. New opens are stopped until the multisig deploys the new book.",
+      );
     else if (message === "warm")
       setNote(
         lang === "zh"
@@ -1093,6 +1100,7 @@ export function RealPerp({
     poolPx > 0 &&
     (coin === "btc" || coin === "eth" || coin === "zec" || coin === "up" || coin === "tape" || coin === "fab" || (chain === "xlayer" && coin === "bem")) &&
     Math.abs(settle - poolPx) / poolPx > 0.03;
+  const xStale = chain === "xlayer" && !ownCoin && markFar;
   const ownMark =
     coin === "btc" || coin === "eth" || coin === "zec" || coin === "up" || coin === "tape" || coin === "fab" || chain === "xlayer";
   const markN = alt
@@ -1332,6 +1340,22 @@ export function RealPerp({
   const place = (side) => {
     setIntent(side);
     if (busy) return;
+    if (xStale) {
+      run(async (from) => {
+        const shipped = await shipXBook(from);
+        setPerp(shipped.book);
+        queueMicrotask(() => {
+          setBad(false);
+          setNote(
+            lang === "zh"
+              ? `新本 ${shipped.book}。标记读现货池。把这行地址发我，写进页面之后别人用的才是这一份。`
+              : `New book ${shipped.book}. The mark reads the spot pools. Send this address so the page uses it for everyone.`,
+          );
+        });
+        return shipped.hash;
+      });
+      return;
+    }
     if (markFar) {
       run((from) => pokeBook(from, perp));
       return;
@@ -1411,12 +1435,6 @@ export function RealPerp({
                             [
                               ["bsc", "bem", "BEM-USDT", "BSC"],
                               ["xlayer", "bem", "BEM-USDT0", "X Layer"],
-                              ["bsc", "up", "UP-USDT", "BSC"],
-                              ["xlayer", "tape", "TAPE-USDT0", "X Layer"],
-                              ["xlayer", "fab", "FAB-USDT0", "X Layer"],
-                              ["bsc", "btc", "BTC-USDT", "BSC"],
-                              ["bsc", "eth", "ETH-USDT", "BSC"],
-                              ["bsc", "zec", "ZEC-USDT", "BSC"],
                             ].map(([nextChain, nextCoin, label, venue]) => {
                               return /* @__PURE__ */ jsxs(
                                 "button",
@@ -2801,6 +2819,22 @@ export function RealPerp({
                                           (!alt && !view?.priced && !(markN > 0))))
                                     }
                                     onClick={() => {
+                                      if (xStale) {
+                                        run(async (from) => {
+                                          const shipped = await shipXBook(from);
+                                          setPerp(shipped.book);
+                                          queueMicrotask(() => {
+                                            setBad(false);
+                                            setNote(
+                                              lang === "zh"
+                                                ? `新本 ${shipped.book}。标记读现货池。把这行地址发我，写进页面之后别人用的才是这一份。`
+                                                : `New book ${shipped.book}. The mark reads the spot pools. Send this address so the page uses it for everyone.`,
+                                            );
+                                          });
+                                          return shipped.hash;
+                                        });
+                                        return;
+                                      }
                                       if (markFar) {
                                         run((from) => pokeBook(from, perp));
                                         return;
@@ -2851,6 +2885,10 @@ export function RealPerp({
                                       ? lang === "zh"
                                         ? "部署合约"
                                         : "Deploy the book"
+                                      : xStale
+                                      ? lang === "zh"
+                                        ? "部署新本"
+                                        : "Deploy the new book"
                                       : markFar
                                       ? lang === "zh"
                                         ? "对齐标记价"

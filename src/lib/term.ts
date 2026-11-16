@@ -661,14 +661,23 @@ export async function addTermColl(chain: TermChain, id: bigint, coll: number, am
   await wait(chain, await send(from, book, data));
 }
 
-export async function repayTerm(chain: TermChain, id: bigint, debt: number, amount: string) {
+function coversOwed(qty: bigint, owed: bigint, decimals: number): boolean {
+  if (owed === 0n || qty === 0n) return false;
+  if (qty >= owed) return true;
+  const step = 10n ** BigInt(Math.max(0, decimals - 4));
+  const cushion = owed / 1000n + 1n;
+  const slack = cushion > step ? cushion : step;
+  return owed - qty <= slack;
+}
+
+export async function repayTerm(chain: TermChain, id: bigint, debt: number, amount: string, all = false) {
   const asset = termAsset(chain, debt);
   const qty = units(amount, asset.decimals);
-  if (qty <= 0n) throw new Error("amount");
+  if (qty <= 0n && !all) throw new Error("amount");
   const from = await signer(chain);
   const book = need(chain);
   let owed = await read<bigint>(chain, book, "debtOf", [id]);
-  const closing = owed > 0n && qty >= owed;
+  const closing = all || coversOwed(qty, owed, asset.decimals);
   for (let pass = 0; pass < 2 && owed > 0n; pass++) {
     let pay = closing ? owed + owed / 1000n + 1n : qty;
     if (asset.native) {

@@ -49,19 +49,23 @@ export type LendAsset = "gas" | "tape" | "bem";
 
 const PIN: Partial<Record<`${LendChain}:${LendAsset}`, Hex>> = {
   "xlayer:gas": "0x57228158cba08c61710ab2644e583c328ec86ea7",
-  "xlayer:tape": "0xa49970ffafa28a0e596745e08993df611170f96f",
-  "xlayer:bem": "0x8d3074bdf9412d77269f59cc506e318e5da27914",
+  "xlayer:tape": "0x586B7992A8467290C5a1857FcE7EC8AF72be9445",
+  "xlayer:bem": "0xeC55C19F6b0E08FbAd7DECD54bf8c892230fD353",
   "bsc:gas": "0xd8d981d32b12ea85b739bb667946975d25b0ab53",
   "bsc:bem": "0xd2c7150f7779ded403c3f81a68dab5164b54df28",
 };
 
-const PRIOR: Partial<Record<`${LendChain}:${LendAsset}`, Hex>> = {
-  "xlayer:tape": "0x425285da21ed3eabe64550d1be7dcabcf6f9e851",
-  "xlayer:bem": "0x5ed8551f90acc6395810d8274b019bf13ef1f696",
+const PRIOR: Partial<Record<`${LendChain}:${LendAsset}`, Hex[]>> = {
+  "xlayer:tape": ["0xa49970ffafa28a0e596745e08993df611170f96f", "0x425285da21ed3eabe64550d1be7dcabcf6f9e851"],
+  "xlayer:bem": ["0x8d3074bdf9412d77269f59cc506e318e5da27914", "0x5ed8551f90acc6395810d8274b019bf13ef1f696"],
 };
 
+export function priorLends(chain: LendChain, asset: LendAsset): Hex[] {
+  return PRIOR[`${chain}:${asset}`] ?? [];
+}
+
 export function priorLend(chain: LendChain, asset: LendAsset): Hex | null {
-  return PRIOR[`${chain}:${asset}`] ?? null;
+  return priorLends(chain, asset)[0] ?? null;
 }
 
 export function lendChoices(chain: LendChain): LendAsset[] {
@@ -570,14 +574,23 @@ export async function borrowLend(chain: LendChain, asset: LendAsset, amount: str
   await wait(chain, await send(from, lend, encodeFunctionData({ abi, functionName: "borrow", args: [qty] })));
 }
 
-export async function repayLend(chain: LendChain, asset: LendAsset, amount: string, book?: Hex) {
+function coversOwed(qty: bigint, owed: bigint, decimals: number): boolean {
+  if (owed === 0n || qty === 0n) return false;
+  if (qty >= owed) return true;
+  const step = 10n ** BigInt(Math.max(0, decimals - 4));
+  const cushion = owed / 1000n + 1n;
+  const slack = cushion > step ? cushion : step;
+  return owed - qty <= slack;
+}
+
+export async function repayLend(chain: LendChain, asset: LendAsset, amount: string, book?: Hex, all = false) {
   const spec = lendSpec(chain, asset);
   const qty = units(amount, spec.usdtDec);
-  if (qty === 0n) throw new Error("amount");
+  if (qty === 0n && !all) throw new Error("amount");
   const from = await signer(chain);
   const lend = need(chain, asset, book);
   let owed = await read<bigint>(chain, lend, "debtOf", [from as Hex]);
-  const closing = owed > 0n && qty >= owed;
+  const closing = all || coversOwed(qty, owed, spec.usdtDec);
   for (let pass = 0; pass < 2 && owed > 0n; pass++) {
     const have = await read<bigint>(chain, spec.usdt, "balanceOf", [from as Hex], erc20);
     let pay = closing ? owed + owed / 1000n + 1n : qty;

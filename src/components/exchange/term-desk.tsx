@@ -39,7 +39,8 @@ function failText(err: unknown, zh: boolean): string {
   if (code === "gas") return zh ? "要留下一点当网络费，不能全部转进去。" : "Leave a little for the network fee.";
   if (code === "live") return zh ? "这一本还没部署。" : "This book is not deployed.";
   if (code === "dry") return zh ? "池子里现在没有这么多可借的。" : "The pool does not have that much to lend.";
-  if (code === "price") return zh ? "价格还不可用。先记账，等它记稳。" : "The price is not usable yet. Post it and wait until it settles.";
+  if (code === "price") return zh ? "价格还没记稳。先记账，连续三次贴近现货后才能开。" : "The price has not settled. Post it until three marks sit near the spot.";
+  if (code === "stale") return zh ? "价格已超过 30 分钟。再记一次就能用。" : "The price is older than 30 minutes. Post it once more.";
   if (code === "ltv") return zh ? "超过抵押品价值的 50%。" : "That is over 50% of the collateral.";
   if (code === "min") return zh ? "单笔至少借 10 美元。" : "A loan has to be at least $10.";
   if (code === "same") return zh ? "抵押和借出不能是同一枚。" : "Collateral and debt cannot be the same asset.";
@@ -221,7 +222,6 @@ export function TermDesk({ zh, account }: { zh: boolean; account: string | null 
         <div className="mt-2 flex flex-wrap gap-1">
           {assets.map((row) => {
             const book = snap?.pools.find((item) => item.id === row.id);
-            const ready = freshAt(book, now);
             return (
               <button
                 key={row.id}
@@ -231,7 +231,7 @@ export function TermDesk({ zh, account }: { zh: boolean; account: string | null 
                 onClick={() => run(() => pokeTerm(chain, row.id), zh ? "已记账。" : "Posted.")}
               >
                 {zh ? "记" : "Post"} {row.symbol}
-                {ready ? (zh ? " · 可用" : " · ready") : book && book.price > 0n ? ` · ${book.stamp}/3` : zh ? " · 还没有" : " · none"}
+                {postMark(book, now, zh)}
               </button>
             );
           })}
@@ -329,7 +329,7 @@ export function TermDesk({ zh, account }: { zh: boolean; account: string | null 
         {collAsset.id === debtAsset.id ? <p className="mt-2 text-xs text-sell">{zh ? "抵押和借出不能是同一枚。" : "Collateral and debt cannot be the same asset."}</p> : preview.warn ? <p className="mt-2 text-xs text-sell">{failText(new Error(preview.warn), zh)}</p> : null}
         <button
           type="button"
-          disabled={busy || !live || collAsset.id === debtAsset.id}
+          disabled={busy || !live || collAsset.id === debtAsset.id || preview.warn === "min" || preview.warn === "ltv" || preview.warn === "dry" || preview.warn === "price" || preview.warn === "stale"}
           className="mt-2 min-h-11 w-full bg-ink text-paper disabled:opacity-40"
           onClick={() => run(() => openTerm(chain, collAsset.id, debtAsset.id, term, collText, debtText).then(() => {
             setCollText("");
@@ -366,7 +366,7 @@ export function TermDesk({ zh, account }: { zh: boolean; account: string | null 
               extra={extras[String(loan.id)] ?? ""}
               onPay={(value) => setPays((prev) => ({ ...prev, [String(loan.id)]: value }))}
               onExtra={(value) => setExtras((prev) => ({ ...prev, [String(loan.id)]: value }))}
-              onRepay={(amount) => run(() => repayTerm(chain, loan.id, loan.debt, amount), zh ? "已还款。" : "Repaid.")}
+              onRepay={(amount, all) => run(() => repayTerm(chain, loan.id, loan.debt, amount, all), zh ? "已还款。" : "Repaid.")}
               onAdd={(amount) => run(() => addTermColl(chain, loan.id, loan.coll, amount), zh ? "已加上抵押。" : "Collateral added.")}
               onFill={(value) => setPays((prev) => ({ ...prev, [String(loan.id)]: value }))}
             />
@@ -431,6 +431,13 @@ export function TermDesk({ zh, account }: { zh: boolean; account: string | null 
   );
 }
 
+function postMark(book: TermPool | undefined, now: number, zh: boolean): string {
+  if (freshAt(book, now)) return zh ? " · 可用" : " · ready";
+  if (book && book.price > 0n && book.stamp >= 3 && book.at > 0 && now - book.at > 30 * 60) return zh ? " · 已过期" : " · expired";
+  if (book && book.price > 0n) return ` · ${book.stamp}/3`;
+  return zh ? " · 还没有" : " · none";
+}
+
 function poolBalance(pool: TermPool | undefined, decimals: number): string {
   if (!pool) return "—";
   return termText(pool.wallet, decimals);
@@ -488,7 +495,7 @@ function openPreview(
   if (debtUsd < MIN_USD) warn = "min";
   else if (collUsd * 5000n < debtUsd * 10000n) warn = "ltv";
   else if (principal > debtPool.cash) warn = "dry";
-  else if (!freshAt(collPool, now) || !freshAt(debtPool, now)) warn = "price";
+  else if (!freshAt(collPool, now) || !freshAt(debtPool, now)) warn = collPool.stamp >= 3 && debtPool.stamp >= 3 ? "stale" : "price";
   return { ltv, debtUsd, hour, due, warn };
 }
 
@@ -517,7 +524,7 @@ function LoanCard({
   extra: string;
   onPay: (value: string) => void;
   onExtra: (value: string) => void;
-  onRepay: (amount: string) => void;
+  onRepay: (amount: string, all: boolean) => void;
   onAdd: (amount: string) => void;
   onFill: (value: string) => void;
 }) {
@@ -526,6 +533,7 @@ function LoanCard({
   const cPool = pools.find((row) => row.id === loan.coll);
   const dPool = pools.find((row) => row.id === loan.debt);
   const owed = owedAt(loan, debt.kind, now);
+  const [full, setFull] = useState(false);
   const collUsd = cPool && cPool.price > 0n ? usdOf(loan.collAmt, cPool.price, coll.decimals) : null;
   const debtUsd = dPool && dPool.price > 0n ? usdOf(owed, dPool.price, debt.decimals) : null;
   const equity = collUsd != null && debtUsd != null ? collUsd - debtUsd : null;
@@ -538,6 +546,9 @@ function LoanCard({
   const overdue = now >= loan.due;
   const step = (loan.principal * hourlyWad(debt.kind, row.mul)) / WAD;
   const nextAdd = loan.start + (done + 1) * 3600 > loan.due ? step * 2n : step;
+  const typed = parseAmt(pay, debt.decimals);
+  const shownStep = 10n ** BigInt(Math.max(0, debt.decimals - 4));
+  const closing = full || (typed != null && owed > 0n && (typed >= owed || owed - typed <= shownStep));
   return (
     <article className={`border px-3 py-3 ${ratio != null && ratio > 7500n ? "border-sell" : "border-gold/40"}`}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -572,7 +583,7 @@ function LoanCard({
       <div className="mt-2 grid gap-2 sm:grid-cols-2">
         <label className="text-xs text-ink/55">
           {zh ? "还款" : "Repay"} {debt.symbol}
-          <input value={pay} inputMode="decimal" className="mt-1 min-h-11 w-full border border-gold/40 bg-transparent px-2 text-sm text-ink" onChange={(event) => onPay(event.target.value)} />
+          <input value={pay} inputMode="decimal" className="mt-1 min-h-11 w-full border border-gold/40 bg-transparent px-2 text-sm text-ink" onChange={(event) => { setFull(false); onPay(event.target.value); }} />
         </label>
         <label className="text-xs text-ink/55">
           {zh ? "再加抵押" : "Add collateral"} {coll.symbol}
@@ -580,10 +591,10 @@ function LoanCard({
         </label>
       </div>
       <div className="mt-2 flex flex-wrap gap-2">
-        <button type="button" className="min-h-9 px-2 text-xs underline" onClick={() => onFill(termPlain(owed, debt.decimals))}>
+        <button type="button" className="min-h-9 px-2 text-xs underline" onClick={() => { setFull(true); onFill(termPlain(owed, debt.decimals)); }}>
           {zh ? "按欠款填入" : "Fill the debt"}
         </button>
-        <button type="button" disabled={busy || !pay.trim()} className="min-h-9 bg-ink px-3 text-xs text-paper disabled:opacity-40" onClick={() => onRepay(pay)}>
+        <button type="button" disabled={busy || !pay.trim()} className="min-h-9 bg-ink px-3 text-xs text-paper disabled:opacity-40" onClick={() => onRepay(pay, closing)}>
           {zh ? "还款" : "Repay"}
         </button>
         <button type="button" disabled={busy || !extra.trim()} className="min-h-9 border border-ink px-3 text-xs disabled:opacity-40" onClick={() => onAdd(extra)}>

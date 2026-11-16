@@ -14,7 +14,6 @@ import { currentAccount, onAccount } from "@/lib/wallet";
 import {
   baseText,
   cancelSpot,
-  deploySpot,
   placeSpot,
   readMyOrders,
   readSpotBook,
@@ -706,30 +705,14 @@ export function TapeSpotDesk({
       <article className="border border-gold bg-card px-3 py-4">
         <p className="text-[11px] tracking-[0.22em] text-gold">{zh ? "现货" : "Spot"}</p>
         <h3 className="mt-1 font-display text-2xl italic sm:text-3xl">
-          {zh ? "订单簿还差一次签名" : "The book needs one signature"}
+          {zh ? "订单簿已经部署" : "The book is already deployed"}
         </h3>
         <p className="mt-2 text-sm leading-6">
           {zh
-            ? "地址已经写在页面上。用收费地址签下面这一次，不要先做别的转账。签完之后，每台设备都能看到盘口。"
-            : "The address is already on the page. Sign this once from the fee address, and do not send another transfer first. After that, every device sees the book."}
+            ? "地址已经写在页面上。节点这一下没读到代码，不会再部署第二本。刷新后再看盘口。"
+            : "The address is already on the page. This read missed the code, so another book is not deployed. Refresh to see the book."}
         </p>
         <p className="mt-2 break-all font-mono text-xs">{spot}</p>
-        <button
-          type="button"
-          disabled={busy}
-          className="mt-3 min-h-12 w-full bg-ink px-4 text-sm text-paper disabled:opacity-40"
-          onClick={() =>
-            run(() => deploySpot(account ?? ""), zh ? "订单簿已上线。" : "The book is live.")
-          }
-        >
-          {busy
-            ? zh
-              ? "等待钱包确认"
-              : "Waiting for the wallet"
-            : zh
-              ? "部署订单簿"
-              : "Deploy the book"}
-        </button>
         {note ? <p className={`mt-2 text-sm leading-6 ${bad ? "text-sell" : ""}`}>{note}</p> : null}
       </article>
     );
@@ -1067,7 +1050,7 @@ export function TapeSpotDesk({
                       ) : null}
                       {orders.map((row) => (
                         <li
-                          key={row.id.toString()}
+                          key={`${row.book}-${row.id.toString()}`}
                           className="grid items-center gap-2 border-t border-gold/30 px-3 py-2 text-xs sm:grid-cols-[4rem_1fr_1fr_auto]"
                         >
                           <span className={row.bid ? "text-up" : "text-sell"}>
@@ -1083,7 +1066,7 @@ export function TapeSpotDesk({
                             className="min-h-9 border border-gold px-2 disabled:opacity-40"
                             onClick={() =>
                               run(
-                                () => cancelSpot(account ?? "", row.id),
+                                () => cancelSpot(account ?? "", row.id, row.book),
                                 zh
                                   ? "已撤单。没吃掉的退回钱包。"
                                   : "Cancelled. The rest is back in the wallet.",

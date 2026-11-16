@@ -7,7 +7,8 @@ import { getProvider } from "@/lib/wallet";
 import { DEPLOYED, connectXLayer, XLAYER } from "@/lib/xlayer";
 
 /** X Layer order book. Creation bytecode matches contracts/TapeSpot.sol. No admin. */
-export const TAPE_SPOT = "0xd398691dff583788e6e2d02dd33b1ffd9fa6b8bd" as const;
+export const TAPE_SPOT = "0xF973e81F656553C0236c4E452Af4EC5B6085680a" as const;
+export const PREV_SPOT = "0xd398691dff583788e6e2d02dd33b1ffd9fa6b8bd" as const;
 export const SPOT_FEE = XLAYER_SAFE;
 
 const KEY = "tapeliquid-spot";
@@ -70,7 +71,7 @@ export async function rememberSpot(address: string): Promise<Hex> {
 }
 
 export type Level = { price: bigint; size: bigint; lots: number };
-export type OpenOrder = { id: bigint; market: number; bid: boolean; price: bigint; left: bigint };
+export type OpenOrder = { id: bigint; market: number; bid: boolean; price: bigint; left: bigint; book: Hex };
 export type CircuitAsk = { id: bigint; seller: string; price: bigint };
 export type SpotPrint = { tx: string; market: number; price: bigint; base: bigint; quote: bigint; fee: bigint; taker: string; maker: string };
 export type SpotPurse = { usdt: bigint; tape: bigint; nand: bigint; latch: bigint };
@@ -109,10 +110,17 @@ export async function readSpotBook(market: SpotMarket): Promise<{ bids: Level[];
 }
 
 export async function readMyOrders(account: string): Promise<OpenOrder[]> {
-  const spot = spotAddress();
-  if (!spot) return [];
-  const row = await client.readContract({ address: spot, abi, functionName: "myOrders", args: [account as Hex] });
-  return row[0].map((id, i) => ({ id, market: row[1][i] ?? 0, bid: row[2][i] ?? false, price: row[3][i] ?? 0n, left: row[4][i] ?? 0n }));
+  const books = [spotAddress()].filter((row): row is Hex => Boolean(row));
+  const out: OpenOrder[] = [];
+  for (const spot of books) {
+    try {
+      const row = await client.readContract({ address: spot, abi, functionName: "myOrders", args: [account as Hex] });
+      row[0].forEach((id, i) => out.push({ id, market: row[1][i] ?? 0, bid: row[2][i] ?? false, price: row[3][i] ?? 0n, left: row[4][i] ?? 0n, book: spot }));
+    } catch {
+      /* an older book that cannot be read stays out of the list */
+    }
+  }
+  return out;
 }
 
 export async function readListings(): Promise<CircuitAsk[]> {
@@ -330,8 +338,7 @@ async function approveAll(from: string, token: Hex, kind: "wafer" | "circuit") {
   await send(from, token, data);
 }
 
-async function call(from: string, data: Hex) {
-  const spot = spotAddress();
+async function call(from: string, data: Hex, spot: Hex | null = spotAddress()) {
   if (!spot) throw new Error("spot");
   await probe(from, spot, data);
   return send(from, spot, data);
@@ -372,8 +379,8 @@ export async function placeSpot(from: string, market: SpotMarket, bid: boolean, 
   return call(from, encodeFunctionData({ abi, functionName: "place", args: [market, bid, price, amount] }));
 }
 
-export async function cancelSpot(from: string, id: bigint) {
-  return call(from, encodeFunctionData({ abi, functionName: "cancel", args: [id] }));
+export async function cancelSpot(from: string, id: bigint, book?: Hex) {
+  return call(from, encodeFunctionData({ abi, functionName: "cancel", args: [id] }), book ?? spotAddress());
 }
 
 export async function listSpotCircuit(from: string, id: bigint, price: bigint) {

@@ -1,7 +1,6 @@
 import { Component, lazy, Suspense, type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArriveHint } from "@/components/exchange/phone-desk";
-import { HomePatch } from "@/components/exchange/home-books";
 import { PoolSpot } from "@/components/exchange/pool-spot";
 import { useExchange } from "@/lib/exchange-store";
 import type { DeskView } from "@/components/exchange/desk-chrome";
@@ -58,11 +57,10 @@ export function deskChain(view: DeskView): Desk {
 
 export function sisterView(view: DeskView, side: "spot" | "perp"): DeskView {
   if (side === "perp") {
-    if (view.kind === "perp") return view;
-    if (view.kind === "pancake" && view.pair === "fab") return { kind: "perp", chain: "xlayer", coin: "fab" };
+    if (view.kind === "perp") return view.coin === "bem" ? view : { kind: "perp", chain: view.chain, coin: "bem" };
+    if (view.kind === "pancake" && view.pair === "fab") return { kind: "perp", chain: "xlayer", coin: "bem" };
     return { kind: "perp", chain: "xlayer", coin: "bem" };
   }
-  if (view.kind === "perp" && view.coin === "fab") return { kind: "pancake", pair: "fab" };
   if (view.kind === "perp") return { kind: "tape", market: 0 };
   return view;
 }
@@ -70,13 +68,7 @@ export function sisterView(view: DeskView, side: "spot" | "perp"): DeskView {
 export function viewOnChain(view: DeskView, chain: Desk): DeskView {
   if (deskChain(view) === chain) return view;
   if (view.kind === "perp") {
-    if (view.coin === "bem") return { kind: "perp", chain, coin: "bem" };
-    if (view.coin === "fab" || view.coin === "tape")
-      return chain === "xlayer" ? { kind: "perp", chain: "xlayer", coin: view.coin } : { kind: "perp", chain: "bsc", coin: "bem" };
-    if (chain === "xlayer") return { kind: "perp", chain: "xlayer", coin: "bem" };
-    if (view.coin === "btc" || view.coin === "eth" || view.coin === "zec" || view.coin === "up")
-      return { kind: "perp", chain: "bsc", coin: view.coin };
-    return { kind: "perp", chain: "bsc", coin: "bem" };
+    return { kind: "perp", chain, coin: "bem" };
   }
   if (chain === "xlayer") {
     if (view.kind === "hash") return view;
@@ -294,14 +286,19 @@ export function DeskHome({
   const pool = !showPerp && view.kind === "tape" && view.market === 0;
   const book = !showPerp && (view.kind === "otc" || (view.kind === "tape" && view.market !== 0));
   const hash = !showPerp && view.kind === "hash";
+  const launchCoin =
+    view.kind === "perp" && (view.coin === "btc" || view.coin === "eth" || view.coin === "zec" || view.coin === "up" || view.coin === "tape" || view.coin === "fab")
+      ? "bem"
+      : view.kind === "perp"
+        ? view.coin
+        : "bem";
   const launch =
     view.kind === "perp"
-      ? view
+      ? { kind: "perp" as const, chain: view.chain, coin: launchCoin }
       : { kind: "perp" as const, chain: "bsc" as const, coin: "bem" as const };
 
   return (
     <>
-      <HomePatch zh={zh} />
       <ArriveHint zh={zh} />
       {showPerp ? (
         <Suspense fallback={null}>

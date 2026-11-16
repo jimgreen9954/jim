@@ -1172,16 +1172,26 @@ async function tradePerp(chain: GiftChain, from: string, gate: number, need: big
   return hash;
 }
 
+const CHECKED_RED = "0x7761ac208268aaeb74761267dec2e23504676028dd92264c2e07663cad7520c9" as Hex;
+const RED_RUNTIME: Record<GiftChain, Hex> = {
+  xlayer: "0x0ec34e5d71fe7e47355e2510d9f5bc10fa058d96c78695b3eecb136f82f04872",
+  bsc: "0xbbb52e1c7fcefd16904831f2f57fa1a041f8d8aca5bdba3ffc537cbaa49e8947",
+};
+
+async function tapeBuyAllowed(chain: GiftChain, pool: Hex) {
+  const code = await client(chain).getBytecode({ address: pool });
+  if (!code || code === "0x") throw new Error("tape-old");
+  const hash = keccak256(code);
+  if (hash === RED_RUNTIME[chain] || hash === CHECKED_RED) return;
+  throw new Error("tape-old");
+}
+
 export async function tradeRed(chain: GiftChain, from: string, lane: GiftLane = "volunteer", pool: Hex = packetOf(chain, lane)): Promise<Hex> {
   const here = pool.toLowerCase() === packetOf(chain, lane).toLowerCase() ? await readRed(chain, from, lane) : await readLive(chain, from, pool, lane);
   if (here.lastDay === BigInt(sgDay())) throw new Error("day");
   if (here.endsAt > 0n && here.endsAt <= BigInt(Math.floor(Date.now() / 1000))) throw new Error("late");
   if (await tradedNow(chain, from, lane, pool)) throw new Error("traded");
-  if (here.gate === 0 && here.hi === BigInt(TAPE)) {
-    const code = await client(chain).getBytecode({ address: pool });
-    const marks = code ? code.toLowerCase().split("70a08231").length - 1 : 0;
-    if (marks < 9) throw new Error("tape-old");
-  }
+  if (here.gate === 0 && here.hi === BigInt(TAPE)) await tapeBuyAllowed(chain, pool);
   const need = here.spotNeed > here.perpNeed ? here.spotNeed : here.perpNeed;
   if (need <= 0n || here.hi === 0n) throw new Error("task");
   const deskTask = taskAsset(chain, here.hi);

@@ -139,6 +139,10 @@ contract RedNext {
         return (ts + 8 hours) / 1 days;
     }
 
+    function edition() external pure returns (uint8) {
+        return 2;
+    }
+
     function claimsToday(uint256 ts) external view returns (uint256) {
         return sgDay(ts) == claimDay ? claimedToday : 0;
     }
@@ -361,7 +365,7 @@ contract RedNext {
             uint256 beforeBal = address(this).balance;
             ITape(tapePool).swap(1, true, amountIn, minOut);
             uint256 got = address(this).balance - beforeBal;
-            require(got >= minOut, "buy");
+            require(got >= minOut && got >= spotNeed, "buy");
             (bool ok,) = msg.sender.call{value: got}("");
             require(ok, "prize");
             return;
@@ -374,7 +378,7 @@ contract RedNext {
             uint256 beforeBal = address(this).balance;
             ISwapV2(router).swapExactTokensForETH(amountIn, minOut, path, address(this), block.timestamp + 20 minutes);
             uint256 got = address(this).balance - beforeBal;
-            require(got >= minOut, "buy");
+            require(got >= minOut && got >= spotNeed, "buy");
             (bool ok,) = msg.sender.call{value: got}("");
             require(ok, "prize");
             return;
@@ -385,7 +389,7 @@ contract RedNext {
         }
         uint24 fee = swapFee == 0 ? HOP : swapFee;
         uint256 out = _v3(task, wrapped, fee, amountIn, address(this), minOut);
-        require(out >= minOut, "buy");
+        require(out >= minOut && out >= spotNeed, "buy");
         IWETH(wrapped).withdraw(out);
         (bool ok,) = msg.sender.call{value: out}("");
         require(ok, "prize");
@@ -414,7 +418,7 @@ contract RedNext {
         uint256 bem = IERC20(UP_BEM).balanceOf(address(this)) - beforeBem;
         require(bem > 0, "buy");
         uint256 wbnb = _exact(UP_BEM, wrapped, 10000, bem, address(this), minOut);
-        require(wbnb >= minOut, "buy");
+        require(wbnb >= minOut && wbnb >= spotNeed, "buy");
         IWETH(wrapped).withdraw(wbnb);
         (bool ok,) = msg.sender.call{value: wbnb}("");
         require(ok, "prize");

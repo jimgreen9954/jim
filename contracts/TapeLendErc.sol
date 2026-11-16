@@ -213,18 +213,19 @@ contract TapeLendErc {
         uint256 cover = _usdt(posted * 10000 / (10000 + BONUS));
         uint256 maxPay = cover < debt ? cover : debt;
         uint256 pay = amount < maxPay ? amount : maxPay;
-        if (pay == 0) revert Bad();
-        uint256 seize = _coll(pay * (10000 + BONUS) / 10000);
-        if (seize == 0) revert Bad();
+        uint256 seize = pay == 0 ? 0 : _coll(pay * (10000 + BONUS) / 10000);
         if (seize > posted) seize = posted;
-        _pull(usdt, msg.sender, pay);
+        if (posted > seize && _usdt(posted - seize) == 0) seize = posted;
+        if (pay == 0 && seize == 0) revert Bad();
+        if (pay > 0) _pull(usdt, msg.sender, pay);
         collateral[user] = posted - seize;
-        bool close = pay == debt || seize == posted;
+        uint256 unpaid = debt > pay ? debt - pay : 0;
+        bool close = unpaid == 0 || (collateral[user] == 0 && unpaid <= _usdtDust());
         if (close) {
             debtShares[user] = 0;
             totalDebtShares -= have;
             totalBorrow -= debt;
-        } else {
+        } else if (pay > 0) {
             uint256 burn = pay * have / debt;
             if (burn == 0) burn = 1;
             if (burn > have) burn = have;
@@ -233,7 +234,17 @@ contract TapeLendErc {
             totalBorrow -= pay;
         }
         if (totalDebtShares == 0) totalBorrow = 0;
-        _push(IERC20(coll), msg.sender, seize);
+        if (seize > 0) _push(IERC20(coll), msg.sender, seize);
+    }
+
+    function _usdtDust() internal view returns (uint256) {
+        (bool ok, bytes memory data) = address(usdt).staticcall(abi.encodeWithSelector(0x313ce567));
+        uint8 dec = 6;
+        if (ok && data.length >= 32) {
+            uint256 raw = abi.decode(data, (uint256));
+            if (raw > 0 && raw <= 18) dec = uint8(raw);
+        }
+        return dec <= 2 ? 1 : 5 * (10 ** (dec - 2));
     }
 
     function debtOf(address user) external view returns (uint256) {

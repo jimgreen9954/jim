@@ -233,7 +233,7 @@ contract TapeRisk {
         mark();
         uint256 each = margin / count;
         _check(each, lev);
-        _take(msg.sender, each * count);
+        _take(msg.sender, margin);
         uint256 lo = startPx < endPx ? startPx : endPx;
         uint256 hi = startPx < endPx ? endPx : startPx;
         for (uint8 i = 0; i < count; i++) {
