@@ -297,7 +297,7 @@ export function LendDesk({ zh, account }: { zh: boolean; account: string | null 
             <ul className="mt-1">
               {seats.map((seat) => {
                 const row = positionOf(seat.chain, seat.asset, seat.view);
-                const on = seat.chain === chain && seat.asset === asset && seat.prior === prior;
+                const on = seat.chain === chain && seat.asset === asset && (seat.prior ? prior === seat.book : prior === null);
                 return (
                   <li key={`${seat.chain}-${seat.asset}-${seat.book ?? "new"}`} className="border-t border-gold/20 py-2 text-xs first:border-t-0">
                     <button
@@ -356,7 +356,7 @@ export function LendDesk({ zh, account }: { zh: boolean; account: string | null 
             <button
               key={id}
               type="button"
-              disabled={prior && (id === "in" || id === "lock" || id === "borrow")}
+              disabled={Boolean(prior) && (id === "in" || id === "lock" || id === "borrow")}
               className={`min-h-9 px-2 text-xs ${mode === id ? "bg-ink text-paper" : "text-ink/60"} disabled:opacity-30`}
               onClick={() => setMode(id)}
             >
