@@ -87,12 +87,20 @@ contract TermBook {
     mapping(uint8 => bool) public warm;
     mapping(uint8 => uint256) public cash;
     mapping(uint8 => uint256) public principalOut;
+    mapping(uint8 => uint256) public impaired;
     mapping(uint8 => uint256) public totalShares;
     mapping(uint8 => uint256) public epoch;
+    mapping(uint8 => uint256) public rescuePot;
+    mapping(uint8 => uint256) public rescueShares;
+    mapping(uint8 => uint256) public rescueEpoch;
+    mapping(uint8 => bool) public rescueOn;
     mapping(uint8 => mapping(address => uint256)) internal shares;
     mapping(uint8 => mapping(address => uint256)) internal paidIn;
     mapping(uint8 => mapping(address => uint256)) internal seen;
+    mapping(uint8 => mapping(address => uint256)) internal rescueOf;
     mapping(uint256 => Loan) public loans;
+    mapping(uint256 => uint256) public bookedOf;
+    mapping(uint256 => uint256) public loanEpoch;
     mapping(address => uint256[]) internal mine;
     mapping(address => uint8) public openLoans;
     uint256[] internal alive;
@@ -125,6 +133,7 @@ contract TermBook {
         if (block.chainid != 56 && block.chainid != 196) revert Bad();
         safe = safe_;
         chain = block.chainid;
+        for (uint8 i = 0; i < 5; ++i) epoch[i] = 1;
     }
 
     receive() external payable {
@@ -222,11 +231,18 @@ contract TermBook {
         return (cash[id], principalOut[id], totalShares[id], px[id], pxTime[id], stamps[id], fresh(id));
     }
 
+    function rescue(uint8 id, address who) external view returns (uint256 shareAmt, uint256 pot, uint256 total) {
+        total = rescueShares[id];
+        pot = rescuePot[id];
+        if (rescueOn[id] && seen[id][who] == rescueEpoch[id]) shareAmt = shares[id][who];
+        else shareAmt = rescueOf[id][who];
+    }
+
     function account(uint8 id, address who) external view returns (uint256 supply, uint256 basis, uint256 shareAmt) {
         shareAmt = _live(id, who);
         if (shareAmt == 0) return (0, 0, 0);
         uint256 total = totalShares[id];
-        supply = total == 0 ? 0 : shareAmt * (cash[id] + principalOut[id]) / total;
+        supply = total == 0 ? 0 : shareAmt * _nav(id) / total;
         basis = paidIn[id][who];
     }
 
@@ -310,14 +326,23 @@ contract TermBook {
     function deposit(uint8 id, uint256 amount) external payable lock {
         if (id >= count() || amount == 0) revert Bad();
         _pull(id, amount);
-        uint256 assets = cash[id] + principalOut[id];
+        _markOut(id);
+        uint256 assets = _nav(id);
         if (assets == 0 && totalShares[id] != 0) {
-            epoch[id] += 1;
-            totalShares[id] = 0;
+            if (!rescueOn[id] && impaired[id] == 0) {
+                epoch[id] += 1;
+                totalShares[id] = 0;
+            } else if (!rescueOn[id]) {
+                rescueOn[id] = true;
+                rescueShares[id] = totalShares[id];
+                rescueEpoch[id] = epoch[id];
+                epoch[id] += 1;
+                totalShares[id] = 0;
+            }
         }
         _touch(id, msg.sender);
         uint256 total = totalShares[id];
-        uint256 mintAmt = total == 0 ? amount : amount * total / assets;
+        uint256 mintAmt = total == 0 || assets == 0 ? amount : amount * total / assets;
         if (mintAmt == 0) revert Bad();
         shares[id][msg.sender] += mintAmt;
         totalShares[id] = total + mintAmt;
@@ -330,9 +355,10 @@ contract TermBook {
         if (id >= count() || shareAmt == 0) revert Bad();
         uint256 have = _live(id, msg.sender);
         if (shareAmt > have) revert Bad();
+        _markOut(id);
         uint256 total = totalShares[id];
-        uint256 assets = cash[id] + principalOut[id];
-        uint256 amount = shareAmt * assets / total;
+        uint256 assets = _nav(id);
+        uint256 amount = total == 0 ? 0 : shareAmt * assets / total;
         if (amount == 0 || amount > cash[id]) revert Bad();
         uint256 basis = paidIn[id][msg.sender];
         uint256 cut = basis * shareAmt / have;
@@ -342,6 +368,21 @@ contract TermBook {
         cash[id] -= amount;
         _push(id, msg.sender, amount);
         emit Withdrawn(msg.sender, id, amount, shareAmt);
+    }
+
+    /// Withdraw a frozen generation's share of debt repaid after the pool was restarted.
+    function claim(uint8 id, uint256 shareAmt) external lock {
+        if (id >= count() || shareAmt == 0 || !rescueOn[id]) revert Bad();
+        _touch(id, msg.sender);
+        uint256 have = rescueOf[id][msg.sender];
+        if (shareAmt > have || rescueShares[id] == 0) revert Bad();
+        uint256 out = shareAmt * rescuePot[id] / rescueShares[id];
+        if (out == 0 || out > rescuePot[id]) revert Bad();
+        rescueOf[id][msg.sender] = have - shareAmt;
+        rescueShares[id] -= shareAmt;
+        rescuePot[id] -= out;
+        _push(id, msg.sender, out);
+        emit Withdrawn(msg.sender, id, out, shareAmt);
     }
 
     function open(uint8 coll, uint8 debt, uint8 term, uint256 collAmt, uint256 principal) external payable lock {
@@ -356,6 +397,8 @@ contract TermBook {
         cash[debt] -= principal;
         principalOut[debt] += principal;
         uint256 id = ++nextId;
+        bookedOf[id] = principal;
+        loanEpoch[id] = epoch[debt];
         uint64 start = uint64(block.timestamp);
         loans[id] = Loan({
             user: msg.sender,
@@ -394,7 +437,7 @@ contract TermBook {
         if (owed == 0) revert Bad();
         uint256 pay = amount < owed ? amount : owed;
         _collect(row.debt, pay);
-        _credit(row.debt, pay, row);
+        _credit(row.debt, pay, row, id);
         emit Repaid(id, row.user, pay, row.principal + row.interest);
         if (row.principal == 0 && row.interest == 0) _close(id, row);
     }
@@ -416,10 +459,15 @@ contract TermBook {
         uint256 seize = pay == 0 || coverUsd == 0 ? 0 : row.collAmt * usd(row.debt, pay) / coverUsd;
         if (seize > row.collAmt) seize = row.collAmt;
         if (row.collAmt > seize && usd(row.coll, row.collAmt - seize) == 0) seize = row.collAmt;
-        if (pay == 0 && seize == 0) revert Bad();
+        // Nothing can be repaid. Still recognize the shortfall. A zero-value
+        // pile of collateral is seized so it cannot pretend to back the debt.
+        if (pay == 0 && seize == 0) {
+            if (row.collAmt > 0 && collUsd == 0) seize = row.collAmt;
+            else if (coverUsd > 0) revert Bad();
+        }
         if (pay > 0) {
             _collect(row.debt, pay);
-            _credit(row.debt, pay, row);
+            _credit(row.debt, pay, row, id);
         } else if (msg.value != 0) {
             revert Bad();
         }
@@ -427,13 +475,7 @@ contract TermBook {
         uint8 debtId = row.debt;
         address user = row.user;
         row.collAmt -= seize;
-        uint256 leftDebt = row.principal + row.interest;
-        if (leftDebt == 0 || (row.collAmt == 0 && usd(debtId, leftDebt) <= 5e16)) {
-            if (row.principal > 0) {
-                principalOut[debtId] -= row.principal;
-                row.principal = 0;
-                row.interest = 0;
-            }
+        if (row.principal == 0 && row.interest == 0) {
             uint256 left = row.collAmt;
             row.collAmt = 0;
             row.open = false;
@@ -444,6 +486,7 @@ contract TermBook {
             emit Closed(id);
             return;
         }
+        _impair(debtId, id, row);
         if (seize > 0) _push(coll, msg.sender, seize);
         emit Liquidated(id, user, msg.sender, pay, seize);
     }
@@ -483,13 +526,30 @@ contract TermBook {
         row.marked = uint64(row.start + done * HOUR);
     }
 
-    function _credit(uint8 id, uint256 pay, Loan storage row) internal {
+    function _credit(uint8 id, uint256 pay, Loan storage row, uint256 loanId) internal {
         uint256 interestPay = pay < row.interest ? pay : row.interest;
         uint256 principalPay = pay - interestPay;
         row.interest -= interestPay;
         row.principal -= principalPay;
-        principalOut[id] -= principalPay;
+        uint256 booked = bookedOf[loanId];
+        uint256 fromBook = principalPay < booked ? principalPay : booked;
+        if (fromBook > 0) {
+            bookedOf[loanId] = booked - fromBook;
+            principalOut[id] -= fromBook;
+        }
+        uint256 recovery = principalPay - fromBook;
+        if (recovery > 0 && impaired[id] != 0) {
+            // The shortfall was already removed from `principalOut`. This only
+            // retires that memo. Cash added below is the only asset credit.
+            uint256 retire = recovery < impaired[id] ? recovery : impaired[id];
+            impaired[id] -= retire;
+        }
         cash[id] += pay;
+        if (rescueOn[id] && loanEpoch[loanId] == rescueEpoch[id] && rescueEpoch[id] != epoch[id]) {
+            cash[id] -= pay;
+            rescuePot[id] += pay;
+            return;
+        }
         if (interestPay == 0) return;
         uint256 fee = interestPay * FEE_BPS / 10000;
         if (fee == 0) return;
@@ -503,6 +563,66 @@ contract TermBook {
         _touch(id, safe);
         shares[id][safe] += mintAmt;
         totalShares[id] = total + mintAmt;
+    }
+
+    function _impair(uint8 id, uint256 loanId, Loan storage row) internal {
+        uint256 booked = bookedOf[loanId];
+        if (booked == 0) return;
+        uint256 keep = _keep(row, booked);
+        if (keep >= booked) return;
+        uint256 loss = booked - keep;
+        bookedOf[loanId] = keep;
+        principalOut[id] -= loss;
+        impaired[id] += loss;
+    }
+
+    function _keep(Loan storage row, uint256 booked) internal view returns (uint256) {
+        if (row.collAmt == 0 || usd(row.coll, row.collAmt) == 0) return 0;
+        uint256 recUsd = usd(row.coll, row.collAmt) * 10000 / (10000 + BONUS_BPS);
+        uint256 interestUsd = usd(row.debt, row.interest);
+        if (recUsd <= interestUsd) return 0;
+        uint256 price = px[row.debt];
+        if (price == 0) return 0;
+        uint256 keep = (recUsd - interestUsd) * (10 ** dec(row.debt)) / price;
+        return keep > booked ? booked : keep;
+    }
+
+    /// Cash plus principal collateral can still cover. A shortfall that is still
+    /// booked is removed here, including before anyone calls `liquidate`.
+    function _nav(uint8 id) internal view returns (uint256) {
+        uint256 book = cash[id] + principalOut[id];
+        uint256 hole = _pendingOut(id);
+        return hole >= book ? 0 : book - hole;
+    }
+
+    /// Write uncovered principal out of `principalOut` for every open loan
+    /// denominated in this asset. Share pricing and a zero-NAV restart both
+    /// happen after this, so the first depositor or withdrawer cannot use the
+    /// pre-shortfall number.
+    function _markOut(uint8 id) internal {
+        uint256 n = alive.length;
+        for (uint256 i; i < n; ) {
+            uint256 loanId = alive[i];
+            Loan storage row = loans[loanId];
+            if (row.open && row.debt == id) _impair(id, loanId, row);
+            unchecked { ++i; }
+        }
+    }
+
+    function _pendingOut(uint8 id) internal view returns (uint256 hole) {
+        uint256 n = alive.length;
+        for (uint256 i; i < n; ) {
+            uint256 loanId = alive[i];
+            Loan storage row = loans[loanId];
+            if (row.open && row.debt == id) {
+                uint256 booked = bookedOf[loanId];
+                if (booked != 0) {
+                    uint256 keep = _keep(row, booked);
+                    if (keep < booked) hole += booked - keep;
+                }
+            }
+            unchecked { ++i; }
+        }
     }
 
     function _close(uint256 id, Loan storage row) internal {
@@ -543,6 +663,7 @@ contract TermBook {
 
     function _touch(uint8 id, address who) internal {
         if (seen[id][who] == epoch[id]) return;
+        if (rescueOn[id] && seen[id][who] == rescueEpoch[id] && shares[id][who] != 0) rescueOf[id][who] = shares[id][who];
         shares[id][who] = 0;
         paidIn[id][who] = 0;
         seen[id][who] = epoch[id];
