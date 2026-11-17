@@ -48,16 +48,21 @@ const ZERO = "0x0000000000000000000000000000000000000000" as Hex;
 export type LendAsset = "gas" | "tape" | "bem";
 
 const PIN: Partial<Record<`${LendChain}:${LendAsset}`, Hex>> = {
-  "xlayer:gas": "0x6135b562c5d46595b044519e787FE396830C5C83",
-  "xlayer:tape": "0xF2925A78AdaC85cA330643bc5584A694199AfB76",
-  "xlayer:bem": "0x77F01670F70A13299531906e54D45c4247d0E3bf",
-  "bsc:gas": "0xd66C0EA7acCC3D4e8E82a999e7345404803643BC",
-  "bsc:bem": "0x0A0C3D5A8D20468fea019590Bd3FC11623260223",
+  "xlayer:gas": "0x62f9016C97eF9255C8Ba16DDa7F531656015DAeA",
+  "xlayer:tape": "0x8674351Fae2781c077977aE589F2FA71a1bb4992",
+  "xlayer:bem": "0x741331f4c8e4D6937FB92eC88ceE27c9e0AC3062",
+  "bsc:gas": "0xC4bA21b1566Aee4b1113f166C5f496275E51A65E",
+  "bsc:bem": "0xEF9d226254b7Ce8CdCD5b1170d70518AfDC3e05A",
 };
 
 const PRIOR: Partial<Record<`${LendChain}:${LendAsset}`, Hex[]>> = {
-  "xlayer:gas": ["0xc417780f4e1F9385BE1ba4cbDe7b40860B2aA8b0", "0x57228158cba08c61710ab2644e583c328ec86ea7"],
+  "xlayer:gas": [
+    "0x6135b562c5d46595b044519e787FE396830C5C83",
+    "0xc417780f4e1F9385BE1ba4cbDe7b40860B2aA8b0",
+    "0x57228158cba08c61710ab2644e583c328ec86ea7",
+  ],
   "xlayer:tape": [
+    "0xF2925A78AdaC85cA330643bc5584A694199AfB76",
     "0x416DEf23cd29349a0ebceAa8A0Bc9766ec8999F5",
     "0x99CA040580837a2158Bfd0c8d84fcD4B85b6393b",
     "0x8d06D78bd5eC97104cE3c7F10A73516fE1Ab4525",
@@ -66,14 +71,24 @@ const PRIOR: Partial<Record<`${LendChain}:${LendAsset}`, Hex[]>> = {
     "0x425285da21ed3eabe64550d1be7dcabcf6f9e851",
   ],
   "xlayer:bem": [
+    "0x77F01670F70A13299531906e54D45c4247d0E3bf",
     "0xfA211308F9583bEB9aaF724044863b78BfD7B9C1",
     "0x01264DBDEC9Be07c7C1E942D8C4dcfC72A7691b2",
     "0xeC55C19F6b0E08FbAd7DECD54bf8c892230fD353",
     "0x8d3074bdf9412d77269f59cc506e318e5da27914",
     "0x5ed8551f90acc6395810d8274b019bf13ef1f696",
   ],
-  "bsc:gas": ["0x0712cCa64B91Ec87cc175aa46cC38b54c8D3Bff3", "0xd8d981d32b12ea85b739bb667946975d25b0ab53"],
-  "bsc:bem": ["0x4127ddA5153042B6E6aFC02316587ab85D985B3A", "0xD71C270DFf9DF25245B367489D338629059E5014", "0xd2c7150f7779ded403c3f81a68dab5164b54df28"],
+  "bsc:gas": [
+    "0xd66C0EA7acCC3D4e8E82a999e7345404803643BC",
+    "0x0712cCa64B91Ec87cc175aa46cC38b54c8D3Bff3",
+    "0xd8d981d32b12ea85b739bb667946975d25b0ab53",
+  ],
+  "bsc:bem": [
+    "0x0A0C3D5A8D20468fea019590Bd3FC11623260223",
+    "0x4127ddA5153042B6E6aFC02316587ab85D985B3A",
+    "0xD71C270DFf9DF25245B367489D338629059E5014",
+    "0xd2c7150f7779ded403c3f81a68dab5164b54df28",
+  ],
 };
 
 export function priorLends(chain: LendChain, asset: LendAsset): Hex[] {
@@ -146,7 +161,7 @@ function keyOf(chain: LendChain, asset: LendAsset) {
 }
 
 function feeKey(chain: LendChain, asset: LendAsset) {
-  return `tapeliquid-lend3-${chain}-${asset}`;
+  return `tapeliquid-lend4-${chain}-${asset}`;
 }
 
 export function draftLend(chain: LendChain, asset: LendAsset): Hex | null {
@@ -397,10 +412,11 @@ export async function deployLend(chain: LendChain, asset: LendAsset): Promise<st
   const spec = lendSpec(chain, asset);
   const from = await signer(chain);
   const who = from.toLowerCase();
+  const minBorrow = 10n * 10n ** BigInt(spec.usdtDec);
   const args = spec.native
     ? encodeAbiParameters(
-        [{ type: "address" }, { type: "address" }, { type: "address" }, { type: "address" }],
-        [spec.usdt, spec.coll, spec.pool, spec.safe],
+        [{ type: "address" }, { type: "address" }, { type: "address" }, { type: "address" }, { type: "uint256" }],
+        [spec.usdt, spec.coll, spec.pool, spec.safe, minBorrow],
       )
     : encodeAbiParameters(
         [
@@ -410,8 +426,9 @@ export async function deployLend(chain: LendChain, asset: LendAsset): Promise<st
           { type: "address" },
           { type: "uint8" },
           { type: "address" },
+          { type: "uint256" },
         ],
-        [spec.mode, spec.usdt, spec.coll, spec.pool, spec.collDec, spec.safe],
+        [spec.mode, spec.usdt, spec.coll, spec.pool, spec.collDec, spec.safe, minBorrow],
       );
   const init = ((spec.native ? LEND_BYTECODE : LEND_ERC_BYTECODE) + args.slice(2)) as Hex;
   const inner = createCallData(init);
