@@ -104,7 +104,7 @@ export function LendDesk({ zh, account }: { zh: boolean; account: string | null 
         ),
       );
       const old = (["xlayer", "bsc"] as const).flatMap((id) =>
-        (["tape", "bem"] as const).flatMap((next) =>
+        lendChoices(id).flatMap((next) =>
           priorLends(id, next).map((book) =>
             readLend(id, next, account, book)
               .then((row) => ({ chain: id, asset: next, view: row, prior: true, book }))

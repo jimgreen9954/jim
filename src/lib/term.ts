@@ -108,9 +108,17 @@ function storageKey(chain: TermChain) {
 }
 
 const TERM_BOOK: Record<TermChain, Hex> = {
-  xlayer: "0x087E68a1C6c5978Aab73056f7DCd69fc55d72839",
-  bsc: "0x285e93b48e80A7d22CdE47056579074A3842fBcD",
+  xlayer: "0x29a08A0a0619Fd60a8131477859615F8AD438b58",
+  bsc: "0xf52a684531f8387e5383771887FF5b9FBa116b98",
 };
+
+export function draftTerm(chain: TermChain): Hex | null {
+  if (typeof window === "undefined") return null;
+  const saved = window.localStorage.getItem(storageKey(chain)) ?? "";
+  if (!/^0x[a-fA-F0-9]{40}$/.test(saved)) return null;
+  if (TERM_BOOK[chain].toLowerCase() === saved.toLowerCase()) return null;
+  return saved as Hex;
+}
 
 export function termAddress(chain: TermChain): Hex | null {
   return TERM_BOOK[chain];
