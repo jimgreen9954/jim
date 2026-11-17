@@ -86,7 +86,7 @@ contract BadDebtTest is Test {
         usdt = new Cash();
         coll = new Cash();
         oracle = new OraclePool(address(usdt), address(coll));
-        lend = new TapeLendErc(0, address(usdt), address(coll), address(oracle), 18, fee);
+        lend = new TapeLendErc(0, address(usdt), address(coll), address(oracle), 18, fee, 1);
     }
 
     function _fund(address who, uint256 usdtAmt, uint256 collAmt) internal {
@@ -148,6 +148,104 @@ contract BadDebtTest is Test {
         assertGt(minted, inflated, "new deposit got too few shares");
         uint256 daveSupply = lend.supplyOf(dave);
         assertApproxEqAbs(daveSupply, depositAmt, 1e12, "dave did not buy at impaired nav");
+    }
+
+    function testImpairedInterestDoesNotMintFeeShares() public {
+        _lendBook(800000);
+        uint256 sharesBefore = lend.totalShares();
+        vm.warp(block.timestamp + 365 days);
+        usdt.mint(carol, 100 * UNIT);
+        vm.prank(carol);
+        lend.repay(100 * UNIT);
+        assertEq(lend.shares(fee), 0, "partial recovery minted a fee share");
+        assertEq(lend.totalShares(), sharesBefore, "fee shares diluted the pool");
+        uint256 rest = lend.debtOf(carol);
+        usdt.mint(carol, rest);
+        vm.prank(carol);
+        lend.repay(rest);
+        assertEq(lend.shares(fee), 0, "full recovery minted a fee share");
+        assertEq(lend.totalShares(), sharesBefore);
+        uint256 pool = lend.cash();
+        uint256 aliceShares = lend.shareOf(alice);
+        uint256 bobShares = lend.shareOf(bob);
+        vm.prank(alice);
+        lend.withdraw(aliceShares);
+        vm.prank(bob);
+        lend.withdraw(bobShares);
+        assertEq(lend.shares(fee), 0);
+        assertApproxEqAbs(usdt.balanceOf(alice) + usdt.balanceOf(bob), pool, 1e12, "fee took the suppliers' cash");
+    }
+
+    function testPerformingInterestStillPaysTheFee() public {
+        _fund(alice, 1_000 * UNIT + 1, 0);
+        _fund(carol, 0, 1_000 * UNIT);
+        _deposit(alice, 1_000 * UNIT);
+        vm.startPrank(carol);
+        lend.lock(1_000 * UNIT);
+        lend.borrow(100 * UNIT);
+        vm.stopPrank();
+        vm.warp(block.timestamp + 30 days);
+        _deposit(alice, 1);
+        assertGt(lend.shares(fee), 0, "performing interest paid no fee");
+        assertGt(lend.assets(), 0);
+    }
+
+    function testDustBorrowCannotFillTheDebtorList() public {
+        TapeLendErc book = new TapeLendErc(0, address(usdt), address(coll), address(oracle), 18, fee, 10 * UNIT);
+        usdt.mint(alice, 1_000 * UNIT);
+        vm.startPrank(alice);
+        usdt.approve(address(book), type(uint256).max);
+        book.deposit(1_000 * UNIT);
+        vm.stopPrank();
+        address tiny = address(0xA11CE);
+        usdt.mint(tiny, 1);
+        coll.mint(tiny, 100 * UNIT);
+        vm.startPrank(tiny);
+        usdt.approve(address(book), type(uint256).max);
+        coll.approve(address(book), type(uint256).max);
+        book.lock(100 * UNIT);
+        vm.expectRevert();
+        book.borrow(1);
+        vm.stopPrank();
+
+        uint256 n = book.MAX_DEBTORS();
+        for (uint256 i; i < n; i++) {
+            address user = address(uint160(0xB100 + i));
+            coll.mint(user, 100 * UNIT);
+            vm.startPrank(user);
+            coll.approve(address(book), type(uint256).max);
+            usdt.approve(address(book), type(uint256).max);
+            book.lock(100 * UNIT);
+            book.borrow(10 * UNIT);
+            vm.stopPrank();
+        }
+        address extra = address(0xBEEF);
+        coll.mint(extra, 100 * UNIT);
+        vm.startPrank(extra);
+        coll.approve(address(book), type(uint256).max);
+        book.lock(100 * UNIT);
+        vm.expectRevert();
+        book.borrow(10 * UNIT);
+        vm.stopPrank();
+
+        address first = address(uint160(0xB100));
+        usdt.mint(first, 10 * UNIT);
+        vm.startPrank(first);
+        vm.expectRevert();
+        book.repay(1);
+        book.repay(10 * UNIT);
+        vm.stopPrank();
+
+        vm.prank(extra);
+        book.borrow(10 * UNIT);
+
+        uint256 half = book.shares(alice) / 2;
+        uint256 mark = gasleft();
+        vm.prank(alice);
+        book.withdraw(half);
+        uint256 used = mark - gasleft();
+        emit log_named_uint("erc withdraw gas at cap", used);
+        assertLt(used, 8_000_000, "withdrawal at the borrower cap does not fit");
     }
 
     function testLendSequentialWithdrawalsShareTheLoss() public {
@@ -626,7 +724,7 @@ contract BadDebtTest is Test {
         address tape = 0x8f2d517D3d62019CD8D7F08ae178Be05BBb6EBE3;
         vm.etch(usdtX, address(usdt).code);
         vm.etch(tape, address(coll).code);
-        TapeLendErc book = new TapeLendErc(1, usdtX, tape, open, 8, fee);
+        TapeLendErc book = new TapeLendErc(1, usdtX, tape, open, 8, fee, 1);
         Cash usd = Cash(usdtX);
         Cash tok = Cash(tape);
         usd.mint(alice, 1_000e18);

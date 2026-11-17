@@ -50,6 +50,9 @@ contract TapeLendErc {
     uint256 private constant STEP = 50;
     /// One withdrawal revalues every borrower. The list has to stay short enough to fit.
     uint256 public constant MAX_DEBTORS = 32;
+    /// Smallest new borrow, in stablecoin units. A repayment that would leave
+    /// less than this, but more than zero, has to clear the debt instead.
+    uint256 public immutable minBorrow;
 
     uint256 public totalShares;
     uint256 public totalBorrow;
@@ -92,8 +95,8 @@ contract TapeLendErc {
         entered = 1;
     }
 
-    constructor(uint8 mode_, address usdt_, address coll_, address pool_, uint8 dec_, address feeTo_) {
-        if (dec_ == 0 || dec_ > 18 || feeTo_ == address(0)) revert Bad();
+    constructor(uint8 mode_, address usdt_, address coll_, address pool_, uint8 dec_, address feeTo_, uint256 minBorrow_) {
+        if (dec_ == 0 || dec_ > 18 || feeTo_ == address(0) || minBorrow_ == 0) revert Bad();
         if (mode_ == 0) {
             if (usdt_ == address(0) || coll_ == address(0) || pool_ == address(0)) revert Bad();
             if (IPool(pool_).token0() != usdt_ || IPool(pool_).token1() != coll_) revert Bad();
@@ -110,6 +113,7 @@ contract TapeLendErc {
         mode = mode_;
         unit = 10 ** dec_;
         feeTo = feeTo_;
+        minBorrow = minBorrow_;
         lastAccrue = block.timestamp;
         epoch = 1;
         if (mode_ != 0) {
@@ -245,6 +249,7 @@ contract TapeLendErc {
 
     function borrow(uint256 amount) external guarded {
         if (amount == 0 || amount > cash()) revert Bad();
+        if (debtShares[msg.sender] == 0 && amount < minBorrow) revert Bad();
         if (!fresh()) revert Bad();
         _accrue();
         uint256 debt = _due(msg.sender);
@@ -255,6 +260,7 @@ contract TapeLendErc {
         debtShares[msg.sender] += minted;
         totalDebtShares += minted;
         totalBorrow += amount;
+        if (_debt(msg.sender) < minBorrow) revert Bad();
         _seat(msg.sender);
         _push(usdt, msg.sender, amount);
     }
@@ -279,6 +285,8 @@ contract TapeLendErc {
             if (totalDebtShares == 0) totalBorrow = 0;
             _unseat(msg.sender);
         }
+        uint256 leftDebt = _debt(msg.sender);
+        if (leftDebt != 0 && leftDebt < minBorrow) revert Bad();
         uint256 left = pay - toIndex;
         uint256 toShort = left < hole ? left : hole;
         if (toShort > 0) {
@@ -350,6 +358,8 @@ contract TapeLendErc {
             if (totalDebtShares == 0) totalBorrow = 0;
         }
         _realize(user);
+        uint256 leftDebt = _debt(user);
+        if (leftDebt != 0 && leftDebt < minBorrow) revert Bad();
         _unseat(user);
         if (seize > 0) _push(IERC20(coll), msg.sender, seize);
     }
@@ -545,13 +555,22 @@ contract TapeLendErc {
         uint256 dt = block.timestamp - lastAccrue;
         lastAccrue = block.timestamp;
         if (totalBorrow == 0) return;
-        uint256 util = totalBorrow * 10000 / (cash() + totalBorrow);
-        uint256 interest = totalBorrow * _apr(util) / YEAR * dt / 1e18;
+        // Price the hole before the fee. Interest on debt the collateral no
+        // longer covers is still owed, but it is not an asset and pays no fee.
+        uint256 hole = _pending(false);
+        uint256 base = totalBorrow;
+        uint256 performing = hole >= base ? 0 : base - hole;
+        uint256 util = base * 10000 / (cash() + base);
+        uint256 interest = base * _apr(util) / YEAR * dt / 1e18;
         if (interest == 0) return;
-        totalBorrow += interest;
-        uint256 cut = interest * CUT / 10000;
+        totalBorrow = base + interest;
+        if (performing == 0) return;
+        uint256 live = interest * performing / base;
+        uint256 nav = assets();
+        if (live == 0 || nav == 0) return;
+        uint256 cut = live * CUT / 10000;
         if (cut == 0) return;
-        uint256 minted = cut * (totalShares + DEAD) / (assets() + DUST);
+        uint256 minted = cut * (totalShares + DEAD) / (nav + DUST);
         if (minted == 0) return;
         shares[feeTo] += minted;
         totalShares += minted;

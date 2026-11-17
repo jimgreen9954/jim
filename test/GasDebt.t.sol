@@ -87,7 +87,7 @@ contract GasDebtTest is Test {
         usdt = new GasCash();
         weth = new GasWrap();
         oracle = new GasOracle(address(usdt), address(weth));
-        gas = new TapeLend(address(usdt), address(weth), address(oracle), fee);
+        gas = new TapeLend(address(usdt), address(weth), address(oracle), fee, 1);
     }
 
     function _deposit(address who, uint256 amount) internal {
@@ -201,6 +201,86 @@ contract GasDebtTest is Test {
         gas.withdraw(half);
         uint256 used = mark - gasleft();
         emit log_named_uint("lend withdraw gas at cap", used);
+        assertLt(used, 8_000_000, "withdrawal at the borrower cap does not fit");
+    }
+
+    function testGasImpairedInterestDoesNotMintFeeShares() public {
+        _deposit(alice, 1_000 * UNIT);
+        _deposit(bob, 1_000 * UNIT);
+        vm.deal(carol, 1_000 ether);
+        vm.prank(carol);
+        gas.lockNative{value: 1_000 ether}();
+        vm.prank(carol);
+        gas.borrow(500 * UNIT);
+        oracle.setTick(800000);
+        usdt.mint(liq, 1_000 * UNIT);
+        vm.startPrank(liq);
+        usdt.approve(address(gas), type(uint256).max);
+        gas.liquidate(carol, type(uint256).max);
+        vm.stopPrank();
+        uint256 sharesBefore = gas.totalShares();
+        vm.warp(block.timestamp + 365 days);
+        usdt.mint(carol, 100 * UNIT);
+        vm.startPrank(carol);
+        usdt.approve(address(gas), type(uint256).max);
+        gas.repay(100 * UNIT);
+        vm.stopPrank();
+        assertEq(gas.shares(fee), 0, "partial recovery minted a fee share");
+        assertEq(gas.totalShares(), sharesBefore, "fee shares diluted the pool");
+        uint256 rest = gas.debtOf(carol);
+        usdt.mint(carol, rest);
+        vm.prank(carol);
+        gas.repay(rest);
+        assertEq(gas.shares(fee), 0, "full recovery minted a fee share");
+        uint256 pool = gas.cash();
+        uint256 aliceShares = gas.shares(alice);
+        uint256 bobShares = gas.shares(bob);
+        vm.prank(alice);
+        gas.withdraw(aliceShares);
+        vm.prank(bob);
+        gas.withdraw(bobShares);
+        assertApproxEqAbs(usdt.balanceOf(alice) + usdt.balanceOf(bob), pool, 1e12, "fee took the suppliers' cash");
+    }
+
+    function testGasFullRepayFreesTheSeat() public {
+        TapeLend book = new TapeLend(address(usdt), address(weth), address(oracle), fee, 10 * UNIT);
+        usdt.mint(alice, 1_000 * UNIT);
+        vm.startPrank(alice);
+        usdt.approve(address(book), type(uint256).max);
+        book.deposit(1_000 * UNIT);
+        vm.stopPrank();
+        uint256 n = book.MAX_DEBTORS();
+        for (uint256 i; i < n; i++) {
+            address user = address(uint160(0xE100 + i));
+            vm.deal(user, 40 ether);
+            vm.prank(user);
+            book.lockNative{value: 40 ether}();
+            vm.prank(user);
+            book.borrow(10 * UNIT);
+        }
+        address extra = address(0xE0FF);
+        vm.deal(extra, 40 ether);
+        vm.startPrank(extra);
+        book.lockNative{value: 40 ether}();
+        vm.expectRevert();
+        book.borrow(10 * UNIT);
+        vm.stopPrank();
+        address first = address(uint160(0xE100));
+        usdt.mint(first, 10 * UNIT);
+        vm.startPrank(first);
+        usdt.approve(address(book), type(uint256).max);
+        vm.expectRevert();
+        book.repay(1);
+        book.repay(10 * UNIT);
+        vm.stopPrank();
+        vm.prank(extra);
+        book.borrow(10 * UNIT);
+        uint256 mark = gasleft();
+        uint256 half = book.shares(alice) / 2;
+        vm.prank(alice);
+        book.withdraw(half);
+        uint256 used = mark - gasleft();
+        emit log_named_uint("native withdraw gas at cap", used);
         assertLt(used, 8_000_000, "withdrawal at the borrower cap does not fit");
     }
 }
