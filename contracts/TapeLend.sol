@@ -39,6 +39,8 @@ contract TapeLend {
     uint256 public constant CAP = 1_000_000 ether;
     uint256 private constant DEAD = 1_000_000;
     uint256 private constant DUST = 1_000;
+    /// One withdrawal revalues every borrower. The list has to stay short enough to fit.
+    uint256 public constant MAX_DEBTORS = 32;
 
     uint256 public totalShares;
     uint256 public totalBorrow;
@@ -51,12 +53,15 @@ contract TapeLend {
     uint256 public impaired;
     uint256 public rescuePot;
     uint256 public rescueShares;
+    /// Cumulative frozen-generation recovery. Claiming does not reduce this weight.
+    uint256 public rescueEver;
     uint256 public rescueEpoch;
     uint256 public epoch = 1;
     mapping(address => uint256) public shortOf;
     mapping(address => uint256) public rescueShortOf;
     mapping(address => uint256) public shortEpoch;
     mapping(address => uint256) public rescueOf;
+    mapping(address => uint256) public rescueTaken;
     mapping(address => uint256) public seen;
     address[] private debtors;
     mapping(address => uint256) private debtorIx;
@@ -140,14 +145,19 @@ contract TapeLend {
         _push(usdt, msg.sender, out);
     }
 
-    function claim(uint256 shareAmt) external guarded {
+    /// Pay up to `amount` of recovery already credited to this frozen generation.
+    /// Shares stay put, so a later repayment keeps the same split.
+    function claim(uint256 amount) external guarded {
         _touch(msg.sender);
         uint256 have = rescueOf[msg.sender];
-        if (shareAmt == 0 || shareAmt > have || rescueShares == 0) revert Bad();
-        uint256 out = shareAmt * rescuePot / rescueShares;
+        if (amount == 0 || have == 0 || rescueShares == 0) revert Bad();
+        uint256 entitled = have * rescueEver / rescueShares;
+        uint256 taken = rescueTaken[msg.sender];
+        if (entitled <= taken) revert Bad();
+        uint256 pending = entitled - taken;
+        uint256 out = amount < pending ? amount : pending;
         if (out == 0 || out > rescuePot) revert Bad();
-        rescueOf[msg.sender] = have - shareAmt;
-        rescueShares -= shareAmt;
+        rescueTaken[msg.sender] = taken + out;
         rescuePot -= out;
         _push(usdt, msg.sender, out);
     }
@@ -219,7 +229,8 @@ contract TapeLend {
         if (toFrozen > 0) {
             rescueShortOf[msg.sender] = frozen - toFrozen;
             impaired -= toFrozen;
-            if (rescueShares != 0) rescuePot += toFrozen;
+            rescueEver += toFrozen;
+            rescuePot += toFrozen;
         }
     }
 
@@ -340,6 +351,7 @@ contract TapeLend {
 
     function _seat(address user) internal {
         if (debtorIx[user] != 0 || debtShares[user] == 0) return;
+        if (debtors.length >= MAX_DEBTORS) revert Bad();
         debtors.push(user);
         debtorIx[user] = debtors.length;
     }
@@ -359,10 +371,11 @@ contract TapeLend {
     }
 
     function _markBook() internal {
+        uint256 sqrtPx = _sqrtPrice();
         uint256 i;
         while (i < debtors.length) {
             address user = debtors[i];
-            _realize(user);
+            _realizePriced(user, sqrtPx);
             uint256 n = debtors.length;
             _unseat(user);
             if (debtors.length == n) {
@@ -372,12 +385,13 @@ contract TapeLend {
     }
 
     function _pending(bool preview) internal view returns (uint256 hole) {
+        uint256 sqrtPx = _sqrtPrice();
         uint256 n = debtors.length;
         for (uint256 i; i < n; ) {
             address user = debtors[i];
             uint256 debt = preview ? _previewDebt(user) : _debt(user);
             if (debt != 0) {
-                uint256 covered = _usdt(collateral[user]) * 10000 / (10000 + BONUS);
+                uint256 covered = _usdtFrom(collateral[user], sqrtPx) * 10000 / (10000 + BONUS);
                 if (debt > covered) hole += debt - covered;
             }
             unchecked { ++i; }
@@ -385,10 +399,14 @@ contract TapeLend {
     }
 
     function _realize(address user) internal {
+        _realizePriced(user, _sqrtPrice());
+    }
+
+    function _realizePriced(address user, uint256 sqrtPx) internal {
         _park(user);
         uint256 debt = _debt(user);
         if (debt == 0) return;
-        uint256 covered = _usdt(collateral[user]) * 10000 / (10000 + BONUS);
+        uint256 covered = _usdtFrom(collateral[user], sqrtPx) * 10000 / (10000 + BONUS);
         if (debt <= covered) return;
         uint256 have = debtShares[user];
         uint256 loss = debt - covered;
@@ -436,7 +454,8 @@ contract TapeLend {
             if (toFrozen > 0) {
                 rescueShortOf[user] = frozen - toFrozen;
                 impaired -= toFrozen;
-                if (rescueShares != 0) rescuePot += toFrozen;
+                rescueEver += toFrozen;
+                rescuePot += toFrozen;
             }
         }
         collateral[user] = posted - seize;
@@ -521,12 +540,19 @@ contract TapeLend {
         return tick;
     }
 
+    function _sqrtPrice() internal view returns (uint256) {
+        return uint256(TickMath.getSqrtRatioAtTick(_tick()));
+    }
+
+    function _usdtFrom(uint256 amount, uint256 sqrtPx) internal pure returns (uint256) {
+        if (amount == 0) return 0;
+        uint256 step = amount * (uint256(1) << 96) / sqrtPx;
+        return step * (uint256(1) << 96) / sqrtPx;
+    }
+
     /// USDT raw for a collateral amount. Rounded down.
     function _usdt(uint256 amount) internal view returns (uint256) {
-        if (amount == 0) return 0;
-        uint256 sqrt = uint256(TickMath.getSqrtRatioAtTick(_tick()));
-        uint256 step = amount * (uint256(1) << 96) / sqrt;
-        return step * (uint256(1) << 96) / sqrt;
+        return _usdtFrom(amount, _sqrtPrice());
     }
 
     /// Collateral raw for a USDT amount. Rounded up.

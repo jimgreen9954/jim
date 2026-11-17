@@ -48,6 +48,8 @@ contract TapeLendErc {
     uint256 private constant DEAD = 1_000_000;
     uint256 private constant DUST = 1_000;
     uint256 private constant STEP = 50;
+    /// One withdrawal revalues every borrower. The list has to stay short enough to fit.
+    uint256 public constant MAX_DEBTORS = 32;
 
     uint256 public totalShares;
     uint256 public totalBorrow;
@@ -63,6 +65,8 @@ contract TapeLendErc {
     uint256 public impaired;
     uint256 public rescuePot;
     uint256 public rescueShares;
+    /// Cumulative frozen-generation recovery. Claiming does not reduce this weight.
+    uint256 public rescueEver;
     uint256 public rescueEpoch;
     uint256 public epoch;
     mapping(address => uint256) public shortOf;
@@ -70,6 +74,7 @@ contract TapeLendErc {
     mapping(address => uint256) public rescueShortOf;
     mapping(address => uint256) public shortEpoch;
     mapping(address => uint256) public rescueOf;
+    mapping(address => uint256) public rescueTaken;
     mapping(address => uint256) public seen;
     /// Borrowers with indexed debt. Deposit and withdraw revalue this list
     /// before pricing shares, so a shortfall is not an asset while it waits
@@ -162,7 +167,7 @@ contract TapeLendErc {
     }
 
     function deposit(uint256 amount) external guarded {
-        if (amount == 0) revert Bad();
+        if (amount == 0 || !fresh()) revert Bad();
         _accrue();
         _markBook();
         if (cash() == 0 && totalBorrow == 0 && totalShares != 0) {
@@ -185,6 +190,7 @@ contract TapeLendErc {
     }
 
     function withdraw(uint256 shareAmt) external guarded {
+        if (!fresh()) revert Bad();
         _accrue();
         _markBook();
         _touch(msg.sender);
@@ -202,15 +208,19 @@ contract TapeLendErc {
         _push(usdt, msg.sender, out);
     }
 
-    /// Take a pro-rata share of debt that was impaired before a later deposit restarted the pool.
-    function claim(uint256 shareAmt) external guarded {
+    /// Pay up to `amount` of recovery already credited to this frozen generation.
+    /// Shares stay put, so a later repayment keeps the same split.
+    function claim(uint256 amount) external guarded {
         _touch(msg.sender);
         uint256 have = rescueOf[msg.sender];
-        if (shareAmt == 0 || shareAmt > have || rescueShares == 0) revert Bad();
-        uint256 out = shareAmt * rescuePot / rescueShares;
+        if (amount == 0 || have == 0 || rescueShares == 0) revert Bad();
+        uint256 entitled = have * rescueEver / rescueShares;
+        uint256 taken = rescueTaken[msg.sender];
+        if (entitled <= taken) revert Bad();
+        uint256 pending = entitled - taken;
+        uint256 out = amount < pending ? amount : pending;
         if (out == 0 || out > rescuePot) revert Bad();
-        rescueOf[msg.sender] = have - shareAmt;
-        rescueShares -= shareAmt;
+        rescueTaken[msg.sender] = taken + out;
         rescuePot -= out;
         _push(usdt, msg.sender, out);
     }
@@ -283,7 +293,8 @@ contract TapeLendErc {
             impaired -= toFrozen;
             // Frozen generation only. A shortfall opened after the restart is
             // `toShort` and must not be paid to the suppliers who already restarted.
-            if (rescueShares != 0) rescuePot += toFrozen;
+            rescueEver += toFrozen;
+            rescuePot += toFrozen;
         }
     }
 
@@ -470,10 +481,14 @@ contract TapeLendErc {
     /// The borrower still owes it. Repayment credits the generation that was
     /// current when the shortfall was confirmed, and does not re-enter `totalBorrow`.
     function _realize(address user) internal {
+        _realizePriced(user, price());
+    }
+
+    function _realizePriced(address user, uint256 px) internal {
         _park(user);
         uint256 debt = _debt(user);
         if (debt == 0) return;
-        uint256 covered = _usdt(collateral[user]) * 10000 / (10000 + BONUS);
+        uint256 covered = collateral[user] * px / unit * 10000 / (10000 + BONUS);
         if (debt <= covered) return;
         uint256 have = debtShares[user];
         uint256 loss = debt - covered;
@@ -551,6 +566,7 @@ contract TapeLendErc {
 
     function _seat(address user) internal {
         if (debtorIx[user] != 0 || debtShares[user] == 0) return;
+        if (debtors.length >= MAX_DEBTORS) revert Bad();
         debtors.push(user);
         debtorIx[user] = debtors.length;
     }
@@ -572,10 +588,11 @@ contract TapeLendErc {
     /// Crystallize every shortfall before a share is priced. Waiting for
     /// `liquidate` would let the first withdrawal use the old net asset value.
     function _markBook() internal {
+        uint256 px = price();
         uint256 i;
         while (i < debtors.length) {
             address user = debtors[i];
-            _realize(user);
+            _realizePriced(user, px);
             uint256 n = debtors.length;
             _unseat(user);
             if (debtors.length == n) {
@@ -587,12 +604,13 @@ contract TapeLendErc {
     /// Indexed debt that collateral can no longer cover. `preview` includes
     /// interest that has not been written into `totalBorrow` yet.
     function _pending(bool preview) internal view returns (uint256 hole) {
+        uint256 px = price();
         uint256 n = debtors.length;
         for (uint256 i; i < n; ) {
             address user = debtors[i];
             uint256 debt = preview ? _previewDebt(user) : _debt(user);
             if (debt != 0) {
-                uint256 covered = _usdt(collateral[user]) * 10000 / (10000 + BONUS);
+                uint256 covered = collateral[user] * px / unit * 10000 / (10000 + BONUS);
                 if (debt > covered) hole += debt - covered;
             }
             unchecked { ++i; }
@@ -630,7 +648,8 @@ contract TapeLendErc {
             if (toFrozen > 0) {
                 rescueShortOf[user] = frozen - toFrozen;
                 impaired -= toFrozen;
-                if (rescueShares != 0) rescuePot += toFrozen;
+                rescueEver += toFrozen;
+                rescuePot += toFrozen;
             }
         }
         collateral[user] = posted - seize;

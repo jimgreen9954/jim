@@ -33,6 +33,19 @@ contract Cash {
     }
 }
 
+contract SpotBook {
+    uint256 public tape = 1e8;
+    uint256 public okb = 1 ether;
+
+    function okbPool() external view returns (uint256, uint256, uint256) {
+        return (tape, okb, 0);
+    }
+
+    function bemPool() external view returns (uint256, uint256, uint256) {
+        return (tape, okb, 0);
+    }
+}
+
 contract OraclePool {
     address public token0;
     address public token1;
@@ -452,6 +465,16 @@ contract BadDebtTest is Test {
         vm.expectRevert();
         vm.prank(alice);
         book.claim(0, 1);
+        uint256 more = 2e18;
+        stable.mint(carol, more);
+        vm.prank(carol);
+        book.repay(1, more);
+        (uint256 daveLater,,) = book.account(0, dave);
+        assertEq(daveLater, daveSupply, "later recovery entered the new pool");
+        assertEq(book.rescuePot(0), more);
+        vm.prank(alice);
+        book.claim(0, type(uint256).max);
+        assertEq(stable.balanceOf(alice), recovered + more);
     }
 
     /// The shortfall is already visible. Nobody has called liquidate.
@@ -536,5 +559,163 @@ contract BadDebtTest is Test {
         assertGt(book.impaired(0), 4_999e18, "withdraw left the principal booked");
         assertLt(book.principalOut(0), 1_000, "uncovered principal stayed in principalOut");
         assertEq(book.debtOf(1), 5_000e18, "term obligation dropped");
+    }
+
+    /// Taking some recovery must not enlarge the other supplier's claim on what is repaid later.
+    function testPartialClaimKeepsTheOriginalSplit() public {
+        _fund(alice, 500 * UNIT, 0);
+        _fund(bob, 500 * UNIT, 0);
+        _fund(carol, 0, 4_000 * UNIT);
+        _fund(liq, 1, 0);
+        _deposit(alice, 500 * UNIT);
+        _deposit(bob, 500 * UNIT);
+        vm.startPrank(carol);
+        lend.lock(4_000 * UNIT);
+        lend.borrow(1_000 * UNIT);
+        vm.stopPrank();
+        oracle.setTick(800000);
+        vm.prank(liq);
+        lend.liquidate(carol, type(uint256).max);
+        _fund(dave, 200 * UNIT, 0);
+        _deposit(dave, 200 * UNIT);
+
+        _fund(carol, 900 * UNIT, 0);
+        vm.prank(carol);
+        lend.repay(400 * UNIT);
+        assertEq(lend.rescueEver(), 400 * UNIT, "recovery was not reserved");
+        assertGt(lend.rescueShares(), 0, "frozen generation has no weight");
+        (uint256 aliceWeight,, uint256 weight) = lend.rescue(alice);
+        (uint256 bobWeight,,) = lend.rescue(bob);
+        assertEq(aliceWeight + bobWeight, weight);
+        assertGt(aliceWeight * 400 * UNIT / weight, lend.rescuePot() / 4, "partial claim exceeds alice");
+        uint256 piece = lend.rescuePot() / 4;
+        vm.prank(alice);
+        lend.claim(piece);
+
+        vm.prank(carol);
+        lend.repay(400 * UNIT);
+        assertEq(lend.assets(), 200 * UNIT, "later recovery entered the new pool");
+        vm.prank(alice);
+        lend.claim(type(uint256).max);
+        vm.prank(bob);
+        lend.claim(type(uint256).max);
+        assertApproxEqAbs(usdt.balanceOf(alice), aliceWeight * 800 * UNIT / weight, 2);
+        assertApproxEqAbs(usdt.balanceOf(bob), bobWeight * 800 * UNIT / weight, 2);
+        assertEq(lend.assets(), 200 * UNIT);
+
+        vm.prank(carol);
+        lend.repay(100 * UNIT);
+        assertEq(lend.rescuePot(), 100 * UNIT, "recovery after a full take was not reserved");
+        assertEq(lend.assets(), 200 * UNIT, "recovery after a full take entered the new pool");
+        vm.prank(alice);
+        lend.claim(type(uint256).max);
+        vm.prank(bob);
+        lend.claim(type(uint256).max);
+        assertApproxEqAbs(usdt.balanceOf(alice), aliceWeight * 900 * UNIT / weight, 3);
+        assertApproxEqAbs(usdt.balanceOf(bob), bobWeight * 900 * UNIT / weight, 3);
+    }
+
+    function testLaggingTapePriceBlocksWithdrawal() public {
+        address open = 0x58eaD5b41Cfd3627791D439402dd65571c286484;
+        address okbPool = 0xe3BE6A0137f1b0602Fc1a4841686f43B340a5082;
+        vm.etch(open, address(new SpotBook()).code);
+        vm.store(open, bytes32(0), bytes32(uint256(1e8)));
+        vm.store(open, bytes32(uint256(1)), bytes32(uint256(1 ether)));
+        vm.etch(okbPool, address(new OraclePool(address(1), address(2))).code);
+        address usdtX = 0x779Ded0c9e1022225f8E0630b35a9b54bE713736;
+        address tape = 0x8f2d517D3d62019CD8D7F08ae178Be05BBb6EBE3;
+        vm.etch(usdtX, address(usdt).code);
+        vm.etch(tape, address(coll).code);
+        TapeLendErc book = new TapeLendErc(1, usdtX, tape, open, 8, fee);
+        Cash usd = Cash(usdtX);
+        Cash tok = Cash(tape);
+        usd.mint(alice, 1_000e18);
+        tok.mint(carol, 1_000e8);
+        vm.startPrank(alice);
+        usd.approve(address(book), type(uint256).max);
+        book.deposit(1_000e18);
+        vm.stopPrank();
+        vm.startPrank(carol);
+        tok.approve(address(book), type(uint256).max);
+        book.lock(1_000e8);
+        book.borrow(500e18);
+        vm.stopPrank();
+
+        vm.store(open, bytes32(uint256(1)), bytes32(uint256(0.01 ether)));
+        vm.warp(block.timestamp + 30);
+        book.poke();
+        assertFalse(book.fresh(), "one step still counts as fresh");
+        assertGt(book.assets(), 900e18, "lagging stored price still treats the debt as covered");
+        uint256 aliceShares = book.shareOf(alice);
+        vm.expectRevert();
+        vm.prank(alice);
+        book.withdraw(aliceShares);
+
+        vm.warp(block.timestamp + 30 minutes);
+        assertFalse(book.fresh(), "expired price still counts as fresh");
+        vm.expectRevert();
+        vm.prank(alice);
+        book.withdraw(aliceShares);
+    }
+
+    function testStaleTermPriceBlocksWithdrawal() public {
+        vm.chainId(56);
+        TermBook book = new TermBook(fee);
+        address usdtBsc = book.tokenOf(0);
+        vm.etch(usdtBsc, address(usdt).code);
+        Cash stable = Cash(usdtBsc);
+        _mark(book, 0, 1e18);
+        _mark(book, 1, 100e18);
+        stable.mint(alice, 1_000e18);
+        vm.startPrank(alice);
+        stable.approve(address(book), type(uint256).max);
+        book.deposit(0, 1_000e18);
+        vm.stopPrank();
+        vm.deal(carol, 1 ether);
+        vm.prank(carol);
+        book.open{value: 1 ether}(1, 0, 0, 1 ether, 40e18);
+        vm.warp(block.timestamp + 31 minutes);
+        vm.expectRevert(TermBook.Stale.selector);
+        vm.prank(alice);
+        book.withdraw(0, 100e18);
+        _mark(book, 0, 1e18);
+        _mark(book, 1, 1);
+        vm.prank(alice);
+        book.withdraw(0, 100e18);
+        assertLt(stable.balanceOf(alice), 98e18, "stale collateral price priced the withdrawal");
+        assertGt(stable.balanceOf(alice), 90e18);
+    }
+
+    function testOpenLoanCapBoundsWithdrawal() public {
+        vm.chainId(56);
+        TermBook book = new TermBook(fee);
+        address usdtBsc = book.tokenOf(0);
+        vm.etch(usdtBsc, address(usdt).code);
+        Cash stable = Cash(usdtBsc);
+        _mark(book, 0, 1e18);
+        _mark(book, 1, 100e18);
+        stable.mint(alice, 1_000e18);
+        vm.startPrank(alice);
+        stable.approve(address(book), type(uint256).max);
+        book.deposit(0, 1_000e18);
+        vm.stopPrank();
+        uint256 n = book.MAX_OPEN();
+        for (uint256 i; i < n; i++) {
+            address user = address(uint160(0xA000 + i));
+            vm.deal(user, 1 ether);
+            vm.prank(user);
+            book.open{value: 0.2 ether}(1, 0, 0, 0.2 ether, 10e18);
+        }
+        vm.deal(address(0xB000), 1 ether);
+        vm.prank(address(0xB000));
+        vm.expectRevert();
+        book.open{value: 0.2 ether}(1, 0, 0, 0.2 ether, 10e18);
+        uint256 used;
+        uint256 mark = gasleft();
+        vm.prank(alice);
+        book.withdraw(0, 1e18);
+        used = mark - gasleft();
+        emit log_named_uint("term withdraw gas at cap", used);
+        assertLt(used, 8_000_000, "withdrawal at the loan cap does not fit");
     }
 }

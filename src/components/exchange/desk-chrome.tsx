@@ -156,6 +156,68 @@ const ROWS: Row[] = [
     lev: "1000×",
   },
   {
+    id: "btcperp",
+    view: { kind: "perp", chain: "bsc", coin: "btc" },
+    symbol: "BTC-USDT",
+    kind: "perp",
+    tag: "永续",
+    where: "BSC",
+    pin: true,
+    lev: "1000×",
+  },
+  {
+    id: "ethperp",
+    view: { kind: "perp", chain: "bsc", coin: "eth" },
+    symbol: "ETH-USDT",
+    kind: "perp",
+    tag: "永续",
+    where: "BSC",
+    pin: true,
+    lev: "1000×",
+  },
+  {
+    id: "zecperp",
+    view: { kind: "perp", chain: "bsc", coin: "zec" },
+    symbol: "ZEC-USDT",
+    kind: "perp",
+    tag: "永续",
+    where: "BSC",
+    pin: true,
+    lev: "1000×",
+  },
+  {
+    id: "upperp",
+    view: { kind: "perp", chain: "bsc", coin: "up" },
+    symbol: "UP-USDT",
+    kind: "perp",
+    tag: "永续",
+    where: "BSC",
+    pin: true,
+    lev: "1000×",
+    find: "UP TapeUP",
+  },
+  {
+    id: "tapeperp",
+    view: { kind: "perp", chain: "xlayer", coin: "tape" },
+    symbol: "TAPE-USDT0",
+    kind: "perp",
+    tag: "永续",
+    where: "X Layer",
+    pin: true,
+    lev: "1000×",
+  },
+  {
+    id: "fabperp",
+    view: { kind: "perp", chain: "xlayer", coin: "fab" },
+    symbol: "FAB-USDT0",
+    kind: "perp",
+    tag: "永续",
+    where: "X Layer",
+    pin: true,
+    lev: "1000×",
+    find: "FAB FabX",
+  },
+  {
     id: "bembnb",
     view: { kind: "pancake", pair: "bembnb" },
     symbol: "BEM-BNB",
@@ -333,6 +395,7 @@ export function MarketSheet({
         .then((text) => {
           write(coin, text);
           write(`${coin}spot`, text);
+          write(`${coin}perp`, text);
         })
         .catch(() => undefined);
     });
@@ -358,7 +421,10 @@ export function MarketSheet({
       .then((out) => write("upusdt", pretty(out, 18, 6)))
       .catch(() => undefined);
     quoteUpUsd()
-      .then((text) => write("up", text))
+      .then((text) => {
+        write("up", text);
+        write("upperp", text);
+      })
       .catch(() => undefined);
     fabBemPrice()
       .then((text) => write("fabspot", text))
@@ -367,6 +433,7 @@ export function MarketSheet({
       .then((n) => {
         if (!(n > 0)) return;
         write("fab", n.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 }));
+        write("fabperp", n.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 }));
       })
       .catch(() => undefined);
     STOCK_KEYS.forEach((key) => {

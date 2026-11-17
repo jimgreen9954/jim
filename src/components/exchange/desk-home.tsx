@@ -57,9 +57,19 @@ export function deskChain(view: DeskView): Desk {
 
 export function sisterView(view: DeskView, side: "spot" | "perp"): DeskView {
   if (side === "perp") {
-    if (view.kind === "perp") return view.coin === "bem" ? view : { kind: "perp", chain: view.chain, coin: "bem" };
-    if (view.kind === "pancake" && view.pair === "fab") return { kind: "perp", chain: "xlayer", coin: "bem" };
-    return { kind: "perp", chain: "xlayer", coin: "bem" };
+    if (view.kind === "perp") return view;
+    if (view.kind === "pancake") {
+      if (view.pair === "btc" || view.pair === "eth" || view.pair === "zec")
+        return { kind: "perp", chain: "bsc", coin: view.pair };
+      if (view.pair === "upusdt" || view.pair === "upbnb" || view.pair === "upbem")
+        return { kind: "perp", chain: "bsc", coin: "up" };
+      if (view.pair === "fab") return { kind: "perp", chain: "xlayer", coin: "fab" };
+      if (view.pair === "bem" || view.pair === "bembnb") return { kind: "perp", chain: "bsc", coin: "bem" };
+      if (view.pair === "bemokb") return { kind: "perp", chain: "xlayer", coin: "bem" };
+    }
+    if (view.kind === "tape" || view.kind === "hash" || view.kind === "otc")
+      return { kind: "perp", chain: "xlayer", coin: "tape" };
+    return { kind: "perp", chain: deskChain(view) === "bsc" ? "bsc" : "xlayer", coin: "bem" };
   }
   if (view.kind === "perp") return { kind: "tape", market: 0 };
   return view;
@@ -286,15 +296,9 @@ export function DeskHome({
   const pool = !showPerp && view.kind === "tape" && view.market === 0;
   const book = !showPerp && (view.kind === "otc" || (view.kind === "tape" && view.market !== 0));
   const hash = !showPerp && view.kind === "hash";
-  const launchCoin =
-    view.kind === "perp" && (view.coin === "btc" || view.coin === "eth" || view.coin === "zec" || view.coin === "up" || view.coin === "tape" || view.coin === "fab")
-      ? "bem"
-      : view.kind === "perp"
-        ? view.coin
-        : "bem";
   const launch =
     view.kind === "perp"
-      ? { kind: "perp" as const, chain: view.chain, coin: launchCoin }
+      ? { kind: "perp" as const, chain: view.chain, coin: view.coin }
       : { kind: "perp" as const, chain: "bsc" as const, coin: "bem" as const };
 
   return (

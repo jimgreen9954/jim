@@ -64,6 +64,8 @@ contract TermBook {
     uint256 public constant POKE_GAP = 10 minutes;
     uint256 public constant FRESH = 30 minutes;
     uint8 public constant MAX_LOANS = 16;
+    /// Open loans on this book. A deposit or withdrawal revalues all of them.
+    uint256 public constant MAX_OPEN = 32;
 
     struct Loan {
         address user;
@@ -92,12 +94,14 @@ contract TermBook {
     mapping(uint8 => uint256) public epoch;
     mapping(uint8 => uint256) public rescuePot;
     mapping(uint8 => uint256) public rescueShares;
+    mapping(uint8 => uint256) public rescueEver;
     mapping(uint8 => uint256) public rescueEpoch;
     mapping(uint8 => bool) public rescueOn;
     mapping(uint8 => mapping(address => uint256)) internal shares;
     mapping(uint8 => mapping(address => uint256)) internal paidIn;
     mapping(uint8 => mapping(address => uint256)) internal seen;
     mapping(uint8 => mapping(address => uint256)) internal rescueOf;
+    mapping(uint8 => mapping(address => uint256)) internal rescueTaken;
     mapping(uint256 => Loan) public loans;
     mapping(uint256 => uint256) public bookedOf;
     mapping(uint256 => uint256) public loanEpoch;
@@ -325,6 +329,7 @@ contract TermBook {
 
     function deposit(uint8 id, uint256 amount) external payable lock {
         if (id >= count() || amount == 0) revert Bad();
+        _requireFresh(id);
         _pull(id, amount);
         _markOut(id);
         uint256 assets = _nav(id);
@@ -353,6 +358,7 @@ contract TermBook {
 
     function withdraw(uint8 id, uint256 shareAmt) external lock {
         if (id >= count() || shareAmt == 0) revert Bad();
+        _requireFresh(id);
         uint256 have = _live(id, msg.sender);
         if (shareAmt > have) revert Bad();
         _markOut(id);
@@ -370,19 +376,23 @@ contract TermBook {
         emit Withdrawn(msg.sender, id, amount, shareAmt);
     }
 
-    /// Withdraw a frozen generation's share of debt repaid after the pool was restarted.
-    function claim(uint8 id, uint256 shareAmt) external lock {
-        if (id >= count() || shareAmt == 0 || !rescueOn[id]) revert Bad();
+    /// Pay up to `amount` of recovery already credited to this frozen generation.
+    /// Shares stay put, so a later repayment keeps the same split.
+    function claim(uint8 id, uint256 amount) external lock {
+        if (id >= count() || amount == 0 || !rescueOn[id]) revert Bad();
         _touch(id, msg.sender);
         uint256 have = rescueOf[id][msg.sender];
-        if (shareAmt > have || rescueShares[id] == 0) revert Bad();
-        uint256 out = shareAmt * rescuePot[id] / rescueShares[id];
+        if (have == 0 || rescueShares[id] == 0) revert Bad();
+        uint256 entitled = have * rescueEver[id] / rescueShares[id];
+        uint256 taken = rescueTaken[id][msg.sender];
+        if (entitled <= taken) revert Bad();
+        uint256 pending = entitled - taken;
+        uint256 out = amount < pending ? amount : pending;
         if (out == 0 || out > rescuePot[id]) revert Bad();
-        rescueOf[id][msg.sender] = have - shareAmt;
-        rescueShares[id] -= shareAmt;
+        rescueTaken[id][msg.sender] = taken + out;
         rescuePot[id] -= out;
         _push(id, msg.sender, out);
-        emit Withdrawn(msg.sender, id, out, shareAmt);
+        emit Withdrawn(msg.sender, id, out, amount);
     }
 
     function open(uint8 coll, uint8 debt, uint8 term, uint256 collAmt, uint256 principal) external payable lock {
@@ -548,6 +558,7 @@ contract TermBook {
         if (rescueOn[id] && loanEpoch[loanId] == rescueEpoch[id] && rescueEpoch[id] != epoch[id]) {
             cash[id] -= pay;
             rescuePot[id] += pay;
+            rescueEver[id] += pay;
             return;
         }
         if (interestPay == 0) return;
@@ -641,7 +652,19 @@ contract TermBook {
         _untrack(id);
     }
 
+    function _requireFresh(uint8 id) internal view {
+        uint256 n = alive.length;
+        for (uint256 i; i < n; ) {
+            Loan storage row = loans[alive[i]];
+            if (row.open && row.debt == id) {
+                if (!fresh(row.coll) || !fresh(row.debt)) revert Stale();
+            }
+            unchecked { ++i; }
+        }
+    }
+
     function _track(uint256 id) internal {
+        if (alive.length >= MAX_OPEN) revert Bad();
         alive.push(id);
         alivePos[id] = alive.length;
     }

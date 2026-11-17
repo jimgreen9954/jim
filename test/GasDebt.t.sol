@@ -163,5 +163,44 @@ contract GasDebtTest is Test {
         gas.claim(bobShares);
         assertApproxEqAbs(usdt.balanceOf(alice) + usdt.balanceOf(bob), 400 * UNIT, 1);
         assertEq(gas.assets(), 200 * UNIT, "claim changed the new pool");
+
+        usdt.mint(carol, 100 * UNIT);
+        vm.prank(carol);
+        gas.repay(100 * UNIT);
+        assertEq(gas.assets(), 200 * UNIT, "recovery after a full take entered the new pool");
+        assertEq(gas.rescuePot(), 100 * UNIT);
+        vm.prank(alice);
+        gas.claim(type(uint256).max);
+        vm.prank(bob);
+        gas.claim(type(uint256).max);
+        assertApproxEqAbs(usdt.balanceOf(alice) + usdt.balanceOf(bob), 500 * UNIT, 2);
+        assertEq(gas.assets(), 200 * UNIT);
+    }
+
+    function testDebtorCapBoundsWithdrawal() public {
+        _deposit(alice, 100_000 * UNIT);
+        uint256 n = gas.MAX_DEBTORS();
+        for (uint256 i; i < n; i++) {
+            address user = address(uint160(0xC000 + i));
+            vm.deal(user, 4 ether);
+            vm.startPrank(user);
+            gas.lockNative{value: 4 ether}();
+            gas.borrow(1 * UNIT);
+            vm.stopPrank();
+        }
+        vm.deal(address(0xD000), 4 ether);
+        vm.startPrank(address(0xD000));
+        gas.lockNative{value: 4 ether}();
+        vm.stopPrank();
+        vm.expectRevert();
+        vm.prank(address(0xD000));
+        gas.borrow(1 * UNIT);
+        uint256 half = gas.shares(alice) / 2;
+        uint256 mark = gasleft();
+        vm.prank(alice);
+        gas.withdraw(half);
+        uint256 used = mark - gasleft();
+        emit log_named_uint("lend withdraw gas at cap", used);
+        assertLt(used, 8_000_000, "withdrawal at the borrower cap does not fit");
     }
 }
