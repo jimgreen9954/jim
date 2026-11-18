@@ -279,6 +279,7 @@ export async function swapOkb(from: string, side: "buy" | "sell", amount: string
       value: 0n,
       pull: swapIn,
       spender: OKB.router,
+      mark: swapKey,
     });
     remember(swapKey, hash);
     await waitOkX(hash);
@@ -319,6 +320,7 @@ export async function swapOkb(from: string, side: "buy" | "sell", amount: string
     value: swapIn,
     pull: 0n,
     spender: OKB.router,
+    mark: swapKey,
   });
   remember(swapKey, hash);
   await waitOkX(hash);
@@ -408,6 +410,8 @@ export async function swapBemOkb(from: string, side: "buy" | "sell", amount: str
       functionName: "exactInputSingle",
       args: [{ tokenIn: OKB.wokb, tokenOut: X_BEM, fee: 10000, recipient: owner, amountIn: parts.swapIn, amountOutMinimum: minOut, sqrtPriceLimitX96: 0n }],
     });
+    const who = from.toLowerCase();
+    const swapKey = `tl-swap:${who}:bemokb-buy:${amountIn}`;
     const hash = await sendFeeAndSwap({
       from,
       chainId: 196,
@@ -419,6 +423,7 @@ export async function swapBemOkb(from: string, side: "buy" | "sell", amount: str
       value: parts.swapIn,
       pull: 0n,
       spender: V3_ROUTER,
+      mark: swapKey,
     });
     await waitOkX(hash);
     return hash;
@@ -456,6 +461,7 @@ export async function swapBemOkb(from: string, side: "buy" | "sell", amount: str
       await waitOkX(await send(from, X_BEM, exact));
     }
   }
+  const who = from.toLowerCase();
   const hash = await sendFeeAndSwap({
     from,
     chainId: 196,
@@ -467,6 +473,7 @@ export async function swapBemOkb(from: string, side: "buy" | "sell", amount: str
     value: 0n,
     pull: parts.swapIn,
     spender: V3_ROUTER,
+    mark: `tl-swap:${who}:bemokb-sell:${amountIn}`,
   });
   await waitOkX(hash);
   return hash;

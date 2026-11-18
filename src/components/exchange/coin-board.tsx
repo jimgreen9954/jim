@@ -159,7 +159,7 @@ export function CoinBoard({ coin, lang }: { coin: "btc" | "eth" | "zec"; lang: "
         } else if (message === "no-batch")
           setNote(zh ? "没有成交。手续费和兑换必须在同一笔里。" : "No fill. The fee and the swap have to be one transaction.");
         else if (message === "fee-open")
-          setNote(zh ? "成交了，手续费没扣上。再点一次补上。" : "Filled. The fee was not taken. Tap again to pay it.");
+          setNote(zh ? "成交了，手续费没扣上。再点一次只补手续费，不会再成交一次。" : "Filled. The fee was not taken. Tap again to pay only the fee. It will not trade again.");
         else if (/rejected|denied|4001/i.test(message))
           setNote(zh ? "你取消了。" : "You cancelled.");
         else setNote(zh ? "没有成交。" : "No fill.");

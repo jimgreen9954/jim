@@ -410,7 +410,7 @@ async function preflight(chain: GiftChain, from: string, to: Hex, data: Hex, val
     if (which === "ok" || which === "slow") return;
     const text = which instanceof Error ? which.message : "";
     if (/exceeds the balance|insufficient funds/i.test(text)) throw new Error("funds");
-    const known = ["deployer", "creator", "amount", "life", "mode", "range", "packets", "dust", "rule", "late", "empty", "day", "cap", "early", "credit", "token", "native", "bot", "pace", "task", "buy", "fee", "pull", "prize", "closed", "desk", "placed"];
+    const known = ["deployer", "creator", "amount", "life", "mode", "range", "packets", "dust", "rule", "late", "empty", "day", "cap", "early", "credit", "token", "native", "bot", "pace", "task", "buy", "fee", "pull", "prize", "closed", "desk", "placed", "owed"];
     const hit = known.find((item) => text === item || text.includes(`: ${item}`) || text.includes(`"${item}"`));
     throw new Error(hit ?? "revert");
   } finally {
@@ -616,6 +616,7 @@ export type RedRule = {
   balance: bigint;
   lastDay: bigint;
   tradedDay: bigint;
+  prizeOf: bigint;
   ready: boolean;
   asset: GiftAsset | null;
   legacy?: boolean;
@@ -643,6 +644,7 @@ const emptyAsset = (chain: GiftChain, lane: GiftLane = "official"): RedRule => (
   balance: 0n,
   lastDay: 0n,
   tradedDay: 0n,
+  prizeOf: 0n,
   ready: false,
   asset: null,
 });
@@ -753,6 +755,19 @@ async function readLive(chain: GiftChain, account: string | null, pool: Hex, lan
   const balance = !ready ? 0n : token === ZERO
     ? await c.getBalance({ address: pool })
     : await c.readContract({ address: token, abi: erc20, functionName: "balanceOf", args: [pool] });
+  let prizeOf = 0n;
+  if (ready && account) {
+    try {
+      prizeOf = await c.readContract({
+        address: pool,
+        abi: parseAbi(["function prizeOf(address) view returns (uint256)"]),
+        functionName: "prizeOf",
+        args: [who],
+      });
+    } catch {
+      prizeOf = 0n;
+    }
+  }
   return {
     chain,
     lane,
@@ -775,6 +790,7 @@ async function readLive(chain: GiftChain, account: string | null, pool: Hex, lan
     balance,
     lastDay,
     tradedDay,
+    prizeOf,
     ready,
     asset,
   };
@@ -1202,6 +1218,11 @@ const TRUSTED_RED = new Set<string>([
   "0xea2da5a35d4f3c5a921d49821400e5ae76ed013d7ce61db86c8e86b8c0b9d62c",
   "0x2aa0c26c4c2483662453728e0da76cb11ed1c11851f1b19a327dae8db4506e9c",
   "0xae505fff9946e2e2b8917b1bdbd7aea156cfaf89d0f65962f7aef8ac8398d4d5",
+  "0x2b6e4ef934740d318cca2ab8a97fb6c1c269988f5e5e5fb0bbbddca91d8ad30e",
+  "0xbfb7b1f1048225af742122c6a80049cbccd33c2d846871847dcd0bef50bdbd24",
+  "0x91bd8e2c9d02f1ee243c7bd4a51b61a18ba035c1d63063d15c1f02987254e6e3",
+  "0x324ccc0de559a93abe13af9113a70c00b1d481264e15a4e65f6c58b3ae42fa7d",
+  "0x69528468913297cddd2184f4340461dfaf347559ae6d888e83709ef7226ff519",
 ]);
 
 function legacyPacket(pool: Hex): boolean {
@@ -1221,7 +1242,10 @@ async function assertTrustedRed(chain: GiftChain, pool: Hex, kind: "move" | "cla
 
 export async function tradeRed(chain: GiftChain, from: string, lane: GiftLane = "volunteer", pool: Hex = packetOf(chain, lane)): Promise<Hex> {
   const here = pool.toLowerCase() === packetOf(chain, lane).toLowerCase() ? await readRed(chain, from, lane) : await readLive(chain, from, pool, lane);
+  if (here.prizeOf > 0n) throw new Error("owed");
   if (here.lastDay === BigInt(sgDay())) throw new Error("day");
+  if (here.packetsLeft <= 0n || (here.fixedAmt > 0n && here.balance < here.fixedAmt)) throw new Error("empty");
+  if (here.dayCap > 0n && here.claimedToday >= here.dayCap) throw new Error("cap");
   await assertTrustedRed(chain, pool, "move");
   if (here.endsAt > 0n && here.endsAt <= BigInt(Math.floor(Date.now() / 1000))) throw new Error("late");
   if (await tradedNow(chain, from, lane, pool)) throw new Error("traded");
@@ -1278,11 +1302,11 @@ export async function tradeRed(chain: GiftChain, from: string, lane: GiftLane = 
 export async function claimRed(chain: GiftChain, from: string, lane: GiftLane = "volunteer", pool: Hex = packetOf(chain, lane)): Promise<{ hash: Hex; amount: bigint }> {
   const day = sgDay();
   const here = pool.toLowerCase() === packetOf(chain, lane).toLowerCase() ? await readRed(chain, from, lane) : await readLive(chain, from, pool, lane);
-  if (here.lastDay === BigInt(day)) throw new Error("day");
+  if (here.prizeOf <= 0n && here.lastDay === BigInt(day)) throw new Error("day");
   await assertTrustedRed(chain, pool, "claim");
   const need = here.spotNeed > here.perpNeed ? here.spotNeed : here.perpNeed;
   if (need <= 0n || here.hi === 0n) throw new Error("task");
-  if (!(await tradedNow(chain, from, lane, pool))) throw new Error("task");
+  if (here.prizeOf <= 0n && !(await tradedNow(chain, from, lane, pool))) throw new Error("task");
   const data = encodeFunctionData({ abi: RED_PACKET_ABI, functionName: "claim" });
   try {
     await preflight(chain, from, pool, data);

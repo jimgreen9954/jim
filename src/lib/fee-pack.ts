@@ -1,4 +1,4 @@
-import { createPublicClient, encodeFunctionData, http, parseAbi, type Hex } from "viem";
+import { createPublicClient, encodeFunctionData, encodePacked, http, keccak256, parseAbi, type Hex } from "viem";
 import { TxPending } from "@/lib/chain-marks";
 import type { DeskParts } from "@/lib/invite-cut";
 import { rejected, sendAsMulticall, sendUserBatch, type SignedCall } from "@/lib/one-sign";
@@ -94,12 +94,26 @@ export type FeeSwap = {
   spender: Hex;
   /** False for a bridge call that might pay msg.sender. Those stay on the wallet batch or Multicall3. */
   lock?: boolean;
+  /** Stable id for this fill. A rejected fee keeps this id and the next tap pays only the fee. */
+  mark?: string;
 };
 
-/** Batch the fee and the fill when the wallet can. Otherwise the fill is signed first and the fee only after that fill succeeds. A rejected or reverted fill does not take the fee. Gas for a failed fill is not returned. */
+/** Batch the fee and the fill when the wallet can. Otherwise the fill is signed first and the fee only after that fill succeeds. A rejected or reverted fill does not take the fee. If the fill is already on chain and the fee signature is rejected, the next tap pays the fee and does not trade again. */
 export async function sendFeeAndSwap(args: FeeSwap): Promise<Hex> {
   const { from, chainId, token, safe, parts, swapTo, data, value } = args;
   const calls = feeCalls(token, safe, parts);
+  const key = openKey(args);
+  const prior = readOpen(key);
+  if (prior) {
+    const state = await settle(chainId, prior.hash);
+    if (state === "wait") throw new TxPending(prior.hash);
+    if (state === "bad") dropOpen(key);
+    else {
+      await payFees(from, chainId, calls, key, prior);
+      dropOpen(key);
+      return prior.hash;
+    }
+  }
   const swap: SignedCall = { to: swapTo, data, value };
   const together = [...calls, swap];
   if (!remoteWallet()) {
@@ -125,12 +139,92 @@ export async function sendFeeAndSwap(args: FeeSwap): Promise<Hex> {
   }
   sayTradeStep("fill");
   const hash = await sendTx(from, chainId, swapTo, data, value);
-  await mined(chainId, hash);
-  for (const call of calls) {
-    sayTradeStep("fee");
-    await mined(chainId, await sendTx(from, chainId, call.to, call.data, call.value ?? 0n));
+  const saved: OpenFill = { hash, fees: [] };
+  writeOpen(key, saved);
+  const filled = await settle(chainId, hash);
+  if (filled === "wait") throw new TxPending(hash);
+  if (filled === "bad") {
+    dropOpen(key);
+    throw new Error("reverted");
   }
+  await payFees(from, chainId, calls, key, saved);
+  dropOpen(key);
   return hash;
+}
+
+type OpenFill = { hash: Hex; fees: Hex[] };
+
+function openKey(args: FeeSwap): string {
+  if (args.mark) return `tl-open-fill:${args.mark}`;
+  const id = keccak256(
+    encodePacked(
+      ["uint256", "address", "address", "uint256", "bytes"],
+      [BigInt(args.chainId), args.from as Hex, args.swapTo, args.value, args.data],
+    ),
+  );
+  return `tl-open-fill:${id}`;
+}
+
+function readOpen(key: string): OpenFill | null {
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return null;
+    const row = JSON.parse(raw) as OpenFill;
+    return row && /^0x[0-9a-fA-F]{64}$/.test(row.hash) ? row : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeOpen(key: string, row: OpenFill) {
+  try {
+    sessionStorage.setItem(key, JSON.stringify(row));
+  } catch {
+    /* a private window can refuse storage; this tap still will not send the fill twice */
+  }
+}
+
+function dropOpen(key: string) {
+  try {
+    sessionStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
+
+async function settle(chainId: number, hash: Hex): Promise<"ok" | "bad" | "wait"> {
+  try {
+    await mined(chainId, hash);
+    return "ok";
+  } catch (err) {
+    if (err instanceof Error && err.message === "reverted") return "bad";
+    return "wait";
+  }
+}
+
+async function payFees(from: string, chainId: 56 | 196, calls: SignedCall[], key: string, saved: OpenFill) {
+  for (let i = 0; i < calls.length; i += 1) {
+    const prior = saved.fees[i];
+    if (prior) {
+      const state = await settle(chainId, prior);
+      if (state === "ok") continue;
+      if (state === "wait") throw new TxPending(prior);
+    }
+    const call = calls[i];
+    let hash: Hex;
+    try {
+      sayTradeStep("fee");
+      hash = await sendTx(from, chainId, call.to, call.data, call.value ?? 0n);
+    } catch (err) {
+      if (rejected(err)) throw new Error("fee-open");
+      throw err;
+    }
+    saved.fees[i] = hash;
+    writeOpen(key, saved);
+    const state = await settle(chainId, hash);
+    if (state === "wait") throw new TxPending(hash);
+    if (state === "bad") throw new Error("fee-open");
+  }
 }
 
 export const LOCK_TOKENS: { chainId: 56 | 196; name: string; token: Hex }[] = [

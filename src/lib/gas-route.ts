@@ -147,6 +147,7 @@ export async function sendGasRoute(toBnb: boolean, from: string, amount: bigint)
       pull: 0n,
       spender: quote.to,
       lock: false,
+      mark: key,
     });
   } catch (err) {
     if (err instanceof TxPending) throw new Error("pending");

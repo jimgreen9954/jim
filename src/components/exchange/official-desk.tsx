@@ -123,7 +123,11 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
           ? zh
             ? `已经提交，回执还没读到。先核对 ${(error as TxPending).hash ?? ""}，不要再签同一笔。`
             : `Submitted. The receipt is not back. Check ${(error as TxPending).hash ?? ""} before signing again.`
-          : message === "fee-kept"
+          : message === "fee-open"
+            ? zh
+              ? "TapeOut 已经成交。手续费没扣上。再点一次只补手续费，不会再成交一次。"
+              : "The TapeOut trade filled. The fee was not taken. Tap again to pay only the fee. It will not trade again."
+            : message === "fee-kept"
             ? zh
               ? "服务费已经付了，TapeOut 那一笔没有完成。服务费不退。"
               : "The fee was paid. The TapeOut trade did not finish. The fee is not returned."

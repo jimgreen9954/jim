@@ -86,6 +86,7 @@ function blankRule(chain: GiftChain, lane: GiftLane): RedRule {
     balance: 0n,
     lastDay: 0n,
     tradedDay: 0n,
+    prizeOf: 0n,
     ready: false,
     asset: null,
   };
@@ -453,6 +454,24 @@ export function RedGift({
             ? "奖池里还有奖金。只有创建人可以修改这一份。"
             : "This round still has a prize. Only its creator can change it.",
         );
+      else if (message === "owed")
+        setNote(
+          zh
+            ? "上一笔奖金还在你名下。先领取。新的一轮不会把这笔冲掉，也不会再让你做一次任务。"
+            : "The last prize is still yours. Claim it. A new round does not wipe it, and you do not take the task again.",
+        );
+      else if (message === "empty")
+        setNote(
+          zh
+            ? "这一份奖金已经有人完成了。这一笔不会再成交。"
+            : "That prize is already taken. This trade will not run.",
+        );
+      else if (message === "cap")
+        setNote(
+          zh
+            ? "今天的名额满了。这一笔不会再成交。"
+            : "Today's places are full. This trade will not run.",
+        );
       else if (message === "funds")
         setNote(
           zh
@@ -494,11 +513,12 @@ export function RedGift({
   };
 
   const whyNot = (book: RedRule, who = self): string | null => {
+    if (book.prizeOf > 0n) return null;
     if (book.lastDay === BigInt(day)) return zh ? "这个已经领过。" : "Already claimed this one.";
-    if (book.endsAt > 0n && BigInt(Math.floor(Date.now() / 1000)) > book.endsAt)
+    if (book.prizeOf <= 0n && book.endsAt > 0n && BigInt(Math.floor(Date.now() / 1000)) > book.endsAt)
       return zh ? "领取时间已经过了。" : "The claim window is over.";
     if (book.balance === 0n) return zh ? "奖金还没进池。" : "The prize is not in the pool.";
-    if (book.dayCap > 0n && book.claimedToday >= book.dayCap)
+    if (book.prizeOf <= 0n && book.dayCap > 0n && book.claimedToday >= book.dayCap)
       return zh
         ? "今天的名额满了。创建者点放开领取。"
         : "Today's quota is full. The creator can reopen it.";
@@ -524,7 +544,7 @@ export function RedGift({
   };
 
   const claim = (book: RedRule) => {
-    if (book.lastDay === BigInt(day)) {
+    if (book.prizeOf <= 0n && book.lastDay === BigInt(day)) {
       setBad(true);
       setNote(
         zh
@@ -536,7 +556,7 @@ export function RedGift({
     }
     void run(async () => {
       const from = await who();
-      if (taskStake(book.chain, book.hi).perp && !(await tradedNow(book.chain, from, book.lane, book.address))) {
+      if (book.prizeOf <= 0n && taskStake(book.chain, book.hi).perp && !(await tradedNow(book.chain, from, book.lane, book.address))) {
         setNote(
           zh
             ? "钱包正在弹出盖章。请确认。确认之后再点一次领取。"
@@ -1106,6 +1126,8 @@ function PacketCard({
   const maker = Boolean(self && book.maker.toLowerCase() === self.toLowerCase());
   const mineToday = book.lastDay === BigInt(sgDay());
   const tradedToday = book.tradedDay === BigInt(sgDay()) && !mineToday;
+  const owed = book.prizeOf > 0n;
+  const stale = owed && book.tradedDay !== BigInt(sgDay());
   const stuck = book.dayCap > 0n && book.claimedToday >= book.dayCap && book.balance > 0n;
   const sum = purse(book, paid);
   const name = book.asset ? (zh ? book.asset.zh : book.asset.en) : "";
@@ -1282,7 +1304,16 @@ function PacketCard({
         >
           {zh ? "重开" : "Reopen"}
         </button>
-      ) : (ended || mineToday) && !reclaim ? (
+      ) : stale ? (
+        <button
+          type="button"
+          className="gift-go disabled:opacity-40"
+          disabled={busy}
+          onClick={() => openSeal(book)}
+        >
+          {zh ? "领取已完成的奖金" : "Claim the prize already earned"}
+        </button>
+      ) : (ended || mineToday) && !owed && !reclaim ? (
         <button
           type="button"
           className="gift-go"

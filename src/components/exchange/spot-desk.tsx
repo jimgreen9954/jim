@@ -514,6 +514,12 @@ export function SpotDesk({
     const code = (err as { code?: number }).code;
     const message = err instanceof Error ? err.message : "";
     if (message === "nowallet") setNote(c.walletNo);
+    else if (message === "fee-open")
+      setNote(
+        lang === "zh"
+          ? "成交了，手续费没扣上。再点一次只补手续费，不会再成交一次。"
+          : "Filled. The fee was not taken. Tap again to pay only the fee. It will not trade again.",
+      );
     else if (code === 4001) setNote(c.walletReject);
     else if (message === "pending" || err instanceof TxPending) {
       const pending = err as TxPending;
@@ -528,12 +534,6 @@ export function SpotDesk({
         lang === "zh"
           ? "价格变了，现在的最少到账低于刚才确认的数。看新报价再签。"
           : "The price moved. The new minimum is below the one you confirmed. Look again, then sign.",
-      );
-    else if (message === "fee-open")
-      setNote(
-        lang === "zh"
-          ? "成交了，手续费没扣上。再点一次补上。"
-          : "Filled. The fee was not taken. Tap again to pay it.",
       );
     else if (message === "fee-kept")
       setNote(

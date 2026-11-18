@@ -87,4 +87,68 @@ contract RedRuleTest is Test {
         assertEq(bob.balance, 1 ether - 0.01 ether + 1 ether, "earned prize was not paid after the round");
         assertEq(next.reserved(), 0);
     }
+
+    function testOnePrizeCannotBePromisedTwice() public {
+        Route router = new Route();
+        RedNext next = new RedNext(address(router), address(1), address(2), address(3), address(4), address(5), address(6), 1, 1);
+        address task = address(0xBEEF);
+        address alice = makeAddr("alice");
+        address bob = makeAddr("bob");
+        address cara = makeAddr("cara");
+        vm.warp(1_700_000_000);
+        address booth = next.BOOTH();
+        vm.deal(booth, 2 ether);
+        vm.prank(booth, alice);
+        next.begin{value: 1 ether}(address(0), 1 ether, uint256(uint160(task)), 0.01 ether, 0, 1 days, 0, 1 ether);
+
+        vm.deal(bob, 1 ether);
+        vm.prank(bob, bob);
+        next.trade{value: 0.01 ether}(0, 1);
+        assertEq(next.packetsLeft(), 0, "the only prize stayed open");
+        assertEq(next.prizeOf(bob), 1 ether);
+
+        vm.deal(cara, 1 ether);
+        vm.prank(cara, cara);
+        vm.expectRevert(bytes("empty"));
+        next.trade{value: 0.01 ether}(0, 1);
+        assertEq(cara.balance, 1 ether, "the second task spent funds");
+        assertEq(next.prizeOf(cara), 0);
+    }
+
+    function testNewRoundDoesNotBlockAnUnpaidPrize() public {
+        Route router = new Route();
+        RedNext next = new RedNext(address(router), address(1), address(2), address(3), address(4), address(5), address(6), 1, 1);
+        address task = address(0xBEEF);
+        address alice = makeAddr("alice");
+        address bob = makeAddr("bob");
+        address cara = makeAddr("cara");
+        vm.warp(1_700_000_000);
+        address booth = next.BOOTH();
+        vm.deal(booth, 2 ether);
+        vm.prank(booth, alice);
+        next.begin{value: 1 ether}(address(0), 1 ether, uint256(uint160(task)), 0.01 ether, 0, 1 days, 0, 1 ether);
+
+        vm.deal(bob, 1 ether);
+        vm.prank(bob, bob);
+        next.trade{value: 0.01 ether}(0, 1);
+        uint256 until = next.prizeUntil(bob);
+
+        vm.warp(next.endsAt() + 1);
+        vm.prank(alice);
+        next.setRule(address(0), 0, 1 ether, 0, uint256(uint160(task)), 3, 3, 0.01 ether, 0, 0, 1 days, 0);
+        assertEq(next.packetsLeft(), 3);
+        assertGt(next.endsAt(), until);
+
+        vm.deal(cara, 1 ether);
+        vm.prank(cara, cara);
+        vm.expectRevert(bytes("empty"));
+        next.trade{value: 0.01 ether}(0, 1);
+        assertEq(next.packetsLeft(), 3, "a new task took the reserved prize");
+
+        vm.prank(bob, bob);
+        next.claim();
+        assertEq(bob.balance, 1 ether - 0.01 ether + 1 ether, "the old prize was not paid in the new round");
+        assertEq(next.prizeOf(bob), 0);
+        assertEq(next.packetsLeft(), 3, "claiming the old prize consumed a new packet");
+    }
 }

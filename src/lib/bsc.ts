@@ -569,6 +569,7 @@ async function fillThenFee(
     value,
     pull: token ? parts.swapIn : 0n,
     spender: to,
+    mark: swapKey,
   });
   remember(swapKey, hash);
   try {

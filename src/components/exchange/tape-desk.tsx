@@ -232,8 +232,8 @@ function GasDesk({ account, zh }: { account: string | null; zh: boolean }) {
                     : "Balance is not enough."
                   : code === "fee-open"
                     ? zh
-                      ? "兑换已经发出，手续费没扣上。再点一次只补手续费。"
-                      : "The swap was sent. The fee was not taken. Tap again to pay only the fee."
+                      ? "兑换已经发出，手续费没扣上。再点一次只补手续费，不会再兑换一次。"
+                      : "The swap was sent. The fee was not taken. Tap again to pay only the fee. It will not swap again."
                     : code === "pending"
                       ? zh
                         ? "兑换已经提交，回执还没读到。再点一次不会再换，只等回执后补手续费。"

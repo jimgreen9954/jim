@@ -562,7 +562,9 @@ export function PoolSpot({
     const message = err instanceof Error ? err.message : "";
     const code = (err as { code?: number }).code;
     setBad(true);
-    if (code === 4001 || /reject|denied|cancel/i.test(message))
+    if (message === "fee-open")
+      setNote(zh ? "成交了，手续费没扣上。再点一次只补手续费，不会再成交一次。" : "Filled. The fee was not taken. Tap again to pay only the fee. It will not trade again.");
+    else if (code === 4001 || /reject|denied|cancel/i.test(message))
       setNote(zh ? "钱包拒绝了签名。" : "The wallet rejected the signature.");
     else if (message === "chain" || /chain/i.test(message))
       setNote(
@@ -586,8 +588,6 @@ export function PoolSpot({
       );
     else if (message === "no-batch")
       setNote(zh ? "没有成交。手续费和兑换必须在同一笔里。" : "No fill. The fee and the swap have to be one transaction.");
-    else if (message === "fee-open")
-      setNote(zh ? "成交了，手续费没扣上。再点一次补上。" : "Filled. The fee was not taken. Tap again to pay it.");
     else if (message === "fee")
       setNote(zh ? "收费地址不对，没有签名。" : "Fee address mismatch. Not signed.");
     else if (message === "gas") setNote(zh ? "OKB 要留下手续费。" : "Keep OKB for gas.");

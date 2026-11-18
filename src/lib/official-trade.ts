@@ -60,6 +60,7 @@ async function tradeWithFee(from: string, to: Hex, data: Hex, value: bigint, not
     value,
     pull: 0n,
     spender: to,
+    mark: `official:${from.toLowerCase()}:${to.toLowerCase()}:${value}:${data}`,
   });
 }
 

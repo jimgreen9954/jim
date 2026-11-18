@@ -92,6 +92,8 @@ contract RedNext {
     uint256 public tasksDone;
     /// Prize locked at the moment the task was done. A later rule edit cannot shrink it.
     mapping(address => uint256) public prizeOf;
+    /// Round deadline frozen with the prize. A later round does not gate this claim.
+    mapping(address => uint256) public prizeUntil;
     uint256 public reserved;
     bool public ready;
     uint256 private locked;
@@ -257,6 +259,7 @@ contract RedNext {
         require(block.timestamp <= endsAt, "late");
         uint256 day = sgDay(block.timestamp);
         require(tradedDay[msg.sender] != day, "day");
+        _room(day);
         address task = address(uint160(hi));
         require(task != address(0), "task");
         if (gate == 0) {
@@ -266,12 +269,7 @@ contract RedNext {
             require(amountIn > 0 && minOut > 0, "amount");
             _sell(task, amountIn, minOut);
         }
-        require(fixedAmt > 0, "empty");
-        require(prizeOf[msg.sender] == 0, "owed");
-        prizeOf[msg.sender] = fixedAmt;
-        reserved += fixedAmt;
-        tradedDay[msg.sender] = day;
-        tasksDone += 1;
+        _owe(day);
         emit Traded(msg.sender, day, gate);
         locked = 0;
     }
@@ -282,23 +280,15 @@ contract RedNext {
         uint256 pay = prizeOf[msg.sender];
         require(pay > 0, "task");
         require(block.timestamp >= lastClaimAt + PACE, "pace");
-        if (block.timestamp <= endsAt) {
+        uint256 until = prizeUntil[msg.sender];
+        if (block.timestamp <= until) {
             uint256 day = sgDay(block.timestamp);
             require(tradedDay[msg.sender] == day, "task");
             require(lastDay[msg.sender] != day, "day");
-            if (claimDay != day) {
-                claimDay = day;
-                claimedToday = 0;
-            }
-            require(packetsLeft > 0, "empty");
-            require(dayCap > 0 && claimedToday < dayCap, "cap");
-            claimedToday += 1;
             lastDay[msg.sender] = day;
-            packetsLeft -= 1;
-        } else if (packetsLeft > 0) {
-            packetsLeft -= 1;
         }
         prizeOf[msg.sender] = 0;
+        prizeUntil[msg.sender] = 0;
         reserved -= pay;
         lastClaimAt = block.timestamp;
         if (token == address(0)) {
@@ -308,6 +298,35 @@ contract RedNext {
             _push(token, msg.sender, pay);
         }
         emit Claimed(msg.sender, sgDay(block.timestamp), pay);
+    }
+
+    function _cash() internal view returns (uint256 bal) {
+        bal = token == address(0) ? address(this).balance : IERC20(token).balanceOf(address(this));
+        if (token == address(0) && bal >= msg.value) bal -= msg.value;
+    }
+
+    /// One completion takes one unpaid prize. A second person cannot finish the task once that prize is gone.
+    function _room(uint256 day) internal view {
+        require(fixedAmt > 0, "empty");
+        require(prizeOf[msg.sender] == 0, "owed");
+        require(packetsLeft > 0, "empty");
+        uint256 taken = claimDay == day ? claimedToday : 0;
+        require(dayCap > 0 && taken < dayCap, "cap");
+        require(_cash() >= reserved + fixedAmt, "empty");
+    }
+
+    function _owe(uint256 day) internal {
+        if (claimDay != day) {
+            claimDay = day;
+            claimedToday = 0;
+        }
+        claimedToday += 1;
+        packetsLeft -= 1;
+        prizeOf[msg.sender] = fixedAmt;
+        prizeUntil[msg.sender] = endsAt;
+        reserved += fixedAmt;
+        tradedDay[msg.sender] = day;
+        tasksDone += 1;
     }
 
     function _arm(
