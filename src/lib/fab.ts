@@ -141,11 +141,13 @@ async function allow(from: string, token: Hex, need: bigint) {
     args: [owner, token, ROUTER],
   });
   const now = BigInt(Math.floor(Date.now() / 1000));
-  if (row[0] < need || row[1] <= now + 60n) {
+  const cap = need > (1n << 160n) - 1n ? (1n << 160n) - 1n : need;
+  const until = now + 20n * 60n;
+  if (row[0] !== cap || row[1] < now + 60n || row[1] > until + 120n) {
     const data = encodeFunctionData({
       abi: permitAbi,
       functionName: "approve",
-      args: [token, ROUTER, (1n << 160n) - 1n, Number(now + 30n * 24n * 60n * 60n)],
+      args: [token, ROUTER, cap, Number(until)],
     });
     const hash = await send(from, PERMIT2, data);
     await xClient.waitForTransactionReceipt({ hash, timeout: 60_000 });

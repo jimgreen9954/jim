@@ -554,9 +554,9 @@ async function fillThenFee(
     return resumed;
   }
   if (token && to.toLowerCase() === UP_POOL.toLowerCase()) {
-    const owed = parts.desk > 0n || parts.reward > 0n;
-    if (owed) await payDeskToken(from, token, parts, feeKey, false);
-    return finishSwap(from, data, owed, swapKey, feeKey, to, value);
+    const hash = await finishSwap(from, data, false, swapKey, feeKey, to, value);
+    if (parts.desk > 0n || parts.reward > 0n) await payDeskToken(from, token, parts, feeKey, false);
+    return hash;
   }
   const hash = await sendFeeAndSwap({
     from,
@@ -1148,9 +1148,10 @@ async function sellDepositedUp(from: string, parts: DeskParts, swapKey: string, 
     const message = err instanceof Error ? err.message : "";
     if (message !== "no-batch") throw err;
   }
-  const paid = await payDeskToken(from, BSC.up, parts, feeKey, false);
   if (credited < parts.swapIn) await step(`${swapKey}:dep`, () => send(from, UP_POOL, depositData));
-  return finishSwap(from, sellData, paid, swapKey, feeKey, UP_POOL, 0n);
+  const hash = await finishSwap(from, sellData, false, swapKey, feeKey, UP_POOL, 0n);
+  if (parts.desk > 0n || parts.reward > 0n) await payDeskToken(from, BSC.up, parts, feeKey, false);
+  return hash;
 }
 
 export async function swapUpBnbSpot(from: string, side: "buy" | "sell", amount: string): Promise<Hex> {

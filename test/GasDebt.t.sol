@@ -177,6 +177,29 @@ contract GasDebtTest is Test {
         assertEq(gas.assets(), 200 * UNIT);
     }
 
+    function testGasCashShortWithdrawDoesNotBurnTheClaim() public {
+        _deposit(alice, 100 * UNIT);
+        vm.deal(carol, 400 ether);
+        vm.prank(carol);
+        gas.lockNative{value: 400 ether}();
+        vm.prank(carol);
+        gas.borrow(90 * UNIT);
+        assertEq(gas.cash(), 10 * UNIT);
+        assertEq(gas.totalBorrow(), 90 * UNIT);
+        uint256 shares = gas.shares(alice);
+        vm.expectRevert();
+        vm.prank(alice);
+        gas.withdraw(shares);
+        assertEq(gas.shares(alice), shares, "full exit burned the unpaid claim");
+        uint256 take = 10 * UNIT * (shares + 1_000_000) / (gas.assets() + 1_000);
+        assertLt(take, shares);
+        vm.prank(alice);
+        gas.withdraw(take);
+        assertGt(gas.shares(alice), 0, "cash exit left no claim");
+        assertEq(gas.totalBorrow(), 90 * UNIT);
+    }
+
+
     function testDebtorCapBoundsWithdrawal() public {
         _deposit(alice, 100_000 * UNIT);
         uint256 n = gas.MAX_DEBTORS();

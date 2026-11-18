@@ -48,20 +48,22 @@ const ZERO = "0x0000000000000000000000000000000000000000" as Hex;
 export type LendAsset = "gas" | "tape" | "bem";
 
 const PIN: Partial<Record<`${LendChain}:${LendAsset}`, Hex>> = {
-  "xlayer:gas": "0x62f9016C97eF9255C8Ba16DDa7F531656015DAeA",
-  "xlayer:tape": "0x8674351Fae2781c077977aE589F2FA71a1bb4992",
-  "xlayer:bem": "0x741331f4c8e4D6937FB92eC88ceE27c9e0AC3062",
-  "bsc:gas": "0xC4bA21b1566Aee4b1113f166C5f496275E51A65E",
-  "bsc:bem": "0xEF9d226254b7Ce8CdCD5b1170d70518AfDC3e05A",
+  "xlayer:gas": "0x98814252d0BacaD3FddF4433F3BF388686F26F97",
+  "xlayer:tape": "0xB6d0fE8552f1F14E4F282DEcb137645E3c988D11",
+  "xlayer:bem": "0x07d25044cBE0524c0617267d6BFAf2Fa6A0A0eFe",
+  "bsc:gas": "0xd80B34d487CeC5F8F4966B65517Ba0b0CB2E9c31",
+  "bsc:bem": "0x03e2fed201edeF0f70789A79c6D59BeEbc05fB41",
 };
 
 const PRIOR: Partial<Record<`${LendChain}:${LendAsset}`, Hex[]>> = {
   "xlayer:gas": [
+    "0x62f9016C97eF9255C8Ba16DDa7F531656015DAeA",
     "0x6135b562c5d46595b044519e787FE396830C5C83",
     "0xc417780f4e1F9385BE1ba4cbDe7b40860B2aA8b0",
     "0x57228158cba08c61710ab2644e583c328ec86ea7",
   ],
   "xlayer:tape": [
+    "0x8674351Fae2781c077977aE589F2FA71a1bb4992",
     "0xF2925A78AdaC85cA330643bc5584A694199AfB76",
     "0x416DEf23cd29349a0ebceAa8A0Bc9766ec8999F5",
     "0x99CA040580837a2158Bfd0c8d84fcD4B85b6393b",
@@ -71,6 +73,7 @@ const PRIOR: Partial<Record<`${LendChain}:${LendAsset}`, Hex[]>> = {
     "0x425285da21ed3eabe64550d1be7dcabcf6f9e851",
   ],
   "xlayer:bem": [
+    "0x741331f4c8e4D6937FB92eC88ceE27c9e0AC3062",
     "0x77F01670F70A13299531906e54D45c4247d0E3bf",
     "0xfA211308F9583bEB9aaF724044863b78BfD7B9C1",
     "0x01264DBDEC9Be07c7C1E942D8C4dcfC72A7691b2",
@@ -79,11 +82,13 @@ const PRIOR: Partial<Record<`${LendChain}:${LendAsset}`, Hex[]>> = {
     "0x5ed8551f90acc6395810d8274b019bf13ef1f696",
   ],
   "bsc:gas": [
+    "0xC4bA21b1566Aee4b1113f166C5f496275E51A65E",
     "0xd66C0EA7acCC3D4e8E82a999e7345404803643BC",
     "0x0712cCa64B91Ec87cc175aa46cC38b54c8D3Bff3",
     "0xd8d981d32b12ea85b739bb667946975d25b0ab53",
   ],
   "bsc:bem": [
+    "0xEF9d226254b7Ce8CdCD5b1170d70518AfDC3e05A",
     "0x0A0C3D5A8D20468fea019590Bd3FC11623260223",
     "0x4127ddA5153042B6E6aFC02316587ab85D985B3A",
     "0xD71C270DFf9DF25245B367489D338629059E5014",
@@ -562,12 +567,14 @@ export async function withdrawLend(chain: LendChain, asset: LendAsset, amount: s
     read<bigint>(chain, lend, "assets"),
     read<bigint>(chain, lend, "cash"),
   ]);
-  const room = supply < poolCash ? supply : poolCash;
-  const want = qty < room ? qty : room;
-  if (want === 0n || haveShares === 0n || total === 0n) throw new Error("idle");
-  let shareAmt = (want * (total + DEAD) + poolAssets + DUST - 1n) / (poolAssets + DUST);
+  const room = qty < poolCash ? qty : poolCash;
+  if (room === 0n || haveShares === 0n || total === 0n || poolAssets === 0n) throw new Error("idle");
+  let shareAmt = (room * (total + DEAD)) / (poolAssets + DUST);
   if (shareAmt > haveShares) shareAmt = haveShares;
+  if (shareAmt === total && poolAssets > poolCash + DUST) shareAmt = shareAmt > 1n ? shareAmt - 1n : 0n;
   if (shareAmt === 0n) throw new Error("idle");
+  const out = (shareAmt * (poolAssets + DUST)) / (total + DEAD);
+  if (out === 0n || out > poolCash) throw new Error("idle");
   await wait(chain, await send(from, lend, encodeFunctionData({ abi, functionName: "withdraw", args: [shareAmt] })));
 }
 

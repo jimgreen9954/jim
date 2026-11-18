@@ -12,6 +12,7 @@ import {
   MIN_USD,
   owedAt,
   pokeTerm,
+  priorTerms,
   readTerm,
   repayTerm,
   termAsset,
@@ -29,6 +30,7 @@ import {
 } from "@/lib/term";
 import { units } from "@/lib/bsc";
 import { connectAny } from "@/lib/wallet";
+import type { Hex } from "viem";
 
 const WAD = 10n ** 18n;
 
@@ -100,6 +102,7 @@ export function TermDesk({ zh, account }: { zh: boolean; account: string | null 
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const [bad, setBad] = useState(false);
+  const [prior, setPrior] = useState<Hex | null>(null);
   const assets = termAssets(chain);
   const picked = assets.find((row) => row.id === asset) ?? assets[0];
   const collAsset = assets.find((row) => row.id === coll) ?? assets[1] ?? assets[0];
@@ -116,7 +119,7 @@ export function TermDesk({ zh, account }: { zh: boolean; account: string | null 
   useEffect(() => {
     let dead = false;
     const pull = () => {
-      readTerm(chain, account)
+      readTerm(chain, account, prior ?? undefined)
         .then((row) => {
           if (dead) return;
           setSnap(row);
@@ -132,7 +135,7 @@ export function TermDesk({ zh, account }: { zh: boolean; account: string | null 
       dead = true;
       window.clearInterval(id);
     };
-  }, [chain, account, busy]);
+  }, [chain, account, busy, prior]);
 
   const run = (work: () => Promise<void>, done: string) => {
     if (busy) return;
@@ -156,6 +159,7 @@ export function TermDesk({ zh, account }: { zh: boolean; account: string | null 
 
   const chooseChain = (next: TermChain) => {
     setChain(next);
+    setPrior(null);
     setAsset(0);
     setColl(1);
     setDebt(0);
@@ -203,6 +207,21 @@ export function TermDesk({ zh, account }: { zh: boolean; account: string | null 
           <p className="mt-2 text-xs text-sell">{zh ? "链上这份对不上期贷合约。" : "The contract on chain is not this term book."}</p>
         ) : null}
         {miss && !snap ? <p className="mt-2 text-xs text-sell">{zh ? "链上没读到。不写成 0。" : "The chain did not answer. This is not shown as zero."}</p> : null}
+        <div className="mt-2 flex flex-wrap gap-1">
+          <button type="button" className={`min-h-9 px-2 text-xs ${prior ? "text-ink/60" : "bg-ink text-paper"}`} onClick={() => setPrior(null)}>
+            {zh ? "这一本" : "This book"}
+          </button>
+          {priorTerms(chain).map((book) => (
+            <button key={book} type="button" className={`min-h-9 px-2 text-xs ${prior === book ? "bg-ink text-paper" : "text-ink/60"}`} onClick={() => setPrior(book)}>
+              {zh ? "旧本" : "Previous"}
+            </button>
+          ))}
+        </div>
+        {prior ? (
+          <p className="mt-2 text-xs leading-5 text-ink/60">
+            {zh ? "旧本只留取出、加抵押、还款和平仓。不能新存，也不能新借。里面的钱没有搬到新本。" : "The previous book only withdraws, adds collateral, repays and liquidates. No new deposit and no new loan. Money was not moved."}
+          </p>
+        ) : null}
       </article>
 
       <article className="border border-gold bg-card px-3 py-3">
@@ -228,7 +247,7 @@ export function TermDesk({ zh, account }: { zh: boolean; account: string | null 
                 type="button"
                 disabled={busy || !live}
                 className="min-h-9 border border-gold/40 px-2 text-xs disabled:opacity-40"
-                onClick={() => run(() => pokeTerm(chain, row.id), zh ? "已记账。" : "Posted.")}
+                onClick={() => run(() => pokeTerm(chain, row.id, prior ?? undefined), zh ? "已记账。" : "Posted.")}
               >
                 {zh ? "记" : "Post"} {row.symbol}
                 {postMark(book, now, zh)}
@@ -275,10 +294,10 @@ export function TermDesk({ zh, account }: { zh: boolean; account: string | null 
           </label>
         </div>
         <div className="mt-2 grid grid-cols-2 gap-2">
-          <button type="button" disabled={busy || !live} className="min-h-11 bg-ink text-paper disabled:opacity-40" onClick={() => run(() => depositTerm(chain, picked.id, putIn).then(() => setPutIn("")), zh ? "已存入。" : "Supplied.")}>
+          <button type="button" disabled={busy || !live || Boolean(prior)} className="min-h-11 bg-ink text-paper disabled:opacity-40" onClick={() => run(() => depositTerm(chain, picked.id, putIn, prior ?? undefined).then(() => setPutIn("")), zh ? "已存入。" : "Supplied.")}>
             {zh ? "存入" : "Supply"}
           </button>
-          <button type="button" disabled={busy || !live} className="min-h-11 border border-ink text-ink disabled:opacity-40" onClick={() => run(() => withdrawTerm(chain, picked.id, takeOut).then(() => setTakeOut("")), zh ? "已取出。" : "Withdrawn.")}>
+          <button type="button" disabled={busy || !live} className="min-h-11 border border-ink text-ink disabled:opacity-40" onClick={() => run(() => withdrawTerm(chain, picked.id, takeOut, prior ?? undefined).then(() => setTakeOut("")), zh ? "已取出。" : "Withdrawn.")}>
             {zh ? "取出" : "Withdraw"}
           </button>
         </div>
@@ -329,9 +348,9 @@ export function TermDesk({ zh, account }: { zh: boolean; account: string | null 
         {collAsset.id === debtAsset.id ? <p className="mt-2 text-xs text-sell">{zh ? "抵押和借出不能是同一枚。" : "Collateral and debt cannot be the same asset."}</p> : preview.warn ? <p className="mt-2 text-xs text-sell">{failText(new Error(preview.warn), zh)}</p> : null}
         <button
           type="button"
-          disabled={busy || !live || collAsset.id === debtAsset.id || preview.warn === "min" || preview.warn === "ltv" || preview.warn === "dry" || preview.warn === "price" || preview.warn === "stale"}
+          disabled={busy || !live || Boolean(prior) || collAsset.id === debtAsset.id || preview.warn === "min" || preview.warn === "ltv" || preview.warn === "dry" || preview.warn === "price" || preview.warn === "stale"}
           className="mt-2 min-h-11 w-full bg-ink text-paper disabled:opacity-40"
-          onClick={() => run(() => openTerm(chain, collAsset.id, debtAsset.id, term, collText, debtText).then(() => {
+          onClick={() => run(() => openTerm(chain, collAsset.id, debtAsset.id, term, collText, debtText, prior ?? undefined).then(() => {
             setCollText("");
             setDebtText("");
           }), zh ? "已开仓。" : "Opened.")}
@@ -366,8 +385,8 @@ export function TermDesk({ zh, account }: { zh: boolean; account: string | null 
               extra={extras[String(loan.id)] ?? ""}
               onPay={(value) => setPays((prev) => ({ ...prev, [String(loan.id)]: value }))}
               onExtra={(value) => setExtras((prev) => ({ ...prev, [String(loan.id)]: value }))}
-              onRepay={(amount, all) => run(() => repayTerm(chain, loan.id, loan.debt, amount, all), zh ? "已还款。" : "Repaid.")}
-              onAdd={(amount) => run(() => addTermColl(chain, loan.id, loan.coll, amount), zh ? "已加上抵押。" : "Collateral added.")}
+              onRepay={(amount, all) => run(() => repayTerm(chain, loan.id, loan.debt, amount, all, prior ?? undefined), zh ? "已还款。" : "Repaid.")}
+              onAdd={(amount) => run(() => addTermColl(chain, loan.id, loan.coll, amount, prior ?? undefined), zh ? "已加上抵押。" : "Collateral added.")}
               onFill={(value) => setPays((prev) => ({ ...prev, [String(loan.id)]: value }))}
             />
           ))}
@@ -416,7 +435,7 @@ export function TermDesk({ zh, account }: { zh: boolean; account: string | null 
                     type="button"
                     disabled={busy || !live || !ready || !quote}
                     className="mt-1 min-h-9 border border-sell px-2 text-sell disabled:opacity-40"
-                    onClick={() => quote && run(() => liquidateTerm(chain, loan, quote.pay), zh ? "已平仓。" : "Liquidated.")}
+                    onClick={() => quote && run(() => liquidateTerm(chain, loan, quote.pay, prior ?? undefined), zh ? "已平仓。" : "Liquidated.")}
                   >
                     {ready ? (zh ? "平仓" : "Liquidate") : zh ? "价格超过 30 分钟，现在不能平" : "Price is older than 30 minutes"}
                   </button>

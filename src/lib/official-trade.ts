@@ -4,6 +4,7 @@ import { OFFICIAL } from "@/lib/official-books";
 import type { CircuitSigned } from "@/lib/circuit-board";
 import { getProvider } from "@/lib/wallet";
 import { deskParts } from "@/lib/invite-cut";
+import { sendFeeAndSwap } from "@/lib/fee-pack";
 import { sayTradeStep } from "@/lib/trade-step";
 
 const client = createPublicClient({ transport: http(BSC.rpc) });
@@ -45,38 +46,31 @@ async function send(from: string, to: Hex, data: Hex, value = 0n): Promise<Hex> 
   })) as Hex;
 }
 
-async function payFee(from: string, notional: bigint): Promise<void> {
+async function tradeWithFee(from: string, to: Hex, data: Hex, value: bigint, notional: bigint): Promise<Hex> {
   const parts = await deskParts("bsc", from, notional);
-  if (parts.reward <= 0n && parts.desk <= 0n) return;
-  sayTradeStep("fee");
-  const pay = async (to: Hex, value: bigint) => {
-    if (value <= 0n) return;
-    const hash = await send(from, to, "0x", value);
-    try {
-      await waitOk(hash);
-    } catch (err) {
-      if (err instanceof TxPending) throw err;
-      throw new Error("reverted");
-    }
-  };
-  if (parts.reward > 0n && parts.referrer) await pay(parts.referrer, parts.reward);
-  if (parts.desk > 0n) await pay(BSC_SAFE, parts.desk);
+  sayTradeStep("both");
+  return sendFeeAndSwap({
+    from,
+    chainId: 56,
+    token: null,
+    safe: BSC_SAFE,
+    parts,
+    swapTo: to,
+    data,
+    value,
+    pull: 0n,
+    spender: to,
+  });
 }
 
-async function finishPaid(hash: Hex): Promise<Hex> {
-  try {
-    await waitOk(hash);
-    return hash;
-  } catch (err) {
-    if (err instanceof TxPending) {
-      err.paid = true;
-      throw err;
-    }
-    throw new Error("fee-kept");
-  }
+export async function revokeOfficialOperator(from: string, token: Hex, operator: Hex): Promise<Hex> {
+  const data = encodeFunctionData({ abi: bidAbi, functionName: "setApprovalForAll", args: [operator, false] });
+  const hash = await send(from, token, data);
+  await waitOk(hash);
+  return hash;
 }
 
-/** Eat an official bid. The bid is re-read on chain first. 0.2% is paid before the official fill. */
+/** Eat an official bid. The bid is re-read on chain first. The 0.2% is charged with the fill, or only after that fill succeeds. */
 export async function fillOfficialBid(from: string, id: bigint, quantity: bigint, transistors: string, priceWei: bigint): Promise<Hex> {
   if (quantity < 1n) throw new Error("amount");
   const row = await client.readContract({
@@ -110,14 +104,7 @@ export async function fillOfficialBid(from: string, id: bigint, quantity: bigint
     }
   }
   await client.call({ account: from as Hex, to: OFFICIAL.transistorMarket, data });
-  await payFee(from, notional);
-  sayTradeStep("trade");
-  try {
-    return await finishPaid(await send(from, OFFICIAL.transistorMarket, data));
-  } catch (err) {
-    if (err instanceof TxPending || (err instanceof Error && err.message === "fee-kept")) throw err;
-    throw new Error("fee-kept");
-  }
+  return tradeWithFee(from, OFFICIAL.transistorMarket, data, 0n, notional);
 }
 
 /** Place a bid on a processor that is already in the official snapshot. */
@@ -131,14 +118,7 @@ export async function placeOfficialBid(from: string, transistors: Hex, tokenId: 
     args: [transistors, tokenId, priceWei, quantity],
   });
   await client.call({ account: from as Hex, to: OFFICIAL.transistorMarket, data, value: notional });
-  await payFee(from, notional);
-  sayTradeStep("trade");
-  try {
-    return await finishPaid(await send(from, OFFICIAL.transistorMarket, data, notional));
-  } catch (err) {
-    if (err instanceof TxPending || (err instanceof Error && err.message === "fee-kept")) throw err;
-    throw new Error("fee-kept");
-  }
+  return tradeWithFee(from, OFFICIAL.transistorMarket, data, notional, notional);
 }
 
 /** Buy one official circuit listing at the exact wei price from the snapshot. */
@@ -146,17 +126,10 @@ export async function buyOfficialCircuit(from: string, id: bigint, priceWei: big
   if (priceWei <= 0n) throw new Error("amount");
   const data = encodeFunctionData({ abi: listAbi, functionName: "buy", args: [id, priceWei] });
   await client.call({ account: from as Hex, to: OFFICIAL.circuitMarket, data, value: priceWei });
-  await payFee(from, priceWei);
-  sayTradeStep("trade");
-  try {
-    return await finishPaid(await send(from, OFFICIAL.circuitMarket, data, priceWei));
-  } catch (err) {
-    if (err instanceof TxPending || (err instanceof Error && err.message === "fee-kept")) throw err;
-    throw new Error("fee-kept");
-  }
+  return tradeWithFee(from, OFFICIAL.circuitMarket, data, priceWei, priceWei);
 }
 
-/** Fill one signed circuit ask. The exchange price includes its own fee. Ours is another 0.2%, paid first. */
+/** Fill one signed circuit ask. The exchange price includes its own fee. Ours is another 0.2%, charged with the fill or only after it succeeds. */
 export async function fillSignedCircuit(from: string, ask: CircuitSigned): Promise<Hex> {
   const price = BigInt(ask.price);
   const value = BigInt(ask.buyerCost || ask.price);
@@ -176,14 +149,7 @@ export async function fillSignedCircuit(from: string, ask: CircuitSigned): Promi
     ? encodeFunctionData({ abi: signedAbiEpoch, functionName: "fillSignedAsk", args: [{ ...common, feeEpoch: BigInt(ask.feeEpoch) }, ask.signature, from as Hex] })
     : encodeFunctionData({ abi: signedAbi, functionName: "fillSignedAsk", args: [common, ask.signature, from as Hex] });
   await client.call({ account: from as Hex, to: ask.exchange, data, value });
-  await payFee(from, price);
-  sayTradeStep("trade");
-  try {
-    return await finishPaid(await send(from, ask.exchange, data, value));
-  } catch (err) {
-    if (err instanceof TxPending || (err instanceof Error && err.message === "fee-kept")) throw err;
-    throw new Error("fee-kept");
-  }
+  return tradeWithFee(from, ask.exchange, data, value, price);
 }
 
 function destOf(from: string, to: string): Hex {

@@ -18,6 +18,8 @@ const FILE = "/workspace/data/tape-book.json";
 const nftAbi = parseAbi([
   "function ownerOf(uint256) view returns (address)",
   "function isApprovedForAll(address owner, address operator) view returns (bool)",
+  "function getApproved(uint256) view returns (address)",
+  "function approve(address,uint256)",
   "function setApprovalForAll(address operator, bool approved)",
 ]);
 const seaAbi = parseAbi([
@@ -224,14 +226,11 @@ export async function listTapeOnSite(from: string, tokenId: string, priceOkb: st
   const price = parseEther(priceOkb.trim());
   if (price <= 0n || price > parseEther("1000")) throw new Error("amount");
   await connectXLayer();
-  const approvedData = encodeFunctionData({
-    abi: nftAbi,
-    functionName: "isApprovedForAll",
-    args: [from as Hex, SEAPORT],
-  });
-  const approvedRaw = await rpc(TAPECODE, approvedData);
-  if (BigInt(approvedRaw) === 0n) {
-    const approve = encodeFunctionData({ abi: nftAbi, functionName: "setApprovalForAll", args: [SEAPORT, true] });
+  const id = BigInt(tokenId);
+  const approvedAll = BigInt(await rpc(TAPECODE, encodeFunctionData({ abi: nftAbi, functionName: "isApprovedForAll", args: [from as Hex, SEAPORT] })));
+  const approvedOne = (await rpc(TAPECODE, encodeFunctionData({ abi: nftAbi, functionName: "getApproved", args: [id] }))).toLowerCase();
+  if (approvedAll === 0n && approvedOne !== SEAPORT.toLowerCase()) {
+    const approve = encodeFunctionData({ abi: nftAbi, functionName: "approve", args: [SEAPORT, id] });
     const hash = await send(from, TAPECODE, approve);
     for (let i = 0; i < 20; i++) {
       await new Promise((resolve) => setTimeout(resolve, 1500));

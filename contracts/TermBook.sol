@@ -102,6 +102,13 @@ contract TermBook {
     mapping(uint8 => mapping(address => uint256)) internal seen;
     mapping(uint8 => mapping(address => uint256)) internal rescueOf;
     mapping(uint8 => mapping(address => uint256)) internal rescueTaken;
+    /// Generations after the first, per asset. A new deposit never mints on an unfrozen prior book.
+    mapping(uint8 => mapping(uint256 => uint256)) public laterShares;
+    mapping(uint8 => mapping(uint256 => uint256)) public laterEver;
+    mapping(uint8 => mapping(uint256 => uint256)) public laterPot;
+    mapping(uint8 => mapping(uint256 => mapping(address => uint256))) internal laterOf;
+    mapping(uint8 => mapping(uint256 => mapping(address => uint256))) internal laterTaken;
+    mapping(uint8 => uint256[]) internal laterEpochs;
     mapping(uint256 => Loan) public loans;
     mapping(uint256 => uint256) public bookedOf;
     mapping(uint256 => uint256) public loanEpoch;
@@ -343,6 +350,10 @@ contract TermBook {
                 rescueEpoch[id] = epoch[id];
                 epoch[id] += 1;
                 totalShares[id] = 0;
+            } else {
+                // A later zero-NAV book freezes itself and opens a new generation.
+                // rescueOn stays set so the first generation can still be claimed.
+                _freezeLater(id);
             }
         }
         _touch(id, msg.sender);
@@ -379,20 +390,61 @@ contract TermBook {
     /// Pay up to `amount` of recovery already credited to this frozen generation.
     /// Shares stay put, so a later repayment keeps the same split.
     function claim(uint8 id, uint256 amount) external lock {
-        if (id >= count() || amount == 0 || !rescueOn[id]) revert Bad();
+        if (id >= count() || amount == 0) revert Bad();
         _touch(id, msg.sender);
-        uint256 have = rescueOf[id][msg.sender];
-        if (have == 0 || rescueShares[id] == 0) revert Bad();
-        uint256 entitled = have * rescueEver[id] / rescueShares[id];
-        uint256 taken = rescueTaken[id][msg.sender];
-        if (entitled <= taken) revert Bad();
-        uint256 pending = entitled - taken;
-        uint256 out = amount < pending ? amount : pending;
-        if (out == 0 || out > rescuePot[id]) revert Bad();
-        rescueTaken[id][msg.sender] = taken + out;
-        rescuePot[id] -= out;
-        _push(id, msg.sender, out);
-        emit Withdrawn(msg.sender, id, out, amount);
+        if (rescueOn[id]) {
+            uint256 have = rescueOf[id][msg.sender];
+            if (have != 0 && rescueShares[id] != 0) {
+                uint256 entitled = have * rescueEver[id] / rescueShares[id];
+                uint256 taken = rescueTaken[id][msg.sender];
+                if (entitled > taken) {
+                    uint256 pending = entitled - taken;
+                    uint256 out = amount < pending ? amount : pending;
+                    if (out == 0 || out > rescuePot[id]) revert Bad();
+                    rescueTaken[id][msg.sender] = taken + out;
+                    rescuePot[id] -= out;
+                    _push(id, msg.sender, out);
+                    emit Withdrawn(msg.sender, id, out, amount);
+                    return;
+                }
+            }
+        }
+        uint256 left = amount;
+        uint256 paid;
+        uint256 n = laterEpochs[id].length;
+        for (uint256 i; i < n && left > 0; ) {
+            uint256 gen = laterEpochs[id][i];
+            uint256 shareAmt = laterOf[id][gen][msg.sender];
+            uint256 weight = laterShares[id][gen];
+            uint256 pot = laterPot[id][gen];
+            uint256 ever = laterEver[id][gen];
+            if (shareAmt != 0 && weight != 0 && pot != 0 && ever != 0) {
+                uint256 entitled = shareAmt * ever / weight;
+                uint256 taken = laterTaken[id][gen][msg.sender];
+                if (entitled > taken) {
+                    uint256 pending = entitled - taken;
+                    uint256 out = left < pending ? left : pending;
+                    if (out > pot) out = pot;
+                    if (out > 0) {
+                        laterTaken[id][gen][msg.sender] = taken + out;
+                        laterPot[id][gen] = pot - out;
+                        left -= out;
+                        paid += out;
+                    }
+                }
+            }
+            unchecked { ++i; }
+        }
+        if (paid == 0) revert Bad();
+        _push(id, msg.sender, paid);
+        emit Withdrawn(msg.sender, id, paid, amount);
+    }
+
+    function rescueAt(uint8 id, uint256 gen, address who) external view returns (uint256 shareAmt, uint256 pot, uint256 total) {
+        total = laterShares[id][gen];
+        pot = laterPot[id][gen];
+        if (seen[id][who] == gen) shareAmt = shares[id][who];
+        else shareAmt = laterOf[id][gen][who];
     }
 
     function open(uint8 coll, uint8 debt, uint8 term, uint256 collAmt, uint256 principal) external payable lock {
@@ -555,10 +607,17 @@ contract TermBook {
             impaired[id] -= retire;
         }
         cash[id] += pay;
-        if (rescueOn[id] && loanEpoch[loanId] == rescueEpoch[id] && rescueEpoch[id] != epoch[id]) {
+        uint256 born = loanEpoch[loanId];
+        if (born != epoch[id] && rescueOn[id] && born == rescueEpoch[id]) {
             cash[id] -= pay;
             rescuePot[id] += pay;
             rescueEver[id] += pay;
+            return;
+        }
+        if (born != epoch[id] && laterShares[id][born] != 0) {
+            cash[id] -= pay;
+            laterPot[id][born] += pay;
+            laterEver[id][born] += pay;
             return;
         }
         if (interestPay == 0) return;
@@ -686,10 +745,24 @@ contract TermBook {
 
     function _touch(uint8 id, address who) internal {
         if (seen[id][who] == epoch[id]) return;
-        if (rescueOn[id] && seen[id][who] == rescueEpoch[id] && shares[id][who] != 0) rescueOf[id][who] = shares[id][who];
+        uint256 was = seen[id][who];
+        uint256 held = shares[id][who];
+        if (held != 0) {
+            if (rescueOn[id] && was == rescueEpoch[id]) rescueOf[id][who] = held;
+            if (laterShares[id][was] != 0) laterOf[id][was][who] = held;
+        }
         shares[id][who] = 0;
         paidIn[id][who] = 0;
         seen[id][who] = epoch[id];
+    }
+
+    function _freezeLater(uint8 id) internal {
+        uint256 gen = epoch[id];
+        if (gen == 0 || gen == rescueEpoch[id] || laterShares[id][gen] != 0) revert Bad();
+        laterShares[id][gen] = totalShares[id];
+        laterEpochs[id].push(gen);
+        epoch[id] = gen + 1;
+        totalShares[id] = 0;
     }
 
     function _usdToAmt(uint8 id, uint256 usdAmt) internal view returns (uint256) {

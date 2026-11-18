@@ -276,7 +276,7 @@ async function allow(chain: VaultChain, from: string, amount: bigint): Promise<v
   const data = encodeFunctionData({
     abi: erc20,
     functionName: "approve",
-    args: [vault, 2n ** 256n - 1n],
+    args: [vault, amount],
   });
   await wait(chain, await send(from, token, data));
 }

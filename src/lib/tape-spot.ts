@@ -42,6 +42,8 @@ const erc1155 = parseAbi([
 const erc721 = parseAbi([
   "function isApprovedForAll(address,address) view returns (bool)",
   "function setApprovalForAll(address,bool)",
+  "function getApproved(uint256) view returns (address)",
+  "function approve(address,uint256)",
 ]);
 
 const client = createPublicClient({ transport: http(XLAYER.rpc) });
@@ -327,13 +329,33 @@ async function approveErc20(from: string, token: Hex, amount: bigint) {
   await send(from, token, data);
 }
 
-async function approveAll(from: string, token: Hex, kind: "wafer" | "circuit") {
+async function approveCircuit(from: string, id: bigint) {
   const spot = spotAddress();
   if (!spot) throw new Error("spot");
-  const table = kind === "wafer" ? erc1155 : erc721;
-  const ok = await client.readContract({ address: token, abi: table, functionName: "isApprovedForAll", args: [from as Hex, spot] });
+  const [all, one] = await Promise.all([
+    client.readContract({ address: DEPLOYED.circuits, abi: erc721, functionName: "isApprovedForAll", args: [from as Hex, spot] }),
+    client.readContract({ address: DEPLOYED.circuits, abi: erc721, functionName: "getApproved", args: [id] }),
+  ]);
+  if (all || one.toLowerCase() === spot.toLowerCase()) return;
+  const data = encodeFunctionData({ abi: erc721, functionName: "approve", args: [spot, id] });
+  await probe(from, DEPLOYED.circuits, data);
+  await send(from, DEPLOYED.circuits, data);
+}
+
+export async function revokeSpotOperator(from: string, token: Hex) {
+  const spot = spotAddress();
+  if (!spot) throw new Error("spot");
+  const data = encodeFunctionData({ abi: erc1155, functionName: "setApprovalForAll", args: [spot, false] });
+  await probe(from, token, data);
+  await send(from, token, data);
+}
+
+async function approveAll(from: string, token: Hex) {
+  const spot = spotAddress();
+  if (!spot) throw new Error("spot");
+  const ok = await client.readContract({ address: token, abi: erc1155, functionName: "isApprovedForAll", args: [from as Hex, spot] });
   if (ok) return;
-  const data = encodeFunctionData({ abi: table, functionName: "setApprovalForAll", args: [spot, true] });
+  const data = encodeFunctionData({ abi: erc1155, functionName: "setApprovalForAll", args: [spot, true] });
   await probe(from, token, data);
   await send(from, token, data);
 }
@@ -375,7 +397,7 @@ export async function placeSpot(from: string, market: SpotMarket, bid: boolean, 
   if (need * 20n / 10000n === 0n) throw new Error("fee");
   if (bid) await approveErc20(from, TAPE_USDT, need);
   else if (market === 0) await approveErc20(from, TAPE_TOKEN, amount);
-  else await approveAll(from, DEPLOYED.transistors, "wafer");
+  else await approveAll(from, DEPLOYED.transistors);
   return call(from, encodeFunctionData({ abi, functionName: "place", args: [market, bid, price, amount] }));
 }
 
@@ -384,7 +406,7 @@ export async function cancelSpot(from: string, id: bigint, book?: Hex) {
 }
 
 export async function listSpotCircuit(from: string, id: bigint, price: bigint) {
-  await approveAll(from, DEPLOYED.circuits, "circuit");
+  await approveCircuit(from, id);
   return call(from, encodeFunctionData({ abi, functionName: "listCircuit", args: [id, price] }));
 }
 

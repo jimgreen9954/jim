@@ -231,12 +231,15 @@ export function LendDesk({ zh, account }: { zh: boolean; account: string | null 
             <p className="mt-1 font-mono text-xl tabular-nums">
               {money(view?.supply)} <span className="text-sm text-ink/50">{market.usdtSym}</span>
             </p>
+            <p className="mt-1 font-mono text-sm tabular-nums text-ink/70">
+              {zh ? "可取现金" : "Cash now"} {money(view && view.supply < view.cash ? view.supply : view?.cash)} {market.usdtSym}
+            </p>
             <details className="mt-1 text-xs text-ink/55">
               <summary className="min-h-11 cursor-pointer">{zh ? "说明" : "Note"}</summary>
               <p className="mt-1 leading-5">
                 {zh
-                  ? `这是你现在能取回的数，利息已经加进去，年化 ${view ? aprText(view.supplyApr) : "—"}。合约只记份额，不记你存入时的本金，所以不另写一笔盈亏。`
-                  : `This is what you can withdraw now. Interest is already inside it, at ${view ? aprText(view.supplyApr) : "—"}. The contract stores shares, not your original deposit, so it does not invent a profit figure.`}
+                  ? `上面是你的全部权益，含还借在外面的部分。现在能拿走的只有池子里的现金。现金不够时，取出只付现金，剩下的份额还在，不会被烧掉。`
+                  : `This is the whole claim, including money still lent out. Only cash in the pool can be taken now. If cash is short, a withdrawal pays the cash and leaves the rest of the shares. It does not burn the claim.`}
               </p>
             </details>
           </article>

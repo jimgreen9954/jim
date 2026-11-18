@@ -269,6 +269,12 @@ export function RedGift({
             ? "授权已提交。请等它完成，再点一次。这一次还没有交易，也还没有领取。"
             : "The approval was sent. Wait for it, then tap once more. Nothing was traded or claimed.",
         );
+      else if (message === "template")
+        setNote(
+          zh
+            ? "这口红包不是本站核对过的合约。没有授权，也没有打钱。"
+            : "This red packet is not a contract this site has checked. Nothing was approved and nothing was sent.",
+        );
       else if (message === "booth") {
         setDeskOn(true);
         setNote(

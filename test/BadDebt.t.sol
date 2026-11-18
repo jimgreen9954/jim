@@ -334,6 +334,127 @@ contract BadDebtTest is Test {
         lend.claim(1);
     }
 
+    /// A healthy loan still owes the cash that is not in the pool.
+    /// Burning every share for that cash drops the claim.
+    function testCashShortWithdrawDoesNotBurnTheClaim() public {
+        _fund(alice, 100 * UNIT, 0);
+        _fund(carol, 0, 200 * UNIT);
+        _deposit(alice, 100 * UNIT);
+        vm.startPrank(carol);
+        lend.lock(200 * UNIT);
+        lend.borrow(90 * UNIT);
+        vm.stopPrank();
+        assertEq(lend.cash(), 10 * UNIT);
+        assertEq(lend.totalBorrow(), 90 * UNIT);
+        uint256 shares = lend.shareOf(alice);
+        uint256 assets = lend.assets();
+        vm.expectRevert();
+        vm.prank(alice);
+        lend.withdraw(shares);
+        assertEq(lend.shareOf(alice), shares, "full exit burned the unpaid claim");
+        assertEq(lend.totalBorrow(), 90 * UNIT);
+
+        uint256 take = 10 * UNIT * (shares + 1_000_000) / (assets + 1_000);
+        assertGt(take, 0);
+        assertLt(take, shares);
+        vm.prank(alice);
+        lend.withdraw(take);
+        assertGt(lend.shareOf(alice), 0, "cash exit left no claim");
+        assertEq(lend.totalBorrow(), 90 * UNIT);
+        assertApproxEqAbs(usdt.balanceOf(alice), 10 * UNIT, 1_000);
+
+        _fund(carol, 90 * UNIT, 0);
+        vm.prank(carol);
+        lend.repay(90 * UNIT);
+        uint256 left = lend.shareOf(alice);
+        vm.prank(alice);
+        lend.withdraw(left);
+        assertEq(lend.totalShares(), 0);
+        assertApproxEqAbs(usdt.balanceOf(alice), 100 * UNIT, 1e12);
+    }
+
+    /// The second time the book is empty, a new deposit must not mint on the shares
+    /// the first restart already froze, and must not clear that rescue.
+    function testSecondZeroNavDepositDoesNotMixGenerations() public {
+        _fund(alice, 500 * UNIT, 0);
+        _fund(carol, 0, 4_000 * UNIT);
+        _deposit(alice, 500 * UNIT);
+        vm.startPrank(carol);
+        lend.lock(4_000 * UNIT);
+        lend.borrow(500 * UNIT);
+        vm.stopPrank();
+        oracle.setTick(800000);
+        vm.prank(liq);
+        lend.liquidate(carol, type(uint256).max);
+        assertEq(lend.assets(), 0);
+
+        _fund(dave, 200 * UNIT, 0);
+        _deposit(dave, 200 * UNIT);
+        assertGt(lend.rescueShares(), 0, "first zero did not freeze the old shares");
+        assertGt(lend.shareOf(dave), 0);
+        assertEq(lend.supplyOf(alice), 0);
+
+        address eve = makeAddr("eve");
+        _fund(eve, 0, 800 * UNIT);
+        oracle.setTick(0);
+        vm.startPrank(eve);
+        lend.lock(800 * UNIT);
+        lend.borrow(200 * UNIT);
+        vm.stopPrank();
+        oracle.setTick(800000);
+        vm.prank(liq);
+        lend.liquidate(eve, type(uint256).max);
+        assertEq(lend.cash(), 0, "second book still has cash");
+        assertEq(lend.totalBorrow(), 0, "second book still has debt");
+        assertGt(lend.totalShares(), 0);
+
+        address frank = makeAddr("frank");
+        _fund(frank, 100 * UNIT, 0);
+        uint256 gen2 = lend.epoch();
+        _deposit(frank, 100 * UNIT);
+        assertApproxEqAbs(lend.supplyOf(frank), 100 * UNIT, 1e12, "third book was not a fresh generation");
+        assertEq(lend.shareOf(dave), 0, "second generation stayed in the live book");
+        assertEq(lend.supplyOf(alice), 0);
+        assertGt(lend.rescueShares(), 0, "first rescue was cleared to unlock the restart");
+        vm.expectRevert();
+        vm.prank(dave);
+        lend.withdraw(1);
+
+        _fund(carol, 80 * UNIT, 0);
+        vm.prank(carol);
+        lend.repay(80 * UNIT);
+        assertEq(lend.rescuePot(), 80 * UNIT, "gen1 repayment missed its pot");
+        assertApproxEqAbs(lend.supplyOf(frank), 100 * UNIT, 1e12, "gen1 repayment paid the new principal");
+        (uint256 aliceClaim,,) = lend.rescue(alice);
+        vm.prank(alice);
+        lend.claim(aliceClaim);
+        assertApproxEqAbs(usdt.balanceOf(alice), 80 * UNIT, 1);
+        vm.expectRevert();
+        vm.prank(alice);
+        lend.claim(1);
+
+        _fund(eve, 50 * UNIT, 0);
+        vm.prank(eve);
+        lend.repay(50 * UNIT);
+        assertEq(lend.rescuePot(), 0, "gen2 repayment paid gen1");
+        assertApproxEqAbs(lend.supplyOf(frank), 100 * UNIT, 1e12, "gen2 repayment paid the new principal");
+        (uint256 daveWeight,, uint256 weight) = lend.rescueAt(gen2, dave);
+        assertGt(daveWeight, 0);
+        assertGt(weight, 0);
+        vm.prank(dave);
+        lend.claim(type(uint256).max);
+        assertApproxEqAbs(usdt.balanceOf(dave), daveWeight * 50 * UNIT / weight, 2);
+
+        _fund(eve, 20 * UNIT, 0);
+        vm.prank(eve);
+        lend.repay(20 * UNIT);
+        vm.prank(dave);
+        lend.claim(type(uint256).max);
+        assertApproxEqAbs(usdt.balanceOf(dave), daveWeight * 70 * UNIT / weight, 3, "later gen2 recovery was dropped");
+        assertApproxEqAbs(lend.supplyOf(frank), 100 * UNIT, 1e12, "old shares took new principal");
+    }
+
+
     /// A shortfall opened after the restart belongs to the new suppliers.
     /// Repaying the frozen generation must not move that cash, or be booked twice.
     function testLendRecoveryAfterRestartFollowsItsGeneration() public {
@@ -573,6 +694,90 @@ contract BadDebtTest is Test {
         vm.prank(alice);
         book.claim(0, type(uint256).max);
         assertEq(stable.balanceOf(alice), recovered + more);
+    }
+
+    /// A second zero-NAV book has to freeze itself. New cash is not the old share's.
+    function testTermSecondZeroNavDoesNotMix() public {
+        vm.chainId(56);
+        TermBook book = new TermBook(fee);
+        address usdtBsc = book.tokenOf(0);
+        Cash token = new Cash();
+        vm.etch(usdtBsc, address(token).code);
+        Cash stable = Cash(usdtBsc);
+        _mark(book, 0, 1e18);
+        _mark(book, 1, 100e18);
+        uint256 each = 10e18;
+        stable.mint(alice, each);
+        vm.startPrank(alice);
+        stable.approve(address(book), type(uint256).max);
+        book.deposit(0, each);
+        vm.stopPrank();
+        vm.deal(carol, 1 ether);
+        vm.prank(carol);
+        book.open{value: 0.2 ether}(1, 0, 0, 0.2 ether, each);
+        _mark(book, 1, 1);
+        vm.prank(liq);
+        book.liquidate(1);
+
+        uint256 freshDeposit = 10e18;
+        stable.mint(dave, freshDeposit);
+        vm.startPrank(dave);
+        stable.approve(address(book), type(uint256).max);
+        book.deposit(0, freshDeposit);
+        vm.stopPrank();
+
+        address eve = makeAddr("eve");
+        vm.deal(eve, 1 ether);
+        _mark(book, 1, 100e18);
+        vm.prank(eve);
+        book.open{value: 0.2 ether}(1, 0, 0, 0.2 ether, freshDeposit);
+        uint256 gen2 = book.epoch(0);
+        _mark(book, 1, 1);
+        vm.prank(liq);
+        book.liquidate(2);
+        (uint256 wiped,,,,,,) = book.pool(0);
+        assertEq(wiped, 0, "second book still has cash");
+
+        address frank = makeAddr("frank");
+        uint256 frankAmt = 100e18;
+        stable.mint(frank, frankAmt);
+        vm.startPrank(frank);
+        stable.approve(address(book), type(uint256).max);
+        book.deposit(0, frankAmt);
+        vm.stopPrank();
+        (uint256 frankSupply,,) = book.account(0, frank);
+        (uint256 daveSupply,,) = book.account(0, dave);
+        assertApproxEqAbs(frankSupply, frankAmt, 1);
+        assertEq(daveSupply, 0, "second generation stayed live");
+        vm.expectRevert();
+        vm.prank(dave);
+        book.withdraw(0, 1);
+
+        stable.mint(carol, 4e18);
+        vm.startPrank(carol);
+        stable.approve(address(book), type(uint256).max);
+        book.repay(1, 4e18);
+        vm.stopPrank();
+        (uint256 frankAfter,,) = book.account(0, frank);
+        assertEq(frankAfter, frankSupply, "gen1 repayment paid new principal");
+        vm.prank(alice);
+        book.claim(0, type(uint256).max);
+        assertEq(stable.balanceOf(alice), 4e18);
+
+        stable.mint(eve, 6e18);
+        vm.startPrank(eve);
+        stable.approve(address(book), type(uint256).max);
+        book.repay(2, 6e18);
+        vm.stopPrank();
+        (uint256 frankFinal,,) = book.account(0, frank);
+        assertEq(frankFinal, frankSupply, "gen2 repayment paid new principal");
+        (uint256 daveWeight,,) = book.rescueAt(0, gen2, dave);
+        assertGt(daveWeight, 0);
+        vm.prank(dave);
+        book.claim(0, type(uint256).max);
+        assertApproxEqAbs(stable.balanceOf(dave), 6e18, 1);
+        (uint256 frankStill,,) = book.account(0, frank);
+        assertEq(frankStill, frankSupply, "old shares took new principal");
     }
 
     /// The shortfall is already visible. Nobody has called liquidate.

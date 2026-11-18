@@ -531,6 +531,7 @@ export async function readSpawned(chain: GiftChain, account: string | null): Pro
   const rows: RedRule[] = [];
   for (let i = 0n; i < count; i++) {
     const pool = await client(chain).readContract({ address: booth, abi: RED_BOOTH_ABI, functionName: "packets", args: [i] });
+    if (!(await trustedRed(chain, pool))) continue;
     try {
       const row = await readLive(chain, account, pool, "volunteer");
       if (row.ready) rows.push(row);
@@ -572,6 +573,10 @@ export async function openAnother(
   }
   const count = await client(chain).readContract({ address: booth, abi: RED_BOOTH_ABI, functionName: "count" });
   const packet = predictSpawn(chain, count, init);
+  const known = init.toLowerCase() === nextInit(chain).toLowerCase()
+    || init.toLowerCase() === deskInit().toLowerCase()
+    || init.toLowerCase() === perpInit(chain).toLowerCase();
+  if (!known) throw new Error("template");
   const fixedAmt = parseUnits(eachText.trim() || "0", asset.decimals);
   const fundAmt = parseUnits(totalText.trim() || "0", asset.decimals);
   if (fixedAmt <= 0n || fundAmt <= 0n) throw new Error("amount");
@@ -791,6 +796,7 @@ export async function fundRed(chain: GiftChain, from: string, text: string, asse
   const amount = parseUnits(text.trim(), asset.decimals);
   if (amount <= 0n) throw new Error("amount");
   const pool = packetOf(chain, lane);
+  await assertTrustedRed(chain, pool, "move");
   if (asset.token === ZERO) {
     const hash = await send(chain, from, pool, encodeFunctionData({ abi: RED_PACKET_ABI, functionName: "depositNative" }), amount);
     await wait(chain, hash);
@@ -805,6 +811,7 @@ export async function fundRed(chain: GiftChain, from: string, text: string, asse
 export async function withdrawRed(chain: GiftChain, from: string, text: string, asset: GiftAsset, lane: GiftLane = "official", pool: Hex = packetOf(chain, lane)): Promise<Hex> {
   const amount = parseUnits(text.trim(), asset.decimals);
   if (amount <= 0n) throw new Error("amount");
+  await assertTrustedRed(chain, pool, "claim");
   const hash = await send(chain, from, pool, encodeFunctionData({ abi: RED_PACKET_ABI, functionName: "withdraw", args: [amount] }));
   await wait(chain, hash);
   return hash;
@@ -1174,24 +1181,50 @@ async function tradePerp(chain: GiftChain, from: string, gate: number, need: big
 
 const CHECKED_RED = "0x7761ac208268aaeb74761267dec2e23504676028dd92264c2e07663cad7520c9" as Hex;
 const RED_RUNTIME: Record<GiftChain, Hex> = {
-  xlayer: "0x0ec34e5d71fe7e47355e2510d9f5bc10fa058d96c78695b3eecb136f82f04872",
-  bsc: "0xbbb52e1c7fcefd16904831f2f57fa1a041f8d8aca5bdba3ffc537cbaa49e8947",
+  xlayer: "0x9f6a07ce7e33186652a2ace00d89929db9efa8eb5d2a0de7e70c67b981e2e186",
+  bsc: "0x50b8507ab02ffeefe66e153e71ee4d63b861a37d34e72a91f9e9667b4d9d51b5",
 };
+/** Runtimes this app ships or has already checked. A factory row with any other code is not a red packet. */
+const TRUSTED_RED = new Set<string>([
+  CHECKED_RED,
+  RED_RUNTIME.xlayer,
+  RED_RUNTIME.bsc,
+  "0x0ec34e5d71fe7e47355e2510d9f5bc10fa058d96c78695b3eecb136f82f04872",
+  "0xbbb52e1c7fcefd16904831f2f57fa1a041f8d8aca5bdba3ffc537cbaa49e8947",
+  "0x44b4d3286ad28656d02bbc21f573ed24dbbc53cab9f1cf7cfb0c39f3ed9b8f6b",
+  "0x937c3dc258fac789fb53c31338060a86411995071e8f7d40aa7c07150f5c8755",
+  "0x0cbd679e775082f1d5ffdc969bc67bd3b1dc8fbd0419ee775cfc9dfc80a2a312",
+  "0xff29fa0f0d662b1bc36779c45859dfc7318a6c23e5f969ebb26939382ad85e38",
+  "0xc017edf7955cdccacf9c89202e5e85a92dd1d3f35fb686f398413db9b9fe325c",
+  "0xd9569da7f2800f0ce20e6cd1cb40b92e131e776d9e919edb0656585cecbaf240",
+  "0xa6a257e753f6a9ada5c1883e54f0e01cf6ba10065d58e604438995c05369d148",
+  "0x6f7c535a6116e6484a88deaab88b24b7105b2626e64ebfda92a075db890b4327",
+  "0xea2da5a35d4f3c5a921d49821400e5ae76ed013d7ce61db86c8e86b8c0b9d62c",
+  "0x2aa0c26c4c2483662453728e0da76cb11ed1c11851f1b19a327dae8db4506e9c",
+  "0xae505fff9946e2e2b8917b1bdbd7aea156cfaf89d0f65962f7aef8ac8398d4d5",
+]);
 
-async function tapeBuyAllowed(chain: GiftChain, pool: Hex) {
+function legacyPacket(pool: Hex): boolean {
+  return OLD_PACKETS.some((row) => row.address.toLowerCase() === pool.toLowerCase());
+}
+
+async function trustedRed(chain: GiftChain, pool: Hex): Promise<boolean> {
   const code = await client(chain).getBytecode({ address: pool });
-  if (!code || code === "0x") throw new Error("tape-old");
-  const hash = keccak256(code);
-  if (hash === RED_RUNTIME[chain] || hash === CHECKED_RED) return;
-  throw new Error("tape-old");
+  if (!code || code === "0x") return false;
+  return TRUSTED_RED.has(keccak256(code));
+}
+
+async function assertTrustedRed(chain: GiftChain, pool: Hex, kind: "move" | "claim" = "move") {
+  if (kind === "claim" && legacyPacket(pool)) return;
+  if (!(await trustedRed(chain, pool))) throw new Error("template");
 }
 
 export async function tradeRed(chain: GiftChain, from: string, lane: GiftLane = "volunteer", pool: Hex = packetOf(chain, lane)): Promise<Hex> {
   const here = pool.toLowerCase() === packetOf(chain, lane).toLowerCase() ? await readRed(chain, from, lane) : await readLive(chain, from, pool, lane);
   if (here.lastDay === BigInt(sgDay())) throw new Error("day");
+  await assertTrustedRed(chain, pool, "move");
   if (here.endsAt > 0n && here.endsAt <= BigInt(Math.floor(Date.now() / 1000))) throw new Error("late");
   if (await tradedNow(chain, from, lane, pool)) throw new Error("traded");
-  if (here.gate === 0 && here.hi === BigInt(TAPE)) await tapeBuyAllowed(chain, pool);
   const need = here.spotNeed > here.perpNeed ? here.spotNeed : here.perpNeed;
   if (need <= 0n || here.hi === 0n) throw new Error("task");
   const deskTask = taskAsset(chain, here.hi);
@@ -1246,6 +1279,7 @@ export async function claimRed(chain: GiftChain, from: string, lane: GiftLane = 
   const day = sgDay();
   const here = pool.toLowerCase() === packetOf(chain, lane).toLowerCase() ? await readRed(chain, from, lane) : await readLive(chain, from, pool, lane);
   if (here.lastDay === BigInt(day)) throw new Error("day");
+  await assertTrustedRed(chain, pool, "claim");
   const need = here.spotNeed > here.perpNeed ? here.spotNeed : here.perpNeed;
   if (need <= 0n || here.hi === 0n) throw new Error("task");
   if (!(await tradedNow(chain, from, lane, pool))) throw new Error("task");
@@ -1317,8 +1351,10 @@ export async function setRedRule(
       swapFeeOf(chain, hi),
     ],
   });
-  await preflight(chain, from, packetOf(chain, lane), data);
-  const hash = await send(chain, from, packetOf(chain, lane), data);
+  const pool = packetOf(chain, lane);
+  await assertTrustedRed(chain, pool, "move");
+  await preflight(chain, from, pool, data);
+  const hash = await send(chain, from, pool, data);
   await wait(chain, hash);
   return hash;
 }

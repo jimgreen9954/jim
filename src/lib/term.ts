@@ -107,10 +107,27 @@ function storageKey(chain: TermChain) {
   return `tapeliquid-termbook-${chain}`;
 }
 
-const TERM_BOOK: Record<TermChain, Hex> = {
-  xlayer: "0xC4fA8f4cE83ce03A0264D76ebdA8903FABb947d5",
-  bsc: "0x073452aD271ad5D511295aEB7706D4742dD1a75E",
+const PRIOR_TERM: Record<TermChain, Hex[]> = {
+  xlayer: ["0xC4fA8f4cE83ce03A0264D76ebdA8903FABb947d5"],
+  bsc: ["0x073452aD271ad5D511295aEB7706D4742dD1a75E"],
 };
+
+const TERM_BOOK: Record<TermChain, Hex> = {
+  xlayer: "0x536327976231cf4c12759D81C99b12bD40aF0DD6",
+  bsc: "0x92E44Ba44b2b3CC3E5C823d9dF5b571C7338f2c3",
+};
+
+export function priorTerms(chain: TermChain): Hex[] {
+  return PRIOR_TERM[chain];
+}
+
+function resolveTerm(chain: TermChain, which?: Hex): Hex {
+  const current = TERM_BOOK[chain];
+  if (!which || which.toLowerCase() === current.toLowerCase()) return current;
+  const prior = PRIOR_TERM[chain].find((row) => row.toLowerCase() === which.toLowerCase());
+  if (!prior) throw new Error("live");
+  return prior;
+}
 
 export function draftTerm(chain: TermChain): Hex | null {
   if (typeof window === "undefined") return null;
@@ -284,8 +301,8 @@ async function walletOf(chain: TermChain, asset: TermAsset, who: Hex | null): Pr
   return read<bigint>(chain, asset.token as Hex, "balanceOf", [who], erc20).catch(() => 0n);
 }
 
-export async function readTerm(chain: TermChain, account: string | null): Promise<TermSnap> {
-  const book = termAddress(chain);
+export async function readTerm(chain: TermChain, account: string | null, which?: Hex): Promise<TermSnap> {
+  const book = which ? resolveTerm(chain, which) : termAddress(chain);
   const who = account ? (account as Hex) : null;
   const assets = termAssets(chain);
   const wallets = await Promise.all(assets.map((asset) => walletOf(chain, asset, who).catch(() => 0n)));
@@ -567,7 +584,8 @@ export async function deployTerm(chain: TermChain): Promise<string> {
   return landed;
 }
 
-export async function depositTerm(chain: TermChain, id: number, amount: string) {
+export async function depositTerm(chain: TermChain, id: number, amount: string, which?: Hex) {
+  if (which && which.toLowerCase() !== TERM_BOOK[chain].toLowerCase()) throw new Error("live");
   const asset = termAsset(chain, id);
   const qty = units(amount, asset.decimals);
   if (qty <= 0n) throw new Error("amount");
@@ -601,12 +619,12 @@ export function sharesFor(want: bigint, have: bigint, total: bigint, assets: big
   return shareAmt;
 }
 
-export async function withdrawTerm(chain: TermChain, id: number, amount: string) {
+export async function withdrawTerm(chain: TermChain, id: number, amount: string, which?: Hex) {
   const asset = termAsset(chain, id);
   const qty = units(amount, asset.decimals);
   if (qty <= 0n) throw new Error("amount");
   const from = await signer(chain);
-  const book = need(chain);
+  const book = resolveTerm(chain, which);
   const [acct, pool] = await Promise.all([
     read<readonly [bigint, bigint, bigint]>(chain, book, "account", [id, from as Hex]),
     read<readonly [bigint, bigint, bigint, bigint, bigint, number, boolean]>(chain, book, "pool", [id]),
@@ -616,7 +634,8 @@ export async function withdrawTerm(chain: TermChain, id: number, amount: string)
   await wait(chain, await send(from, book, encodeFunctionData({ abi, functionName: "withdraw", args: [id, shareAmt] })));
 }
 
-export async function openTerm(chain: TermChain, coll: number, debt: number, term: number, collText: string, debtText: string) {
+export async function openTerm(chain: TermChain, coll: number, debt: number, term: number, collText: string, debtText: string, which?: Hex) {
+  if (which && which.toLowerCase() !== TERM_BOOK[chain].toLowerCase()) throw new Error("live");
   if (coll === debt) throw new Error("same");
   const collAsset = termAsset(chain, coll);
   const debtAsset = termAsset(chain, debt);
@@ -650,12 +669,12 @@ export async function openTerm(chain: TermChain, coll: number, debt: number, ter
   await wait(chain, await send(from, book, data));
 }
 
-export async function addTermColl(chain: TermChain, id: bigint, coll: number, amount: string) {
+export async function addTermColl(chain: TermChain, id: bigint, coll: number, amount: string, which?: Hex) {
   const asset = termAsset(chain, coll);
   const qty = units(amount, asset.decimals);
   if (qty <= 0n) throw new Error("amount");
   const from = await signer(chain);
-  const book = need(chain);
+  const book = resolveTerm(chain, which);
   const data = encodeFunctionData({ abi, functionName: "addColl", args: [id, qty] });
   if (asset.native) {
     const gas = await nativeBal(chain, from);
@@ -678,12 +697,12 @@ function coversOwed(qty: bigint, owed: bigint, decimals: number): boolean {
   return owed - qty <= slack;
 }
 
-export async function repayTerm(chain: TermChain, id: bigint, debt: number, amount: string, all = false) {
+export async function repayTerm(chain: TermChain, id: bigint, debt: number, amount: string, all = false, which?: Hex) {
   const asset = termAsset(chain, debt);
   const qty = units(amount, asset.decimals);
   if (qty <= 0n && !all) throw new Error("amount");
   const from = await signer(chain);
-  const book = need(chain);
+  const book = resolveTerm(chain, which);
   let owed = await read<bigint>(chain, book, "debtOf", [id]);
   const closing = all || coversOwed(qty, owed, asset.decimals);
   for (let pass = 0; pass < 2 && owed > 0n; pass++) {
@@ -709,12 +728,12 @@ export async function repayTerm(chain: TermChain, id: bigint, debt: number, amou
   if (owed > 0n) throw new Error(asset.native ? "gas" : "balance");
 }
 
-export async function liquidateTerm(chain: TermChain, loan: TermLoan, pay: bigint) {
+export async function liquidateTerm(chain: TermChain, loan: TermLoan, pay: bigint, which?: Hex) {
   if (pay <= 0n) throw new Error("amount");
   const asset = termAsset(chain, loan.debt);
   const from = await signer(chain);
   if (from.toLowerCase() === loan.user.toLowerCase()) throw new Error("self");
-  const book = need(chain);
+  const book = resolveTerm(chain, which);
   const data = encodeFunctionData({ abi, functionName: "liquidate", args: [loan.id] });
   if (asset.native) {
     const gas = await nativeBal(chain, from);
@@ -728,9 +747,9 @@ export async function liquidateTerm(chain: TermChain, loan: TermLoan, pay: bigin
   await wait(chain, await send(from, book, data));
 }
 
-export async function pokeTerm(chain: TermChain, id: number) {
+export async function pokeTerm(chain: TermChain, id: number, which?: Hex) {
   const from = await signer(chain);
-  const book = need(chain);
+  const book = resolveTerm(chain, which);
   if (chain === "bsc" && id === 3) {
     const pool = await read<readonly [bigint, bigint, bigint, bigint, bigint, number, boolean]>(chain, book, "pool", [2]);
     if (!pool[6]) throw new Error("price");

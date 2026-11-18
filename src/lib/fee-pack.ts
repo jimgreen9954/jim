@@ -96,45 +96,41 @@ export type FeeSwap = {
   lock?: boolean;
 };
 
-/** One signature. The phone wallet sees the same router call as the desktop, not a chain switch plus a fee plus a swap. */
+/** Batch the fee and the fill when the wallet can. Otherwise the fill is signed first and the fee only after that fill succeeds. A rejected or reverted fill does not take the fee. Gas for a failed fill is not returned. */
 export async function sendFeeAndSwap(args: FeeSwap): Promise<Hex> {
   const { from, chainId, token, safe, parts, swapTo, data, value } = args;
-  if (remoteWallet()) {
-    sayTradeStep("fill");
-    return sendTx(from, chainId, swapTo, data, value);
-  }
   const calls = feeCalls(token, safe, parts);
-  calls.push({ to: swapTo, data, value });
-  if (parts.desk <= 0n && parts.reward <= 0n) {
-    sayTradeStep("both");
-    return sendUserBatch(from, chainId, calls);
-  }
-  try {
-    sayTradeStep("both");
-    return await sendUserBatch(from, chainId, calls);
-  } catch (err) {
-    if (rejected(err) || err instanceof TxPending) throw err;
-    const message = err instanceof Error ? err.message : "";
-    if (message !== "no-batch") throw err;
-  }
-  if (!token) {
+  const swap: SignedCall = { to: swapTo, data, value };
+  const together = [...calls, swap];
+  if (!remoteWallet()) {
     try {
-      sayTradeStep("both");
-      return await sendAsMulticall(from, calls, chainId);
+      sayTradeStep(calls.length ? "both" : "fill");
+      return await sendUserBatch(from, chainId, together);
     } catch (err) {
       if (rejected(err) || err instanceof TxPending) throw err;
       const message = err instanceof Error ? err.message : "";
       if (message !== "no-batch") throw err;
     }
-    if (args.lock === false) throw new Error("no-batch");
+    if (!token) {
+      try {
+        sayTradeStep(calls.length ? "both" : "fill");
+        return await sendAsMulticall(from, together, chainId);
+      } catch (err) {
+        if (rejected(err) || err instanceof TxPending) throw err;
+        const message = err instanceof Error ? err.message : "";
+        if (message !== "no-batch") throw err;
+      }
+      if (args.lock === false) throw new Error("no-batch");
+    }
   }
-  const fees = feeCalls(token, safe, parts);
-  for (const call of fees) {
+  sayTradeStep("fill");
+  const hash = await sendTx(from, chainId, swapTo, data, value);
+  await mined(chainId, hash);
+  for (const call of calls) {
     sayTradeStep("fee");
     await mined(chainId, await sendTx(from, chainId, call.to, call.data, call.value ?? 0n));
   }
-  sayTradeStep("fill");
-  return sendTx(from, chainId, swapTo, data, value);
+  return hash;
 }
 
 export const LOCK_TOKENS: { chainId: 56 | 196; name: string; token: Hex }[] = [

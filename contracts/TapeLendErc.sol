@@ -78,6 +78,17 @@ contract TapeLendErc {
     mapping(address => uint256) public shortEpoch;
     mapping(address => uint256) public rescueOf;
     mapping(address => uint256) public rescueTaken;
+    /// Freezes after the first one. Each keeps its own shares, recoveries and claims.
+    struct Later {
+        uint256 shares;
+        uint256 ever;
+        uint256 pot;
+    }
+    mapping(uint256 => Later) public laterGen;
+    mapping(uint256 => mapping(address => uint256)) public laterOf;
+    mapping(uint256 => mapping(address => uint256)) public laterTaken;
+    mapping(address => mapping(uint256 => uint256)) public laterShort;
+    uint256[] public laterEpochs;
     mapping(address => uint256) public seen;
     /// Borrowers with indexed debt. Deposit and withdraw revalue this list
     /// before pricing shares, so a shortfall is not an asset while it waits
@@ -123,11 +134,12 @@ contract TapeLendErc {
         }
     }
 
-    /// Cash the current shares can withdraw. Recovery owed to a frozen generation is excluded.
+    /// Cash the current shares can withdraw. Recovery owed to any frozen generation is excluded.
     function cash() public view returns (uint256) {
         uint256 bal = usdt.balanceOf(address(this));
-        if (bal <= rescuePot) return 0;
-        return bal - rescuePot;
+        uint256 pots = rescuePot + _laterPots();
+        if (bal <= pots) return 0;
+        return bal - pots;
     }
 
     /// Recoverable assets. Uncovered indexed debt is subtracted even before
@@ -183,6 +195,11 @@ contract TapeLendErc {
                 rescueEpoch = epoch;
                 epoch += 1;
                 totalShares = 0;
+            } else {
+                // Another zero-NAV book. Freeze this generation and open the next.
+                // The first generation's rescue shares stay, so a new deposit cannot
+                // mint against them or clear their recovery.
+                _freezeLater();
             }
         }
         _touch(msg.sender);
@@ -202,9 +219,10 @@ contract TapeLendErc {
         uint256 out = shareAmt * (assets() + DUST) / (totalShares + DEAD);
         if (out == 0) revert Bad();
         if (out > cash()) {
-            // The virtual share only pushes the final redemption a few wei over cash.
-            // An earlier exit still cannot take cash that belongs to the remaining shares.
-            if (shareAmt != totalShares) revert Bad();
+            // Virtual shares can price a cash-only exit a few wei over cash.
+            // Money still lent out is this share's claim. Paying the cash and
+            // burning every share drops it, so that shortfall reverts instead.
+            if (shareAmt != totalShares || totalBorrow != 0 || out > cash() + DUST) revert Bad();
             out = cash();
         }
         shares[msg.sender] -= shareAmt;
@@ -212,21 +230,33 @@ contract TapeLendErc {
         _push(usdt, msg.sender, out);
     }
 
-    /// Pay up to `amount` of recovery already credited to this frozen generation.
-    /// Shares stay put, so a later repayment keeps the same split.
+    /// Pay up to `amount` of recovery already credited to this caller's frozen generations.
+    /// Shares stay put, so a later repayment keeps the same split. One generation cannot take another's cash.
     function claim(uint256 amount) external guarded {
         _touch(msg.sender);
+        if (amount == 0) revert Bad();
+        uint256 left = amount;
+        uint256 paid;
         uint256 have = rescueOf[msg.sender];
-        if (amount == 0 || have == 0 || rescueShares == 0) revert Bad();
-        uint256 entitled = have * rescueEver / rescueShares;
-        uint256 taken = rescueTaken[msg.sender];
-        if (entitled <= taken) revert Bad();
-        uint256 pending = entitled - taken;
-        uint256 out = amount < pending ? amount : pending;
-        if (out == 0 || out > rescuePot) revert Bad();
-        rescueTaken[msg.sender] = taken + out;
-        rescuePot -= out;
-        _push(usdt, msg.sender, out);
+        if (have != 0 && rescueShares != 0) {
+            uint256 entitled = have * rescueEver / rescueShares;
+            uint256 taken = rescueTaken[msg.sender];
+            if (entitled > taken) {
+                uint256 pending = entitled - taken;
+                uint256 out = left < pending ? left : pending;
+                if (out == 0 || out > rescuePot) revert Bad();
+                rescueTaken[msg.sender] = taken + out;
+                rescuePot -= out;
+                left -= out;
+                paid = out;
+            }
+        }
+        if (left != 0) {
+            uint256 more = _payLaterClaim(msg.sender, left);
+            paid += more;
+        }
+        if (paid == 0) revert Bad();
+        _push(usdt, msg.sender, paid);
     }
 
     function lock(uint256 amount) external guarded {
@@ -271,8 +301,9 @@ contract TapeLendErc {
         uint256 debt = _debt(msg.sender);
         uint256 hole = shortOf[msg.sender];
         uint256 frozen = rescueShortOf[msg.sender];
-        if (amount == 0 || debt + hole + frozen == 0) revert Bad();
-        uint256 pay = amount >= debt + hole + frozen ? debt + hole + frozen : amount;
+        uint256 later = _bookedLater(msg.sender);
+        if (amount == 0 || debt + hole + frozen + later == 0) revert Bad();
+        uint256 pay = amount >= debt + hole + frozen + later ? debt + hole + frozen + later : amount;
         _pull(usdt, msg.sender, pay);
         uint256 toIndex = pay < debt ? pay : debt;
         if (toIndex > 0) {
@@ -287,23 +318,26 @@ contract TapeLendErc {
         }
         uint256 leftDebt = _debt(msg.sender);
         if (leftDebt != 0 && leftDebt < minBorrow) revert Bad();
-        uint256 left = pay - toIndex;
-        uint256 toShort = left < hole ? left : hole;
+        uint256 rest = pay - toIndex;
+        uint256 toShort = rest < hole ? rest : hole;
         if (toShort > 0) {
             shortOf[msg.sender] = hole - toShort;
             impaired -= toShort;
             // Current generation. The tokens stay in cash and are not put back
             // into `totalBorrow`, so the recovery is an asset exactly once.
         }
-        uint256 toFrozen = left - toShort;
+        rest -= toShort;
+        uint256 toFrozen = rest < frozen ? rest : frozen;
         if (toFrozen > 0) {
             rescueShortOf[msg.sender] = frozen - toFrozen;
             impaired -= toFrozen;
-            // Frozen generation only. A shortfall opened after the restart is
-            // `toShort` and must not be paid to the suppliers who already restarted.
+            // First frozen generation only. A shortfall opened after that restart
+            // is `toShort` or a later generation, and must not be paid here.
             rescueEver += toFrozen;
             rescuePot += toFrozen;
         }
+        rest -= toFrozen;
+        if (rest > 0) _payLaterShort(msg.sender, rest);
     }
 
     function liquidate(address user, uint256 amount) external guarded {
@@ -396,6 +430,15 @@ contract TapeLendErc {
         else shareAmt = rescueOf[user];
     }
 
+    /// Shares, unclaimed pot and frozen weight of a generation after the first.
+    function rescueAt(uint256 id, address user) external view returns (uint256 shareAmt, uint256 pot, uint256 total) {
+        Later storage gen = laterGen[id];
+        total = gen.shares;
+        pot = gen.pot;
+        if (seen[user] == id) shareAmt = shares[user];
+        else shareAmt = laterOf[id][user];
+    }
+
     function maxBorrow(address user) external view returns (uint256) {
         if (!fresh()) return 0;
         uint256 room = _usdt(collateral[user]) * LTV / 10000;
@@ -468,10 +511,11 @@ contract TapeLendErc {
 
     /// Split a borrower's shortfall into the current generation and the one frozen at restart.
     function _holes(address user) internal view returns (uint256 current, uint256 frozen) {
-        frozen = rescueShortOf[user];
+        frozen = rescueShortOf[user] + _bookedLater(user);
         uint256 hole = shortOf[user];
         if (hole == 0 || shortEpoch[user] == epoch) current = hole;
         else if (rescueEpoch != 0 && shortEpoch[user] == rescueEpoch) frozen += hole;
+        else if (laterGen[shortEpoch[user]].shares != 0) frozen += hole;
         else current = hole;
     }
 
@@ -480,8 +524,15 @@ contract TapeLendErc {
     function _park(address user) internal {
         uint256 hole = shortOf[user];
         if (hole == 0 || shortEpoch[user] == epoch) return;
-        if (rescueEpoch != 0 && shortEpoch[user] == rescueEpoch) {
+        uint256 from = shortEpoch[user];
+        if (rescueEpoch != 0 && from == rescueEpoch) {
             rescueShortOf[user] += hole;
+            shortOf[user] = 0;
+            shortEpoch[user] = epoch;
+            return;
+        }
+        if (laterGen[from].shares != 0) {
+            laterShort[user][from] += hole;
             shortOf[user] = 0;
             shortEpoch[user] = epoch;
         }
@@ -521,7 +572,12 @@ contract TapeLendErc {
 
     function _touch(address who) internal {
         if (seen[who] == epoch) return;
-        if (rescueEpoch != 0 && seen[who] == rescueEpoch && shares[who] != 0) rescueOf[who] = shares[who];
+        uint256 was = seen[who];
+        uint256 held = shares[who];
+        if (held != 0) {
+            if (rescueEpoch != 0 && was == rescueEpoch) rescueOf[who] = held;
+            if (laterGen[was].shares != 0) laterOf[was][who] = held;
+        }
         shares[who] = 0;
         seen[who] = epoch;
     }
@@ -644,7 +700,8 @@ contract TapeLendErc {
         _unseat(user);
         uint256 hole = shortOf[user];
         uint256 frozen = rescueShortOf[user];
-        uint256 owed = hole + frozen;
+        uint256 later = _bookedLater(user);
+        uint256 owed = hole + frozen + later;
         if (posted == 0 || owed == 0) revert Bad();
         if (!fresh()) revert Bad();
         if (owed * 10000 <= _usdt(posted) * LIQ) revert Bad();
@@ -658,21 +715,95 @@ contract TapeLendErc {
             if (seize == 0 || seize > posted) seize = posted;
             if (posted > seize && _usdt(posted - seize) == 0) seize = posted;
             _pull(usdt, msg.sender, pay);
-            uint256 toShort = pay < hole ? pay : hole;
+            uint256 rest = pay;
+            uint256 toShort = rest < hole ? rest : hole;
             if (toShort > 0) {
                 shortOf[user] = hole - toShort;
                 impaired -= toShort;
             }
-            uint256 toFrozen = pay - toShort;
+            rest -= toShort;
+            uint256 toFrozen = rest < frozen ? rest : frozen;
             if (toFrozen > 0) {
                 rescueShortOf[user] = frozen - toFrozen;
                 impaired -= toFrozen;
                 rescueEver += toFrozen;
                 rescuePot += toFrozen;
             }
+            rest -= toFrozen;
+            if (rest > 0) _payLaterShort(user, rest);
         }
         collateral[user] = posted - seize;
         if (seize > 0) _push(IERC20(coll), msg.sender, seize);
+    }
+
+    function _freezeLater() internal {
+        uint256 id = epoch;
+        if (id == 0 || id == rescueEpoch || laterGen[id].shares != 0) revert Bad();
+        laterGen[id].shares = totalShares;
+        laterEpochs.push(id);
+        epoch = id + 1;
+        totalShares = 0;
+    }
+
+    function _laterPots() internal view returns (uint256 sum) {
+        uint256 n = laterEpochs.length;
+        for (uint256 i; i < n; ) {
+            sum += laterGen[laterEpochs[i]].pot;
+            unchecked { ++i; }
+        }
+    }
+
+    function _bookedLater(address user) internal view returns (uint256 sum) {
+        uint256 n = laterEpochs.length;
+        for (uint256 i; i < n; ) {
+            sum += laterShort[user][laterEpochs[i]];
+            unchecked { ++i; }
+        }
+    }
+
+    function _payLaterShort(address user, uint256 amount) internal {
+        uint256 left = amount;
+        uint256 n = laterEpochs.length;
+        for (uint256 i; i < n && left > 0; ) {
+            uint256 id = laterEpochs[i];
+            uint256 hole = laterShort[user][id];
+            uint256 pay = left < hole ? left : hole;
+            if (pay > 0) {
+                laterShort[user][id] = hole - pay;
+                impaired -= pay;
+                laterGen[id].ever += pay;
+                laterGen[id].pot += pay;
+                left -= pay;
+            }
+            unchecked { ++i; }
+        }
+        if (left != 0) revert Bad();
+    }
+
+    function _payLaterClaim(address user, uint256 amount) internal returns (uint256 paid) {
+        uint256 left = amount;
+        uint256 n = laterEpochs.length;
+        for (uint256 i; i < n && left > 0; ) {
+            uint256 id = laterEpochs[i];
+            Later storage gen = laterGen[id];
+            uint256 shareAmt = laterOf[id][user];
+            if (shareAmt != 0 && gen.shares != 0 && gen.pot != 0 && gen.ever != 0) {
+                uint256 entitled = shareAmt * gen.ever / gen.shares;
+                uint256 taken = laterTaken[id][user];
+                if (entitled > taken) {
+                    uint256 pending = entitled - taken;
+                    uint256 out = left < pending ? left : pending;
+                    if (out > gen.pot) out = gen.pot;
+                    if (out > 0) {
+                        laterTaken[id][user] = taken + out;
+                        gen.pot -= out;
+                        left -= out;
+                        paid += out;
+                    }
+                }
+            }
+            unchecked { ++i; }
+        }
     }
 
     function _pull(IERC20 token, address from, uint256 amount) internal {

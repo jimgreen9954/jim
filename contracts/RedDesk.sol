@@ -75,6 +75,10 @@ contract RedDesk {
     uint256 public lastClaimAt;
     uint256 public claimDay;
     uint256 public claimedToday;
+    /// Trades that already earned this round. setRule cannot rewrite them.
+    uint256 public tasksDone;
+    mapping(address => uint256) public prizeOf;
+    uint256 public reserved;
     bool public ready;
     uint256 private locked;
 
@@ -162,6 +166,8 @@ contract RedDesk {
         require(msg.sender == deployer, "deployer");
         require(creator == deployer, "rule");
         require(packets_ > 0 && dayCap_ > 0 && fixedAmt_ > 0, "packets");
+        require(tasksDone == 0 || block.timestamp > endsAt, "frozen");
+        if (block.timestamp > endsAt) tasksDone = 0;
         _save(token_, mode_, fixedAmt_, lo_, hi_, spotNeed_, perpNeed_, gate_, life_, fee_);
         packetsLeft = packets_;
         dayCap = dayCap_;
@@ -187,14 +193,16 @@ contract RedDesk {
     function withdraw(uint256 amount) external {
         require(msg.sender == creator || msg.sender == deployer, "creator");
         require(amount > 0, "amount");
+        uint256 bal = token == address(0) ? address(this).balance : IERC20(token).balanceOf(address(this));
+        require(bal >= amount + reserved, "earned");
         if (token == address(0)) {
             (bool ok,) = msg.sender.call{value: amount}("");
             require(ok, "prize");
         } else {
             _push(token, msg.sender, amount);
         }
-        uint256 bal = token == address(0) ? address(this).balance : IERC20(token).balanceOf(address(this));
-        packetsLeft = fixedAmt == 0 ? 0 : bal / fixedAmt;
+        uint256 left = token == address(0) ? address(this).balance : IERC20(token).balanceOf(address(this));
+        packetsLeft = fixedAmt == 0 ? 0 : left / fixedAmt;
     }
 
     function trade(uint256 amountIn, uint256 minOut) external payable {
@@ -233,7 +241,12 @@ contract RedDesk {
         } else {
             revert("task");
         }
+        require(fixedAmt > 0, "empty");
+        require(prizeOf[msg.sender] == 0, "owed");
+        prizeOf[msg.sender] = fixedAmt;
+        reserved += fixedAmt;
         tradedDay[msg.sender] = day;
+        tasksDone += 1;
         emit Traded(msg.sender, day, spent, got);
         locked = 0;
     }
@@ -241,22 +254,27 @@ contract RedDesk {
     function claim() external {
         require(tx.origin == msg.sender, "bot");
         require(ready, "rule");
-        require(block.timestamp <= endsAt, "late");
+        uint256 pay = prizeOf[msg.sender];
+        require(pay > 0, "task");
         require(block.timestamp >= lastClaimAt + PACE, "pace");
-        uint256 day = sgDay(block.timestamp);
-        require(tradedDay[msg.sender] == day, "task");
-        require(lastDay[msg.sender] != day, "day");
-        if (claimDay != day) {
-            claimDay = day;
-            claimedToday = 0;
+        if (block.timestamp <= endsAt) {
+            uint256 day = sgDay(block.timestamp);
+            require(tradedDay[msg.sender] == day, "task");
+            require(lastDay[msg.sender] != day, "day");
+            if (claimDay != day) {
+                claimDay = day;
+                claimedToday = 0;
+            }
+            require(packetsLeft > 0, "empty");
+            require(dayCap > 0 && claimedToday < dayCap, "cap");
+            claimedToday += 1;
+            lastDay[msg.sender] = day;
+            packetsLeft -= 1;
+        } else if (packetsLeft > 0) {
+            packetsLeft -= 1;
         }
-        require(packetsLeft > 0, "empty");
-        require(dayCap > 0 && claimedToday < dayCap, "cap");
-        uint256 pay = fixedAmt;
-        require(pay > 0, "empty");
-        packetsLeft -= 1;
-        claimedToday += 1;
-        lastDay[msg.sender] = day;
+        prizeOf[msg.sender] = 0;
+        reserved -= pay;
         lastClaimAt = block.timestamp;
         if (token == address(0)) {
             (bool ok,) = msg.sender.call{value: pay}("");
@@ -264,7 +282,7 @@ contract RedDesk {
         } else {
             _push(token, msg.sender, pay);
         }
-        emit Claimed(msg.sender, day, pay);
+        emit Claimed(msg.sender, sgDay(block.timestamp), pay);
     }
 
     function _arm(

@@ -42,11 +42,15 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
       setNote(
         step === "fee"
           ? zh
-            ? "先扣 0.20% 手续费。确认后，下一笔才是成交。"
-            : "The 0.20% fee comes first. The next confirmation is the trade."
-          : zh
-            ? "手续费已扣。这一笔是成交。"
-            : "The fee is in. This confirmation is the trade.",
+            ? "成交已经成功。这一笔才是 0.20% 服务费。拒绝它，成交仍在，但服务费没付。"
+            : "The fill succeeded. This confirmation is the 0.20% fee. Rejecting it leaves the fill and does not take the fee."
+          : step === "both"
+            ? zh
+              ? "费用和成交在同一次确认里。拒绝或失败，两边都不发生。网络费另算。"
+              : "The fee and the fill are one confirmation. Rejecting it or a revert does neither. Network gas is separate."
+            : zh
+              ? "这一笔是成交。成功之后才会另签服务费。"
+              : "This confirmation is the fill. The fee is signed only after it succeeds.",
       );
     };
     window.addEventListener("tl-trade-step", onStep);
@@ -292,8 +296,8 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
               />
               <span>
                 {zh
-                  ? "我知道服务费先打进写死地址，TapeOut 没成交也不退。"
-                  : "I know the fee is paid to the locked address first and is not returned."}
+                  ? "我知道 0.20% 和服务费地址。成交没成功就不扣。卖出晶圆会授权市场合约搬走这个钱包里该集合的全部晶圆，不是只这一笔。可在下面取消。"
+                  : "I know the 0.20% and the fee address. A fill that does not succeed is not charged. Selling wafers approves the market to move every wafer of that collection in this wallet, not only this sale. It can be cancelled below."}
               </span>
             </label>
             <button
