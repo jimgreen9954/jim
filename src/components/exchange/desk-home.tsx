@@ -5,8 +5,6 @@ import { PoolSpot } from "@/components/exchange/pool-spot";
 import { useExchange } from "@/lib/exchange-store";
 import type { DeskView } from "@/components/exchange/desk-chrome";
 import { currentAccount, onAccount } from "@/lib/wallet";
-import { connectBsc } from "@/lib/bsc";
-import { LOCK_TOKENS, lockLeft, revokeLock } from "@/lib/fee-pack";
 import { selectDesk, type Desk } from "@/lib/perp";
 
 const RedGift = lazy(() =>
@@ -108,90 +106,6 @@ function announceChain(view: DeskView) {
   const chain = deskChain(view);
   selectDesk(chain);
   window.dispatchEvent(new CustomEvent("tape-desk-chain", { detail: chain }));
-}
-
-const BEM_LOCKS = [
-  { chainId: 56 as const, name: "BSC BEM" },
-  { chainId: 196 as const, name: "X BEM" },
-];
-
-export function RevokeLocks({ zh }: { zh: boolean }) {
-  const [account, setAccount] = useState<string | null>(currentAccount());
-  const [extra, setExtra] = useState<number[]>([]);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [note, setNote] = useState<string | null>(null);
-  useEffect(() => onAccount(setAccount), []);
-  useEffect(() => {
-    if (!account) {
-      setExtra([]);
-      return;
-    }
-    let dead = false;
-    Promise.all(LOCK_TOKENS.map((row) => lockLeft(row.chainId, account, row.token).catch(() => 0n))).then((rows) => {
-      if (dead) return;
-      setExtra(
-        rows.flatMap((n, i) => (n > 0n && LOCK_TOKENS[i].name !== "BEM" ? [i] : [])),
-      );
-    });
-    return () => {
-      dead = true;
-    };
-  }, [account]);
-  const cut = async (chainId: 56 | 196, token: (typeof LOCK_TOKENS)[number]["token"], key: string) => {
-    setBusy(key);
-    setNote(null);
-    try {
-      const from = account ?? (await connectBsc());
-      setAccount(from);
-      await revokeLock(from, chainId, token);
-      setExtra((rows) => rows.filter((i) => `${LOCK_TOKENS[i].chainId}-${LOCK_TOKENS[i].token}` !== key));
-      setNote(zh ? "已取消" : "Revoked");
-    } catch {
-      setNote(zh ? "没取消" : "Not revoked");
-    } finally {
-      setBusy(null);
-    }
-  };
-  const bem = (chainId: 56 | 196) => LOCK_TOKENS.find((row) => row.chainId === chainId && row.name === "BEM");
-  return (
-    <div className="flex flex-wrap items-center gap-2 border border-sell px-3 py-2 text-xs">
-      <span className="text-sell">{zh ? "取消 BEM 交易授权" : "Revoke BEM"}</span>
-      <span className="font-mono text-ink/70">0xC5A63E4c37c23F97558673731196abC30FBFa659</span>
-      {BEM_LOCKS.map((row) => {
-        const token = bem(row.chainId)?.token;
-        if (!token) return null;
-        const key = `${row.chainId}-${token}`;
-        return (
-          <button
-            key={key}
-            type="button"
-            className="min-h-9 border border-sell px-2 text-sell"
-            disabled={busy !== null}
-            onClick={() => void cut(row.chainId, token, key)}
-          >
-            {busy === key ? "…" : row.name}
-          </button>
-        );
-      })}
-      {extra.map((i) => {
-        const row = LOCK_TOKENS[i];
-        const key = `${row.chainId}-${row.token}`;
-        const chain = row.chainId === 56 ? "BSC" : "X";
-        return (
-          <button
-            key={key}
-            type="button"
-            className="min-h-9 border border-sell px-2 text-sell"
-            disabled={busy !== null}
-            onClick={() => void cut(row.chainId, row.token, key)}
-          >
-            {busy === key ? "…" : `${chain} ${row.name}`}
-          </button>
-        );
-      })}
-      {note ? <span>{note}</span> : null}
-    </div>
-  );
 }
 
 export function DeskHome({

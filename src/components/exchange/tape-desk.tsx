@@ -232,12 +232,16 @@ function GasDesk({ account, zh }: { account: string | null; zh: boolean }) {
                     : "Balance is not enough."
                   : code === "fee-open"
                     ? zh
-                      ? "兑换已经发出，手续费没扣上。再点一次只补手续费，不会再兑换一次。"
-                      : "The swap was sent. The fee was not taken. Tap again to pay only the fee. It will not swap again."
+                      ? "兑换已经上链，手续费没扣上。不要再点成交。用「只补手续费」，这一笔不会自动再兑换。"
+                      : "The swap is on chain and the fee was not taken. Do not tap the trade again. Use Pay the fee only. It does not swap again."
+                    : code === "no-store"
+                      ? zh
+                        ? "这一步没有发出。浏览器记不住这笔成交，所以没有兑换。"
+                        : "Nothing was sent. This browser cannot save the fill, so the swap did not start."
                     : code === "pending"
                       ? zh
-                        ? "兑换已经提交，回执还没读到。再点一次不会再换，只等回执后补手续费。"
-                        : "The swap is submitted and the receipt is not back. Tapping again does not swap twice. It only pays the fee after the receipt."
+                        ? "兑换已经提交，回执还没读到。不要再点成交。回执确定后用「只补手续费」。"
+                        : "The swap is submitted and the receipt is not back. Do not tap the trade again. After the receipt, use Pay the fee only."
                     : code === "fee-kept"
                     ? zh
                       ? "台费已经转出，不退。兑换没有提交。"

@@ -125,8 +125,12 @@ export function OfficialDesk({ mode }: { mode: "chips" | "circuits" }) {
             : `Submitted. The receipt is not back. Check ${(error as TxPending).hash ?? ""} before signing again.`
           : message === "fee-open"
             ? zh
-              ? "TapeOut 已经成交。手续费没扣上。再点一次只补手续费，不会再成交一次。"
-              : "The TapeOut trade filled. The fee was not taken. Tap again to pay only the fee. It will not trade again."
+              ? "TapeOut 已经成交，手续费没扣上。不要再点成交。用「只补手续费」，这一笔不会自动再成交。"
+              : "The TapeOut trade is on chain and the fee was not taken. Do not tap the trade again. Use Pay the fee only. It does not trade again."
+            : message === "no-store"
+            ? zh
+              ? "这一步没有发出。浏览器记不住这笔成交，所以没有成交。"
+              : "Nothing was sent. This browser cannot save the fill, so the trade did not start."
             : message === "fee-kept"
             ? zh
               ? "服务费已经付了，TapeOut 那一笔没有完成。服务费不退。"

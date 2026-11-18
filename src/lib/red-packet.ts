@@ -1223,6 +1223,11 @@ const TRUSTED_RED = new Set<string>([
   "0x91bd8e2c9d02f1ee243c7bd4a51b61a18ba035c1d63063d15c1f02987254e6e3",
   "0x324ccc0de559a93abe13af9113a70c00b1d481264e15a4e65f6c58b3ae42fa7d",
   "0x69528468913297cddd2184f4340461dfaf347559ae6d888e83709ef7226ff519",
+  "0x4ea48166fe4e5f4fbf51ad345353cd26920aefdf5c6508a1c699d82fc7a945e1",
+  "0x7b1b86a26664c4ce3d0e8f399aed7320bcb36987c14a6bbc83e03049bbb6a511",
+  "0xa7eb3de793cf53536a8fdb62e7ac2f7dcd7db0658b19f799597c5d7fc3316075",
+  "0xb582c5814c1413706c84348269bc9b3f9d8a260dc93cf16fd7cf4149db2a4952",
+  "0x7610dcfc1c4cf5c12f168af74d8980a34806b655728a1b01229ce741f401f190",
 ]);
 
 function legacyPacket(pool: Hex): boolean {
@@ -1304,9 +1309,11 @@ export async function claimRed(chain: GiftChain, from: string, lane: GiftLane = 
   const here = pool.toLowerCase() === packetOf(chain, lane).toLowerCase() ? await readRed(chain, from, lane) : await readLive(chain, from, pool, lane);
   if (here.prizeOf <= 0n && here.lastDay === BigInt(day)) throw new Error("day");
   await assertTrustedRed(chain, pool, "claim");
-  const need = here.spotNeed > here.perpNeed ? here.spotNeed : here.perpNeed;
-  if (need <= 0n || here.hi === 0n) throw new Error("task");
-  if (here.prizeOf <= 0n && !(await tradedNow(chain, from, lane, pool))) throw new Error("task");
+  if (here.prizeOf <= 0n) {
+    const need = here.spotNeed > here.perpNeed ? here.spotNeed : here.perpNeed;
+    if (need <= 0n || here.hi === 0n) throw new Error("task");
+    if (!(await tradedNow(chain, from, lane, pool))) throw new Error("task");
+  }
   const data = encodeFunctionData({ abi: RED_PACKET_ABI, functionName: "claim" });
   try {
     await preflight(chain, from, pool, data);

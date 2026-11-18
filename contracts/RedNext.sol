@@ -280,13 +280,7 @@ contract RedNext {
         uint256 pay = prizeOf[msg.sender];
         require(pay > 0, "task");
         require(block.timestamp >= lastClaimAt + PACE, "pace");
-        uint256 until = prizeUntil[msg.sender];
-        if (block.timestamp <= until) {
-            uint256 day = sgDay(block.timestamp);
-            require(tradedDay[msg.sender] == day, "task");
-            require(lastDay[msg.sender] != day, "day");
-            lastDay[msg.sender] = day;
-        }
+        lastDay[msg.sender] = sgDay(block.timestamp);
         prizeOf[msg.sender] = 0;
         prizeUntil[msg.sender] = 0;
         reserved -= pay;

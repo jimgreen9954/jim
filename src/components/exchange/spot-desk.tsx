@@ -517,8 +517,14 @@ export function SpotDesk({
     else if (message === "fee-open")
       setNote(
         lang === "zh"
-          ? "成交了，手续费没扣上。再点一次只补手续费，不会再成交一次。"
-          : "Filled. The fee was not taken. Tap again to pay only the fee. It will not trade again.",
+          ? "成交已经上链，手续费没扣上。不要再点成交。用「只补手续费」，这一笔不会自动再兑换。"
+          : "The fill is on chain and the fee was not taken. Do not tap the trade again. Use Pay the fee only. It does not swap again.",
+      );
+    else if (message === "no-store")
+      setNote(
+        lang === "zh"
+          ? "这一步没有发出。浏览器记不住这笔成交，所以没有兑换。"
+          : "Nothing was sent. This browser cannot save the fill, so the swap did not start.",
       );
     else if (code === 4001) setNote(c.walletReject);
     else if (message === "pending" || err instanceof TxPending) {

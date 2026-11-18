@@ -151,4 +151,34 @@ contract RedRuleTest is Test {
         assertEq(next.prizeOf(bob), 0);
         assertEq(next.packetsLeft(), 3, "claiming the old prize consumed a new packet");
     }
+
+    function testEarnedPrizeCanBeClaimedTheNextDay() public {
+        Route router = new Route();
+        RedNext next = new RedNext(address(router), address(1), address(2), address(3), address(4), address(5), address(6), 1, 1);
+        address task = address(0xBEEF);
+        address alice = makeAddr("alice");
+        address bob = makeAddr("bob");
+        vm.warp(1_700_000_000);
+        address booth = next.BOOTH();
+        vm.deal(booth, 2 ether);
+        vm.prank(booth, alice);
+        next.begin{value: 1 ether}(address(0), 1 ether, uint256(uint160(task)), 0.01 ether, 0, 7 days, 0, 1 ether);
+
+        vm.deal(bob, 1 ether);
+        vm.prank(bob, bob);
+        next.trade{value: 0.01 ether}(0, 1);
+        uint256 traded = next.tradedDay(bob);
+
+        vm.warp(block.timestamp + 1 days);
+        assertLt(block.timestamp, next.endsAt(), "the round was already over");
+        assertTrue(next.sgDay(block.timestamp) != traded, "the next day did not move");
+        vm.prank(bob, bob);
+        next.claim();
+        assertEq(bob.balance, 1 ether - 0.01 ether + 1 ether, "the next-day prize was not paid");
+        assertEq(next.prizeOf(bob), 0);
+
+        vm.prank(bob, bob);
+        vm.expectRevert(bytes("task"));
+        next.claim();
+    }
 }
