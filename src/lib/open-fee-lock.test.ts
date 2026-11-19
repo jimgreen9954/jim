@@ -4,15 +4,17 @@ import { mayStartFee, parseFeeLock, type FeeLockRow } from "./open-fee-lock.ts";
 
 const hash = "0x" + "ab".repeat(32);
 
-test("a live wallet wait is not released by the clock", () => {
+test("a live wallet wait is not released by the clock or by a confirmation", () => {
   const lock: FeeLockRow = { holder: "page-a", hash, nonce: "1" };
-  assert.equal(mayStartFee(lock, "page-b", true), false);
-  assert.equal(mayStartFee(lock, "page-a", true), true);
+  assert.equal(mayStartFee(lock, "page-b", true, false), false);
+  assert.equal(mayStartFee(lock, "page-b", true, true), false);
+  assert.equal(mayStartFee(lock, "page-a", true, false), true);
 });
 
-test("a page that does not answer can be replaced", () => {
+test("silence does not release the lock until the user confirms that page is closed", () => {
   const lock: FeeLockRow = { holder: "page-a", hash, nonce: "1" };
-  assert.equal(mayStartFee(lock, "page-b", false), true);
+  assert.equal(mayStartFee(lock, "page-b", false, false), false);
+  assert.equal(mayStartFee(lock, "page-b", false, true), true);
 });
 
 test("an old timed lock is still busy until it expires, and a nonce lock has no expiry", () => {
@@ -23,5 +25,5 @@ test("an old timed lock is still busy until it expires, and a nonce lock has no 
   assert.equal(parseFeeLock(pending, now + 10 * 60_000), null);
   const held = JSON.stringify({ holder: "page-a", hash, nonce: "1" });
   assert.deepEqual(parseFeeLock(held, now + 24 * 60 * 60_000), { holder: "page-a", hash, nonce: "1" });
-  assert.equal(mayStartFee(parseFeeLock(held, now + 24 * 60 * 60_000), "page-b", true), false);
+  assert.equal(mayStartFee(parseFeeLock(held, now + 24 * 60 * 60_000), "page-b", true, true), false);
 });

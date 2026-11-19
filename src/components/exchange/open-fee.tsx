@@ -13,6 +13,7 @@ export function OpenFeeBar({ zh }: { zh: boolean }) {
   const [account, setAccount] = useState<string | null>(currentAccount());
   const [rows, setRows] = useState<OpenFeeView[]>([]);
   const [busy, setBusy] = useState<56 | 196 | null>(null);
+  const [confirm, setConfirm] = useState<56 | 196 | null>(null);
   const [note, setNote] = useState<string | null>(null);
   useEffect(() => onAccount(setAccount), []);
   useEffect(() => {
@@ -21,19 +22,27 @@ export function OpenFeeBar({ zh }: { zh: boolean }) {
     return subscribeOpenFees(load);
   }, [account]);
   if (!rows.length) return null;
-  const pay = async (row: OpenFeeView) => {
+  const pay = async (row: OpenFeeView, takeOver = false) => {
     if (!account) return;
     setBusy(row.chainId);
     setNote(null);
     try {
-      await payOpenFee(account, row.chainId);
+      await payOpenFee(account, row.chainId, takeOver);
+      setConfirm(null);
       setNote(zh ? "手续费已补。成交没有重做。" : "The fee is paid. The fill was not sent again.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "";
       if (message === "pending" || err instanceof TxPending)
         setNote(zh ? "回执还没读到。先打开这笔哈希，不要再点成交。" : "The receipt is not back. Open the hash. Do not tap the trade again.");
-      else if (message === "fee-open")
-        setNote(zh ? "手续费还在等钱包。不要再点成交。" : "The fee is still waiting on the wallet. Do not tap the trade again.");
+      else if (message === "fee-silent") {
+        setConfirm(row.chainId);
+        setNote(
+          zh
+            ? "另一个页面没有应答。这一页不会自动补。只有确认那个页面已经关掉，才接手。"
+            : "The other page did not answer. This page will not pay on its own. Continue only if you confirm that page is closed.",
+        );
+      } else if (message === "fee-open")
+        setNote(zh ? "另一个页面还在等钱包。这一页没有补。" : "The other page is still waiting on the wallet. This page did not pay.");
       else setNote(zh ? "手续费没签上。成交没有重做。" : "The fee was not signed. The fill was not sent again.");
     } finally {
       setBusy(null);
@@ -43,8 +52,8 @@ export function OpenFeeBar({ zh }: { zh: boolean }) {
     <div className="mx-2 mt-2 border border-sell px-3 py-2 text-xs sm:mx-3">
       <p className="text-sell">
         {zh
-          ? "有一笔成交已经上链，手续费还没扣。不要再点成交。这一条只补手续费。另一个页面如果正在等钱包，或者已经记下这笔，这里不会再发。这不靠超时放开。每笔仍要钱包确认。这挡不住另一台设备。"
-          : "A fill is already on chain and the fee is still open. Do not tap the trade again. This row pays only the fee. Another tab that is waiting on the wallet, or that already recorded the payment, will not be cut off by a timer. Each payment still needs the wallet. Another device is not covered."}
+          ? "有一笔成交已经上链，手续费还没扣。不要再点成交。这一条只补手续费。另一个页面如果正在等钱包，这里不会再发，也不会因为没应答就自动接手。同一笔编号再付，链上会失败。每笔仍要钱包确认。"
+          : "A fill is already on chain and the fee is still open. Do not tap the trade again. This row pays only the fee. Another tab waiting on the wallet is not paid again, and silence does not take over. Paying the same id again fails on chain. Each payment still needs the wallet."}
       </p>
       {rows.map((row) => (
         <div key={row.chainId} className="mt-2 flex flex-wrap items-center gap-2">
@@ -59,6 +68,16 @@ export function OpenFeeBar({ zh }: { zh: boolean }) {
           >
             {busy === row.chainId ? "…" : zh ? "只补手续费" : "Pay the fee only"}
           </button>
+          {confirm === row.chainId ? (
+            <button
+              type="button"
+              className="min-h-9 border border-sell px-2 text-sell"
+              disabled={busy !== null}
+              onClick={() => void pay(row, true)}
+            >
+              {zh ? "那个页面已经关掉" : "That page is closed"}
+            </button>
+          ) : null}
         </div>
       ))}
       {note ? <p className="mt-1">{note}</p> : null}

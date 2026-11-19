@@ -19,8 +19,10 @@ export function safeFor(chain: 56 | 196 | "bsc" | "xlayer"): Hex {
 export function assertSafeDeployer(chain: 56 | 196 | "bsc" | "xlayer", from: string) {
   if (from.toLowerCase() !== safeFor(chain).toLowerCase()) throw new Error("safe");
 }
-export const BSC_VAULT = "0x731a2572b1cf56cfb804c74555715c8c8b5e980b" as const;
-export const XLAYER_VAULT = "0xb0e31149c03f1300bd9ff8c165b1fa38fda2f0bb" as const;
+export const PREV_BSC_VAULT = "0x731a2572b1cf56cfb804c74555715c8c8b5e980b" as const;
+export const PREV_XLAYER_VAULT = "0xb0e31149c03f1300bd9ff8c165b1fa38fda2f0bb" as const;
+export const BSC_VAULT = "0x138524b76E10b1c60060CD11e8946d24D861Fe23" as const;
+export const XLAYER_VAULT = "0x721f32Efae0276B3C77652a192A14c3a5Da20aCd" as const;
 
 export class TxPending extends Error {
   hash: Hex;

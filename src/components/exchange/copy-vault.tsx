@@ -158,23 +158,23 @@ export function CopyVault({ zh, account }: { zh: boolean; account: string | null
         <ol className="mt-3 grid gap-1.5 text-xs leading-5 text-ink/75">
           <li>
             {zh
-              ? "1. 先选链。页面读的是这口金库自己的 book、稳定币和带单人，不是网站现在这笔永续。两口金库的钱不互通。已经部署的合约没有升级。"
-              : "1. Pick a chain. This page reads that vault's own book, token, and leader. It does not follow the perp the rest of the site is using. The two vaults do not share funds. The deployed contracts are not upgraded."}
+              ? "1. 先选链。页面读的是这口新金库自己的 book、稳定币和带单人。两口新金库的钱不互通。旧金库没有升级，页面不再读它。"
+              : "1. Pick a chain. This page reads this new vault's own book, token, and leader. The two new vaults do not share funds. The old vault was not upgraded, and this page no longer reads it."}
           </li>
           <li>
             {zh
-              ? "2. 新的存入已关闭，页面不会再授权或存款。带单开仓也已停用。源码里的下一版金库，在还有挂单、仓位或未结保证金时，存和取都会失败，结清后才按现金记净值。那一版还没有部署。"
-              : "2. New deposits are closed. This page will not approve or deposit. Opening a copy trade is already stopped. The next vault source rejects both deposit and withdraw while a quote, a position, or unsettled margin remains, and prices shares on cash only after it is flat. That source is not deployed."}
+              ? "2. 新的存入已关闭，页面不会再授权或存款。带单开仓也已停用。这口新金库在还有挂单、仓位或未结保证金时，存和取都会失败，结清后才按现金记净值。"
+              : "2. New deposits are closed. This page will not approve or deposit. Opening a copy trade is already stopped. This new vault rejects deposit and withdraw while a quote, a position, or unsettled margin remains, and prices shares on cash only after it is flat."}
           </li>
           <li>
             {zh
-              ? "3. 上面的净值仍来自已部署合约：现金加上锁着的保证金，不是未实现盈亏。不要把它当成公平的退出价。"
-              : "3. Equity still comes from the deployed contract: cash plus locked margin, not unrealized PnL. Do not treat it as a fair exit price."}
+              ? "3. 上面的净值是现金加上锁着的保证金，不是未实现盈亏。有仓时这口新金库不让取。"
+              : "3. Equity on screen is cash plus locked margin, not unrealized PnL. This new vault will not pay a withdrawal while a position is open."}
           </li>
           <li>
             {zh
-              ? "4. 取出仍发给已部署的合约。旧合约在有仓时仍可能让人取走闲置现金，亏损留给剩下的人。这次改的是页面和下一版源码，不是这两口已经上链的金库。"
-              : "4. Withdraw still calls the deployed contract. The old contract can still pay idle cash while a position is open and leave the loss with the other depositor. This change is the page and the next source, not the two vaults already on chain."}
+              ? "4. 取出发给这口新金库。有挂单、仓位或未结保证金时合约会拒绝。旧金库不在这个按钮上。"
+              : "4. Withdraw calls this new vault. It reverts while a quote, a position, or unsettled margin remains. The old vault is not this button."}
           </li>
         </ol>
         <details className="mt-2 text-xs text-ink/55">
@@ -192,8 +192,8 @@ export function CopyVault({ zh, account }: { zh: boolean; account: string | null
             </p>
             <p>
               {zh
-                ? "中途按浮动盈亏进出，在已部署的金库上做不到。页面已关掉新存入。直接调用旧合约仍可能存入，那不是这次页面能拦住的。"
-                : "Entering or leaving against unrealized PnL is not priced on the deployed vault. The page no longer sends deposits. A direct call to the old contract can still deposit. The page cannot block that."}
+                ? "中途按浮动盈亏进出，这口新金库不允许。页面已关掉新存入。直接调用旧金库仍可能存入，那不是这个页面发的。"
+                : "This new vault does not accept a deposit or a withdrawal against unrealized PnL. The page no longer sends deposits. A direct call to the old vault can still deposit. This page does not send that."}
             </p>
             <p>
               {zh

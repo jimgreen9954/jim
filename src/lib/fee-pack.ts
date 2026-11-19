@@ -15,6 +15,18 @@ const erc20 = parseAbi([
   "function transfer(address,uint256) returns (bool)",
 ]);
 
+const feeOnceAbi = parseAbi([
+  "function paid(bytes32) view returns (bool)",
+  "function pay(bytes32 id, address token, address referrer, uint256 reward, address desk, uint256 deskAmt) payable",
+]);
+
+export const FEE_ONCE: Record<56 | 196, Hex> = {
+  56: "0x6E7B7145c10AA01C63918F201Fb4d73f8aeCfF9a",
+  196: "0x5a76855251Fa311001319D5f59D7dA9A4c6e87c5",
+};
+
+const ZERO = "0x0000000000000000000000000000000000000000" as Hex;
+
 const RPC: Record<number, string[]> = {
   56: ["https://bsc-dataseed.binance.org", "https://bsc.publicnode.com"],
   196: ["https://rpc.xlayer.tech", "https://xlayerrpc.okx.com"],
@@ -60,25 +72,43 @@ async function mined(chainId: number, hash: Hex): Promise<void> {
   throw new TxPending(hash);
 }
 
-function feeCalls(token: Hex | null, safe: Hex, parts: DeskParts): SignedCall[] {
-  const calls: SignedCall[] = [];
-  if (token) {
-    if (parts.reward > 0n && parts.referrer) {
-      calls.push({
-        to: token,
-        data: encodeFunctionData({ abi: erc20, functionName: "transfer", args: [parts.referrer, parts.reward] }),
-      });
-    }
-    if (parts.desk > 0n) {
-      calls.push({
-        to: token,
-        data: encodeFunctionData({ abi: erc20, functionName: "transfer", args: [safe, parts.desk] }),
-      });
-    }
-  } else {
-    if (parts.reward > 0n && parts.referrer) calls.push({ to: parts.referrer, data: "0x", value: parts.reward });
-    if (parts.desk > 0n) calls.push({ to: safe, data: "0x", value: parts.desk });
+async function feeCalls(chainId: 56 | 196, from: string, id: Hex, token: Hex | null, safe: Hex, parts: DeskParts): Promise<SignedCall[]> {
+  const reward = parts.reward;
+  const deskAmt = parts.desk;
+  if (reward === 0n && deskAmt === 0n) return [];
+  const once = FEE_ONCE[chainId];
+  try {
+    const paid = await pub(chainId).readContract({ address: once, abi: feeOnceAbi, functionName: "paid", args: [id] });
+    if (paid) return [];
+  } catch {
+    throw new Error("fee");
   }
+  const calls: SignedCall[] = [];
+  const referrer = parts.referrer ?? ZERO;
+  if (token) {
+    const need = reward + deskAmt;
+    const allowance = await pub(chainId).readContract({
+      address: token,
+      abi: erc20,
+      functionName: "allowance",
+      args: [from as Hex, once],
+    });
+    if (allowance < need) {
+      if (allowance > 0n) {
+        calls.push({ to: token, data: encodeFunctionData({ abi: erc20, functionName: "approve", args: [once, 0n] }) });
+      }
+      calls.push({ to: token, data: encodeFunctionData({ abi: erc20, functionName: "approve", args: [once, need] }) });
+    }
+  }
+  calls.push({
+    to: once,
+    data: encodeFunctionData({
+      abi: feeOnceAbi,
+      functionName: "pay",
+      args: [id, token ?? ZERO, referrer, reward, safe, deskAmt],
+    }),
+    value: token ? 0n : reward + deskAmt,
+  });
   return calls;
 }
 
@@ -102,7 +132,10 @@ export type FeeSwap = {
 /** Batch the fee and the fill when the wallet can. Otherwise the fill is signed first, and only after that fill succeeds is the fee asked. A rejected fill does not take the fee. A fill that is already on chain is not sent again. Paying the missing fee is a separate call. */
 export async function sendFeeAndSwap(args: FeeSwap): Promise<Hex> {
   const { from, chainId, token, safe, parts, swapTo, data, value } = args;
-  const calls = feeCalls(token, safe, parts);
+  const mark = keccak256(
+    encodePacked(["uint256", "address", "address", "uint256", "bytes"], [BigInt(chainId), from as Hex, swapTo, value, data]),
+  );
+  const calls = await feeCalls(chainId, from, mark, token, safe, parts);
   await blockIfOpen(args, calls);
   const swap: SignedCall = { to: swapTo, data, value };
   const together = [...calls, swap];
@@ -130,18 +163,26 @@ export async function sendFeeAndSwap(args: FeeSwap): Promise<Hex> {
   if (calls.length > 0 && !storageReady()) throw new Error("no-store");
   sayTradeStep("fill");
   const hash = await sendTx(from, chainId, swapTo, data, value);
-  const saved: OpenFill = { hash, from, chainId, calls: pack(calls), paid: [] };
-  if (calls.length > 0) writeStore(feeKey(chainId, from), saved);
+  const owed = await feeCalls(chainId, from, hash, token, safe, parts);
+  const saved: OpenFill = { hash, from, chainId, calls: pack(owed), paid: [] };
+  if (owed.length > 0) writeStore(feeKey(chainId, from), saved);
   const filled = await settle(chainId, hash);
   if (filled === "wait") throw new TxPending(hash);
   if (filled === "bad") {
     clearStore(feeKey(chainId, from));
     throw new Error("reverted");
   }
-  if (calls.length === 0) return hash;
-  await payFees(from, chainId, saved);
+  if (owed.length === 0) return hash;
+  await payFees(from, chainId, saved, false);
   clearStore(feeKey(chainId, from));
   return hash;
+}
+
+export class FeeSilent extends Error {
+  constructor() {
+    super("fee-silent");
+    this.name = "FeeSilent";
+  }
 }
 
 export class FeeOpen extends Error {
@@ -423,17 +464,17 @@ function writeLock(key: string, row: FeeLockRow) {
   localStorage.setItem(lockKey(key), JSON.stringify(row));
 }
 
-async function takeLock(key: string, hash: Hex): Promise<boolean> {
-  if (paying.has(key)) return false;
+async function takeLock(key: string, hash: Hex, takeOver: boolean): Promise<"ok" | "busy" | "silent"> {
+  if (paying.has(key)) return "busy";
   paying.add(key);
   const nonce = `${pageId}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2)}`;
   try {
     const cur = readLock(key);
     if (cur && cur.holder !== pageId) {
       const alive = await holderStillHere(key, cur);
-      if (!mayStartFee(cur, pageId, alive)) {
+      if (!mayStartFee(cur, pageId, alive, takeOver)) {
         paying.delete(key);
-        return false;
+        return alive ? "busy" : "silent";
       }
     }
     writeLock(key, { holder: pageId, hash, nonce });
@@ -441,13 +482,13 @@ async function takeLock(key: string, hash: Hex): Promise<boolean> {
     const again = readLock(key);
     if (!again || again.holder !== pageId || again.nonce !== nonce) {
       paying.delete(key);
-      return false;
+      return "busy";
     }
     heldNonce.set(key, nonce);
-    return true;
+    return "ok";
   } catch {
     heldNonce.set(key, nonce);
-    return true;
+    return "ok";
   }
 }
 
@@ -474,9 +515,11 @@ function ownLock(key: string): boolean {
   }
 }
 
-async function payFees(from: string, chainId: 56 | 196, saved: OpenFill) {
+async function payFees(from: string, chainId: 56 | 196, saved: OpenFill, takeOver: boolean) {
   const key = feeKey(chainId, from);
-  if (!(await takeLock(key, saved.hash))) throw new FeeOpen(saved.hash, chainId);
+  const held = await takeLock(key, saved.hash, takeOver);
+  if (held === "silent") throw new FeeSilent();
+  if (held !== "ok") throw new FeeOpen(saved.hash, chainId);
   try {
     let current = readStore(key);
     if (!current || current.hash !== saved.hash) return;
@@ -513,7 +556,7 @@ async function payFees(from: string, chainId: 56 | 196, saved: OpenFill) {
 }
 
 /** Pay the fee that was left behind by a fill. Does not send the swap again. */
-export async function payOpenFee(from: string, chainId: 56 | 196): Promise<Hex> {
+export async function payOpenFee(from: string, chainId: 56 | 196, takeOver = false): Promise<Hex> {
   const key = feeKey(chainId, from);
   const open = readStore(key);
   if (!open || open.from.toLowerCase() !== from.toLowerCase()) throw new Error("no-fee");
@@ -523,7 +566,21 @@ export async function payOpenFee(from: string, chainId: 56 | 196): Promise<Hex> 
     clearStore(key);
     throw new Error("reverted");
   }
-  await payFees(from, chainId, open);
+  try {
+    const paid = await pub(chainId).readContract({
+      address: FEE_ONCE[chainId],
+      abi: feeOnceAbi,
+      functionName: "paid",
+      args: [open.hash],
+    });
+    if (paid) {
+      clearStore(key);
+      return open.hash;
+    }
+  } catch {
+    /* an older saved fee is not this record */
+  }
+  await payFees(from, chainId, open, takeOver);
   clearStore(key);
   return open.hash;
 }

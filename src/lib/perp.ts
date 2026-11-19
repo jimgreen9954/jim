@@ -468,12 +468,18 @@ const COIN_MARK: Record<Exclude<CoinBook, "fab">, Hex> = {
   tape: "0x5EF3db885b1E3D254a192887965ed514187089A3",
 };
 
-export const BTC_COIN_BOOK = "0x81A35fDaaEe7dE3dcDa195F312279Bb2aDc0b8B4" as Hex;
-export const ETH_COIN_BOOK = "0x564C9f5aa89430ca4f2945b466e34BE8705ee0B8" as Hex;
-export const ZEC_COIN_BOOK = "0xdAd8E211ec6c8b43eCe19Da2519C9505CDCbF229" as Hex;
-export const UP_COIN_BOOK = "0x7aaf00Dab91e0e6dDDb6093323D0140c11C55aD3" as Hex;
-export const TAPE_COIN_BOOK = "0x9b17D0F6431957661AdD30051de2615cb08A3886" as Hex;
-export const FAB_COIN_BOOK = "0x6Bd480BF658FaB7A2cb758c0408A7b3B5B94B431" as Hex;
+export const PREV_BTC_COIN_BOOK = "0x81A35fDaaEe7dE3dcDa195F312279Bb2aDc0b8B4" as Hex;
+export const PREV_ETH_COIN_BOOK = "0x564C9f5aa89430ca4f2945b466e34BE8705ee0B8" as Hex;
+export const PREV_ZEC_COIN_BOOK = "0xdAd8E211ec6c8b43eCe19Da2519C9505CDCbF229" as Hex;
+export const PREV_UP_COIN_BOOK = "0x7aaf00Dab91e0e6dDDb6093323D0140c11C55aD3" as Hex;
+export const PREV_TAPE_COIN_BOOK = "0x9b17D0F6431957661AdD30051de2615cb08A3886" as Hex;
+export const PREV_FAB_COIN_BOOK = "0x6Bd480BF658FaB7A2cb758c0408A7b3B5B94B431" as Hex;
+export const BTC_COIN_BOOK = "0x77E6af2fb801f8A30258aB6E3fFaC8c0b53ECbd1" as Hex;
+export const ETH_COIN_BOOK = "0x33Eb07D186B25243D58e72Be51859D3f5c28545F" as Hex;
+export const ZEC_COIN_BOOK = "0xE1f5a45D709F6d547FcA76F2E2E7d42AfDe0bA90" as Hex;
+export const UP_COIN_BOOK = "0xB3cdB968580cE0121f613886E8f86EFFcC514d70" as Hex;
+export const TAPE_COIN_BOOK = "0xd5CaE88012A443449BE3d6efCf86A245A6972a86" as Hex;
+export const FAB_COIN_BOOK = "0x80318c852eE7fBDe52cE439deC3AE022Ba39A536" as Hex;
 
 const COIN_LIVE: Partial<Record<CoinBook, { chain: Desk; book: Hex }>> = {
   btc: { chain: "bsc", book: BTC_COIN_BOOK },
@@ -534,7 +540,7 @@ export async function deployRisk(from: string, which: Desk): Promise<string> {
 
 function pinned(perp: string): void {
   const want = perp.toLowerCase();
-  const rows = [bookOf("bsc"), bookOf("xlayer"), PREV_BSC, OLDER_BSC, PREV_XPERP, OLDER_XPERP, coinBook("bsc", "btc"), coinBook("bsc", "eth"), coinBook("bsc", "zec"), coinBook("bsc", "up"), coinBook("xlayer", "tape"), coinBook("xlayer", "fab"), BTC_COIN_BOOK, ETH_COIN_BOOK, ZEC_COIN_BOOK, UP_COIN_BOOK, TAPE_COIN_BOOK, FAB_COIN_BOOK];
+  const rows = [bookOf("bsc"), bookOf("xlayer"), PREV_BSC, OLDER_BSC, PREV_XPERP, OLDER_XPERP, coinBook("bsc", "btc"), coinBook("bsc", "eth"), coinBook("bsc", "zec"), coinBook("bsc", "up"), coinBook("xlayer", "tape"), coinBook("xlayer", "fab"), BTC_COIN_BOOK, ETH_COIN_BOOK, ZEC_COIN_BOOK, UP_COIN_BOOK, TAPE_COIN_BOOK, FAB_COIN_BOOK, PREV_BTC_COIN_BOOK, PREV_ETH_COIN_BOOK, PREV_ZEC_COIN_BOOK, PREV_UP_COIN_BOOK, PREV_TAPE_COIN_BOOK, PREV_FAB_COIN_BOOK];
   if (!rows.some((row) => row.length === 42 && row.toLowerCase() === want)) throw new Error("book");
 }
 

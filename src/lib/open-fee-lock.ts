@@ -16,10 +16,12 @@ export function parseFeeLock(raw: string | null, now: number): FeeLockRow | null
 }
 
 /**
- * Another tab may start a payment only when nobody holds the lock, or the holder is this tab,
- * or the holding page did not answer. A live wallet prompt answers, so age never makes it free.
+ * Another tab may start only when nobody holds the lock, or the holder is this tab.
+ * A holder that does not answer is not treated as gone. The user must confirm that page is closed.
+ * If it still answers, confirmation does not start a second payment.
  */
-export function mayStartFee(lock: FeeLockRow | null, me: string, holderAlive: boolean): boolean {
+export function mayStartFee(lock: FeeLockRow | null, me: string, holderAlive: boolean, confirmedGone: boolean): boolean {
   if (!lock || lock.holder === me) return true;
-  return !holderAlive;
+  if (holderAlive) return false;
+  return confirmedGone;
 }
