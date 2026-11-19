@@ -3,6 +3,7 @@ import { TxPending } from "@/lib/chain-marks";
 import type { DeskParts } from "@/lib/invite-cut";
 import { rejected, sendAsMulticall, sendUserBatch, type SignedCall } from "@/lib/one-sign";
 import { sayTradeStep } from "@/lib/trade-step";
+import { parseFeeLock, mayStartFee, type FeeLockRow } from "@/lib/open-fee-lock";
 import { ensureProvider, armChain, remoteWallet, switchDeskChain } from "@/lib/wallet";
 
 /** Old desk contract. Kept only so a wallet can cancel its leftover approval. Nobody deploys it again. */
@@ -163,6 +164,7 @@ type LegacyFill = { hash: Hex; fees?: Hex[] };
 const memory = new Map<string, OpenFill>();
 const memoryOnly = new Set<string>();
 const paying = new Set<string>();
+const heldNonce = new Map<string, string>();
 const listeners = new Set<() => void>();
 const pageId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 let feeChannel: BroadcastChannel | null = null;
@@ -280,9 +282,15 @@ function feeBus(): BroadcastChannel | null {
   if (typeof BroadcastChannel === "undefined") return null;
   try {
     feeChannel = new BroadcastChannel("tl-open-fee");
-    feeChannel.onmessage = (event: MessageEvent<{ key?: string; raw?: string | null }>) => {
+    feeChannel.onmessage = (event: MessageEvent<{ type?: string; key?: string; raw?: string | null; nonce?: string }>) => {
       const data = event.data;
-      if (!data?.key?.startsWith("tl-open-fee:")) return;
+      if (!data?.key) return;
+      if (data.type === "fee-lock-ping") {
+        answerLockPing(data.key, data.nonce || "");
+        return;
+      }
+      if (data.type === "fee-lock-pong") return;
+      if (!data.key.startsWith("tl-open-fee:")) return;
       applyRemote(data.key, data.raw ?? null);
     };
   } catch {
@@ -370,40 +378,99 @@ async function settle(chainId: number, hash: Hex): Promise<"ok" | "bad" | "wait"
   }
 }
 
+async function holderStillHere(key: string, row: FeeLockRow): Promise<boolean> {
+  if (!row.nonce) return true;
+  const channel = feeBus();
+  if (!channel) return true;
+  return new Promise((resolve) => {
+    const onMessage = (event: MessageEvent<{ type?: string; key?: string; nonce?: string }>) => {
+      const data = event.data;
+      if (data?.type === "fee-lock-pong" && data.key === key && data.nonce === row.nonce) finish(true);
+    };
+    const finish = (alive: boolean) => {
+      channel.removeEventListener("message", onMessage);
+      window.clearTimeout(timer);
+      resolve(alive);
+    };
+    const timer = window.setTimeout(() => finish(false), 1500);
+    channel.addEventListener("message", onMessage);
+    try {
+      channel.postMessage({ type: "fee-lock-ping", key, nonce: row.nonce });
+    } catch {
+      finish(true);
+    }
+  });
+}
+
+function answerLockPing(key: string, nonce: string) {
+  if (!nonce || heldNonce.get(key) !== nonce) return;
+  try {
+    feeBus()?.postMessage({ type: "fee-lock-pong", key, nonce });
+  } catch {
+    /* the other page keeps the lock if it cannot hear us */
+  }
+}
+
+function readLock(key: string): FeeLockRow | null {
+  try {
+    return parseFeeLock(localStorage.getItem(lockKey(key)), Date.now());
+  } catch {
+    return null;
+  }
+}
+
+function writeLock(key: string, row: FeeLockRow) {
+  localStorage.setItem(lockKey(key), JSON.stringify(row));
+}
+
 async function takeLock(key: string, hash: Hex): Promise<boolean> {
   if (paying.has(key)) return false;
   paying.add(key);
-  const slot = lockKey(key);
-  const now = Date.now();
+  const nonce = `${pageId}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2)}`;
   try {
-    const raw = localStorage.getItem(slot);
-    const cur = raw ? (JSON.parse(raw) as { holder?: string; exp?: number }) : null;
-    if (cur && cur.holder !== pageId && (cur.exp ?? 0) > now) {
-      paying.delete(key);
-      return false;
+    const cur = readLock(key);
+    if (cur && cur.holder !== pageId) {
+      const alive = await holderStillHere(key, cur);
+      if (!mayStartFee(cur, pageId, alive)) {
+        paying.delete(key);
+        return false;
+      }
     }
-    localStorage.setItem(slot, JSON.stringify({ holder: pageId, exp: now + 120_000, hash }));
+    writeLock(key, { holder: pageId, hash, nonce });
     await new Promise((resolve) => setTimeout(resolve, 80));
-    const again = JSON.parse(localStorage.getItem(slot) || "null") as { holder?: string } | null;
-    if (!again || again.holder !== pageId) {
+    const again = readLock(key);
+    if (!again || again.holder !== pageId || again.nonce !== nonce) {
       paying.delete(key);
       return false;
     }
+    heldNonce.set(key, nonce);
     return true;
   } catch {
+    heldNonce.set(key, nonce);
     return true;
   }
 }
 
 function dropLock(key: string) {
   paying.delete(key);
+  heldNonce.delete(key);
   const slot = lockKey(key);
   try {
-    const raw = localStorage.getItem(slot);
-    const cur = raw ? (JSON.parse(raw) as { holder?: string }) : null;
-    if (cur?.holder === pageId) localStorage.removeItem(slot);
+    const cur = parseFeeLock(localStorage.getItem(slot), Date.now());
+    if (!cur || cur.holder === pageId) localStorage.removeItem(slot);
   } catch {
     /* ignore */
+  }
+}
+
+function ownLock(key: string): boolean {
+  const nonce = heldNonce.get(key);
+  if (!nonce) return false;
+  try {
+    const cur = readLock(key);
+    return Boolean(cur && cur.holder === pageId && cur.nonce === nonce);
+  } catch {
+    return true;
   }
 }
 
@@ -423,6 +490,7 @@ async function payFees(from: string, chainId: 56 | 196, saved: OpenFill) {
         if (state === "ok") continue;
         if (state === "wait") throw new TxPending(prior);
       }
+      if (!ownLock(key)) throw new FeeOpen(saved.hash, chainId);
       const call = calls[i];
       let hash: Hex;
       try {

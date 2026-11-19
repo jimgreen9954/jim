@@ -1,16 +1,19 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { assertGasQuote, type RawGasQuote } from "./gas-quote-check.ts";
 
 const user = "0xE51C19aE6E4261Ed329CC54F1120Cf0Ae09364Bd";
+const samples = dirname(fileURLToPath(import.meta.url));
 
-function load(path: string): RawGasQuote {
-  return JSON.parse(readFileSync(path, "utf8")) as RawGasQuote;
+function load(name: string): RawGasQuote {
+  return JSON.parse(readFileSync(join(samples, "gas-quote-samples", name), "utf8")) as RawGasQuote;
 }
 
 test("xlayer to bnb quote matches the router, portal, and user", () => {
-  const json = load("/tmp/sym-ok.json");
+  const json = load("xlayer-bnb.json");
   const quote = assertGasQuote(
     { sourceChain: 196, targetChain: 56, user, amountIn: 10n ** 18n, symbolOut: "BNB" },
     json,
@@ -22,7 +25,7 @@ test("xlayer to bnb quote matches the router, portal, and user", () => {
 });
 
 test("a non-196 chain id is not treated as xlayer", () => {
-  const json = load("/tmp/sym-ok.json");
+  const json = load("xlayer-bnb.json");
   json.tx = { ...json.tx, chainId: 1 };
   assert.throws(
     () => assertGasQuote({ sourceChain: 196, targetChain: 56, user, amountIn: 10n ** 18n, symbolOut: "BNB" }, json),
@@ -31,7 +34,7 @@ test("a non-196 chain id is not treated as xlayer", () => {
 });
 
 test("an arbitrary router is rejected", () => {
-  const json = load("/tmp/sym-ok.json");
+  const json = load("xlayer-bnb.json");
   json.tx = { ...json.tx, to: "0x0000000000000000000000000000000000000001" };
   assert.throws(
     () => assertGasQuote({ sourceChain: 196, targetChain: 56, user, amountIn: 10n ** 18n, symbolOut: "BNB" }, json),
@@ -40,7 +43,7 @@ test("an arbitrary router is rejected", () => {
 });
 
 test("a changed bridge recipient is rejected", () => {
-  const json = load("/tmp/sym-ok.json");
+  const json = load("xlayer-bnb.json");
   const data = json.tx?.data || "";
   const userWord = user.slice(2).toLowerCase();
   const swapped = data.replace(userWord, "1111111111111111111111111111111111111111");
@@ -52,7 +55,7 @@ test("a changed bridge recipient is rejected", () => {
 });
 
 test("an unrecognized aggregator call is not given to the wallet", () => {
-  const json = load("/tmp/sym-bsc.json");
+  const json = load("bsc-okb.json");
   assert.throws(
     () => assertGasQuote({ sourceChain: 56, targetChain: 196, user, amountIn: 10n ** 18n, symbolOut: "OKB" }, json),
     /quote/,
