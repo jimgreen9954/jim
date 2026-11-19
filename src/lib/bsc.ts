@@ -940,16 +940,22 @@ export async function swapWithBnb(from: string, token: Hex, decimals: number, fe
     if (together) return together;
     return fillThenFee(from, packed, parts, swapKey, feeKey, BSC.router, 0n, token);
   }
+  const usdtQuoted = await quoteExact(token, BSC.usdt, swapIn, feeHint);
+  const minUsdt = boundMin(usdtQuoted);
+  if (minUsdt <= 0n) throw new Error("tiny");
+  const usdtBefore = await client.readContract({ address: BSC.usdt, abi: erc20, functionName: "balanceOf", args: [owner] });
   const data = encodeFunctionData({
     abi: routerAbi,
     functionName: "exactInputSingle",
-    args: [{ tokenIn: token, tokenOut: BSC.usdt, fee: feeHint, recipient: owner, deadline, amountIn: swapIn, amountOutMinimum: 1n, sqrtPriceLimitX96: 0n }],
+    args: [{ tokenIn: token, tokenOut: BSC.usdt, fee: feeHint, recipient: owner, deadline, amountIn: swapIn, amountOutMinimum: minUsdt, sqrtPriceLimitX96: 0n }],
   });
   const firstTogether = await finishTogether(from, parts, token, BSC.router, data, 0n, `${swapKey}:usdt`, feeKey);
   const first = firstTogether ?? (await fillThenFee(from, data, parts, `${swapKey}:usdt`, feeKey, BSC.router, 0n, token));
   await client.waitForTransactionReceipt({ hash: first, timeout: 60_000 });
-  const usdtBal = await client.readContract({ address: BSC.usdt, abi: erc20, functionName: "balanceOf", args: [owner] });
-  const spend = usdtBal > quoted ? quoted : usdtBal;
+  const usdtAfter = await client.readContract({ address: BSC.usdt, abi: erc20, functionName: "balanceOf", args: [owner] });
+  const gained = usdtAfter > usdtBefore ? usdtAfter - usdtBefore : 0n;
+  const spend = gained > usdtQuoted ? usdtQuoted : gained;
+  if (spend <= 0n) throw new Error("slip");
   await approveIfNeeded(from, BSC.usdt, spend);
   const bnbOut = await quoteExact(BSC.usdt, BSC.wbnb, spend, BSC.bnbFee);
   const leg = encodeFunctionData({
