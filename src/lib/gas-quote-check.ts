@@ -187,7 +187,17 @@ function readAction(action: string, allow: Set<string>, settler: string): void {
     if (value <= 1n << 80n || value >= 1n << 160n) continue;
     note(`0x${value.toString(16).padStart(40, "0")}`, allow);
   }
-  if (sel === UNI_V3 && !same(addr(action, 4), settler)) throw new Error("quote");
+  if (sel === UNI_V3) {
+    if (!same(addr(action, 4), settler)) throw new Error("quote");
+    const pathAt = 4 + Number(word(action, 4 + 64));
+    if (!Number.isSafeInteger(pathAt)) throw new Error("quote");
+    const pathLen = Number(word(action, pathAt));
+    if (pathLen !== 64) throw new Error("quote");
+    const path = action.slice((pathAt + 32) * 2, (pathAt + 32 + 64) * 2);
+    if (path.length !== 128) throw new Error("quote");
+    note(`0x${path.slice(0, 40)}`, allow);
+    note(`0x${path.slice(88, 128)}`, allow);
+  }
 }
 
 function note(found: string, allow: Set<string>): void {

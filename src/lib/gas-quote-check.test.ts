@@ -96,3 +96,19 @@ test("the nested settler recipient at byte 820 cannot be replaced", () => {
     /quote/,
   );
 });
+
+test("a changed token inside the settler path is rejected", () => {
+  const who = "0x7fa7193115a481067af731499c551c5571071528";
+  const json = load("bsc-okb-exec.json");
+  const data = json.tx?.data || "";
+  const marker = "bb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c00000064";
+  assert.equal(data.toLowerCase().includes(marker), true);
+  json.tx = {
+    ...json.tx,
+    data: data.replace(/bb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c00000064/i, "222222222222222222222222222222222222222200000064"),
+  };
+  assert.throws(
+    () => assertGasQuote({ sourceChain: 56, targetChain: 196, user: who, amountIn: 2000000000000000n, symbolOut: "OKB" }, json),
+    /quote/,
+  );
+});
