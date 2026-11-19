@@ -868,6 +868,21 @@ export async function quoteWithBnb(token: Hex, feeHint: number, side: "buy" | "s
   return quoteExact(BSC.usdt, BSC.wbnb, usdt, BSC.bnbFee);
 }
 
+const USDT_TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+
+function usdtPaid(logs: readonly { address: string; topics: readonly (string | undefined)[]; data: string }[], owner: string): bigint {
+  const who = `0x${owner.slice(2).toLowerCase().padStart(64, "0")}`;
+  let total = 0n;
+  for (const log of logs) {
+    if (log.address.toLowerCase() !== BSC.usdt.toLowerCase()) continue;
+    if ((log.topics[0] || "").toLowerCase() !== USDT_TRANSFER) continue;
+    if ((log.topics[2] || "").toLowerCase() !== who) continue;
+    if (!/^0x[0-9a-fA-F]{64}$/.test(log.data)) continue;
+    total += BigInt(log.data);
+  }
+  return total;
+}
+
 export async function swapWithBnb(from: string, token: Hex, decimals: number, feeHint: number, side: "buy" | "sell", amount: string, floor?: bigint): Promise<Hex> {
   const owner = from as Hex;
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20);
@@ -943,7 +958,6 @@ export async function swapWithBnb(from: string, token: Hex, decimals: number, fe
   const usdtQuoted = await quoteExact(token, BSC.usdt, swapIn, feeHint);
   const minUsdt = boundMin(usdtQuoted);
   if (minUsdt <= 0n) throw new Error("tiny");
-  const usdtBefore = await client.readContract({ address: BSC.usdt, abi: erc20, functionName: "balanceOf", args: [owner] });
   const data = encodeFunctionData({
     abi: routerAbi,
     functionName: "exactInputSingle",
@@ -951,9 +965,8 @@ export async function swapWithBnb(from: string, token: Hex, decimals: number, fe
   });
   const firstTogether = await finishTogether(from, parts, token, BSC.router, data, 0n, `${swapKey}:usdt`, feeKey);
   const first = firstTogether ?? (await fillThenFee(from, data, parts, `${swapKey}:usdt`, feeKey, BSC.router, 0n, token));
-  await client.waitForTransactionReceipt({ hash: first, timeout: 60_000 });
-  const usdtAfter = await client.readContract({ address: BSC.usdt, abi: erc20, functionName: "balanceOf", args: [owner] });
-  const gained = usdtAfter > usdtBefore ? usdtAfter - usdtBefore : 0n;
+  const receipt = await client.waitForTransactionReceipt({ hash: first, timeout: 60_000 });
+  const gained = usdtPaid(receipt.logs, owner);
   const spend = gained > usdtQuoted ? usdtQuoted : gained;
   if (spend <= 0n) throw new Error("slip");
   await approveIfNeeded(from, BSC.usdt, spend);
