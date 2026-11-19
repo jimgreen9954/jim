@@ -68,7 +68,7 @@ export async function quoteGasRoute(toBnb: boolean, from: string, amount: bigint
     approveTo?: string;
     tx?: { to?: Hex; data?: Hex; value?: string; chainId?: number | string };
   };
-  const checked = assertGasQuote(
+  const checked = await assertGasQuote(
     { sourceChain, targetChain, user: from, amountIn: amount, symbolOut: toBnb ? "BNB" : "OKB" },
     json,
   );

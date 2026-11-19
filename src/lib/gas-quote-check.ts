@@ -34,22 +34,25 @@ const POSITIVE_SLIPPAGE = "5f80abae";
 const SETTLER: Partial<Record<56 | 196, Hex>> = {
   56: "0xd52e8e422a352ac1afdc2bd6ec533d41b20acb7b",
 };
-
+/** PancakeSwap V3 WBNB/USDC, fee 100. Factory getPool returns this pool. */
+const PANCAKE_BNB_USDC = "0xf2688Fb5B81049DFB7703aDa5e770543770612C4";
+/** WOKB/USDT0 pool used to price the OKB that must arrive. */
+const OKB_USDT = "0xe3BE6A0137f1b0602Fc1a4841686f43B340a5082";
+const USDC = "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d";
+const WBNB = "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c";
+const ALLOWANCE_HOLDER = "0x980447ddcef79a7499da4538da8fc59bacad6997";
+const SLIP_RECIPIENT = "0xf5c4f3dc02c3fb9279495a8fef7b0741da956157";
 /**
- * Addresses a BSC settler hop may name. The Uniswap step must pay the settler itself.
- * Anything else, including a recipient tucked into a later action, is rejected.
+ * One Pancake hop: WBNB, fork 0, fee 100, the sqrt limit from the checked quote, USDC.
+ * The 20 bytes after the fee are a sqrt-price limit, not a pool. The pool for fee 100 is PANCAKE_BNB_USDC.
  */
-const HOP_TOKEN: Record<56 | 196, readonly Hex[]> = {
-  56: [
-    "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
-    "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
-    "0x55d398326f99059fF775485246999027B3197955",
-    "0x980447ddcef79a7499da4538da8fc59bacad6997",
-    "0xf5c4f3dc02c3fb9279495a8fef7b0741da956157",
-    "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
-  ],
-  196: [],
-};
+const PANCAKE_PATH =
+  "bb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c00000064fffd8963efd1fc6a506488495d951d5263988d258ac76a51cc950d9822d68b83fe1ad97b32cd580d";
+/** BASIC that only wraps BNB into WBNB. */
+const WRAP =
+  "38c9c147000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee00000000000000000000000000000000000000000000000000000000000f4240000000000000000000000000bb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000024d0e30db0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+const BSC_RPC = ["https://bsc-dataseed.binance.org", "https://bsc.publicnode.com"];
+const XLAYER_RPC = ["https://rpc.xlayer.tech", "https://xlayerrpc.okx.com"];
 
 export type GasIntent = {
   sourceChain: 56 | 196;
@@ -116,76 +119,74 @@ function bytesAt(data: string, offset: number): string {
   return slice;
 }
 
-function hopPays(calldata: string, source: 56 | 196, router: string, amountIn: bigint): void {
-  if (calldata.length === 0) return;
+function hopPays(calldata: string, source: 56 | 196, router: string, amountIn: bigint): bigint {
+  if (calldata.length === 0) return 0n;
   const sel = calldata.slice(0, 8);
   if (sel === EXACT_INPUT_SINGLE) {
     const recipient = addr(calldata, 4 + 96);
     const gateway = GATEWAY[source];
-    if (same(recipient, router)) return;
-    if (gateway && same(recipient, gateway)) return;
+    if (same(recipient, router)) return 0n;
+    if (gateway && same(recipient, gateway)) return 0n;
     throw new Error("quote");
   }
-  if (sel === EXEC) {
-    allowExec(calldata, source, router, amountIn);
-    return;
-  }
+  if (sel === EXEC) return allowExec(calldata, source, router, amountIn);
   throw new Error("quote");
 }
 
-function allowExec(calldata: string, source: 56 | 196, router: string, amountIn: bigint): void {
+function allowExec(calldata: string, source: 56 | 196, router: string, amountIn: bigint): bigint {
   const settler = SETTLER[source];
   if (!settler) throw new Error("quote");
   const args = calldata.slice(8);
   if (word(args, 64) !== amountIn) throw new Error("quote");
-  const operator = addr(args, 0);
-  const token = addr(args, 32);
-  const recipient = addr(args, 96);
-  if (!same(operator, settler)) throw new Error("quote");
-  if (token !== `0x${"0".repeat(40)}`) throw new Error("quote");
-  if (!same(recipient, settler) && !same(recipient, router) && !same(recipient, PORTAL[source])) throw new Error("quote");
-  const allow = new Set(
-    [settler, router, PORTAL[source], ...HOP_TOKEN[source]].map((item) => item.toLowerCase()),
-  );
+  if (!same(addr(args, 0), settler)) throw new Error("quote");
+  if (addr(args, 32) !== `0x${"0".repeat(40)}`) throw new Error("quote");
+  const paid = addr(args, 96);
+  if (!same(paid, settler) && !same(paid, router) && !same(paid, PORTAL[source])) throw new Error("quote");
   const bytesOff = Number(word(args, 128));
   if (!Number.isSafeInteger(bytesOff)) throw new Error("quote");
   const blobLen = Number(word(args, bytesOff));
   if (!Number.isSafeInteger(blobLen) || blobLen < 4) throw new Error("quote");
   const start = bytesOff + 32;
   if ((start + blobLen) * 2 > args.length) throw new Error("quote");
-  readSettlement(args.slice(start * 2, (start + blobLen) * 2), source, allow, settler);
+  return readSettlement(args.slice(start * 2, (start + blobLen) * 2), amountIn, settler);
 }
 
-function readSettlement(blob: string, source: 56 | 196, allow: Set<string>, settler: string): void {
+function readSettlement(blob: string, amountIn: bigint, settler: string): bigint {
   if (!blob.startsWith(SETTLEMENT)) throw new Error("quote");
   const inner = blob.slice(8);
-  const buy = addr(inner, 32);
-  const usdc = HOP_TOKEN[source][0];
-  if (!usdc || !same(buy, usdc)) throw new Error("quote");
-  note(addr(inner, 0), allow);
+  if (!same(addr(inner, 0), ALLOWANCE_HOLDER)) throw new Error("quote");
+  if (!same(addr(inner, 32), USDC)) throw new Error("quote");
+  const minBuy = word(inner, 64);
+  if (minBuy <= 0n) throw new Error("quote");
   const arrayAt = Number(word(inner, 96));
   if (!Number.isSafeInteger(arrayAt)) throw new Error("quote");
   const count = Number(word(inner, arrayAt));
-  if (!Number.isSafeInteger(count) || count < 1 || count > 8) throw new Error("quote");
-  for (let i = 0; i < count; i += 1) {
+  if (count !== 4) throw new Error("quote");
+  const steps = [NATIVE_CHECK, BASIC, UNI_V3, POSITIVE_SLIPPAGE];
+  for (let i = 0; i < 4; i += 1) {
     const rel = Number(word(inner, arrayAt + 32 + i * 32));
     if (!Number.isSafeInteger(rel)) throw new Error("quote");
     const at = arrayAt + 32 + rel;
     const len = Number(word(inner, at));
     if (!Number.isSafeInteger(len) || len < 4) throw new Error("quote");
     const action = inner.slice((at + 32) * 2, (at + 32 + len) * 2);
-    if (action.length !== len * 2) throw new Error("quote");
-    readAction(action, allow, settler);
+    if (action.length !== len * 2 || !action.startsWith(steps[i])) throw new Error("quote");
+    readStep(action, amountIn, settler, minBuy);
   }
+  return minBuy;
 }
 
-function readAction(action: string, allow: Set<string>, settler: string): void {
+function readStep(action: string, amountIn: bigint, settler: string, minBuy: bigint): void {
   const sel = action.slice(0, 8);
-  if (sel !== NATIVE_CHECK && sel !== BASIC && sel !== UNI_V3 && sel !== POSITIVE_SLIPPAGE) throw new Error("quote");
-  for (let byte = 4; byte + 32 <= action.length / 2; byte += 32) {
-    const value = word(action, byte);
-    if (value <= 1n << 80n || value >= 1n << 160n) continue;
-    note(`0x${value.toString(16).padStart(40, "0")}`, allow);
+  if (sel === NATIVE_CHECK) {
+    if (word(action, 4 + 32) !== amountIn) throw new Error("quote");
+    return;
+  }
+  if (sel === BASIC) {
+    if (action !== WRAP) throw new Error("quote");
+    if (!same(addr(action, 4), "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")) throw new Error("quote");
+    if (!same(addr(action, 4 + 64), WBNB)) throw new Error("quote");
+    return;
   }
   if (sel === UNI_V3) {
     if (!same(addr(action, 4), settler)) throw new Error("quote");
@@ -193,18 +194,20 @@ function readAction(action: string, allow: Set<string>, settler: string): void {
     if (!Number.isSafeInteger(pathAt)) throw new Error("quote");
     const pathLen = Number(word(action, pathAt));
     if (pathLen !== 64) throw new Error("quote");
-    const path = action.slice((pathAt + 32) * 2, (pathAt + 32 + 64) * 2);
-    if (path.length !== 128) throw new Error("quote");
-    note(`0x${path.slice(0, 40)}`, allow);
-    note(`0x${path.slice(88, 128)}`, allow);
+    const path = action.slice((pathAt + 32) * 2, (pathAt + 96) * 2);
+    if (path !== PANCAKE_PATH) throw new Error("quote");
+    return;
   }
+  if (sel === POSITIVE_SLIPPAGE) {
+    if (!same(addr(action, 4), SLIP_RECIPIENT)) throw new Error("quote");
+    if (!same(addr(action, 4 + 32), USDC)) throw new Error("quote");
+    if (word(action, 4 + 64) < minBuy) throw new Error("quote");
+    return;
+  }
+  throw new Error("quote");
 }
 
-function note(found: string, allow: Set<string>): void {
-  if (!allow.has(found.toLowerCase())) throw new Error("quote");
-}
-
-function metaRoute(data: string, source: 56 | 196, router: string, user: string, amountIn: bigint): void {
+function metaRoute(data: string, source: 56 | 196, router: string, user: string, amountIn: bigint): bigint {
   const raw = hex(data);
   if (!raw.startsWith(META_ROUTE)) throw new Error("quote");
   const body = raw.slice(8);
@@ -216,25 +219,58 @@ function metaRoute(data: string, source: 56 | 196, router: string, user: string,
   if (word(st, 192) !== 1n) throw new Error("quote");
   const relay = addr(st, 224);
   if (!same(relay, PORTAL[source])) throw new Error("quote");
-  hopPays(first, source, router, amountIn);
-  hopPays(second, source, router, amountIn);
+  const left = hopPays(first, source, router, amountIn);
+  const right = hopPays(second, source, router, amountIn);
   const other = bytesAt(st, Number(word(st, 256)));
   if (!other.startsWith(META_SYNTH)) throw new Error("quote");
   const otherBody = other.slice(8);
   if (word(otherBody, 0) !== 32n) throw new Error("quote");
   const synth = otherBody.slice(64);
   if (!same(addr(synth, 96), user)) throw new Error("quote");
+  return left > right ? left : right;
+}
+
+async function ethCall(urls: string[], to: string, data: string): Promise<bigint> {
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to, data }, "latest"] }),
+      });
+      const json = (await res.json()) as { result?: string };
+      if (json.result && json.result.startsWith("0x") && json.result.length >= 66) return BigInt(json.result.slice(0, 66));
+    } catch {
+      /* next */
+    }
+  }
+  throw new Error("quote");
+}
+
+/** USDC (18) out for `bnb` wei, from the fee-100 pool. token0 is USDC and token1 is WBNB. */
+async function usdcForBnb(bnb: bigint): Promise<bigint> {
+  const sqrt = await ethCall(BSC_RPC, PANCAKE_BNB_USDC, "0x3850c7bd");
+  if (sqrt <= 0n) throw new Error("quote");
+  return (bnb * (1n << 192n)) / (sqrt * sqrt);
+}
+
+/** OKB wei bought by `usdc` (18) at the WOKB/USDT0 pool. token0 is USDT0 (6) and token1 is WOKB. */
+async function okbForUsdc(usdc: bigint): Promise<bigint> {
+  const sqrt = await ethCall(XLAYER_RPC, OKB_USDT, "0x3850c7bd");
+  if (sqrt <= 0n) throw new Error("quote");
+  const wokbPerUsdtRaw = (sqrt * sqrt) / (1n << 192n);
+  return (usdc / 1_000_000_000_000n) * wokbPerUsdtRaw;
 }
 
 /** Reject a quote that is not the exact native bridge the user asked for. */
-export function assertGasQuote(intent: GasIntent, json: RawGasQuote): {
+export async function assertGasQuote(intent: GasIntent, json: RawGasQuote): Promise<{
   to: Hex;
   data: Hex;
   value: bigint;
   chainId: 56 | 196;
   amountOut: bigint;
   amountOutMin: bigint;
-} {
+}> {
   if (intent.amountIn <= 0n) throw new Error("quote");
   if (intent.sourceChain === intent.targetChain) throw new Error("quote");
   const tx = json.tx;
@@ -249,6 +285,12 @@ export function assertGasQuote(intent: GasIntent, json: RawGasQuote): {
   const amountOut = nativeOut(json.tokenAmountOut, intent.targetChain, intent.symbolOut);
   const amountOutMin = nativeOut(json.tokenAmountOutMin, intent.targetChain, intent.symbolOut);
   if (amountOutMin > amountOut) throw new Error("quote");
-  metaRoute(tx.data, intent.sourceChain, router, intent.user, intent.amountIn);
+  const minBuy = metaRoute(tx.data, intent.sourceChain, router, intent.user, intent.amountIn);
+  if (minBuy > 0n) {
+    const usdc = await usdcForBnb(intent.amountIn);
+    if (usdc <= 0n || minBuy * 100n < usdc * 99n) throw new Error("quote");
+    const okb = await okbForUsdc(usdc);
+    if (okb <= 0n || amountOutMin * 100n < okb * 98n) throw new Error("quote");
+  }
   return { to: router, data: tx.data as Hex, value, chainId, amountOut, amountOutMin };
 }
