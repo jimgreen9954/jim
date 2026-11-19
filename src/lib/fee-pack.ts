@@ -161,11 +161,18 @@ type OpenFill = { hash: Hex; from: string; chainId: 56 | 196; calls: SavedCall[]
 type LegacyFill = { hash: Hex; fees?: Hex[] };
 
 const memory = new Map<string, OpenFill>();
+const memoryOnly = new Set<string>();
 const paying = new Set<string>();
 const listeners = new Set<() => void>();
+const pageId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+let feeChannel: BroadcastChannel | null = null;
 
 function feeKey(chainId: number, from: string): string {
   return `tl-open-fee:${chainId}:${from.toLowerCase()}`;
+}
+
+function lockKey(key: string): string {
+  return `tl-open-fee-lock:${key.slice("tl-open-fee:".length)}`;
 }
 
 function pack(calls: SignedCall[]): SavedCall[] {
@@ -211,36 +218,85 @@ function parseOpen(raw: string | null): OpenFill | null {
 }
 
 function readStore(key: string): OpenFill | null {
-  const held = memory.get(key);
-  if (held) return held;
   try {
     const row = parseOpen(localStorage.getItem(key));
-    if (!row) return null;
-    memory.set(key, row);
-    return row;
-  } catch {
+    if (row) {
+      memoryOnly.delete(key);
+      memory.set(key, row);
+      return row;
+    }
+    if (memoryOnly.has(key)) return memory.get(key) ?? null;
+    memory.delete(key);
     return null;
+  } catch {
+    return memory.get(key) ?? null;
+  }
+}
+
+function publish(key: string, raw: string | null) {
+  try {
+    feeBus()?.postMessage({ key, raw });
+  } catch {
+    /* another tab simply re-reads storage */
   }
 }
 
 function writeStore(key: string, row: OpenFill) {
   memory.set(key, row);
+  let raw: string | null = null;
   try {
-    localStorage.setItem(key, JSON.stringify(row));
+    raw = JSON.stringify(row);
+    localStorage.setItem(key, raw);
+    memoryOnly.delete(key);
   } catch {
-    /* the hash stays in memory for this page */
+    memoryOnly.add(key);
+    raw = null;
   }
+  if (raw) publish(key, raw);
   notify();
 }
 
 function clearStore(key: string) {
   memory.delete(key);
+  memoryOnly.delete(key);
   try {
     localStorage.removeItem(key);
   } catch {
     /* ignore */
   }
+  publish(key, null);
   notify();
+}
+
+function applyRemote(key: string, raw: string | null) {
+  const row = parseOpen(raw);
+  if (!row) memory.delete(key);
+  else memory.set(key, row);
+  notify();
+}
+
+function feeBus(): BroadcastChannel | null {
+  if (feeChannel) return feeChannel;
+  if (typeof BroadcastChannel === "undefined") return null;
+  try {
+    feeChannel = new BroadcastChannel("tl-open-fee");
+    feeChannel.onmessage = (event: MessageEvent<{ key?: string; raw?: string | null }>) => {
+      const data = event.data;
+      if (!data?.key?.startsWith("tl-open-fee:")) return;
+      applyRemote(data.key, data.raw ?? null);
+    };
+  } catch {
+    feeChannel = null;
+  }
+  return feeChannel;
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (event) => {
+    if (!event.key?.startsWith("tl-open-fee:")) return;
+    applyRemote(event.key, event.newValue);
+  });
+  feeBus();
 }
 
 export function openFees(from: string | null): OpenFeeView[] {
@@ -314,14 +370,54 @@ async function settle(chainId: number, hash: Hex): Promise<"ok" | "bad" | "wait"
   }
 }
 
+async function takeLock(key: string, hash: Hex): Promise<boolean> {
+  if (paying.has(key)) return false;
+  paying.add(key);
+  const slot = lockKey(key);
+  const now = Date.now();
+  try {
+    const raw = localStorage.getItem(slot);
+    const cur = raw ? (JSON.parse(raw) as { holder?: string; exp?: number }) : null;
+    if (cur && cur.holder !== pageId && (cur.exp ?? 0) > now) {
+      paying.delete(key);
+      return false;
+    }
+    localStorage.setItem(slot, JSON.stringify({ holder: pageId, exp: now + 120_000, hash }));
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    const again = JSON.parse(localStorage.getItem(slot) || "null") as { holder?: string } | null;
+    if (!again || again.holder !== pageId) {
+      paying.delete(key);
+      return false;
+    }
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+function dropLock(key: string) {
+  paying.delete(key);
+  const slot = lockKey(key);
+  try {
+    const raw = localStorage.getItem(slot);
+    const cur = raw ? (JSON.parse(raw) as { holder?: string }) : null;
+    if (cur?.holder === pageId) localStorage.removeItem(slot);
+  } catch {
+    /* ignore */
+  }
+}
+
 async function payFees(from: string, chainId: 56 | 196, saved: OpenFill) {
   const key = feeKey(chainId, from);
-  if (paying.has(key)) throw new FeeOpen(saved.hash, chainId);
-  paying.add(key);
+  if (!(await takeLock(key, saved.hash))) throw new FeeOpen(saved.hash, chainId);
   try {
-    const calls = unpack(saved.calls);
+    let current = readStore(key);
+    if (!current || current.hash !== saved.hash) return;
+    const calls = unpack(current.calls);
     for (let i = 0; i < calls.length; i += 1) {
-      const prior = saved.paid[i];
+      current = readStore(key);
+      if (!current || current.hash !== saved.hash) return;
+      const prior = current.paid[i];
       if (prior) {
         const state = await settle(chainId, prior);
         if (state === "ok") continue;
@@ -336,14 +432,15 @@ async function payFees(from: string, chainId: 56 | 196, saved: OpenFill) {
         if (rejected(err)) throw new FeeOpen(saved.hash, chainId);
         throw err;
       }
-      saved.paid[i] = hash;
-      writeStore(key, saved);
+      const fresh = readStore(key) ?? current;
+      fresh.paid[i] = hash;
+      writeStore(key, fresh);
       const state = await settle(chainId, hash);
       if (state === "wait") throw new TxPending(hash);
       if (state === "bad") throw new FeeOpen(saved.hash, chainId);
     }
   } finally {
-    paying.delete(key);
+    dropLock(key);
   }
 }
 

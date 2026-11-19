@@ -2,14 +2,11 @@ import { useEffect, useState } from "react";
 import {
   cancelVault,
   closeVault,
-  depositVault,
   openVault,
   readCopyVault,
   showAmt,
   syncVault,
   takeVault,
-  vaultLeader,
-  vaultUnit,
   withdrawVault,
   type VaultChain,
   type VaultView,
@@ -25,9 +22,11 @@ function failText(err: unknown, zh: boolean): string {
   if (code === "price") return zh ? "限价要在 0.01 到 100000 之间。" : "Limit price must be from 0.01 to 100000.";
   if (code === "lev") return zh ? "杠杆要在 1 到 1000 之间。" : "Leverage must be from 1 to 1000.";
   if (code === "usdt") return zh ? "余额不够。" : "Balance is not enough.";
-  if (code === "idle") return zh ? "有仓位时，只能取出还没锁上的钱。" : "While a position is open, only idle cash can be withdrawn.";
-  if (code === "leader") return zh ? "只有带单多签能下单。" : "Only the leader multisig can trade.";
+  if (code === "idle") return zh ? "闲置现金不够取出这一笔。已部署合约有仓时，仍可能让别人先取走现金。" : "Idle cash cannot cover this withdrawal. On the deployed vault, someone can still take cash while a position is open.";
+  if (code === "halt") return zh ? "新的存入已关闭。页面不会再发起存款。" : "New deposits are closed. This page will not send one.";
+  if (code === "token") return zh ? "这口金库的稳定币不在已知名单里，页面不猜它的小数位。" : "This vault's token is not a known stablecoin. The page will not guess its decimals.";
   if (code === "nowallet") return zh ? "先连接钱包。" : "Connect a wallet first.";
+  if (code === "leader") return zh ? "只有这口金库链上的带单地址能下单。" : "Only the leader stored on this vault can trade.";
   if (code === "revert") return zh ? "链上没有成交。" : "The chain did not fill it.";
   if (code === "pending") return zh ? "还在确认。不要重复提交。" : "Still confirming. Do not send it again.";
   if (/rejected|denied|cancel/i.test(code)) return zh ? "已取消。" : "Cancelled.";
@@ -46,8 +45,11 @@ export function CopyVault({ zh, account }: { zh: boolean; account: string | null
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState(empty);
   const [bad, setBad] = useState(false);
-  const unit = vaultUnit(chain);
-  const leader = Boolean(account && account.toLowerCase() === vaultLeader(chain).toLowerCase());
+  const unit = {
+    decimals: view?.decimals ?? null,
+    symbol: view?.symbol || (zh ? "未知" : "unknown"),
+  };
+  const leader = Boolean(account && view && account.toLowerCase() === view.leader.toLowerCase());
 
   useEffect(() => {
     let dead = false;
@@ -91,7 +93,8 @@ export function CopyVault({ zh, account }: { zh: boolean; account: string | null
     })();
   };
 
-  const money = (value: bigint | undefined) => (view && value !== undefined ? showAmt(value, unit.decimals) : "—");
+  const money = (value: bigint | undefined) =>
+    view && value !== undefined && unit.decimals != null ? showAmt(value, unit.decimals) : "—";
 
   return (
     <section className="grid gap-3">
@@ -143,37 +146,35 @@ export function CopyVault({ zh, account }: { zh: boolean; account: string | null
         </label>
         <button
           type="button"
-          disabled={busy}
+          disabled={busy || side === "in"}
           className="mt-2 min-h-11 w-full bg-ink text-paper disabled:opacity-40"
-          onClick={() =>
-            run(
-              () => (side === "in" ? depositVault(chain, amount) : withdrawVault(chain, amount)),
-              side === "in" ? (zh ? "已存入。" : "Deposited.") : zh ? "已取出。" : "Withdrawn.",
-            )
-          }
+          onClick={() => {
+            if (side === "in") return;
+            run(() => withdrawVault(chain, amount), zh ? "已取出。" : "Withdrawn.");
+          }}
         >
-          {side === "in" ? (zh ? "存入" : "Deposit") : zh ? "取出" : "Withdraw"}
+          {side === "in" ? (zh ? "存入已关闭" : "Deposits closed") : zh ? "取出" : "Withdraw"}
         </button>
         <ol className="mt-3 grid gap-1.5 text-xs leading-5 text-ink/75">
           <li>
             {zh
-              ? "1. 先选链。X Layer 存 USDT0，跟的是 X Layer 永续。BSC 存 USDT，跟的是 BSC 永续。两口金库的钱不互通。"
-              : "1. Pick a chain. X Layer takes USDT0 and follows the X Layer perp. BSC takes USDT and follows the BSC perp. The two vaults do not share funds."}
+              ? "1. 先选链。页面读的是这口金库自己的 book、稳定币和带单人，不是网站现在这笔永续。两口金库的钱不互通。已经部署的合约没有升级。"
+              : "1. Pick a chain. This page reads that vault's own book, token, and leader. It does not follow the perp the rest of the site is using. The two vaults do not share funds. The deployed contracts are not upgraded."}
           </li>
           <li>
             {zh
-              ? "2. 点存入。第一次会先授权，再存入。你拿到的是份额，不是单独开给你的仓。金库赚钱，每份更值钱。金库亏钱，每份更便宜。"
-              : "2. Deposit. The first time asks for approval, then the deposit. You receive shares, not a private position. If the vault gains, each share is worth more. If it loses, each share is worth less."}
+              ? "2. 新的存入已关闭，页面不会再授权或存款。带单开仓也已停用。源码里的下一版金库，在还有挂单、仓位或未结保证金时，存和取都会失败，结清后才按现金记净值。那一版还没有部署。"
+              : "2. New deposits are closed. This page will not approve or deposit. Opening a copy trade is already stopped. The next vault source rejects both deposit and withdraw while a quote, a position, or unsettled margin remains, and prices shares on cash only after it is flat. That source is not deployed."}
           </li>
           <li>
             {zh
-              ? "3. 带单人用金库的钱挂单、吃单、平仓。上面的净值是现金加上还锁在仓里的保证金。我的，是你的份额现在值多少。"
-              : "3. The leader posts, takes, and closes with the vault's money. Equity is cash plus margin still locked in positions. Mine is what your shares are worth now."}
+              ? "3. 上面的净值仍来自已部署合约：现金加上锁着的保证金，不是未实现盈亏。不要把它当成公平的退出价。"
+              : "3. Equity still comes from the deployed contract: cash plus locked margin, not unrealized PnL. Do not treat it as a fair exit price."}
           </li>
           <li>
             {zh
-              ? "4. 点取出。没有仓位时，按份额拿回。有仓位时，锁进仓里的保证金取不出，只能取还留在金库里的现金。平仓之后再取剩下的。"
-              : "4. Withdraw. With no position, you take your share. With a position open, locked margin stays. You can take only the cash still sitting in the vault. The rest comes out after the position closes."}
+              ? "4. 取出仍发给已部署的合约。旧合约在有仓时仍可能让人取走闲置现金，亏损留给剩下的人。这次改的是页面和下一版源码，不是这两口已经上链的金库。"
+              : "4. Withdraw still calls the deployed contract. The old contract can still pay idle cash while a position is open and leave the loss with the other depositor. This change is the page and the next source, not the two vaults already on chain."}
           </li>
         </ol>
         <details className="mt-2 text-xs text-ink/55">
@@ -191,8 +192,8 @@ export function CopyVault({ zh, account }: { zh: boolean; account: string | null
             </p>
             <p>
               {zh
-                ? "中途存入，按当时净值买份额。有仓时，净值先按锁进去的保证金算，没平仓的浮动盈亏还不能取出。"
-                : "A deposit made midway buys shares at the equity then. While a position is open, equity counts locked margin at cost. Unrealized profit cannot be withdrawn yet."}
+                ? "中途按浮动盈亏进出，在已部署的金库上做不到。页面已关掉新存入。直接调用旧合约仍可能存入，那不是这次页面能拦住的。"
+                : "Entering or leaving against unrealized PnL is not priced on the deployed vault. The page no longer sends deposits. A direct call to the old contract can still deposit. The page cannot block that."}
             </p>
             <p>
               {zh
@@ -251,7 +252,7 @@ export function CopyVault({ zh, account }: { zh: boolean; account: string | null
             {view?.quotes.map((quote) => (
               <li key={`${quote.ours ? "o" : "b"}-${quote.id.toString()}`} className="flex items-center justify-between gap-2 border border-gold/30 px-2 py-2 text-xs">
                 <span>
-                  #{quote.id.toString()} {quote.long ? (zh ? "多" : "Long") : zh ? "空" : "Short"} · {showAmt(quote.margin, unit.decimals)} {unit.symbol} · {quote.lev}x · {showAmt(quote.price, 18)}
+                  #{quote.id.toString()} {quote.long ? (zh ? "多" : "Long") : zh ? "空" : "Short"} · {unit.decimals != null ? showAmt(quote.margin, unit.decimals) : "—"} {unit.symbol} · {quote.lev}x · {showAmt(quote.price, 18)}
                 </span>
                 {quote.ours ? (
                   <button type="button" disabled={busy} className="min-h-9 px-2" onClick={() => run(() => cancelVault(chain, quote.id), zh ? "已撤单。" : "Cancelled.")}>
@@ -262,7 +263,7 @@ export function CopyVault({ zh, account }: { zh: boolean; account: string | null
                     type="button"
                     disabled={busy}
                     className="min-h-9 px-2"
-                    onClick={() => run(() => takeVault(chain, quote.id, margin || showAmt(quote.margin, unit.decimals).replace(/,/g, ""), Number(lev) || quote.lev), zh ? "已吃单。" : "Taken.")}
+                    onClick={() => run(() => takeVault(chain, quote.id, margin || (unit.decimals != null ? showAmt(quote.margin, unit.decimals).replace(/,/g, "") : ""), Number(lev) || quote.lev), zh ? "已吃单。" : "Taken.")}
                   >
                     {zh ? "吃单" : "Take"}
                   </button>
@@ -272,7 +273,7 @@ export function CopyVault({ zh, account }: { zh: boolean; account: string | null
             {view?.deals.map((deal) => (
               <li key={`d-${deal.id.toString()}`} className="flex items-center justify-between gap-2 border border-gold/30 px-2 py-2 text-xs">
                 <span>
-                  #{deal.id.toString()} {deal.long ? (zh ? "多仓" : "Long") : zh ? "空仓" : "Short"} · {showAmt(deal.margin, unit.decimals)} {unit.symbol} · {showAmt(deal.entry, 18)}
+                  #{deal.id.toString()} {deal.long ? (zh ? "多仓" : "Long") : zh ? "空仓" : "Short"} · {unit.decimals != null ? showAmt(deal.margin, unit.decimals) : "—"} {unit.symbol} · {showAmt(deal.entry, 18)}
                 </span>
                 <button type="button" disabled={busy} className="min-h-9 px-2" onClick={() => run(() => closeVault(chain, deal.id), zh ? "已平仓。" : "Closed.")}>
                   {zh ? "平仓" : "Close"}

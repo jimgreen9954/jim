@@ -1,4 +1,5 @@
 import type { Hex } from "viem";
+import { assertGasQuote } from "@/lib/gas-quote-check";
 import { BSC, BSC_SAFE, XLAYER_SAFE } from "@/lib/bsc";
 import { sendFeeAndSwap } from "@/lib/fee-pack";
 import { deskParts } from "@/lib/invite-cut";
@@ -47,12 +48,14 @@ export async function payBalance(toBnb: boolean, account: string | null): Promis
 
 export async function quoteGasRoute(toBnb: boolean, from: string, amount: bigint): Promise<GasQuote> {
   if (amount <= 0n) throw new Error("amount");
+  const sourceChain = toBnb ? 196 : 56;
+  const targetChain = toBnb ? 56 : 196;
   const res = await fetch(SWAP, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      tokenAmountIn: { chainId: toBnb ? 196 : 56, address: "", amount: amount.toString(), decimals: 18 },
-      tokenOut: { chainId: toBnb ? 56 : 196, address: "", symbol: toBnb ? "BNB" : "OKB", decimals: 18 },
+      tokenAmountIn: { chainId: sourceChain, address: "", amount: amount.toString(), decimals: 18 },
+      tokenOut: { chainId: targetChain, address: "", symbol: toBnb ? "BNB" : "OKB", decimals: 18 },
       from,
       to: from,
       slippage: 100,
@@ -60,22 +63,24 @@ export async function quoteGasRoute(toBnb: boolean, from: string, amount: bigint
   });
   if (!res.ok) throw new Error("quote");
   const json = (await res.json()) as {
-    tokenAmountOut?: { amount?: string };
-    tokenAmountOutMin?: { amount?: string };
-    tx?: { to?: Hex; data?: Hex; value?: string; chainId?: number };
+    tokenAmountOut?: { amount?: string; chainId?: number | string; address?: string; symbol?: string };
+    tokenAmountOutMin?: { amount?: string; chainId?: number | string; address?: string; symbol?: string };
+    approveTo?: string;
+    tx?: { to?: Hex; data?: Hex; value?: string; chainId?: number | string };
   };
-  const tx = json.tx;
-  if (!tx?.to || !tx.data || !json.tokenAmountOut?.amount || !json.tokenAmountOutMin?.amount) throw new Error("quote");
-  const chainId = tx.chainId === 56 ? 56 : 196;
+  const checked = assertGasQuote(
+    { sourceChain, targetChain, user: from, amountIn: amount, symbolOut: toBnb ? "BNB" : "OKB" },
+    json,
+  );
   return {
     toBnb,
     amountIn: amount,
-    amountOut: BigInt(json.tokenAmountOut.amount),
-    amountOutMin: BigInt(json.tokenAmountOutMin.amount),
-    to: tx.to,
-    data: tx.data,
-    value: BigInt(tx.value || "0"),
-    chainId,
+    amountOut: checked.amountOut,
+    amountOutMin: checked.amountOutMin,
+    to: checked.to,
+    data: checked.data,
+    value: checked.value,
+    chainId: checked.chainId,
   };
 }
 

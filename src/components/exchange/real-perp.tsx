@@ -923,6 +923,12 @@ export function RealPerp({
       setNote(lang === "zh" ? "没开成。" : "It did not open.");
     else if (code === 4001) setNote(c.walletReject);
     else if (/RPC|publicnode|Archive|Invalid param/i.test(message)) setNote(c.rpcWait);
+    else if (message === "dust")
+      setNote(
+        lang === "zh"
+          ? "分批保证金必须能被笔数整除。网页因此不发。这拦不住直接调用旧合约，旧的六本仍可能少收 1 个最小单位。BEM 对照不是这个缺陷。"
+          : "A split margin must divide by the number of slices, so the page did not send it. A direct call to an old contract can still post. The six older books can still be short 1 minimum unit. The BEM book is not that defect.",
+      );
     else if (message === "amount")
       setNote(
         lang === "zh"

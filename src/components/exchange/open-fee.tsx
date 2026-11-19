@@ -43,8 +43,8 @@ export function OpenFeeBar({ zh }: { zh: boolean }) {
     <div className="mx-2 mt-2 border border-sell px-3 py-2 text-xs sm:mx-3">
       <p className="text-sell">
         {zh
-          ? "有一笔成交已经上链，手续费还没扣。不要再点成交。这一条只补手续费。"
-          : "A fill is already on chain and the fee is still open. Do not tap the trade again. This row pays only the fee."}
+          ? "有一笔成交已经上链，手续费还没扣。不要再点成交。这一条只补手续费。另一个页面如果已经记下这笔，这里不会再发。每笔仍要钱包确认。这挡不住另一台设备。"
+          : "A fill is already on chain and the fee is still open. Do not tap the trade again. This row pays only the fee. If another tab already recorded that payment, this one will not send it again. Each payment still needs the wallet. Another device is not covered."}
       </p>
       {rows.map((row) => (
         <div key={row.chainId} className="mt-2 flex flex-wrap items-center gap-2">

@@ -37,6 +37,8 @@ interface IBook {
 
 /// Copy vault for one already-deployed perp.
 /// The vault itself posts, takes, and closes. The leader cannot withdraw deposits.
+/// While any quote, deal, or parked margin is open, deposits and withdrawals revert.
+/// After the book is flat, shares are priced on cash only. A loss cannot be left behind by an early exit, and new money cannot buy shares against an open profit.
 /// A performance cut is paid only from realized profit, and only when nothing is open.
 /// There is no owner and no rescue.
 contract TapeVault {
@@ -54,12 +56,13 @@ contract TapeVault {
     uint256[] public quoteIds;
     uint256[] public dealIds;
     mapping(uint256 => bool) private knownDeal;
+    mapping(uint256 => bool) private parked;
 
     uint256 private entered = 1;
     uint256 private skipHang;
     uint256 private constant DEAD = 1_000_000;
     uint256 private constant DUST = 1_000;
-    uint256 private constant CAP = 8;
+    uint256 private constant CAP = 32;
 
     error Bad();
 
@@ -83,7 +86,8 @@ contract TapeVault {
     function deposit(uint256 amount) external guarded {
         if (amount == 0) revert Bad();
         _sync();
-        uint256 equity = _equity();
+        if (!_flat()) revert Bad();
+        uint256 equity = usdt.balanceOf(address(this));
         uint256 minted = amount * (totalShares + DEAD) / (equity + DUST);
         if (minted == 0) revert Bad();
         _pull(msg.sender, amount);
@@ -98,7 +102,8 @@ contract TapeVault {
     function withdraw(uint256 shareAmt) external guarded {
         if (shareAmt == 0 || shareAmt > shares[msg.sender] || totalShares == 0) revert Bad();
         _sync();
-        uint256 equity = _equity();
+        if (!_flat()) revert Bad();
+        uint256 equity = usdt.balanceOf(address(this));
         uint256 out = shareAmt * (equity + DUST) / (totalShares + DEAD);
         uint256 idle = usdt.balanceOf(address(this));
         if (out == 0 || out > idle) revert Bad();
@@ -110,7 +115,7 @@ contract TapeVault {
 
     function open(bool long, uint256 margin, uint16 lev, uint256 price) external guarded {
         if (msg.sender != leader) revert Bad();
-        if (quoteIds.length >= CAP) revert Bad();
+        if (quoteIds.length + dealIds.length >= CAP) revert Bad();
         _sync();
         if (margin == 0 || margin > usdt.balanceOf(address(this))) revert Bad();
         uint256 before = IBook(book).nextQuote();
@@ -123,7 +128,7 @@ contract TapeVault {
 
     function take(uint256 quoteId, uint256 margin, uint16 lev) external guarded {
         if (msg.sender != leader) revert Bad();
-        if (dealIds.length >= CAP) revert Bad();
+        if (quoteIds.length + dealIds.length >= CAP) revert Bad();
         _sync();
         if (margin == 0 || margin > usdt.balanceOf(address(this))) revert Bad();
         uint256 before = IBook(book).nextDeal();
@@ -190,7 +195,10 @@ contract TapeVault {
                 }
             } else {
                 _dropQuote(i);
-                if (id != skipHang && !_dealtSince) hang += margin;
+                if (id != skipHang && !_dealtSince && margin > 0 && !parked[id]) {
+                    parked[id] = true;
+                    hang += margin;
+                }
             }
         }
         i = 0;
@@ -220,11 +228,8 @@ contract TapeVault {
         for (uint256 id = tip; id > start; id--) {
             (uint256 ours, bool open) = _side(id);
             if (open && ours > 0 && !knownDeal[id]) {
-                if (dealIds.length >= CAP) {
-                    hang += ours;
-                } else {
-                    _remember(id);
-                }
+                if (dealIds.length >= CAP) revert Bad();
+                _remember(id);
                 _dealtSince = true;
             }
         }
@@ -281,6 +286,10 @@ contract TapeVault {
         uint256 last = dealIds.length - 1;
         if (i != last) dealIds[i] = dealIds[last];
         dealIds.pop();
+    }
+
+    function _flat() internal view returns (bool) {
+        return quoteIds.length == 0 && dealIds.length == 0 && hang == 0 && locked == 0;
     }
 
     function _equity() internal view returns (uint256) {

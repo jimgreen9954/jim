@@ -1107,6 +1107,8 @@ export async function openPostPerp(from: string, perp: string, long: boolean, ma
 export async function openScalePerp(from: string, perp: string, long: boolean, margin: string, lev: number, start: string, end: string, count: number): Promise<Hex> {
   await assertV2(perp);
   if (count < 2 || count > 5) throw new Error("amount");
+  const whole = units(margin, tokenDecimals());
+  if (whole % BigInt(count) !== 0n) throw new Error("dust");
   const amount = await pullMargin(from, perp, margin, lev);
   const lo = units(start, BSC.usdtDecimals);
   const hi = units(end, BSC.usdtDecimals);
@@ -1146,6 +1148,8 @@ export async function openTwapPerp(from: string, perp: string, long: boolean, ma
   await assertV2(perp);
   if (!(await bookIsRisk(perp))) throw new Error("risk");
   if (slices < 2 || slices > 12 || gap < 30) throw new Error("amount");
+  const whole = units(margin, tokenDecimals());
+  if (whole % BigInt(slices) !== 0n) throw new Error("dust");
   const amount = await pullMargin(from, perp, margin, lev);
   const data = encodeFunctionData({
     abi: [{ name: "openTwap", type: "function", stateMutability: "nonpayable", inputs: [{ type: "bool" }, { type: "uint256" }, { type: "uint16" }, { type: "uint8" }, { type: "uint32" }], outputs: [] }] as const,

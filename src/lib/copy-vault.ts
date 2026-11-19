@@ -1,8 +1,6 @@
 import { decodeFunctionResult, encodeFunctionData, parseAbi, type Hex } from "viem";
 import { BSC, pretty, units } from "@/lib/bsc";
-import { BSC_SAFE, BSC_VAULT, XLAYER, XLAYER_SAFE, XLAYER_VAULT } from "@/lib/chain-marks";
-import { BSC_REBATE, KNOWN_XPERP } from "@/lib/perp";
-import { TAPE_USDT } from "@/lib/tape-pool";
+import { BSC_VAULT, XLAYER, XLAYER_VAULT } from "@/lib/chain-marks";
 import { ensureProvider, switchDeskChain } from "@/lib/wallet";
 
 export type VaultChain = "xlayer" | "bsc";
@@ -27,6 +25,9 @@ const vaultAbi = parseAbi([
   "function cancel(uint256)",
   "function close(uint256)",
   "function sync()",
+  "function book() view returns (address)",
+  "function usdt() view returns (address)",
+  "function leader() view returns (address)",
 ]);
 
 const bookAbi = parseAbi([
@@ -42,18 +43,22 @@ const erc20 = parseAbi([
   "function approve(address,uint256) returns (bool)",
 ]);
 
+const KNOWN_TOKEN: Record<string, { decimals: number; symbol: string }> = {
+  "0x55d398326f99059ff775485246999027b3197955": { decimals: 18, symbol: "USDT" },
+  "0x779ded0c9e1022225f8e0630b35a9b54be713736": { decimals: 6, symbol: "USDT0" },
+};
+
+export type VaultBinding = {
+  vault: Hex;
+  token: Hex;
+  book: Hex;
+  leader: Hex;
+  decimals: number | null;
+  symbol: string;
+};
+
 export function vaultAddress(chain: VaultChain): Hex {
   return chain === "bsc" ? BSC_VAULT : XLAYER_VAULT;
-}
-
-export function vaultLeader(chain: VaultChain): string {
-  return chain === "bsc" ? BSC_SAFE : XLAYER_SAFE;
-}
-
-export function vaultUnit(chain: VaultChain): { token: Hex; decimals: number; symbol: string; book: Hex } {
-  return chain === "bsc"
-    ? { token: BSC.usdt, decimals: 18, symbol: "USDT", book: BSC_REBATE as Hex }
-    : { token: TAPE_USDT, decimals: 6, symbol: "USDT0", book: KNOWN_XPERP as Hex };
 }
 
 export type VaultQuote = {
@@ -84,6 +89,11 @@ export type VaultView = {
   mark: bigint | null;
   quotes: VaultQuote[];
   deals: VaultDeal[];
+  book: Hex;
+  token: Hex;
+  leader: Hex;
+  decimals: number | null;
+  symbol: string;
 };
 
 const rpcs: Record<VaultChain, string[]> = {
@@ -142,9 +152,20 @@ export function maxShares(shares: bigint, total: bigint, equity: bigint, idle: b
   return cap < shares ? cap : shares;
 }
 
-export async function readCopyVault(chain: VaultChain, account: string | null): Promise<VaultView> {
+async function binding(chain: VaultChain): Promise<VaultBinding> {
   const vault = vaultAddress(chain);
-  const book = vaultUnit(chain).book;
+  const [book, token, leader] = await Promise.all([
+    view<Hex>(chain, vault, vaultAbi, "book"),
+    view<Hex>(chain, vault, vaultAbi, "usdt"),
+    view<Hex>(chain, vault, vaultAbi, "leader"),
+  ]);
+  const known = KNOWN_TOKEN[token.toLowerCase()] ?? null;
+  return { vault, token, book, leader, decimals: known?.decimals ?? null, symbol: known?.symbol ?? "" };
+}
+
+export async function readCopyVault(chain: VaultChain, account: string | null): Promise<VaultView> {
+  const bound = await binding(chain);
+  const { vault, book, token } = bound;
   const who = (account || "0x0000000000000000000000000000000000000000") as Hex;
   const [equity, idle, locked, total, mine, wallet, quoteCount, dealCount] = await Promise.all([
     view<bigint>(chain, vault, vaultAbi, "equity"),
@@ -152,7 +173,7 @@ export async function readCopyVault(chain: VaultChain, account: string | null): 
     view<bigint>(chain, vault, vaultAbi, "locked"),
     view<bigint>(chain, vault, vaultAbi, "totalShares"),
     view<bigint>(chain, vault, vaultAbi, "shares", [who]),
-    view<bigint>(chain, vaultUnit(chain).token, erc20, "balanceOf", [who]),
+    view<bigint>(chain, token, erc20, "balanceOf", [who]),
     view<bigint>(chain, vault, vaultAbi, "quoteCount"),
     view<bigint>(chain, vault, vaultAbi, "dealCount"),
   ]);
@@ -222,6 +243,11 @@ export async function readCopyVault(chain: VaultChain, account: string | null): 
     mark,
     quotes,
     deals,
+    book,
+    token,
+    leader: bound.leader,
+    decimals: bound.decimals,
+    symbol: bound.symbol,
   };
 }
 
@@ -264,38 +290,14 @@ async function wait(chain: VaultChain, hash: Hex): Promise<void> {
   throw new Error("pending");
 }
 
-async function allow(chain: VaultChain, from: string, amount: bigint): Promise<void> {
-  const { token } = vaultUnit(chain);
-  const vault = vaultAddress(chain);
-  const allowance = await view<bigint>(chain, token, erc20, "allowance", [from as Hex, vault]);
-  if (allowance >= amount) return;
-  if (allowance > 0n) {
-    const reset = encodeFunctionData({ abi: erc20, functionName: "approve", args: [vault, 0n] });
-    await wait(chain, await send(from, token, reset));
-  }
-  const data = encodeFunctionData({
-    abi: erc20,
-    functionName: "approve",
-    args: [vault, amount],
-  });
-  await wait(chain, await send(from, token, data));
-}
-
-export async function depositVault(chain: VaultChain, amount: string): Promise<void> {
-  const { decimals } = vaultUnit(chain);
-  const qty = units(amount, decimals);
-  if (qty === 0n) throw new Error("amount");
-  const from = await signer(chain);
-  const wallet = await view<bigint>(chain, vaultUnit(chain).token, erc20, "balanceOf", [from as Hex]);
-  if (wallet < qty) throw new Error("usdt");
-  await allow(chain, from, qty);
-  const data = encodeFunctionData({ abi: vaultAbi, functionName: "deposit", args: [qty] });
-  await wait(chain, await send(from, vaultAddress(chain), data));
+export async function depositVault(_chain: VaultChain, _amount: string): Promise<void> {
+  throw new Error("halt");
 }
 
 export async function withdrawVault(chain: VaultChain, amount: string): Promise<void> {
-  const { decimals } = vaultUnit(chain);
-  const qty = units(amount, decimals);
+  const bound = await binding(chain);
+  if (bound.decimals == null) throw new Error("token");
+  const qty = units(amount, bound.decimals);
   if (qty === 0n) throw new Error("amount");
   const from = await signer(chain);
   const viewRow = await readCopyVault(chain, from);
@@ -305,14 +307,6 @@ export async function withdrawVault(chain: VaultChain, amount: string): Promise<
   if (shares === 0n || shares > viewRow.mine) throw new Error("idle");
   const data = encodeFunctionData({ abi: vaultAbi, functionName: "withdraw", args: [shares] });
   await wait(chain, await send(from, vaultAddress(chain), data));
-}
-
-function marginOf(chain: VaultChain, margin: string): bigint {
-  const { decimals } = vaultUnit(chain);
-  const amount = units(margin, decimals);
-  const unit = 10n ** BigInt(decimals);
-  if (amount < unit || amount > unit * 500n) throw new Error("margin");
-  return amount;
 }
 
 export async function openVault(_chain: VaultChain, _long: boolean, _margin: string, _lev: number, _price: string): Promise<void> {
@@ -325,14 +319,16 @@ export async function takeVault(_chain: VaultChain, _quoteId: bigint, _margin: s
 
 export async function cancelVault(chain: VaultChain, quoteId: bigint): Promise<void> {
   const from = await signer(chain);
-  if (from.toLowerCase() !== vaultLeader(chain).toLowerCase()) throw new Error("leader");
+  const bound = await binding(chain);
+  if (from.toLowerCase() !== bound.leader.toLowerCase()) throw new Error("leader");
   const data = encodeFunctionData({ abi: vaultAbi, functionName: "cancel", args: [quoteId] });
   await wait(chain, await send(from, vaultAddress(chain), data));
 }
 
 export async function closeVault(chain: VaultChain, dealId: bigint): Promise<void> {
   const from = await signer(chain);
-  if (from.toLowerCase() !== vaultLeader(chain).toLowerCase()) throw new Error("leader");
+  const bound = await binding(chain);
+  if (from.toLowerCase() !== bound.leader.toLowerCase()) throw new Error("leader");
   const data = encodeFunctionData({ abi: vaultAbi, functionName: "close", args: [dealId] });
   await wait(chain, await send(from, vaultAddress(chain), data));
 }
