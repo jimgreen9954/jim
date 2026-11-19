@@ -251,6 +251,7 @@ export function TermDesk({ zh, account }: { zh: boolean; account: string | null 
               >
                 {zh ? "记" : "Post"} {row.symbol}
                 {postMark(book, now, zh)}
+                {gapMark(book, now, zh)}
               </button>
             );
           })}
@@ -455,6 +456,14 @@ function postMark(book: TermPool | undefined, now: number, zh: boolean): string 
   if (book && book.price > 0n && book.stamp >= 3 && book.at > 0 && now - book.at > 30 * 60) return zh ? " · 已过期" : " · expired";
   if (book && book.price > 0n) return ` · ${book.stamp}/3`;
   return zh ? " · 还没有" : " · none";
+}
+
+function gapMark(book: TermPool | undefined, now: number, zh: boolean): string {
+  if (!book || book.price <= 0n || book.stamp >= 3 || book.at <= 0) return "";
+  const left = book.at + 10 * 60 - now;
+  if (left <= 0) return zh ? " · 可以再记" : " · can post again";
+  if (left < 60) return zh ? " · 不到 1 分钟后可再记" : " · under 1 min";
+  return zh ? ` · ${Math.ceil(left / 60)} 分钟后可再记` : ` · ${Math.ceil(left / 60)} min until the next post`;
 }
 
 function poolBalance(pool: TermPool | undefined, decimals: number): string {
