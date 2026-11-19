@@ -208,7 +208,7 @@ const zhBody: Section[] = [
     ps: [
       "电路和 TAPE 都在 X Layer。BEM 的 BSC 与 X Layer 互转，用 TapeOut 已经上线的桥：BNB Chain 锁仓，X Layer 铸造等量；回来则在 X Layer 销毁，BSC 释放。1:1，走 LayerZero。本站不经手资产。这一跳只签桥自己的那一笔，不另收台费。桥自己的费另计。",
       `BSC 上的 BEM 是 ${BSC.bem}。BSC 桥是 ${BEM_BRIDGE}。X Layer 上的 BEM 是 ${X_BEM}。入口是 tapeout.net/bridge。`,
-      "TAPE 不走 BEM 的桥。TAPE 自己的 1:1 跨链合约还没有，页面不提供 TAPE 跨链按钮。OKB 与 BNB 走现货池：X Layer 上先换成稳定币，BSC 上换成 BNB，或反过来，由 Symbiosis 串起来。钱包能合并时，台费和这一笔在同一次确认里。不能合并时，先签兑换，成功后再扣 0.20%。兑换没发出去，不扣。到账按池子现价，最少到账写在按钮上面。",
+      "TAPE 不走 BEM 的桥。TAPE 自己的 1:1 跨链合约还没有，页面不提供 TAPE 跨链按钮。OKB 与 BNB 走现货池：X Layer 上先换成稳定币，BSC 上换成 BNB，或反过来，由 Symbiosis 串起来。BSC 上把 BNB 换成稳定币的那一跳，只接受打给已核对的结算合约，而且这一跳里出现的地址只能是结算合约、桥、USDC 或 WBNB。别的地址不交给钱包。钱包能合并时，台费和这一笔在同一次确认里。不能合并时，先签兑换，成功后再扣 0.20%。兑换没发出去，不扣。到账按池子现价，最少到账写在按钮上面。",
     ],
   },
   {
@@ -430,7 +430,7 @@ const en: Section[] = [
     ps: [
       "Circuits and TAPE are on X Layer. BEM moves between BSC and X Layer on the bridge TapeOut already runs: lock on BNB Chain and mint the same amount on X Layer, or burn on X Layer and release on BSC. It is 1:1, over LayerZero. This site does not custody the assets. This hop is one signature on the bridge itself and does not take a separate desk fee. The bridge's own fee is separate.",
       `BEM on BSC is ${BSC.bem}. The BSC bridge is ${BEM_BRIDGE}. BEM on X Layer is ${X_BEM}. The page is tapeout.net/bridge.`,
-      "TAPE does not use the BEM bridge. TAPE has no 1:1 bridge contract yet, and there is no TAPE bridge button. OKB and BNB go through the live pools: swap to a stablecoin on X Layer and into BNB on BSC, or the reverse, joined by Symbiosis. When the wallet can combine them, the 0.20% and the swap are one confirmation. Otherwise the swap is signed first, and the 0.20% is taken only after it succeeds. If the swap is not sent, there is no fee. The arrival is the pool price. The minimum is shown above the button.",
+      "TAPE does not use the BEM bridge. TAPE has no 1:1 bridge contract yet, and there is no TAPE bridge button. OKB and BNB go through the live pools: swap to a stablecoin on X Layer and into BNB on BSC, or the reverse, joined by Symbiosis. The BSC hop that sells BNB is accepted only when it calls the checked settler, and only when every address in that hop is the settler, the bridge, USDC, or WBNB. Any other address is not given to the wallet. When the wallet can combine them, the 0.20% and the swap are one confirmation. Otherwise the swap is signed first, and the 0.20% is taken only after it succeeds. If the swap is not sent, there is no fee. The arrival is the pool price. The minimum is shown above the button.",
     ],
   },
   {

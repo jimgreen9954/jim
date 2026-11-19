@@ -23,6 +23,25 @@ const PORTAL: Record<56 | 196, Hex> = {
 const META_ROUTE = "a11b1198";
 const META_SYNTH = "ce654c17";
 const EXACT_INPUT_SINGLE = "04e45aaf";
+/** 0x Settler `exec(address,address,uint256,address,bytes)`, seen on the live BSC BNB to OKB quote. */
+const EXEC = "2213bc0b";
+
+/**
+ * The BSC hop sells native BNB through this settler. Both address arguments must be the settler
+ * itself, and every other address in that hop must be one of these. A quote that names any other
+ * recipient is rejected.
+ */
+const SETTLER: Partial<Record<56 | 196, Hex>> = {
+  56: "0xd52e8e422a352ac1afdc2bd6ec533d41b20acb7b",
+};
+const HOP_TOKEN: Record<56 | 196, readonly Hex[]> = {
+  56: [
+    "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
+    "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+    "0x980447ddcef79a7499da4538da8fc59bacad6997",
+  ],
+  196: [],
+};
 
 export type GasIntent = {
   sourceChain: 56 | 196;
@@ -89,15 +108,49 @@ function bytesAt(data: string, offset: number): string {
   return slice;
 }
 
-function hopPays(calldata: string, source: 56 | 196, router: string): void {
+function hopPays(calldata: string, source: 56 | 196, router: string, amountIn: bigint): void {
   if (calldata.length === 0) return;
   const sel = calldata.slice(0, 8);
-  if (sel !== EXACT_INPUT_SINGLE) throw new Error("quote");
-  const recipient = addr(calldata, 4 + 96);
-  const gateway = GATEWAY[source];
-  if (same(recipient, router)) return;
-  if (gateway && same(recipient, gateway)) return;
+  if (sel === EXACT_INPUT_SINGLE) {
+    const recipient = addr(calldata, 4 + 96);
+    const gateway = GATEWAY[source];
+    if (same(recipient, router)) return;
+    if (gateway && same(recipient, gateway)) return;
+    throw new Error("quote");
+  }
+  if (sel === EXEC) {
+    allowExec(calldata, source, router, amountIn);
+    return;
+  }
   throw new Error("quote");
+}
+
+function allowExec(calldata: string, source: 56 | 196, router: string, amountIn: bigint): void {
+  const settler = SETTLER[source];
+  if (!settler) throw new Error("quote");
+  const args = calldata.slice(8);
+  if (word(args, 64) !== amountIn) throw new Error("quote");
+  const operator = addr(args, 0);
+  const token = addr(args, 32);
+  const recipient = addr(args, 96);
+  if (!same(operator, settler)) throw new Error("quote");
+  if (token !== `0x${"0".repeat(40)}`) throw new Error("quote");
+  if (!same(recipient, settler) && !same(recipient, router) && !same(recipient, PORTAL[source])) throw new Error("quote");
+  const allow = new Set(
+    [settler, router, PORTAL[source], ...HOP_TOKEN[source]].map((item) => item.toLowerCase()),
+  );
+  const bytesOff = Number(word(args, 128));
+  if (!Number.isSafeInteger(bytesOff)) throw new Error("quote");
+  const blobLen = Number(word(args, bytesOff));
+  if (!Number.isSafeInteger(blobLen) || blobLen < 4) throw new Error("quote");
+  const start = bytesOff + 32;
+  if ((start + blobLen) * 2 > args.length) throw new Error("quote");
+  for (let byte = start + 4; byte + 32 <= start + blobLen; byte += 32) {
+    const value = word(args, byte);
+    if (value <= 1n << 80n || value >= 1n << 160n) continue;
+    const found = `0x${value.toString(16).padStart(40, "0")}`;
+    if (!allow.has(found.toLowerCase())) throw new Error("quote");
+  }
 }
 
 function metaRoute(data: string, source: 56 | 196, router: string, user: string, amountIn: bigint): void {
@@ -112,8 +165,8 @@ function metaRoute(data: string, source: 56 | 196, router: string, user: string,
   if (word(st, 192) !== 1n) throw new Error("quote");
   const relay = addr(st, 224);
   if (!same(relay, PORTAL[source])) throw new Error("quote");
-  hopPays(first, source, router);
-  hopPays(second, source, router);
+  hopPays(first, source, router, amountIn);
+  hopPays(second, source, router, amountIn);
   const other = bytesAt(st, Number(word(st, 256)));
   if (!other.startsWith(META_SYNTH)) throw new Error("quote");
   const otherBody = other.slice(8);

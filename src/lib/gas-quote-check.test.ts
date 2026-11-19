@@ -54,10 +54,31 @@ test("a changed bridge recipient is rejected", () => {
   );
 });
 
-test("an unrecognized aggregator call is not given to the wallet", () => {
+test("a bsc settler hop for one bnb is accepted", () => {
   const json = load("bsc-okb.json");
+  const quote = assertGasQuote(
+    { sourceChain: 56, targetChain: 196, user, amountIn: 10n ** 18n, symbolOut: "OKB" },
+    json,
+  );
+  assert.equal(quote.chainId, 56);
+  assert.equal(quote.value, 10n ** 18n);
+});
+
+test("a bsc settler hop is accepted only for the checked contracts", () => {
+  const who = "0x7fa7193115a481067af731499c551c5571071528";
+  const json = load("bsc-okb-exec.json");
+  const quote = assertGasQuote(
+    { sourceChain: 56, targetChain: 196, user: who, amountIn: 2000000000000000n, symbolOut: "OKB" },
+    json,
+  );
+  assert.equal(quote.chainId, 56);
+  assert.equal(quote.value, 2000000000000000n);
+  assert.equal(quote.to.toLowerCase(), "0x851b43189de721dd94aba767aad9e6f6d6a95cca");
+  const data = json.tx?.data || "";
+  const swapped = data.replaceAll(/8ac76a51cc950d9822d68b83fe1ad97b32cd580d/gi, "1111111111111111111111111111111111111111");
+  json.tx = { ...json.tx, data: swapped };
   assert.throws(
-    () => assertGasQuote({ sourceChain: 56, targetChain: 196, user, amountIn: 10n ** 18n, symbolOut: "OKB" }, json),
+    () => assertGasQuote({ sourceChain: 56, targetChain: 196, user: who, amountIn: 2000000000000000n, symbolOut: "OKB" }, json),
     /quote/,
   );
 });
