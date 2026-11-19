@@ -499,15 +499,9 @@ function pendingStore(which: Desk, coin: string): string {
 }
 
 export function coinBook(which: Desk, coin: string): string {
-  if (typeof window !== "undefined") {
-    const fresh = window.localStorage.getItem(`tl-coin-v2:${which}:${coin}`) ?? "";
-    if (/^0x[a-fA-F0-9]{40}$/.test(fresh)) return fresh;
-  }
   const live = COIN_LIVE[coin as CoinBook];
   if (live && live.chain === which) return live.book;
-  if (typeof window === "undefined") return "";
-  const saved = window.localStorage.getItem(coinStore(which, coin)) ?? "";
-  return /^0x[a-fA-F0-9]{40}$/.test(saved) ? saved : "";
+  return "";
 }
 
 export function pickBook(which: Desk, coin: string): string {
@@ -540,7 +534,7 @@ export async function deployRisk(from: string, which: Desk): Promise<string> {
 
 function pinned(perp: string): void {
   const want = perp.toLowerCase();
-  const rows = [bookOf("bsc"), bookOf("xlayer"), PREV_BSC, OLDER_BSC, PREV_XPERP, OLDER_XPERP, coinBook("bsc", "btc"), coinBook("bsc", "eth"), coinBook("bsc", "zec"), coinBook("bsc", "up"), coinBook("xlayer", "tape"), coinBook("xlayer", "fab"), BTC_COIN_BOOK, ETH_COIN_BOOK, ZEC_COIN_BOOK, UP_COIN_BOOK, TAPE_COIN_BOOK, FAB_COIN_BOOK, PREV_BTC_COIN_BOOK, PREV_ETH_COIN_BOOK, PREV_ZEC_COIN_BOOK, PREV_UP_COIN_BOOK, PREV_TAPE_COIN_BOOK, PREV_FAB_COIN_BOOK];
+  const rows = [bookOf("bsc"), bookOf("xlayer"), PREV_BSC, OLDER_BSC, PREV_XPERP, OLDER_XPERP, coinBook("bsc", "btc"), coinBook("bsc", "eth"), coinBook("bsc", "zec"), coinBook("bsc", "up"), coinBook("xlayer", "tape"), coinBook("xlayer", "fab"), BTC_COIN_BOOK, ETH_COIN_BOOK, ZEC_COIN_BOOK, UP_COIN_BOOK, TAPE_COIN_BOOK, FAB_COIN_BOOK];
   if (!rows.some((row) => row.length === 42 && row.toLowerCase() === want)) throw new Error("book");
 }
 
