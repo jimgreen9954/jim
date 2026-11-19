@@ -54,14 +54,12 @@ test("a changed bridge recipient is rejected", () => {
   );
 });
 
-test("a bsc settler hop for one bnb is accepted", () => {
+test("a settler quote that names an unpinned pool is rejected", () => {
   const json = load("bsc-okb.json");
-  const quote = assertGasQuote(
-    { sourceChain: 56, targetChain: 196, user, amountIn: 10n ** 18n, symbolOut: "OKB" },
-    json,
+  assert.throws(
+    () => assertGasQuote({ sourceChain: 56, targetChain: 196, user, amountIn: 10n ** 18n, symbolOut: "OKB" }, json),
+    /quote/,
   );
-  assert.equal(quote.chainId, 56);
-  assert.equal(quote.value, 10n ** 18n);
 });
 
 test("a bsc settler hop is accepted only for the checked contracts", () => {
@@ -77,6 +75,22 @@ test("a bsc settler hop is accepted only for the checked contracts", () => {
   const data = json.tx?.data || "";
   const swapped = data.replaceAll(/8ac76a51cc950d9822d68b83fe1ad97b32cd580d/gi, "1111111111111111111111111111111111111111");
   json.tx = { ...json.tx, data: swapped };
+  assert.throws(
+    () => assertGasQuote({ sourceChain: 56, targetChain: 196, user: who, amountIn: 2000000000000000n, symbolOut: "OKB" }, json),
+    /quote/,
+  );
+});
+
+test("the nested settler recipient at byte 820 cannot be replaced", () => {
+  const who = "0x7fa7193115a481067af731499c551c5571071528";
+  const json = load("bsc-okb-exec.json");
+  const data = json.tx?.data || "";
+  const marker = "8d68a156000000000000000000000000d52e8e422a352ac1afdc2bd6ec533d41b20acb7b";
+  assert.equal(data.toLowerCase().includes(marker), true);
+  json.tx = {
+    ...json.tx,
+    data: data.replace(/8d68a156000000000000000000000000d52e8e422a352ac1afdc2bd6ec533d41b20acb7b/i, "8d68a1560000000000000000000000001111111111111111111111111111111111111111"),
+  };
   assert.throws(
     () => assertGasQuote({ sourceChain: 56, targetChain: 196, user: who, amountIn: 2000000000000000n, symbolOut: "OKB" }, json),
     /quote/,

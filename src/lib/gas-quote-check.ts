@@ -25,20 +25,28 @@ const META_SYNTH = "ce654c17";
 const EXACT_INPUT_SINGLE = "04e45aaf";
 /** 0x Settler `exec(address,address,uint256,address,bytes)`, seen on the live BSC BNB to OKB quote. */
 const EXEC = "2213bc0b";
-
-/**
- * The BSC hop sells native BNB through this settler. Both address arguments must be the settler
- * itself, and every other address in that hop must be one of these. A quote that names any other
- * recipient is rejected.
- */
+/** Settler `execute((address,address,uint256),bytes[],bytes32)`. */
+const SETTLEMENT = "1fff991f";
+const NATIVE_CHECK = "bd01c226";
+const BASIC = "38c9c147";
+const UNI_V3 = "8d68a156";
+const POSITIVE_SLIPPAGE = "5f80abae";
 const SETTLER: Partial<Record<56 | 196, Hex>> = {
   56: "0xd52e8e422a352ac1afdc2bd6ec533d41b20acb7b",
 };
+
+/**
+ * Addresses a BSC settler hop may name. The Uniswap step must pay the settler itself.
+ * Anything else, including a recipient tucked into a later action, is rejected.
+ */
 const HOP_TOKEN: Record<56 | 196, readonly Hex[]> = {
   56: [
     "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
     "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+    "0x55d398326f99059fF775485246999027B3197955",
     "0x980447ddcef79a7499da4538da8fc59bacad6997",
+    "0xf5c4f3dc02c3fb9279495a8fef7b0741da956157",
+    "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
   ],
   196: [],
 };
@@ -145,12 +153,45 @@ function allowExec(calldata: string, source: 56 | 196, router: string, amountIn:
   if (!Number.isSafeInteger(blobLen) || blobLen < 4) throw new Error("quote");
   const start = bytesOff + 32;
   if ((start + blobLen) * 2 > args.length) throw new Error("quote");
-  for (let byte = start + 4; byte + 32 <= start + blobLen; byte += 32) {
-    const value = word(args, byte);
-    if (value <= 1n << 80n || value >= 1n << 160n) continue;
-    const found = `0x${value.toString(16).padStart(40, "0")}`;
-    if (!allow.has(found.toLowerCase())) throw new Error("quote");
+  readSettlement(args.slice(start * 2, (start + blobLen) * 2), source, allow, settler);
+}
+
+function readSettlement(blob: string, source: 56 | 196, allow: Set<string>, settler: string): void {
+  if (!blob.startsWith(SETTLEMENT)) throw new Error("quote");
+  const inner = blob.slice(8);
+  const buy = addr(inner, 32);
+  const usdc = HOP_TOKEN[source][0];
+  if (!usdc || !same(buy, usdc)) throw new Error("quote");
+  note(addr(inner, 0), allow);
+  const arrayAt = Number(word(inner, 96));
+  if (!Number.isSafeInteger(arrayAt)) throw new Error("quote");
+  const count = Number(word(inner, arrayAt));
+  if (!Number.isSafeInteger(count) || count < 1 || count > 8) throw new Error("quote");
+  for (let i = 0; i < count; i += 1) {
+    const rel = Number(word(inner, arrayAt + 32 + i * 32));
+    if (!Number.isSafeInteger(rel)) throw new Error("quote");
+    const at = arrayAt + 32 + rel;
+    const len = Number(word(inner, at));
+    if (!Number.isSafeInteger(len) || len < 4) throw new Error("quote");
+    const action = inner.slice((at + 32) * 2, (at + 32 + len) * 2);
+    if (action.length !== len * 2) throw new Error("quote");
+    readAction(action, allow, settler);
   }
+}
+
+function readAction(action: string, allow: Set<string>, settler: string): void {
+  const sel = action.slice(0, 8);
+  if (sel !== NATIVE_CHECK && sel !== BASIC && sel !== UNI_V3 && sel !== POSITIVE_SLIPPAGE) throw new Error("quote");
+  for (let byte = 4; byte + 32 <= action.length / 2; byte += 32) {
+    const value = word(action, byte);
+    if (value <= 1n << 80n || value >= 1n << 160n) continue;
+    note(`0x${value.toString(16).padStart(40, "0")}`, allow);
+  }
+  if (sel === UNI_V3 && !same(addr(action, 4), settler)) throw new Error("quote");
+}
+
+function note(found: string, allow: Set<string>): void {
+  if (!allow.has(found.toLowerCase())) throw new Error("quote");
 }
 
 function metaRoute(data: string, source: 56 | 196, router: string, user: string, amountIn: bigint): void {
