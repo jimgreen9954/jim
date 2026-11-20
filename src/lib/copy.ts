@@ -91,7 +91,6 @@ export type Copy = {
   walletTitle: string;
   walletNote: string;
   walletConnect: string;
-  walletDeploy: string;
   walletNo: string;
   walletReject: string;
   walletBusy: string;
@@ -123,11 +122,6 @@ export type Copy = {
   nextStep: string;
   chainBsc: string;
   chainX: string;
-  deployX: string;
-  deployX1: string;
-  deployX2: string;
-  deployX3: string;
-  pushMark: string;
   realNote: string;
   paperNote: string;
   perpWarn: string;
@@ -139,7 +133,6 @@ export type Copy = {
   cancelPost: string;
   closeDeal: string;
   liqNow: string;
-  deployPerp: string;
   perpNeedUsdt: string;
   perpNeedX: string;
   perpNoChain: string;
@@ -155,8 +148,6 @@ export type Copy = {
   pkFlat: string;
   pkNote: string;
   pkMiss: string;
-  deployOne: string;
-  deployBook: string;
   bookTake: string;
   eatHint: string;
   sharedBook: string;
@@ -164,7 +155,6 @@ export type Copy = {
   perpWarnX: string;
   perpStepsX: string;
   perpAddrX: string;
-  xOpen: string;
   pnl: string;
   openPnl: string;
   limitPrice: string;
@@ -201,7 +191,6 @@ export type Copy = {
   stopNote: string;
   stopArmed: string;
   stopClear: string;
-  bscDeploy: string;
   rebateRegister: string;
   rebateTaken: string;
   rebateHave: string;
@@ -379,7 +368,6 @@ export const copy: Record<Lang, Copy> = {
     walletNote:
       "处理器不用再部署。本页铸造：钱包切到 X Layer，留一点 OKB，选 NAND 或 LATCH，选 100、1000、10000 或自己填数量，在 OKX 或币安钱包里签名。tapeout 铸造：打开 tapeout 上的这台处理器，在晶体管市场买。两条路都把 OKB 付给处理器，不进交易所。",
     walletConnect: "连接钱包",
-    walletDeploy: "部署 TAPELIQUID",
     walletNo: "没检测到对应钱包。OKX 会打开 App。币安会打开币安 App 确认，确认后回到这个页面再交易。",
     walletReject: "你在钱包里取消了。",
     walletBusy: "等钱包确认…",
@@ -411,11 +399,6 @@ export const copy: Record<Lang, Copy> = {
     nextStep: "下一步",
     chainBsc: "现在用 BSC 上的 USDT。只有同样停在 BSC 的人能吃你的单。",
     chainX: "当前使用 X Layer 的 USDT0，Gas 为 OKB。全站锁定一份 X Layer 合约，同一条链上的地址均可查看并吃单。新标记读取 X Layer 的 BEM/WOKB 1% 池与 USDT0/WOKB，连续更新单次不超过 0.5%，不引用 BSC。不能与 BSC 订单合并。",
-    deployX: "部署全站 X Layer 合约",
-    deployX1: "第一笔签名：部署标记合约。价格取自 X Layer 的两口池，不取自 BSC。",
-    deployX2: "第二笔签名：按池子现价写入初始观察。",
-    deployX3: "第三笔签名：部署永续。完成后请将两个地址交回，以便写入页面。",
-    pushMark: "按 X Layer 池子更新标记",
     realNote: "现货在 PancakeSwap V3 成交。本台另收 0.20%，于签名时转入收费地址。资产在签名前留在钱包。",
     paperNote: "本页为练习。成交只记录在本机浏览器，清除记录不触及合约。",
     perpWarn:
@@ -428,7 +411,6 @@ export const copy: Record<Lang, Copy> = {
     cancelPost: "撤回挂单",
     closeDeal: "平仓",
     liqNow: "强平",
-    deployPerp: "部署合约",
     perpNeedUsdt: "USDT 不够。",
     perpNeedX: "USDT0 不够。",
     perpNoChain: "这个地址在 BSC 上没有合约代码。部署时钱包必须停在 BNB Smart Chain，不能停在 X Layer。",
@@ -444,8 +426,6 @@ export const copy: Record<Lang, Copy> = {
     pkFlat: "持平",
     pkNote: "柱子和输赢按合约标记价算。下面的线是池子真实成交，结算不看这根线的最后一笔。",
     pkMiss: "对手还没来。任何钱包打开本页都能看到这张单，点吃单就接上。不要再部署新合约。",
-    deployOne: "部署 1 USDT 版",
-    deployBook: "部署订单簿",
     bookTake: "吃单",
     eatHint: "下面列出所有钱包的挂单，不看你连的是哪个地址。不是你的单就点吃单。你自己的单换一个钱包才能吃。",
     sharedBook: "BSC 全站只用这一份合约。任何人、任何时候开的单都在这里，打开就能看到，点吃单就能接。",
@@ -454,7 +434,6 @@ export const copy: Record<Lang, Copy> = {
       "保证金为 X Layer 的 USDT0，锁入本合约。Gas 使用 OKB。金额为 1 至 500。页面杠杆上限 50 倍，合约仍接受直到 1000，直接调用可以更高。亏损达到保证金约一半时，任何地址均可强平。资金费每 8 小时在这一对里结算，单次不超过 ±0.05%。强平剩下一半进保险基金，不能提取。保险不够时只减这一对的浮盈。标记读取 X Layer 的 BEM/WOKB 1% 池与 USDT0/WOKB。不能与 BSC 仓位合并。撮合与撤单各收保证金的 0.20%，进 X Layer 多签。订单簿无对手时，签名只构成挂单。",
     perpStepsX: "三步：钱包停在 X Layer，里面有 USDT0，再留一点 OKB 当 gas。选一档，点开多或开空。另一个 X Layer 钱包接反方向才成交。",
     perpAddrX: "X Layer 永续合约",
-    xOpen: "X Layer 的全站合约还没写进页面。部署一次，把地址发我，我锁给所有人。在那之前，别人看不到你的单。",
     pnl: "盈亏",
     openPnl: "还没人接，盈亏 0",
     limitPrice: "开单价",
@@ -491,7 +470,6 @@ export const copy: Record<Lang, Copy> = {
     stopNote: "小白档按保证金算：止盈赚一倍，止损亏一半。页面开着、价格碰到，会请你的钱包签名平仓。关掉页面就不会自动平。",
     stopArmed: "已挂上",
     stopClear: "取消止盈止损",
-    bscDeploy: "部署 BSC 返佣合约",
     rebateRegister: "登记",
     rebateTaken: "这个码已经有人登记了，换一个。",
     rebateHave: "这个地址已经登记过码，不能再改。",
@@ -683,7 +661,6 @@ export const copy: Record<Lang, Copy> = {
     walletNote:
       "Do not deploy another processor. Mint here: switch the wallet to X Layer, keep a little OKB, pick NAND or LATCH, then 100, 1,000, 10,000, or your own number. Sign in OKX or Binance Wallet. Or open this processor on tapeout and mint in the tapeout transistor market. Both pay the processor, not an exchange.",
     walletConnect: "Connect wallet",
-    walletDeploy: "Deploy TAPELIQUID",
     walletNo: "That wallet is not in this browser. OKX opens its app. Binance opens the Binance app to confirm, then come back to this page to trade.",
     walletReject: "You cancelled in the wallet.",
     walletBusy: "Waiting for the wallet…",
@@ -715,11 +692,6 @@ export const copy: Record<Lang, Copy> = {
     nextStep: "Next",
     chainBsc: "This book uses BSC USDT. Only people on BSC can take your order.",
     chainX: "This book uses USDT0 on X Layer. Gas is OKB. The site locks one X Layer contract, so any address on this chain can see an order and take it. The new mark reads the X Layer BEM/WOKB 1% pool and USDT0/WOKB. A consecutive update is at most 0.5 percent. It does not reference BSC. It does not net with a BSC order.",
-    deployX: "Deploy the shared X Layer contract",
-    deployX1: "Signature 1 of 3: deploy the mark. It reads the two X Layer pools, not BSC.",
-    deployX2: "Signature 2 of 3: record the first observation at the pool price.",
-    deployX3: "Signature 3 of 3: deploy the perpetual. Return both addresses so they can be written into the page.",
-    pushMark: "Update the mark from the X Layer pools",
     realNote: "Spot settles on PancakeSwap V3. This desk charges 0.20%, transferred to the fee address when you sign. Assets remain in the wallet until then.",
     paperNote: "This page is practice. Fills are stored in this browser. Clearing them does not touch a contract.",
     perpWarn:
@@ -732,7 +704,6 @@ export const copy: Record<Lang, Copy> = {
     cancelPost: "Cancel",
     closeDeal: "Close",
     liqNow: "Liquidate",
-    deployPerp: "Deploy contract",
     perpNeedUsdt: "Not enough USDT.",
     perpNeedX: "Not enough USDT0.",
     perpNoChain: "No contract code at this address on BSC. The wallet has to be on BNB Smart Chain when you deploy, not X Layer.",
@@ -748,8 +719,6 @@ export const copy: Record<Lang, Copy> = {
     pkFlat: "Even",
     pkNote: "The bar uses the contract mark. The line is real pool prints. Settlement ignores the last print.",
     pkMiss: "Nobody has taken it yet. Any wallet that opens this page can see the order and take it. Do not deploy another contract.",
-    deployOne: "Deploy the 1 USDT contract",
-    deployBook: "Deploy the order book",
     bookTake: "Take",
     eatHint: "Other people's orders are below. The other wallet must open this page on the same contract address and tap Take. Taking a long makes you the short.",
     sharedBook: "The whole site uses this one BSC contract. Anyone can see every order here and take it.",
@@ -758,7 +727,6 @@ export const copy: Record<Lang, Copy> = {
       "Margin is X Layer USDT0, locked in this contract. Gas is OKB. Size is from 1 to 500. Leverage is capped at 1,000×. When about half the margin is lost, any address may liquidate. Funding settles inside the pair every 8 hours, capped at ±0.05%. Half of a liquidation remainder enters the insurance fund and cannot be withdrawn. If insurance is short, only that pair's profit is cut. The mark reads the X Layer BEM/WOKB 1% pool and USDT0/WOKB. It does not net with a BSC position. A match and a cancellation each charge 0.20% of margin, paid to the X Layer multisig. If the book has no counterparty, a signature only posts an order.",
     perpStepsX: "Three steps: be on X Layer with USDT0 and a little OKB for gas, pick a size, then long or short. It fills only when another X Layer wallet takes the other side.",
     perpAddrX: "X Layer perp",
-    xOpen: "The shared X Layer contract is not written into the page yet. Deploy once and send me the address. Until then, other people cannot see your order.",
     pnl: "PnL",
     openPnl: "Not taken yet. PnL 0",
     limitPrice: "Your price",
@@ -795,7 +763,6 @@ export const copy: Record<Lang, Copy> = {
     stopNote: "Simple mode uses margin: take profit at a double, stop at a half loss. While this page is open and the price touches either line, your wallet is asked to close. A closed page does not close the trade.",
     stopArmed: "Armed",
     stopClear: "Clear stops",
-    bscDeploy: "Deploy BSC rebate contract",
     rebateRegister: "Register",
     rebateTaken: "Someone already registered that code. Pick another.",
     rebateHave: "This address already has a code. It cannot be changed.",

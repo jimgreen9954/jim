@@ -46,14 +46,11 @@ import { clearArm, easyBand, readArm, writeArm, type Arm } from "@/lib/stops";
 import {
   cancelPerp,
   closePerp,
-  deployXLayer,
   bookOf,
   pickBook,
   liveLevCap,
   nextTierCap,
-  deployCoin,
   pokeBook,
-  shipXBook,
   liquidatePerp,
   openPerp,
   openPostPerp,
@@ -72,7 +69,6 @@ import {
   readChainPurse,
   readPerp,
   readBoard,
-  rememberXBem,
   savedDesk,
   selectDesk,
   activeBook,
@@ -394,9 +390,6 @@ export function RealPerp({
   const [perp, setPerp] = useState(() =>
     pickBook(launch?.chain ?? savedDesk(), launch?.coin ?? "bem"),
   );
-  const [xbem, setXbem] = useState("");
-  const [pasted, setPasted] = useState("");
-  const [deployNote, setDeployNote] = useState(null);
   const [account, setAccount] = useState(currentAccount());
   const [view, setView] = useState(null);
   const [margin, setMargin] = useState("1");
@@ -897,40 +890,38 @@ export function RealPerp({
         lang === "zh" ? "这笔合约过不了，没有打开钱包。" : "That call would fail. The wallet was not opened.",
       );
     else if (message === "nochain") setNote(c.perpNoChain);
-    else if (message === "fee")
-      setNote(lang === "zh" ? "只有多签能部署。" : "Only the multisig can deploy.");
-    else if (message === "oracle")
-      setNote(
-        lang === "zh" ? "只有多签能写标记价。" : "Only the multisig can post the mark.",
-      );
     else if (message === "stale")
       setNote(
         lang === "zh"
-          ? "标记价还是旧池，大约是现货的两倍。新开仓停了。多签部署新本之后才能开。"
-          : "The mark still reads the old pool and is about twice spot. New opens are stopped until the multisig deploys the new book.",
+          ? "标记价离现货超过 15%。新开仓停了，平仓和撤单还可以。"
+          : "The mark is more than 15% from spot. New opens are stopped. Close and cancel still work.",
       );
     else if (message === "warm")
       setNote(
         lang === "zh"
-          ? "新合约已经在，标记价还没攒满 10 分钟。这段时间不能开仓，旧仓可以平。"
-          : "The new book is up. The mark still needs 10 minutes. Opens wait. Old positions can still be closed.",
+          ? "标记价还没攒满 10 分钟。这段时间不能开仓，已有仓可以平。"
+          : "The mark still needs 10 minutes. Opens wait. Open positions can still be closed.",
       );
     else if (message === "tapehalt")
       setNote(
-        lang === "zh"
-          ? "TAPE 和 FAB 先停新开仓。已有仓位可以平仓，挂单可以撤。新本由多签部署，按保证金分档。"
-          : "New TAPE and FAB opens are paused. A position can still be closed and an order cancelled. The multisig deploys the next book. Leverage there depends on margin.",
+        coin === "fab"
+          ? lang === "zh"
+            ? "FAB 先停新开仓。平仓和撤单还可以。"
+            : "New FAB opens are paused. Close and cancel still work."
+          : lang === "zh"
+            ? "这一本不再开新仓。可以平仓和撤单。"
+            : "This book takes no new positions. Close and cancel still work.",
       );
     else if (message === "uphalt")
       setNote(
         lang === "zh"
-          ? "UP 新开仓已停。这本读的是官方池的即时价。可以平仓、撤单、取回保证金。新标记由多签部署，杠杆最高 5 倍。"
-          : "New UP opens are paused. This book reads the official pool's spot price. Positions can be closed, orders cancelled, and margin withdrawn. The multisig deploys the next mark. Leverage there is at most 5×.",
+          ? "这一本不再开新仓。可以平仓和撤单。"
+          : "This book takes no new positions. Close and cancel still work.",
       );
     else if (message === "halt")
       setNote(
         lang === "zh"
-          ? "新开仓先停。已有仓位可以平仓，挂单可以撤。保险和标记价还没换新合约。"
+          ? "新开仓先停。已有仓位可以平仓，挂单可以撤。"
           : "New opens are paused. Open positions can still be closed, and resting orders can be cancelled.",
       );
     else if (chain === "xlayer" && /revert|execution|Bad/i.test(message))
@@ -1101,7 +1092,6 @@ export function RealPerp({
   const ownCoin = coin === "btc" || coin === "eth" || coin === "zec" || coin === "up" || coin === "tape" || coin === "fab";
   const ownBook = ownCoin ? pickBook(coin === "tape" || coin === "fab" ? "xlayer" : "bsc", coin) : "";
   const alt = ownCoin && !/^0x[a-fA-F0-9]{40}$/.test(ownBook);
-  const canDeploy = alt && ownCoin;
   const riskLive =
     !alt &&
     /^0x[a-fA-F0-9]{40}$/.test(perp) &&
@@ -1134,7 +1124,6 @@ export function RealPerp({
     poolPx > 0 &&
     (coin === "btc" || coin === "eth" || coin === "zec" || coin === "up" || coin === "tape" || coin === "fab" || (chain === "xlayer" && coin === "bem")) &&
     Math.abs(settle - poolPx) / poolPx > 0.03;
-  const xStale = chain === "xlayer" && !ownCoin && markFar;
   const ownMark =
     coin === "btc" || coin === "eth" || coin === "zec" || coin === "up" || coin === "tape" || coin === "fab" || chain === "xlayer";
   const markN = alt
@@ -1374,27 +1363,11 @@ export function RealPerp({
   const place = (side) => {
     setIntent(side);
     if (busy) return;
-    if (xStale) {
-      run(async (from) => {
-        const shipped = await shipXBook(from);
-        setPerp(shipped.book);
-        queueMicrotask(() => {
-          setBad(false);
-          setNote(
-            lang === "zh"
-              ? `新本 ${shipped.book}。标记读现货池。把这行地址发我，写进页面之后别人用的才是这一份。`
-              : `New book ${shipped.book}. The mark reads the spot pools. Send this address so the page uses it for everyone.`,
-          );
-        });
-        return shipped.hash;
-      });
-      return;
-    }
     if (markFar) {
       run((from) => pokeBook(from, perp));
       return;
     }
-    if (canDeploy || alt) return;
+    if (alt) return;
     if (feeBlocked) {
       setBad(true);
       setNote(lang === "zh" ? "开仓停了。" : "Opening is stopped.");
@@ -2870,8 +2843,7 @@ export function RealPerp({
                                     className={`min-h-11 w-full text-sm ${intent === "short" ? "hl-sell" : "hl-buy"}`}
                                     disabled={
                                       busy ||
-                                      (!canDeploy &&
-                                        !markFar &&
+                                      (!markFar &&
                                         (feeBlocked ||
                                           !levOk ||
                                           !marginOk ||
@@ -2879,40 +2851,8 @@ export function RealPerp({
                                           (!alt && !view?.priced && !(markN > 0))))
                                     }
                                     onClick={() => {
-                                      if (xStale) {
-                                        run(async (from) => {
-                                          const shipped = await shipXBook(from);
-                                          setPerp(shipped.book);
-                                          queueMicrotask(() => {
-                                            setBad(false);
-                                            setNote(
-                                              lang === "zh"
-                                                ? `新本 ${shipped.book}。标记读现货池。把这行地址发我，写进页面之后别人用的才是这一份。`
-                                                : `New book ${shipped.book}. The mark reads the spot pools. Send this address so the page uses it for everyone.`,
-                                            );
-                                          });
-                                          return shipped.hash;
-                                        });
-                                        return;
-                                      }
                                       if (markFar) {
                                         run((from) => pokeBook(from, perp));
-                                        return;
-                                      }
-                                      if (canDeploy) {
-                                        run(async (from) => {
-                                          const { book, hash } = await deployCoin(from, coin);
-                                          setPerp(book);
-                                          queueMicrotask(() => {
-                                            setBad(false);
-                                            setNote(
-                                              lang === "zh"
-                                                ? `已部署 ${book}。把这行地址发我，写进页面之后别人用的才是这一份。`
-                                                : `Deployed ${book}. Send this address so the page uses it for everyone.`,
-                                            );
-                                          });
-                                          return hash;
-                                        });
                                         return;
                                       }
                                       if (planned.net === "reject") {
@@ -2941,15 +2881,7 @@ export function RealPerp({
                                       setCard(intent);
                                     }}
                                   >
-                                    {canDeploy
-                                      ? lang === "zh"
-                                        ? "部署合约"
-                                        : "Deploy the book"
-                                      : xStale
-                                      ? lang === "zh"
-                                        ? "部署新本"
-                                        : "Deploy the new book"
-                                      : markFar
+                                    {markFar
                                       ? lang === "zh"
                                         ? "对齐标记价"
                                         : "Match the mark"
