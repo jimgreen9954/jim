@@ -9,7 +9,7 @@ import "./TapeRisk.sol";
 contract UpTapeRisk is TapeRisk {
     constructor(address usdt_, address pool_, uint256 unit_, address feeTo_) TapeRisk(usdt_, pool_, unit_, feeTo_) {}
 
-    function _maxLev() internal pure override returns (uint16) {
+    function _maxLev(uint256) internal view override returns (uint16) {
         return 5;
     }
 

@@ -236,6 +236,7 @@ contract TapeRisk {
         if (count < 2 || count > 5) revert Bad();
         mark();
         uint256 each = margin / count;
+        _check(margin, lev);
         _check(each, lev);
         _take(msg.sender, margin);
         uint256 lo = startPx < endPx ? startPx : endPx;
@@ -288,6 +289,7 @@ contract TapeRisk {
         if (slices < 2 || slices > 12) revert Bad();
         if (gap < 30 || gap > 1 days) revert Bad();
         uint256 each = margin / slices;
+        _check(each * slices, lev);
         _check(each, lev);
         _take(msg.sender, each * slices);
         uint256 id = ++nextTwap;
@@ -352,7 +354,8 @@ contract TapeRisk {
         _settle(id, true);
     }
 
-    function _maxLev() internal pure virtual returns (uint16) {
+    /// BTC, ETH, ZEC and BEM stay at 50. UP, TAPE and FAB books override this.
+    function _maxLev(uint256) internal view virtual returns (uint16) {
         return 50;
     }
 
@@ -360,7 +363,7 @@ contract TapeRisk {
     function _guard() internal view virtual {}
 
     function _check(uint256 margin, uint16 lev) internal view {
-        if (lev < 1 || lev > _maxLev()) revert Bad();
+        if (lev < 1 || lev > _maxLev(margin)) revert Bad();
         if (margin < MIN_MARGIN || margin > MAX_MARGIN) revert Bad();
     }
 

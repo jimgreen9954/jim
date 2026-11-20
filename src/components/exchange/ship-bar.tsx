@@ -1,8 +1,6 @@
 import { useState } from "react";
-import { deployGuardedVault, deployTwapBook, deployUpCap } from "@/lib/perp";
+import { deployTapeCap, deployTierUp } from "@/lib/perp";
 import { connectAny } from "@/lib/wallet";
-
-const books = ["btc", "eth", "zec", "bem"] as const;
 
 export function ShipBar({ zh }: { zh: boolean }) {
   const [busy, setBusy] = useState("");
@@ -11,14 +9,26 @@ export function ShipBar({ zh }: { zh: boolean }) {
   const run = (id: string, work: (from: string) => Promise<string>) => {
     if (busy) return;
     setBusy(id);
-    setNote(zh ? "请用多签签名。别人签会被拒绝。" : "Sign with the multisig. Any other wallet is rejected.");
+    setNote(zh ? "请用这条链的多签签名。别人签会被拒绝。签完把地址发来，页面先不换。" : "Sign with that chain's multisig. Any other wallet is rejected. Send the address back. The page does not switch yet.");
     void (async () => {
       try {
         const from = await connectAny();
         setNote(await work(from));
       } catch (err) {
         const code = err instanceof Error ? err.message : "";
-        setNote(code === "safe" ? (zh ? "这个钱包不是这条链的多签。" : "This wallet is not that chain's multisig.") : code === "price" ? (zh ? "部署了，但价格不在预期范围，先不要换页面。" : "Deployed, but the price is outside the expected range. Do not switch the page yet.") : zh ? "没有完成。等钱包弹出再确认。" : "It did not finish. Wait for the wallet, then confirm.");
+        setNote(
+          code === "safe"
+            ? zh
+              ? "这个钱包不是这条链的多签。"
+              : "This wallet is not that chain's multisig."
+            : code === "price"
+              ? zh
+                ? "部署了，但价格偏离现价超过 3%，先不要换页面。"
+                : "Deployed, but the price is more than 3 percent from spot. Do not switch the page yet."
+              : zh
+                ? "没有完成。等钱包弹出再确认。"
+                : "It did not finish. Wait for the wallet, then confirm.",
+        );
       } finally {
         setBusy("");
       }
@@ -30,58 +40,39 @@ export function ShipBar({ zh }: { zh: boolean }) {
       <h2 className="font-display text-2xl italic">{zh ? "多签部署" : "Multisig deploy"}</h2>
       <p className="mt-1 text-xs leading-5 text-ink/70">
         {zh
-          ? "还没换上的合约在这里部署。比特币、ETH、ZEC、BSC 的 BEM 会新建一个读 10 分钟均价的标记，并新建一本永续。UP 用官方池，每次报价最多走动 0.5%，杠杆上限 5 倍。金库跟现在正在用的 BEM 永续，申请退出之后不能再开新单。部署完把地址发我，我再撤掉这里，并改页面读的地址。现在下单仍走旧合约。UP 这本已经不能新开。"
-          : "Contracts that are not live yet deploy here. Bitcoin, ETH, ZEC and BSC BEM each get a 10-minute mark and a new book. UP uses the official pool, moves at most 0.5 percent a quote, and caps leverage at 5x. The vault follows the BEM book already in use, and it refuses a new order after an exit request. Send me the addresses after you sign. I will remove this and point the page at them. Orders still use the current contracts. New UP orders are already stopped."}
+          ? "现在下单仍走已经在用的合约。TAPE 和 FAB 先停新开仓。这里只部署还没换上的两本：X Layer 的 TAPE 限幅标记和分档永续，以及 BSC 上挂在现有 UP 标记上的分档永续。比特币、ETH、ZEC、BEM 不在这里重部署。FAB 还没有限幅标记，所以没有按钮。"
+          : "Orders still use the contracts already live. New TAPE and FAB opens are paused. This deploys only the two books that are not live yet: the capped TAPE mark and tiered book on X Layer, and a tiered UP book on the UP mark that is already live. Bitcoin, ETH, ZEC and BEM are not redeployed here. FAB has no capped mark, so it has no button."}
       </p>
       <div className="mt-2 grid gap-2 sm:grid-cols-2">
-        {books.map((id) => (
-          <button
-            key={id}
-            type="button"
-            disabled={Boolean(busy)}
-            className="min-h-10 border border-gold text-xs disabled:opacity-40"
-            onClick={() =>
-              run(id, async (from) => {
-                const made = await deployTwapBook(from, id);
-                return zh
-                  ? `${id.toUpperCase()} 永续 ${made.book}，标记 ${made.mark}，价格 ${made.usd.toFixed(2)}`
-                  : `${id.toUpperCase()} book ${made.book}, mark ${made.mark}, price ${made.usd.toFixed(2)}`;
-              })
-            }
-          >
-            {busy === id ? (zh ? "部署中" : "Deploying") : zh ? `部署 ${id.toUpperCase()} 标记和永续` : `Deploy the ${id.toUpperCase()} mark and book`}
-          </button>
-        ))}
+        <button
+          type="button"
+          disabled={Boolean(busy)}
+          className="min-h-10 border border-gold text-xs disabled:opacity-40"
+          onClick={() =>
+            run("tape", async (from) => {
+              const made = await deployTapeCap(from);
+              return zh
+                ? `TAPE 永续 ${made.book}，标记 ${made.mark}，价格 ${made.usd.toFixed(4)}`
+                : `TAPE book ${made.book}, mark ${made.mark}, price ${made.usd.toFixed(4)}`;
+            })
+          }
+        >
+          {busy === "tape" ? (zh ? "部署中" : "Deploying") : zh ? "部署 TAPE 标记和分档永续" : "Deploy the TAPE mark and tiered book"}
+        </button>
         <button
           type="button"
           disabled={Boolean(busy)}
           className="min-h-10 border border-gold text-xs disabled:opacity-40"
           onClick={() =>
             run("up", async (from) => {
-              const made = await deployUpCap(from);
+              const made = await deployTierUp(from);
               return zh
-                ? `UP 永续 ${made.book}，标记 ${made.mark}，价格 ${made.usd.toFixed(4)}`
-                : `UP book ${made.book}, mark ${made.mark}, price ${made.usd.toFixed(4)}`;
+                ? `UP 分档永续 ${made.book}，价格 ${made.usd.toFixed(4)}。标记仍是现在这一份。`
+                : `UP tiered book ${made.book}, price ${made.usd.toFixed(4)}. The mark stays the one already live.`;
             })
           }
         >
-          {busy === "up" ? (zh ? "部署中" : "Deploying") : zh ? "部署 UP 标记和永续" : "Deploy the UP mark and book"}
-        </button>
-        <button
-          type="button"
-          disabled={Boolean(busy)}
-          className="min-h-10 border border-gold text-xs disabled:opacity-40"
-          onClick={() => run("vbsc", async (from) => (zh ? `BSC 金库 ${await deployGuardedVault(from, "bsc")}` : `BSC vault ${await deployGuardedVault(from, "bsc")}`))}
-        >
-          {busy === "vbsc" ? (zh ? "部署中" : "Deploying") : zh ? "部署 BSC 金库" : "Deploy the BSC vault"}
-        </button>
-        <button
-          type="button"
-          disabled={Boolean(busy)}
-          className="min-h-10 border border-gold text-xs disabled:opacity-40"
-          onClick={() => run("vxl", async (from) => (zh ? `X Layer 金库 ${await deployGuardedVault(from, "xlayer")}` : `X Layer vault ${await deployGuardedVault(from, "xlayer")}`))}
-        >
-          {busy === "vxl" ? (zh ? "部署中" : "Deploying") : zh ? "部署 X Layer 金库" : "Deploy the X Layer vault"}
+          {busy === "up" ? (zh ? "部署中" : "Deploying") : zh ? "部署 UP 分档永续" : "Deploy the tiered UP book"}
         </button>
       </div>
       {note ? <p className="mt-2 text-xs leading-5 text-ink/80">{note}</p> : null}

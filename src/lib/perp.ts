@@ -11,6 +11,8 @@ import { TWAP_SHIP_BYTECODE } from "@/lib/twap-ship-artifact";
 import { VAULT_BYTECODE } from "@/lib/vault-artifact";
 import { UP_CAP_MARK_BYTECODE } from "@/lib/up-cap-mark-artifact";
 import { UP_RISK_BYTECODE } from "@/lib/up-risk-artifact";
+import { TAPE_CAP_MARK_BYTECODE } from "@/lib/tape-cap-mark-artifact";
+import { TIER_RISK_BYTECODE } from "@/lib/tier-risk-artifact";
 import { FAB_QUOTER } from "@/lib/fab";
 import { getProvider } from "@/lib/wallet";
 import { XLAYER, connectXLayer } from "@/lib/xlayer";
@@ -463,6 +465,30 @@ export function riskOf(which: Desk): string {
 export type CoinBook = "btc" | "eth" | "zec" | "up" | "tape" | "fab";
 
 const TAPE_POOL = "0x58eaD5b41Cfd3627791D439402dd65571c286484" as Hex;
+const OKB_USDT = "0xe3BE6A0137f1b0602Fc1a4841686f43B340a5082" as Hex;
+const UP_CAP_MARK = "0x11dCaA2ee4A6F4c437B9B6B304FFBc09B768845B" as Hex;
+
+/** Leverage the next UP, TAPE and FAB book will allow for this margin. */
+export function nextTierCap(margin: string, chain: Desk): number {
+  const dec = chain === "xlayer" ? 6 : 18;
+  const unit = chain === "xlayer" ? 1_000_000n : 10n ** 18n;
+  let raw = 0n;
+  try {
+    raw = units(margin || "0", dec);
+  } catch {
+    return 50;
+  }
+  if (raw <= unit * 20n) return 50;
+  if (raw <= unit * 100n) return 20;
+  return 5;
+}
+
+/** What the book the page reads will actually accept. TAPE and FAB are paused. */
+export function liveLevCap(coin: string): number {
+  if (coin === "tape" || coin === "fab") return 0;
+  if (coin === "up") return 5;
+  return 50;
+}
 
 /** Marks the multisig already created. Books are separate. */
 const COIN_MARK: Record<Exclude<CoinBook, "fab">, Hex> = {
@@ -1093,7 +1119,16 @@ async function assertV2(perp: string) {
 
 /** Post-only on the risk book. On the live book, a crossing price is refused and the rest uses open. */
 function rejectUpOpen(perp: string) {
-  if (perp.toLowerCase() === PREV_UP_COIN_BOOK.toLowerCase()) throw new Error("uphalt");
+  const id = perp.toLowerCase();
+  if (id === PREV_UP_COIN_BOOK.toLowerCase()) throw new Error("uphalt");
+  if (
+    id === TAPE_COIN_BOOK.toLowerCase() ||
+    id === PREV_TAPE_COIN_BOOK.toLowerCase() ||
+    id === FAB_COIN_BOOK.toLowerCase() ||
+    id === PREV_FAB_COIN_BOOK.toLowerCase()
+  ) {
+    throw new Error("tapehalt");
+  }
 }
 
 export async function openPostPerp(from: string, perp: string, long: boolean, margin: string, lev: number, price: string): Promise<Hex> {
@@ -1654,6 +1689,69 @@ export async function deployUpCap(from: string): Promise<{ book: string; mark: s
 
 export async function deployUpOfficial(_from: string): Promise<{ mark: string; book: string }> {
   throw new Error("uphalt");
+}
+
+/** Tiered UP book on the mark that is already live. Does not deploy another mark. */
+export async function deployTierUp(from: string): Promise<{ book: string; usd: number }> {
+  if (from.toLowerCase() !== BSC_SAFE.toLowerCase()) throw new Error("safe");
+  const was = desk;
+  desk = "bsc";
+  try {
+    const rpc = await client();
+    const args = encodeAbiParameters(
+      [{ type: "address" }, { type: "address" }, { type: "uint256" }, { type: "address" }],
+      [BSC.usdt, UP_CAP_MARK, 10n ** 18n, BSC_SAFE],
+    );
+    const hash = await send(from, CREATE_CALL, createCallData((TIER_RISK_BYTECODE + args.slice(2)) as Hex), 12_000_000n);
+    const book = createdAddress((await rpc.getTransactionReceipt({ hash })).logs);
+    if (!book) throw new Error("revert");
+    const pool = await rpc.readContract({ address: book as Hex, abi: poolAbi, functionName: "pool" });
+    if (pool.toLowerCase() !== UP_CAP_MARK.toLowerCase()) throw new Error("price");
+    const px = await readMark("bsc", book);
+    if (px === null) throw new Error("price");
+    const usd = Number(px) / 1e18;
+    if (!(usd >= 0.02 && usd <= 50)) throw new Error("price");
+    return { book, usd };
+  } finally {
+    desk = was;
+  }
+}
+
+/** Capped TAPE mark plus a tiered book. The page does not switch to it. */
+export async function deployTapeCap(from: string): Promise<{ book: string; mark: string; usd: number }> {
+  if (from.toLowerCase() !== XLAYER_SAFE.toLowerCase()) throw new Error("safe");
+  const was = desk;
+  desk = "xlayer";
+  try {
+    const rpc = await client();
+    const markInit = (TAPE_CAP_MARK_BYTECODE +
+      encodeAbiParameters([{ type: "address" }, { type: "address" }], [TAPE_POOL, OKB_USDT]).slice(2)) as Hex;
+    const shipArgs = encodeAbiParameters(
+      [{ type: "bytes" }, { type: "bytes" }, { type: "address" }, { type: "uint256" }, { type: "address" }],
+      [markInit, TIER_RISK_BYTECODE, X_USDT, 1_000_000n, XLAYER_SAFE],
+    );
+    const hash = await send(from, CREATE_CALL, createCallData((TWAP_SHIP_BYTECODE + shipArgs.slice(2)) as Hex), 16_000_000n);
+    const receipt = await rpc.getTransactionReceipt({ hash });
+    const topic = keccak256(stringToBytes("Book(address)"));
+    const log = receipt.logs.find((row) => row.topics[0]?.toLowerCase() === topic.toLowerCase());
+    const indexed = log?.topics[1];
+    if (!indexed || indexed.length !== 66) throw new Error("revert");
+    const book = getAddress(`0x${indexed.slice(26)}`);
+    const px = await readMark("xlayer", book);
+    const mark = await rpc.readContract({ address: book, abi: poolAbi, functionName: "pool" });
+    const spot = await rpc.readContract({
+      address: mark,
+      abi: [{ name: "spotUsd", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] }] as const,
+      functionName: "spotUsd",
+    });
+    if (px === null || spot === 0n) throw new Error("price");
+    const usd = Number(px) / 1e18;
+    const live = Number(spot) / 1e18;
+    if (!(usd >= 0.05 && usd <= 100) || live <= 0 || usd / live > 1.03 || live / usd > 1.03) throw new Error("price");
+    return { book, mark, usd };
+  } finally {
+    desk = was;
+  }
 }
 
 export async function pokeBook(from: string, perp: string): Promise<Hex> {

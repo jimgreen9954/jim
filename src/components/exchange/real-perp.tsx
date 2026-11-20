@@ -49,6 +49,8 @@ import {
   deployXLayer,
   bookOf,
   pickBook,
+  liveLevCap,
+  nextTierCap,
   deployCoin,
   pokeBook,
   shipXBook,
@@ -913,6 +915,12 @@ export function RealPerp({
           ? "新合约已经在，标记价还没攒满 10 分钟。这段时间不能开仓，旧仓可以平。"
           : "The new book is up. The mark still needs 10 minutes. Opens wait. Old positions can still be closed.",
       );
+    else if (message === "tapehalt")
+      setNote(
+        lang === "zh"
+          ? "TAPE 和 FAB 先停新开仓。已有仓位可以平仓，挂单可以撤。新本由多签部署，按保证金分档。"
+          : "New TAPE and FAB opens are paused. A position can still be closed and an order cancelled. The multisig deploys the next book. Leverage there depends on margin.",
+      );
     else if (message === "uphalt")
       setNote(
         lang === "zh"
@@ -1075,7 +1083,8 @@ export function RealPerp({
   const dec = chain === "xlayer" ? 6 : 18;
   const scan = chain === "xlayer" ? XLAYER.explorer : BSC.explorer;
   const floor = view && view.min > 0n ? Number(view.min / 10n ** BigInt(dec)) : 1;
-  const levMax = coin === "up" ? 5 : 50;
+  const levMax = liveLevCap(coin);
+  const tierCap = nextTierCap(margin, chain);
   const levOk = lev >= 1 && lev <= levMax;
   const marginOk = (() => {
     const n = Number(margin);
@@ -2822,14 +2831,26 @@ export function RealPerp({
                                     ? /* @__PURE__ */ jsx("p", {
                                         className: "desk-extra",
                                         children: !levOk
-                                          ? coin === "up"
+                                          ? coin === "tape" || coin === "fab"
                                             ? lang === "zh"
-                                              ? "UP 杠杆最高 5 倍。"
-                                              : "UP leverage stops at 5×."
-                                            : c.levCap
+                                              ? "TAPE 和 FAB 先停新开仓。平仓和撤单还可以。"
+                                              : "New TAPE and FAB opens are paused. Close and cancel still work."
+                                            : coin === "up"
+                                              ? lang === "zh"
+                                                ? "这一本 UP 最高 5 倍。"
+                                                : "This UP book stops at 5×."
+                                              : c.levCap
                                           : `${floor}–500 USDT`,
                                       })
-                                    : null,
+                                    : coin === "up" || coin === "tape" || coin === "fab"
+                                      ? /* @__PURE__ */ jsx("p", {
+                                          className: "desk-extra",
+                                          children:
+                                            lang === "zh"
+                                              ? `新本按这一笔保证金最高 ${tierCap} 倍：20 以内 50 倍，100 以内 20 倍，超过 100 是 5 倍。现在的 UP 仍是 5 倍。TAPE 和 FAB 还没换上。`
+                                              : `The next book allows ${tierCap}× on this margin: 50× up to 20, 20× up to 100, and 5× above that. This UP book is still 5×. TAPE and FAB are not switched yet.`,
+                                        })
+                                      : null,
                                   !priceOk
                                     ? /* @__PURE__ */ jsx("p", {
                                         className: "desk-extra",
@@ -3737,7 +3758,7 @@ export function RealPerp({
               setLevText(String(next));
               if (next > 20) setMode("pro");
             },
-            cap: coin === "up" ? 5 : 50,
+            cap: liveLevCap(coin) || 1,
             onClose: () => setLevOpen(false),
           })
         : null,
