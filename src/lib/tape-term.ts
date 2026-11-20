@@ -139,7 +139,12 @@ async function approve(from: string, token: Hex, amount: bigint) {
   const term = termAddress();
   if (!term) throw new Error("term");
   const allowance = await client.readContract({ address: token, abi: erc20, functionName: "allowance", args: [from as Hex, term] });
-  if (allowance >= amount) return;
+  if (allowance === amount) return;
+  if (allowance > 0n) {
+    const zero = encodeFunctionData({ abi: erc20, functionName: "approve", args: [term, 0n] });
+    await probe(from, token, zero);
+    await send(from, token, zero);
+  }
   const data = encodeFunctionData({ abi: erc20, functionName: "approve", args: [term, amount] });
   await probe(from, token, data);
   await send(from, token, data);

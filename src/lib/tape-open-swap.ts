@@ -247,7 +247,7 @@ async function unwindOkb(from: string, want: bigint): Promise<Hex> {
   const data = encodeFunctionData({
     abi: v2,
     functionName: "swapExactETHForTokens",
-    args: [out * 97n / 100n, [WOKB, USDT], from as Hex, BigInt(Math.floor(Date.now() / 1000) + 60 * 20)],
+    args: [out * 99n / 100n, [WOKB, USDT], from as Hex, BigInt(Math.floor(Date.now() / 1000) + 60 * 20)],
   });
   const hash = await send(from, ROUTER, data, spend);
   writeHop(SELL_HOP, { from, unwind: hash, okb: want.toString() });

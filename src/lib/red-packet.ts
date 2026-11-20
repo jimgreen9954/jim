@@ -904,7 +904,7 @@ export async function buyPreview(chain: GiftChain, hi: bigint, amountIn: bigint)
 
 async function approveSpend(chain: GiftChain, from: string, token: Hex, spender: Hex, amount: bigint) {
   const allowance = await client(chain).readContract({ address: token, abi: erc20, functionName: "allowance", args: [from as Hex, spender] });
-  if (allowance >= amount) return;
+  if (allowance === amount) return;
   const hash = await send(chain, from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, allowance > 0n ? 0n : amount] }));
   await wait(chain, hash);
   throw new Error("approve");

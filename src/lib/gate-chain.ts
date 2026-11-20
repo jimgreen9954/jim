@@ -126,7 +126,7 @@ export async function deployGate(from: string): Promise<string> {
 async function approve(from: string, perp: string, amount: bigint) {
   const c = await client();
   const allowance = await c.readContract({ address: USDT, abi: erc20, functionName: "allowance", args: [from as Hex, perp as Hex] });
-  if (allowance >= amount) return;
+  if (allowance === amount) return;
   if (allowance > 0n) {
     const reset = encodeFunctionData({ abi: erc20, functionName: "approve", args: [perp as Hex, 0n] });
     await send(from, USDT, reset, 80_000n);

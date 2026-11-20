@@ -73,7 +73,11 @@ export async function sendBridge(toX: boolean, from: string, amount: bigint): Pr
       functionName: "allowance",
       args: [who, bridge],
     });
-    if (allowance < amount) {
+    if (allowance !== amount) {
+      if (allowance > 0n) {
+        const zero = encodeFunctionData({ abi: erc20, functionName: "approve", args: [bridge, 0n] });
+        await tx(who, token, zero, 0n, client);
+      }
       const data = encodeFunctionData({ abi: erc20, functionName: "approve", args: [bridge, amount] });
       await tx(who, token, data, 0n, client);
     }

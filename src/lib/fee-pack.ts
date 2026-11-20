@@ -93,7 +93,7 @@ async function feeCalls(chainId: 56 | 196, from: string, id: Hex, token: Hex | n
       functionName: "allowance",
       args: [from as Hex, once],
     });
-    if (allowance < need) {
+    if (allowance !== need) {
       if (allowance > 0n) {
         calls.push({ to: token, data: encodeFunctionData({ abi: erc20, functionName: "approve", args: [once, 0n] }) });
       }

@@ -143,7 +143,7 @@ const ROWS: Row[] = [
     tag: "永续",
     where: "",
     pin: true,
-    lev: "1000×",
+    lev: "50×",
   },
   {
     id: "bemx",
@@ -153,7 +153,7 @@ const ROWS: Row[] = [
     tag: "永续",
     where: "",
     pin: true,
-    lev: "1000×",
+    lev: "50×",
   },
   {
     id: "btcperp",
@@ -163,7 +163,7 @@ const ROWS: Row[] = [
     tag: "永续",
     where: "BSC",
     pin: true,
-    lev: "1000×",
+    lev: "50×",
   },
   {
     id: "ethperp",
@@ -173,7 +173,7 @@ const ROWS: Row[] = [
     tag: "永续",
     where: "BSC",
     pin: true,
-    lev: "1000×",
+    lev: "50×",
   },
   {
     id: "zecperp",
@@ -183,7 +183,7 @@ const ROWS: Row[] = [
     tag: "永续",
     where: "BSC",
     pin: true,
-    lev: "1000×",
+    lev: "50×",
   },
   {
     id: "upperp",
@@ -193,7 +193,7 @@ const ROWS: Row[] = [
     tag: "永续",
     where: "BSC",
     pin: true,
-    lev: "1000×",
+    lev: "50×",
     find: "UP TapeUP",
   },
   {
@@ -204,7 +204,7 @@ const ROWS: Row[] = [
     tag: "永续",
     where: "X Layer",
     pin: true,
-    lev: "1000×",
+    lev: "50×",
   },
   {
     id: "fabperp",
@@ -214,7 +214,7 @@ const ROWS: Row[] = [
     tag: "永续",
     where: "X Layer",
     pin: true,
-    lev: "1000×",
+    lev: "50×",
     find: "FAB FabX",
   },
   {
@@ -593,8 +593,9 @@ export function LevDialog({
   onLev: (next: number) => void;
   onClose: () => void;
 }) {
-  const [n, setN] = useState(lev >= 1 ? lev : 3);
-  const [text, setText] = useState(String(lev >= 1 ? lev : 3));
+  const start = lev >= 1 && lev <= 50 ? lev : 3;
+  const [n, setN] = useState(start);
+  const [text, setText] = useState(String(start));
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -626,7 +627,7 @@ export function LevDialog({
           <input
             type="range"
             min={1}
-            max={1000}
+            max={50}
             value={n}
             onChange={(event) => {
               const next = Number(event.target.value);
@@ -645,13 +646,13 @@ export function LevDialog({
                 const raw = event.target.value.replace(/[^\d]/g, "").slice(0, 4);
                 setText(raw);
                 const next = Number(raw);
-                if (next >= 1 && next <= 1000) {
+                if (next >= 1 && next <= 50) {
                   setN(next);
                   onLev(next);
                 }
               }}
               onBlur={() => {
-                const next = Math.min(1000, Math.max(1, Math.round(Number(text) || n || 1)));
+                const next = Math.min(50, Math.max(1, Math.round(Number(text) || n || 1)));
                 setN(next);
                 setText(String(next));
                 onLev(next);

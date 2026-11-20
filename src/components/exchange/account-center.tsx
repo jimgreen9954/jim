@@ -40,6 +40,7 @@ import { listSplitPieces, readShareSeats, transferShare } from "@/lib/circuit-sp
 import { FeePass } from "@/components/exchange/fee-pass";
 import { RedGift } from "@/components/exchange/red-gift";
 import { tapeText } from "@/lib/tape-mine";
+import { DESK_LOCK, LOCK_TOKENS, lockLeft, revokeLock } from "@/lib/fee-pack";
 
 function money(n: number): string {
   if (!Number.isFinite(n)) return "—";
@@ -101,6 +102,66 @@ function place(rows: Worth[]): Worth[] {
     if (left !== right) return right - left;
     return a.name.localeCompare(b.name);
   });
+}
+
+function OldLock({ zh, account }: { zh: boolean; account: string }) {
+  const [rows, setRows] = useState<{ chainId: 56 | 196; name: string; token: Hex; left: bigint }[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  useEffect(() => {
+    let stop = false;
+    Promise.all(
+      LOCK_TOKENS.map(async (row) => {
+        try {
+          const left = await lockLeft(row.chainId, account, row.token);
+          return left > 0n ? { ...row, left } : null;
+        } catch {
+          return null;
+        }
+      }),
+    ).then((found) => {
+      if (!stop) setRows(found.filter((row): row is { chainId: 56 | 196; name: string; token: Hex; left: bigint } => row !== null));
+    });
+    return () => {
+      stop = true;
+    };
+  }, [account]);
+  if (rows.length === 0 && !note) return null;
+  return (
+    <div className="border border-down px-4 py-3">
+      <p className="text-sm">
+        {zh
+          ? `旧合约 ${DESK_LOCK} 上还有授权。别人可以把它转走。`
+          : `An allowance remains on the old contract ${DESK_LOCK}. Someone else can move it.`}
+      </p>
+      <p className="mt-1 font-mono text-xs text-ink/70">
+        {rows.map((row) => `${row.chainId === 56 ? "BSC" : "X Layer"} ${row.name}`).join(" · ")}
+      </p>
+      <button
+        type="button"
+        className="mt-3 h-10 border border-down px-3 text-xs disabled:opacity-50"
+        disabled={busy || rows.length === 0}
+        onClick={() => {
+          setBusy(true);
+          setNote(null);
+          void (async () => {
+            try {
+              for (const row of rows) await revokeLock(account, row.chainId, row.token);
+              setRows([]);
+              setNote(zh ? "这些授权已经改成 0。" : "Those allowances are now zero.");
+            } catch (err) {
+              setNote(err instanceof Error ? err.message : zh ? "没撤成。" : "It was not revoked.");
+            } finally {
+              setBusy(false);
+            }
+          })();
+        }}
+      >
+        {busy ? (zh ? "撤销中" : "Revoking") : zh ? "撤销旧授权" : "Revoke the old allowance"}
+      </button>
+      {note ? <p className="mt-2 text-xs">{note}</p> : null}
+    </div>
+  );
 }
 
 export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
@@ -976,6 +1037,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
 
   return (
     <section className="flex min-w-0 flex-col gap-3">
+      <OldLock zh={zh} account={account} />
       <div className="flex min-w-0 flex-col gap-3">
         <div className="border border-gold px-4 py-4">
           <div className="flex items-start justify-between gap-3">

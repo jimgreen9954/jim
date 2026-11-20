@@ -143,7 +143,10 @@ async function approveNand(from: string) {
 async function approveBem(from: string, amount: bigint) {
   const gift = bemGift();
   const allowance = await b.readContract({ address: BSC.bem, abi: erc20, functionName: "allowance", args: [from as Hex, gift] });
-  if (allowance >= amount) return;
+  if (allowance === amount) return;
+  if (allowance > 0n) {
+    await send("b", from, BSC.bem, encodeFunctionData({ abi: erc20, functionName: "approve", args: [gift, 0n] }));
+  }
   await send("b", from, BSC.bem, encodeFunctionData({ abi: erc20, functionName: "approve", args: [gift, amount] }));
 }
 

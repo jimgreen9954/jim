@@ -362,7 +362,7 @@ async function wait(chain: LendChain, hash: Hex): Promise<{ logs: { data: Hex; t
 
 async function allowToken(chain: LendChain, from: string, token: Hex, amount: bigint, lend: Hex) {
   const allowance = await read<bigint>(chain, token, "allowance", [from as Hex, lend], erc20);
-  if (allowance >= amount) return;
+  if (allowance === amount) return;
   if (allowance > 0n) await wait(chain, await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [lend, 0n] })));
   await wait(chain, await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [lend, amount] })));
 }

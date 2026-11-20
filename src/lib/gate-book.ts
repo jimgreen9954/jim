@@ -18,7 +18,7 @@ export const postGate = createServerFn({ method: "POST" })
     const price = num(input?.price);
     const margin = num(input?.margin);
     const lev = num(input?.lev);
-    if (!user || !(price > 0) || !(margin > 0) || !(lev >= 1 && lev <= 1000)) throw new Error("order");
+    if (!user || !(price > 0) || !(margin > 0) || !(lev >= 1 && lev <= 50)) throw new Error("order");
     return { user, market: text(input?.market), name: text(input?.name), kind: text(input?.kind), long: Boolean(input?.long), price, margin, lev };
   })
   .handler(async ({ data }): Promise<GateBook> => {
@@ -31,7 +31,7 @@ export const takeGate = createServerFn({ method: "POST" })
     const user = address(input?.user);
     const margin = num(input?.margin);
     const lev = num(input?.lev);
-    if (!user || !input?.id || !(margin > 0) || !(lev >= 1 && lev <= 1000)) throw new Error("take");
+    if (!user || !input?.id || !(margin > 0) || !(lev >= 1 && lev <= 50)) throw new Error("take");
     return { user, id: text(input.id), margin, lev };
   })
   .handler(async ({ data }): Promise<GateBook> => {

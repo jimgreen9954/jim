@@ -1036,7 +1036,7 @@ async function pullMargin(from: string, perp: string, margin: string, lev: numbe
   const unit = tokenUnit();
   const amount = units(margin, tokenDecimals());
   if (amount < unit || amount > unit * 500n) throw new Error("margin");
-  if (lev < 1 || lev > 1000) throw new Error("lev");
+  if (lev < 1 || lev > 50) throw new Error("lev");
   const balances = desk === "xlayer" ? { usdt: await readDeskUsdt(from) } : await readBalances(from);
   if (balances.usdt < amount) throw new Error("usdt");
   return amount;
@@ -1177,7 +1177,7 @@ export async function openPerp(from: string, perp: string, long: boolean, margin
   const amount = units(margin, tokenDecimals());
   const px = units(price, BSC.usdtDecimals);
   if (amount < unit || amount > unit * 500n) throw new Error("margin");
-  if (lev < 1 || lev > 1000) throw new Error("lev");
+  if (lev < 1 || lev > 50) throw new Error("lev");
   if (px < 10n ** 16n || px > 100_000n * 10n ** 18n) throw new Error("price");
   const balances = desk === "xlayer" ? { usdt: await readDeskUsdt(from) } : await readBalances(from);
   if (balances.usdt < amount) throw new Error("usdt");
@@ -1194,7 +1194,7 @@ export async function takePerp(from: string, perp: string, quoteId: bigint, marg
   const unit = tokenUnit();
   const amount = units(margin, tokenDecimals());
   if (amount < unit || amount > unit * 500n) throw new Error("margin");
-  if (lev < 1 || lev > 1000) throw new Error("lev");
+  if (lev < 1 || lev > 50) throw new Error("lev");
   const balances = desk === "xlayer" ? { usdt: await readDeskUsdt(from) } : await readBalances(from);
   if (balances.usdt < amount) throw new Error("usdt");
   const data = encodeFunctionData({

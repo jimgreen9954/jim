@@ -227,7 +227,7 @@ async function approve(from: string, token: Hex, spender: Hex, need: bigint): Pr
     functionName: "allowance",
     args: [from as Hex, spender],
   });
-  if (allowance >= need) return;
+  if (allowance === need) return;
   if (allowance > 0n) {
     await waitOk(await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, 0n] })));
   }

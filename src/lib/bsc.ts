@@ -227,6 +227,8 @@ async function resumeSwap(key: string): Promise<Hex | null> {
 export function units(amount: string, decimals: number): bigint {
   const trimmed = amount.trim().replace(/\.$/, "");
   if (!/^\d+(\.\d+)?$/.test(trimmed)) throw new Error("amount");
+  const frac = trimmed.split(".")[1] ?? "";
+  if (frac.length > decimals) throw new Error("decimals");
   return parseUnits(trimmed, decimals);
 }
 

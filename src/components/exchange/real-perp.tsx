@@ -929,6 +929,12 @@ export function RealPerp({
           ? "分批保证金必须能被笔数整除。网页因此不发。这拦不住直接调用旧合约，旧的六本仍可能少收 1 个最小单位。BEM 对照不是这个缺陷。"
           : "A split margin must divide by the number of slices, so the page did not send it. A direct call to an old contract can still post. The six older books can still be short 1 minimum unit. The BEM book is not that defect.",
       );
+    else if (message === "decimals")
+      setNote(
+        lang === "zh"
+          ? "小数位超过这个币的精度，没有发出去。"
+          : "Too many decimal places for this token. Nothing was sent.",
+      );
     else if (message === "amount")
       setNote(
         lang === "zh"
@@ -1063,7 +1069,7 @@ export function RealPerp({
   const dec = chain === "xlayer" ? 6 : 18;
   const scan = chain === "xlayer" ? XLAYER.explorer : BSC.explorer;
   const floor = view && view.min > 0n ? Number(view.min / 10n ** BigInt(dec)) : 1;
-  const levOk = lev >= 1 && lev <= 1000;
+  const levOk = lev >= 1 && lev <= 50;
   const marginOk = (() => {
     const n = Number(margin);
     return Number.isFinite(n) && n >= floor && n <= 500;

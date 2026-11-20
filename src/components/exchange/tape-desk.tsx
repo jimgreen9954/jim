@@ -661,7 +661,9 @@ export function TapeDesk({ account, zh }: { account: string | null; zh: boolean 
         const message = err instanceof Error ? err.message : "";
         const code = (err as { code?: number }).code;
         setBad(true);
-        if (message === "amount" || message === "integer") {
+        if (message === "decimals") {
+          setNote(zh ? "小数位超过这个币的精度，没有发出去。" : "Too many decimal places for this token. Nothing was sent.");
+        } else if (message === "amount" || message === "integer") {
           setNote(
             kind === "stake"
               ? zh

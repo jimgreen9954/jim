@@ -92,7 +92,7 @@ async function approve(from: string, token: Hex, amount: bigint) {
   const desk = deskAddress();
   if (!desk) throw new Error("desk");
   const allowance = await client.readContract({ address: token, abi: erc20, functionName: "allowance", args: [from as Hex, desk] });
-  if (allowance >= amount) return;
+  if (allowance === amount) return;
   if (allowance > 0n) {
     const zero = encodeFunctionData({ abi: erc20, functionName: "approve", args: [desk, 0n] });
     await probe(from, token, zero);
@@ -128,6 +128,8 @@ export function wholeTape(text: string): bigint {
 export function units(text: string, decimals: number): bigint {
   const cleaned = text.trim().replace(/,/g, "");
   if (!/^\d+(\.\d+)?$/.test(cleaned)) throw new Error("amount");
+  const frac = cleaned.split(".")[1] ?? "";
+  if (frac.length > decimals) throw new Error("decimals");
   const amount = parseUnits(cleaned, decimals);
   if (amount <= 0n) throw new Error("amount");
   return amount;

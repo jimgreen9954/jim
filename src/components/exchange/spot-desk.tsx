@@ -610,6 +610,8 @@ export function SpotDesk({
       );
     else if (message === "tiny")
       setNote(lang === "zh" ? "池子报不出价，没有发出去。" : "The pool did not quote. Nothing was sent.");
+    else if (message === "decimals")
+      setNote(lang === "zh" ? "小数位超过这个币的精度，没有发出去。" : "Too many decimal places for this token. Nothing was sent.");
     else if (message === "amount") setNote(c.pay);
     else setNote(message || c.walletReject);
     setBad(true);

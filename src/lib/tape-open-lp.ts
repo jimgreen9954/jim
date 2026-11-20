@@ -136,7 +136,7 @@ async function approve(from: string, token: Hex, need: bigint) {
     functionName: "allowance",
     args: [from as Hex, OPEN_POOL],
   });
-  if (allowance >= need) return;
+  if (allowance === need) return;
   if (allowance > 0n) {
     await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [OPEN_POOL, 0n] }));
   }
