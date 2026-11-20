@@ -483,10 +483,9 @@ export function nextTierCap(margin: string, chain: Desk): number {
   return 5;
 }
 
-/** What the book the page reads will actually accept. TAPE and FAB are paused. */
+/** What the book the page reads will actually accept. FAB stays paused. */
 export function liveLevCap(coin: string): number {
-  if (coin === "tape" || coin === "fab") return 0;
-  if (coin === "up") return 5;
+  if (coin === "fab") return 0;
   return 50;
 }
 
@@ -496,20 +495,22 @@ const COIN_MARK: Record<Exclude<CoinBook, "fab">, Hex> = {
   eth: "0xc060EEc9230B6760FD1ca87Ac8DdD7f4332dA31B",
   zec: "0x00f7e34f7571BCe2133EA9511E503D5200B940EA",
   up: "0x11dCaA2ee4A6F4c437B9B6B304FFBc09B768845B",
-  tape: "0x5EF3db885b1E3D254a192887965ed514187089A3",
+  tape: "0x86fA83c53DD77F1562543B62dFf839B7BcD0Ea99",
 };
 
 export const PREV_BTC_COIN_BOOK = "0x77E6af2fb801f8A30258aB6E3fFaC8c0b53ECbd1" as Hex;
 export const PREV_ETH_COIN_BOOK = "0x33Eb07D186B25243D58e72Be51859D3f5c28545F" as Hex;
 export const PREV_ZEC_COIN_BOOK = "0xE1f5a45D709F6d547FcA76F2E2E7d42AfDe0bA90" as Hex;
 export const PREV_UP_COIN_BOOK = "0xB3cdB968580cE0121f613886E8f86EFFcC514d70" as Hex;
+export const LAST_UP_COIN_BOOK = "0xceC1334Bc30D05e3ceab6bA19a5C0915df075552" as Hex;
 export const PREV_TAPE_COIN_BOOK = "0x9b17D0F6431957661AdD30051de2615cb08A3886" as Hex;
+export const LAST_TAPE_COIN_BOOK = "0xd5CaE88012A443449BE3d6efCf86A245A6972a86" as Hex;
 export const PREV_FAB_COIN_BOOK = "0x6Bd480BF658FaB7A2cb758c0408A7b3B5B94B431" as Hex;
 export const BTC_COIN_BOOK = "0x81060936404F7984675c3928731871032b9E8eEE" as Hex;
 export const ETH_COIN_BOOK = "0xB059c8951256A5eBBf9051f7d8D19AE0A1798A82" as Hex;
 export const ZEC_COIN_BOOK = "0xc2D7436047ff08afB7A8aB6fFa9cDb73Bb1EDFC6" as Hex;
-export const UP_COIN_BOOK = "0xceC1334Bc30D05e3ceab6bA19a5C0915df075552" as Hex;
-export const TAPE_COIN_BOOK = "0xd5CaE88012A443449BE3d6efCf86A245A6972a86" as Hex;
+export const UP_COIN_BOOK = "0x53610279d1fFaF4D211E4c3988c964A9E870007F" as Hex;
+export const TAPE_COIN_BOOK = "0x76FF80D56E1be05BabeD1C4ef31fb9dEfa941d22" as Hex;
 export const FAB_COIN_BOOK = "0x80318c852eE7fBDe52cE439deC3AE022Ba39A536" as Hex;
 
 const COIN_LIVE: Partial<Record<CoinBook, { chain: Desk; book: Hex }>> = {
@@ -565,7 +566,7 @@ export async function deployRisk(from: string, which: Desk): Promise<string> {
 
 function pinned(perp: string): void {
   const want = perp.toLowerCase();
-  const rows = [bookOf("bsc"), bookOf("xlayer"), LAST_BSC, PREV_BSC, OLDER_BSC, PREV_XPERP, OLDER_XPERP, coinBook("bsc", "btc"), coinBook("bsc", "eth"), coinBook("bsc", "zec"), coinBook("bsc", "up"), coinBook("xlayer", "tape"), coinBook("xlayer", "fab"), BTC_COIN_BOOK, ETH_COIN_BOOK, ZEC_COIN_BOOK, UP_COIN_BOOK, TAPE_COIN_BOOK, FAB_COIN_BOOK];
+  const rows = [bookOf("bsc"), bookOf("xlayer"), LAST_BSC, PREV_BSC, OLDER_BSC, PREV_XPERP, OLDER_XPERP, coinBook("bsc", "btc"), coinBook("bsc", "eth"), coinBook("bsc", "zec"), coinBook("bsc", "up"), coinBook("xlayer", "tape"), coinBook("xlayer", "fab"), BTC_COIN_BOOK, ETH_COIN_BOOK, ZEC_COIN_BOOK, UP_COIN_BOOK, LAST_UP_COIN_BOOK, PREV_UP_COIN_BOOK, TAPE_COIN_BOOK, LAST_TAPE_COIN_BOOK, PREV_TAPE_COIN_BOOK, FAB_COIN_BOOK, PREV_FAB_COIN_BOOK];
   if (!rows.some((row) => row.length === 42 && row.toLowerCase() === want)) throw new Error("book");
 }
 
@@ -1064,11 +1065,20 @@ export async function bookIsRisk(perp: string): Promise<boolean> {
   }
 }
 
+function maxLevFor(perp: string, amount: bigint): number {
+  const id = perp.toLowerCase();
+  if (id !== UP_COIN_BOOK.toLowerCase() && id !== TAPE_COIN_BOOK.toLowerCase()) return 50;
+  const unit = id === TAPE_COIN_BOOK.toLowerCase() ? 1_000_000n : 10n ** 18n;
+  if (amount <= unit * 20n) return 50;
+  if (amount <= unit * 100n) return 20;
+  return 5;
+}
+
 async function pullMargin(from: string, perp: string, margin: string, lev: number) {
   const unit = tokenUnit();
   const amount = units(margin, tokenDecimals());
   if (amount < unit || amount > unit * 500n) throw new Error("margin");
-  if (lev < 1 || lev > (perp.toLowerCase() === UP_COIN_BOOK.toLowerCase() ? 5 : 50)) throw new Error("lev");
+  if (lev < 1 || lev > maxLevFor(perp, amount)) throw new Error("lev");
   const balances = desk === "xlayer" ? { usdt: await readDeskUsdt(from) } : await readBalances(from);
   if (balances.usdt < amount) throw new Error("usdt");
   return amount;
@@ -1120,9 +1130,9 @@ async function assertV2(perp: string) {
 /** Post-only on the risk book. On the live book, a crossing price is refused and the rest uses open. */
 function rejectUpOpen(perp: string) {
   const id = perp.toLowerCase();
-  if (id === PREV_UP_COIN_BOOK.toLowerCase()) throw new Error("uphalt");
+  if (id === LAST_UP_COIN_BOOK.toLowerCase() || id === PREV_UP_COIN_BOOK.toLowerCase()) throw new Error("uphalt");
   if (
-    id === TAPE_COIN_BOOK.toLowerCase() ||
+    id === LAST_TAPE_COIN_BOOK.toLowerCase() ||
     id === PREV_TAPE_COIN_BOOK.toLowerCase() ||
     id === FAB_COIN_BOOK.toLowerCase() ||
     id === PREV_FAB_COIN_BOOK.toLowerCase()
@@ -1229,7 +1239,7 @@ export async function openPerp(from: string, perp: string, long: boolean, margin
   const amount = units(margin, tokenDecimals());
   const px = units(price, BSC.usdtDecimals);
   if (amount < unit || amount > unit * 500n) throw new Error("margin");
-  if (lev < 1 || lev > (perp.toLowerCase() === UP_COIN_BOOK.toLowerCase() ? 5 : 50)) throw new Error("lev");
+  if (lev < 1 || lev > maxLevFor(perp, amount)) throw new Error("lev");
   if (px < 10n ** 16n || px > 100_000n * 10n ** 18n) throw new Error("price");
   const balances = desk === "xlayer" ? { usdt: await readDeskUsdt(from) } : await readBalances(from);
   if (balances.usdt < amount) throw new Error("usdt");
@@ -1247,7 +1257,7 @@ export async function takePerp(from: string, perp: string, quoteId: bigint, marg
   const unit = tokenUnit();
   const amount = units(margin, tokenDecimals());
   if (amount < unit || amount > unit * 500n) throw new Error("margin");
-  if (lev < 1 || lev > (perp.toLowerCase() === UP_COIN_BOOK.toLowerCase() ? 5 : 50)) throw new Error("lev");
+  if (lev < 1 || lev > maxLevFor(perp, amount)) throw new Error("lev");
   const balances = desk === "xlayer" ? { usdt: await readDeskUsdt(from) } : await readBalances(from);
   if (balances.usdt < amount) throw new Error("usdt");
   const data = encodeFunctionData({

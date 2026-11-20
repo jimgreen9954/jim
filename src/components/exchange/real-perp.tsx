@@ -1085,7 +1085,7 @@ export function RealPerp({
   const floor = view && view.min > 0n ? Number(view.min / 10n ** BigInt(dec)) : 1;
   const levMax = liveLevCap(coin);
   const tierCap = nextTierCap(margin, chain);
-  const levOk = lev >= 1 && lev <= levMax;
+  const levOk = lev >= 1 && lev <= (coin === "up" || coin === "tape" ? Math.min(levMax, tierCap) : levMax);
   const marginOk = (() => {
     const n = Number(margin);
     return Number.isFinite(n) && n >= floor && n <= 500;
@@ -2831,24 +2831,32 @@ export function RealPerp({
                                     ? /* @__PURE__ */ jsx("p", {
                                         className: "desk-extra",
                                         children: !levOk
-                                          ? coin === "tape" || coin === "fab"
+                                          ? coin === "fab"
                                             ? lang === "zh"
-                                              ? "TAPE 和 FAB 先停新开仓。平仓和撤单还可以。"
-                                              : "New TAPE and FAB opens are paused. Close and cancel still work."
-                                            : coin === "up"
+                                              ? "FAB 先停新开仓。平仓和撤单还可以。"
+                                              : "New FAB opens are paused. Close and cancel still work."
+                                            : coin === "up" || coin === "tape"
                                               ? lang === "zh"
-                                                ? "这一本 UP 最高 5 倍。"
-                                                : "This UP book stops at 5×."
+                                                ? `这一笔保证金最高 ${tierCap} 倍。20 以内 50 倍，100 以内 20 倍，超过 100 是 5 倍。`
+                                                : `This margin stops at ${tierCap}×. 50× up to 20, 20× up to 100, and 5× above that.`
                                               : c.levCap
                                           : `${floor}–500 USDT`,
                                       })
-                                    : coin === "up" || coin === "tape" || coin === "fab"
+                                    : coin === "fab"
                                       ? /* @__PURE__ */ jsx("p", {
                                           className: "desk-extra",
                                           children:
                                             lang === "zh"
-                                              ? `新本按这一笔保证金最高 ${tierCap} 倍：20 以内 50 倍，100 以内 20 倍，超过 100 是 5 倍。现在的 UP 仍是 5 倍。TAPE 和 FAB 还没换上。`
-                                              : `The next book allows ${tierCap}× on this margin: 50× up to 20, 20× up to 100, and 5× above that. This UP book is still 5×. TAPE and FAB are not switched yet.`,
+                                              ? "FAB 先停新开仓。平仓和撤单还可以。"
+                                              : "New FAB opens are paused. Close and cancel still work.",
+                                        })
+                                      : coin === "up" || coin === "tape"
+                                      ? /* @__PURE__ */ jsx("p", {
+                                          className: "desk-extra",
+                                          children:
+                                            lang === "zh"
+                                              ? `这一笔最高 ${tierCap} 倍：20 以内 50 倍，100 以内 20 倍，超过 100 是 5 倍。`
+                                              : `This margin allows ${tierCap}×: 50× up to 20, 20× up to 100, and 5× above that.`,
                                         })
                                       : null,
                                   !priceOk
@@ -3758,7 +3766,7 @@ export function RealPerp({
               setLevText(String(next));
               if (next > 20) setMode("pro");
             },
-            cap: liveLevCap(coin) || 1,
+            cap: (coin === "up" || coin === "tape" ? Math.min(liveLevCap(coin), nextTierCap(margin, chain)) : liveLevCap(coin)) || 1,
             onClose: () => setLevOpen(false),
           })
         : null,

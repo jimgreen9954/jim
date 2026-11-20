@@ -6,7 +6,6 @@ import { useExchange } from "@/lib/exchange-store";
 import type { DeskView } from "@/components/exchange/desk-chrome";
 import { currentAccount, onAccount } from "@/lib/wallet";
 import { selectDesk, type Desk } from "@/lib/perp";
-import { ShipBar } from "@/components/exchange/ship-bar";
 
 const RedGift = lazy(() =>
   import("@/components/exchange/red-gift").then((mod) => ({ default: mod.RedGift })),
@@ -219,7 +218,6 @@ export function DeskHome({
   return (
     <>
       <ArriveHint zh={zh} />
-      <ShipBar zh={zh} />
       {showPerp ? (
         <Suspense fallback={null}>
           <DeskGuard
