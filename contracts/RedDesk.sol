@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
+import "./TickMath.sol";
+
 interface IERC20 {
     function balanceOf(address) external view returns (uint256);
     function approve(address, uint256) external returns (bool);
@@ -16,6 +18,7 @@ interface IRouter {
 
 interface IPool {
     function slot0() external view returns (uint160 sqrtPriceX96, int24, uint16, uint16, uint16, uint8, bool);
+    function observe(uint32[] calldata secondsAgos) external view returns (int56[] memory tickCumulatives, uint160[] memory);
 }
 
 interface ISplit {
@@ -359,7 +362,14 @@ contract RedDesk {
     }
 
     function _bemOkb(uint256 bemIn) internal view returns (uint256) {
-        (uint160 sqrt,,,,,,) = IPool(BEM_POOL).slot0();
+        uint32[] memory ago = new uint32[](2);
+        ago[0] = 600;
+        ago[1] = 0;
+        (int56[] memory ticks,) = IPool(BEM_POOL).observe(ago);
+        int56 delta = ticks[1] - ticks[0];
+        int24 tick = int24(delta / int56(600));
+        if (delta < 0 && delta % int56(600) != 0) tick--;
+        uint160 sqrt = TickMath.getSqrtRatioAtTick(tick);
         require(sqrt > 0, "buy");
         uint256 step = (bemIn * uint256(sqrt)) / Q96;
         return (step * uint256(sqrt)) / Q96;

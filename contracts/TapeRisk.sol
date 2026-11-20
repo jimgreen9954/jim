@@ -344,7 +344,7 @@ contract TapeRisk {
     }
 
     function _check(uint256 margin, uint16 lev) internal view {
-        if (lev < 1 || lev > 1000) revert Bad();
+        if (lev < 1 || lev > 50) revert Bad();
         if (margin < MIN_MARGIN || margin > MAX_MARGIN) revert Bad();
     }
 

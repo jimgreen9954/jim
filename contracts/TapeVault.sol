@@ -99,6 +99,47 @@ contract TapeVault {
         }
     }
 
+    uint256 public exitAt;
+    uint256 public constant EXIT_WAIT = 6 hours;
+
+    /// A shareholder starts the clock. Six hours later anyone may flatten the book.
+    function askExit() external guarded {
+        if (shares[msg.sender] == 0) revert Bad();
+        if (exitAt == 0) exitAt = block.timestamp;
+    }
+
+    /// After the wait, cancel this vault's quotes and close its deals. Then a withdrawal can pass.
+    function forceFlat() external guarded {
+        if (exitAt == 0 || block.timestamp < exitAt + EXIT_WAIT) revert Bad();
+        _sync();
+        uint256 guard;
+        while (quoteIds.length > 0 && guard < CAP) {
+            uint256 id = quoteIds[quoteIds.length - 1];
+            (address user, bool open,) = _quote(id);
+            if (!(open && user == address(this))) {
+                _dropQuote(quoteIds.length - 1);
+                continue;
+            }
+            skipHang = id;
+            IBook(book).cancel(id);
+            skipHang = 0;
+            _sync();
+            guard++;
+        }
+        guard = 0;
+        while (dealIds.length > 0 && guard < CAP) {
+            uint256 id = dealIds[dealIds.length - 1];
+            (uint256 ours, bool open) = _side(id);
+            if (!(open && ours > 0)) {
+                _dropDeal(dealIds.length - 1);
+                continue;
+            }
+            IBook(book).close(id);
+            _sync();
+            guard++;
+        }
+    }
+
     function withdraw(uint256 shareAmt) external guarded {
         if (shareAmt == 0 || shareAmt > shares[msg.sender] || totalShares == 0) revert Bad();
         _sync();
@@ -217,6 +258,7 @@ contract TapeVault {
         locked = sum;
         _dealtSince = false;
         if (locked == 0) _crystallize();
+        if (quoteIds.length == 0 && dealIds.length == 0 && hang == 0 && locked == 0) exitAt = 0;
     }
 
     bool private _dealtSince;
