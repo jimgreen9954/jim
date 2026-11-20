@@ -50,6 +50,7 @@ import {
   pickBook,
   liveLevCap,
   markGuard,
+  tapeSamples,
   pokeBook,
   liquidatePerp,
   openPerp,
@@ -403,6 +404,7 @@ export function RealPerp({
   const [bad, setBad] = useState(false);
   const [hash, setHash] = useState(null);
   const [guardOn, setGuardOn] = useState(null);
+  const [tapeN, setTapeN] = useState(null);
   const [link, setLink] = useState(null);
   const [bal, setBal] = useState(null);
   const [prices, setPrices] = useState([]);
@@ -793,6 +795,15 @@ export function RealPerp({
         .catch(() => {
           if (!dead) setGuardOn(null);
         });
+      if (coin === "tape") {
+        tapeSamples()
+          .then((n) => {
+            if (!dead) setTapeN(n);
+          })
+          .catch(() => {
+            if (!dead) setTapeN(null);
+          });
+      } else if (!dead) setTapeN(null);
     };
     pull();
     const id = window.setInterval(pull, 15_000);
@@ -1388,10 +1399,12 @@ export function RealPerp({
   const usdtShort = Boolean(bal) && opensMargin && needLock > freeN + 0.009;
   const walletUsdt = bal ? freeN.toFixed(2) : "—";
   const shortLine = lang === "zh" ? `${chain === "xlayer" ? "USDT0" : "USDT"} 不够` : `Not enough ${chain === "xlayer" ? "USDT0" : "USDT"}`;
+  const tapeCold = coin === "tape" && tapeN !== null && tapeN < 20;
+  const needMark = markFar || ((coin === "up" || coin === "tape") && guardOn === false) || tapeCold;
   const place = (side) => {
     setIntent(side);
     if (busy) return;
-    if (markFar || ((coin === "up" || coin === "tape") && guardOn === false)) {
+    if (needMark) {
       run((from) => pokeBook(from, perp));
       return;
     }
@@ -2862,7 +2875,15 @@ export function RealPerp({
                                                       ? "标记和现价差超过约 3%。新开仓和强平停了，平仓还可以。点下面更新标记。"
                                                       : "Spot and the average differ by about 3%. New opens and liquidations are paused. Close still works. Update the mark below.",
                                                 })
-                                              : null,
+                                              : tapeCold
+                                                ? /* @__PURE__ */ jsx("p", {
+                                                    className: "desk-extra",
+                                                    children:
+                                                      lang === "zh"
+                                                        ? "TAPE 标记还只有刚部署时的价格，10 分钟样本没满。新开仓先停，平仓可以。"
+                                                        : "The TAPE mark is still the deployment price. The 10-minute sample is not full. New opens wait. Close still works.",
+                                                  })
+                                                : null,
                                             /* @__PURE__ */ jsx("p", {
                                               className: "desk-extra",
                                               children:
@@ -2884,8 +2905,7 @@ export function RealPerp({
                                     className={`min-h-11 w-full text-sm ${intent === "short" ? "hl-sell" : "hl-buy"}`}
                                     disabled={
                                       busy ||
-                                      (!markFar &&
-                                        guardOn !== false &&
+                                      (!needMark &&
                                         (feeBlocked ||
                                           !levOk ||
                                           !marginOk ||
@@ -2893,7 +2913,7 @@ export function RealPerp({
                                           (!alt && !view?.priced && !(markN > 0))))
                                     }
                                     onClick={() => {
-                                      if (markFar || ((coin === "up" || coin === "tape") && guardOn === false)) {
+                                      if (needMark) {
                                         run((from) => pokeBook(from, perp));
                                         return;
                                       }
@@ -2923,14 +2943,10 @@ export function RealPerp({
                                       setCard(intent);
                                     }}
                                   >
-                                    {(coin === "up" || coin === "tape") && guardOn === false
+                                    {needMark
                                       ? lang === "zh"
                                         ? "更新标记"
                                         : "Update the mark"
-                                      : markFar
-                                      ? lang === "zh"
-                                        ? "对齐标记价"
-                                        : "Match the mark"
                                       : waiting &&
                                     view &&
                                     (intent === "long" ? !view.pendingLong : view.pendingLong)

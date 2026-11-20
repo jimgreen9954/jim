@@ -254,6 +254,20 @@ export async function markGuard(coin: "up" | "tape"): Promise<boolean | null> {
   }
 }
 
+/** TAPE opens wait until about 10 minutes of pokes are stored. 20 samples is that window. */
+export async function tapeSamples(): Promise<number | null> {
+  try {
+    const n = await (await deskClient("xlayer")).readContract({
+      address: TAPE_MARK,
+      abi: [{ name: "count", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint8" }] }] as const,
+      functionName: "count",
+    });
+    return Number(n);
+  } catch {
+    return null;
+  }
+}
+
 async function tapePoolCode(): Promise<Hex | undefined> {
   const { createPublicClient, http } = await import("viem");
   for (const url of [XLAYER.rpc, "https://xlayer.drpc.org"]) {
@@ -926,6 +940,8 @@ async function assertV2(perp: string) {
   if (perp.toLowerCase() === TAPE_COIN_BOOK.toLowerCase()) {
     const code = await tapePoolCode();
     if (!code || keccak256(code) !== TAPE_OFFICIAL_CODE) throw new Error("poolhash");
+    const n = await tapeSamples();
+    if (n === null || n < 20) throw new Error("warm");
   }
   const retired = perp.toLowerCase();
   if (retired === LAST_BSC.toLowerCase() || retired === PREV_BSC.toLowerCase() || retired === OLDER_BSC.toLowerCase()) throw new Error("halt");
