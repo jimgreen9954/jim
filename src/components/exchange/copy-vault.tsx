@@ -193,8 +193,8 @@ export function CopyVault({ zh, account }: { zh: boolean; account: string | null
           </li>
           <li>
             {zh
-              ? "4. 有份额的人可以申请退出。满 6 小时后，任何人可以强制平掉这口金库自己的挂单和仓位，然后才能取出。没满时间，强制平仓会失败。上一口没有这道计时，页面不再读它。"
-              : "4. A shareholder can ask to exit. After 6 hours anyone can force this vault's own quotes and positions flat, and a withdrawal can then pass. Before that, the force-flat call fails. The previous vault has no such clock, and this page no longer reads it."}
+              ? "4. 有份额的人可以申请退出。满 6 小时后，任何人可以强制平掉这口金库自己的挂单和仓位，然后才能取出。没满时间，强制平仓会失败。BSC 这一口在已经申请退出之后不能再开新单。X Layer 这一口还没有这道限制。上一口没有这道计时，页面不再读它。"
+              : "4. A shareholder can ask to exit. After 6 hours anyone can force this vault's own quotes and positions flat, and a withdrawal can then pass. Before that, the force-flat call fails. On BSC a new open is refused after the exit request. On X Layer it is not. The previous vault has no such clock, and this page no longer reads it."}
           </li>
         </ol>
         <details className="mt-2 text-xs text-ink/55">

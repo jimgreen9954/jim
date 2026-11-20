@@ -1075,8 +1075,8 @@ export function RealPerp({
   const dec = chain === "xlayer" ? 6 : 18;
   const scan = chain === "xlayer" ? XLAYER.explorer : BSC.explorer;
   const floor = view && view.min > 0n ? Number(view.min / 10n ** BigInt(dec)) : 1;
-  const upHalt = coin === "up";
-  const levOk = !upHalt && lev >= 1 && lev <= 50;
+  const levMax = coin === "up" ? 5 : 50;
+  const levOk = lev >= 1 && lev <= levMax;
   const marginOk = (() => {
     const n = Number(margin);
     return Number.isFinite(n) && n >= floor && n <= 500;
@@ -2821,13 +2821,13 @@ export function RealPerp({
                                   !levOk || !marginOk
                                     ? /* @__PURE__ */ jsx("p", {
                                         className: "desk-extra",
-                                        children: upHalt
-                                          ? lang === "zh"
-                                            ? "UP 新开仓已暂停。可以平仓、撤单、取回保证金。新标记用官方池，每次最多 0.5%，还没换上。"
-                                            : "New UP orders are paused. Close, cancel, and withdraw margin still work. The new official-pool mark is not live yet."
-                                          : !levOk
-                                            ? c.levCap
-                                            : `${floor}–500 USDT`,
+                                        children: !levOk
+                                          ? coin === "up"
+                                            ? lang === "zh"
+                                              ? "UP 杠杆最高 5 倍。"
+                                              : "UP leverage stops at 5×."
+                                            : c.levCap
+                                          : `${floor}–500 USDT`,
                                       })
                                     : null,
                                   !priceOk
@@ -3737,6 +3737,7 @@ export function RealPerp({
               setLevText(String(next));
               if (next > 20) setMode("pro");
             },
+            cap: coin === "up" ? 5 : 50,
             onClose: () => setLevOpen(false),
           })
         : null,

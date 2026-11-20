@@ -587,13 +587,15 @@ export function LevDialog({
   lev,
   onLev,
   onClose,
+  cap = 50,
 }: {
   zh: boolean;
   lev: number;
   onLev: (next: number) => void;
   onClose: () => void;
+  cap?: number;
 }) {
-  const start = lev >= 1 && lev <= 50 ? lev : 3;
+  const start = lev >= 1 && lev <= cap ? lev : Math.min(3, cap);
   const [n, setN] = useState(start);
   const [text, setText] = useState(String(start));
   useEffect(() => {
@@ -627,7 +629,7 @@ export function LevDialog({
           <input
             type="range"
             min={1}
-            max={50}
+            max={cap}
             value={n}
             onChange={(event) => {
               const next = Number(event.target.value);
@@ -646,13 +648,13 @@ export function LevDialog({
                 const raw = event.target.value.replace(/[^\d]/g, "").slice(0, 4);
                 setText(raw);
                 const next = Number(raw);
-                if (next >= 1 && next <= 50) {
+                if (next >= 1 && next <= cap) {
                   setN(next);
                   onLev(next);
                 }
               }}
               onBlur={() => {
-                const next = Math.min(50, Math.max(1, Math.round(Number(text) || n || 1)));
+                const next = Math.min(cap, Math.max(1, Math.round(Number(text) || n || 1)));
                 setN(next);
                 setText(String(next));
                 onLev(next);

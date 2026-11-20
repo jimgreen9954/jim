@@ -464,23 +464,23 @@ const TAPE_POOL = "0x58eaD5b41Cfd3627791D439402dd65571c286484" as Hex;
 
 /** Marks the multisig already created. Books are separate. */
 const COIN_MARK: Record<Exclude<CoinBook, "fab">, Hex> = {
-  btc: "0xCA0a236452fB2cE9257DCb976211E09A95769bd0",
-  eth: "0xcA755b4202Bfa5419c73019Eb889a5F884F7A337",
-  zec: "0x3a84F7df202C2d76a5435D467619D1a8d4815d21",
-  up: "0xD18Ec3c8d37D4954974EB217361C11b80E6545E3",
+  btc: "0x1892Bc451C5e0cD7A26B9FdBf7aC8338d423B371",
+  eth: "0xc060EEc9230B6760FD1ca87Ac8DdD7f4332dA31B",
+  zec: "0x00f7e34f7571BCe2133EA9511E503D5200B940EA",
+  up: "0x11dCaA2ee4A6F4c437B9B6B304FFBc09B768845B",
   tape: "0x5EF3db885b1E3D254a192887965ed514187089A3",
 };
 
-export const PREV_BTC_COIN_BOOK = "0x81A35fDaaEe7dE3dcDa195F312279Bb2aDc0b8B4" as Hex;
-export const PREV_ETH_COIN_BOOK = "0x564C9f5aa89430ca4f2945b466e34BE8705ee0B8" as Hex;
-export const PREV_ZEC_COIN_BOOK = "0xdAd8E211ec6c8b43eCe19Da2519C9505CDCbF229" as Hex;
-export const PREV_UP_COIN_BOOK = "0x7aaf00Dab91e0e6dDDb6093323D0140c11C55aD3" as Hex;
+export const PREV_BTC_COIN_BOOK = "0x77E6af2fb801f8A30258aB6E3fFaC8c0b53ECbd1" as Hex;
+export const PREV_ETH_COIN_BOOK = "0x33Eb07D186B25243D58e72Be51859D3f5c28545F" as Hex;
+export const PREV_ZEC_COIN_BOOK = "0xE1f5a45D709F6d547FcA76F2E2E7d42AfDe0bA90" as Hex;
+export const PREV_UP_COIN_BOOK = "0xB3cdB968580cE0121f613886E8f86EFFcC514d70" as Hex;
 export const PREV_TAPE_COIN_BOOK = "0x9b17D0F6431957661AdD30051de2615cb08A3886" as Hex;
 export const PREV_FAB_COIN_BOOK = "0x6Bd480BF658FaB7A2cb758c0408A7b3B5B94B431" as Hex;
-export const BTC_COIN_BOOK = "0x77E6af2fb801f8A30258aB6E3fFaC8c0b53ECbd1" as Hex;
-export const ETH_COIN_BOOK = "0x33Eb07D186B25243D58e72Be51859D3f5c28545F" as Hex;
-export const ZEC_COIN_BOOK = "0xE1f5a45D709F6d547FcA76F2E2E7d42AfDe0bA90" as Hex;
-export const UP_COIN_BOOK = "0xB3cdB968580cE0121f613886E8f86EFFcC514d70" as Hex;
+export const BTC_COIN_BOOK = "0x81060936404F7984675c3928731871032b9E8eEE" as Hex;
+export const ETH_COIN_BOOK = "0xB059c8951256A5eBBf9051f7d8D19AE0A1798A82" as Hex;
+export const ZEC_COIN_BOOK = "0xc2D7436047ff08afB7A8aB6fFa9cDb73Bb1EDFC6" as Hex;
+export const UP_COIN_BOOK = "0xceC1334Bc30D05e3ceab6bA19a5C0915df075552" as Hex;
 export const TAPE_COIN_BOOK = "0xd5CaE88012A443449BE3d6efCf86A245A6972a86" as Hex;
 export const FAB_COIN_BOOK = "0x80318c852eE7fBDe52cE439deC3AE022Ba39A536" as Hex;
 
@@ -1039,7 +1039,7 @@ async function pullMargin(from: string, perp: string, margin: string, lev: numbe
   const unit = tokenUnit();
   const amount = units(margin, tokenDecimals());
   if (amount < unit || amount > unit * 500n) throw new Error("margin");
-  if (lev < 1 || lev > 50) throw new Error("lev");
+  if (lev < 1 || lev > (perp.toLowerCase() === UP_COIN_BOOK.toLowerCase() ? 5 : 50)) throw new Error("lev");
   const balances = desk === "xlayer" ? { usdt: await readDeskUsdt(from) } : await readBalances(from);
   if (balances.usdt < amount) throw new Error("usdt");
   return amount;
@@ -1088,7 +1088,7 @@ async function assertV2(perp: string) {
 
 /** Post-only on the risk book. On the live book, a crossing price is refused and the rest uses open. */
 function rejectUpOpen(perp: string) {
-  if (perp.toLowerCase() === UP_COIN_BOOK.toLowerCase()) throw new Error("uphalt");
+  if (perp.toLowerCase() === PREV_UP_COIN_BOOK.toLowerCase()) throw new Error("uphalt");
 }
 
 export async function openPostPerp(from: string, perp: string, long: boolean, margin: string, lev: number, price: string): Promise<Hex> {
@@ -1189,7 +1189,7 @@ export async function openPerp(from: string, perp: string, long: boolean, margin
   const amount = units(margin, tokenDecimals());
   const px = units(price, BSC.usdtDecimals);
   if (amount < unit || amount > unit * 500n) throw new Error("margin");
-  if (lev < 1 || lev > 50) throw new Error("lev");
+  if (lev < 1 || lev > (perp.toLowerCase() === UP_COIN_BOOK.toLowerCase() ? 5 : 50)) throw new Error("lev");
   if (px < 10n ** 16n || px > 100_000n * 10n ** 18n) throw new Error("price");
   const balances = desk === "xlayer" ? { usdt: await readDeskUsdt(from) } : await readBalances(from);
   if (balances.usdt < amount) throw new Error("usdt");
@@ -1207,7 +1207,7 @@ export async function takePerp(from: string, perp: string, quoteId: bigint, marg
   const unit = tokenUnit();
   const amount = units(margin, tokenDecimals());
   if (amount < unit || amount > unit * 500n) throw new Error("margin");
-  if (lev < 1 || lev > 50) throw new Error("lev");
+  if (lev < 1 || lev > (perp.toLowerCase() === UP_COIN_BOOK.toLowerCase() ? 5 : 50)) throw new Error("lev");
   const balances = desk === "xlayer" ? { usdt: await readDeskUsdt(from) } : await readBalances(from);
   if (balances.usdt < amount) throw new Error("usdt");
   const data = encodeFunctionData({
