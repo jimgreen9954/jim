@@ -5,6 +5,7 @@ import { startPersistence, useExchange } from "@/lib/exchange-store";
 import { fmtPct, fmtPx, fmtUsd } from "@/lib/format";
 import { equity, sessionChange } from "@/lib/match-engine";
 import { DeskHome, RedPocket, openOtcDesk, rememberDesk } from "@/components/exchange/desk-home";
+import { ShipBar } from "@/components/exchange/ship-bar";
 import { OpenFeeBar } from "@/components/exchange/open-fee";
 import { ConnectButton, ChainSwitch } from "@/components/exchange/wallet-bar";
 import { SettingsMenu } from "@/components/exchange/settings-menu";
@@ -175,6 +176,7 @@ export function Exchange({
             className={`flex flex-col gap-3 px-2 pt-2 sm:px-3 ${floor === "paper" ? "pb-6" : ""}`}
           >
             <FeeStrip />
+            {floor === "desk" ? <ShipBar zh={lang === "zh"} /> : null}
             {floor === "desk" ? <DeskHome desk={desk} onDesk={setDesk} /> : null}
             {floor === "paper" ? (
               <Suspense fallback={null}>
