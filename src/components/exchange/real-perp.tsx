@@ -49,7 +49,7 @@ import {
   bookOf,
   pickBook,
   liveLevCap,
-  nextTierCap,
+  markGuard,
   pokeBook,
   liquidatePerp,
   openPerp,
@@ -402,6 +402,7 @@ export function RealPerp({
   const [note, setNote] = useState(null);
   const [bad, setBad] = useState(false);
   const [hash, setHash] = useState(null);
+  const [guardOn, setGuardOn] = useState(null);
   const [link, setLink] = useState(null);
   const [bal, setBal] = useState(null);
   const [prices, setPrices] = useState([]);
@@ -779,6 +780,28 @@ export function RealPerp({
     };
   }, [coin]);
   useEffect(() => {
+    if (coin !== "up" && coin !== "tape") {
+      setGuardOn(null);
+      return;
+    }
+    let dead = false;
+    const pull = () => {
+      markGuard(coin)
+        .then((on) => {
+          if (!dead) setGuardOn(on);
+        })
+        .catch(() => {
+          if (!dead) setGuardOn(null);
+        });
+    };
+    pull();
+    const id = window.setInterval(pull, 15_000);
+    return () => {
+      dead = true;
+      window.clearInterval(id);
+    };
+  }, [coin]);
+  useEffect(() => {
     const chart = () => setPhone("chart");
     const trade = () => setPhone("ticket");
     window.addEventListener("tape-chart", chart);
@@ -901,6 +924,12 @@ export function RealPerp({
         lang === "zh"
           ? "标记价还没攒满 10 分钟。这段时间不能开仓，已有仓可以平。"
           : "The mark still needs 10 minutes. Opens wait. Open positions can still be closed.",
+      );
+    else if (message === "poolhash")
+      setNote(
+        lang === "zh"
+          ? "TAPE 官方池的合约代码变了。新开仓停了，平仓和撤单还可以。"
+          : "The TAPE official pool code changed. New opens are paused. Close and cancel still work.",
       );
     else if (message === "tapehalt")
       setNote(
@@ -1074,9 +1103,8 @@ export function RealPerp({
   const dec = chain === "xlayer" ? 6 : 18;
   const scan = chain === "xlayer" ? XLAYER.explorer : BSC.explorer;
   const floor = view && view.min > 0n ? Number(view.min / 10n ** BigInt(dec)) : 1;
-  const levMax = liveLevCap(coin);
-  const tierCap = nextTierCap(margin, chain);
-  const levOk = lev >= 1 && lev <= (coin === "up" || coin === "tape" ? Math.min(levMax, tierCap) : levMax);
+  const levMax = liveLevCap(coin, margin, chain);
+  const levOk = lev >= 1 && lev <= levMax;
   const marginOk = (() => {
     const n = Number(margin);
     return Number.isFinite(n) && n >= floor && n <= 500;
@@ -1363,7 +1391,7 @@ export function RealPerp({
   const place = (side) => {
     setIntent(side);
     if (busy) return;
-    if (markFar) {
+    if (markFar || ((coin === "up" || coin === "tape") && guardOn === false)) {
       run((from) => pokeBook(from, perp));
       return;
     }
@@ -2810,8 +2838,8 @@ export function RealPerp({
                                               : "New FAB opens are paused. Close and cancel still work."
                                             : coin === "up" || coin === "tape"
                                               ? lang === "zh"
-                                                ? `这一笔保证金最高 ${tierCap} 倍。20 以内 50 倍，100 以内 20 倍，超过 100 是 5 倍。`
-                                                : `This margin stops at ${tierCap}×. 50× up to 20, 20× up to 100, and 5× above that.`
+                                                ? `这一笔保证金最高 ${levMax} 倍。20 以内 50 倍，100 以内 20 倍，超过 100 是 5 倍。`
+                                                : `This margin stops at ${levMax}×. 50× up to 20, 20× up to 100, and 5× above that.`
                                               : c.levCap
                                           : `${floor}–500 USDT`,
                                       })
@@ -2824,12 +2852,25 @@ export function RealPerp({
                                               : "New FAB opens are paused. Close and cancel still work.",
                                         })
                                       : coin === "up" || coin === "tape"
-                                      ? /* @__PURE__ */ jsx("p", {
-                                          className: "desk-extra",
-                                          children:
-                                            lang === "zh"
-                                              ? `这一笔最高 ${tierCap} 倍：20 以内 50 倍，100 以内 20 倍，超过 100 是 5 倍。`
-                                              : `This margin allows ${tierCap}×: 50× up to 20, 20× up to 100, and 5× above that.`,
+                                      ? /* @__PURE__ */ jsxs(Fragment, {
+                                          children: [
+                                            guardOn === false
+                                              ? /* @__PURE__ */ jsx("p", {
+                                                  className: "desk-extra",
+                                                  children:
+                                                    lang === "zh"
+                                                      ? "标记和现价差超过约 3%。新开仓和强平停了，平仓还可以。点下面更新标记。"
+                                                      : "Spot and the average differ by about 3%. New opens and liquidations are paused. Close still works. Update the mark below.",
+                                                })
+                                              : null,
+                                            /* @__PURE__ */ jsx("p", {
+                                              className: "desk-extra",
+                                              children:
+                                                lang === "zh"
+                                                  ? `这一笔最高 ${levMax} 倍：20 以内 50 倍，100 以内 20 倍，超过 100 是 5 倍。`
+                                                  : `This margin allows ${levMax}×: 50× up to 20, 20× up to 100, and 5× above that.`,
+                                            }),
+                                          ],
                                         })
                                       : null,
                                   !priceOk
@@ -2844,6 +2885,7 @@ export function RealPerp({
                                     disabled={
                                       busy ||
                                       (!markFar &&
+                                        guardOn !== false &&
                                         (feeBlocked ||
                                           !levOk ||
                                           !marginOk ||
@@ -2851,7 +2893,7 @@ export function RealPerp({
                                           (!alt && !view?.priced && !(markN > 0))))
                                     }
                                     onClick={() => {
-                                      if (markFar) {
+                                      if (markFar || ((coin === "up" || coin === "tape") && guardOn === false)) {
                                         run((from) => pokeBook(from, perp));
                                         return;
                                       }
@@ -2881,7 +2923,11 @@ export function RealPerp({
                                       setCard(intent);
                                     }}
                                   >
-                                    {markFar
+                                    {(coin === "up" || coin === "tape") && guardOn === false
+                                      ? lang === "zh"
+                                        ? "更新标记"
+                                        : "Update the mark"
+                                      : markFar
                                       ? lang === "zh"
                                         ? "对齐标记价"
                                         : "Match the mark"
@@ -3698,7 +3744,7 @@ export function RealPerp({
               setLevText(String(next));
               if (next > 20) setMode("pro");
             },
-            cap: (coin === "up" || coin === "tape" ? Math.min(liveLevCap(coin), nextTierCap(margin, chain)) : liveLevCap(coin)) || 1,
+            cap: liveLevCap(coin, margin, chain) || 1,
             onClose: () => setLevOpen(false),
           })
         : null,

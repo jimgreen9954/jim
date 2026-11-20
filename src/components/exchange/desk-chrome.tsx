@@ -10,7 +10,7 @@ import { fundingPreview, fundClock, pct } from "@/lib/risk-rules";
 import { readOpenBook } from "@/lib/tape-open-candles";
 import { readSpotBook, usdtText } from "@/lib/tape-spot";
 import { readShareBook } from "@/lib/circuit-split";
-import type { Desk } from "@/lib/perp";
+import { marketLev, type Desk } from "@/lib/perp";
 
 import { PairChevron } from "@/components/exchange/pair-chevron";
 
@@ -143,7 +143,7 @@ const ROWS: Row[] = [
     tag: "永续",
     where: "",
     pin: true,
-    lev: "50×",
+    lev: marketLev("bem"),
   },
   {
     id: "bemx",
@@ -153,7 +153,7 @@ const ROWS: Row[] = [
     tag: "永续",
     where: "",
     pin: true,
-    lev: "50×",
+    lev: marketLev("bem"),
   },
   {
     id: "btcperp",
@@ -163,7 +163,7 @@ const ROWS: Row[] = [
     tag: "永续",
     where: "BSC",
     pin: true,
-    lev: "50×",
+    lev: marketLev("btc"),
   },
   {
     id: "ethperp",
@@ -173,7 +173,7 @@ const ROWS: Row[] = [
     tag: "永续",
     where: "BSC",
     pin: true,
-    lev: "50×",
+    lev: marketLev("eth"),
   },
   {
     id: "zecperp",
@@ -183,7 +183,7 @@ const ROWS: Row[] = [
     tag: "永续",
     where: "BSC",
     pin: true,
-    lev: "50×",
+    lev: marketLev("zec"),
   },
   {
     id: "upperp",
@@ -193,7 +193,7 @@ const ROWS: Row[] = [
     tag: "永续",
     where: "BSC",
     pin: true,
-    lev: "50×",
+    lev: marketLev("up"),
     find: "UP TapeUP",
   },
   {
@@ -204,7 +204,7 @@ const ROWS: Row[] = [
     tag: "永续",
     where: "X Layer",
     pin: true,
-    lev: "50×",
+    lev: marketLev("tape"),
   },
   {
     id: "fabperp",
@@ -214,7 +214,7 @@ const ROWS: Row[] = [
     tag: "永续",
     where: "X Layer",
     pin: true,
-    lev: "50×",
+    lev: marketLev("fab"),
     find: "FAB FabX",
   },
   {
