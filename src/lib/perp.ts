@@ -8,6 +8,9 @@ import { FAB_PERP_SHIP_BYTECODE, FAB_VIEW_QUOTER_BYTECODE } from "@/lib/fab-ship
 import { MARK_BYTECODE } from "@/lib/mark-artifact";
 import { UP_MARK_BYTECODE } from "@/lib/up-mark-artifact";
 import { UP_SHIP_BYTECODE } from "@/lib/up-ship-artifact";
+import { TWAP_MARK_BYTECODE } from "@/lib/twap-mark-artifact";
+import { TWAP_SHIP_BYTECODE } from "@/lib/twap-ship-artifact";
+import { VAULT_BYTECODE } from "@/lib/vault-artifact";
 import { FAB_QUOTER } from "@/lib/fab";
 import { getProvider } from "@/lib/wallet";
 import { XLAYER, connectXLayer } from "@/lib/xlayer";
@@ -1535,6 +1538,64 @@ export async function deployCoinBook(from: string, coin: keyof typeof FRESH_MARK
     desk = was;
   }
 }
+
+export async function deployTwapBook(from: string, id: "btc" | "eth" | "zec" | "bem"): Promise<{ book: string; mark: string; usd: number }> {
+  const spec = {
+    btc: { pool: BSC.btcPool, quoteIsToken0: true, baseDec: 18, quoteDec: 18, lo: 1_000, hi: 100_000 },
+    eth: { pool: BSC.ethPool, quoteIsToken0: false, baseDec: 18, quoteDec: 18, lo: 50, hi: 20_000 },
+    zec: { pool: BSC.zecPool, quoteIsToken0: false, baseDec: 18, quoteDec: 18, lo: 20, hi: 20_000 },
+    bem: { pool: BSC.pool, quoteIsToken0: true, baseDec: 8, quoteDec: 18, lo: 0.01, hi: 1_000 },
+  }[id];
+  if (from.toLowerCase() !== BSC_SAFE.toLowerCase()) throw new Error("safe");
+  const was = desk;
+  desk = "bsc";
+  try {
+    const rpc = await client();
+    const markInit = (TWAP_MARK_BYTECODE +
+      encodeAbiParameters(
+        [{ type: "address" }, { type: "bool" }, { type: "uint8" }, { type: "uint8" }],
+        [spec.pool, spec.quoteIsToken0, spec.baseDec, spec.quoteDec],
+      ).slice(2)) as Hex;
+    const shipArgs = encodeAbiParameters(
+      [{ type: "bytes" }, { type: "bytes" }, { type: "address" }, { type: "uint256" }, { type: "address" }],
+      [markInit, RISK_BYTECODE, BSC.usdt, 10n ** 18n, BSC_SAFE],
+    );
+    const hash = await send(from, CREATE_CALL, createCallData((TWAP_SHIP_BYTECODE + shipArgs.slice(2)) as Hex), 12_000_000n);
+    const receipt = await rpc.getTransactionReceipt({ hash });
+    const topic = keccak256(stringToBytes("Book(address)"));
+    const log = receipt.logs.find((row) => row.topics[0]?.toLowerCase() === topic.toLowerCase());
+    const indexed = log?.topics[1];
+    if (!indexed || indexed.length !== 66) throw new Error("revert");
+    const book = getAddress(`0x${indexed.slice(26)}`);
+    const px = await readMark("bsc", book);
+    if (px === null) throw new Error("price");
+    const usd = Number(px) / 1e18;
+    if (!(usd >= spec.lo && usd <= spec.hi)) throw new Error("price");
+    const mark = await rpc.readContract({ address: book, abi: poolAbi, functionName: "pool" });
+    return { book, mark, usd };
+  } finally {
+    desk = was;
+  }
+}
+
+export async function deployGuardedVault(from: string, chain: "bsc" | "xlayer"): Promise<string> {
+  const safe = chain === "bsc" ? BSC_SAFE : XLAYER_SAFE;
+  if (from.toLowerCase() !== safe.toLowerCase()) throw new Error("safe");
+  const was = desk;
+  desk = chain;
+  try {
+    const rpc = await client();
+    const args = encodeAbiParameters(
+      [{ type: "address" }, { type: "address" }, { type: "address" }, { type: "uint16" }],
+      [chain === "bsc" ? BSC.usdt : X_USDT, chain === "bsc" ? BSC_REBATE : KNOWN_XPERP, safe, 1000],
+    );
+    const hash = await send(from, CREATE_CALL, createCallData((VAULT_BYTECODE + args.slice(2)) as Hex), 8_000_000n);
+    return createdAddress((await rpc.getTransactionReceipt({ hash })).logs);
+  } finally {
+    desk = was;
+  }
+}
+
 export async function deployUpOfficial(from: string): Promise<{ mark: string; book: string }> {
   const safe = BSC_SAFE;
   if (from.toLowerCase() !== safe.toLowerCase()) throw new Error("fee");

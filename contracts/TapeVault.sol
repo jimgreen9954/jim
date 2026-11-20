@@ -156,6 +156,7 @@ contract TapeVault {
 
     function open(bool long, uint256 margin, uint16 lev, uint256 price) external guarded {
         if (msg.sender != leader) revert Bad();
+        if (exitAt != 0) revert Bad();
         if (quoteIds.length + dealIds.length >= CAP) revert Bad();
         _sync();
         if (margin == 0 || margin > usdt.balanceOf(address(this))) revert Bad();
@@ -169,6 +170,7 @@ contract TapeVault {
 
     function take(uint256 quoteId, uint256 margin, uint16 lev) external guarded {
         if (msg.sender != leader) revert Bad();
+        if (exitAt != 0) revert Bad();
         if (quoteIds.length + dealIds.length >= CAP) revert Bad();
         _sync();
         if (margin == 0 || margin > usdt.balanceOf(address(this))) revert Bad();
