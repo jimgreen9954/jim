@@ -913,6 +913,12 @@ export function RealPerp({
           ? "新合约已经在，标记价还没攒满 10 分钟。这段时间不能开仓，旧仓可以平。"
           : "The new book is up. The mark still needs 10 minutes. Opens wait. Old positions can still be closed.",
       );
+    else if (message === "uphalt")
+      setNote(
+        lang === "zh"
+          ? "UP 新开仓已停。这本读的是官方池的即时价。可以平仓、撤单、取回保证金。新标记由多签部署，杠杆最高 5 倍。"
+          : "New UP opens are paused. This book reads the official pool's spot price. Positions can be closed, orders cancelled, and margin withdrawn. The multisig deploys the next mark. Leverage there is at most 5×.",
+      );
     else if (message === "halt")
       setNote(
         lang === "zh"
@@ -1069,7 +1075,8 @@ export function RealPerp({
   const dec = chain === "xlayer" ? 6 : 18;
   const scan = chain === "xlayer" ? XLAYER.explorer : BSC.explorer;
   const floor = view && view.min > 0n ? Number(view.min / 10n ** BigInt(dec)) : 1;
-  const levOk = lev >= 1 && lev <= 50;
+  const upHalt = coin === "up";
+  const levOk = !upHalt && lev >= 1 && lev <= 50;
   const marginOk = (() => {
     const n = Number(margin);
     return Number.isFinite(n) && n >= floor && n <= 500;
@@ -2814,7 +2821,13 @@ export function RealPerp({
                                   !levOk || !marginOk
                                     ? /* @__PURE__ */ jsx("p", {
                                         className: "desk-extra",
-                                        children: !levOk ? c.levCap : `${floor}–500 USDT`,
+                                        children: upHalt
+                                          ? lang === "zh"
+                                            ? "UP 新开仓已暂停。可以平仓、撤单、取回保证金。新标记用官方池，每次最多 0.5%，还没换上。"
+                                            : "New UP orders are paused. Close, cancel, and withdraw margin still work. The new official-pool mark is not live yet."
+                                          : !levOk
+                                            ? c.levCap
+                                            : `${floor}–500 USDT`,
                                       })
                                     : null,
                                   !priceOk

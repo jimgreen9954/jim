@@ -6,11 +6,11 @@ import { RISK_BYTECODE } from "@/lib/risk-artifact";
 import { DESK_MARK_BYTECODE } from "@/lib/desk-mark-artifact";
 import { FAB_PERP_SHIP_BYTECODE, FAB_VIEW_QUOTER_BYTECODE } from "@/lib/fab-ship-artifact";
 import { MARK_BYTECODE } from "@/lib/mark-artifact";
-import { UP_MARK_BYTECODE } from "@/lib/up-mark-artifact";
-import { UP_SHIP_BYTECODE } from "@/lib/up-ship-artifact";
 import { TWAP_MARK_BYTECODE } from "@/lib/twap-mark-artifact";
 import { TWAP_SHIP_BYTECODE } from "@/lib/twap-ship-artifact";
 import { VAULT_BYTECODE } from "@/lib/vault-artifact";
+import { UP_CAP_MARK_BYTECODE } from "@/lib/up-cap-mark-artifact";
+import { UP_RISK_BYTECODE } from "@/lib/up-risk-artifact";
 import { FAB_QUOTER } from "@/lib/fab";
 import { getProvider } from "@/lib/wallet";
 import { XLAYER, connectXLayer } from "@/lib/xlayer";
@@ -1087,7 +1087,12 @@ async function assertV2(perp: string) {
 }
 
 /** Post-only on the risk book. On the live book, a crossing price is refused and the rest uses open. */
+function rejectUpOpen(perp: string) {
+  if (perp.toLowerCase() === UP_COIN_BOOK.toLowerCase()) throw new Error("uphalt");
+}
+
 export async function openPostPerp(from: string, perp: string, long: boolean, margin: string, lev: number, price: string): Promise<Hex> {
+  rejectUpOpen(perp);
   await assertV2(perp);
   const amount = await pullMargin(from, perp, margin, lev);
   const px = units(price, BSC.usdtDecimals);
@@ -1108,6 +1113,7 @@ export async function openPostPerp(from: string, perp: string, long: boolean, ma
 
 /** One transaction on the risk book. On the live book, one signature per slice. */
 export async function openScalePerp(from: string, perp: string, long: boolean, margin: string, lev: number, start: string, end: string, count: number): Promise<Hex> {
+  rejectUpOpen(perp);
   await assertV2(perp);
   if (count < 2 || count > 5) throw new Error("amount");
   const whole = units(margin, tokenDecimals());
@@ -1134,6 +1140,7 @@ export async function openScalePerp(from: string, perp: string, long: boolean, m
 }
 
 export async function openStopPerp(from: string, perp: string, long: boolean, margin: string, lev: number, trigger: string): Promise<Hex> {
+  rejectUpOpen(perp);
   await assertV2(perp);
   if (!(await bookIsRisk(perp))) throw new Error("local");
   const amount = await pullMargin(from, perp, margin, lev);
@@ -1148,6 +1155,7 @@ export async function openStopPerp(from: string, perp: string, long: boolean, ma
 }
 
 export async function openTwapPerp(from: string, perp: string, long: boolean, margin: string, lev: number, slices: number, gap: number): Promise<Hex> {
+  rejectUpOpen(perp);
   await assertV2(perp);
   if (!(await bookIsRisk(perp))) throw new Error("risk");
   if (slices < 2 || slices > 12 || gap < 30) throw new Error("amount");
@@ -1175,6 +1183,7 @@ export async function armTrailPerp(from: string, perp: string, dealId: bigint, b
 }
 
 export async function openPerp(from: string, perp: string, long: boolean, margin: string, lev: number, price: string): Promise<Hex> {
+  rejectUpOpen(perp);
   await assertV2(perp);
   const unit = tokenUnit();
   const amount = units(margin, tokenDecimals());
@@ -1193,6 +1202,7 @@ export async function openPerp(from: string, perp: string, long: boolean, margin
 }
 
 export async function takePerp(from: string, perp: string, quoteId: bigint, margin: string, lev: number, priced: boolean): Promise<Hex> {
+  rejectUpOpen(perp);
   await assertV2(perp);
   const unit = tokenUnit();
   const amount = units(margin, tokenDecimals());
@@ -1340,7 +1350,7 @@ const COIN_SPEC = {
   btc: { chain: "bsc" as Desk, src: BSC.btcPool, kind: 0, quoteIsToken0: true, baseDec: 18, quoteDec: 18, lo: 1_000, hi: 100_000 },
   eth: { chain: "bsc" as Desk, src: BSC.ethPool, kind: 0, quoteIsToken0: false, baseDec: 18, quoteDec: 18, lo: 50, hi: 100_000 },
   zec: { chain: "bsc" as Desk, src: BSC.zecPool, kind: 0, quoteIsToken0: false, baseDec: 18, quoteDec: 18, lo: 20, hi: 20_000 },
-  up: { chain: "bsc" as Desk, src: BSC.upWbnb, kind: 2, quoteIsToken0: true, baseDec: 18, quoteDec: 18, lo: 0.02, hi: 50 },
+  up: { chain: "bsc" as Desk, src: "0xDf40529fa3E797c992272e27B811E59E5f1827Ae" as Hex, kind: 4, quoteIsToken0: true, baseDec: 18, quoteDec: 18, lo: 0.02, hi: 50 },
   tape: { chain: "xlayer" as Desk, src: TAPE_POOL, kind: 1, quoteIsToken0: false, baseDec: 8, quoteDec: 6, lo: 0.05, hi: 100 },
   fab: { chain: "xlayer" as Desk, src: FAB_QUOTER, kind: 3, quoteIsToken0: false, baseDec: 8, quoteDec: 8, lo: 0.01, hi: 50 },
 };
@@ -1381,6 +1391,7 @@ export async function deployCoin(
   coin: CoinBook,
   onStep?: (step: 1 | 2 | 3) => void,
 ): Promise<{ book: string; hash: Hex }> {
+  if (coin === "up") throw new Error("uphalt");
   const spec = COIN_SPEC[coin];
   const safe = spec.chain === "xlayer" ? XLAYER_SAFE : BSC_SAFE;
   if (from.toLowerCase() !== safe.toLowerCase()) throw new Error("fee");
@@ -1462,7 +1473,7 @@ const markRead = [
 
 /** New mark and new book. A partial take leaves the rest of the quote. Insurance pays only on liquidation. */
 export async function deployCoinV2(from: string, coin: CoinBook): Promise<{ book: string; hash: Hex }> {
-  if (coin === "fab") throw new Error("coin");
+  if (coin === "up" || coin === "fab") throw new Error(coin === "up" ? "uphalt" : "coin");
   const spec = COIN_SPEC[coin];
   const safe = spec.chain === "xlayer" ? XLAYER_SAFE : BSC_SAFE;
   if (from.toLowerCase() !== safe.toLowerCase()) throw new Error("fee");
@@ -1514,6 +1525,7 @@ const FRESH_MARK = {
 
 /** The mark is already on chain and already poked. One signature creates the book. */
 export async function deployCoinBook(from: string, coin: keyof typeof FRESH_MARK): Promise<{ book: string; hash: Hex }> {
+  if (coin === "up") throw new Error("uphalt");
   const spec = COIN_SPEC[coin];
   const safe = spec.chain === "xlayer" ? XLAYER_SAFE : BSC_SAFE;
   if (from.toLowerCase() !== safe.toLowerCase()) throw new Error("fee");
@@ -1596,18 +1608,22 @@ export async function deployGuardedVault(from: string, chain: "bsc" | "xlayer"):
   }
 }
 
-export async function deployUpOfficial(from: string): Promise<{ mark: string; book: string }> {
-  const safe = BSC_SAFE;
-  if (from.toLowerCase() !== safe.toLowerCase()) throw new Error("fee");
+export async function deployUpCap(from: string): Promise<{ book: string; mark: string; usd: number }> {
+  if (from.toLowerCase() !== BSC_SAFE.toLowerCase()) throw new Error("safe");
   const was = desk;
   desk = "bsc";
   try {
     const rpc = await client();
-    const args = encodeAbiParameters(
+    const markInit = (UP_CAP_MARK_BYTECODE +
+      encodeAbiParameters(
+        [{ type: "address" }, { type: "address" }],
+        ["0xDf40529fa3E797c992272e27B811E59E5f1827Ae", BSC.pool],
+      ).slice(2)) as Hex;
+    const shipArgs = encodeAbiParameters(
       [{ type: "bytes" }, { type: "bytes" }, { type: "address" }, { type: "uint256" }, { type: "address" }],
-      [UP_MARK_BYTECODE as Hex, RISK_BYTECODE as Hex, BSC.usdt, 10n ** 18n, safe],
+      [markInit, UP_RISK_BYTECODE, BSC.usdt, 10n ** 18n, BSC_SAFE],
     );
-    const hash = await send(from, CREATE_CALL, createCallData((UP_SHIP_BYTECODE + args.slice(2)) as Hex), 14_000_000n);
+    const hash = await send(from, CREATE_CALL, createCallData((TWAP_SHIP_BYTECODE + shipArgs.slice(2)) as Hex), 14_000_000n);
     const receipt = await rpc.getTransactionReceipt({ hash });
     const topic = keccak256(stringToBytes("Book(address)"));
     const log = receipt.logs.find((row) => row.topics[0]?.toLowerCase() === topic.toLowerCase());
@@ -1615,13 +1631,24 @@ export async function deployUpOfficial(from: string): Promise<{ mark: string; bo
     if (!indexed || indexed.length !== 66) throw new Error("revert");
     const book = getAddress(`0x${indexed.slice(26)}`);
     const px = await readMark("bsc", book);
-    if (px === null || !markSane("up", px)) throw new Error("price");
-    if (typeof window !== "undefined") window.localStorage.setItem("tl-up-official-book", book);
-    const pool = await rpc.readContract({ address: book, abi: poolAbi, functionName: "pool" });
-    return { mark: pool, book };
+    const mark = await rpc.readContract({ address: book, abi: poolAbi, functionName: "pool" });
+    const spot = await rpc.readContract({
+      address: mark,
+      abi: [{ name: "spotUsd", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] }] as const,
+      functionName: "spotUsd",
+    });
+    if (px === null || spot === 0n) throw new Error("price");
+    const usd = Number(px) / 1e18;
+    const live = Number(spot) / 1e18;
+    if (!(usd >= 0.02 && usd <= 50) || live <= 0 || usd / live > 1.03 || live / usd > 1.03) throw new Error("price");
+    return { book, mark, usd };
   } finally {
     desk = was;
   }
+}
+
+export async function deployUpOfficial(_from: string): Promise<{ mark: string; book: string }> {
+  throw new Error("uphalt");
 }
 
 export async function pokeBook(from: string, perp: string): Promise<Hex> {

@@ -183,6 +183,7 @@ contract TapeRisk {
     }
 
     function open(bool long, uint256 margin, uint16 lev, uint256 price) external nonReentrant {
+        _guard();
         mark();
         _check(margin, lev);
         if (price < 1e16 || price > 100_000 ether) revert Bad();
@@ -194,6 +195,7 @@ contract TapeRisk {
     }
 
     function take(uint256 quoteId, uint256 margin, uint16 lev) external nonReentrant {
+        _guard();
         mark();
         Quote memory q = quotes[quoteId];
         if (!q.open || q.user == msg.sender) revert Bad();
@@ -216,6 +218,7 @@ contract TapeRisk {
 
     /// Resting only. Reverts if this price would meet an opposite quote.
     function openPost(bool long, uint256 margin, uint16 lev, uint256 price) external nonReentrant {
+        _guard();
         mark();
         _check(margin, lev);
         if (price < 1e16 || price > 100_000 ether) revert Bad();
@@ -229,6 +232,7 @@ contract TapeRisk {
 
     /// One signature, two to five resting quotes between the two prices.
     function openScale(bool long, uint256 margin, uint16 lev, uint256 startPx, uint256 endPx, uint8 count) external nonReentrant {
+        _guard();
         if (count < 2 || count > 5) revert Bad();
         mark();
         uint256 each = margin / count;
@@ -249,6 +253,7 @@ contract TapeRisk {
 
     /// Long fires when mark rises to the trigger. Short fires when mark falls to it.
     function openStop(bool long, uint256 margin, uint16 lev, uint256 triggerPx) external nonReentrant {
+        _guard();
         mark();
         _check(margin, lev);
         if (triggerPx < 1e16 || triggerPx > 100_000 ether) revert Bad();
@@ -258,6 +263,7 @@ contract TapeRisk {
     }
 
     function fireStop(uint256 id) external nonReentrant {
+        _guard();
         Stop memory s = stops[id];
         if (!s.open) revert Bad();
         uint256 px = mark();
@@ -278,6 +284,7 @@ contract TapeRisk {
 
     /// First slice rests now. Anyone can poke the next slice after the gap.
     function openTwap(bool long, uint256 margin, uint16 lev, uint8 slices, uint32 gap) external nonReentrant {
+        _guard();
         if (slices < 2 || slices > 12) revert Bad();
         if (gap < 30 || gap > 1 days) revert Bad();
         uint256 each = margin / slices;
@@ -289,6 +296,7 @@ contract TapeRisk {
     }
 
     function pokeTwap(uint256 id) external nonReentrant {
+        _guard();
         _poke(id);
     }
 
@@ -340,11 +348,19 @@ contract TapeRisk {
     }
 
     function liquidate(uint256 id) external nonReentrant {
+        _guard();
         _settle(id, true);
     }
 
+    function _maxLev() internal pure virtual returns (uint16) {
+        return 50;
+    }
+
+    /// Overridden by the UP book. Other books do not ask the mark for a pause.
+    function _guard() internal view virtual {}
+
     function _check(uint256 margin, uint16 lev) internal view {
-        if (lev < 1 || lev > 50) revert Bad();
+        if (lev < 1 || lev > _maxLev()) revert Bad();
         if (margin < MIN_MARGIN || margin > MAX_MARGIN) revert Bad();
     }
 
