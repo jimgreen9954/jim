@@ -25,6 +25,8 @@ const vaultAbi = parseAbi([
   "function cancel(uint256)",
   "function close(uint256)",
   "function sync()",
+  "function askExit()",
+  "function forceFlat()",
   "function book() view returns (address)",
   "function usdt() view returns (address)",
   "function leader() view returns (address)",
@@ -336,6 +338,18 @@ export async function closeVault(chain: VaultChain, dealId: bigint): Promise<voi
 export async function syncVault(chain: VaultChain): Promise<void> {
   const from = await signer(chain);
   const data = encodeFunctionData({ abi: vaultAbi, functionName: "sync" });
+  await wait(chain, await send(from, vaultAddress(chain), data));
+}
+
+export async function askVaultExit(chain: VaultChain): Promise<void> {
+  const from = await signer(chain);
+  const data = encodeFunctionData({ abi: vaultAbi, functionName: "askExit" });
+  await wait(chain, await send(from, vaultAddress(chain), data));
+}
+
+export async function forceVaultFlat(chain: VaultChain): Promise<void> {
+  const from = await signer(chain);
+  const data = encodeFunctionData({ abi: vaultAbi, functionName: "forceFlat" });
   await wait(chain, await send(from, vaultAddress(chain), data));
 }
 

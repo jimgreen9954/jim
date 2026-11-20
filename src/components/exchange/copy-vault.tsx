@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import {
+  askVaultExit,
   cancelVault,
   closeVault,
+  forceVaultFlat,
   openVault,
   readCopyVault,
   showAmt,
@@ -155,6 +157,24 @@ export function CopyVault({ zh, account }: { zh: boolean; account: string | null
         >
           {side === "in" ? (zh ? "存入已关闭" : "Deposits closed") : zh ? "取出" : "Withdraw"}
         </button>
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            disabled={busy}
+            className="min-h-10 border border-gold text-xs disabled:opacity-40"
+            onClick={() => run(() => askVaultExit(chain), zh ? "已开始计时。满 6 小时后可以强制平仓。" : "The clock has started. After 6 hours anyone can force it flat.")}
+          >
+            {zh ? "申请退出" : "Ask to exit"}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            className="min-h-10 border border-gold text-xs disabled:opacity-40"
+            onClick={() => run(() => forceVaultFlat(chain), zh ? "已强制平掉这口金库自己的单。" : "This vault's own orders are flat.")}
+          >
+            {zh ? "满 6 小时后强制平仓" : "Force flat after 6 hours"}
+          </button>
+        </div>
         <ol className="mt-3 grid gap-1.5 text-xs leading-5 text-ink/75">
           <li>
             {zh
@@ -173,8 +193,8 @@ export function CopyVault({ zh, account }: { zh: boolean; account: string | null
           </li>
           <li>
             {zh
-              ? "4. 取出发给这口新金库。有挂单、仓位或未结保证金时合约会拒绝。旧金库不在这个按钮上。"
-              : "4. Withdraw calls this new vault. It reverts while a quote, a position, or unsettled margin remains. The old vault is not this button."}
+              ? "4. 有份额的人可以申请退出。满 6 小时后，任何人可以强制平掉这口金库自己的挂单和仓位，然后才能取出。没满时间，强制平仓会失败。上一口没有这道计时，页面不再读它。"
+              : "4. A shareholder can ask to exit. After 6 hours anyone can force this vault's own quotes and positions flat, and a withdrawal can then pass. Before that, the force-flat call fails. The previous vault has no such clock, and this page no longer reads it."}
           </li>
         </ol>
         <details className="mt-2 text-xs text-ink/55">
