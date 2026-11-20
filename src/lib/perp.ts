@@ -59,7 +59,9 @@ function tokenUnit(): bigint {
   return 10n ** BigInt(tokenDecimals());
 }
 export const KNOWN_PERP = "0xB98D14333a93D49a4E05478d002FC3944D88A3b7";
-export const BSC_REBATE = "0x89b2f4a2e0C07864172fB47fbDEa14411AF2e0E0";
+export const BSC_REBATE = "0x070c66555535e1145275df54f4eEBBfd28d98581";
+/** Desk book just replaced. The BSC copy vault is still bound to this address. Close only. */
+export const LAST_BSC = "0x89b2f4a2e0C07864172fB47fbDEa14411AF2e0E0";
 export const PREV_BSC = "0x0a81a426b29991a777e038d9e4ecce1783804aa0";
 export const OLDER_BSC = "0xdA4aA9E0aaad6F91835cD19345D49a8fcA8d019A";
 export const KNOWN_XPERP = "0x9fD9Ade0272646cc3aD36F1699Fd42CcFE8927c2";
@@ -537,7 +539,7 @@ export async function deployRisk(from: string, which: Desk): Promise<string> {
 
 function pinned(perp: string): void {
   const want = perp.toLowerCase();
-  const rows = [bookOf("bsc"), bookOf("xlayer"), PREV_BSC, OLDER_BSC, PREV_XPERP, OLDER_XPERP, coinBook("bsc", "btc"), coinBook("bsc", "eth"), coinBook("bsc", "zec"), coinBook("bsc", "up"), coinBook("xlayer", "tape"), coinBook("xlayer", "fab"), BTC_COIN_BOOK, ETH_COIN_BOOK, ZEC_COIN_BOOK, UP_COIN_BOOK, TAPE_COIN_BOOK, FAB_COIN_BOOK];
+  const rows = [bookOf("bsc"), bookOf("xlayer"), LAST_BSC, PREV_BSC, OLDER_BSC, PREV_XPERP, OLDER_XPERP, coinBook("bsc", "btc"), coinBook("bsc", "eth"), coinBook("bsc", "zec"), coinBook("bsc", "up"), coinBook("xlayer", "tape"), coinBook("xlayer", "fab"), BTC_COIN_BOOK, ETH_COIN_BOOK, ZEC_COIN_BOOK, UP_COIN_BOOK, TAPE_COIN_BOOK, FAB_COIN_BOOK];
   if (!rows.some((row) => row.length === 42 && row.toLowerCase() === want)) throw new Error("book");
 }
 
@@ -628,6 +630,7 @@ export async function readMine(account: string): Promise<MineRow[]> {
   const who = account.toLowerCase();
   const books = [
     ["bsc", "bem", BSC_REBATE],
+    ["bsc", "bem", LAST_BSC],
     ["xlayer", "bem", bookOf("xlayer")],
   ] as const;
   const out: MineRow[] = [];
@@ -1060,6 +1063,8 @@ function xBemPerp(perp: string): boolean {
 /** Old books stay closed. A v2 book can open once its mark is near the spot pools. */
 async function assertV2(perp: string) {
   pinned(perp);
+  const retired = perp.toLowerCase();
+  if (retired === LAST_BSC.toLowerCase() || retired === PREV_BSC.toLowerCase() || retired === OLDER_BSC.toLowerCase()) throw new Error("halt");
   let fresh = false;
   try {
     fresh = Boolean(await (await client()).readContract({ address: perp as Hex, abi: bookV2Abi, functionName: "bookV2" }));

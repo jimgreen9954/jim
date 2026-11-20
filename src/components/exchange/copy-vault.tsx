@@ -178,8 +178,8 @@ export function CopyVault({ zh, account }: { zh: boolean; account: string | null
         <ol className="mt-3 grid gap-1.5 text-xs leading-5 text-ink/75">
           <li>
             {zh
-              ? "1. 先选链。页面读的是这口新金库自己的 book、稳定币和带单人。两口新金库的钱不互通。旧金库没有升级，页面不再读它。"
-              : "1. Pick a chain. This page reads this new vault's own book, token, and leader. The two new vaults do not share funds. The old vault was not upgraded, and this page no longer reads it."}
+              ? "1. 先选链。页面读的是这口新金库自己的 book、稳定币和带单人。两口新金库的钱不互通。BSC 这一口的 book 仍是 0x89b2f4a2e0C07864172fB47fbDEa14411AF2e0E0，不是交易台现在的 BEM。旧金库没有升级，页面不再读它。"
+              : "1. Pick a chain. This page reads this new vault's own book, token, and leader. The two new vaults do not share funds. The BSC vault's book is still 0x89b2f4a2e0C07864172fB47fbDEa14411AF2e0E0, not the BEM book on the trading desk. The old vault was not upgraded, and this page no longer reads it."}
           </li>
           <li>
             {zh
