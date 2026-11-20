@@ -646,6 +646,8 @@ export async function repayLend(chain: LendChain, asset: LendAsset, amount: stri
     if (pay > have) pay = have;
     if (pay === 0n || (!closing && pay < qty)) throw new Error("usdt");
     await allowToken(chain, from, spec.usdt, pay, lend);
+    const allowance = await read<bigint>(chain, spec.usdt, "allowance", [from as Hex, lend], erc20);
+    if (allowance < pay) throw new Error("allow");
     await wait(chain, await send(from, lend, encodeFunctionData({ abi, functionName: "repay", args: [pay] })));
     if (!closing) return;
     owed = await read<bigint>(chain, lend, "debtOf", [from as Hex]);

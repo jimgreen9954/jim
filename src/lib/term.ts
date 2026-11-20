@@ -720,6 +720,8 @@ export async function repayTerm(chain: TermChain, id: bigint, debt: number, amou
       if (pay === 0n || (!closing && pay < qty)) throw new Error("balance");
       const data = encodeFunctionData({ abi, functionName: "repay", args: [id, pay] });
       await allowToken(chain, from, asset.token as Hex, pay, book);
+      const allowance = await read<bigint>(chain, asset.token as Hex, "allowance", [from as Hex, book], erc20);
+      if (allowance < pay) throw new Error("allow");
       await wait(chain, await send(from, book, data));
     }
     if (!closing) return;

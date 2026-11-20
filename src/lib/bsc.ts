@@ -870,17 +870,21 @@ export async function quoteWithBnb(token: Hex, feeHint: number, side: "buy" | "s
 
 const USDT_TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
-function usdtPaid(logs: readonly { address: string; topics: readonly (string | undefined)[]; data: string }[], owner: string): bigint {
+function tokenPaid(logs: readonly { address: string; topics: readonly (string | undefined)[]; data: string }[], token: string, owner: string): bigint {
   const who = `0x${owner.slice(2).toLowerCase().padStart(64, "0")}`;
   let total = 0n;
   for (const log of logs) {
-    if (log.address.toLowerCase() !== BSC.usdt.toLowerCase()) continue;
+    if (log.address.toLowerCase() !== token.toLowerCase()) continue;
     if ((log.topics[0] || "").toLowerCase() !== USDT_TRANSFER) continue;
     if ((log.topics[2] || "").toLowerCase() !== who) continue;
     if (!/^0x[0-9a-fA-F]{64}$/.test(log.data)) continue;
     total += BigInt(log.data);
   }
   return total;
+}
+
+function usdtPaid(logs: readonly { address: string; topics: readonly (string | undefined)[]; data: string }[], owner: string): bigint {
+  return tokenPaid(logs, BSC.usdt, owner);
 }
 
 export async function swapWithBnb(from: string, token: Hex, decimals: number, feeHint: number, side: "buy" | "sell", amount: string, floor?: bigint): Promise<Hex> {
@@ -1216,15 +1220,17 @@ export async function swapUpBnbSpot(from: string, side: "buy" | "sell", amount: 
   const feeKey = `tl-fee:${from.toLowerCase()}:upbnb-sell:${amountIn}`;
   const swapKey = `tl-swap:${from.toLowerCase()}:upbnb-sell:${amountIn}`;
   const sold = await sellDepositedUp(from, parts, swapKey, feeKey, minBem);
-  await waitOk(sold);
-  const bnbOut = await quoteExact(BSC.bem, BSC.wbnb, minBem, 10000);
+  const receipt = await client.waitForTransactionReceipt({ hash: sold, timeout: 60_000 });
+  const bemGot = tokenPaid(receipt.logs, BSC.bem, owner);
+  if (bemGot <= 0n) throw new Error("slip");
+  const bnbOut = await quoteExact(BSC.bem, BSC.wbnb, bemGot, 10000);
   const minBnb = (bnbOut * 9900n) / 10_000n;
   if (minBnb <= 0n) throw new Error("tiny");
-  await approveIfNeeded(from, BSC.bem, minBem);
+  await approveIfNeeded(from, BSC.bem, bemGot);
   const swap = encodeFunctionData({
     abi: routerAbi,
     functionName: "exactInputSingle",
-    args: [{ tokenIn: BSC.bem, tokenOut: BSC.wbnb, fee: 10000, recipient: BSC.router, deadline, amountIn: minBem, amountOutMinimum: minBnb, sqrtPriceLimitX96: 0n }],
+    args: [{ tokenIn: BSC.bem, tokenOut: BSC.wbnb, fee: 10000, recipient: BSC.router, deadline, amountIn: bemGot, amountOutMinimum: minBnb, sqrtPriceLimitX96: 0n }],
   });
   const unwrap = encodeFunctionData({ abi: routerAbi, functionName: "unwrapWETH9", args: [minBnb, owner] });
   const packed = encodeFunctionData({ abi: routerAbi, functionName: "multicall", args: [[swap, unwrap]] });
@@ -1279,10 +1285,12 @@ export async function swapUpUsdtSpot(from: string, side: "buy" | "sell", amount:
   const minBem = (bemOut * 9900n) / 10_000n;
   if (minBem <= 0n) throw new Error("tiny");
   const sold = await sellDepositedUp(from, parts, swapKey, feeKey, minBem);
-  await waitOk(sold);
-  const usdtMin = ((await quoteExact(BSC.bem, BSC.usdt, minBem, BSC.fee)) * 9900n) / 10_000n;
+  const receipt = await client.waitForTransactionReceipt({ hash: sold, timeout: 60_000 });
+  const bemGot = tokenPaid(receipt.logs, BSC.bem, owner);
+  if (bemGot <= 0n) throw new Error("slip");
+  const usdtMin = ((await quoteExact(BSC.bem, BSC.usdt, bemGot, BSC.fee)) * 9900n) / 10_000n;
   if (usdtMin <= 0n) throw new Error("tiny");
-  await approveIfNeeded(from, BSC.bem, minBem);
+  await approveIfNeeded(from, BSC.bem, bemGot);
   const toUsdt = encodeFunctionData({
     abi: routerAbi,
     functionName: "exactInputSingle",
@@ -1292,7 +1300,7 @@ export async function swapUpUsdtSpot(from: string, side: "buy" | "sell", amount:
       fee: BSC.fee,
       recipient: owner,
       deadline: BigInt(Math.floor(Date.now() / 1000) + 60 * 20),
-      amountIn: minBem,
+      amountIn: bemGot,
       amountOutMinimum: usdtMin,
       sqrtPriceLimitX96: 0n,
     }],
