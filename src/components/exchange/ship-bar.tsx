@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { deployTapeCap, deployTierUp } from "@/lib/perp";
+import { deployGuardedVault, deployTapeCap, deployTierUp } from "@/lib/perp";
 import { connectAny } from "@/lib/wallet";
 
 export function ShipBar({ zh }: { zh: boolean }) {
@@ -40,8 +40,8 @@ export function ShipBar({ zh }: { zh: boolean }) {
       <h2 className="font-display text-2xl italic">{zh ? "多签部署" : "Multisig deploy"}</h2>
       <p className="mt-1 text-xs leading-5 text-ink/70">
         {zh
-          ? "在主页。现在下单仍走已经在用的合约。TAPE 和 FAB 先停新开仓。X Layer 多签 0xb4D6039394c8B97C3AC3234aa07011B564Fcb88c 部署 TAPE 限幅标记和分档永续。BSC 多签 0xE51C19aE6E4261Ed329CC54F1120Cf0Ae09364Bd 部署挂在现有 UP 标记上的分档永续。签完把地址发我，我再撤掉这里。比特币、ETH、ZEC、BEM 不在这里重部署。FAB 还没有限幅标记，所以没有按钮。"
-          : "On the homepage. Orders still use the contracts already live. New TAPE and FAB opens are paused. The X Layer multisig 0xb4D6039394c8B97C3AC3234aa07011B564Fcb88c deploys the capped TAPE mark and tiered book. The BSC multisig 0xE51C19aE6E4261Ed329CC54F1120Cf0Ae09364Bd deploys a tiered UP book on the mark already live. Send the addresses back and this comes off. Bitcoin, ETH, ZEC and BEM are not redeployed here. FAB has no capped mark, so it has no button."}
+          ? "在主页。现在下单仍走已经在用的合约。TAPE 和 FAB 先停新开仓。还要部署的只有这三笔。X Layer 多签 0xb4D6039394c8B97C3AC3234aa07011B564Fcb88c 部署 TAPE 限幅标记和分档永续，再部署一口申请退出后不能新开的金库，金库跟现在的 X Layer BEM 永续。BSC 多签 0xE51C19aE6E4261Ed329CC54F1120Cf0Ae09364Bd 部署挂在现有 UP 标记上的分档永续。签完把地址发我，我再撤掉这里。比特币、ETH、ZEC、BEM 和 BSC 金库已经在用，不重部署。FAB 还没有限幅标记，所以没有按钮。"
+          : "On the homepage. Orders still use the contracts already live. New TAPE and FAB opens are paused. Three deploys are left. The X Layer multisig 0xb4D6039394c8B97C3AC3234aa07011B564Fcb88c deploys the capped TAPE mark and tiered book, then a vault that refuses a new open after an exit request. That vault follows the X Layer BEM book already live. The BSC multisig 0xE51C19aE6E4261Ed329CC54F1120Cf0Ae09364Bd deploys a tiered UP book on the mark already live. Send the addresses back and this comes off. Bitcoin, ETH, ZEC, BEM and the BSC vault are already live and are not redeployed. FAB has no capped mark, so it has no button."}
       </p>
       <div className="mt-2 grid gap-2 sm:grid-cols-2">
         <button
@@ -73,6 +73,20 @@ export function ShipBar({ zh }: { zh: boolean }) {
           }
         >
           {busy === "up" ? (zh ? "部署中" : "Deploying") : zh ? "部署 UP 分档永续" : "Deploy the tiered UP book"}
+        </button>
+        <button
+          type="button"
+          disabled={Boolean(busy)}
+          className="min-h-10 border border-gold text-xs disabled:opacity-40"
+          onClick={() =>
+            run("vxl", async (from) =>
+              zh
+                ? `X Layer 金库 ${await deployGuardedVault(from, "xlayer")}。跟现有 BEM 永续。申请退出后不能新开。`
+                : `X Layer vault ${await deployGuardedVault(from, "xlayer")}. It follows the live BEM book and refuses a new open after an exit request.`,
+            )
+          }
+        >
+          {busy === "vxl" ? (zh ? "部署中" : "Deploying") : zh ? "部署 X Layer 金库" : "Deploy the X Layer vault"}
         </button>
       </div>
       {note ? <p className="mt-2 text-xs leading-5 text-ink/80">{note}</p> : null}
