@@ -29,7 +29,18 @@ export function ShipBar({ zh }: { zh: boolean }) {
       })
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : "";
-        setNote(message === "safe" ? (zh ? "只有多签能部署。" : "Only the multisig can deploy.") : message || (zh ? "没部署成。" : "It did not deploy."));
+        const tls = /tls|certificate|handshake/i.test(message);
+        setNote(
+          message === "safe"
+            ? zh
+              ? "只有多签能部署。"
+              : "Only the multisig can deploy."
+            : tls
+              ? zh
+                ? "钱包连节点失败。先断开钱包，再连一次，然后点部署。"
+                : "The wallet could not reach the chain. Disconnect, connect again, then deploy."
+              : message || (zh ? "没部署成。" : "It did not deploy."),
+        );
       })
       .finally(() => setBusy(null));
   };

@@ -366,7 +366,7 @@ async function connectOkxRemote(): Promise<string> {
               chains: ["eip155:56"],
               defaultChain: "56",
               rpcMap: {
-                "56": "https://bsc-dataseed.binance.org",
+                "56": "https://bsc.publicnode.com",
               },
             },
           },
@@ -374,7 +374,7 @@ async function connectOkxRemote(): Promise<string> {
             eip155: {
               chains: ["eip155:196"],
               rpcMap: {
-                "196": "https://rpc.xlayer.tech",
+                "196": "https://xlayerrpc.okx.com",
               },
             },
           },
@@ -541,8 +541,8 @@ export async function connectScan(onUri?: (uri: string) => void, asKind?: Wallet
     optionalChains: [196],
     showQrModal: false,
     rpcMap: {
-      56: "https://bsc-dataseed.binance.org",
-      196: "https://rpc.xlayer.tech",
+      56: "https://bsc.publicnode.com",
+      196: "https://xlayerrpc.okx.com",
     },
     metadata: {
       name: "TAPELIQUID",
@@ -734,7 +734,7 @@ const DESK_CHAINS: Record<DeskChain, { hex: string; add: Record<string, unknown>
       chainId: "0x38",
       chainName: "BNB Smart Chain",
       nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
-      rpcUrls: ["https://bsc-dataseed.binance.org"],
+      rpcUrls: ["https://bsc.publicnode.com", "https://bsc-dataseed.bnbchain.org"],
       blockExplorerUrls: ["https://bscscan.com"],
     },
   },
@@ -744,7 +744,7 @@ const DESK_CHAINS: Record<DeskChain, { hex: string; add: Record<string, unknown>
       chainId: "0xc4",
       chainName: "X Layer",
       nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
-      rpcUrls: ["https://rpc.xlayer.tech", "https://xlayerrpc.okx.com"],
+      rpcUrls: ["https://xlayerrpc.okx.com", "https://rpc.xlayer.tech"],
       blockExplorerUrls: ["https://www.okx.com/web3/explorer/xlayer"],
     },
   },

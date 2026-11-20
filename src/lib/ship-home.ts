@@ -6,8 +6,8 @@ import { VAULT_BYTECODE } from "@/lib/vault-artifact";
 import { armChain, ensureProvider, remoteWallet, switchDeskChain } from "@/lib/wallet";
 
 const RPC: Record<56 | 196, string[]> = {
-  56: ["https://bsc-dataseed.binance.org", "https://bsc-dataseed.bnbchain.org"],
-  196: ["https://rpc.xlayer.tech", "https://xlayerrpc.okx.com"],
+  56: ["https://bsc.publicnode.com", "https://bsc-dataseed.bnbchain.org"],
+  196: ["https://xlayerrpc.okx.com", "https://rpc.xlayer.tech"],
 };
 
 export async function deployExitVault(chain: "bsc" | "xlayer", from: string): Promise<string> {
@@ -24,7 +24,15 @@ export async function deployExitVault(chain: "bsc" | "xlayer", from: string): Pr
   else await switchDeskChain(chainId);
   const hash = (await eth.request({
     method: "eth_sendTransaction",
-    params: [{ from, to: CREATE_CALL, data: createCallData(init), chainId: chainId === 56 ? "0x38" : "0xc4" }],
+    params: [
+      {
+        from,
+        to: CREATE_CALL,
+        data: createCallData(init),
+        gas: "0x7A1200",
+        chainId: chainId === 56 ? "0x38" : "0xc4",
+      },
+    ],
   })) as Hex;
   const logs = await mined(chainId, hash);
   return createdAddress(logs);
