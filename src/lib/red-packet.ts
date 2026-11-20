@@ -799,7 +799,7 @@ async function readLive(chain: GiftChain, account: string | null, pool: Hex, lan
 async function approve(chain: GiftChain, from: string, token: Hex, need: bigint, lane: GiftLane) {
   const pool = packetOf(chain, lane);
   const current = await client(chain).readContract({ address: token, abi: erc20, functionName: "allowance", args: [from as Hex, pool] });
-  if (current >= need) return;
+  if (current === need) return;
   if (current > 0n) {
     const cleared = await send(chain, from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [pool, 0n] }));
     await wait(chain, cleared);
@@ -905,9 +905,12 @@ export async function buyPreview(chain: GiftChain, hi: bigint, amountIn: bigint)
 async function approveSpend(chain: GiftChain, from: string, token: Hex, spender: Hex, amount: bigint) {
   const allowance = await client(chain).readContract({ address: token, abi: erc20, functionName: "allowance", args: [from as Hex, spender] });
   if (allowance === amount) return;
-  const hash = await send(chain, from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, allowance > 0n ? 0n : amount] }));
+  if (allowance > 0n) {
+    const cleared = await send(chain, from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, 0n] }));
+    await wait(chain, cleared);
+  }
+  const hash = await send(chain, from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [spender, amount] }));
   await wait(chain, hash);
-  throw new Error("approve");
 }
 
 export async function openBlock(chain: GiftChain, from: string, lane: GiftLane = "official", pool: Hex = packetOf(chain, lane)): Promise<"day" | "funds" | null> {
