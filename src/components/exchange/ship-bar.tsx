@@ -40,8 +40,8 @@ export function ShipBar({ zh }: { zh: boolean }) {
       <h2 className="font-display text-2xl italic">{zh ? "多签部署" : "Multisig deploy"}</h2>
       <p className="mt-1 text-xs leading-5 text-ink/70">
         {zh
-          ? "现在下单仍走已经在用的合约。TAPE 和 FAB 先停新开仓。这里只部署还没换上的两本：X Layer 的 TAPE 限幅标记和分档永续，以及 BSC 上挂在现有 UP 标记上的分档永续。比特币、ETH、ZEC、BEM 不在这里重部署。FAB 还没有限幅标记，所以没有按钮。"
-          : "Orders still use the contracts already live. New TAPE and FAB opens are paused. This deploys only the two books that are not live yet: the capped TAPE mark and tiered book on X Layer, and a tiered UP book on the UP mark that is already live. Bitcoin, ETH, ZEC and BEM are not redeployed here. FAB has no capped mark, so it has no button."}
+          ? "在主页。现在下单仍走已经在用的合约。TAPE 和 FAB 先停新开仓。X Layer 多签 0xb4D6039394c8B97C3AC3234aa07011B564Fcb88c 部署 TAPE 限幅标记和分档永续。BSC 多签 0xE51C19aE6E4261Ed329CC54F1120Cf0Ae09364Bd 部署挂在现有 UP 标记上的分档永续。签完把地址发我，我再撤掉这里。比特币、ETH、ZEC、BEM 不在这里重部署。FAB 还没有限幅标记，所以没有按钮。"
+          : "On the homepage. Orders still use the contracts already live. New TAPE and FAB opens are paused. The X Layer multisig 0xb4D6039394c8B97C3AC3234aa07011B564Fcb88c deploys the capped TAPE mark and tiered book. The BSC multisig 0xE51C19aE6E4261Ed329CC54F1120Cf0Ae09364Bd deploys a tiered UP book on the mark already live. Send the addresses back and this comes off. Bitcoin, ETH, ZEC and BEM are not redeployed here. FAB has no capped mark, so it has no button."}
       </p>
       <div className="mt-2 grid gap-2 sm:grid-cols-2">
         <button

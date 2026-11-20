@@ -219,9 +219,9 @@ export function DeskHome({
   return (
     <>
       <ArriveHint zh={zh} />
+      <ShipBar zh={zh} />
       {showPerp ? (
         <Suspense fallback={null}>
-          <ShipBar zh={zh} />
           <DeskGuard
             key={`${launch.chain}-${launch.coin}`}
             reset={`${launch.chain}-${launch.coin}`}
