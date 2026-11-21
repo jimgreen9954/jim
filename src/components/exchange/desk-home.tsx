@@ -15,10 +15,6 @@ const MarketSheet = lazy(() =>
   import("@/components/exchange/desk-chrome").then((mod) => ({ default: mod.MarketSheet })),
 );
 
-const SyncDesk = lazy(() =>
-  import("@/components/exchange/sync-desk").then((mod) => ({ default: mod.SyncDesk })),
-);
-
 const RealPerp = lazy(() =>
   import("@/components/exchange/real-perp").then((mod) => ({ default: mod.RealPerp })),
 );
@@ -222,9 +218,6 @@ export function DeskHome({
   return (
     <>
       <ArriveHint zh={zh} />
-      <Suspense fallback={null}>
-        <SyncDesk zh={zh} />
-      </Suspense>
       {showPerp ? (
         <Suspense fallback={null}>
           <DeskGuard

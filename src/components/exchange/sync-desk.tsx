@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { fundBookInsurance, syncBookState, type SyncBookState } from "@/lib/perp";
-import { deployRebateClerk, deployRedCommit } from "@/lib/sync-ship";
 
 const COINS = ["up", "tape", "fab"] as const;
 
@@ -75,7 +74,7 @@ export function SyncDesk({ zh }: { zh: boolean }) {
   const warm = row?.samples != null && row.samples < 20;
 
   return (
-    <section className="border border-gold bg-card px-3 py-3 text-sm">
+    <div className="mt-3 border border-gold/40 px-3 py-3 text-sm">
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -148,48 +147,7 @@ export function SyncDesk({ zh }: { zh: boolean }) {
           </div>
         </>
       ) : null}
-      <p className="mt-3 text-xs leading-5 text-ink/70">
-        {zh
-          ? "现在这三本没有公开的 sync()。价格如果在没人交易时走开超过约 1%，开仓和强平会失败，记价也一起回滚。带 sync() 的 UP、TAPE、FAB，新的 X Layer 金库，X Layer 的 commit-reveal 红包和多签 clerk 领取都已经部署，按钮已撤。下面两颗还没上链，用该链多签两签。页面不改地址，领取仍走旧合约。"
-          : "These three books have no public sync(). If spot walks more than about 1% while nobody trades, opens and liquidations fail and the price note rolls back with them. The sync() books, the new X Layer vault, the X Layer commit-reveal packet and the X Layer multisig clerk are already deployed, and those buttons are gone. The two below are not on chain. Sign them with that chain's multisig, two signatures. The page does not switch, and claims stay on the old contract."}
-      </p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        <button
-          type="button"
-          disabled={busy}
-          className="min-h-11 border border-gold px-3 text-xs disabled:opacity-40"
-          onClick={() =>
-            run(async () => {
-              const address = await deployRedCommit("bsc");
-              setNote(
-                zh
-                  ? `BSC 红包 ${address}。领取仍走旧合约。页面不改地址。`
-                  : `BSC packet ${address}. Claims stay on the old contract. The page does not switch.`,
-              );
-            }, "")
-          }
-        >
-          {zh ? "部署 BSC commit-reveal 红包" : "Deploy the BSC commit-reveal packet"}
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          className="min-h-11 border border-gold px-3 text-xs disabled:opacity-40"
-          onClick={() =>
-            run(async () => {
-              const address = await deployRebateClerk("bsc");
-              setNote(
-                zh
-                  ? `BSC 领取合约 ${address}，clerk 是多签。现在的领取地址不变。`
-                  : `BSC claim contract ${address}. The clerk is the multisig. The live claim address stays.`,
-              );
-            }, "")
-          }
-        >
-          {zh ? "部署 BSC 多签 clerk 领取" : "Deploy the BSC multisig clerk"}
-        </button>
-      </div>
       {note ? <p className={`mt-2 text-xs ${bad ? "text-sell" : "text-ink/80"}`}>{note}</p> : null}
-    </section>
+    </div>
   );
 }

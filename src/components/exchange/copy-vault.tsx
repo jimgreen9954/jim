@@ -14,6 +14,7 @@ import {
   type VaultView,
 } from "@/lib/copy-vault";
 import { connectAny } from "@/lib/wallet";
+import { SyncDesk } from "@/components/exchange/sync-desk";
 
 const empty = "";
 
@@ -157,6 +158,7 @@ export function CopyVault({ zh, account }: { zh: boolean; account: string | null
         >
           {side === "in" ? (zh ? "存入已关闭" : "Deposits closed") : zh ? "取出" : "Withdraw"}
         </button>
+        <SyncDesk zh={zh} />
         <div className="mt-2 grid gap-2 sm:grid-cols-2">
           <button
             type="button"
