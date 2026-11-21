@@ -19,8 +19,6 @@ import {
   readSpawned,
   openAnother,
   boothReady,
-  placeStamp,
-  stampReady,
   sellPreview,
   setRedRule,
   sgClock,
@@ -129,7 +127,6 @@ export function RedGift({
   const [life, setLife] = useState(86_400);
   const [pick, setPick] = useState<GiftChain>(() => (currentChain() === 196 ? "xlayer" : "bsc"));
   const [deskOn, setDeskOn] = useState(true);
-  const [stampOn, setStampOn] = useState(true);
   const [tab, setTab] = useState<"send" | "claim">("claim");
   const [info, setInfo] = useState<string | null>(null);
   const [seal, setSeal] = useState<RedRule | null>(null);
@@ -159,13 +156,6 @@ export function RedGift({
       })
       .catch(() => {
         if (!dead) setDeskOn(false);
-      });
-    void stampReady(pick)
-      .then((on) => {
-        if (!dead) setStampOn(on);
-      })
-      .catch(() => {
-        if (!dead) setStampOn(false);
       });
     return () => {
       dead = true;
@@ -286,8 +276,8 @@ export function RedGift({
       else if (message === "stamp")
         setNote(
           zh
-            ? "成交记录还没放上。合约任务红包先不能新开。多签放上并允许之后才能发。"
-            : "The fill record is not in place. A perpetual red packet cannot be opened yet. The multisig places it and allows this version first.",
+            ? "成交记录还没放上。合约任务红包先不能新开。多签在主页点「放上成交记录」，放上后再点一次允许。"
+            : "The fill record is not in place. A perpetual red packet cannot be opened yet. The multisig places it from the home page, then taps again to allow this version.",
         );
       else if (message === "safe")
         setNote(zh ? "只有这条链的多签可以放上。" : "Only this chain's multisig can place it.");
@@ -744,31 +734,6 @@ export function RedGift({
                     {zh ? "官方" : "Official"}
                   </button>
                 </div>
-              ) : null}
-              {officialHere && !stampOn ? (
-                <button
-                  type="button"
-                  className="mb-2 min-h-11 w-full border border-gold text-sm"
-                  disabled={busy}
-                  onClick={() => {
-                    void act(async () => {
-                      const step = await placeStamp(pick, await who());
-                      setStampOn(step === "allowed");
-                      setNote(
-                        step === "deployed"
-                          ? zh
-                            ? "成交记录已放上。再点一次，允许这一版合约任务红包。"
-                            : "The fill record is in place. Tap again to allow this perpetual red packet."
-                          : zh
-                            ? "这一版已经允许。新的合约任务红包可以发了。"
-                            : "This version is allowed. A new perpetual red packet can be opened.",
-                      );
-                      return "ok" as const;
-                    });
-                  }}
-                >
-                  {zh ? "放上成交记录" : "Place the fill record"}
-                </button>
               ) : null}
               {!deskOn ? (
                 <p className="mb-2 text-center text-sm text-ink/70">

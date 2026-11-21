@@ -5,6 +5,7 @@ import { PoolSpot } from "@/components/exchange/pool-spot";
 import { useExchange } from "@/lib/exchange-store";
 import type { DeskView } from "@/components/exchange/desk-chrome";
 import { currentAccount, onAccount } from "@/lib/wallet";
+import { BSC_SAFE, XLAYER_SAFE } from "@/lib/chain-marks";
 import { selectDesk, type Desk } from "@/lib/perp";
 
 const RedGift = lazy(() =>
@@ -217,6 +218,7 @@ export function DeskHome({
 
   return (
     <>
+      <StampShip zh={zh} />
       <ArriveHint zh={zh} />
       {showPerp ? (
         <Suspense fallback={null}>
@@ -295,6 +297,66 @@ export function DeskHome({
         </Suspense>
       ) : null}
     </>
+  );
+}
+
+function StampShip({ zh }: { zh: boolean }) {
+  const [account, setAccount] = useState<string | null>(currentAccount());
+  const [ready, setReady] = useState({ bsc: true, xlayer: true });
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => onAccount(setAccount), []);
+  useEffect(() => {
+    let dead = false;
+    void import("@/lib/red-packet")
+      .then(({ stampReady }) => Promise.all([stampReady("bsc"), stampReady("xlayer")]))
+      .then(([bsc, xlayer]) => {
+        if (!dead) setReady({ bsc, xlayer });
+      })
+      .catch(() => {
+        if (!dead) setReady({ bsc: false, xlayer: false });
+      });
+    return () => {
+      dead = true;
+    };
+  }, [note]);
+  const who = account?.toLowerCase() ?? "";
+  const chain = who === BSC_SAFE.toLowerCase() ? "bsc" : who === XLAYER_SAFE.toLowerCase() ? "xlayer" : null;
+  if (!chain || ready[chain]) return null;
+  return (
+    <div className="border-b border-gold px-3 py-2">
+      <button
+        type="button"
+        className="min-h-11 w-full border border-gold text-sm"
+        disabled={busy}
+        onClick={() => {
+          if (!account) return;
+          setBusy(true);
+          setNote("");
+          void import("@/lib/red-packet")
+            .then(({ placeStamp }) => placeStamp(chain, account))
+            .then((step) => {
+              setReady((prev) => ({ ...prev, [chain]: step === "allowed" }));
+              setNote(
+                step === "deployed"
+                  ? zh
+                    ? "成交记录已放上。再点一次，允许这一版。"
+                    : "The fill record is in place. Tap again to allow this version."
+                  : zh
+                    ? "这一版已经允许。主页这一块可以撤了。"
+                    : "This version is allowed. This block can come off the home page.",
+              );
+            })
+            .catch(() => {
+              setNote(zh ? "没放上。确认这是这条链的多签，再点一次。" : "It was not placed. Use this chain's multisig and tap again.");
+            })
+            .finally(() => setBusy(false));
+        }}
+      >
+        {chain === "bsc" ? (zh ? "BSC 放上成交记录" : "Place the BSC fill record") : zh ? "X Layer 放上成交记录" : "Place the X Layer fill record"}
+      </button>
+      {note ? <p className="mt-1 text-center text-xs text-ink/70">{note}</p> : null}
+    </div>
   );
 }
 
