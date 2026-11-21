@@ -303,15 +303,19 @@ export function DeskHome({
 function StampShip({ zh }: { zh: boolean }) {
   const [account, setAccount] = useState<string | null>(currentAccount());
   const [ready, setReady] = useState({ bsc: true, xlayer: true });
+  const [placed, setPlaced] = useState({ bsc: false, xlayer: false });
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => onAccount(setAccount), []);
   useEffect(() => {
     let dead = false;
     void import("@/lib/red-packet")
-      .then(({ stampReady }) => Promise.all([stampReady("bsc"), stampReady("xlayer")]))
+      .then(({ stampStep }) => Promise.all([stampStep("bsc"), stampStep("xlayer")]))
       .then(([bsc, xlayer]) => {
-        if (!dead) setReady({ bsc, xlayer });
+        if (!dead) {
+          setReady({ bsc: bsc === "allowed", xlayer: xlayer === "allowed" });
+          setPlaced({ bsc: bsc !== "none", xlayer: xlayer !== "none" });
+        }
       })
       .catch(() => {
         if (!dead) setReady({ bsc: false, xlayer: false });
@@ -337,6 +341,7 @@ function StampShip({ zh }: { zh: boolean }) {
             .then(({ placeStamp }) => placeStamp(chain, account))
             .then((step) => {
               setReady((prev) => ({ ...prev, [chain]: step === "allowed" }));
+              if (step === "deployed") setPlaced((prev) => ({ ...prev, [chain]: true }));
               setNote(
                 step === "deployed"
                   ? zh
@@ -353,7 +358,21 @@ function StampShip({ zh }: { zh: boolean }) {
             .finally(() => setBusy(false));
         }}
       >
-        {chain === "bsc" ? (zh ? "BSC 放上成交记录" : "Place the BSC fill record") : zh ? "X Layer 放上成交记录" : "Place the X Layer fill record"}
+        {chain === "bsc"
+          ? placed.bsc
+            ? zh
+              ? "BSC 允许这一版"
+              : "Allow this BSC version"
+            : zh
+              ? "BSC 放上成交记录"
+              : "Place the BSC fill record"
+          : placed.xlayer
+            ? zh
+              ? "X Layer 允许这一版"
+              : "Allow this X Layer version"
+            : zh
+              ? "X Layer 放上成交记录"
+              : "Place the X Layer fill record"}
       </button>
       {note ? <p className="mt-1 text-center text-xs text-ink/70">{note}</p> : null}
     </div>

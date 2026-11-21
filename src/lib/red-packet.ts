@@ -457,12 +457,18 @@ const stampAbi = parseAbi(["function ok(bytes32) view returns (bool)", "function
 
 /** True once this chain's multisig has allowed the current perp-packet code. */
 export async function stampReady(chain: GiftChain): Promise<boolean> {
+  return (await stampStep(chain)) === "allowed";
+}
+
+/** none: not deployed. placed: code is there, this version is not allowed yet. */
+export async function stampStep(chain: GiftChain): Promise<"none" | "placed" | "allowed"> {
   const code = await client(chain).getBytecode({ address: RED_STAMP });
-  if (!code || code === "0x") return false;
+  if (!code || code === "0x") return "none";
   try {
-    return await client(chain).readContract({ address: RED_STAMP, abi: stampAbi, functionName: "ok", args: [RED_PERP_CODE[chain]] });
+    const ok = await client(chain).readContract({ address: RED_STAMP, abi: stampAbi, functionName: "ok", args: [RED_PERP_CODE[chain]] });
+    return ok ? "allowed" : "placed";
   } catch {
-    return false;
+    return "placed";
   }
 }
 
