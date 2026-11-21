@@ -45,6 +45,7 @@ function blockReason(
   zh: boolean,
 ): string | null {
   if (!rule.deployed) return zh ? "链上没有代码" : "No code";
+  if (rule.mode !== 0) return zh ? "旧随机红包已停。页面不再领取。" : "Old random packets are stopped. This page will not claim one.";
   if (!rule.ready || !rule.asset) return zh ? "已部署，去创建活动" : "Deployed. Create the game";
   if (rule.spotNeed === 0n && rule.perpNeed === 0n)
     return zh ? "部署者还没写交易量" : "No volume rule";
@@ -53,12 +54,8 @@ function blockReason(
     return zh ? "交易量还没到" : "Volume is short";
   if (rule.dayCap > 0n && rule.claimedToday >= rule.dayCap)
     return zh ? "今天名额满了" : "Today is full";
-  if (rule.mode === 2 && rule.packetsLeft === 0n)
-    return zh ? "这一轮领完了" : "This round is finished";
-  if (rule.mode === 0 && rule.balance < rule.fixedAmt)
+  if (rule.balance < rule.fixedAmt)
     return zh ? "池子不够这一份" : "Pool is short";
-  if (rule.mode === 1 && rule.balance < rule.lo)
-    return zh ? "池子不够最少的一份" : "Pool is under the minimum";
   if (rule.balance === 0n) return zh ? "池子是空的" : "Pool is empty";
   return null;
 }

@@ -51,6 +51,7 @@ interface IGate {
 /// Refunds half of a matched fee after three seal circuits.
 /// One claim per Singapore week (Monday 00:00, UTC+8). The book fee is unchanged.
 /// The pool is funded by transfer, never pulled from the fee address.
+/// clerk is the chain multisig, passed in. It is not tx.origin.
 contract SealRebate {
     IERC20 public immutable usdt;
     address public immutable circuits;
@@ -65,11 +66,11 @@ contract SealRebate {
 
     error Bad();
 
-    constructor(address usdt_, address circuits_, address gate_, address a, address b, address c) {
-        if (usdt_ == address(0)) revert Bad();
+    constructor(address usdt_, address circuits_, address gate_, address a, address b, address c, address clerk_) {
+        if (usdt_ == address(0) || clerk_ == address(0)) revert Bad();
         usdt = IERC20(usdt_);
         circuits = circuits_;
-        clerk = tx.origin;
+        clerk = clerk_;
         gate = gate_;
         if (a != address(0)) tape[a] = true;
         if (b != address(0)) tape[b] = true;

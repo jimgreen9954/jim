@@ -178,8 +178,8 @@ export function CopyVault({ zh, account }: { zh: boolean; account: string | null
         <ol className="mt-3 grid gap-1.5 text-xs leading-5 text-ink/75">
           <li>
             {zh
-              ? "1. 先选链。页面读的是这口新金库自己的 book、稳定币和带单人。两口新金库的钱不互通。BSC 这一口的 book 仍是 0x89b2f4a2e0C07864172fB47fbDEa14411AF2e0E0，不是交易台现在的 BEM。旧金库没有升级，页面不再读它。"
-              : "1. Pick a chain. This page reads this new vault's own book, token, and leader. The two new vaults do not share funds. The BSC vault's book is still 0x89b2f4a2e0C07864172fB47fbDEa14411AF2e0E0, not the BEM book on the trading desk. The old vault was not upgraded, and this page no longer reads it."}
+              ? "1. X Layer 这一口绑的是旧本 0x9fD9Ade0272646cc3aD36F1699Fd42CcFE8927c2，只留取钱，不能再挂单。新金库绑正在交易的 BEM 0x46cBAfCA59873E7115dF7825fdBF659BafAc3a51，主页可以两签部署。核对之前页面不改地址。BSC 这一口的 book 仍是 0x89b2f4a2e0C07864172fB47fbDEa14411AF2e0E0。"
+              : "1. The X Layer vault is bound to the old book 0x9fD9Ade0272646cc3aD36F1699Fd42CcFE8927c2. Withdraw only. It cannot post. A new vault bound to the live BEM book 0x46cBAfCA59873E7115dF7825fdBF659BafAc3a51 can be deployed from the homepage with two signatures. The page does not switch until that address is checked. The BSC vault's book is still 0x89b2f4a2e0C07864172fB47fbDEa14411AF2e0E0."}
           </li>
           <li>
             {zh
@@ -257,16 +257,17 @@ export function CopyVault({ zh, account }: { zh: boolean; account: string | null
           </div>
           <button
             type="button"
-            disabled={busy}
+            disabled={busy || chain === "xlayer"}
             className="mt-2 min-h-11 w-full border border-gold disabled:opacity-40"
-            onClick={() =>
+            onClick={() => {
+              if (chain === "xlayer") return;
               run(
                 () => openVault(chain, long, margin, Number(lev), price),
                 zh ? "已挂出。" : "Posted.",
-              )
-            }
+              );
+            }}
           >
-            {zh ? "挂单" : "Post"}
+            {chain === "xlayer" ? (zh ? "旧金库只取钱" : "Old vault, withdraw only") : zh ? "挂单" : "Post"}
           </button>
           <ul className="mt-3 grid gap-2">
             {view?.quotes.map((quote) => (

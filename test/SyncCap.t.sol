@@ -110,6 +110,23 @@ contract SyncCapTest is Test {
         _back(book, 100 ether);
     }
 
+    function testSyncReopensAfterFivePercent() public {
+        uint256 start = up.net();
+        up.setNet(start * 105 / 100);
+        assertFalse(mark.guard());
+        uint32 t = uint32(block.timestamp);
+        uint256 steps;
+        for (uint256 i; i < 80 && !mark.guard(); i++) {
+            t += 31;
+            vm.warp(t);
+            book.sync();
+            steps++;
+        }
+        assertTrue(mark.guard());
+        assertGt(steps, 1);
+        emit log_named_uint("syncs to reopen", steps);
+    }
+
     function testTradesRecordThePrice() public {
         uint256 px = book.mark();
         assertGt(px, 0.5 ether);
@@ -544,6 +561,33 @@ contract SyncCapFork is Test {
     address constant OKB_POOL = 0xe3BE6A0137f1b0602Fc1a4841686f43B340a5082;
 
     receive() external payable {}
+
+    /// Real UP pool on a BSC fork. The sell quote is walked 5%. sync() does not check the guard.
+    /// The 10-minute average needs more than one note. This records how many.
+    function testForkSyncReopensAfterFivePercent() public {
+        vm.createSelectFork("https://bsc-dataseed.binance.org");
+        vm.recordLogs();
+        new UpSyncShip();
+        (address markAddr, address bookAddr) = _shipped();
+        UpSyncMark mark = UpSyncMark(markAddr);
+        SyncTierTapeRisk book = SyncTierTapeRisk(bookAddr);
+        (,,,, uint256 net) = IUpLive(UP).quoteSell(1e18);
+        uint256 jumped = net * 105 / 100;
+        vm.mockCall(UP, abi.encodeWithSelector(IUpLive.quoteSell.selector, uint256(1e18)), abi.encode(uint256(0), uint256(0), uint256(0), uint256(0), jumped));
+        assertFalse(mark.guard());
+        uint256 t = block.timestamp;
+        uint256 steps;
+        for (uint256 i; i < 80 && !mark.guard(); i++) {
+            t += 31;
+            vm.warp(t);
+            book.sync();
+            steps++;
+        }
+        emit log_named_uint("fork syncs to reopen", steps);
+        emit log_named_uint("fork guard", mark.guard() ? 1 : 0);
+        assertGt(steps, 1);
+        assertTrue(mark.guard());
+    }
 
     function testForkUpShipMatchesSpotAndCapLoses() public {
         vm.createSelectFork("https://bsc-dataseed.binance.org");

@@ -259,23 +259,82 @@ export async function markGuard(coin: "up" | "tape" | "fab"): Promise<boolean | 
 
 /** How much notional insurance currently allows. Zero means a new open is refused. */
 export async function openRoom(coin: "up" | "tape" | "fab"): Promise<bigint | null> {
+  const row = await syncBookState(coin);
+  return row ? row.room : null;
+}
+
+const bookStatAbi = [
+  { name: "cap", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "insurance", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "openNotional", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "openCap", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "fundInsurance", type: "function", stateMutability: "nonpayable", inputs: [{ name: "amount", type: "uint256" }], outputs: [] },
+] as const;
+
+export type SyncBookState = {
+  cap: bigint;
+  insurance: bigint;
+  backed: bigint;
+  openNotional: bigint;
+  room: bigint;
+  samples: number | null;
+  guard: boolean | null;
+  decimals: number;
+};
+
+/** Cap, insurance × 20, and open notional for the book the page is trading. */
+export async function syncBookState(coin: "up" | "tape" | "fab"): Promise<SyncBookState | null> {
   const which: Desk = coin === "up" ? "bsc" : "xlayer";
   const address = coinBook(which, coin) as Hex;
   if (!address) return null;
+  const mark = coin === "up" ? UP_MARK : coin === "tape" ? TAPE_MARK : FAB_MARK;
+  const decimals = coin === "up" ? 18 : 6;
   try {
-    return await (await deskClient(which)).readContract({
-      address,
-      abi: [{ name: "openCap", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] }] as const,
-      functionName: "openCap",
-    });
+    const c = await deskClient(which);
+    const [cap, insurance, openNotional, room, samples, guard] = await Promise.all([
+      c.readContract({ address, abi: bookStatAbi, functionName: "cap" }),
+      c.readContract({ address, abi: bookStatAbi, functionName: "insurance" }),
+      c.readContract({ address, abi: bookStatAbi, functionName: "openNotional" }),
+      c.readContract({ address, abi: bookStatAbi, functionName: "openCap" }),
+      sampleCount(which, mark),
+      markGuard(coin),
+    ]);
+    return { cap, insurance, backed: insurance * 20n, openNotional, room, samples, guard, decimals };
   } catch {
     return null;
   }
 }
 
-async function sampleCount(mark: Hex): Promise<number | null> {
+/** Anyone can add insurance on the book the page is trading. It cannot be withdrawn. */
+export async function fundBookInsurance(coin: "up" | "tape" | "fab", whole: number): Promise<Hex> {
+  if (!Number.isFinite(whole) || whole <= 0) throw new Error("amount");
+  const which: Desk = coin === "up" ? "bsc" : "xlayer";
+  selectDesk(which);
+  const from = which === "xlayer" ? await connectXLayer() : await connectBsc();
+  const book = coinBook(which, coin) as Hex;
+  const decimals = coin === "up" ? 18 : 6;
+  const amount = BigInt(Math.round(whole)) * 10n ** BigInt(decimals);
+  const token = tokenAddress();
+  const c = await client();
+  const allowance = await c.readContract({
+    address: token,
+    abi: erc20,
+    functionName: "allowance",
+    args: [from as Hex, book],
+  });
+  if (allowance < amount) {
+    if (allowance > 0n) {
+      await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [book, 0n] }));
+    }
+    await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [book, amount] }));
+  }
+  const data = encodeFunctionData({ abi: bookStatAbi, functionName: "fundInsurance", args: [amount] });
+  return send(from, book, data);
+}
+
+async function sampleCount(which: Desk, mark: Hex): Promise<number | null> {
   try {
-    const n = await (await deskClient("xlayer")).readContract({
+    const n = await (await deskClient(which)).readContract({
       address: mark,
       abi: [{ name: "count", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint8" }] }] as const,
       functionName: "count",
@@ -286,14 +345,19 @@ async function sampleCount(mark: Hex): Promise<number | null> {
   }
 }
 
+/** UP opens show a warm-up line until about 10 minutes of notes are stored. */
+export async function upSamples(): Promise<number | null> {
+  return sampleCount("bsc", UP_MARK);
+}
+
 /** TAPE opens wait until about 10 minutes of pokes are stored. 20 samples is that window. */
 export async function tapeSamples(): Promise<number | null> {
-  return sampleCount(TAPE_MARK);
+  return sampleCount("xlayer", TAPE_MARK);
 }
 
 /** FAB opens wait until about 10 minutes of pokes are stored. */
 export async function fabSamples(): Promise<number | null> {
-  return sampleCount(FAB_MARK);
+  return sampleCount("xlayer", FAB_MARK);
 }
 
 async function tapePoolCode(): Promise<Hex | undefined> {
@@ -565,7 +629,7 @@ export function pickBook(which: Desk, coin: string): string {
 
 function pinned(perp: string): void {
   const want = perp.toLowerCase();
-  const rows = [bookOf("bsc"), bookOf("xlayer"), LAST_BSC, PREV_BSC, OLDER_BSC, LAST_XPERP, PREV_XPERP, OLDER_XPERP, coinBook("bsc", "btc"), coinBook("bsc", "eth"), coinBook("bsc", "zec"), coinBook("bsc", "up"), coinBook("xlayer", "tape"), coinBook("xlayer", "fab"), BTC_COIN_BOOK, ETH_COIN_BOOK, ZEC_COIN_BOOK, UP_COIN_BOOK, SYNC_UP_COIN_BOOK, LAST_UP_COIN_BOOK, MID_UP_COIN_BOOK, PREV_UP_COIN_BOOK, TAPE_COIN_BOOK, SYNC_TAPE_COIN_BOOK, LAST_TAPE_COIN_BOOK, MID_TAPE_COIN_BOOK, PREV_TAPE_COIN_BOOK, FAB_COIN_BOOK, SYNC_FAB_COIN_BOOK, LAST_FAB_COIN_BOOK, MID_FAB_COIN_BOOK, PREV_FAB_COIN_BOOK];
+  const rows = [bookOf("bsc"), bookOf("xlayer"), LAST_BSC, PREV_BSC, OLDER_BSC, LAST_XPERP, PREV_XPERP, OLDER_XPERP, coinBook("bsc", "btc"), coinBook("bsc", "eth"), coinBook("bsc", "zec"), coinBook("bsc", "up"), coinBook("xlayer", "tape"), coinBook("xlayer", "fab"), BTC_COIN_BOOK, ETH_COIN_BOOK, ZEC_COIN_BOOK, UP_COIN_BOOK, TAPE_COIN_BOOK, FAB_COIN_BOOK];
   if (!rows.some((row) => row.length === 42 && row.toLowerCase() === want)) throw new Error("book");
 }
 

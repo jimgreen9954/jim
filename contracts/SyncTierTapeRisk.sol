@@ -57,6 +57,12 @@ contract SyncTierTapeRisk is TapeRisk {
         pendingAt = 0;
     }
 
+    /// Anyone can record the mark. Opens and liquidations still check the guard.
+    /// The mark itself waits 30 seconds and moves at most about 0.5%.
+    function sync() external {
+        _note();
+    }
+
     /// Anyone can add insurance. It cannot be withdrawn. Fees also stay here.
     function fundInsurance(uint256 amount) external {
         if (amount == 0) revert Bad();

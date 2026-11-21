@@ -1310,6 +1310,7 @@ export async function tradeRed(chain: GiftChain, from: string, lane: GiftLane = 
 export async function claimRed(chain: GiftChain, from: string, lane: GiftLane = "volunteer", pool: Hex = packetOf(chain, lane)): Promise<{ hash: Hex; amount: bigint }> {
   const day = sgDay();
   const here = pool.toLowerCase() === packetOf(chain, lane).toLowerCase() ? await readRed(chain, from, lane) : await readLive(chain, from, pool, lane);
+  if (here.mode !== 0) throw new Error("range");
   if (here.prizeOf <= 0n && here.lastDay === BigInt(day)) throw new Error("day");
   await assertTrustedRed(chain, pool, "claim");
   if (here.prizeOf <= 0n) {

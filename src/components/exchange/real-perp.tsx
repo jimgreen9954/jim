@@ -50,7 +50,7 @@ import {
   pickBook,
   liveLevCap,
   markGuard,
-  openRoom,
+  syncBookState,
   pokeBook,
   liquidatePerp,
   openPerp,
@@ -404,7 +404,8 @@ export function RealPerp({
   const [bad, setBad] = useState(false);
   const [hash, setHash] = useState(null);
   const [guardOn, setGuardOn] = useState(null);
-  const [room, setRoom] = useState<bigint | null>(null);
+  const [insured, setInsured] = useState<bigint | null>(null);
+  const [bookStat, setBookStat] = useState(null);
   const [link, setLink] = useState(null);
   const [bal, setBal] = useState(null);
   const [prices, setPrices] = useState([]);
@@ -784,24 +785,24 @@ export function RealPerp({
   useEffect(() => {
     if (coin !== "up" && coin !== "tape" && coin !== "fab") {
       setGuardOn(null);
-      setRoom(null);
+      setInsured(null);
+      setBookStat(null);
       return;
     }
     let dead = false;
     const pull = () => {
-      markGuard(coin)
-        .then((on) => {
-          if (!dead) setGuardOn(on);
-        })
-        .catch(() => {
-          if (!dead) setGuardOn(null);
-        });
-      openRoom(coin)
+      syncBookState(coin)
         .then((next) => {
-          if (!dead) setRoom(next);
+          if (dead) return;
+          setBookStat(next);
+          setGuardOn(next ? next.guard : null);
+          setInsured(next ? next.room : null);
         })
         .catch(() => {
-          if (!dead) setRoom(null);
+          if (dead) return;
+          setBookStat(null);
+          setGuardOn(null);
+          setInsured(null);
         });
     };
     pull();
@@ -2872,21 +2873,46 @@ export function RealPerp({
                                                   className: "desk-extra",
                                                   children:
                                                     lang === "zh"
-                                                      ? "现价和 10 分钟均价差超过约 1%。价格暂停中，只能平仓。"
-                                                      : "Spot and the 10-minute average differ by about 1%. The price is paused. Close only.",
+                                                      ? "价格暂停中，只能平仓。"
+                                                      : "The price is paused. Close only.",
+                                                })
+                                              : null,
+                                            bookStat && bookStat.samples != null && bookStat.samples < 20
+                                              ? /* @__PURE__ */ jsx("p", {
+                                                  className: "desk-extra",
+                                                  children:
+                                                    lang === "zh"
+                                                      ? `价格预热中。样本 ${bookStat.samples} / 20。`
+                                                      : `Price is warming up. Samples ${bookStat.samples} / 20.`,
                                                 })
                                               : null,
                                             /* @__PURE__ */ jsx("p", {
                                               className: "desk-extra",
                                               children:
                                                 lang === "zh"
-                                                  ? room === 0n
-                                                    ? "整本最多 3000，一个人一个方向最多 600。保险金是 0，存够之前开不了。10 可以开 50 倍。强平要两次确认，至少隔 2 分钟。"
-                                                    : `整本最多 3000，一个人一个方向最多 600。保险金现在允许开 ${room == null ? "—" : (Number(room) / (coin === "up" ? 1e18 : 1e6)).toFixed(0)}。10 可以开 50 倍。强平要两次确认，至少隔 2 分钟。`
-                                                  : room === 0n
-                                                    ? "The book stops at 3000. One side stops at 600. Insurance is 0, so nothing can open yet. 10 can use 50×. Liquidation needs two readings, 2 minutes apart."
-                                                    : `The book stops at 3000. One side stops at 600. Insurance currently allows ${room == null ? "—" : (Number(room) / (coin === "up" ? 1e18 : 1e6)).toFixed(0)}. 10 can use 50×. Liquidation needs two readings, 2 minutes apart.`,
+                                                  ? `上限 ${bookStat ? (Number(bookStat.cap) / 10 ** bookStat.decimals).toFixed(0) : "3000"}。保险金 × 20 是 ${bookStat ? (Number(bookStat.backed) / 10 ** bookStat.decimals).toFixed(0) : "—"}。已开名义 ${bookStat ? (Number(bookStat.openNotional) / 10 ** bookStat.decimals).toFixed(0) : "—"}。`
+                                                  : `Cap ${bookStat ? (Number(bookStat.cap) / 10 ** bookStat.decimals).toFixed(0) : "3000"}. Insurance × 20 is ${bookStat ? (Number(bookStat.backed) / 10 ** bookStat.decimals).toFixed(0) : "—"}. Open notional ${bookStat ? (Number(bookStat.openNotional) / 10 ** bookStat.decimals).toFixed(0) : "—"}.`,
                                             }),
+                                            insured === 0n
+                                              ? /* @__PURE__ */ jsx("p", {
+                                                  className: "desk-extra",
+                                                  children: lang === "zh" ? "保险金不足，暂不能开仓。" : "Insurance is short, so a new open is refused.",
+                                                })
+                                              : insured != null && bookStat && bookStat.openNotional >= insured
+                                                ? /* @__PURE__ */ jsx("p", {
+                                                    className: "desk-extra",
+                                                    children: lang === "zh" ? "暂时额满。" : "The book is full for now.",
+                                                  })
+                                                : null,
+                                            coin === "tape"
+                                              ? /* @__PURE__ */ jsx("p", {
+                                                  className: "desk-extra",
+                                                  children:
+                                                    lang === "zh"
+                                                      ? "TAPE 池子很浅。上限要变大，只能先加流动性。现在的 3000 高于测到的大约 0.058 美元成本。"
+                                                      : "The TAPE pool is thin. The cap grows only after liquidity is added. 3000 is above the measured cost of about 0.058.",
+                                                })
+                                              : null,
                                             /* @__PURE__ */ jsx("p", {
                                               className: "desk-extra",
                                               children:
