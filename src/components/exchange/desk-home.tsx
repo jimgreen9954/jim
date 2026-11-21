@@ -5,7 +5,6 @@ import { PoolSpot } from "@/components/exchange/pool-spot";
 import { useExchange } from "@/lib/exchange-store";
 import type { DeskView } from "@/components/exchange/desk-chrome";
 import { currentAccount, onAccount } from "@/lib/wallet";
-import { BSC_SAFE, XLAYER_SAFE } from "@/lib/chain-marks";
 import { selectDesk, type Desk } from "@/lib/perp";
 
 const RedGift = lazy(() =>
@@ -218,7 +217,6 @@ export function DeskHome({
 
   return (
     <>
-      <StampShip zh={zh} />
       <ArriveHint zh={zh} />
       {showPerp ? (
         <Suspense fallback={null}>
@@ -297,85 +295,6 @@ export function DeskHome({
         </Suspense>
       ) : null}
     </>
-  );
-}
-
-function StampShip({ zh }: { zh: boolean }) {
-  const [account, setAccount] = useState<string | null>(currentAccount());
-  const [ready, setReady] = useState({ bsc: true, xlayer: true });
-  const [placed, setPlaced] = useState({ bsc: false, xlayer: false });
-  const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
-  useEffect(() => onAccount(setAccount), []);
-  useEffect(() => {
-    let dead = false;
-    void import("@/lib/red-packet")
-      .then(({ stampStep }) => Promise.all([stampStep("bsc"), stampStep("xlayer")]))
-      .then(([bsc, xlayer]) => {
-        if (!dead) {
-          setReady({ bsc: bsc === "allowed", xlayer: xlayer === "allowed" });
-          setPlaced({ bsc: bsc !== "none", xlayer: xlayer !== "none" });
-        }
-      })
-      .catch(() => {
-        if (!dead) setReady({ bsc: false, xlayer: false });
-      });
-    return () => {
-      dead = true;
-    };
-  }, [note]);
-  const who = account?.toLowerCase() ?? "";
-  const chain = who === BSC_SAFE.toLowerCase() ? "bsc" : who === XLAYER_SAFE.toLowerCase() ? "xlayer" : null;
-  if (!chain || ready[chain]) return null;
-  return (
-    <div className="border-b border-gold px-3 py-2">
-      <button
-        type="button"
-        className="min-h-11 w-full border border-gold text-sm"
-        disabled={busy}
-        onClick={() => {
-          if (!account) return;
-          setBusy(true);
-          setNote("");
-          void import("@/lib/red-packet")
-            .then(({ placeStamp }) => placeStamp(chain, account))
-            .then((step) => {
-              setReady((prev) => ({ ...prev, [chain]: step === "allowed" }));
-              if (step === "deployed") setPlaced((prev) => ({ ...prev, [chain]: true }));
-              setNote(
-                step === "deployed"
-                  ? zh
-                    ? "成交记录已放上。再点一次，允许这一版。"
-                    : "The fill record is in place. Tap again to allow this version."
-                  : zh
-                    ? "这一版已经允许。主页这一块可以撤了。"
-                    : "This version is allowed. This block can come off the home page.",
-              );
-            })
-            .catch(() => {
-              setNote(zh ? "没放上。确认这是这条链的多签，再点一次。" : "It was not placed. Use this chain's multisig and tap again.");
-            })
-            .finally(() => setBusy(false));
-        }}
-      >
-        {chain === "bsc"
-          ? placed.bsc
-            ? zh
-              ? "BSC 允许这一版"
-              : "Allow this BSC version"
-            : zh
-              ? "BSC 放上成交记录"
-              : "Place the BSC fill record"
-          : placed.xlayer
-            ? zh
-              ? "X Layer 允许这一版"
-              : "Allow this X Layer version"
-            : zh
-              ? "X Layer 放上成交记录"
-              : "Place the X Layer fill record"}
-      </button>
-      {note ? <p className="mt-1 text-center text-xs text-ink/70">{note}</p> : null}
-    </div>
   );
 }
 

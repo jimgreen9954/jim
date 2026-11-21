@@ -276,8 +276,8 @@ export function RedGift({
       else if (message === "stamp")
         setNote(
           zh
-            ? "成交记录还没放上。合约任务红包先不能新开。多签在主页点「放上成交记录」，放上后再点一次允许。"
-            : "The fill record is not in place. A perpetual red packet cannot be opened yet. The multisig places it from the home page, then taps again to allow this version.",
+            ? "成交记录还没允许这一版。合约任务红包先不能新开。"
+            : "This version is not allowed on the fill record yet. A perpetual red packet cannot be opened.",
         );
       else if (message === "safe")
         setNote(zh ? "只有这条链的多签可以放上。" : "Only this chain's multisig can place it.");
