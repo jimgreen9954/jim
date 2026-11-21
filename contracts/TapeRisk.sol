@@ -72,6 +72,8 @@ contract TapeRisk {
     mapping(uint256 => Trail) public trails;
     uint256 public lastPrice;
     uint256 public insurance;
+    /// Sum of open entry notionals. Child books cap this. Uncapped books use the maximum.
+    uint256 public openNotional;
     uint256 private entered = 1;
 
     struct Stop {
@@ -183,6 +185,7 @@ contract TapeRisk {
     }
 
     function open(bool long, uint256 margin, uint16 lev, uint256 price) external nonReentrant {
+        _note();
         _guard();
         mark();
         _check(margin, lev);
@@ -195,6 +198,7 @@ contract TapeRisk {
     }
 
     function take(uint256 quoteId, uint256 margin, uint16 lev) external nonReentrant {
+        _note();
         _guard();
         mark();
         Quote memory q = quotes[quoteId];
@@ -218,6 +222,7 @@ contract TapeRisk {
 
     /// Resting only. Reverts if this price would meet an opposite quote.
     function openPost(bool long, uint256 margin, uint16 lev, uint256 price) external nonReentrant {
+        _note();
         _guard();
         mark();
         _check(margin, lev);
@@ -232,6 +237,7 @@ contract TapeRisk {
 
     /// One signature, two to five resting quotes between the two prices.
     function openScale(bool long, uint256 margin, uint16 lev, uint256 startPx, uint256 endPx, uint8 count) external nonReentrant {
+        _note();
         _guard();
         if (count < 2 || count > 5) revert Bad();
         mark();
@@ -254,6 +260,7 @@ contract TapeRisk {
 
     /// Long fires when mark rises to the trigger. Short fires when mark falls to it.
     function openStop(bool long, uint256 margin, uint16 lev, uint256 triggerPx) external nonReentrant {
+        _note();
         _guard();
         mark();
         _check(margin, lev);
@@ -264,6 +271,7 @@ contract TapeRisk {
     }
 
     function fireStop(uint256 id) external nonReentrant {
+        _note();
         _guard();
         Stop memory s = stops[id];
         if (!s.open) revert Bad();
@@ -285,6 +293,7 @@ contract TapeRisk {
 
     /// First slice rests now. Anyone can poke the next slice after the gap.
     function openTwap(bool long, uint256 margin, uint16 lev, uint8 slices, uint32 gap) external nonReentrant {
+        _note();
         _guard();
         if (slices < 2 || slices > 12) revert Bad();
         if (gap < 30 || gap > 1 days) revert Bad();
@@ -298,6 +307,7 @@ contract TapeRisk {
     }
 
     function pokeTwap(uint256 id) external nonReentrant {
+        _note();
         _guard();
         _poke(id);
     }
@@ -319,6 +329,7 @@ contract TapeRisk {
     }
 
     function pokeTrail(uint256 id) external nonReentrant {
+        _note();
         Trail storage t = trails[id];
         if (!t.open) revert Bad();
         uint256 px = mark();
@@ -340,16 +351,19 @@ contract TapeRisk {
     }
 
     function accrue(uint256 id) external nonReentrant {
+        _note();
         _accrue(id);
     }
 
     function close(uint256 id) external nonReentrant {
+        _note();
         Deal memory d = deals[id];
         if (msg.sender != d.long && msg.sender != d.short) revert Bad();
         _settle(id, false);
     }
 
     function liquidate(uint256 id) external nonReentrant {
+        _note();
         _guard();
         _settle(id, true);
     }
@@ -361,6 +375,14 @@ contract TapeRisk {
 
     /// Overridden by the UP book. Other books do not ask the mark for a pause.
     function _guard() internal view virtual {}
+
+    /// Trade paths record the mark before using it. The default mark ignores this.
+    function _note() internal virtual {}
+
+    /// Entry notional of every open deal. The default book does not cap it.
+    function _cap() internal view virtual returns (uint256) {
+        return type(uint256).max;
+    }
 
     function _check(uint256 margin, uint16 lev) internal view {
         if (lev < 1 || lev > _maxLev(margin)) revert Bad();
@@ -395,6 +417,10 @@ contract TapeRisk {
         usedQ = base * px / (uint256(q.lev) * 1e18);
         uint256 usedT = base * px / (uint256(takerLev) * 1e18);
         if (usedQ > q.margin || usedT > takerMargin) revert Bad();
+        uint256 notion = base * px / 1e18;
+        uint256 cap = _cap();
+        if (notion > cap || openNotional > cap - notion) revert Bad();
+        openNotional += notion;
         uint256 feeQ = _feeSplit(q.user, usedQ * FEE_NUM / FEE_DEN);
         uint256 feeT = _feeSplit(taker, usedT * FEE_NUM / FEE_DEN);
         address long = takerLong ? taker : q.user;
@@ -479,6 +505,9 @@ contract TapeRisk {
         _accrue(id);
         Deal memory d = deals[id];
         if (!d.open) revert Bad();
+        uint256 notion = uint256(d.base) * uint256(d.entry) / 1e18;
+        if (openNotional >= notion) openNotional -= notion;
+        else openNotional = 0;
         uint256 px = mark();
         (uint256 eqL, uint256 eqS, bool weakL, bool weakS) = _equity(d, px);
         if (mustLiq && !weakL && !weakS) revert Bad();

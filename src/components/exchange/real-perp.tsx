@@ -50,8 +50,6 @@ import {
   pickBook,
   liveLevCap,
   markGuard,
-  tapeSamples,
-  fabSamples,
   pokeBook,
   liquidatePerp,
   openPerp,
@@ -405,7 +403,6 @@ export function RealPerp({
   const [bad, setBad] = useState(false);
   const [hash, setHash] = useState(null);
   const [guardOn, setGuardOn] = useState(null);
-  const [tapeN, setTapeN] = useState(null);
   const [link, setLink] = useState(null);
   const [bal, setBal] = useState(null);
   const [prices, setPrices] = useState([]);
@@ -796,15 +793,6 @@ export function RealPerp({
         .catch(() => {
           if (!dead) setGuardOn(null);
         });
-      if (coin === "tape" || coin === "fab") {
-        (coin === "fab" ? fabSamples() : tapeSamples())
-          .then((n) => {
-            if (!dead) setTapeN(n);
-          })
-          .catch(() => {
-            if (!dead) setTapeN(null);
-          });
-      } else if (!dead) setTapeN(null);
     };
     pull();
     const id = window.setInterval(pull, 15_000);
@@ -952,8 +940,8 @@ export function RealPerp({
     else if (message === "gap")
       setNote(
         lang === "zh"
-          ? "标记和现价差超过约 3%。新开仓和强平停了，平仓还可以。"
-          : "Spot and the average differ by about 3%. New opens and liquidations are paused. Close still works.",
+          ? "标记和现价差超过约 3%。新开仓和强平停了，平仓还可以。点「记下价格」只记一次，不会自己连着记。"
+          : "Spot and the average differ by about 3%. New opens and liquidations are paused. Close still works. “Record the price” writes once. It does not keep going.",
       );
     else if (message === "uphalt")
       setNote(
@@ -1067,7 +1055,7 @@ export function RealPerp({
         setHash(result);
         setFills(pushFill(kind || "tx", result));
         announceFill(lang === "zh" ? "合约回执" : "Perp receipt", result.slice(0, 10));
-        if (kind !== "cancel")
+        if (kind !== "cancel" && kind !== "poke")
           markDeskFill(
             chain === "bsc" ? "bsc" : "xlayer",
             from,
@@ -1077,6 +1065,17 @@ export function RealPerp({
           );
       }
         setNote(null);
+        if (kind === "poke") {
+          setNote(
+            lang === "zh"
+              ? "只记下了一次价格，没有开仓。要是还差着，等一会儿再点。不会自己连着记。"
+              : "One price was recorded. Nothing was opened. If the gap is still there, wait and tap again. It does not keep recording.",
+          );
+          setBad(false);
+          if (coin === "up" || coin === "tape" || coin === "fab") {
+            void markGuard(coin).then((on) => setGuardOn(on));
+          }
+        }
         if (/^0x[a-fA-F0-9]{40}$/.test(perp)) {
           void readPerp(perp, from)
             .then((next) => {
@@ -1402,13 +1401,13 @@ export function RealPerp({
   const usdtShort = Boolean(bal) && opensMargin && needLock > freeN + 0.009;
   const walletUsdt = bal ? freeN.toFixed(2) : "—";
   const shortLine = lang === "zh" ? `${chain === "xlayer" ? "USDT0" : "USDT"} 不够` : `Not enough ${chain === "xlayer" ? "USDT0" : "USDT"}`;
-  const tapeCold = (coin === "tape" || coin === "fab") && tapeN !== null && tapeN < 20;
-  const needMark = markFar || ((coin === "up" || coin === "tape" || coin === "fab") && guardOn === false) || tapeCold;
+  const needMark =
+    coin === "up" || coin === "tape" || coin === "fab" ? guardOn === false : markFar;
   const place = (side) => {
     setIntent(side);
     if (busy) return;
     if (needMark) {
-      run((from) => pokeBook(from, perp));
+      run((from) => pokeBook(from, perp), "poke");
       return;
     }
     if (alt) return;
@@ -2858,21 +2857,22 @@ export function RealPerp({
                                     : coin === "up" || coin === "tape" || coin === "fab"
                                       ? /* @__PURE__ */ jsxs(Fragment, {
                                           children: [
-                                            tapeCold
+                                            guardOn === false
                                               ? /* @__PURE__ */ jsx("p", {
                                                   className: "desk-extra",
                                                   children:
                                                     lang === "zh"
-                                                      ? `${coin === "fab" ? "FAB" : "TAPE"} 标记还只有刚部署时的价格，10 分钟样本没满。新开仓先停，平仓可以。点下面只更新一次标记。`
-                                                      : `The ${coin === "fab" ? "FAB" : "TAPE"} mark is still the deployment price. The 10-minute sample is not full. New opens wait. Close still works. The button below updates the mark once.`,
+                                                      ? "现价和 10 分钟均价差超过约 3%。新开仓和强平停了，平仓还可以。点下面只记下一次价格，不会开仓，也不会自己连着记。"
+                                                      : "Spot and the 10-minute average differ by about 3%. New opens and liquidations are paused. Close still works. The button records the price once. It does not open, and it does not keep going.",
                                                 })
-                                              : guardOn === false
+                                              : null,
+                                            coin === "tape"
                                               ? /* @__PURE__ */ jsx("p", {
                                                   className: "desk-extra",
                                                   children:
                                                     lang === "zh"
-                                                      ? "标记和现价差超过约 3%。新开仓和强平停了，平仓还可以。点下面更新标记。"
-                                                      : "Spot and the average differ by about 3%. New opens and liquidations are paused. Close still works. Update the mark below.",
+                                                      ? "整本未平名义最多 40 USDT0。1 个保证金开 50 倍是 50，放不进。20 倍可以。"
+                                                      : "Open notional on this book stops at 40 USDT0. 1 at 50× is 50 and does not fit. 20× does.",
                                                 })
                                               : null,
                                             /* @__PURE__ */ jsx("p", {
@@ -2905,7 +2905,7 @@ export function RealPerp({
                                     }
                                     onClick={() => {
                                       if (needMark) {
-                                        run((from) => pokeBook(from, perp));
+                                        run((from) => pokeBook(from, perp), "poke");
                                         return;
                                       }
                                       if (planned.net === "reject") {
@@ -2936,8 +2936,8 @@ export function RealPerp({
                                   >
                                     {needMark
                                       ? lang === "zh"
-                                        ? "更新标记"
-                                        : "Update the mark"
+                                        ? "记下价格"
+                                        : "Record the price"
                                       : waiting &&
                                     view &&
                                     (intent === "long" ? !view.pendingLong : view.pendingLong)

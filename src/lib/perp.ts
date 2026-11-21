@@ -456,10 +456,25 @@ export function nextTierCap(margin: string, chain: Desk): number {
   return 5;
 }
 
-/** What this margin can actually use. UP, TAPE and FAB follow the book tiers. */
+/** What this margin can actually use. UP, TAPE and FAB follow the book tiers, then the book notional cap. */
 export function liveLevCap(coin: string, margin = "0", chain?: Desk): number {
-  if (coin === "up" || coin === "tape" || coin === "fab") return nextTierCap(margin, chain ?? (coin === "up" ? "bsc" : "xlayer"));
-  return 50;
+  if (coin !== "up" && coin !== "tape" && coin !== "fab") return 50;
+  const which = chain ?? (coin === "up" ? "bsc" : "xlayer");
+  let cap = nextTierCap(margin, which);
+  const limit = notionalCap(coin);
+  const dec = which === "xlayer" ? 6 : 18;
+  if (!limit) return cap;
+  try {
+    const raw = units(margin || "0", dec);
+    if (raw > 0n) {
+      const room = limit / raw;
+      if (room < 1n) return 0;
+      if (room < BigInt(cap)) cap = Number(room);
+    }
+  } catch {
+    /* keep the tier */
+  }
+  return cap;
 }
 
 /** Market list. UP, TAPE and FAB are not a flat 50×. */
@@ -472,22 +487,41 @@ export const PREV_BTC_COIN_BOOK = "0x77E6af2fb801f8A30258aB6E3fFaC8c0b53ECbd1" a
 export const PREV_ETH_COIN_BOOK = "0x33Eb07D186B25243D58e72Be51859D3f5c28545F" as Hex;
 export const PREV_ZEC_COIN_BOOK = "0xE1f5a45D709F6d547FcA76F2E2E7d42AfDe0bA90" as Hex;
 export const PREV_UP_COIN_BOOK = "0xB3cdB968580cE0121f613886E8f86EFFcC514d70" as Hex;
-export const LAST_UP_COIN_BOOK = "0xceC1334Bc30D05e3ceab6bA19a5C0915df075552" as Hex;
+export const LAST_UP_COIN_BOOK = "0x53610279d1fFaF4D211E4c3988c964A9E870007F" as Hex;
+const MID_UP_COIN_BOOK = "0xceC1334Bc30D05e3ceab6bA19a5C0915df075552" as Hex;
 export const PREV_TAPE_COIN_BOOK = "0x9b17D0F6431957661AdD30051de2615cb08A3886" as Hex;
-export const LAST_TAPE_COIN_BOOK = "0xd5CaE88012A443449BE3d6efCf86A245A6972a86" as Hex;
+export const LAST_TAPE_COIN_BOOK = "0x76FF80D56E1be05BabeD1C4ef31fb9dEfa941d22" as Hex;
+const MID_TAPE_COIN_BOOK = "0xd5CaE88012A443449BE3d6efCf86A245A6972a86" as Hex;
 export const PREV_FAB_COIN_BOOK = "0x6Bd480BF658FaB7A2cb758c0408A7b3B5B94B431" as Hex;
-export const LAST_FAB_COIN_BOOK = "0x80318c852eE7fBDe52cE439deC3AE022Ba39A536" as Hex;
+export const LAST_FAB_COIN_BOOK = "0x61eb43aa602554324701cd2b551adff5b850d9cd" as Hex;
+const MID_FAB_COIN_BOOK = "0x80318c852eE7fBDe52cE439deC3AE022Ba39A536" as Hex;
 export const BTC_COIN_BOOK = "0x81060936404F7984675c3928731871032b9E8eEE" as Hex;
 export const ETH_COIN_BOOK = "0xB059c8951256A5eBBf9051f7d8D19AE0A1798A82" as Hex;
 export const ZEC_COIN_BOOK = "0xc2D7436047ff08afB7A8aB6fFa9cDb73Bb1EDFC6" as Hex;
-export const UP_COIN_BOOK = "0x53610279d1fFaF4D211E4c3988c964A9E870007F" as Hex;
-export const TAPE_COIN_BOOK = "0x76FF80D56E1be05BabeD1C4ef31fb9dEfa941d22" as Hex;
-export const FAB_COIN_BOOK = "0x61eb43aa602554324701cd2b551adff5b850d9cd" as Hex;
+export const UP_COIN_BOOK = "0x277689ab82b04aE8100683B155CE2e2E12C82b30" as Hex;
+export const TAPE_COIN_BOOK = "0x5C9F44A4D1f5F9082D3Cb02d11d717DE9563251A" as Hex;
+export const FAB_COIN_BOOK = "0x03A1B0e5E225855905a63BD2a5A3Eb3A366A3caA" as Hex;
 const TAPE_OFFICIAL_POOL = "0x58eaD5b41Cfd3627791D439402dd65571c286484" as Hex;
 const TAPE_OFFICIAL_CODE = "0xf5e304a7d79711bb3c77a1380a0e2898ee40621ff46a14ad3456e205096f9fa9" as Hex;
-const UP_MARK = "0x11dCaA2ee4A6F4c437B9B6B304FFBc09B768845B" as Hex;
-const TAPE_MARK = "0x86fA83c53DD77F1562543B62dFf839B7BcD0Ea99" as Hex;
-const FAB_MARK = "0xb9e819e6d7db7ebdc82dc04bd0d8524dc67b3fc7" as Hex;
+const UP_MARK = "0xfdC61Db9FE1A6a9cA0EB847cb46D696599c27B19" as Hex;
+const TAPE_MARK = "0x14dd565D626D2b469Ee326558Ef2f24f7B37FFe7" as Hex;
+const FAB_MARK = "0x66e052B645F517A5508Ec3eb3287012cae0670Bb" as Hex;
+
+function notionalCap(id: string): bigint | null {
+  const key = id.toLowerCase();
+  if (key === "up" || key === UP_COIN_BOOK.toLowerCase()) return 500n * 10n ** 18n;
+  if (key === "tape" || key === TAPE_COIN_BOOK.toLowerCase()) return 40_000_000n;
+  if (key === "fab" || key === FAB_COIN_BOOK.toLowerCase()) return 500_000_000n;
+  return null;
+}
+
+function syncBook(id: string): "up" | "tape" | "fab" | null {
+  const key = id.toLowerCase();
+  if (key === UP_COIN_BOOK.toLowerCase()) return "up";
+  if (key === TAPE_COIN_BOOK.toLowerCase()) return "tape";
+  if (key === FAB_COIN_BOOK.toLowerCase()) return "fab";
+  return null;
+}
 
 const COIN_LIVE: Partial<Record<CoinBook, { chain: Desk; book: Hex }>> = {
   btc: { chain: "bsc", book: BTC_COIN_BOOK },
@@ -512,7 +546,7 @@ export function pickBook(which: Desk, coin: string): string {
 
 function pinned(perp: string): void {
   const want = perp.toLowerCase();
-  const rows = [bookOf("bsc"), bookOf("xlayer"), LAST_BSC, PREV_BSC, OLDER_BSC, LAST_XPERP, PREV_XPERP, OLDER_XPERP, coinBook("bsc", "btc"), coinBook("bsc", "eth"), coinBook("bsc", "zec"), coinBook("bsc", "up"), coinBook("xlayer", "tape"), coinBook("xlayer", "fab"), BTC_COIN_BOOK, ETH_COIN_BOOK, ZEC_COIN_BOOK, UP_COIN_BOOK, LAST_UP_COIN_BOOK, PREV_UP_COIN_BOOK, TAPE_COIN_BOOK, LAST_TAPE_COIN_BOOK, PREV_TAPE_COIN_BOOK, FAB_COIN_BOOK, LAST_FAB_COIN_BOOK, PREV_FAB_COIN_BOOK];
+  const rows = [bookOf("bsc"), bookOf("xlayer"), LAST_BSC, PREV_BSC, OLDER_BSC, LAST_XPERP, PREV_XPERP, OLDER_XPERP, coinBook("bsc", "btc"), coinBook("bsc", "eth"), coinBook("bsc", "zec"), coinBook("bsc", "up"), coinBook("xlayer", "tape"), coinBook("xlayer", "fab"), BTC_COIN_BOOK, ETH_COIN_BOOK, ZEC_COIN_BOOK, UP_COIN_BOOK, LAST_UP_COIN_BOOK, MID_UP_COIN_BOOK, PREV_UP_COIN_BOOK, TAPE_COIN_BOOK, LAST_TAPE_COIN_BOOK, MID_TAPE_COIN_BOOK, PREV_TAPE_COIN_BOOK, FAB_COIN_BOOK, LAST_FAB_COIN_BOOK, MID_FAB_COIN_BOOK, PREV_FAB_COIN_BOOK];
   if (!rows.some((row) => row.length === 42 && row.toLowerCase() === want)) throw new Error("book");
 }
 
@@ -920,9 +954,15 @@ function maxLevFor(perp: string, amount: bigint): number {
   const tiered = id === UP_COIN_BOOK.toLowerCase() || id === TAPE_COIN_BOOK.toLowerCase() || id === FAB_COIN_BOOK.toLowerCase();
   if (!tiered) return 50;
   const unit = id === UP_COIN_BOOK.toLowerCase() ? 10n ** 18n : 1_000_000n;
-  if (amount <= unit * 20n) return 50;
-  if (amount <= unit * 100n) return 20;
-  return 5;
+  let cap = 5;
+  if (amount <= unit * 20n) cap = 50;
+  else if (amount <= unit * 100n) cap = 20;
+  const limit = notionalCap(id);
+  if (limit && amount > 0n) {
+    const room = limit / amount;
+    if (room < BigInt(cap)) cap = Number(room);
+  }
+  return cap;
 }
 
 async function pullMargin(from: string, perp: string, margin: string, lev: number) {
@@ -956,14 +996,9 @@ async function assertV2(perp: string) {
   if (perp.toLowerCase() === TAPE_COIN_BOOK.toLowerCase()) {
     const code = await tapePoolCode();
     if (!code || keccak256(code) !== TAPE_OFFICIAL_CODE) throw new Error("poolhash");
-    const n = await tapeSamples();
-    if (n === null || n < 20) throw new Error("warm");
   }
-  if (perp.toLowerCase() === FAB_COIN_BOOK.toLowerCase()) {
-    const n = await fabSamples();
-    if (n === null || n < 20) throw new Error("warm");
-    if ((await markGuard("fab")) !== true) throw new Error("gap");
-  }
+  const sync = syncBook(id);
+  if (sync && (await markGuard(sync)) !== true) throw new Error("gap");
   const retired = perp.toLowerCase();
   if (retired === LAST_BSC.toLowerCase() || retired === PREV_BSC.toLowerCase() || retired === OLDER_BSC.toLowerCase()) throw new Error("halt");
   let fresh = false;
@@ -995,11 +1030,13 @@ async function assertV2(perp: string) {
 /** Post-only on the risk book. On the live book, a crossing price is refused and the rest uses open. */
 function rejectUpOpen(perp: string) {
   const id = perp.toLowerCase();
-  if (id === LAST_UP_COIN_BOOK.toLowerCase() || id === PREV_UP_COIN_BOOK.toLowerCase()) throw new Error("uphalt");
+  if (id === LAST_UP_COIN_BOOK.toLowerCase() || id === MID_UP_COIN_BOOK.toLowerCase() || id === PREV_UP_COIN_BOOK.toLowerCase()) throw new Error("uphalt");
   if (
     id === LAST_TAPE_COIN_BOOK.toLowerCase() ||
+    id === MID_TAPE_COIN_BOOK.toLowerCase() ||
     id === PREV_TAPE_COIN_BOOK.toLowerCase() ||
     id === LAST_FAB_COIN_BOOK.toLowerCase() ||
+    id === MID_FAB_COIN_BOOK.toLowerCase() ||
     id === PREV_FAB_COIN_BOOK.toLowerCase()
   ) {
     throw new Error("tapehalt");
@@ -1190,6 +1227,9 @@ export async function readChainPurse(which: Desk, account: string): Promise<{ ga
 const pokeAbi = [
   { name: "poke", type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
 ] as const;
+const noteAbi = [
+  { name: "note", type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
+] as const;
 
 export async function xPoolPrice(): Promise<number> {
   const { createPublicClient, http } = await import("viem");
@@ -1216,7 +1256,11 @@ const poolAbi = [
 export async function pokeBook(from: string, perp: string): Promise<Hex> {
   pinned(perp);
   const pool = await (await client()).readContract({ address: perp as Hex, abi: poolAbi, functionName: "pool" });
-  return send(from, pool, encodeFunctionData({ abi: pokeAbi, functionName: "poke" }), 1_200_000n);
+  const sync = syncBook(perp);
+  const data = sync
+    ? encodeFunctionData({ abi: noteAbi, functionName: "note" })
+    : encodeFunctionData({ abi: pokeAbi, functionName: "poke" });
+  return send(from, pool, data, 1_200_000n);
 }
 
 export async function readStops(perp: string): Promise<{ id: bigint; user: string; long: boolean; margin: bigint; lev: number; trigger: bigint }[]> {

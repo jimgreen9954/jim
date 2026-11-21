@@ -80,6 +80,7 @@ contract TierMarkTest is Test {
     TapeRisk plain;
 
     function setUp() public {
+        vm.warp(1_000_000);
         tape = new MockTape();
         okb = new MockOkb();
         mark = new TapeCapMark(address(tape), address(okb));
