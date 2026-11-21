@@ -29,7 +29,7 @@ import { RED_BOOTH_ABI, RED_BOOTH_BYTECODE } from "@/lib/red-booth-artifact";
 import { STOCKS } from "@/lib/stocks";
 import { TAPE_BEM, TAPE_TOKEN, TAPE_USDT } from "@/lib/tape-pool";
 import { OPEN_POOL } from "@/lib/tape-open-swap";
-import { BSC_REBATE, currentDesk, openPerp, readPerp, selectDesk, takePerp } from "@/lib/perp";
+import { BSC_REBATE, FAB_COIN_BOOK, KNOWN_XPERP, TAPE_COIN_BOOK, UP_COIN_BOOK, currentDesk, openPerp, readPerp, selectDesk, takePerp } from "@/lib/perp";
 import { connectXLayer } from "@/lib/xlayer";
 import { ensureProvider, parseChainId, switchDeskChain } from "@/lib/wallet";
 
@@ -52,11 +52,11 @@ const DESK = {
   xlayer: { router: OKB.router, quote: OKB.usdt, wrapped: OKB.wokb, tapePool: OPEN_POOL, tapeQuote: TAPE_USDT, tapeToken: TAPE_TOKEN, tapeBem: TAPE_BEM, scale: 1n, kind: 1 },
 } as const;
 
-const X_BEM_BOOK = "0xE8Ed0fE7a7aaEF822b2e5Ce9679ccACcF3aEFF56" as Hex;
+const X_BEM_BOOK = KNOWN_XPERP as Hex;
 const BSC_BEM_BOOK = BSC_REBATE as Hex;
-const X_FAB_BOOK = "0x6Bd480BF658FaB7A2cb758c0408A7b3B5B94B431" as Hex;
-const X_TAPE_BOOK = "0x9b17D0F6431957661AdD30051de2615cb08A3886" as Hex;
-const BSC_UP_BOOK = "0x7aaf00Dab91e0e6dDDb6093323D0140c11C55aD3" as Hex;
+const X_FAB_BOOK = FAB_COIN_BOOK;
+const X_TAPE_BOOK = TAPE_COIN_BOOK;
+const BSC_UP_BOOK = UP_COIN_BOOK;
 const USDT0 = "0x779Ded0c9e1022225f8E0630b35a9b54bE713736" as Hex;
 const TAPE = "0x8f2d517D3d62019CD8D7F08ae178Be05BBb6EBE3" as Hex;
 const X_BEM = "0x60e62Efa9405d6873C5deaBD4E6CC91c25363952" as Hex;
@@ -1199,6 +1199,7 @@ async function tradePerp(chain: GiftChain, from: string, gate: number, need: big
 }
 
 const CHECKED_RED = "0x7761ac208268aaeb74761267dec2e23504676028dd92264c2e07663cad7520c9" as Hex;
+const RED_PERP_RUNTIME = "0x40620dd68b9dfac03a41b822d044aa6925ac4c77618daa4f8cc85539ac9b0752" as Hex;
 const RED_RUNTIME: Record<GiftChain, Hex> = {
   xlayer: "0x9f6a07ce7e33186652a2ace00d89929db9efa8eb5d2a0de7e70c67b981e2e186",
   bsc: "0x50b8507ab02ffeefe66e153e71ee4d63b861a37d34e72a91f9e9667b4d9d51b5",
@@ -1206,6 +1207,7 @@ const RED_RUNTIME: Record<GiftChain, Hex> = {
 /** Runtimes this app ships or has already checked. A factory row with any other code is not a red packet. */
 const TRUSTED_RED = new Set<string>([
   CHECKED_RED,
+  RED_PERP_RUNTIME,
   RED_RUNTIME.xlayer,
   RED_RUNTIME.bsc,
   "0x0ec34e5d71fe7e47355e2510d9f5bc10fa058d96c78695b3eecb136f82f04872",

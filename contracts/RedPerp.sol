@@ -29,11 +29,11 @@ interface IPerp {
 contract RedPerp {
     uint256 public constant PACE = 180;
     address public constant BOOTH = 0x284Fa8819980A229622B711A52BF66bD9cDCbC2d;
-    address public constant BSC_BEM = 0xdA4aA9E0aaad6F91835cD19345D49a8fcA8d019A;
-    address public constant BSC_UP = 0x5f913f7AFa71c51d69F472b0fE4c3EC74b1132F8;
-    address public constant X_BEM = 0xE8Ed0fE7a7aaEF822b2e5Ce9679ccACcF3aEFF56;
-    address public constant X_TAPE = 0x9b17D0F6431957661AdD30051de2615cb08A3886;
-    address public constant X_FAB = 0x6Bd480BF658FaB7A2cb758c0408A7b3B5B94B431;
+    address public constant BSC_BEM = 0x070c66555535e1145275df54f4eEBBfd28d98581;
+    address public constant BSC_UP = 0xdCc4F9dF12bD2550a2d9292f8894880A85822734;
+    address public constant X_BEM = 0x46cBAfCA59873E7115dF7825fdBF659BafAc3a51;
+    address public constant X_TAPE = 0xE08f0F8e056E65E00b2f80CF63Fbc0bfc78BAB0d;
+    address public constant X_FAB = 0xb87A0D23A9D5c1F63C2DeA9331fBaA1B0C027D0A;
 
     address public immutable deployer;
     address public immutable router = 0x881fB2f98c13d521009464e7D1CBf16E1b394e8E;
