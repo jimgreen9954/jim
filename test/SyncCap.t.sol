@@ -387,6 +387,39 @@ contract SyncCapTest is Test {
         assertEq(cash.balanceOf(address(0xBEEF)), held);
     }
 
+    function testARecoveredPriceClearsTheLiquidation() public {
+        _fund();
+        uint256 px = book.mark();
+        vm.prank(address(0xA11));
+        book.open(true, 1 ether, 50, px);
+        vm.prank(address(0xB22));
+        book.take(1, 1 ether, 50);
+        uint256 clock = block.timestamp;
+        uint256 net = 1e8;
+        for (uint256 i; i < 200 && book.liqSeen(1) == 0; i++) {
+            if (mark.guard()) net = net * 9995 / 10000;
+            up.setNet(net);
+            clock += 31;
+            vm.warp(clock);
+            book.sync();
+            if (mark.guard()) try this.pokeLiq() {} catch {}
+        }
+        assertGt(book.liqSeen(1), 0);
+        up.setNet(1e8);
+        for (uint256 i; i < 200 && book.liqSeen(1) != 0; i++) {
+            clock += 31;
+            vm.warp(clock);
+            book.sync();
+        }
+        assertEq(book.liqSeen(1), 0);
+        clock += 2 minutes;
+        vm.warp(clock);
+        vm.expectRevert(TapeRisk.Bad.selector);
+        book.liquidate(1);
+        (,,,,,, bool still,,) = book.deals(1);
+        assertTrue(still);
+    }
+
     function testInsuranceShrinksTheCap() public {
         SyncTierTapeRisk thin = new SyncTierTapeRisk(address(cash), address(mark), 1 ether, address(this), 1_000 ether);
         cash.mint(address(0xA11), 100 ether);

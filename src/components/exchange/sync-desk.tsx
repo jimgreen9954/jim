@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { fundBookInsurance, syncBookState, type SyncBookState } from "@/lib/perp";
+import { deployShip } from "@/lib/sync-ship";
 
 const COINS = ["up", "tape", "fab"] as const;
 
@@ -149,5 +150,54 @@ export function SyncDesk({ zh }: { zh: boolean }) {
       ) : null}
       {note ? <p className={`mt-2 text-xs ${bad ? "text-sell" : "text-ink/80"}`}>{note}</p> : null}
     </div>
+  );
+}
+
+export function ShipHome({ zh }: { zh: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+  const [bad, setBad] = useState(false);
+  const run = (kind: "up" | "tape" | "fab") => {
+    if (busy) return;
+    setBusy(true);
+    setBad(false);
+    setNote(zh ? "钱包正在打开。" : "The wallet is opening.");
+    void deployShip(kind)
+      .then((row) => {
+        setBad(false);
+        setNote(
+          zh
+            ? `${kind.toUpperCase()} 已部署。交易 ${row.book}，标记 ${row.mark}。页面不改地址。保险金还是要另存。`
+            : `${kind.toUpperCase()} is deployed. Book ${row.book}, mark ${row.mark}. The page does not switch. Insurance is still a separate deposit.`,
+        );
+      })
+      .catch((err: unknown) => {
+        setBad(true);
+        setNote(say(err, zh));
+      })
+      .finally(() => setBusy(false));
+  };
+  return (
+    <section className="border border-gold bg-card px-3 py-3 text-sm">
+      <p className="text-xs leading-5 text-ink/75">
+        {zh
+          ? "下一本 UP、TAPE、FAB。记价时如果仓位已经安全，就清掉那次强平记录。谁都能调 sync()，只记价。部署不会存入保险金，保险金仍要另存，存了拿不回来。用该链多签两签。页面不改地址。"
+          : "The next UP, TAPE and FAB books. A price note clears a liquidation reading once that position is safe. Anyone can call sync(), and it only records the price. Deploying does not deposit insurance. Insurance is separate and cannot be withdrawn. Two signatures from that chain's multisig. The page does not switch."}
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {(["up", "tape", "fab"] as const).map((kind) => (
+          <button
+            key={kind}
+            type="button"
+            disabled={busy}
+            className="min-h-11 border border-gold px-3 text-xs uppercase disabled:opacity-40"
+            onClick={() => run(kind)}
+          >
+            {zh ? `部署 ${kind} 记价本` : `Deploy the ${kind} book`}
+          </button>
+        ))}
+      </div>
+      {note ? <p className={`mt-2 text-xs ${bad ? "text-sell" : "text-ink/80"}`}>{note}</p> : null}
+    </section>
   );
 }

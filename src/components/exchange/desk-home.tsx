@@ -15,6 +15,10 @@ const MarketSheet = lazy(() =>
   import("@/components/exchange/desk-chrome").then((mod) => ({ default: mod.MarketSheet })),
 );
 
+const ShipHome = lazy(() =>
+  import("@/components/exchange/sync-desk").then((mod) => ({ default: mod.ShipHome })),
+);
+
 const RealPerp = lazy(() =>
   import("@/components/exchange/real-perp").then((mod) => ({ default: mod.RealPerp })),
 );
@@ -218,6 +222,9 @@ export function DeskHome({
   return (
     <>
       <ArriveHint zh={zh} />
+      <Suspense fallback={null}>
+        <ShipHome zh={zh} />
+      </Suspense>
       {showPerp ? (
         <Suspense fallback={null}>
           <DeskGuard

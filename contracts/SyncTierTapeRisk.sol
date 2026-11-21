@@ -9,6 +9,7 @@ import "./TapeRisk.sol";
 /// The live cap is the smaller of the multisig cap and 20 times the insurance.
 /// The multisig can lower its cap now. A higher cap waits a day.
 /// A liquidation needs two weak readings, at least two minutes apart.
+/// A later price note clears a reading once that position is safe again.
 /// The liquidation slice stays in insurance. The caller is not paid.
 /// Opens and liquidations stop when guard() is false. A close still uses mark().
 contract SyncTierTapeRisk is TapeRisk {
@@ -20,6 +21,7 @@ contract SyncTierTapeRisk is TapeRisk {
     mapping(address => uint256) public longOf;
     mapping(address => uint256) public shortOf;
     mapping(uint256 => uint32) public liqSeen;
+    uint256[] private liqWait;
     uint256 public constant DELAY = 1 days;
     uint256 public constant LIQ_GAP = 2 minutes;
 
@@ -136,6 +138,38 @@ contract SyncTierTapeRisk is TapeRisk {
 
     function _note() internal override {
         address(pool).call(abi.encodeWithSignature("note()"));
+        _clearSafe();
+    }
+
+    function _clearSafe() private {
+        uint256 px = mark();
+        uint256 i;
+        while (i < liqWait.length) {
+            uint256 id = liqWait[i];
+            Deal memory d = deals[id];
+            bool drop = !d.open;
+            if (!drop) {
+                (,, bool weakL, bool weakS) = _equity(d, px);
+                drop = !weakL && !weakS;
+                if (drop) liqSeen[id] = 0;
+            }
+            if (!drop) {
+                i++;
+                continue;
+            }
+            liqWait[i] = liqWait[liqWait.length - 1];
+            liqWait.pop();
+        }
+    }
+
+    function _forget(uint256 id) private {
+        uint256 n = liqWait.length;
+        for (uint256 i; i < n; i++) {
+            if (liqWait[i] != id) continue;
+            liqWait[i] = liqWait[n - 1];
+            liqWait.pop();
+            return;
+        }
     }
 
     function _liqReady(uint256 id) internal override returns (bool) {
@@ -145,16 +179,19 @@ contract SyncTierTapeRisk is TapeRisk {
         (,, bool weakL, bool weakS) = _equity(d, px);
         if (!weakL && !weakS) {
             liqSeen[id] = 0;
+            _forget(id);
             revert Bad();
         }
         uint32 prev = liqSeen[id];
         if (prev == 0) {
             liqSeen[id] = uint32(block.timestamp);
+            liqWait.push(id);
             emit LiqWait(id, uint32(block.timestamp));
             return false;
         }
         if (block.timestamp < uint256(prev) + LIQ_GAP) return false;
         liqSeen[id] = 0;
+        _forget(id);
         return true;
     }
 
