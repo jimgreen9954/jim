@@ -178,8 +178,8 @@ export function CopyVault({ zh, account }: { zh: boolean; account: string | null
         <ol className="mt-3 grid gap-1.5 text-xs leading-5 text-ink/75">
           <li>
             {zh
-              ? "1. X Layer 这一口绑的是旧本 0x9fD9Ade0272646cc3aD36F1699Fd42CcFE8927c2，只留取钱，不能再挂单。新金库绑正在交易的 BEM 0x46cBAfCA59873E7115dF7825fdBF659BafAc3a51，主页可以两签部署。核对之前页面不改地址。BSC 这一口的 book 仍是 0x89b2f4a2e0C07864172fB47fbDEa14411AF2e0E0。"
-              : "1. The X Layer vault is bound to the old book 0x9fD9Ade0272646cc3aD36F1699Fd42CcFE8927c2. Withdraw only. It cannot post. A new vault bound to the live BEM book 0x46cBAfCA59873E7115dF7825fdBF659BafAc3a51 can be deployed from the homepage with two signatures. The page does not switch until that address is checked. The BSC vault's book is still 0x89b2f4a2e0C07864172fB47fbDEa14411AF2e0E0."}
+              ? "1. X Layer 这一口绑的是旧本 0x9fD9Ade0272646cc3aD36F1699Fd42CcFE8927c2，只留取钱，不能再挂单。新金库已经部署，绑正在交易的 BEM 0x46cBAfCA59873E7115dF7825fdBF659BafAc3a51。主页部署按钮已撤。核对之前页面不改地址。BSC 这一口的 book 仍是 0x89b2f4a2e0C07864172fB47fbDEa14411AF2e0E0。"
+              : "1. The X Layer vault is bound to the old book 0x9fD9Ade0272646cc3aD36F1699Fd42CcFE8927c2. Withdraw only. It cannot post. A new vault bound to the live BEM book 0x46cBAfCA59873E7115dF7825fdBF659BafAc3a51 is already deployed. The homepage button is gone. The page does not switch until that address is checked. The BSC vault's book is still 0x89b2f4a2e0C07864172fB47fbDEa14411AF2e0E0."}
           </li>
           <li>
             {zh
