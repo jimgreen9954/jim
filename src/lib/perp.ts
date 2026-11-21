@@ -581,14 +581,17 @@ export const ZEC_COIN_BOOK = "0xc2D7436047ff08afB7A8aB6fFa9cDb73Bb1EDFC6" as Hex
 const SYNC_UP_COIN_BOOK = "0x277689ab82b04aE8100683B155CE2e2E12C82b30" as Hex;
 const SYNC_TAPE_COIN_BOOK = "0x5C9F44A4D1f5F9082D3Cb02d11d717DE9563251A" as Hex;
 const SYNC_FAB_COIN_BOOK = "0x03A1B0e5E225855905a63BD2a5A3Eb3A366A3caA" as Hex;
-export const UP_COIN_BOOK = "0xe9B1fe713FcE9E4670c610cCc5bf2F2decDCcA4A" as Hex;
-export const TAPE_COIN_BOOK = "0xC74795Aac0FE2E0Db36beeF422504f464c3083f1" as Hex;
-export const FAB_COIN_BOOK = "0xa03525d6C0367E6589Af4cc93b5aA16C4F280411" as Hex;
+const PAGE_UP_COIN_BOOK = "0xe9B1fe713FcE9E4670c610cCc5bf2F2decDCcA4A" as Hex;
+const PAGE_TAPE_COIN_BOOK = "0xC74795Aac0FE2E0Db36beeF422504f464c3083f1" as Hex;
+const PAGE_FAB_COIN_BOOK = "0xa03525d6C0367E6589Af4cc93b5aA16C4F280411" as Hex;
+export const UP_COIN_BOOK = "0xdcc4f9df12bd2550a2d9292f8894880a85822734" as Hex;
+export const TAPE_COIN_BOOK = "0xe08f0f8e056e65e00b2f80cf63fbc0bfc78bab0d" as Hex;
+export const FAB_COIN_BOOK = "0xb87a0d23a9d5c1f63c2dea9331fbaa1b0c027d0a" as Hex;
 const TAPE_OFFICIAL_POOL = "0x58eaD5b41Cfd3627791D439402dd65571c286484" as Hex;
 const TAPE_OFFICIAL_CODE = "0xf5e304a7d79711bb3c77a1380a0e2898ee40621ff46a14ad3456e205096f9fa9" as Hex;
-const UP_MARK = "0xEf744901777f6CDD3C27D20380eC2E7c6740326C" as Hex;
-const TAPE_MARK = "0xA3f7570d34E6DeE46b8c70FB804AcD97A02D95d7" as Hex;
-const FAB_MARK = "0xe6F8419FE6F22d19933Ec6028366fc698709e73F" as Hex;
+const UP_MARK = "0x4ae9c52a00f5911dc2e792d6761e289a6daf3aec" as Hex;
+const TAPE_MARK = "0x6a813faacf11bcbdcb0c13f83a19ba68dd7d85a7" as Hex;
+const FAB_MARK = "0xa6e9f2d6e69ed49c038d120f7c407321951a495b" as Hex;
 
 function notionalCap(id: string): bigint | null {
   const key = id.toLowerCase();
@@ -629,7 +632,7 @@ export function pickBook(which: Desk, coin: string): string {
 
 function pinned(perp: string): void {
   const want = perp.toLowerCase();
-  const rows = [bookOf("bsc"), bookOf("xlayer"), LAST_BSC, PREV_BSC, OLDER_BSC, LAST_XPERP, PREV_XPERP, OLDER_XPERP, coinBook("bsc", "btc"), coinBook("bsc", "eth"), coinBook("bsc", "zec"), coinBook("bsc", "up"), coinBook("xlayer", "tape"), coinBook("xlayer", "fab"), BTC_COIN_BOOK, ETH_COIN_BOOK, ZEC_COIN_BOOK, UP_COIN_BOOK, TAPE_COIN_BOOK, FAB_COIN_BOOK];
+  const rows = [bookOf("bsc"), bookOf("xlayer"), LAST_BSC, PREV_BSC, OLDER_BSC, LAST_XPERP, PREV_XPERP, OLDER_XPERP, coinBook("bsc", "btc"), coinBook("bsc", "eth"), coinBook("bsc", "zec"), coinBook("bsc", "up"), coinBook("xlayer", "tape"), coinBook("xlayer", "fab"), BTC_COIN_BOOK, ETH_COIN_BOOK, ZEC_COIN_BOOK, UP_COIN_BOOK, TAPE_COIN_BOOK, FAB_COIN_BOOK, PAGE_UP_COIN_BOOK, PAGE_TAPE_COIN_BOOK, PAGE_FAB_COIN_BOOK];
   if (!rows.some((row) => row.length === 42 && row.toLowerCase() === want)) throw new Error("book");
 }
 
@@ -1055,6 +1058,11 @@ async function pullMargin(from: string, perp: string, margin: string, lev: numbe
   if (lev < 1 || lev > maxLevFor(perp, amount)) throw new Error("lev");
   const balances = desk === "xlayer" ? { usdt: await readDeskUsdt(from) } : await readBalances(from);
   if (balances.usdt < amount) throw new Error("usdt");
+  const coin = syncBook(perp.toLowerCase());
+  if (coin) {
+    const row = await syncBookState(coin);
+    if (!row || amount * BigInt(lev) > row.room) throw new Error("lev");
+  }
   return amount;
 }
 
@@ -1113,16 +1121,18 @@ async function assertV2(perp: string) {
 /** Post-only on the risk book. On the live book, a crossing price is refused and the rest uses open. */
 function rejectUpOpen(perp: string) {
   const id = perp.toLowerCase();
-  if (id === LAST_UP_COIN_BOOK.toLowerCase() || id === MID_UP_COIN_BOOK.toLowerCase() || id === PREV_UP_COIN_BOOK.toLowerCase() || id === SYNC_UP_COIN_BOOK.toLowerCase()) throw new Error("uphalt");
+  if (id === LAST_UP_COIN_BOOK.toLowerCase() || id === MID_UP_COIN_BOOK.toLowerCase() || id === PREV_UP_COIN_BOOK.toLowerCase() || id === SYNC_UP_COIN_BOOK.toLowerCase() || id === PAGE_UP_COIN_BOOK.toLowerCase()) throw new Error("uphalt");
   if (
     id === LAST_TAPE_COIN_BOOK.toLowerCase() ||
     id === MID_TAPE_COIN_BOOK.toLowerCase() ||
     id === PREV_TAPE_COIN_BOOK.toLowerCase() ||
     id === SYNC_TAPE_COIN_BOOK.toLowerCase() ||
+    id === PAGE_TAPE_COIN_BOOK.toLowerCase() ||
     id === LAST_FAB_COIN_BOOK.toLowerCase() ||
     id === MID_FAB_COIN_BOOK.toLowerCase() ||
     id === PREV_FAB_COIN_BOOK.toLowerCase() ||
-    id === SYNC_FAB_COIN_BOOK.toLowerCase()
+    id === SYNC_FAB_COIN_BOOK.toLowerCase() ||
+    id === PAGE_FAB_COIN_BOOK.toLowerCase()
   ) {
     throw new Error("tapehalt");
   }
