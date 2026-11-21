@@ -1127,7 +1127,22 @@ export function RealPerp({
   const dec = chain === "xlayer" ? 6 : 18;
   const scan = chain === "xlayer" ? XLAYER.explorer : BSC.explorer;
   const floor = view && view.min > 0n ? Number(view.min / 10n ** BigInt(dec)) : 1;
-  const levMax = liveLevCap(coin, margin, chain);
+  const levMax = (() => {
+    let cap = liveLevCap(coin, margin, chain);
+    if ((coin === "up" || coin === "tape" || coin === "fab") && insured != null) {
+      try {
+        const raw = units(margin || "0", dec);
+        if (raw > 0n) {
+          const room = insured / raw;
+          if (room < 1n) return 0;
+          if (room < BigInt(cap)) cap = Number(room);
+        }
+      } catch {
+        /* keep the tier */
+      }
+    }
+    return cap;
+  })();
   const levOk = lev >= 1 && lev <= levMax;
   const marginOk = (() => {
     const n = Number(margin);
