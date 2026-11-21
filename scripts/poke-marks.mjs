@@ -2,7 +2,8 @@
 // Poke the capped marks every 30 seconds, and watch the TAPE pool code.
 // No key is stored here. The page does not send this transaction.
 //   POKE_KEY=0x... node scripts/poke-marks.mjs
-// Optional: POKE_ALERT_URL=https://... BSC_RPC=... XLAYER_RPC=... TAPE_MARK=0x...
+// Optional: POKE_ALERT_URL=https://... BSC_RPC=... XLAYER_RPC=... TAPE_MARK=... FAB_MARK=...
+// The page does not start this. FAB is included once POKE_KEY is set by hand.
 
 import { createPublicClient, createWalletClient, encodeFunctionData, http, keccak256 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -41,6 +42,12 @@ const jobs = [
     chain: xlayer,
     rpcs: xRpcs,
     to: /^0x[0-9a-fA-F]{40}$/.test(process.env.TAPE_MARK ?? "") ? process.env.TAPE_MARK : "0x86fA83c53DD77F1562543B62dFf839B7BcD0Ea99",
+  },
+  {
+    name: "FAB",
+    chain: xlayer,
+    rpcs: xRpcs,
+    to: /^0x[0-9a-fA-F]{40}$/.test(process.env.FAB_MARK ?? "") ? process.env.FAB_MARK : "0xb9e819e6d7db7ebdc82dc04bd0d8524dc67b3fc7",
   },
 ];
 

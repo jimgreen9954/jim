@@ -42,7 +42,9 @@ export const BSC_REBATE = "0x070c66555535e1145275df54f4eEBBfd28d98581";
 export const LAST_BSC = "0x89b2f4a2e0C07864172fB47fbDEa14411AF2e0E0";
 export const PREV_BSC = "0x0a81a426b29991a777e038d9e4ecce1783804aa0";
 export const OLDER_BSC = "0xdA4aA9E0aaad6F91835cD19345D49a8fcA8d019A";
-export const KNOWN_XPERP = "0x9fD9Ade0272646cc3aD36F1699Fd42CcFE8927c2";
+/** Desk book just replaced. The X Layer copy vault is still bound to this address. Close only. */
+export const LAST_XPERP = "0x9fD9Ade0272646cc3aD36F1699Fd42CcFE8927c2";
+export const KNOWN_XPERP = "0x46cBAfCA59873E7115dF7825fdBF659BafAc3a51";
 export const KNOWN_XMARK = "0xb4B2ee90D10ECfC7ed36A58e96e03074fA8731Eb";
 export const PREV_XPERP = "0xE8Ed0fE7a7aaEF822b2e5Ce9679ccACcF3aEFF56";
 export const OLDER_XPERP = "0xCAC69F02c06bfCa3bFDb1eaF1F4a60e17e718081";
@@ -240,11 +242,12 @@ async function client() {
 const guardAbi = [{ name: "guard", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "bool" }] }] as const;
 
 /** True when spot and the capped average are within about 3%. Null if the read failed. */
-export async function markGuard(coin: "up" | "tape"): Promise<boolean | null> {
-  const which: Desk = coin === "tape" ? "xlayer" : "bsc";
+export async function markGuard(coin: "up" | "tape" | "fab"): Promise<boolean | null> {
+  const which: Desk = coin === "up" ? "bsc" : "xlayer";
+  const address = coin === "up" ? UP_MARK : coin === "tape" ? TAPE_MARK : FAB_MARK;
   try {
     const on = await (await deskClient(which)).readContract({
-      address: coin === "tape" ? TAPE_MARK : UP_MARK,
+      address,
       abi: guardAbi,
       functionName: "guard",
     });
@@ -254,11 +257,10 @@ export async function markGuard(coin: "up" | "tape"): Promise<boolean | null> {
   }
 }
 
-/** TAPE opens wait until about 10 minutes of pokes are stored. 20 samples is that window. */
-export async function tapeSamples(): Promise<number | null> {
+async function sampleCount(mark: Hex): Promise<number | null> {
   try {
     const n = await (await deskClient("xlayer")).readContract({
-      address: TAPE_MARK,
+      address: mark,
       abi: [{ name: "count", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint8" }] }] as const,
       functionName: "count",
     });
@@ -266,6 +268,16 @@ export async function tapeSamples(): Promise<number | null> {
   } catch {
     return null;
   }
+}
+
+/** TAPE opens wait until about 10 minutes of pokes are stored. 20 samples is that window. */
+export async function tapeSamples(): Promise<number | null> {
+  return sampleCount(TAPE_MARK);
+}
+
+/** FAB opens wait until about 10 minutes of pokes are stored. */
+export async function fabSamples(): Promise<number | null> {
+  return sampleCount(FAB_MARK);
 }
 
 async function tapePoolCode(): Promise<Hex | undefined> {
@@ -444,17 +456,15 @@ export function nextTierCap(margin: string, chain: Desk): number {
   return 5;
 }
 
-/** What this margin can actually use. FAB stays paused. UP and TAPE follow the book tiers. */
+/** What this margin can actually use. UP, TAPE and FAB follow the book tiers. */
 export function liveLevCap(coin: string, margin = "0", chain?: Desk): number {
-  if (coin === "fab") return 0;
-  if (coin === "up" || coin === "tape") return nextTierCap(margin, chain ?? (coin === "tape" ? "xlayer" : "bsc"));
+  if (coin === "up" || coin === "tape" || coin === "fab") return nextTierCap(margin, chain ?? (coin === "up" ? "bsc" : "xlayer"));
   return 50;
 }
 
-/** Market list. UP and TAPE are not a flat 50×. */
+/** Market list. UP, TAPE and FAB are not a flat 50×. */
 export function marketLev(coin: string): string {
-  if (coin === "fab") return "";
-  if (coin === "up" || coin === "tape") return "5–50×";
+  if (coin === "up" || coin === "tape" || coin === "fab") return "5–50×";
   return "50×";
 }
 
@@ -466,16 +476,18 @@ export const LAST_UP_COIN_BOOK = "0xceC1334Bc30D05e3ceab6bA19a5C0915df075552" as
 export const PREV_TAPE_COIN_BOOK = "0x9b17D0F6431957661AdD30051de2615cb08A3886" as Hex;
 export const LAST_TAPE_COIN_BOOK = "0xd5CaE88012A443449BE3d6efCf86A245A6972a86" as Hex;
 export const PREV_FAB_COIN_BOOK = "0x6Bd480BF658FaB7A2cb758c0408A7b3B5B94B431" as Hex;
+export const LAST_FAB_COIN_BOOK = "0x80318c852eE7fBDe52cE439deC3AE022Ba39A536" as Hex;
 export const BTC_COIN_BOOK = "0x81060936404F7984675c3928731871032b9E8eEE" as Hex;
 export const ETH_COIN_BOOK = "0xB059c8951256A5eBBf9051f7d8D19AE0A1798A82" as Hex;
 export const ZEC_COIN_BOOK = "0xc2D7436047ff08afB7A8aB6fFa9cDb73Bb1EDFC6" as Hex;
 export const UP_COIN_BOOK = "0x53610279d1fFaF4D211E4c3988c964A9E870007F" as Hex;
 export const TAPE_COIN_BOOK = "0x76FF80D56E1be05BabeD1C4ef31fb9dEfa941d22" as Hex;
-export const FAB_COIN_BOOK = "0x80318c852eE7fBDe52cE439deC3AE022Ba39A536" as Hex;
+export const FAB_COIN_BOOK = "0x61eb43aa602554324701cd2b551adff5b850d9cd" as Hex;
 const TAPE_OFFICIAL_POOL = "0x58eaD5b41Cfd3627791D439402dd65571c286484" as Hex;
 const TAPE_OFFICIAL_CODE = "0xf5e304a7d79711bb3c77a1380a0e2898ee40621ff46a14ad3456e205096f9fa9" as Hex;
 const UP_MARK = "0x11dCaA2ee4A6F4c437B9B6B304FFBc09B768845B" as Hex;
 const TAPE_MARK = "0x86fA83c53DD77F1562543B62dFf839B7BcD0Ea99" as Hex;
+const FAB_MARK = "0xb9e819e6d7db7ebdc82dc04bd0d8524dc67b3fc7" as Hex;
 
 const COIN_LIVE: Partial<Record<CoinBook, { chain: Desk; book: Hex }>> = {
   btc: { chain: "bsc", book: BTC_COIN_BOOK },
@@ -500,7 +512,7 @@ export function pickBook(which: Desk, coin: string): string {
 
 function pinned(perp: string): void {
   const want = perp.toLowerCase();
-  const rows = [bookOf("bsc"), bookOf("xlayer"), LAST_BSC, PREV_BSC, OLDER_BSC, PREV_XPERP, OLDER_XPERP, coinBook("bsc", "btc"), coinBook("bsc", "eth"), coinBook("bsc", "zec"), coinBook("bsc", "up"), coinBook("xlayer", "tape"), coinBook("xlayer", "fab"), BTC_COIN_BOOK, ETH_COIN_BOOK, ZEC_COIN_BOOK, UP_COIN_BOOK, LAST_UP_COIN_BOOK, PREV_UP_COIN_BOOK, TAPE_COIN_BOOK, LAST_TAPE_COIN_BOOK, PREV_TAPE_COIN_BOOK, FAB_COIN_BOOK, PREV_FAB_COIN_BOOK];
+  const rows = [bookOf("bsc"), bookOf("xlayer"), LAST_BSC, PREV_BSC, OLDER_BSC, LAST_XPERP, PREV_XPERP, OLDER_XPERP, coinBook("bsc", "btc"), coinBook("bsc", "eth"), coinBook("bsc", "zec"), coinBook("bsc", "up"), coinBook("xlayer", "tape"), coinBook("xlayer", "fab"), BTC_COIN_BOOK, ETH_COIN_BOOK, ZEC_COIN_BOOK, UP_COIN_BOOK, LAST_UP_COIN_BOOK, PREV_UP_COIN_BOOK, TAPE_COIN_BOOK, LAST_TAPE_COIN_BOOK, PREV_TAPE_COIN_BOOK, FAB_COIN_BOOK, LAST_FAB_COIN_BOOK, PREV_FAB_COIN_BOOK];
   if (!rows.some((row) => row.length === 42 && row.toLowerCase() === want)) throw new Error("book");
 }
 
@@ -905,8 +917,9 @@ export async function bookIsRisk(perp: string): Promise<boolean> {
 
 function maxLevFor(perp: string, amount: bigint): number {
   const id = perp.toLowerCase();
-  if (id !== UP_COIN_BOOK.toLowerCase() && id !== TAPE_COIN_BOOK.toLowerCase()) return 50;
-  const unit = id === TAPE_COIN_BOOK.toLowerCase() ? 1_000_000n : 10n ** 18n;
+  const tiered = id === UP_COIN_BOOK.toLowerCase() || id === TAPE_COIN_BOOK.toLowerCase() || id === FAB_COIN_BOOK.toLowerCase();
+  if (!tiered) return 50;
+  const unit = id === UP_COIN_BOOK.toLowerCase() ? 10n ** 18n : 1_000_000n;
   if (amount <= unit * 20n) return 50;
   if (amount <= unit * 100n) return 20;
   return 5;
@@ -934,14 +947,22 @@ function xBemPerp(perp: string): boolean {
   return true;
 }
 
-/** Old books stay closed. A v2 book can open once its mark is near the spot pools. */
+/** Old books stay closed. Only the books pinned as live may open. */
 async function assertV2(perp: string) {
   pinned(perp);
+  const id = perp.toLowerCase();
+  const live = [BSC_REBATE, KNOWN_XPERP, BTC_COIN_BOOK, ETH_COIN_BOOK, ZEC_COIN_BOOK, UP_COIN_BOOK, TAPE_COIN_BOOK, FAB_COIN_BOOK];
+  if (!live.some((row) => row.toLowerCase() === id)) throw new Error("halt");
   if (perp.toLowerCase() === TAPE_COIN_BOOK.toLowerCase()) {
     const code = await tapePoolCode();
     if (!code || keccak256(code) !== TAPE_OFFICIAL_CODE) throw new Error("poolhash");
     const n = await tapeSamples();
     if (n === null || n < 20) throw new Error("warm");
+  }
+  if (perp.toLowerCase() === FAB_COIN_BOOK.toLowerCase()) {
+    const n = await fabSamples();
+    if (n === null || n < 20) throw new Error("warm");
+    if ((await markGuard("fab")) !== true) throw new Error("gap");
   }
   const retired = perp.toLowerCase();
   if (retired === LAST_BSC.toLowerCase() || retired === PREV_BSC.toLowerCase() || retired === OLDER_BSC.toLowerCase()) throw new Error("halt");
@@ -978,7 +999,7 @@ function rejectUpOpen(perp: string) {
   if (
     id === LAST_TAPE_COIN_BOOK.toLowerCase() ||
     id === PREV_TAPE_COIN_BOOK.toLowerCase() ||
-    id === FAB_COIN_BOOK.toLowerCase() ||
+    id === LAST_FAB_COIN_BOOK.toLowerCase() ||
     id === PREV_FAB_COIN_BOOK.toLowerCase()
   ) {
     throw new Error("tapehalt");

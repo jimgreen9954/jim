@@ -51,6 +51,7 @@ import {
   liveLevCap,
   markGuard,
   tapeSamples,
+  fabSamples,
   pokeBook,
   liquidatePerp,
   openPerp,
@@ -782,7 +783,7 @@ export function RealPerp({
     };
   }, [coin]);
   useEffect(() => {
-    if (coin !== "up" && coin !== "tape") {
+    if (coin !== "up" && coin !== "tape" && coin !== "fab") {
       setGuardOn(null);
       return;
     }
@@ -795,8 +796,8 @@ export function RealPerp({
         .catch(() => {
           if (!dead) setGuardOn(null);
         });
-      if (coin === "tape") {
-        tapeSamples()
+      if (coin === "tape" || coin === "fab") {
+        (coin === "fab" ? fabSamples() : tapeSamples())
           .then((n) => {
             if (!dead) setTapeN(n);
           })
@@ -933,8 +934,8 @@ export function RealPerp({
     else if (message === "warm")
       setNote(
         lang === "zh"
-          ? "标记价还没攒满 10 分钟。这段时间不能开仓，已有仓可以平。"
-          : "The mark still needs 10 minutes. Opens wait. Open positions can still be closed.",
+          ? "标记价还没攒满 10 分钟。这段时间不能开仓，已有仓可以平。点开仓会更新一次标记，不会自己连着更新。"
+          : "The mark still needs 10 minutes. Opens wait. Open positions can still be closed. Opening once updates the mark. It does not keep updating.",
       );
     else if (message === "poolhash")
       setNote(
@@ -944,13 +945,15 @@ export function RealPerp({
       );
     else if (message === "tapehalt")
       setNote(
-        coin === "fab"
-          ? lang === "zh"
-            ? "FAB 先停新开仓。平仓和撤单还可以。"
-            : "New FAB opens are paused. Close and cancel still work."
-          : lang === "zh"
-            ? "这一本不再开新仓。可以平仓和撤单。"
-            : "This book takes no new positions. Close and cancel still work.",
+        lang === "zh"
+          ? "这一本不再开新仓。可以平仓和撤单。"
+          : "This book takes no new positions. Close and cancel still work.",
+      );
+    else if (message === "gap")
+      setNote(
+        lang === "zh"
+          ? "标记和现价差超过约 3%。新开仓和强平停了，平仓还可以。"
+          : "Spot and the average differ by about 3%. New opens and liquidations are paused. Close still works.",
       );
     else if (message === "uphalt")
       setNote(
@@ -1399,8 +1402,8 @@ export function RealPerp({
   const usdtShort = Boolean(bal) && opensMargin && needLock > freeN + 0.009;
   const walletUsdt = bal ? freeN.toFixed(2) : "—";
   const shortLine = lang === "zh" ? `${chain === "xlayer" ? "USDT0" : "USDT"} 不够` : `Not enough ${chain === "xlayer" ? "USDT0" : "USDT"}`;
-  const tapeCold = coin === "tape" && tapeN !== null && tapeN < 20;
-  const needMark = markFar || ((coin === "up" || coin === "tape") && guardOn === false) || tapeCold;
+  const tapeCold = (coin === "tape" || coin === "fab") && tapeN !== null && tapeN < 20;
+  const needMark = markFar || ((coin === "up" || coin === "tape" || coin === "fab") && guardOn === false) || tapeCold;
   const place = (side) => {
     setIntent(side);
     if (busy) return;
@@ -2845,29 +2848,25 @@ export function RealPerp({
                                     ? /* @__PURE__ */ jsx("p", {
                                         className: "desk-extra",
                                         children: !levOk
-                                          ? coin === "fab"
-                                            ? lang === "zh"
-                                              ? "FAB 先停新开仓。平仓和撤单还可以。"
-                                              : "New FAB opens are paused. Close and cancel still work."
-                                            : coin === "up" || coin === "tape"
+                                          ? coin === "up" || coin === "tape" || coin === "fab"
                                               ? lang === "zh"
                                                 ? `这一笔保证金最高 ${levMax} 倍。20 以内 50 倍，100 以内 20 倍，超过 100 是 5 倍。`
                                                 : `This margin stops at ${levMax}×. 50× up to 20, 20× up to 100, and 5× above that.`
                                               : c.levCap
                                           : `${floor}–500 USDT`,
                                       })
-                                    : coin === "fab"
-                                      ? /* @__PURE__ */ jsx("p", {
-                                          className: "desk-extra",
-                                          children:
-                                            lang === "zh"
-                                              ? "FAB 先停新开仓。平仓和撤单还可以。"
-                                              : "New FAB opens are paused. Close and cancel still work.",
-                                        })
-                                      : coin === "up" || coin === "tape"
+                                    : coin === "up" || coin === "tape" || coin === "fab"
                                       ? /* @__PURE__ */ jsxs(Fragment, {
                                           children: [
-                                            guardOn === false
+                                            tapeCold
+                                              ? /* @__PURE__ */ jsx("p", {
+                                                  className: "desk-extra",
+                                                  children:
+                                                    lang === "zh"
+                                                      ? `${coin === "fab" ? "FAB" : "TAPE"} 标记还只有刚部署时的价格，10 分钟样本没满。新开仓先停，平仓可以。点下面只更新一次标记。`
+                                                      : `The ${coin === "fab" ? "FAB" : "TAPE"} mark is still the deployment price. The 10-minute sample is not full. New opens wait. Close still works. The button below updates the mark once.`,
+                                                })
+                                              : guardOn === false
                                               ? /* @__PURE__ */ jsx("p", {
                                                   className: "desk-extra",
                                                   children:
@@ -2875,15 +2874,7 @@ export function RealPerp({
                                                       ? "标记和现价差超过约 3%。新开仓和强平停了，平仓还可以。点下面更新标记。"
                                                       : "Spot and the average differ by about 3%. New opens and liquidations are paused. Close still works. Update the mark below.",
                                                 })
-                                              : tapeCold
-                                                ? /* @__PURE__ */ jsx("p", {
-                                                    className: "desk-extra",
-                                                    children:
-                                                      lang === "zh"
-                                                        ? "TAPE 标记还只有刚部署时的价格，10 分钟样本没满。新开仓先停，平仓可以。"
-                                                        : "The TAPE mark is still the deployment price. The 10-minute sample is not full. New opens wait. Close still works.",
-                                                  })
-                                                : null,
+                                              : null,
                                             /* @__PURE__ */ jsx("p", {
                                               className: "desk-extra",
                                               children:

@@ -1365,6 +1365,7 @@ export async function setRedRule(
   taskHi?: bigint,
 ): Promise<Hex> {
   const fixedAmt = parseUnits(fixedText.trim() || "0", asset.decimals);
+  if (mode !== 0) throw new Error("range");
   const lo = parseUnits(loText.trim() || "0", asset.decimals);
   const hi = taskHi ?? parseUnits(hiText.trim() || "0", asset.decimals);
   const data = encodeFunctionData({
