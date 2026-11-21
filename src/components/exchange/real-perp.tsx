@@ -50,6 +50,7 @@ import {
   pickBook,
   liveLevCap,
   markGuard,
+  openRoom,
   pokeBook,
   liquidatePerp,
   openPerp,
@@ -403,6 +404,7 @@ export function RealPerp({
   const [bad, setBad] = useState(false);
   const [hash, setHash] = useState(null);
   const [guardOn, setGuardOn] = useState(null);
+  const [room, setRoom] = useState<bigint | null>(null);
   const [link, setLink] = useState(null);
   const [bal, setBal] = useState(null);
   const [prices, setPrices] = useState([]);
@@ -782,6 +784,7 @@ export function RealPerp({
   useEffect(() => {
     if (coin !== "up" && coin !== "tape" && coin !== "fab") {
       setGuardOn(null);
+      setRoom(null);
       return;
     }
     let dead = false;
@@ -792,6 +795,13 @@ export function RealPerp({
         })
         .catch(() => {
           if (!dead) setGuardOn(null);
+        });
+      openRoom(coin)
+        .then((next) => {
+          if (!dead) setRoom(next);
+        })
+        .catch(() => {
+          if (!dead) setRoom(null);
         });
     };
     pull();
@@ -2849,8 +2859,8 @@ export function RealPerp({
                                         children: !levOk
                                           ? coin === "up" || coin === "tape" || coin === "fab"
                                               ? lang === "zh"
-                                                ? `这一笔保证金最高 ${levMax} 倍。20 以内 50 倍，100 以内 20 倍，超过 100 是 5 倍。`
-                                                : `This margin stops at ${levMax}×. 50× up to 20, 20× up to 100, and 5× above that.`
+                                                ? `这一笔保证金最高 ${levMax} 倍。10 以内 50 倍，100 以内 20 倍，超过 100 是 5 倍。一个人一个方向最多 600。`
+                                                : `This margin stops at ${levMax}×. 50× up to 10, 20× up to 100, and 5× above that. One address, one side, stops at 600.`
                                               : c.levCap
                                           : `${floor}–500 USDT`,
                                       })
@@ -2862,25 +2872,27 @@ export function RealPerp({
                                                   className: "desk-extra",
                                                   children:
                                                     lang === "zh"
-                                                      ? "现价和 10 分钟均价差超过约 3%。新开仓和强平停了，平仓还可以。点下面只记下一次价格，不会开仓，也不会自己连着记。"
-                                                      : "Spot and the 10-minute average differ by about 3%. New opens and liquidations are paused. Close still works. The button records the price once. It does not open, and it does not keep going.",
-                                                })
-                                              : null,
-                                            coin === "tape"
-                                              ? /* @__PURE__ */ jsx("p", {
-                                                  className: "desk-extra",
-                                                  children:
-                                                    lang === "zh"
-                                                      ? "整本未平名义最多 40 USDT0。1 个保证金开 50 倍是 50，放不进。20 倍可以。"
-                                                      : "Open notional on this book stops at 40 USDT0. 1 at 50× is 50 and does not fit. 20× does.",
+                                                      ? "现价和 10 分钟均价差超过约 1%。价格暂停中，只能平仓。"
+                                                      : "Spot and the 10-minute average differ by about 1%. The price is paused. Close only.",
                                                 })
                                               : null,
                                             /* @__PURE__ */ jsx("p", {
                                               className: "desk-extra",
                                               children:
                                                 lang === "zh"
-                                                  ? `这一笔最高 ${levMax} 倍：20 以内 50 倍，100 以内 20 倍，超过 100 是 5 倍。`
-                                                  : `This margin allows ${levMax}×: 50× up to 20, 20× up to 100, and 5× above that.`,
+                                                  ? room === 0n
+                                                    ? "整本最多 3000，一个人一个方向最多 600。保险金是 0，存够之前开不了。10 可以开 50 倍。强平要两次确认，至少隔 2 分钟。"
+                                                    : `整本最多 3000，一个人一个方向最多 600。保险金现在允许开 ${room == null ? "—" : (Number(room) / (coin === "up" ? 1e18 : 1e6)).toFixed(0)}。10 可以开 50 倍。强平要两次确认，至少隔 2 分钟。`
+                                                  : room === 0n
+                                                    ? "The book stops at 3000. One side stops at 600. Insurance is 0, so nothing can open yet. 10 can use 50×. Liquidation needs two readings, 2 minutes apart."
+                                                    : `The book stops at 3000. One side stops at 600. Insurance currently allows ${room == null ? "—" : (Number(room) / (coin === "up" ? 1e18 : 1e6)).toFixed(0)}. 10 can use 50×. Liquidation needs two readings, 2 minutes apart.`,
+                                            }),
+                                            /* @__PURE__ */ jsx("p", {
+                                              className: "desk-extra",
+                                              children:
+                                                lang === "zh"
+                                                  ? `这一笔最高 ${levMax} 倍：10 以内 50 倍，100 以内 20 倍，超过 100 是 5 倍。`
+                                                  : `This margin allows ${levMax}×: 50× up to 10, 20× up to 100, and 5× above that.`,
                                             }),
                                           ],
                                         })

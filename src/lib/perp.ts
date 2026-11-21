@@ -241,7 +241,7 @@ async function client() {
 
 const guardAbi = [{ name: "guard", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "bool" }] }] as const;
 
-/** True when spot and the capped average are within about 3%. Null if the read failed. */
+/** True when spot and the capped average are within about 1%. Null if the read failed. */
 export async function markGuard(coin: "up" | "tape" | "fab"): Promise<boolean | null> {
   const which: Desk = coin === "up" ? "bsc" : "xlayer";
   const address = coin === "up" ? UP_MARK : coin === "tape" ? TAPE_MARK : FAB_MARK;
@@ -252,6 +252,22 @@ export async function markGuard(coin: "up" | "tape" | "fab"): Promise<boolean | 
       functionName: "guard",
     });
     return Boolean(on);
+  } catch {
+    return null;
+  }
+}
+
+/** How much notional insurance currently allows. Zero means a new open is refused. */
+export async function openRoom(coin: "up" | "tape" | "fab"): Promise<bigint | null> {
+  const which: Desk = coin === "up" ? "bsc" : "xlayer";
+  const address = coinBook(which, coin) as Hex;
+  if (!address) return null;
+  try {
+    return await (await deskClient(which)).readContract({
+      address,
+      abi: [{ name: "openCap", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] }] as const,
+      functionName: "openCap",
+    });
   } catch {
     return null;
   }
@@ -451,7 +467,7 @@ export function nextTierCap(margin: string, chain: Desk): number {
   } catch {
     return 50;
   }
-  if (raw <= unit * 20n) return 50;
+  if (raw <= unit * 10n) return 50;
   if (raw <= unit * 100n) return 20;
   return 5;
 }
@@ -467,7 +483,7 @@ export function liveLevCap(coin: string, margin = "0", chain?: Desk): number {
   try {
     const raw = units(margin || "0", dec);
     if (raw > 0n) {
-      const room = limit / raw;
+      const room = limit / 5n / raw;
       if (room < 1n) return 0;
       if (room < BigInt(cap)) cap = Number(room);
     }
@@ -498,20 +514,23 @@ const MID_FAB_COIN_BOOK = "0x80318c852eE7fBDe52cE439deC3AE022Ba39A536" as Hex;
 export const BTC_COIN_BOOK = "0x81060936404F7984675c3928731871032b9E8eEE" as Hex;
 export const ETH_COIN_BOOK = "0xB059c8951256A5eBBf9051f7d8D19AE0A1798A82" as Hex;
 export const ZEC_COIN_BOOK = "0xc2D7436047ff08afB7A8aB6fFa9cDb73Bb1EDFC6" as Hex;
-export const UP_COIN_BOOK = "0x277689ab82b04aE8100683B155CE2e2E12C82b30" as Hex;
-export const TAPE_COIN_BOOK = "0x5C9F44A4D1f5F9082D3Cb02d11d717DE9563251A" as Hex;
-export const FAB_COIN_BOOK = "0x03A1B0e5E225855905a63BD2a5A3Eb3A366A3caA" as Hex;
+const SYNC_UP_COIN_BOOK = "0x277689ab82b04aE8100683B155CE2e2E12C82b30" as Hex;
+const SYNC_TAPE_COIN_BOOK = "0x5C9F44A4D1f5F9082D3Cb02d11d717DE9563251A" as Hex;
+const SYNC_FAB_COIN_BOOK = "0x03A1B0e5E225855905a63BD2a5A3Eb3A366A3caA" as Hex;
+export const UP_COIN_BOOK = "0xe9B1fe713FcE9E4670c610cCc5bf2F2decDCcA4A" as Hex;
+export const TAPE_COIN_BOOK = "0xC74795Aac0FE2E0Db36beeF422504f464c3083f1" as Hex;
+export const FAB_COIN_BOOK = "0xa03525d6C0367E6589Af4cc93b5aA16C4F280411" as Hex;
 const TAPE_OFFICIAL_POOL = "0x58eaD5b41Cfd3627791D439402dd65571c286484" as Hex;
 const TAPE_OFFICIAL_CODE = "0xf5e304a7d79711bb3c77a1380a0e2898ee40621ff46a14ad3456e205096f9fa9" as Hex;
-const UP_MARK = "0xfdC61Db9FE1A6a9cA0EB847cb46D696599c27B19" as Hex;
-const TAPE_MARK = "0x14dd565D626D2b469Ee326558Ef2f24f7B37FFe7" as Hex;
-const FAB_MARK = "0x66e052B645F517A5508Ec3eb3287012cae0670Bb" as Hex;
+const UP_MARK = "0xEf744901777f6CDD3C27D20380eC2E7c6740326C" as Hex;
+const TAPE_MARK = "0xA3f7570d34E6DeE46b8c70FB804AcD97A02D95d7" as Hex;
+const FAB_MARK = "0xe6F8419FE6F22d19933Ec6028366fc698709e73F" as Hex;
 
 function notionalCap(id: string): bigint | null {
   const key = id.toLowerCase();
-  if (key === "up" || key === UP_COIN_BOOK.toLowerCase()) return 500n * 10n ** 18n;
-  if (key === "tape" || key === TAPE_COIN_BOOK.toLowerCase()) return 40_000_000n;
-  if (key === "fab" || key === FAB_COIN_BOOK.toLowerCase()) return 500_000_000n;
+  if (key === "up" || key === UP_COIN_BOOK.toLowerCase()) return 3000n * 10n ** 18n;
+  if (key === "tape" || key === TAPE_COIN_BOOK.toLowerCase()) return 3_000_000_000n;
+  if (key === "fab" || key === FAB_COIN_BOOK.toLowerCase()) return 3_000_000_000n;
   return null;
 }
 
@@ -546,7 +565,7 @@ export function pickBook(which: Desk, coin: string): string {
 
 function pinned(perp: string): void {
   const want = perp.toLowerCase();
-  const rows = [bookOf("bsc"), bookOf("xlayer"), LAST_BSC, PREV_BSC, OLDER_BSC, LAST_XPERP, PREV_XPERP, OLDER_XPERP, coinBook("bsc", "btc"), coinBook("bsc", "eth"), coinBook("bsc", "zec"), coinBook("bsc", "up"), coinBook("xlayer", "tape"), coinBook("xlayer", "fab"), BTC_COIN_BOOK, ETH_COIN_BOOK, ZEC_COIN_BOOK, UP_COIN_BOOK, LAST_UP_COIN_BOOK, MID_UP_COIN_BOOK, PREV_UP_COIN_BOOK, TAPE_COIN_BOOK, LAST_TAPE_COIN_BOOK, MID_TAPE_COIN_BOOK, PREV_TAPE_COIN_BOOK, FAB_COIN_BOOK, LAST_FAB_COIN_BOOK, MID_FAB_COIN_BOOK, PREV_FAB_COIN_BOOK];
+  const rows = [bookOf("bsc"), bookOf("xlayer"), LAST_BSC, PREV_BSC, OLDER_BSC, LAST_XPERP, PREV_XPERP, OLDER_XPERP, coinBook("bsc", "btc"), coinBook("bsc", "eth"), coinBook("bsc", "zec"), coinBook("bsc", "up"), coinBook("xlayer", "tape"), coinBook("xlayer", "fab"), BTC_COIN_BOOK, ETH_COIN_BOOK, ZEC_COIN_BOOK, UP_COIN_BOOK, SYNC_UP_COIN_BOOK, LAST_UP_COIN_BOOK, MID_UP_COIN_BOOK, PREV_UP_COIN_BOOK, TAPE_COIN_BOOK, SYNC_TAPE_COIN_BOOK, LAST_TAPE_COIN_BOOK, MID_TAPE_COIN_BOOK, PREV_TAPE_COIN_BOOK, FAB_COIN_BOOK, SYNC_FAB_COIN_BOOK, LAST_FAB_COIN_BOOK, MID_FAB_COIN_BOOK, PREV_FAB_COIN_BOOK];
   if (!rows.some((row) => row.length === 42 && row.toLowerCase() === want)) throw new Error("book");
 }
 
@@ -955,11 +974,11 @@ function maxLevFor(perp: string, amount: bigint): number {
   if (!tiered) return 50;
   const unit = id === UP_COIN_BOOK.toLowerCase() ? 10n ** 18n : 1_000_000n;
   let cap = 5;
-  if (amount <= unit * 20n) cap = 50;
+  if (amount <= unit * 10n) cap = 50;
   else if (amount <= unit * 100n) cap = 20;
   const limit = notionalCap(id);
   if (limit && amount > 0n) {
-    const room = limit / amount;
+    const room = limit / 5n / amount;
     if (room < BigInt(cap)) cap = Number(room);
   }
   return cap;
@@ -1030,14 +1049,16 @@ async function assertV2(perp: string) {
 /** Post-only on the risk book. On the live book, a crossing price is refused and the rest uses open. */
 function rejectUpOpen(perp: string) {
   const id = perp.toLowerCase();
-  if (id === LAST_UP_COIN_BOOK.toLowerCase() || id === MID_UP_COIN_BOOK.toLowerCase() || id === PREV_UP_COIN_BOOK.toLowerCase()) throw new Error("uphalt");
+  if (id === LAST_UP_COIN_BOOK.toLowerCase() || id === MID_UP_COIN_BOOK.toLowerCase() || id === PREV_UP_COIN_BOOK.toLowerCase() || id === SYNC_UP_COIN_BOOK.toLowerCase()) throw new Error("uphalt");
   if (
     id === LAST_TAPE_COIN_BOOK.toLowerCase() ||
     id === MID_TAPE_COIN_BOOK.toLowerCase() ||
     id === PREV_TAPE_COIN_BOOK.toLowerCase() ||
+    id === SYNC_TAPE_COIN_BOOK.toLowerCase() ||
     id === LAST_FAB_COIN_BOOK.toLowerCase() ||
     id === MID_FAB_COIN_BOOK.toLowerCase() ||
-    id === PREV_FAB_COIN_BOOK.toLowerCase()
+    id === PREV_FAB_COIN_BOOK.toLowerCase() ||
+    id === SYNC_FAB_COIN_BOOK.toLowerCase()
   ) {
     throw new Error("tapehalt");
   }

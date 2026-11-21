@@ -3,15 +3,15 @@ pragma solidity 0.8.26;
 
 import "./TickMath.sol";
 
-/// Shared clip and 10-minute average. A trade calls note(). The longer the
-/// wait since the last note, the further one note may move, up to about 10%.
-/// About 0.5% is allowed after 30 seconds. Orders still read the average.
+/// Shared clip and 10-minute average. Only the bound book may call note().
+/// One note moves at most about 0.5%, however long the wait. Orders still
+/// read the average. Spot more than about 1% from that average pauses opens.
 abstract contract SyncLeg {
     uint32 public constant GAP = 30;
     uint32 public constant WINDOW = 600;
     int24 public constant STEP = 50;
-    int24 public constant MAX_STEP = 1000;
-    int24 public constant BAND = 296;
+    /// About 1%. 1.0001^99 is just under 1%, inside a 50x liquidation.
+    int24 public constant BAND = 99;
     int24 public constant SHIFT = 230270;
 
     struct Sample {
@@ -25,19 +25,27 @@ abstract contract SyncLeg {
     int24 public lastTick;
     uint32 public lastAt;
     uint32 public touched;
+    address public book;
 
     error Price();
+    error Denied();
+
+    /// Once. The ship calls this in the same transaction that deploys the book.
+    function bind(address book_) external {
+        if (book != address(0) || book_ == address(0)) revert Denied();
+        book = book_;
+    }
 
     function note() external {
+        if (msg.sender != book) revert Denied();
         touched += 1;
         if (!_pinned()) return;
         uint32 nowT = uint32(block.timestamp);
         if (nowT < lastAt + GAP) return;
         int24 raw = _leg();
-        int24 room = _room(nowT - lastAt);
         int24 next = raw;
-        if (next > lastTick + room) next = lastTick + room;
-        if (next < lastTick - room) next = lastTick - room;
+        if (next > lastTick + STEP) next = lastTick + STEP;
+        if (next < lastTick - STEP) next = lastTick - STEP;
         samples[cursor] = Sample(nowT, next);
         cursor = (cursor + 1) % 24;
         if (count < 24) count += 1;
@@ -85,7 +93,7 @@ abstract contract SyncLeg {
         cursor = 1;
         lastTick = tick;
         lastAt = uint32(block.timestamp);
-        // Spot can sit more than 3% from the average. That pauses opens.
+        // Spot can sit more than 1% from the average. That pauses opens.
         // It must not stop the book from being deployed.
         uint256 px = _px(_bookTick());
         if (px < 0.01 ether || px > 100 ether) revert Price();
@@ -97,14 +105,6 @@ abstract contract SyncLeg {
         int256 avg = _usd(false);
         int256 gap = spot > avg ? spot - avg : avg - spot;
         return gap <= int256(BAND);
-    }
-
-    function _room(uint32 elapsed) internal pure returns (int24) {
-        uint256 steps = uint256(elapsed) / GAP;
-        if (steps == 0) return 0;
-        uint256 ticks = steps * uint256(uint24(STEP));
-        if (ticks > uint256(uint24(MAX_STEP))) ticks = uint256(uint24(MAX_STEP));
-        return int24(uint24(ticks));
     }
 
     function _bookTick() internal view returns (int24) {

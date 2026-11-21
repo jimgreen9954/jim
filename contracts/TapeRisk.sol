@@ -365,7 +365,13 @@ contract TapeRisk {
     function liquidate(uint256 id) external nonReentrant {
         _note();
         _guard();
+        if (!_liqReady(id)) return;
         _settle(id, true);
+    }
+
+    /// The synced books require two weak readings. Other books liquidate immediately.
+    function _liqReady(uint256) internal virtual returns (bool) {
+        return true;
     }
 
     /// BTC, ETH, ZEC and BEM stay at 50. UP, TAPE and FAB books override this.
@@ -382,6 +388,18 @@ contract TapeRisk {
     /// Entry notional of every open deal. The default book does not cap it.
     function _cap() internal view virtual returns (uint256) {
         return type(uint256).max;
+    }
+
+    /// Child books count each side and each trader. The default book counts the sum.
+    function _reserve(address, address, uint256 notion) internal virtual {
+        uint256 cap = _cap();
+        if (notion > cap || openNotional > cap - notion) revert Bad();
+        openNotional += notion;
+    }
+
+    function _release(address, address, uint256 notion) internal virtual {
+        if (openNotional >= notion) openNotional -= notion;
+        else openNotional = 0;
     }
 
     function _check(uint256 margin, uint16 lev) internal view {
@@ -418,13 +436,11 @@ contract TapeRisk {
         uint256 usedT = base * px / (uint256(takerLev) * 1e18);
         if (usedQ > q.margin || usedT > takerMargin) revert Bad();
         uint256 notion = base * px / 1e18;
-        uint256 cap = _cap();
-        if (notion > cap || openNotional > cap - notion) revert Bad();
-        openNotional += notion;
         uint256 feeQ = _feeSplit(q.user, usedQ * FEE_NUM / FEE_DEN);
         uint256 feeT = _feeSplit(taker, usedT * FEE_NUM / FEE_DEN);
         address long = takerLong ? taker : q.user;
         address short = takerLong ? q.user : taker;
+        _reserve(long, short, notion);
         uint16 levL = takerLong ? takerLev : q.lev;
         uint16 levS = takerLong ? q.lev : takerLev;
         uint256 id = ++nextDeal;
@@ -506,8 +522,7 @@ contract TapeRisk {
         Deal memory d = deals[id];
         if (!d.open) revert Bad();
         uint256 notion = uint256(d.base) * uint256(d.entry) / 1e18;
-        if (openNotional >= notion) openNotional -= notion;
-        else openNotional = 0;
+        _release(d.long, d.short, notion);
         uint256 px = mark();
         (uint256 eqL, uint256 eqS, bool weakL, bool weakS) = _equity(d, px);
         if (mustLiq && !weakL && !weakS) revert Bad();
@@ -530,7 +545,7 @@ contract TapeRisk {
         emit Settled(id, eqL, eqS, msg.sender);
     }
 
-    function _slice(uint256 eqL, uint256 eqS, bool weakL, bool weakS) internal returns (uint256 bounty, uint256 left, uint256 right) {
+    function _slice(uint256 eqL, uint256 eqS, bool weakL, bool weakS) internal virtual returns (uint256 bounty, uint256 left, uint256 right) {
         left = eqL;
         right = eqS;
         if (weakL && left > 0) {
@@ -603,7 +618,7 @@ contract TapeRisk {
         weakS = right * int256(uint256(d.levS)) * 2 <= int256(notional);
     }
 
-    function _feeSplit(address user, uint256 fee) internal returns (uint256) {
+    function _feeSplit(address user, uint256 fee) internal virtual returns (uint256) {
         address ref = referrerOf[user];
         if (ref == address(0) || fee == 0) {
             _pay(FEE_TO, fee);

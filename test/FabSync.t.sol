@@ -50,6 +50,7 @@ contract FabSyncTest is Test {
         FabDollar bem = new FabDollar(210345);
         FabDollar okb = new FabDollar(232295);
         FabSyncMark mark = new FabSyncMark(address(view_), address(bem), address(okb), bytes32(uint256(1)));
+        mark.bind(address(this));
         uint256 before = mark.mark();
         int24 seed = mark.lastTick();
         assertTrue(mark.guard());
@@ -117,19 +118,44 @@ contract FabSyncFork is Test {
         assertLt(px, 2 ether);
         if (mark.guard()) {
             uint256 gap = px > spot ? px - spot : spot - px;
-            assertLe(gap * 100, spot * 3);
+            assertLe(gap * 100, spot);
         }
-        uint256 inventory = _inventory(spot);
+        uint256 inventory = _inventory(spot, 97);
         emit log_named_uint("fab inventory", inventory);
-        assertLt(book.CAP() * 1e12, inventory);
+        assertLt(book.cap() * 1e12, inventory);
     }
 
-    function _inventory(uint256 spot) internal returns (uint256) {
+    function testForkFabHoldCost() public {
+        vm.createSelectFork("https://rpc.xlayer.tech");
+        FabSyncMark mark = new FabSyncMark(
+            0x76Fd297e2D437cd7f76d50F01AfE6160f86e9990,
+            0x2CcF8aa17F5DF9Fb5D51C9de12135a913fF29f7A,
+            0xe3BE6A0137f1b0602Fc1a4841686f43B340a5082,
+            keccak256(abi.encode(BEM, FAB, uint24(9000), int24(180), address(0)))
+        );
+        _logFab(mark.spotUsd(), 99);
+        _logFab(mark.spotUsd(), 96);
+    }
+
+    function _logFab(uint256 spot, uint256 keep) internal {
+        uint256 inventory = _inventory(spot, keep);
+        uint256 sold = inventory * 1e8 / spot;
+        uint256 unit = _out(1e8);
+        uint256 got = _out(sold);
+        uint256 fair = sold * unit / 1e8;
+        uint256 slip = fair > got ? (fair - got) * spot / unit : 0;
+        emit log_named_uint("fab keep", keep);
+        emit log_named_uint("fab inventory", inventory);
+        emit log_named_uint("fab one way", slip);
+        emit log_named_uint("fab cap from two slips", slip * 2 * 125);
+    }
+
+    function _inventory(uint256 spot, uint256 keep) internal returns (uint256) {
         uint256 unit = _out(1e8);
         uint256 lo = 1e8;
         uint256 hi = 20_000_000e8;
         uint256 best;
-        for (uint256 i; i < 16; i++) {
+        for (uint256 i; i < 18; i++) {
             uint256 mid = (lo + hi) / 2;
             uint256 a = _out(mid);
             uint256 b = _out(mid + 1e8);
@@ -137,7 +163,7 @@ contract FabSyncFork is Test {
                 hi = mid;
                 continue;
             }
-            if ((b - a) * 100 <= unit * 97) {
+            if ((b - a) * 100 <= unit * keep) {
                 best = mid;
                 hi = mid;
             } else lo = mid;
