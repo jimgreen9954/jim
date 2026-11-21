@@ -25,6 +25,7 @@ export function SyncDesk({ zh }: { zh: boolean }) {
   const [note, setNote] = useState("");
   const [bad, setBad] = useState(false);
   const [fundOpen, setFundOpen] = useState(false);
+  const [about, setAbout] = useState(false);
 
   useEffect(() => {
     if (!fundOpen) return;
@@ -74,14 +75,15 @@ export function SyncDesk({ zh }: { zh: boolean }) {
   const warm = row?.samples != null && row.samples < 20;
 
   return (
-    <div className="mt-3 border border-gold/40 px-3 py-3 text-sm">
+    <article className="border border-gold bg-card px-3 py-3 text-sm">
       <div className="flex flex-wrap items-center gap-2">
+        <h2 className="font-display text-3xl italic">{zh ? "保险金" : "Insurance"}</h2>
         <button
           type="button"
           className="min-h-11 border border-gold px-3 text-xs"
           onClick={() => setFundOpen((open) => !open)}
         >
-          {fundOpen ? (zh ? "收起保险金" : "Hide insurance") : zh ? "充值保险金" : "Add insurance"}
+          {fundOpen ? (zh ? "收起" : "Hide") : zh ? "充值" : "Add"}
         </button>
       </div>
       {fundOpen ? (
@@ -107,17 +109,34 @@ export function SyncDesk({ zh }: { zh: boolean }) {
           {paused ? <p className="mt-1 text-xs text-sell">{zh ? "价格暂停中，只能平仓。" : "The price is paused. Close only."}</p> : null}
           {short ? <p className="mt-1 text-xs text-sell">{zh ? "保险金不足，暂不能开仓。" : "Insurance is short, so a new open is refused."}</p> : null}
           {full ? <p className="mt-1 text-xs text-sell">{zh ? "暂时额满。" : "The book is full for now."}</p> : null}
-          <p className="mt-2 text-xs leading-5 text-ink/70">
-            {zh
-              ? "存进去拿不回来。1 美元保险金，整本可开名义 20。这笔进的是上面选中的这一本。"
-              : "A deposit cannot be withdrawn. 1 dollar of insurance opens 20 of notional on the selected book."}
-          </p>
-          {coin === "tape" ? (
-            <p className="mt-1 text-xs leading-5 text-ink/70">
-              {zh
-                ? "TAPE 池子很浅。压住约 1% 再买回，测到的成本大约 0.058 美元。上限要变大，只能先往池子加流动性。现在的 3000 高于这条。"
-                : "The TAPE pool is thin. A measured 1% round trip cost about 0.058 dollars. The cap only grows after liquidity is added. 3000 is above that line."}
-            </p>
+          <button type="button" className="mt-2 min-h-9 text-xs text-ink/70" onClick={() => setAbout((open) => !open)}>
+            {about ? (zh ? "收起说明" : "Hide notes") : zh ? "说明" : "Notes"}
+          </button>
+          {about ? (
+            <div className="mt-2 grid gap-2 text-xs leading-5 text-ink/70">
+              <p>
+                {zh
+                  ? "这是 UP、TAPE、FAB 交易合约的公共保险金，不是跟单金库的份额。存进去没有份额，也不能取回。"
+                  : "This is the shared insurance of the UP, TAPE and FAB books. It is not a copy-vault share. A deposit mints no shares and cannot be withdrawn."}
+              </p>
+              <p>
+                {zh
+                  ? `钱进当前选中的这一本，三本互不相通。全体可开名义是上限和保险金 × 20 里较小的那个。1 ${unit} 保险金，这一本全体只能开 20 ${unit} 名义。一个人一个方向最多 600 名义，保险金不够时先被上面的额度卡住。`
+                  : `The payment enters only the selected book. The three books are separate. Open notional is the smaller of the cap and insurance × 20. One ${unit} of insurance lets the whole book open 20 ${unit} of notional. One address and one side stop at 600 of notional, or sooner when insurance is the tighter limit.`}
+              </p>
+              <p>
+                {zh
+                  ? "平常平仓赚的是对手的保证金，不动保险金。只有一边穿仓、保证金变成负数时，欠下的那一截才从保险金补给赢的一边，不补给亏的人。补到 0 为止。"
+                  : "A normal close is paid from the other side's margin. Insurance moves only when one side is through zero. That shortfall is paid to the winner, not to the loser, and only up to the balance."}
+              </p>
+              {coin === "tape" ? (
+                <p>
+                  {zh
+                    ? "TAPE 池子很浅。把价格压过约 1% 再买回，测到的成本大约 0.058 美元。整本上限 3000 高于这条。上限要提高，先得给池子加流动性。"
+                    : "The TAPE pool is thin. A measured round trip through about 1% cost about 0.058 dollars. The 3000 cap is above that. Raising the cap takes liquidity in the pool first."}
+                </p>
+              ) : null}
+            </div>
           ) : null}
           <div className="mt-2 flex flex-wrap gap-2">
             <button
@@ -148,6 +167,6 @@ export function SyncDesk({ zh }: { zh: boolean }) {
         </>
       ) : null}
       {note ? <p className={`mt-2 text-xs ${bad ? "text-sell" : "text-ink/80"}`}>{note}</p> : null}
-    </div>
+    </article>
   );
 }

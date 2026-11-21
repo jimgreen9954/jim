@@ -48,6 +48,7 @@ export function CopyVault({ zh, account }: { zh: boolean; account: string | null
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState(empty);
   const [bad, setBad] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
   const unit = {
     decimals: view?.decimals ?? null,
     symbol: view?.symbol || (zh ? "未知" : "unknown"),
@@ -125,7 +126,7 @@ export function CopyVault({ zh, account }: { zh: boolean; account: string | null
         </dl>
         <div className="mt-3 flex gap-1">
           <button type="button" className={`min-h-9 px-3 text-sm ${side === "in" ? "bg-ink text-paper" : "text-ink/60"}`} onClick={() => setSide("in")}>
-            {zh ? "存入" : "Deposit"}
+            {zh ? "份额" : "Shares"}
           </button>
           <button type="button" className={`min-h-9 px-3 text-sm ${side === "out" ? "bg-ink text-paper" : "text-ink/60"}`} onClick={() => setSide("out")}>
             {zh ? "取出" : "Withdraw"}
@@ -142,7 +143,7 @@ export function CopyVault({ zh, account }: { zh: boolean; account: string | null
           <input
             value={amount}
             inputMode="decimal"
-            placeholder={side === "in" ? (zh ? "存入数量" : "Amount") : zh ? "取出数量" : "Amount"}
+            placeholder={side === "in" ? (zh ? "份额数量" : "Shares") : zh ? "取出数量" : "Amount"}
             className="mt-1 min-h-11 w-full border border-gold/40 bg-transparent px-2 text-sm text-ink"
             onChange={(event) => setAmount(event.target.value)}
           />
@@ -156,9 +157,8 @@ export function CopyVault({ zh, account }: { zh: boolean; account: string | null
             run(() => withdrawVault(chain, amount), zh ? "已取出。" : "Withdrawn.");
           }}
         >
-          {side === "in" ? (zh ? "存入已关闭" : "Deposits closed") : zh ? "取出" : "Withdraw"}
+          {side === "in" ? (zh ? "份额存入已关闭" : "Share deposits are closed") : zh ? "取出份额" : "Withdraw shares"}
         </button>
-        <SyncDesk zh={zh} />
         <div className="mt-2 grid gap-2 sm:grid-cols-2">
           <button
             type="button"
@@ -177,55 +177,41 @@ export function CopyVault({ zh, account }: { zh: boolean; account: string | null
             {zh ? "满 6 小时后强制平仓" : "Force flat after 6 hours"}
           </button>
         </div>
-        <ol className="mt-3 grid gap-1.5 text-xs leading-5 text-ink/75">
-          <li>
-            {zh
-              ? "1. X Layer 这一口绑的是旧本 0x9fD9Ade0272646cc3aD36F1699Fd42CcFE8927c2，只留取钱，不能再挂单。新金库已经部署，绑正在交易的 BEM 0x46cBAfCA59873E7115dF7825fdBF659BafAc3a51。主页部署按钮已撤。核对之前页面不改地址。BSC 这一口的 book 仍是 0x89b2f4a2e0C07864172fB47fbDEa14411AF2e0E0。"
-              : "1. The X Layer vault is bound to the old book 0x9fD9Ade0272646cc3aD36F1699Fd42CcFE8927c2. Withdraw only. It cannot post. A new vault bound to the live BEM book 0x46cBAfCA59873E7115dF7825fdBF659BafAc3a51 is already deployed. The homepage button is gone. The page does not switch until that address is checked. The BSC vault's book is still 0x89b2f4a2e0C07864172fB47fbDEa14411AF2e0E0."}
-          </li>
-          <li>
-            {zh
-              ? "2. 新的存入已关闭，页面不会再授权或存款。带单开仓也已停用。这口新金库在还有挂单、仓位或未结保证金时，存和取都会失败，结清后才按现金记净值。"
-              : "2. New deposits are closed. This page will not approve or deposit. Opening a copy trade is already stopped. This new vault rejects deposit and withdraw while a quote, a position, or unsettled margin remains, and prices shares on cash only after it is flat."}
-          </li>
-          <li>
-            {zh
-              ? "3. 上面的净值是现金加上锁着的保证金，不是未实现盈亏。有仓时这口新金库不让取。"
-              : "3. Equity on screen is cash plus locked margin, not unrealized PnL. This new vault will not pay a withdrawal while a position is open."}
-          </li>
-          <li>
-            {zh
-              ? "4. 有份额的人可以申请退出。满 6 小时后，任何人可以强制平掉这口金库自己的挂单和仓位，然后才能取出。没满时间，强制平仓会失败。BSC 和 X Layer 这两口在已经申请退出之后都不能再开新单。上一口 X Layer 还能开，页面不再读它。"
-              : "4. A shareholder can ask to exit. After 6 hours anyone can force this vault's own quotes and positions flat, and a withdrawal can then pass. Before that, the force-flat call fails. On both BSC and X Layer a new open is refused after the exit request. The previous X Layer vault still allows one, and this page no longer reads it."}
-          </li>
-        </ol>
-        <details className="mt-2 text-xs text-ink/55">
-          <summary className="cursor-pointer">{zh ? "详细规则" : "Full rules"}</summary>
-          <div className="mt-1 grid gap-1 leading-5">
+        <button type="button" className="mt-3 min-h-9 text-xs text-ink/70" onClick={() => setRulesOpen((open) => !open)}>
+          {rulesOpen ? (zh ? "收起说明" : "Hide notes") : zh ? "说明" : "Notes"}
+        </button>
+        {rulesOpen ? (
+          <div className="mt-2 grid gap-2 text-xs leading-5 text-ink/75">
             <p>
               {zh
-                ? "带单人是这口金库的多签。只能开仓、吃单、撤单、平仓。没有把存款转到自己钱包的功能，也没有管理员提取。"
-                : "The leader is this vault's multisig. It can only open, take, cancel, and close. It cannot transfer deposits to its own wallet, and there is no admin withdrawal."}
+                ? "这里只处理跟单金库的份额。取出的是这口金库里的稳定币。它不是 UP、TAPE、FAB 的保险金，也不能用来开那三本的仓。"
+                : "This only handles copy-vault shares. A withdrawal pays this vault's stablecoin. It is not the UP, TAPE or FAB insurance, and it cannot open those books."}
             </p>
             <p>
               {zh
-                ? "抽成 10%。只在全部平掉、利润已经回到金库、并且净值高过历史最高时，从多出来的利润里抽。亏的时候不抽，本金不抽。"
-                : "The cut is 10%. It is taken only after everything is closed, the profit is back in the vault, and equity is above its high. Losses pay no cut. Principal pays no cut."}
+                ? "页面读的是旧金库。X Layer 绑着已换下的 BEM 永续 0x9fD9Ade0272646cc3aD36F1699Fd42CcFE8927c2，只取款，不能再挂单。BSC 绑着 0x89b2f4a2e0C07864172fB47fbDEa14411AF2e0E0。新金库已经部署，页面还没换过去。"
+                : "The page reads the old vaults. X Layer is bound to the replaced BEM book 0x9fD9Ade0272646cc3aD36F1699Fd42CcFE8927c2. Withdraw only. It cannot post. BSC is bound to 0x89b2f4a2e0C07864172fB47fbDEa14411AF2e0E0. A new vault is deployed. The page has not switched."}
             </p>
             <p>
               {zh
-                ? "中途按浮动盈亏进出，这口新金库不允许。页面已关掉新存入。直接调用旧金库仍可能存入，那不是这个页面发的。"
-                : "This new vault does not accept a deposit or a withdrawal against unrealized PnL. The page no longer sends deposits. A direct call to the old vault can still deposit. This page does not send that."}
+                ? "份额存入已在页面关闭。已有份额可以取出。上面的净值是现金加上锁着的保证金，不是未实现盈亏。"
+                : "Share deposits are closed on this page. Existing shares can be withdrawn. Equity on screen is cash plus locked margin, not unrealized PnL."}
             </p>
             <p>
               {zh
-                ? "带单会亏，仓位也可能被强平。那是交易结果。存入之前看清楚这条链和这个带单人。"
-                : "The leader can lose, and a position can be liquidated. That is the trading result. Check the chain and the leader before you deposit."}
+                ? "有份额的地址可以申请退出。满 6 小时后，任何人可以强制平掉这口金库自己的挂单和仓位。时间未到，强制平仓会失败。这两口在已申请退出后都不再新开。"
+                : "A shareholder can ask to exit. After 6 hours anyone can force this vault's own quotes and positions flat. Before that, force-flat fails. After the request, neither of these two vaults can open again."}
+            </p>
+            <p>
+              {zh
+                ? "带单地址是这口金库的多签，只能开仓、吃单、撤单和平仓，不能把存款转到自己的钱包。抽成 10%，只在全部平仓、利润回到金库、并且净值高过历史最高时，从多出来的部分收取。亏损不抽，本金不抽。"
+                : "The leader is this vault's multisig. It can open, take, cancel and close. It cannot transfer deposits to its own wallet. The cut is 10%, taken only after the vault is flat, profit is back in cash, and equity is above its high. Losses and principal are not cut."}
             </p>
           </div>
-        </details>
+        ) : null}
         {note ? <p className={`mt-2 text-xs ${bad ? "text-down" : "text-ink/70"}`}>{note}</p> : null}
       </article>
+      <SyncDesk zh={zh} />
       {leader ? (
         <article className="border border-gold bg-card px-3 py-3">
           <div className="flex items-center justify-between gap-2">
