@@ -14,6 +14,12 @@ contract RedStamp {
         ok[codehash] = true;
     }
 
+    /// Stops one packet version. A fill already marked stays marked.
+    function revoke(bytes32 codehash) external {
+        require(msg.sender == BSC_SAFE || msg.sender == X_SAFE, "safe");
+        ok[codehash] = false;
+    }
+
     function take(address book, uint256 id) external {
         require(ok[keccak256(msg.sender.code)], "code");
         bytes32 key = keccak256(abi.encode(book, id));

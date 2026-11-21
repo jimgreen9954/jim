@@ -38,7 +38,7 @@ contract RedPerp {
     address public constant X_BEM = 0x46cBAfCA59873E7115dF7825fdBF659BafAc3a51;
     address public constant X_TAPE = 0xE08f0F8e056E65E00b2f80CF63Fbc0bfc78BAB0d;
     address public constant X_FAB = 0xb87A0D23A9D5c1F63C2DeA9331fBaA1B0C027D0A;
-    address public constant STAMP = 0xe11BEF11f73BAF34F73787bF6fd7550396236301;
+    address public constant STAMP = 0x30E48e1FA7B8FF93E213814d7EA3BbF35B28731A;
 
     address public immutable deployer;
     address public immutable router = 0x881fB2f98c13d521009464e7D1CBf16E1b394e8E;

@@ -21,14 +21,14 @@ contract TipBook {
 contract AsBooth {
     function arm(address packet) external payable {
         RedPerp(payable(packet)).begin{value: msg.value}(
-            address(0), 0.1 ether, uint256(uint160(0x070c66555535e1145275df54f4eEBBfd28d98581)), 1 ether, 0, 1 days, 0, 0.1 ether
+            address(0), 0.1 ether, uint256(uint160(0x070c66555535e1145275df54f4eEBBfd28d98581)), 1 ether, 0, 1 days, 0, 0.3 ether
         );
     }
 }
 
 contract RedPerpLoTest is Test {
     address constant BOOK = 0x070c66555535e1145275df54f4eEBBfd28d98581;
-    address constant STAMP = 0xe11BEF11f73BAF34F73787bF6fd7550396236301;
+    address constant STAMP = 0x30E48e1FA7B8FF93E213814d7EA3BbF35B28731A;
     address constant BOOTH = 0x284Fa8819980A229622B711A52BF66bD9cDCbC2d;
     address constant SAFE = 0xE51C19aE6E4261Ed329CC54F1120Cf0Ae09364Bd;
     address constant TRADER = address(0xB0B);
@@ -47,8 +47,8 @@ contract RedPerpLoTest is Test {
         vm.prank(SAFE);
         RedStamp(STAMP).allow(keccak256(address(first).code));
 
-        AsBooth(BOOTH).arm{value: 0.1 ether}(address(first));
-        AsBooth(BOOTH).arm{value: 0.1 ether}(address(second));
+        AsBooth(BOOTH).arm{value: 0.3 ether}(address(first));
+        AsBooth(BOOTH).arm{value: 0.3 ether}(address(second));
         assertEq(first.lo(), 2);
         assertEq(second.lo(), 2);
 
@@ -62,6 +62,20 @@ contract RedPerpLoTest is Test {
         vm.prank(TRADER, TRADER);
         vm.expectRevert(bytes("used"));
         second.trade(2, 0);
+
+        vm.prank(TRADER, TRADER);
+        first.claim();
+        vm.prank(SAFE);
+        RedStamp(STAMP).revoke(keccak256(address(first).code));
+        vm.warp(block.timestamp + 1 days);
+        vm.prank(TRADER, TRADER);
+        vm.expectRevert(bytes("code"));
+        first.trade(3, 0);
+
+        vm.prank(SAFE);
+        RedStamp(STAMP).allow(keccak256(address(first).code));
+        vm.prank(TRADER, TRADER);
+        first.trade(3, 0);
     }
 
     function testRuntimeHashes() public {
