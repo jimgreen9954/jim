@@ -1257,6 +1257,21 @@ export async function takePerp(from: string, perp: string, quoteId: bigint, marg
   if (lev < 1 || lev > maxLevFor(perp, amount)) throw new Error("lev");
   const balances = desk === "xlayer" ? { usdt: await readDeskUsdt(from) } : await readBalances(from);
   if (balances.usdt < amount) throw new Error("usdt");
+  try {
+    const c = await client();
+    const markAbi = [{ name: "mark", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] }] as const;
+    const [markPx, quote] = await Promise.all([
+      c.readContract({ address: perp as Hex, abi: markAbi, functionName: "mark" }),
+      c.readContract({ address: perp as Hex, abi: quoteWideAbi, functionName: "quotes", args: [quoteId] }),
+    ]);
+    const price = quote[5];
+    if (markPx > 0n && price > 0n) {
+      const slip = markPx / 100n;
+      if (price + slip < markPx || price > markPx + slip) throw new Error("drift");
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message === "drift") throw err;
+  }
   const data = encodeFunctionData({
     abi: priced ? takeWideAbi : abi,
     functionName: "take",
@@ -1322,9 +1337,6 @@ export async function readChainPurse(which: Desk, account: string): Promise<{ ga
 const pokeAbi = [
   { name: "poke", type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
 ] as const;
-const noteAbi = [
-  { name: "note", type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
-] as const;
 
 export async function xPoolPrice(): Promise<number> {
   const { createPublicClient, http } = await import("viem");
@@ -1350,11 +1362,13 @@ const poolAbi = [
 
 export async function pokeBook(from: string, perp: string): Promise<Hex> {
   pinned(perp);
-  const pool = await (await client()).readContract({ address: perp as Hex, abi: poolAbi, functionName: "pool" });
   const sync = syncBook(perp);
-  const data = sync
-    ? encodeFunctionData({ abi: noteAbi, functionName: "note" })
-    : encodeFunctionData({ abi: pokeAbi, functionName: "poke" });
+  if (sync) {
+    const data = encodeFunctionData({ abi: [{ name: "sync", type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] }] as const, functionName: "sync" });
+    return send(from, perp as Hex, data, 1_200_000n);
+  }
+  const pool = await (await client()).readContract({ address: perp as Hex, abi: poolAbi, functionName: "pool" });
+  const data = encodeFunctionData({ abi: pokeAbi, functionName: "poke" });
   return send(from, pool, data, 1_200_000n);
 }
 

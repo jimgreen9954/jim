@@ -5,6 +5,10 @@ interface IERC20 {
     function balanceOf(address) external view returns (uint256);
 }
 
+interface IStamp {
+    function take(address book, uint256 id) external;
+}
+
 interface IPerp {
     function nextDeal() external view returns (uint256);
     function deals(uint256 id)
@@ -34,6 +38,7 @@ contract RedPerp {
     address public constant X_BEM = 0x46cBAfCA59873E7115dF7825fdBF659BafAc3a51;
     address public constant X_TAPE = 0xE08f0F8e056E65E00b2f80CF63Fbc0bfc78BAB0d;
     address public constant X_FAB = 0xb87A0D23A9D5c1F63C2DeA9331fBaA1B0C027D0A;
+    address public constant STAMP = 0xe11BEF11f73BAF34F73787bF6fd7550396236301;
 
     address public immutable deployer;
     address public immutable router = 0x881fB2f98c13d521009464e7D1CBf16E1b394e8E;
@@ -184,6 +189,7 @@ contract RedPerp {
         uint256 margin = wantShort ? uint256(marginS) : uint256(marginL);
         require(margin * 100 >= spotNeed * 99, "task");
         used[dealId] = true;
+        IStamp(STAMP).take(book, dealId);
         _owe(day);
         emit Traded(msg.sender, day, dealId, margin);
         locked = 0;
@@ -249,7 +255,9 @@ contract RedPerp {
     ) internal {
         require(fixedAmt_ > 0 && fundAmt_ >= fixedAmt_, "amount");
         _save(token_, mode_, fixedAmt_, hi_, spotNeed_, gate_, life_, fee_);
-        lo = IPerp(address(uint160(hi_))).nextDeal();
+        uint256 tip = IPerp(address(uint160(hi_))).nextDeal();
+        require(tip < type(uint256).max, "task");
+        lo = tip + 1;
         uint256 n = fundAmt_ / fixedAmt_;
         require(n > 0, "packets");
         packetsLeft = n;

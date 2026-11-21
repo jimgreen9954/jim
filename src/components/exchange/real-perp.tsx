@@ -948,11 +948,13 @@ export function RealPerp({
           ? "这一本不再开新仓。可以平仓和撤单。"
           : "This book takes no new positions. Close and cancel still work.",
       );
+    else if (message === "drift")
+      setNote(lang === "zh" ? "挂单价已偏离，请重新挂。" : "The posted price has moved away. Post it again.");
     else if (message === "gap")
       setNote(
         lang === "zh"
-          ? "标记和现价差超过约 3%。新开仓和强平停了，平仓还可以。点「记下价格」只记一次，不会自己连着记。"
-          : "Spot and the average differ by about 3%. New opens and liquidations are paused. Close still works. “Record the price” writes once. It does not keep going.",
+          ? "标记和现价差超过约 1%。新开仓和强平停了，平仓还可以。点「更新价格」只走一步，大约 0.5%，不会自己连着走。"
+          : "Spot and the average differ by about 1%. New opens and liquidations are paused. Close still works. “Update the price” moves one step, about 0.5%. It does not keep going.",
       );
     else if (message === "uphalt")
       setNote(
@@ -1079,8 +1081,12 @@ export function RealPerp({
         if (kind === "poke") {
           setNote(
             lang === "zh"
-              ? "只记下了一次价格，没有开仓。要是还差着，等一会儿再点。不会自己连着记。"
-              : "One price was recorded. Nothing was opened. If the gap is still there, wait and tap again. It does not keep recording.",
+              ? coin === "up" || coin === "tape" || coin === "fab"
+                ? "更新了一次价格，没有开仓。差着的话等 30 秒再点。不会自己连着更新。"
+                : "只记下了一次价格，没有开仓。要是还差着，等一会儿再点。不会自己连着记。"
+              : coin === "up" || coin === "tape" || coin === "fab"
+                ? "The price moved one step. Nothing was opened. If the gap is still there, wait 30 seconds and tap again. It does not keep going."
+                : "One price was recorded. Nothing was opened. If the gap is still there, wait and tap again. It does not keep recording.",
           );
           setBad(false);
           if (coin === "up" || coin === "tape" || coin === "fab") {
@@ -1825,6 +1831,12 @@ export function RealPerp({
                       },
                       onTake: (book, quote) => {
                         const px = quote.price > 0n ? Number(formatUnits(quote.price, 18)) : 0;
+                        const markRef = markN > 0 ? markN : settle;
+                        if (markRef > 0 && Math.abs(px - markRef) / markRef > 0.01) {
+                          setBad(true);
+                          setNote(lang === "zh" ? "挂单价已偏离，请重新挂。" : "The posted price has moved away. Post it again.");
+                          return;
+                        }
                         if (!withinSlip(px, [markN, settle], slipBps)) {
                           setBad(true);
                           setNote(
@@ -2988,9 +3000,13 @@ export function RealPerp({
                                     }}
                                   >
                                     {needMark
-                                      ? lang === "zh"
-                                        ? "记下价格"
-                                        : "Record the price"
+                                      ? coin === "up" || coin === "tape" || coin === "fab"
+                                        ? lang === "zh"
+                                          ? "更新价格"
+                                          : "Update the price"
+                                        : lang === "zh"
+                                          ? "记下价格"
+                                          : "Record the price"
                                       : waiting &&
                                     view &&
                                     (intent === "long" ? !view.pendingLong : view.pendingLong)

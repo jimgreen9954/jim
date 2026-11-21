@@ -19,6 +19,8 @@ import {
   readSpawned,
   openAnother,
   boothReady,
+  placeStamp,
+  stampReady,
   sellPreview,
   setRedRule,
   sgClock,
@@ -127,6 +129,7 @@ export function RedGift({
   const [life, setLife] = useState(86_400);
   const [pick, setPick] = useState<GiftChain>(() => (currentChain() === 196 ? "xlayer" : "bsc"));
   const [deskOn, setDeskOn] = useState(true);
+  const [stampOn, setStampOn] = useState(true);
   const [tab, setTab] = useState<"send" | "claim">("claim");
   const [info, setInfo] = useState<string | null>(null);
   const [seal, setSeal] = useState<RedRule | null>(null);
@@ -156,6 +159,13 @@ export function RedGift({
       })
       .catch(() => {
         if (!dead) setDeskOn(false);
+      });
+    void stampReady(pick)
+      .then((on) => {
+        if (!dead) setStampOn(on);
+      })
+      .catch(() => {
+        if (!dead) setStampOn(false);
       });
     return () => {
       dead = true;
@@ -267,6 +277,20 @@ export function RedGift({
             ? "授权已提交。请等它完成，再点一次。这一次还没有交易，也还没有领取。"
             : "The approval was sent. Wait for it, then tap once more. Nothing was traded or claimed.",
         );
+      else if (message === "oldperp")
+        setNote(
+          zh
+            ? "这一份合约任务红包已停。发出的时候把已经平掉的旧仓也算进去了，不能再领。创建人可以取回还没领的奖金。"
+            : "This perpetual red packet is stopped. It counted a position that was already closed, so it cannot be claimed. The creator can take back what is left.",
+        );
+      else if (message === "stamp")
+        setNote(
+          zh
+            ? "成交记录还没放上。合约任务红包先不能新开。多签放上并允许之后才能发。"
+            : "The fill record is not in place. A perpetual red packet cannot be opened yet. The multisig places it and allows this version first.",
+        );
+      else if (message === "safe")
+        setNote(zh ? "只有这条链的多签可以放上。" : "Only this chain's multisig can place it.");
       else if (message === "template")
         setNote(
           zh
@@ -721,6 +745,31 @@ export function RedGift({
                   </button>
                 </div>
               ) : null}
+              {officialHere && !stampOn ? (
+                <button
+                  type="button"
+                  className="mb-2 min-h-11 w-full border border-gold text-sm"
+                  disabled={busy}
+                  onClick={() => {
+                    void act(async () => {
+                      const step = await placeStamp(pick, await who());
+                      setStampOn(step === "allowed");
+                      setNote(
+                        step === "deployed"
+                          ? zh
+                            ? "成交记录已放上。再点一次，允许这一版合约任务红包。"
+                            : "The fill record is in place. Tap again to allow this perpetual red packet."
+                          : zh
+                            ? "这一版已经允许。新的合约任务红包可以发了。"
+                            : "This version is allowed. A new perpetual red packet can be opened.",
+                      );
+                      return "ok" as const;
+                    });
+                  }}
+                >
+                  {zh ? "放上成交记录" : "Place the fill record"}
+                </button>
+              ) : null}
               {!deskOn ? (
                 <p className="mb-2 text-center text-sm text-ink/70">
                   {pick === "bsc"
@@ -1004,6 +1053,11 @@ function ClaimBoard({
     .sort((a, b) => (a.endsAt > b.endsAt ? -1 : 1));
   return (
     <div className="mt-3 flex flex-col gap-3">
+      <p className="text-sm text-ink/70">
+        {zh
+          ? "已经发出的合约任务红包停用。当时把已经平掉的旧仓也算成新成交，所以不能再领。创建人可以取回剩下的奖金。"
+          : "Perpetual red packets already opened are stopped. They counted a position that was already closed, so they cannot be claimed. The creator can take back what is left."}
+      </p>
       <button
         type="button"
         className="flex min-h-11 w-full items-center justify-between text-base text-ink"

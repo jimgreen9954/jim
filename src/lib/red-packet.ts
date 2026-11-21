@@ -26,6 +26,7 @@ import { RED_PACKET_ABI, RED_PACKET_BYTECODE } from "@/lib/red-packet-artifact";
 import { RED_OPEN_ABI, RED_OPEN_BYTECODE } from "@/lib/red-packet-open-artifact";
 import { RED_NEXT_ABI, RED_NEXT_BYTECODE } from "@/lib/red-packet-next-artifact";
 import { RED_BOOTH_ABI, RED_BOOTH_BYTECODE } from "@/lib/red-booth-artifact";
+import { RED_STAMP_BYTECODE } from "@/lib/red-stamp-artifact";
 import { STOCKS } from "@/lib/stocks";
 import { TAPE_BEM, TAPE_TOKEN, TAPE_USDT } from "@/lib/tape-pool";
 import { OPEN_POOL } from "@/lib/tape-open-swap";
@@ -410,7 +411,7 @@ async function preflight(chain: GiftChain, from: string, to: Hex, data: Hex, val
     if (which === "ok" || which === "slow") return;
     const text = which instanceof Error ? which.message : "";
     if (/exceeds the balance|insufficient funds/i.test(text)) throw new Error("funds");
-    const known = ["deployer", "creator", "amount", "life", "mode", "range", "packets", "dust", "rule", "late", "empty", "day", "cap", "early", "credit", "token", "native", "bot", "pace", "task", "buy", "fee", "pull", "prize", "closed", "desk", "placed", "owed"];
+    const known = ["deployer", "creator", "amount", "life", "mode", "range", "packets", "dust", "rule", "late", "empty", "day", "cap", "early", "credit", "token", "native", "bot", "pace", "task", "buy", "fee", "pull", "prize", "closed", "desk", "placed", "owed", "used", "code", "safe"];
     const hit = known.find((item) => text === item || text.includes(`: ${item}`) || text.includes(`"${item}"`));
     throw new Error(hit ?? "revert");
   } finally {
@@ -448,6 +449,53 @@ const BOOTH_SALT = keccak256(`0x${[...new TextEncoder().encode("TAPELIQUID-booth
 export function boothOf(chain: GiftChain): Hex {
   const hash = keccak256(concat(["0xff", FACTORY, BOOTH_SALT, keccak256(RED_BOOTH_BYTECODE)]));
   return getAddress(`0x${hash.slice(-40)}`);
+}
+
+export const RED_STAMP = "0xe11BEF11f73BAF34F73787bF6fd7550396236301" as Hex;
+const STAMP_SALT = keccak256(stringToHex("TAPELIQUID-red-stamp-v1"));
+const stampAbi = parseAbi(["function ok(bytes32) view returns (bool)", "function allow(bytes32)"]);
+
+/** True once this chain's multisig has allowed the current perp-packet code. */
+export async function stampReady(chain: GiftChain): Promise<boolean> {
+  const code = await client(chain).getBytecode({ address: RED_STAMP });
+  if (!code || code === "0x") return false;
+  try {
+    return await client(chain).readContract({ address: RED_STAMP, abi: stampAbi, functionName: "ok", args: [RED_PERP_CODE[chain]] });
+  } catch {
+    return false;
+  }
+}
+
+/** Deploy the fill record, or allow this version. The second step is a separate signature. */
+export async function placeStamp(chain: GiftChain, from: string): Promise<"deployed" | "allowed"> {
+  if (from.toLowerCase() !== giftDeployer(chain).toLowerCase()) throw new Error("safe");
+  const code = await client(chain).getBytecode({ address: RED_STAMP });
+  if (!code || code === "0x") {
+    const hash = await send(chain, from, FACTORY, concat([STAMP_SALT, RED_STAMP_BYTECODE]));
+    await wait(chain, hash);
+    return "deployed";
+  }
+  const data = encodeFunctionData({ abi: stampAbi, functionName: "allow", args: [RED_PERP_CODE[chain]] });
+  await preflight(chain, from, RED_STAMP, data);
+  const hash = await send(chain, from, RED_STAMP, data);
+  await wait(chain, hash);
+  return "allowed";
+}
+
+async function perpCode(chain: GiftChain, pool: Hex): Promise<"new" | "old" | "other"> {
+  try {
+    const on = await client(chain).readContract({
+      address: pool,
+      abi: parseAbi(["function perp() view returns (bool)"]),
+      functionName: "perp",
+    });
+    if (!on) return "other";
+  } catch {
+    return "other";
+  }
+  const code = await client(chain).getBytecode({ address: pool });
+  if (!code || code === "0x") return "old";
+  return keccak256(code) === RED_PERP_CODE[chain] ? "new" : "old";
 }
 
 function nextInit(chain: GiftChain): Hex {
@@ -562,6 +610,7 @@ export async function openAnother(
   const booth = boothOf(chain);
   const deskTask = chain === "xlayer" && (taskHi === BigInt(FAB) || taskHi === BigInt(CIRCUIT_SPLIT));
   const perp = taskAsset(chain, taskHi)?.id.endsWith("perp") === true;
+  if (perp && !(await stampReady(chain))) throw new Error("stamp");
   if (deskTask && !(await deskLive())) throw new Error("desk");
   const init = perp ? perpInit(chain) : deskTask ? deskInit() : nextInit(chain);
   const code = await client(chain).getBytecode({ address: booth });
@@ -1199,7 +1248,10 @@ async function tradePerp(chain: GiftChain, from: string, gate: number, need: big
 }
 
 const CHECKED_RED = "0x7761ac208268aaeb74761267dec2e23504676028dd92264c2e07663cad7520c9" as Hex;
-const RED_PERP_RUNTIME = "0x40620dd68b9dfac03a41b822d044aa6925ac4c77618daa4f8cc85539ac9b0752" as Hex;
+const RED_PERP_CODE: Record<GiftChain, Hex> = {
+  bsc: "0x4e338d3be131184f720a72a29ca2a110a8993bc56449a5cbcc691a7f23dc46fa",
+  xlayer: "0xe25f093dc7be9bb1e1b375ac6e0fbebfbcb306652d391dc0220a815b9e345be4",
+};
 const RED_RUNTIME: Record<GiftChain, Hex> = {
   xlayer: "0x9f6a07ce7e33186652a2ace00d89929db9efa8eb5d2a0de7e70c67b981e2e186",
   bsc: "0x50b8507ab02ffeefe66e153e71ee4d63b861a37d34e72a91f9e9667b4d9d51b5",
@@ -1207,7 +1259,8 @@ const RED_RUNTIME: Record<GiftChain, Hex> = {
 /** Runtimes this app ships or has already checked. A factory row with any other code is not a red packet. */
 const TRUSTED_RED = new Set<string>([
   CHECKED_RED,
-  RED_PERP_RUNTIME,
+  RED_PERP_CODE.bsc,
+  RED_PERP_CODE.xlayer,
   RED_RUNTIME.xlayer,
   RED_RUNTIME.bsc,
   "0x0ec34e5d71fe7e47355e2510d9f5bc10fa058d96c78695b3eecb136f82f04872",
@@ -1263,6 +1316,7 @@ export async function tradeRed(chain: GiftChain, from: string, lane: GiftLane = 
   if (need <= 0n || here.hi === 0n) throw new Error("task");
   const deskTask = taskAsset(chain, here.hi);
   if (deskTask?.id.endsWith("perp")) {
+    if ((await perpCode(chain, pool)) !== "new") throw new Error("oldperp");
     const hash = await tradePerp(chain, from, here.gate, need, here.hi, here.lo, pool);
     markDeskFill(chain, from, "perp", Number(formatUnits(need, deskTask.decimals)) || 0, deskTask.id);
     return hash;
