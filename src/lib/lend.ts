@@ -547,6 +547,20 @@ async function sendSafe(chain: LendChain, safe: Hex, chainId: number, from: stri
   return send(from, safe, call, 0n, 8_000_000n);
 }
 
+async function catchUp(chain: LendChain, asset: LendAsset, book?: Hex) {
+  const spec = lendSpec(chain, asset);
+  if (spec.native || spec.mode === 0) return;
+  const lend = need(chain, asset, book);
+  if (await read<boolean>(chain, lend, "fresh").catch(() => false)) return;
+  const from = await signer(chain);
+  try {
+    await wait(chain, await send(from, lend, encodeFunctionData({ abi, functionName: "poke" })));
+  } catch (err) {
+    if (!(err instanceof Error) || err.message !== "revert") throw err;
+  }
+  if (!(await read<boolean>(chain, lend, "fresh").catch(() => false))) throw new Error("sync");
+}
+
 export async function depositLend(chain: LendChain, asset: LendAsset, amount: string) {
   const spec = lendSpec(chain, asset);
   const qty = units(amount, spec.usdtDec);
@@ -555,6 +569,7 @@ export async function depositLend(chain: LendChain, asset: LendAsset, amount: st
   const have = await read<bigint>(chain, spec.usdt, "balanceOf", [from as Hex], erc20);
   if (have < qty) throw new Error("usdt");
   const lend = need(chain, asset);
+  await catchUp(chain, asset);
   await allowToken(chain, from, spec.usdt, qty, lend);
   await wait(chain, await send(from, lend, encodeFunctionData({ abi, functionName: "deposit", args: [qty] })));
 }
@@ -563,6 +578,7 @@ export async function withdrawLend(chain: LendChain, asset: LendAsset, amount: s
   const spec = lendSpec(chain, asset);
   const qty = units(amount, spec.usdtDec);
   if (qty === 0n) throw new Error("amount");
+  await catchUp(chain, asset, book);
   const from = await signer(chain);
   const lend = need(chain, asset, book);
   const [supply, haveShares, total, poolAssets, poolCash] = await Promise.all([
@@ -605,6 +621,7 @@ export async function unlockLend(chain: LendChain, asset: LendAsset, amount: str
   const spec = lendSpec(chain, asset);
   const qty = units(amount, spec.collDec);
   if (qty === 0n) throw new Error("amount");
+  await catchUp(chain, asset, book);
   const from = await signer(chain);
   await wait(chain, await send(from, need(chain, asset, book), encodeFunctionData({ abi, functionName: "unlock", args: [qty] })));
 }
@@ -615,16 +632,13 @@ export async function borrowLend(chain: LendChain, asset: LendAsset, amount: str
   if (qty === 0n) throw new Error("amount");
   const from = await signer(chain);
   const lend = need(chain, asset);
-  const [cash, posted, liveFresh] = await Promise.all([
+  const [cash, posted] = await Promise.all([
     read<bigint>(chain, lend, "cash"),
     read<bigint>(chain, lend, "collateral", [from as Hex]),
-    spec.native || spec.mode === 0 ? Promise.resolve(true) : read<boolean>(chain, lend, "fresh"),
   ]);
   if (posted === 0n) throw new Error("posted");
   if (qty > cash) throw new Error("dry");
-  if (!liveFresh) {
-    await wait(chain, await send(from, lend, encodeFunctionData({ abi, functionName: "poke" })));
-  }
+  await catchUp(chain, asset);
   await wait(chain, await send(from, lend, encodeFunctionData({ abi, functionName: "borrow", args: [qty] })));
 }
 
