@@ -108,13 +108,13 @@ function storageKey(chain: TermChain) {
 }
 
 const PRIOR_TERM: Record<TermChain, Hex[]> = {
-  xlayer: ["0xC4fA8f4cE83ce03A0264D76ebdA8903FABb947d5"],
-  bsc: ["0x073452aD271ad5D511295aEB7706D4742dD1a75E"],
+  xlayer: ["0x536327976231cf4c12759D81C99b12bD40aF0DD6", "0xC4fA8f4cE83ce03A0264D76ebdA8903FABb947d5"],
+  bsc: ["0x92E44Ba44b2b3CC3E5C823d9dF5b571C7338f2c3", "0x073452aD271ad5D511295aEB7706D4742dD1a75E"],
 };
 
 const TERM_BOOK: Record<TermChain, Hex> = {
-  xlayer: "0x536327976231cf4c12759D81C99b12bD40aF0DD6",
-  bsc: "0x92E44Ba44b2b3CC3E5C823d9dF5b571C7338f2c3",
+  xlayer: "0x0b545E7589A46c9BA6e922C183C681b6EEaeeB9f",
+  bsc: "0x0e8C5Dc56BeB4b0D1209d9F5CbEc91BBa95764A4",
 };
 
 export function priorTerms(chain: TermChain): Hex[] {

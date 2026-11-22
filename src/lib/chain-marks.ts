@@ -21,8 +21,8 @@ export function assertSafeDeployer(chain: 56 | 196 | "bsc" | "xlayer", from: str
 }
 export const PREV_BSC_VAULT = "0x138524b76E10b1c60060CD11e8946d24D861Fe23" as const;
 export const PREV_XLAYER_VAULT = "0x721f32Efae0276B3C77652a192A14c3a5Da20aCd" as const;
-export const BSC_VAULT = "0xe9Ef9C5031015fA626eCE1cC8Dc8e5d213F591F5" as const;
-export const XLAYER_VAULT = "0x5d6eF9E36B591b50069DA8C535FB56dE73ad8EEe" as const;
+export const BSC_VAULT = "0x66EFC8E54F84D5349F2445F4A836A503B09F4039" as const;
+export const XLAYER_VAULT = "0xA270097f263cb935beFE69AbeE7C6BDF02a08494" as const;
 export const LAST_XLAYER_VAULT = "0xe895122Ba5aF841704730B999a73F9562F5bd46E" as const;
 
 export class TxPending extends Error {

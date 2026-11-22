@@ -189,8 +189,8 @@ export function CopyVault({ zh, account }: { zh: boolean; account: string | null
             </p>
             <p>
               {zh
-                ? "页面读的是旧金库。X Layer 绑着已换下的 BEM 永续 0x9fD9Ade0272646cc3aD36F1699Fd42CcFE8927c2，只取款，不能再挂单。BSC 绑着 0x89b2f4a2e0C07864172fB47fbDEa14411AF2e0E0。新金库已经部署，页面还没换过去。"
-                : "The page reads the old vaults. X Layer is bound to the replaced BEM book 0x9fD9Ade0272646cc3aD36F1699Fd42CcFE8927c2. Withdraw only. It cannot post. BSC is bound to 0x89b2f4a2e0C07864172fB47fbDEa14411AF2e0E0. A new vault is deployed. The page has not switched."}
+                ? "页面读的是新金库。BSC 0x66EFC8E54F84D5349F2445F4A836A503B09F4039 绑当前 BEM 永续 0x070c66555535e1145275df54f4eEBBfd28d98581。X Layer 0xA270097f263cb935beFE69AbeE7C6BDF02a08494 绑当前 BEM 永续 0x46cBAfCA59873E7115dF7825fdBF659BafAc3a51。上一口 BSC 0xe9Ef9C5031015fA626eCE1cC8Dc8e5d213F591F5 和 X Layer 0x5d6eF9E36B591b50069DA8C535FB56dE73ad8EEe 净值都是 0，页面不再读。"
+                : "The page reads the new vaults. BSC 0x66EFC8E54F84D5349F2445F4A836A503B09F4039 is bound to the live BEM book 0x070c66555535e1145275df54f4eEBBfd28d98581. X Layer 0xA270097f263cb935beFE69AbeE7C6BDF02a08494 is bound to the live BEM book 0x46cBAfCA59873E7115dF7825fdBF659BafAc3a51. The previous vaults, BSC 0xe9Ef9C5031015fA626eCE1cC8Dc8e5d213F591F5 and X Layer 0x5d6eF9E36B591b50069DA8C535FB56dE73ad8EEe, have zero equity. The page does not read them."}
             </p>
             <p>
               {zh

@@ -217,7 +217,6 @@ export function DeskHome({
 
   return (
     <>
-      <AuditShip zh={zh} />
       <ArriveHint zh={zh} />
       {showPerp ? (
         <Suspense fallback={null}>
@@ -296,50 +295,6 @@ export function DeskHome({
         </Suspense>
       ) : null}
     </>
-  );
-}
-
-function AuditShip({ zh }: { zh: boolean }) {
-  const [rows, setRows] = useState<{ id: string; zh: string; en: string }[]>([]);
-  const [busy, setBusy] = useState("");
-  const [note, setNote] = useState("");
-  const load = () => {
-    void import("@/lib/audit-ship").then(async ({ shipPending }) => {
-      const left = await shipPending(currentAccount());
-      setRows(left.map((row) => ({ id: row.id, zh: row.zh, en: row.en })));
-    });
-  };
-  useEffect(() => {
-    load();
-    return onAccount(() => load());
-  }, []);
-  if (rows.length === 0) return null;
-  return (
-    <div className="border-b border-gold px-3 py-2">
-      {rows.map((row) => (
-        <button
-          key={row.id}
-          type="button"
-          className="mt-2 min-h-11 w-full border border-gold text-sm"
-          disabled={busy === row.id}
-          onClick={() => {
-            setBusy(row.id);
-            setNote("");
-            void import("@/lib/audit-ship")
-              .then(({ deployShip }) => deployShip(row.id))
-              .then(() => {
-                setNote(zh ? "已放上。" : "Deployed.");
-                load();
-              })
-              .catch(() => setNote(zh ? "没放上。确认是这条链的多签，并且有 gas。" : "It did not deploy. Use this chain's multisig, and keep gas for the fee."))
-              .finally(() => setBusy(""));
-          }}
-        >
-          {busy === row.id ? (zh ? "签名中" : "Signing") : zh ? `部署 ${row.zh}` : `Deploy ${row.en}`}
-        </button>
-      ))}
-      {note ? <p className="mt-1 text-center text-xs text-ink/70">{note}</p> : null}
-    </div>
   );
 }
 
