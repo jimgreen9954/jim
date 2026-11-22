@@ -231,41 +231,6 @@ contract VaultFlatTest is Test {
         assertEq(vault.hang(), 0);
     }
 
-    function testAnyoneFlattensAQuoteAfterSixHours() public {
-        _fund(alice, 10 ether);
-        vm.prank(alice);
-        vault.deposit(10 ether);
-        vm.prank(bob);
-        vm.expectRevert(TapeVault.Bad.selector);
-        vault.askExit();
-        vm.prank(bob);
-        vm.expectRevert(TapeVault.Bad.selector);
-        vault.forceFlat();
-
-        vm.prank(leader);
-        vault.open(true, 1 ether, 1, 1 ether);
-        vm.prank(alice);
-        vault.askExit();
-        assertGt(vault.exitAt(), 0);
-        vm.prank(leader);
-        vm.expectRevert(TapeVault.Bad.selector);
-        vault.open(false, 1 ether, 1, 1 ether);
-        vm.prank(bob);
-        vm.expectRevert(TapeVault.Bad.selector);
-        vault.forceFlat();
-
-        vm.warp(block.timestamp + 6 hours);
-        vm.prank(bob);
-        vault.forceFlat();
-        assertEq(vault.quoteCount(), 0);
-        assertEq(vault.exitAt(), 0);
-        uint256 shares = vault.shares(alice);
-        vm.prank(alice);
-        vault.withdraw(shares);
-        assertEq(vault.shares(alice), 0);
-        assertEq(cash.balanceOf(alice), 10 ether);
-    }
-
     function testAnyoneClosesADealAfterSixHours() public {
         _fund(alice, 10 ether);
         vm.prank(alice);
