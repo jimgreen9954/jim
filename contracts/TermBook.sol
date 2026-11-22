@@ -56,6 +56,8 @@ contract TermBook {
 
     uint256 public constant OPEN_LTV = 5000;
     uint256 public constant LIQ_LTV = 7500;
+    /// A stale mark can still close a loan, but only past this deeper line, and with no bonus.
+    uint256 public constant STALE_LTV = 9000;
     uint256 public constant BONUS_BPS = 500;
     uint256 public constant FEE_BPS = 1000;
     uint256 public constant WAD = 1e18;
@@ -508,13 +510,16 @@ contract TermBook {
         Loan storage row = loans[id];
         if (!row.open) revert ClosedBook();
         if (msg.sender == row.user) revert Bad();
-        if (!fresh(row.coll) || !fresh(row.debt)) revert Stale();
+        if (px[row.coll] == 0 || px[row.debt] == 0) revert Stale();
+        bool stale = !fresh(row.coll) || !fresh(row.debt);
         _accrue(row);
         uint256 owed = row.principal + row.interest;
         uint256 collUsd = usd(row.coll, row.collAmt);
         uint256 debtUsd = usd(row.debt, owed);
-        if (owed == 0 || debtUsd == 0 || debtUsd * 10000 <= collUsd * LIQ_LTV) revert Bad();
-        uint256 coverUsd = collUsd * 10000 / (10000 + BONUS_BPS);
+        uint256 line = stale ? STALE_LTV : LIQ_LTV;
+        uint256 bonus = stale ? 0 : BONUS_BPS;
+        if (owed == 0 || debtUsd == 0 || debtUsd * 10000 <= collUsd * line) revert Bad();
+        uint256 coverUsd = collUsd * 10000 / (10000 + bonus);
         uint256 wantUsd = debtUsd < coverUsd ? debtUsd : coverUsd;
         uint256 pay = _usdToAmt(row.debt, wantUsd);
         if (pay > owed) pay = owed;

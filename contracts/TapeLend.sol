@@ -586,6 +586,7 @@ contract TapeLend {
         if (cut == 0) return;
         uint256 minted = cut * (totalShares + DEAD) / (nav + DUST);
         if (minted == 0) return;
+        _touch(feeTo);
         shares[feeTo] += minted;
         totalShares += minted;
     }

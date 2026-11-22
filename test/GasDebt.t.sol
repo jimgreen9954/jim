@@ -177,6 +177,38 @@ contract GasDebtTest is Test {
         assertEq(gas.assets(), 200 * UNIT);
     }
 
+    function testFeeSharesFollowTheEpoch() public {
+        _deposit(alice, 1_000 * UNIT);
+        _deposit(bob, 10 * UNIT);
+        vm.deal(carol, 4_000 ether);
+        vm.prank(carol);
+        gas.lockNative{value: 4_000 ether}();
+        vm.prank(carol);
+        gas.borrow(1_010 * UNIT);
+        vm.warp(block.timestamp + 30 days);
+        vm.prank(carol);
+        gas.unlock(1);
+
+        uint256 frozen = gas.shares(fee);
+        assertGt(frozen, 0, "first fee mint");
+        assertGt(gas.supplyOf(fee), 0, "fee shares were not in this epoch");
+
+        oracle.setTick(800000);
+        _deposit(dave, 200 * UNIT);
+        assertEq(gas.epoch(), 2, "epoch did not move");
+        assertGt(gas.impaired(), 0, "shortfall was not booked");
+        assertEq(gas.rescueEpoch(), 1, "old epoch was not the rescue book");
+        assertEq(gas.supplyOf(fee), 0, "old fee shares stayed in the new book");
+
+        _deposit(fee, 1 * UNIT);
+        assertEq(gas.rescueOf(fee), frozen, "old fee shares were not frozen");
+        assertGt(gas.supplyOf(fee), 0, "new fee shares were not visible");
+        uint256 live = gas.shares(fee);
+        vm.prank(fee);
+        gas.withdraw(live);
+        assertGt(usdt.balanceOf(fee), 0, "fee could not withdraw the new shares");
+    }
+
     function testGasCashShortWithdrawDoesNotBurnTheClaim() public {
         _deposit(alice, 100 * UNIT);
         vm.deal(carol, 400 ether);
