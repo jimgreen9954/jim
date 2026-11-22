@@ -5,7 +5,6 @@ import { PoolSpot } from "@/components/exchange/pool-spot";
 import { useExchange } from "@/lib/exchange-store";
 import type { DeskView } from "@/components/exchange/desk-chrome";
 import { currentAccount, onAccount } from "@/lib/wallet";
-import { BSC_SAFE, XLAYER_SAFE } from "@/lib/chain-marks";
 import { selectDesk, type Desk } from "@/lib/perp";
 
 const RedGift = lazy(() =>
@@ -301,53 +300,52 @@ export function DeskHome({
 }
 
 function RebateShip({ zh }: { zh: boolean }) {
-  const [account, setAccount] = useState<string | null>(currentAccount());
-  const [on, setOn] = useState(true);
+  const [gone, setGone] = useState<{ bsc: boolean; xlayer: boolean }>({ bsc: false, xlayer: false });
   const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
-  useEffect(() => onAccount(setAccount), []);
-  const who = account?.toLowerCase() ?? "";
-  const chain = who === BSC_SAFE.toLowerCase() ? "bsc" : who === XLAYER_SAFE.toLowerCase() ? "xlayer" : null;
+  const [busy, setBusy] = useState<"bsc" | "xlayer" | null>(null);
   useEffect(() => {
-    if (!chain) return;
     let dead = false;
     void import("@/lib/seal-rebate")
-      .then(({ nextReady }) => nextReady(chain))
-      .then((ready) => {
-        if (!dead) setOn(ready);
+      .then(async ({ nextReady }) => {
+        const [bsc, xlayer] = await Promise.all([nextReady("bsc"), nextReady("xlayer")]);
+        if (!dead) setGone({ bsc, xlayer });
       })
       .catch(() => {
-        if (!dead) setOn(false);
+        if (!dead) setGone({ bsc: false, xlayer: false });
       });
     return () => {
       dead = true;
     };
-  }, [chain, note]);
-  if (!chain || on) return null;
+  }, [note]);
+  if (gone.bsc && gone.xlayer) return null;
+  const place = (chain: "bsc" | "xlayer") => {
+    setBusy(chain);
+    setNote("");
+    void import("@/lib/seal-rebate")
+      .then(({ deployRebate }) => deployRebate(chain))
+      .then(() => {
+        setGone((now) => ({ ...now, [chain]: true }));
+        setNote(zh ? "新返佣已放上。领取仍走旧合约，等余额转过去再换。" : "The new rebate is in place. Claims stay on the old contract until its balance is moved.");
+      })
+      .catch(() => {
+        setNote(zh ? "没放上。请换成这条链的多签再点一次。" : "It was not placed. Switch to this chain's multisig and tap again.");
+      })
+      .finally(() => setBusy(null));
+  };
   return (
     <div className="border-b border-gold px-3 py-2">
-      <button
-        type="button"
-        className="min-h-11 w-full border border-gold text-sm"
-        disabled={busy}
-        onClick={() => {
-          if (!account) return;
-          setBusy(true);
-          setNote("");
-          void import("@/lib/seal-rebate")
-            .then(({ deployRebate }) => deployRebate(chain))
-            .then(() => {
-              setOn(true);
-              setNote(zh ? "新返佣已放上。领取仍走旧合约，等余额转过去再换。" : "The new rebate is in place. Claims stay on the old contract until its balance is moved.");
-            })
-            .catch(() => {
-              setNote(zh ? "没放上。确认这是这条链的多签，再点一次。" : "It was not placed. Use this chain's multisig and tap again.");
-            })
-            .finally(() => setBusy(false));
-        }}
-      >
-        {chain === "bsc" ? (zh ? "BSC 部署新返佣" : "Deploy the BSC rebate") : zh ? "X Layer 部署新返佣" : "Deploy the X Layer rebate"}
-      </button>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        {gone.bsc ? null : (
+          <button type="button" className="min-h-11 flex-1 border border-gold text-sm" disabled={busy != null} onClick={() => place("bsc")}>
+            {busy === "bsc" ? (zh ? "签名中" : "Signing") : zh ? "BSC 部署新返佣" : "Deploy the BSC rebate"}
+          </button>
+        )}
+        {gone.xlayer ? null : (
+          <button type="button" className="min-h-11 flex-1 border border-gold text-sm" disabled={busy != null} onClick={() => place("xlayer")}>
+            {busy === "xlayer" ? (zh ? "签名中" : "Signing") : zh ? "X Layer 部署新返佣" : "Deploy the X Layer rebate"}
+          </button>
+        )}
+      </div>
       {note ? <p className="mt-1 text-center text-xs text-ink/70">{note}</p> : null}
     </div>
   );
