@@ -26,7 +26,7 @@ function failText(err: unknown, zh: boolean): string {
   if (code === "price") return zh ? "限价要在 0.01 到 100000 之间。" : "Limit price must be from 0.01 to 100000.";
   if (code === "lev") return zh ? "杠杆要在 1 到 50 之间。" : "Leverage must be from 1 to 50.";
   if (code === "usdt") return zh ? "余额不够。" : "Balance is not enough.";
-  if (code === "idle") return zh ? "闲置现金不够取出这一笔。已部署合约有仓时，仍可能让别人先取走现金。" : "Idle cash cannot cover this withdrawal. On the deployed vault, someone can still take cash while a position is open.";
+  if (code === "idle") return zh ? "闲置现金不够取出这一笔。" : "Idle cash cannot cover this withdrawal.";
   if (code === "flat") return zh ? "金库还有挂单或仓位。结清以后才能存入或取出。" : "The vault still has a quote or a position. Deposit and withdrawal wait until it is flat.";
   if (code === "token") return zh ? "这口金库的稳定币不在已知名单里，页面不猜它的小数位。" : "This vault's token is not a known stablecoin. The page will not guess its decimals.";
   if (code === "nowallet") return zh ? "先连接钱包。" : "Connect a wallet first.";

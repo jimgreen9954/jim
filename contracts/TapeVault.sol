@@ -122,8 +122,8 @@ contract TapeVault {
             }
             skipHang = id;
             IBook(book).cancel(id);
-            skipHang = 0;
             _sync();
+            skipHang = 0;
             guard++;
         }
         guard = 0;
