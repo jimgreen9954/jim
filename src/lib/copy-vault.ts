@@ -292,8 +292,28 @@ async function wait(chain: VaultChain, hash: Hex): Promise<void> {
   throw new Error("pending");
 }
 
-export async function depositVault(_chain: VaultChain, _amount: string): Promise<void> {
-  throw new Error("halt");
+async function allow(chain: VaultChain, from: string, token: Hex, vault: Hex, amount: bigint) {
+  const allowance = await view<bigint>(chain, token, erc20, "allowance", [from, vault]);
+  if (allowance >= amount) return;
+  if (allowance > 0n) {
+    await wait(chain, await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [vault, 0n] })));
+  }
+  await wait(chain, await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [vault, amount] })));
+}
+
+export async function depositVault(chain: VaultChain, amount: string): Promise<void> {
+  const bound = await binding(chain);
+  if (bound.decimals == null) throw new Error("token");
+  const qty = units(amount, bound.decimals);
+  if (qty === 0n) throw new Error("amount");
+  const from = await signer(chain);
+  const vault = vaultAddress(chain);
+  const have = await view<bigint>(chain, bound.token, erc20, "balanceOf", [from as Hex]);
+  if (have < qty) throw new Error("usdt");
+  const state = await readCopyVault(chain, from);
+  if (state.quotes.length > 0 || state.deals.length > 0 || state.locked > 0n) throw new Error("flat");
+  await allow(chain, from, bound.token, vault, qty);
+  await wait(chain, await send(from, vault, encodeFunctionData({ abi: vaultAbi, functionName: "deposit", args: [qty] })));
 }
 
 export async function withdrawVault(chain: VaultChain, amount: string): Promise<void> {
@@ -311,12 +331,32 @@ export async function withdrawVault(chain: VaultChain, amount: string): Promise<
   await wait(chain, await send(from, vaultAddress(chain), data));
 }
 
-export async function openVault(_chain: VaultChain, _long: boolean, _margin: string, _lev: number, _price: string): Promise<void> {
-  throw new Error("halt");
+export async function openVault(chain: VaultChain, long: boolean, margin: string, lev: number, price: string): Promise<void> {
+  const bound = await binding(chain);
+  if (bound.decimals == null) throw new Error("token");
+  const qty = units(margin, bound.decimals);
+  const px = units(price, 18);
+  const unit = 10n ** BigInt(bound.decimals);
+  if (!Number.isInteger(lev) || lev < 1 || lev > 50) throw new Error("lev");
+  if (qty < unit || qty > unit * 500n) throw new Error("margin");
+  if (px < units("0.01", 18) || px > units("100000", 18)) throw new Error("price");
+  const from = await signer(chain);
+  if (from.toLowerCase() !== bound.leader.toLowerCase()) throw new Error("leader");
+  const data = encodeFunctionData({ abi: vaultAbi, functionName: "open", args: [long, qty, lev, px] });
+  await wait(chain, await send(from, vaultAddress(chain), data));
 }
 
-export async function takeVault(_chain: VaultChain, _quoteId: bigint, _margin: string, _lev: number): Promise<void> {
-  throw new Error("halt");
+export async function takeVault(chain: VaultChain, quoteId: bigint, margin: string, lev: number): Promise<void> {
+  const bound = await binding(chain);
+  if (bound.decimals == null) throw new Error("token");
+  const qty = units(margin, bound.decimals);
+  const unit = 10n ** BigInt(bound.decimals);
+  if (!Number.isInteger(lev) || lev < 1 || lev > 50) throw new Error("lev");
+  if (qty < unit || qty > unit * 500n) throw new Error("margin");
+  const from = await signer(chain);
+  if (from.toLowerCase() !== bound.leader.toLowerCase()) throw new Error("leader");
+  const data = encodeFunctionData({ abi: vaultAbi, functionName: "take", args: [quoteId, qty, lev] });
+  await wait(chain, await send(from, vaultAddress(chain), data));
 }
 
 export async function cancelVault(chain: VaultChain, quoteId: bigint): Promise<void> {

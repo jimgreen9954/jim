@@ -3,6 +3,7 @@ import {
   askVaultExit,
   cancelVault,
   closeVault,
+  depositVault,
   forceVaultFlat,
   openVault,
   readCopyVault,
@@ -26,7 +27,7 @@ function failText(err: unknown, zh: boolean): string {
   if (code === "lev") return zh ? "杠杆要在 1 到 50 之间。" : "Leverage must be from 1 to 50.";
   if (code === "usdt") return zh ? "余额不够。" : "Balance is not enough.";
   if (code === "idle") return zh ? "闲置现金不够取出这一笔。已部署合约有仓时，仍可能让别人先取走现金。" : "Idle cash cannot cover this withdrawal. On the deployed vault, someone can still take cash while a position is open.";
-  if (code === "halt") return zh ? "新的存入已关闭。页面不会再发起存款。" : "New deposits are closed. This page will not send one.";
+  if (code === "flat") return zh ? "金库还有挂单或仓位。结清以后才能存入或取出。" : "The vault still has a quote or a position. Deposit and withdrawal wait until it is flat.";
   if (code === "token") return zh ? "这口金库的稳定币不在已知名单里，页面不猜它的小数位。" : "This vault's token is not a known stablecoin. The page will not guess its decimals.";
   if (code === "nowallet") return zh ? "先连接钱包。" : "Connect a wallet first.";
   if (code === "leader") return zh ? "只有这口金库链上的带单地址能下单。" : "Only the leader stored on this vault can trade.";
@@ -150,14 +151,14 @@ export function CopyVault({ zh, account }: { zh: boolean; account: string | null
         </label>
         <button
           type="button"
-          disabled={busy || side === "in"}
+          disabled={busy}
           className="mt-2 min-h-11 w-full bg-ink text-paper disabled:opacity-40"
           onClick={() => {
-            if (side === "in") return;
-            run(() => withdrawVault(chain, amount), zh ? "已取出。" : "Withdrawn.");
+            if (side === "in") run(() => depositVault(chain, amount), zh ? "已存入。" : "Deposited.");
+            else run(() => withdrawVault(chain, amount), zh ? "已取出。" : "Withdrawn.");
           }}
         >
-          {side === "in" ? (zh ? "份额存入已关闭" : "Share deposits are closed") : zh ? "取出份额" : "Withdraw shares"}
+          {side === "in" ? (zh ? "存入份额" : "Deposit shares") : zh ? "取出份额" : "Withdraw shares"}
         </button>
         <div className="mt-2 grid gap-2 sm:grid-cols-2">
           <button
@@ -194,8 +195,8 @@ export function CopyVault({ zh, account }: { zh: boolean; account: string | null
             </p>
             <p>
               {zh
-                ? "份额存入已在页面关闭。已有份额可以取出。上面的净值是现金加上锁着的保证金，不是未实现盈亏。"
-                : "Share deposits are closed on this page. Existing shares can be withdrawn. Equity on screen is cash plus locked margin, not unrealized PnL."}
+                ? "金库没有挂单和仓位时可以存入和取出。存入只从当前钱包扣稳定币，取出只付回这个钱包。带单地址不能把存款转到自己的钱包。"
+                : "A deposit or a withdrawal needs the vault flat. A deposit pulls stablecoin only from this wallet, and a withdrawal pays only this wallet. The leader cannot move deposits to its own wallet."}
             </p>
             <p>
               {zh
@@ -245,17 +246,16 @@ export function CopyVault({ zh, account }: { zh: boolean; account: string | null
           </div>
           <button
             type="button"
-            disabled={busy || chain === "xlayer"}
+            disabled={busy}
             className="mt-2 min-h-11 w-full border border-gold disabled:opacity-40"
             onClick={() => {
-              if (chain === "xlayer") return;
               run(
                 () => openVault(chain, long, margin, Number(lev), price),
                 zh ? "已挂出。" : "Posted.",
               );
             }}
           >
-            {chain === "xlayer" ? (zh ? "旧金库只取钱" : "Old vault, withdraw only") : zh ? "挂单" : "Post"}
+            {zh ? "挂单" : "Post"}
           </button>
           <ul className="mt-3 grid gap-2">
             {view?.quotes.map((quote) => (
