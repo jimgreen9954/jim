@@ -267,6 +267,38 @@ export async function fundRebate(chain: RebateChain, text: string): Promise<void
   await send(chain, from, address as Hex, data, 150_000n);
 }
 
+const OLD_CLERK = "0x585d2DF4B8fDDA783B074555e6F3787e3fCB39D7" as Hex;
+
+export async function oldBscRebateLeft(): Promise<bigint> {
+  return client("bsc").readContract({
+    address: BSC.usdt,
+    abi: erc20,
+    functionName: "balanceOf",
+    args: [LOCKED_REBATE.bsc],
+  });
+}
+
+export async function moveOldBscRebate(): Promise<void> {
+  const from = await connectBsc();
+  if (from.toLowerCase() !== OLD_CLERK.toLowerCase()) throw new Error("clerk");
+  const old = LOCKED_REBATE.bsc;
+  const next = nextRebate("bsc");
+  const bal = await oldBscRebateLeft();
+  if (bal === 0n) return;
+  const pull = encodeFunctionData({ abi: rebateAbi, functionName: "withdraw", args: [bal] });
+  await send("bsc", from, old, pull, 150_000n);
+  const mine = await client("bsc").readContract({
+    address: BSC.usdt,
+    abi: erc20,
+    functionName: "balanceOf",
+    args: [from as Hex],
+  });
+  const pay = mine < bal ? mine : bal;
+  if (pay === 0n) throw new Error("amount");
+  const give = encodeFunctionData({ abi: erc20, functionName: "transfer", args: [next, pay] });
+  await send("bsc", from, BSC.usdt, give, 120_000n);
+}
+
 export async function withdrawRebate(chain: RebateChain, text: string): Promise<void> {
   const address = savedRebate(chain);
   const from = chain === "xlayer" ? await connectXLayer() : await connectBsc();
