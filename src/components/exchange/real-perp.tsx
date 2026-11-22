@@ -2899,21 +2899,19 @@ export function RealPerp({
                                               ? /* @__PURE__ */ jsx("p", {
                                                   className: "desk-extra",
                                                   children: (() => {
-                                                    const steps =
-                                                      settle > 0 && poolPx > 0
-                                                        ? Math.abs(Math.log(poolPx / settle) / Math.log(1.0001))
-                                                        : null;
-                                                    const left =
-                                                      steps != null && Number.isFinite(steps) && steps > 99
-                                                        ? Math.ceil((steps - 99) / 50)
-                                                        : 0;
-                                                    return left > 0
+                                                    const left = bookStat?.steps;
+                                                    const mins = left != null && left > 0 ? Math.max(1, Math.ceil((left - 1) / 2)) : 0;
+                                                    return left != null && left > 0
                                                       ? lang === "zh"
-                                                        ? `价格同步中，还需约 ${left} 次。每 30 秒点一次「更新价格」，每次最多走近约 0.5%。现价和均价回到约 1% 以内才能开仓。`
-                                                        : `The price is catching up, about ${left} more taps. Tap “Update the price” once every 30 seconds. Each tap moves at most about 0.5%. Opens wait until spot and the average are within about 1%.`
+                                                        ? left >= 48
+                                                          ? "价格同步中，至少还需约 48 次，大约 24 分钟。每 30 秒点一次「更新价格」。旧样本要等满 10 分钟才会退出均价。"
+                                                          : `价格同步中，还需 ${left} 次，大约 ${mins} 分钟。每 30 秒点一次「更新价格」。这是按 10 分钟均价算的，不是按每次 0.5%。`
+                                                        : left >= 48
+                                                          ? "The price is catching up. At least about 48 taps, about 24 minutes. Tap “Update the price” every 30 seconds. Old samples leave the average only after 10 minutes."
+                                                          : `The price is catching up. ${left} more taps, about ${mins} minutes, one every 30 seconds. This counts the 10-minute average, not a 0.5% step.`
                                                       : lang === "zh"
-                                                        ? "价格暂停中，只能平仓。点「更新价格」每 30 秒走近一步，每次最多约 0.5%。"
-                                                        : "The price is paused. Close only. “Update the price” moves one step every 30 seconds, at most about 0.5%.";
+                                                        ? "价格暂停中，只能平仓。点「更新价格」每 30 秒记一次，不会自己连着记。"
+                                                        : "The price is paused. Close only. “Update the price” records once every 30 seconds. It does not keep going.";
                                                   })(),
                                                 })
                                               : null,

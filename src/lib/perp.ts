@@ -279,6 +279,8 @@ export type SyncBookState = {
   room: bigint;
   samples: number | null;
   guard: boolean | null;
+  /** Taps left if the user calls sync once every 30 seconds. Null when it cannot be counted. */
+  steps: number | null;
   decimals: number;
 };
 
@@ -299,7 +301,8 @@ export async function syncBookState(coin: "up" | "tape" | "fab"): Promise<SyncBo
       sampleCount(which, mark),
       markGuard(coin),
     ]);
-    return { cap, insurance, backed: insurance * 20n, openNotional, room, samples, guard, decimals };
+    const steps = guard === false ? await syncSteps(c, coin, mark) : guard ? 0 : null;
+    return { cap, insurance, backed: insurance * 20n, openNotional, room, samples, guard, steps, decimals };
   } catch {
     return null;
   }
@@ -343,6 +346,155 @@ async function sampleCount(which: Desk, mark: Hex): Promise<number | null> {
   } catch {
     return null;
   }
+}
+
+const STEP_TICKS = 50;
+const BAND_TICKS = 99;
+const STEP_GAP = 30;
+const STEP_WINDOW = 600;
+const STEP_CAP = 48;
+
+function logTick(human: bigint): number {
+  if (human <= 0n) return 0;
+  if (human === 10n ** 18n) return 0;
+  const below = human < 10n ** 18n;
+  const x = below ? 10n ** 36n / human : human;
+  const n = Math.floor(Math.log(Number(x) / 1e18) / Math.log(1.0001));
+  return below ? -n : n;
+}
+
+function pxTick(px: bigint): number {
+  const x = Number(px);
+  if (!(x > 0)) return 0;
+  return Math.round(Math.log(1e8 / x) / Math.log(1.0001));
+}
+
+function legTwap(rows: { at: number; tick: number }[], count: number, cursor: number, now: number): number {
+  const start = now > STEP_WINDOW ? now - STEP_WINDOW : 0;
+  let carry = rows[0]?.tick ?? 0;
+  let from = start;
+  let area = 0;
+  for (let k = 0; k < count; k++) {
+    const row = rows[(cursor + 24 - count + k) % 24];
+    if (!row) continue;
+    if (row.at <= start) {
+      carry = row.tick;
+      continue;
+    }
+    if (row.at > from) area += carry * (row.at - from);
+    carry = row.tick;
+    from = row.at;
+  }
+  if (now > from) area += carry * (now - from);
+  const span = now - start;
+  if (span === 0) return carry;
+  return Math.trunc(area / span);
+}
+
+/** How many sync() calls, one every 30 seconds, until the 10-minute average is inside the band. */
+function tapsUntilBand(
+  rows: { at: number; tick: number }[],
+  count: number,
+  cursor: number,
+  lastTick: number,
+  lastAt: number,
+  now: number,
+  target: number,
+  other: number,
+): number | null {
+  const gap = (twap: number) => Math.abs(target - twap + other);
+  if (Math.abs(other) > BAND_TICKS) return null;
+  if (gap(legTwap(rows, count, cursor, now)) <= BAND_TICKS) return 0;
+  const book = rows.map((row) => ({ ...row }));
+  let n = count;
+  let cur = cursor;
+  let tick = lastTick;
+  let at = Math.max(now, lastAt + STEP_GAP);
+  for (let step = 1; step <= STEP_CAP; step++) {
+    let next = target;
+    if (next > tick + STEP_TICKS) next = tick + STEP_TICKS;
+    if (next < tick - STEP_TICKS) next = tick - STEP_TICKS;
+    book[cur] = { at, tick: next };
+    cur = (cur + 1) % 24;
+    if (n < 24) n += 1;
+    tick = next;
+    if (gap(legTwap(book, n, cur, at)) <= BAND_TICKS) return step;
+    at += STEP_GAP;
+  }
+  return STEP_CAP;
+}
+
+async function syncSteps(
+  c: Awaited<ReturnType<typeof deskClient>>,
+  coin: "up" | "tape" | "fab",
+  mark: Hex,
+): Promise<number | null> {
+  try {
+    const sampleAbi = [{ name: "samples", type: "function", stateMutability: "view", inputs: [{ type: "uint256" }], outputs: [{ type: "uint32" }, { type: "int24" }] }] as const;
+    const i24 = (name: "lastTick" | "legTwap") =>
+      [{ name, type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "int24" }] }] as const;
+    const u8 = (name: "count" | "cursor") =>
+      [{ name, type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint8" }] }] as const;
+    const px = (name: "spotUsd" | "mark") =>
+      [{ name, type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] }] as const;
+    const [count, cursor, lastTick, lastAt, twap, spotPx, markPx, rows, target] = await Promise.all([
+      c.readContract({ address: mark, abi: u8("count"), functionName: "count" }),
+      c.readContract({ address: mark, abi: u8("cursor"), functionName: "cursor" }),
+      c.readContract({ address: mark, abi: i24("lastTick"), functionName: "lastTick" }),
+      c.readContract({ address: mark, abi: [{ name: "lastAt", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint32" }] }] as const, functionName: "lastAt" }),
+      c.readContract({ address: mark, abi: i24("legTwap"), functionName: "legTwap" }),
+      c.readContract({ address: mark, abi: px("spotUsd"), functionName: "spotUsd" }),
+      c.readContract({ address: mark, abi: px("mark"), functionName: "mark" }),
+      Promise.all(Array.from({ length: 24 }, (_, i) => c.readContract({ address: mark, abi: sampleAbi, functionName: "samples", args: [BigInt(i)] }))),
+      legTarget(c, coin, mark),
+    ]);
+    if (target == null) return null;
+    const book = rows.map((row) => ({ at: Number(row[0]), tick: Number(row[1]) }));
+    const other = pxTick(markPx) - pxTick(spotPx) - (target - Number(twap));
+    return tapsUntilBand(book, Number(count), Number(cursor), Number(lastTick), Number(lastAt), Math.floor(Date.now() / 1000), target, other);
+  } catch {
+    return null;
+  }
+}
+
+async function legTarget(
+  c: Awaited<ReturnType<typeof deskClient>>,
+  coin: "up" | "tape" | "fab",
+  mark: Hex,
+): Promise<number | null> {
+  if (coin === "tape") {
+    const pool = await c.readContract({ address: mark, abi: [{ name: "tapePool", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] }] as const, functionName: "tapePool" });
+    const out = await c.readContract({
+      address: pool,
+      abi: [{ name: "previewSwap", type: "function", stateMutability: "view", inputs: [{ type: "uint8" }, { type: "bool" }, { type: "uint256" }], outputs: [{ type: "uint256" }, { type: "uint256" }] }] as const,
+      functionName: "previewSwap",
+      args: [1, true, 100_000_000n],
+    });
+    return out[1] > 0n ? logTick(out[1]) : null;
+  }
+  if (coin === "up") {
+    const pool = await c.readContract({ address: mark, abi: [{ name: "upPool", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] }] as const, functionName: "upPool" });
+    const out = await c.readContract({
+      address: pool,
+      abi: [{ name: "quoteSell", type: "function", stateMutability: "view", inputs: [{ type: "uint256" }], outputs: [{ type: "uint256" }, { type: "uint256" }, { type: "uint256" }, { type: "uint256" }, { type: "uint256" }] }] as const,
+      functionName: "quoteSell",
+      args: [10n ** 18n],
+    });
+    return out[4] > 0n ? logTick(out[4] * 10n ** 10n) : null;
+  }
+  const [view, poolId] = await Promise.all([
+    c.readContract({ address: mark, abi: [{ name: "stateView", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] }] as const, functionName: "stateView" }),
+    c.readContract({ address: mark, abi: [{ name: "poolId", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "bytes32" }] }] as const, functionName: "poolId" }),
+  ]);
+  const slot = await c.readContract({
+    address: view,
+    abi: [{ name: "getSlot0", type: "function", stateMutability: "view", inputs: [{ type: "bytes32" }], outputs: [{ type: "uint160" }, { type: "int24" }, { type: "uint24" }, { type: "uint24" }] }] as const,
+    functionName: "getSlot0",
+    args: [poolId],
+  });
+  if (slot[0] === 0n) return null;
+  const human = (1n << 192n) * 10n ** 18n / (slot[0] * slot[0]);
+  return human > 0n ? logTick(human) : null;
 }
 
 /** UP opens show a warm-up line until about 10 minutes of notes are stored. */
