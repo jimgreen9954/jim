@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.37;
+pragma solidity 0.8.26;
 
 interface ITapeCircuits {
     function ownerOf(uint256 id) external view returns (address);
