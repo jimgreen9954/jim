@@ -953,8 +953,8 @@ export function RealPerp({
     else if (message === "gap")
       setNote(
         lang === "zh"
-          ? "标记和现价差超过约 1%。新开仓和强平停了，平仓还可以。点「更新价格」只走一步，大约 0.5%，不会自己连着走。"
-          : "Spot and the average differ by about 1%. New opens and liquidations are paused. Close still works. “Update the price” moves one step, about 0.5%. It does not keep going.",
+          ? "标记和现价差超过约 1%。新开仓和强平停了，平仓还可以。点「更新价格」每 30 秒走近一步，大约 0.5%，不会自己连着走。按钮旁写着大约还要几次。"
+          : "Spot and the average differ by about 1%. New opens and liquidations are paused. Close still works. “Update the price” moves one step every 30 seconds, about 0.5%. It does not keep going. The button says about how many taps are left.",
       );
     else if (message === "uphalt")
       setNote(
@@ -2898,10 +2898,23 @@ export function RealPerp({
                                             guardOn === false
                                               ? /* @__PURE__ */ jsx("p", {
                                                   className: "desk-extra",
-                                                  children:
-                                                    lang === "zh"
-                                                      ? "价格暂停中，只能平仓。"
-                                                      : "The price is paused. Close only.",
+                                                  children: (() => {
+                                                    const steps =
+                                                      settle > 0 && poolPx > 0
+                                                        ? Math.abs(Math.log(poolPx / settle) / Math.log(1.0001))
+                                                        : null;
+                                                    const left =
+                                                      steps != null && Number.isFinite(steps) && steps > 99
+                                                        ? Math.ceil((steps - 99) / 50)
+                                                        : 0;
+                                                    return left > 0
+                                                      ? lang === "zh"
+                                                        ? `价格同步中，还需约 ${left} 次。每 30 秒点一次「更新价格」，每次最多走近约 0.5%。现价和均价回到约 1% 以内才能开仓。`
+                                                        : `The price is catching up, about ${left} more taps. Tap “Update the price” once every 30 seconds. Each tap moves at most about 0.5%. Opens wait until spot and the average are within about 1%.`
+                                                      : lang === "zh"
+                                                        ? "价格暂停中，只能平仓。点「更新价格」每 30 秒走近一步，每次最多约 0.5%。"
+                                                        : "The price is paused. Close only. “Update the price” moves one step every 30 seconds, at most about 0.5%.";
+                                                  })(),
                                                 })
                                               : null,
                                             bookStat && bookStat.samples != null && bookStat.samples < 20
