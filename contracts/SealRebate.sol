@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 interface IERC20 {
     function transfer(address, uint256) external returns (bool);
     function transferFrom(address, address, uint256) external returns (bool);
+    function balanceOf(address) external view returns (uint256);
 }
 
 interface ICircuits {
@@ -63,6 +64,12 @@ contract SealRebate {
     mapping(address => mapping(uint256 => mapping(address => bool))) public claimed;
     mapping(address => uint256) public claimedWeek;
     uint256 private entered = 1;
+    uint256 public constant WAIT = 1 days;
+    uint256 public queued;
+    uint256 public readyAt;
+
+    event Queued(uint256 amount, uint256 readyAt);
+    event Withdrawn(uint256 amount);
 
     error Bad();
 
@@ -94,9 +101,25 @@ contract SealRebate {
         _take(msg.sender, amount);
     }
 
-    function withdraw(uint256 amount) external lock {
+    function queue(uint256 amount) external {
         if (msg.sender != clerk || amount == 0) revert Bad();
-        _pay(msg.sender, amount);
+        if (usdt.balanceOf(address(this)) < amount) revert Bad();
+        queued = amount;
+        readyAt = block.timestamp + WAIT;
+        emit Queued(amount, readyAt);
+    }
+
+    /// Pays the queued amount, or whatever claims have left, after the wait.
+    function withdraw() external lock {
+        if (msg.sender != clerk || queued == 0 || block.timestamp < readyAt) revert Bad();
+        uint256 amount = queued;
+        uint256 bal = usdt.balanceOf(address(this));
+        if (bal < amount) amount = bal;
+        queued = 0;
+        readyAt = 0;
+        if (amount == 0) revert Bad();
+        _pay(clerk, amount);
+        emit Withdrawn(amount);
     }
 
     function preview(address book, uint256 dealId, address user) external view returns (uint256) {
