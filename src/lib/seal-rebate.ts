@@ -13,7 +13,7 @@ import {
   type Hex,
 } from "viem";
 import { BSC, connectBsc } from "@/lib/bsc";
-import { assertSafeDeployer } from "@/lib/chain-marks";
+import { assertSafeDeployer, safeFor } from "@/lib/chain-marks";
 import { X_USDT } from "@/lib/perp";
 import { SEAL_REBATE_BYTECODE } from "@/lib/seal-rebate-artifact";
 import { getProvider } from "@/lib/wallet";
@@ -23,7 +23,7 @@ export type RebateChain = "bsc" | "xlayer";
 
 const ZERO = "0x0000000000000000000000000000000000000000" as Hex;
 const FACTORY = "0x4e59b44847b379578588920cA78FbF26c0B4956C" as Hex;
-const REBATE_SALT = keccak256(toHex("TAPELIQUID-seal-v4"));
+const NEXT_SALT = keccak256(toHex("TAPELIQUID-seal-wait-v1"));
 
 const xClient = createPublicClient({ transport: http(XLAYER.rpc) });
 const bscClient = createPublicClient({ transport: http(BSC.rpc) });
@@ -101,37 +101,48 @@ async function send(chain: RebateChain, from: string, to: Hex, data: Hex, gas: b
   return hash;
 }
 
-function initOf(chain: RebateChain): Hex {
+function nextInit(chain: RebateChain): Hex {
+  const clerk = safeFor(chain);
   const args = encodeAbiParameters(
-    [{ type: "address" }, { type: "address" }, { type: "address" }, { type: "address" }, { type: "address" }, { type: "address" }],
+    [{ type: "address" }, { type: "address" }, { type: "address" }, { type: "address" }, { type: "address" }, { type: "address" }, { type: "address" }],
     chain === "xlayer"
-      ? [X_USDT, DEPLOYED.circuits, ZERO, CLAIM_X, ZERO, ZERO]
-      : [BSC.usdt, ZERO, CLAIM_GATE, CLAIM_BSC, ZERO, ZERO],
+      ? [X_USDT, DEPLOYED.circuits, ZERO, CLAIM_X, ZERO, ZERO, clerk]
+      : [BSC.usdt, ZERO, CLAIM_GATE, CLAIM_BSC, ZERO, ZERO, clerk],
   );
   return `${SEAL_REBATE_BYTECODE}${args.slice(2)}`;
 }
 
-function predict(init: Hex): Hex {
-  const hash = keccak256(concat(["0xff", FACTORY, REBATE_SALT, keccak256(init)]));
+function predict(init: Hex, salt: Hex): Hex {
+  const hash = keccak256(concat(["0xff", FACTORY, salt, keccak256(init)]));
   return getAddress(`0x${hash.slice(-40)}`);
 }
 
+/** Live pools. Claims stay here until the next copy is funded. */
 export const LOCKED_REBATE = {
-  xlayer: predict(initOf("xlayer")),
-  bsc: predict(initOf("bsc")),
+  xlayer: "0xCbc3Bd75199E8168ecd0Ebfd33051c7642223c8c" as Hex,
+  bsc: "0x864EBcf258855f674255D78195598B2fbFAaB8Db" as Hex,
 } as const;
 
+export function nextRebate(chain: RebateChain): Hex {
+  return predict(nextInit(chain), NEXT_SALT);
+}
+
 export async function deployRebate(chain: RebateChain): Promise<string> {
-  const address = LOCKED_REBATE[chain];
+  const address = nextRebate(chain);
   const existing = await client(chain).getBytecode({ address });
   if (existing && existing !== "0x") return address;
   const from = chain === "xlayer" ? await connectXLayer() : await connectBsc();
   assertSafeDeployer(chain, from);
-  const data = concat([REBATE_SALT, initOf(chain)]);
+  const data = concat([NEXT_SALT, nextInit(chain)]);
   await send(chain, from, FACTORY, data, 8_000_000n);
   const code = await client(chain).getBytecode({ address });
   if (!code || code === "0x") throw new Error("deploy");
   return address;
+}
+
+export async function nextReady(chain: RebateChain): Promise<boolean> {
+  const code = await client(chain).getBytecode({ address: nextRebate(chain) });
+  return Boolean(code && code !== "0x");
 }
 
 export type RebateState = {
