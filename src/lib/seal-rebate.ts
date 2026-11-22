@@ -32,7 +32,7 @@ const rebateAbi = [
   { name: "qualify", type: "function", stateMutability: "nonpayable", inputs: [{ name: "a", type: "uint256" }, { name: "b", type: "uint256" }, { name: "c", type: "uint256" }], outputs: [] },
   { name: "pass", type: "function", stateMutability: "nonpayable", inputs: [{ name: "who", type: "address" }], outputs: [] },
   { name: "fund", type: "function", stateMutability: "nonpayable", inputs: [{ name: "amount", type: "uint256" }], outputs: [] },
-  { name: "withdraw", type: "function", stateMutability: "nonpayable", inputs: [{ name: "amount", type: "uint256" }], outputs: [] },
+  { name: "queue", type: "function", stateMutability: "nonpayable", inputs: [{ name: "amount", type: "uint256" }], outputs: [] },
   { name: "claim", type: "function", stateMutability: "nonpayable", inputs: [{ name: "books_", type: "address[]" }, { name: "ids", type: "uint256[]" }], outputs: [] },
   { name: "preview", type: "function", stateMutability: "view", inputs: [{ name: "book", type: "address" }, { name: "dealId", type: "uint256" }, { name: "user", type: "address" }], outputs: [{ name: "", type: "uint256" }] },
   { name: "weekOf", type: "function", stateMutability: "pure", inputs: [{ name: "ts", type: "uint256" }], outputs: [{ name: "", type: "uint256" }] },
@@ -120,8 +120,8 @@ function predict(init: Hex, salt: Hex): Hex {
 
 /** Live pools. Claims stay here until the next copy is funded. */
 export const LOCKED_REBATE = {
-  xlayer: "0xCbc3Bd75199E8168ecd0Ebfd33051c7642223c8c" as Hex,
-  bsc: "0x864EBcf258855f674255D78195598B2fbFAaB8Db" as Hex,
+  xlayer: "0xc1eBF74f70cb228A7a4863c3F31271E68585E75b" as Hex,
+  bsc: "0xD3B459d2BaA2d24A3661E9C144D59b8b998324E2" as Hex,
 } as const;
 
 export function nextRebate(chain: RebateChain): Hex {
@@ -268,38 +268,6 @@ export async function fundRebate(chain: RebateChain, text: string): Promise<void
   await send(chain, from, address as Hex, data, 150_000n);
 }
 
-const OLD_CLERK = "0x585d2DF4B8fDDA783B074555e6F3787e3fCB39D7" as Hex;
-
-export async function oldBscRebateLeft(): Promise<bigint> {
-  return client("bsc").readContract({
-    address: BSC.usdt,
-    abi: erc20,
-    functionName: "balanceOf",
-    args: [LOCKED_REBATE.bsc],
-  });
-}
-
-export async function moveOldBscRebate(): Promise<void> {
-  const from = await connectBsc();
-  if (from.toLowerCase() !== OLD_CLERK.toLowerCase()) throw new Error("clerk");
-  const old = LOCKED_REBATE.bsc;
-  const next = nextRebate("bsc");
-  const bal = await oldBscRebateLeft();
-  if (bal === 0n) return;
-  const pull = encodeFunctionData({ abi: rebateAbi, functionName: "withdraw", args: [bal] });
-  await send("bsc", from, old, pull, 150_000n);
-  const mine = await client("bsc").readContract({
-    address: BSC.usdt,
-    abi: erc20,
-    functionName: "balanceOf",
-    args: [from as Hex],
-  });
-  const pay = mine < bal ? mine : bal;
-  if (pay === 0n) throw new Error("amount");
-  const give = encodeFunctionData({ abi: erc20, functionName: "transfer", args: [next, pay] });
-  await send("bsc", from, BSC.usdt, give, 120_000n);
-}
-
 export async function withdrawRebate(chain: RebateChain, text: string): Promise<void> {
   const address = savedRebate(chain);
   const from = chain === "xlayer" ? await connectXLayer() : await connectBsc();
@@ -308,7 +276,7 @@ export async function withdrawRebate(chain: RebateChain, text: string): Promise<
   const decimals = Number(await c.readContract({ address: token, abi: erc20, functionName: "decimals" }));
   const amount = parseUnits(text.trim(), decimals);
   if (amount <= 0n) throw new Error("amount");
-  const data = encodeFunctionData({ abi: rebateAbi, functionName: "withdraw", args: [amount] });
+  const data = encodeFunctionData({ abi: rebateAbi, functionName: "queue", args: [amount] });
   await send(chain, from, address as Hex, data, 150_000n);
 }
 

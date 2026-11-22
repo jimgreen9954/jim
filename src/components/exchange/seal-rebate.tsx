@@ -215,12 +215,12 @@ export function SealRebateBox() {
                 onClick={() =>
                   run(
                     () => withdrawRebate(chain, amount),
-                    zh ? "已从池子取回。" : "Withdrawn from the pool.",
+                    zh ? "已排队。满 24 小时后，多签才能取走。" : "Queued. The multisig can take it after 24 hours.",
                   )
                 }
                 className="min-h-11 border border-gold px-3 disabled:opacity-60"
               >
-                {zh ? "取回" : "Withdraw"}
+                {zh ? "排队取回" : "Queue"}
               </button>
             ) : null}
           </div>

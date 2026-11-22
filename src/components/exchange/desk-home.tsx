@@ -217,7 +217,6 @@ export function DeskHome({
 
   return (
     <>
-      <OldPoolMove zh={zh} />
       <ArriveHint zh={zh} />
       {showPerp ? (
         <Suspense fallback={null}>
@@ -296,64 +295,6 @@ export function DeskHome({
         </Suspense>
       ) : null}
     </>
-  );
-}
-
-function OldPoolMove({ zh }: { zh: boolean }) {
-  const [left, setLeft] = useState<bigint | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState("");
-  useEffect(() => {
-    let dead = false;
-    void import("@/lib/seal-rebate")
-      .then(({ oldBscRebateLeft }) => oldBscRebateLeft())
-      .then((bal) => {
-        if (!dead) setLeft(bal);
-      })
-      .catch(() => {
-        if (!dead) setLeft(null);
-      });
-    return () => {
-      dead = true;
-    };
-  }, [note]);
-  if (left === 0n) return null;
-  return (
-    <div className="border-b border-gold px-3 py-2">
-      <p className="text-center text-xs text-ink/70">
-        {zh
-          ? "旧 BSC 返佣还有 10 USDT。用 0x585d…39D7 点下面，提出来并转入新合约。"
-          : "The old BSC rebate still holds 10 USDT. Use 0x585d…39D7, then tap to move it into the new contract."}
-      </p>
-      <button
-        type="button"
-        className="mt-2 min-h-11 w-full border border-gold text-sm"
-        disabled={busy}
-        onClick={() => {
-          setBusy(true);
-          setNote("");
-          void import("@/lib/seal-rebate")
-            .then(({ moveOldBscRebate }) => moveOldBscRebate())
-            .then(() => setNote(zh ? "已转入新合约。" : "Moved into the new contract."))
-            .catch((err: unknown) => {
-              const message = err instanceof Error ? err.message : "";
-              setNote(
-                message === "clerk"
-                  ? zh
-                    ? "这不是 0x585d…39D7。换成这个钱包再点。"
-                    : "This is not 0x585d…39D7. Switch to that wallet and tap again."
-                  : zh
-                    ? "没转成。看一下是不是 BSC，以及这个钱包有没有 BNB 付 gas。"
-                    : "It did not move. Check that you are on BSC and this wallet has BNB for gas.",
-              );
-            })
-            .finally(() => setBusy(false));
-        }}
-      >
-        {busy ? (zh ? "签名中，要确认两笔" : "Signing, two transactions") : zh ? "提出并转入新合约" : "Withdraw and move it"}
-      </button>
-      {note ? <p className="mt-1 text-center text-xs text-ink/70">{note}</p> : null}
-    </div>
   );
 }
 

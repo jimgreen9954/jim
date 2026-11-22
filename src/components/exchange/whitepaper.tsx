@@ -31,7 +31,7 @@ const zhBody: Section[] = [
  "UP、TAPE、FAB 页面已改签带 sync() 的本。UP 0xdcc4f9df12bd2550a2d9292f8894880a85822734，标记 0x4ae9c52a00f5911dc2e792d6761e289a6daf3aec。TAPE 0xe08f0f8e056e65e00b2f80cf63fbc0bfc78bab0d，标记 0x6a813faacf11bcbdcb0c13f83a19ba68dd7d85a7。FAB 0xb87a0d23a9d5c1f63c2dea9331fbaa1b0c027d0a，标记 0xa6e9f2d6e69ed49c038d120f7c407321951a495b。真钱已跑通存保险金、记价、开仓和平仓。谁都能调 sync()，只记价。记价时仓位已经安全，就清掉强平记录。现在每本保险金约 1.004，全体可开名义约 20。1 美元保证金的 50 倍名义是 50，开不了。要让 10 美元保证金开到 50 倍，这一本保险金至少要 25。手续费和强平罚金留在保险金。旧本里已经存入的保险金取不回来。",
  "已经换下的永续，页面不再新开，平仓仍可以签。核对时这些本都没有未平的仓。BSC 跟单金库仍绑着 0x89b2f4a2e0C07864172fB47fbDEa14411AF2e0E0，所以这一本还留着平仓路径。X Layer 金库 0x5d6eF9E36B591b50069DA8C535FB56dE73ad8EEe 和 BSC 金库 0xe9Ef9C5031015fA626eCE1cC8Dc8e5d213F591F5 的申请退出之后这两口都拒绝新开。0xe895122Ba5aF841704730B999a73F9562F5bd46E 短 14 字节，退出之后仍能开，",
  "页面不再发、也不再领随机红包。已经部署的旧合约仍用 prevrandao，改不了。X Layer 和 BSC 的 commit-reveal 红包都已经部署，领取仍走旧合约。",
- "新的 SealRebate 已由多签放上。BSC 0xD3B459d2BaA2d24A3661E9C144D59b8b998324E2，clerk 是 0xE51C19aE6E4261Ed329CC54F1120Cf0Ae09364Bd。X Layer 0xc1eBF74f70cb228A7a4863c3F31271E68585E75b，clerk 是 0xb4D6039394c8B97C3AC3234aa07011B564Fcb88c。提款要先排队，满 24 小时才能取。返佣先到先得，不为每个用户预留。旧份还在用：BSC 0x864EBcf258855f674255D78195598B2fbFAaB8Db 里还有 10 USDT，X Layer 0xCbc3Bd75199E8168ecd0Ebfd33051c7642223c8c 余额是 0。这两份的 clerk 仍是 0x585d2DF4B8fDDA783B074555e6F3787e3fCB39D7，能马上提走。领取先不换，等旧余额转进新合约再换。",
+ "领取已经改到新的 SealRebate。BSC 0xD3B459d2BaA2d24A3661E9C144D59b8b998324E2，里面是刚转来的 10 USDT，clerk 是 0xE51C19aE6E4261Ed329CC54F1120Cf0Ae09364Bd。X Layer 0xc1eBF74f70cb228A7a4863c3F31271E68585E75b，余额是 0，clerk 是 0xb4D6039394c8B97C3AC3234aa07011B564Fcb88c。提款要先排队，满 24 小时才能取。返佣先到先得，不为每个用户预留。旧 BSC 0x864EBcf258855f674255D78195598B2fbFAaB8Db 余额已经是 0。",
  ],
  },
  {
@@ -173,7 +173,7 @@ const zhBody: Section[] = [
  FAB_COIN_BOOK +
  "，标记 0xa6e9f2d6e69ed49c038d120f7c407321951a495b。谁都能调 sync()，每 30 秒一次，每次最多约 0.5%。手续费留在保险金。现价和均价差过约 1% 不能新开，也不能强平，平仓可以。合约名单列出这六本，下单签到上面这些地址。换链落到该链的 BEM。开仓价不能超过 100000。",
  "TAPE 是 TAPELIQUID 的唯一平台币。只有这一枚，没有第二枚。矿池没有管理员，也不能改排放。",
- "SealRebate 的 clerk 可以取走返佣池里还没领的余额。circuits 为 0 的版本里，clerk 还可以直接给地址开领取资格。这个 clerk 不是多签。RedDesk、RedNext、RedPerp、RedPacketOpen 的创建人可以改那一份的规则，并取走那一份的余额。TapeBid 只有写死的 BUYER 能存取。不是每一份合约都没有管理员。",
+ "SealRebate 的 clerk 是该链多签。取走返佣要先排队，满 24 小时才能取。BSC 这份 circuits 为 0，多签还可以直接给地址开领取资格。返佣先到先得，不为每个用户预留。RedDesk、RedNext、RedPerp、RedPacketOpen 的创建人可以改那一份的规则，并取走那一份的余额。TapeBid 只有写死的 BUYER 能存取。不是每一份合约都没有管理员。",
  ],
  },
  {
@@ -261,7 +261,7 @@ const en: Section[] = [
  "The page now signs the sync books. UP 0xdcc4f9df12bd2550a2d9292f8894880a85822734, mark 0x4ae9c52a00f5911dc2e792d6761e289a6daf3aec. TAPE 0xe08f0f8e056e65e00b2f80cf63fbc0bfc78bab0d, mark 0x6a813faacf11bcbdcb0c13f83a19ba68dd7d85a7. FAB 0xb87a0d23a9d5c1f63c2dea9331fbaa1b0c027d0a, mark 0xa6e9f2d6e69ed49c038d120f7c407321951a495b. A real deposit, price note, open and close have cleared. Anyone can call sync(), and it only records the price. A note clears a liquidation reading once the position is safe. Insurance is about 1.004, so the whole book can open about 20 of notional. A 50× open on 1 of margin is 50 of notional and does not fit. A 50× open on 10 of margin needs at least 25 of insurance. Fees and the liquidation penalty stay in insurance. Insurance already in the old books cannot be withdrawn.",
  "The page will not open a book that has been replaced. Closing can still be signed. When checked, those books had no open position. The BSC copy vault is still bound to 0x89b2f4a2e0C07864172fB47fbDEa14411AF2e0E0, so that book stays on the close path. X Layer vault 0x5d6eF9E36B591b50069DA8C535FB56dE73ad8EEe and BSC vault 0xe9Ef9C5031015fA626eCE1cC8Dc8e5d213F591F5 are both 8345 bytes. Both refuse a new open after an exit request. 0xe895122Ba5aF841704730B999a73F9562F5bd46E is 14 bytes shorter and can still open after an exit. The page does not read it.",
  "The page no longer issues or claims a random packet. The contracts already deployed still use prevrandao and cannot be changed. The X Layer and BSC commit-reveal packets are already deployed and the buttons are gone. Claims stay on the old contract.",
- "The new SealRebate copies are in place. BSC 0xD3B459d2BaA2d24A3661E9C144D59b8b998324E2, clerk 0xE51C19aE6E4261Ed329CC54F1120Cf0Ae09364Bd. X Layer 0xc1eBF74f70cb228A7a4863c3F31271E68585E75b, clerk 0xb4D6039394c8B97C3AC3234aa07011B564Fcb88c. A withdrawal is queued for 24 hours. The rebate is first come, first served. Nothing is reserved for a user. Claims still use the old copies. BSC 0x864EBcf258855f674255D78195598B2fbFAaB8Db still holds 10 USDT. X Layer 0xCbc3Bd75199E8168ecd0Ebfd33051c7642223c8c is empty. Their clerk is still 0x585d2DF4B8fDDA783B074555e6F3787e3fCB39D7 and can withdraw at once. Claims move only after that balance is moved.",
+ "Claims now use the new SealRebate copies. BSC 0xD3B459d2BaA2d24A3661E9C144D59b8b998324E2 holds the 10 USDT just moved, and its clerk is 0xE51C19aE6E4261Ed329CC54F1120Cf0Ae09364Bd. X Layer 0xc1eBF74f70cb228A7a4863c3F31271E68585E75b is empty, and its clerk is 0xb4D6039394c8B97C3AC3234aa07011B564Fcb88c. A withdrawal is queued for 24 hours. The rebate is first come, first served. Nothing is reserved for a user. The old BSC copy 0x864EBcf258855f674255D78195598B2fbFAaB8Db is empty.",
  ],
  },
  {
@@ -406,7 +406,7 @@ const en: Section[] = [
  FAB_COIN_BOOK +
  ". Its mark is 0xa6e9f2d6e69ed49c038d120f7c407321951a495b. The BEM/FAB spot moves at most about 0.5 percent in one step, further after a quiet stretch, and at most about 10 percent in one update, then at most a 10-minute average. Dollars use the 10-minute BEM and OKB averages. A gap inside about 1 percent can open. The book just replaced, 0x80318c852eE7fBDe52cE439deC3AE022Ba39A536, only closes. The 0.20 percent goes to the X Layer multisig. There is no admin. The contract list shows these six books, and an order is signed to the address above. Switching chain lands on that chain's BEM. The 0.20 percent goes to the BSC multisig. An open price cannot exceed 100000.",
  "TAPE is the only platform token of TAPELIQUID. There is one token, not a second. The mine has no admin, and the emission cannot be changed.",
- "SealRebate has a clerk. The clerk can withdraw the unclaimed rebate balance. On a build whose circuit count is zero, the clerk can also grant a claim. That clerk is not a multisig. The creator of RedDesk, RedNext, RedPerp, and RedPacketOpen can change that copy's rules and withdraw its balance. TapeBid accepts deposits and withdrawals only from the fixed BUYER. Not every contract is without an admin.",
+ "SealRebate's clerk is that chain's multisig. Taking funds out is queued for 24 hours. On the BSC copy the circuit count is zero, so the multisig can also grant a claim. The rebate is first come, first served. Nothing is reserved for a user. The creator of RedDesk, RedNext, RedPerp, and RedPacketOpen can change that copy's rules and withdraw its balance. TapeBid accepts deposits and withdrawals only from the fixed BUYER. Not every contract is without an admin.",
  ],
  },
  {
