@@ -56,8 +56,10 @@ function saved() {
   return load("bsc-okb-exec.json");
 }
 
-test("the checked bsc quote is rejected when OKB is below 98 percent of the pool", async () => {
-  await assert.rejects(() => assertGasQuote(bscIntent, saved()), /quote/);
+test("a small settler quote is accepted after the bridge fee", async () => {
+  const quote = await assertGasQuote(bscIntent, saved());
+  assert.equal(quote.value, bscIntent.amountIn);
+  assert.ok(quote.amountOutMin > 0n);
 });
 
 test("a replaced pancake pool in the settler path is rejected", async () => {
@@ -108,5 +110,63 @@ test("settler steps out of order are rejected", async () => {
   chars.splice(native, 8, ...b);
   chars.splice(uni, 8, ...a);
   json.tx = { ...json.tx, data: chars.join("") };
+  await assert.rejects(() => assertGasQuote(bscIntent, json), /quote/);
+});
+
+test("a live infinity bnb to okb quote is accepted", async () => {
+  const quote = await assertGasQuote(bscIntent, load("bsc-okb-infinity.json"));
+  assert.equal(quote.chainId, 56);
+  assert.equal(quote.value, bscIntent.amountIn);
+  assert.ok(quote.amountOutMin > 0n);
+});
+
+test("an infinity single-hop bnb to okb quote is accepted", async () => {
+  const quote = await assertGasQuote(bscIntent, load("bsc-okb-infinity-single.json"));
+  assert.equal(quote.to.toLowerCase(), "0x851b43189de721dd94aba767aad9e6f6d6a95cca");
+  assert.ok(quote.amountOut > quote.amountOutMin);
+});
+
+test("an infinity quote with a different router is rejected", async () => {
+  const json = load("bsc-okb-infinity.json");
+  const data = json.tx?.data || "";
+  json.tx = {
+    ...json.tx,
+    data: data.replace(/91bf3bfaef8d771a74e1a8fe460b3ee646b2e588/i, "1111111111111111111111111111111111111111"),
+  };
+  await assert.rejects(() => assertGasQuote(bscIntent, json), /quote/);
+});
+
+test("an infinity take to another address is rejected", async () => {
+  const json = load("bsc-okb-infinity.json");
+  const data = json.tx?.data || "";
+  json.tx = {
+    ...json.tx,
+    data: data.replace(/980447ddcef79a7499da4538da8fc59bacad6997/i, "2222222222222222222222222222222222222222"),
+  };
+  await assert.rejects(() => assertGasQuote(bscIntent, json), /quote/);
+});
+
+test("an infinity hop with a hook is rejected", async () => {
+  const json = load("bsc-okb-infinity-single.json");
+  const data = json.tx?.data || "";
+  const hook = "000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000000";
+  assert.ok(data.toLowerCase().includes(hook));
+  json.tx = { ...json.tx, data: data.toLowerCase().replace(hook, hook.slice(0, 64) + "0000000000000000000000001111111111111111111111111111111111111111") };
+  await assert.rejects(() => assertGasQuote(bscIntent, json), /quote/);
+});
+
+test("a settler quote that hops through USDT then USDC is accepted", async () => {
+  const quote = await assertGasQuote(
+    { sourceChain: 56, targetChain: 196, user: who, amountIn: 100000000000000000n, symbolOut: "OKB" },
+    load("bsc-okb-usdt.json"),
+  );
+  assert.equal(quote.value, 100000000000000000n);
+  assert.ok(quote.amountOutMin > 0n);
+});
+
+test("half of an infinity okb minimum is rejected", async () => {
+  const json = load("bsc-okb-infinity.json");
+  const min = BigInt(json.tokenAmountOutMin?.amount || "0") / 2n;
+  json.tokenAmountOutMin = { ...json.tokenAmountOutMin, amount: min.toString() };
   await assert.rejects(() => assertGasQuote(bscIntent, json), /quote/);
 });

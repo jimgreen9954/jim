@@ -138,17 +138,27 @@ function GasDesk({ account, zh }: { account: string | null; zh: boolean }) {
       deskParts(toBnb ? "xlayer" : "bsc", who, gross)
         .then((parts) => (parts.swapIn > 0n ? quoteGasRoute(toBnb, who, parts.swapIn) : null))
         .then((next) => {
-          if (!dead) setQuote(next);
+          if (!dead) {
+            setQuote(next);
+            if (next) {
+              setBad(false);
+              setNote("");
+            }
+          }
         })
         .catch(() => {
-          if (!dead) setQuote(null);
+          if (!dead) {
+            setQuote(null);
+            setBad(true);
+            setNote(zh ? "这条报价不能用。" : "This quote cannot be used.");
+          }
         });
     }, 350);
     return () => {
       dead = true;
       window.clearTimeout(id);
     };
-  }, [account, toBnb, gross]);
+  }, [account, toBnb, gross, zh]);
 
   const rate = quote && gross > 0n ? Number(formatEther(quote.amountOut)) / Number(formatEther(gross)) : 0;
 
