@@ -110,8 +110,8 @@ function RevokeOldPacket({ zh }: { zh: boolean }) {
   const go = async (chain: "bsc" | "xlayer") => {
     setNote(
       zh
-        ? "钱包会连续确认三次：先允许这一版，再撤回两个旧版。只有多签能完成。"
-        : "The wallet confirms three times: allow this version, then revoke the two older ones. Only the multisig can finish it.",
+        ? "新版已经允许。钱包再确认两次，把两个旧版撤回。只有多签能完成。"
+        : "This version is already allowed. The wallet confirms twice more, to revoke the two older ones. Only the multisig can finish it.",
     );
     try {
       const from = chain === "bsc" ? await connectBsc() : await connectXLayer();
@@ -136,18 +136,18 @@ function RevokeOldPacket({ zh }: { zh: boolean }) {
   };
   return (
     <div className="border border-gold/40 px-3 py-3">
-      <p className="text-sm">{zh ? "换上新的合约任务红包" : "Switch on the new perpetual red packet"}</p>
+      <p className="text-sm">{zh ? "撤回旧版合约任务红包" : "Revoke the old perpetual red packet"}</p>
       <p className="mt-1 text-xs leading-5 text-ink/70">
         {zh
-          ? "满 5 分钟后一笔领走，每人自己隔 3 分钟。两条链各点一次。每次钱包确认三次。"
-          : "After 5 minutes one transaction pays, and each person waits 3 minutes. Tap once on each chain. The wallet confirms three times."}
+          ? "新版已经允许。两个旧版还在，没有 5 分钟限制的那一版也能领。两条链各点一次，每次确认两次。"
+          : "This version is allowed. The two older ones are still allowed, including the one with no 5-minute wait. Tap once on each chain. The wallet confirms twice."}
       </p>
       <div className="mt-2 flex flex-wrap gap-2">
         <button type="button" className="border border-gold px-3 py-2 text-sm" onClick={() => void go("bsc")}>
-          {zh ? "BSC 换上这一版" : "Switch BSC"}
+          {zh ? "BSC 撤回旧版" : "Revoke on BSC"}
         </button>
         <button type="button" className="border border-gold px-3 py-2 text-sm" onClick={() => void go("xlayer")}>
-          {zh ? "X Layer 换上这一版" : "Switch X Layer"}
+          {zh ? "X Layer 撤回旧版" : "Revoke on X Layer"}
         </button>
       </div>
       {note ? <p className="mt-2 text-xs leading-5">{note}</p> : null}

@@ -502,13 +502,19 @@ export async function placeStamp(chain: GiftChain, from: string): Promise<"deplo
   return "allowed";
 }
 
-/** Allow this version, then stop the two older ones. A fill already stamped stays stamped. */
+/** Allow this version if it is not already, then stop any older one that is still allowed. */
 export async function shipPerpCode(chain: GiftChain, from: string): Promise<void> {
   if (from.toLowerCase() !== giftDeployer(chain).toLowerCase()) throw new Error("safe");
-  const allowData = encodeFunctionData({ abi: stampAbi, functionName: "allow", args: [RED_PERP_CODE[chain]] });
-  await preflight(chain, from, RED_STAMP, allowData);
-  await wait(chain, await send(chain, from, RED_STAMP, allowData));
+  const live = client(chain);
+  const allowed = await live.readContract({ address: RED_STAMP, abi: stampAbi, functionName: "ok", args: [RED_PERP_CODE[chain]] });
+  if (!allowed) {
+    const allowData = encodeFunctionData({ abi: stampAbi, functionName: "allow", args: [RED_PERP_CODE[chain]] });
+    await preflight(chain, from, RED_STAMP, allowData);
+    await wait(chain, await send(chain, from, RED_STAMP, allowData));
+  }
   for (const code of RETIRED_PERP[chain]) {
+    const on = await live.readContract({ address: RED_STAMP, abi: stampAbi, functionName: "ok", args: [code] });
+    if (!on) continue;
     const data = encodeFunctionData({ abi: stampAbi, functionName: "revoke", args: [code] });
     await preflight(chain, from, RED_STAMP, data);
     await wait(chain, await send(chain, from, RED_STAMP, data));
