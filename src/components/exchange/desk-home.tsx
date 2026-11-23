@@ -140,7 +140,7 @@ function RevokeOldPacket({ zh }: { zh: boolean }) {
       <p className="mt-1 text-xs leading-5 text-ink/70">
         {zh
           ? "没有 5 分钟限制的旧版已经撤回。上一版还开着，领奖要分两笔。两条链各再点一次，每次确认一次。"
-          : "The version with no 5-minute wait is revoked. The previous version is still allowed and pays in two transactions. Tap once more on each chain. The wallet confirms once.",}
+          : "The version with no 5-minute wait is revoked. The previous version is still allowed and pays in two transactions. Tap once more on each chain. The wallet confirms once."}
       </p>
       <div className="mt-2 flex flex-wrap gap-2">
         <button type="button" className="border border-gold px-3 py-2 text-sm" onClick={() => void go("bsc")}>
