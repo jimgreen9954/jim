@@ -1,8 +1,5 @@
 import { Component, lazy, Suspense, type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { connectBsc } from "@/lib/bsc";
-import { shipPerpCode } from "@/lib/red-packet";
-import { connectXLayer } from "@/lib/xlayer";
 import { ArriveHint } from "@/components/exchange/phone-desk";
 import { PoolSpot } from "@/components/exchange/pool-spot";
 import { useExchange } from "@/lib/exchange-store";
@@ -103,56 +100,6 @@ export function jumpChain(chain: Desk): DeskView {
   window.dispatchEvent(new CustomEvent("tape-chain", { detail: next }));
   window.dispatchEvent(new CustomEvent("tape-desk-chain", { detail: chain }));
   return next;
-}
-
-function RevokeOldPacket({ zh }: { zh: boolean }) {
-  const [note, setNote] = useState("");
-  const go = async (chain: "bsc" | "xlayer") => {
-    setNote(
-      zh
-        ? "没有 5 分钟限制的那一版已经撤回。钱包再确认一次，把上一版也撤回。"
-        : "The version with no 5-minute wait is revoked. The wallet confirms once more, for the previous version.",
-    );
-    try {
-      const from = chain === "bsc" ? await connectBsc() : await connectXLayer();
-      await shipPerpCode(chain, from);
-      setNote(
-        zh
-          ? "这一版已允许，两个旧版已撤回。已经盖过章的仓不受影响。"
-          : "This version is allowed and the two older ones are revoked. A fill already stamped is unchanged.",
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "";
-      setNote(
-        message === "safe"
-          ? zh
-            ? "只有这条链的多签可以点。"
-            : "Only this chain's multisig can do this."
-          : zh
-            ? "没有换完。再点一次。已经签过的那一步再签一次也没有关系。"
-            : "Not finished. Tap again. Signing a finished step again does no harm.",
-      );
-    }
-  };
-  return (
-    <div className="border border-gold/40 px-3 py-3">
-      <p className="text-sm">{zh ? "撤回旧版合约任务红包" : "Revoke the old perpetual red packet"}</p>
-      <p className="mt-1 text-xs leading-5 text-ink/70">
-        {zh
-          ? "没有 5 分钟限制的旧版已经撤回。上一版还开着，领奖要分两笔。两条链各再点一次，每次确认一次。"
-          : "The version with no 5-minute wait is revoked. The previous version is still allowed and pays in two transactions. Tap once more on each chain. The wallet confirms once."}
-      </p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        <button type="button" className="border border-gold px-3 py-2 text-sm" onClick={() => void go("bsc")}>
-          {zh ? "BSC 撤回旧版" : "Revoke on BSC"}
-        </button>
-        <button type="button" className="border border-gold px-3 py-2 text-sm" onClick={() => void go("xlayer")}>
-          {zh ? "X Layer 撤回旧版" : "Revoke on X Layer"}
-        </button>
-      </div>
-      {note ? <p className="mt-2 text-xs leading-5">{note}</p> : null}
-    </div>
-  );
 }
 
 function announceChain(view: DeskView) {
@@ -271,7 +218,6 @@ export function DeskHome({
   return (
     <>
       <ArriveHint zh={zh} />
-      <RevokeOldPacket zh={zh} />
       {showPerp ? (
         <Suspense fallback={null}>
           <DeskGuard
