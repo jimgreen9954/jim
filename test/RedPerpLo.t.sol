@@ -8,13 +8,18 @@ import "../contracts/RedStamp.sol";
 contract TipBook {
     uint256 public nextDeal;
     address public who;
+    bool public shut;
+
+    function shutDown(bool on) external {
+        shut = on;
+    }
 
     function deals(uint256)
         external
         view
         returns (address, address, uint96, uint96, uint128, uint128, bool, uint16, uint16)
     {
-        return (who, address(1), 1 ether, 1 ether, 1, 1 ether, true, 1, 1);
+        return (who, address(1), 1 ether, 1 ether, 1, 1 ether, !shut, 1, 1);
     }
 }
 
@@ -58,16 +63,32 @@ contract RedPerpLoTest is Test {
 
         vm.prank(TRADER, TRADER);
         first.trade(2, 0);
+        assertEq(first.prizeOf(TRADER), 0);
 
         vm.prank(TRADER, TRADER);
         vm.expectRevert(bytes("used"));
         second.trade(2, 0);
 
+        vm.warp(block.timestamp + 4 minutes);
+        vm.prank(TRADER, TRADER);
+        vm.expectRevert(bytes("hold"));
+        first.trade(2, 0);
+
+        TipBook(BOOK).shutDown(true);
+        vm.warp(block.timestamp + 1 minutes);
+        vm.prank(TRADER, TRADER);
+        vm.expectRevert(bytes("open"));
+        first.trade(2, 0);
+        TipBook(BOOK).shutDown(false);
+
+        vm.prank(TRADER, TRADER);
+        first.trade(2, 0);
+        assertEq(first.prizeOf(TRADER), 0.1 ether);
+
         vm.prank(TRADER, TRADER);
         first.claim();
         vm.prank(SAFE);
         RedStamp(STAMP).revoke(keccak256(address(first).code));
-        vm.warp(block.timestamp + 1 days);
         vm.prank(TRADER, TRADER);
         vm.expectRevert(bytes("code"));
         first.trade(3, 0);
@@ -75,6 +96,7 @@ contract RedPerpLoTest is Test {
         vm.prank(SAFE);
         RedStamp(STAMP).allow(keccak256(address(first).code));
         vm.prank(TRADER, TRADER);
+        vm.expectRevert(bytes("rival"));
         first.trade(3, 0);
     }
 

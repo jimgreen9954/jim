@@ -247,7 +247,8 @@ export function RedGift({
         message === "switched" ||
         message === "approve" ||
         message === "booth" ||
-        message === "stamped";
+        message === "stamped" ||
+        message === "hold";
       setBad(!calm);
       if (calm && message === "connected")
         setNote(
@@ -295,6 +296,12 @@ export function RedGift({
             : "The desk is in place. Tap Confirm once more. Only then does the prize enter the pool.",
         );
       }
+      else if (message === "hold")
+        setNote(
+          zh
+            ? "仓位已记下。再保持开着 5 分钟，然后点一次领取。这一次还没有奖金。"
+            : "The position is noted. Keep it open for 5 minutes, then tap Claim once more. No prize moved this time.",
+        );
       else if (message === "stamped")
         setNote(
           zh
@@ -570,11 +577,10 @@ export function RedGift({
       if (book.prizeOf <= 0n && taskStake(book.chain, book.hi).perp && !(await tradedNow(book.chain, from, book.lane, book.address))) {
         setNote(
           zh
-            ? "钱包正在弹出盖章。请确认。确认之后再点一次领取。"
-            : "The wallet is opening the stamp. Confirm it, then tap Claim once more.",
+            ? "钱包正在弹出。仓位要先记下，开满 5 分钟后再领。请确认。"
+            : "The wallet is opening. The position is noted first. Come back after 5 minutes to claim. Confirm it.",
         );
         await tradeRed(book.chain, from, book.lane, book.address);
-        throw new Error("stamped");
       }
       setNote(
         zh

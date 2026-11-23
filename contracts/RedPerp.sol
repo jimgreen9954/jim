@@ -32,6 +32,7 @@ interface IPerp {
 /// and margin, then stamps tradedDay so claim() can pay.
 contract RedPerp {
     uint256 public constant PACE = 180;
+    uint256 public constant HOLD = 5 minutes;
     address public constant BOOTH = 0x284Fa8819980A229622B711A52BF66bD9cDCbC2d;
     address public constant BSC_BEM = 0x070c66555535e1145275df54f4eEBBfd28d98581;
     address public constant BSC_UP = 0xdCc4F9dF12bD2550a2d9292f8894880A85822734;
@@ -77,6 +78,10 @@ contract RedPerp {
     mapping(address => uint256) public lastDay;
     mapping(address => uint256) public tradedDay;
     mapping(uint256 => bool) private used;
+    /// First time this fill was shown. The prize waits until it is still open after HOLD.
+    mapping(uint256 => uint256) public noted;
+    /// A counterparty can be paid once on this packet.
+    mapping(address => bool) public rivalUsed;
 
     event Claimed(address indexed who, uint256 indexed day, uint256 amount);
     event Funded(address indexed from, uint256 amount);
@@ -177,19 +182,30 @@ contract RedPerp {
         require(tx.origin == msg.sender, "bot");
         require(ready, "rule");
         require(block.timestamp <= endsAt, "late");
-        uint256 day = sgDay(block.timestamp);
-        require(tradedDay[msg.sender] != day, "day");
-        _room(day);
         require(dealId >= lo, "task");
-        require(!used[dealId], "task");
         address book = address(uint160(hi));
-        (address long, address short, uint96 marginL, uint96 marginS,,,,,) = IPerp(book).deals(dealId);
+        (address long, address short, uint96 marginL, uint96 marginS,,, bool open,,) = IPerp(book).deals(dealId);
         bool wantShort = gate == 1;
         require((wantShort ? short : long) == msg.sender, "task");
         uint256 margin = wantShort ? uint256(marginS) : uint256(marginL);
         require(margin * 100 >= spotNeed * 99, "task");
+        require(open, "open");
+        address other = wantShort ? long : short;
+        require(other != address(0) && other != msg.sender, "task");
+        if (noted[dealId] == 0) {
+            IStamp(STAMP).take(book, dealId);
+            require(!rivalUsed[other], "rival");
+            noted[dealId] = block.timestamp;
+            locked = 0;
+            return;
+        }
+        require(block.timestamp >= noted[dealId] + HOLD, "hold");
+        require(!rivalUsed[other], "rival");
+        uint256 day = sgDay(block.timestamp);
+        require(tradedDay[msg.sender] != day, "day");
+        _room(day);
+        rivalUsed[other] = true;
         used[dealId] = true;
-        IStamp(STAMP).take(book, dealId);
         _owe(day);
         emit Traded(msg.sender, day, dealId, margin);
         locked = 0;

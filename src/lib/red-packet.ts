@@ -1250,13 +1250,20 @@ async function tradePerp(chain: GiftChain, from: string, gate: number, need: big
   await preflight(chain, from, pool, data);
   const hash = await send(chain, from, pool, data);
   await wait(chain, hash);
+  const prize = await client(chain).readContract({
+    address: pool,
+    abi: parseAbi(["function prizeOf(address) view returns (uint256)"]),
+    functionName: "prizeOf",
+    args: [getAddress(from)],
+  });
+  if (prize === 0n) throw new Error("hold");
   return hash;
 }
 
 const CHECKED_RED = "0x7761ac208268aaeb74761267dec2e23504676028dd92264c2e07663cad7520c9" as Hex;
 const RED_PERP_CODE: Record<GiftChain, Hex> = {
-  bsc: "0xf3e39c896ea131c4ef93fa17f4d289f01cb2ca709e455d6ab545e5cf4a9de638",
-  xlayer: "0xfd5cdb793998f74254bef092e420d5aedface9f11d84827670faf8ed9954b88a",
+  bsc: "0x9b2eefca769b0112c3820bb18ff61002d4e71dc5ff014bf78d16f3a1fd650cfb",
+  xlayer: "0x4569d669767795846444bd7fac928d111a18f59e69dea573631e97f780edbe6a",
 };
 const RED_RUNTIME: Record<GiftChain, Hex> = {
   xlayer: "0x9f6a07ce7e33186652a2ace00d89929db9efa8eb5d2a0de7e70c67b981e2e186",
@@ -1267,6 +1274,8 @@ const TRUSTED_RED = new Set<string>([
   CHECKED_RED,
   RED_PERP_CODE.bsc,
   RED_PERP_CODE.xlayer,
+  "0xf3e39c896ea131c4ef93fa17f4d289f01cb2ca709e455d6ab545e5cf4a9de638",
+  "0xfd5cdb793998f74254bef092e420d5aedface9f11d84827670faf8ed9954b88a",
   RED_RUNTIME.xlayer,
   RED_RUNTIME.bsc,
   "0x0ec34e5d71fe7e47355e2510d9f5bc10fa058d96c78695b3eecb136f82f04872",
