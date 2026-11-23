@@ -26,7 +26,7 @@ const zhBody: Section[] = [
  h: "风险",
  ps: [
  "本页是规则，不是审计，也不是收益承诺。合约不能升级。没有管理员也不等于不能被攻击。浅池上的标记价仍可能被带动。",
- "不通过函数直接转进合约的资产，取不回。页面只授这一笔要用的数量。以前留下的无限授权不会自己消失。旧合约 0xC5A63E4c37c23F97558673731196abC30FBFa659 的 run 可以由调用者指定任意地址和数据，对它的授权请改成 0。新合约只能由该链多签部署。",
+ "不通过函数直接转进合约的资产，取不回。页面只授这一笔要用的数量，只打给页面写明的合约。外人不能从这页部署给大家用的合约。以前留下的无限授权不会自己消失。旧合约 0xC5A63E4c37c23F97558673731196abC30FBFa659 的 run 可以由调用者指定任意地址和数据，对它的授权请改成 0。新合约只能由该链多签部署。",
  "跟单金库存入后，对稳定币是无限授权。有挂单或仓位时不能存，也不能取。有份额的人可以申请退出，满 6 小时后任何人可以平掉这口金库自己的单。申请之后不能再开。",
  ],
  },
@@ -61,7 +61,7 @@ const zhBody: Section[] = [
  h: "奖励和回购",
  ps: [
  "返佣先到先得，不为每个人预留。多签取走返佣要先排队，满 24 小时才能取。",
- "合约任务红包只认发出之后才开的仓，同一张仓只能领一次。仓位还要再开着 5 分钟，满时后一笔领走。每个人自己隔 3 分钟，不是整份红包一起等。同一个对手只能领一次。旧红包已停发。X Layer 志愿红包 0x1A0567219e796Df983Fe584d44E7245B69E72836 还有 3 USDT0，BSC 志愿红包 0x2F0E6F04E7ABeF8140f98c5d8cCDbdc47BA94cD2 还有 0.06 BEM，资助人可以取回。",
+ "合约任务红包只认发出之后才开的仓，同一张仓只能领一次。仓位还要再开着 5 分钟，满时后一笔领走。每个人自己隔 3 分钟，不是整份红包一起等。同一个对手只能领一次。两条链只允许最新版：BSC 0xbcf49f6ed15431bc60316cfd16381371ff651eb23d27e3244a69a40d12bd857a，X Layer 0x02f01c1b0db05a210053e4c1d8bb7b7509753a44ce09f0b95741becedb0d561d。没有 5 分钟限制的旧版和领奖分两笔的上一版都已撤回。旧红包已停发。X Layer 志愿红包 0x1A0567219e796Df983Fe584d44E7245B69E72836 还有 3 USDT0，BSC 志愿红包 0x2F0E6F04E7ABeF8140f98c5d8cCDbdc47BA94cD2 还有 0.06 BEM，资助人可以取回。",
  "回购和销毁没有合约强制执行。每个自然月，用当月手续费的 50% 加上用户铸造收入买入 TAPE，再打进黑洞。以当月成交哈希为准。官方铸造不进回购。",
  ],
  },
@@ -85,7 +85,7 @@ const en: Section[] = [
  h: "Risk",
  ps: [
  "This page is the rulebook. It is not an audit and it is not a promise of return. The contracts cannot be upgraded. No administrator does not mean they cannot be attacked. A mark that reads a thin pool can still be moved.",
- "A raw transfer into a contract cannot be withdrawn. The page approves only the amount of that action. An old unlimited allowance does not disappear. Contract 0xC5A63E4c37c23F97558673731196abC30FBFa659 lets its caller choose any call. Set every allowance for it to zero. A new contract can be deployed only by that chain's multisig.",
+ "A raw transfer into a contract cannot be withdrawn. The page approves only the amount of that action, and only to a contract the page names. A visitor cannot deploy a contract other people will use. An old unlimited allowance does not disappear. Contract 0xC5A63E4c37c23F97558673731196abC30FBFa659 lets its caller choose any call. Set every allowance for it to zero. A new contract can be deployed only by that chain's multisig.",
  "A copy-vault deposit leaves an unlimited stablecoin allowance. A deposit or a withdrawal needs the vault flat. A shareholder can ask to exit. Six hours later anyone can flatten that vault's own orders. After the request, the leader cannot open again.",
  ],
  },
@@ -120,7 +120,7 @@ const en: Section[] = [
  h: "Rewards and buyback",
  ps: [
  "The rebate is first come, first served. Nothing is reserved per user. The multisig queues a withdrawal and waits 24 hours.",
- "A perpetual task packet counts only a position opened after the packet, and that position can be claimed once. It must stay open for 5 minutes, then one transaction pays it. Each person waits 3 minutes, not the whole packet. The same counterparty can be paid only once. Old packets are closed. The X Layer volunteer packet 0x1A0567219e796Df983Fe584d44E7245B69E72836 still holds 3 USDT0. The BSC volunteer packet 0x2F0E6F04E7ABeF8140f98c5d8cCDbdc47BA94cD2 still holds 0.06 BEM. The funder can take the rest back.",
+ "A perpetual task packet counts only a position opened after the packet, and that position can be claimed once. It must stay open for 5 minutes, then one transaction pays it. Each person waits 3 minutes, not the whole packet. The same counterparty can be paid only once. Each chain allows only the current code: BSC 0xbcf49f6ed15431bc60316cfd16381371ff651eb23d27e3244a69a40d12bd857a, X Layer 0x02f01c1b0db05a210053e4c1d8bb7b7509753a44ce09f0b95741becedb0d561d. The version with no 5-minute wait and the previous two-step version are revoked. Old packets are closed. The X Layer volunteer packet 0x1A0567219e796Df983Fe584d44E7245B69E72836 still holds 3 USDT0. The BSC volunteer packet 0x2F0E6F04E7ABeF8140f98c5d8cCDbdc47BA94cD2 still holds 0.06 BEM. The funder can take the rest back.",
  "There is no forced buyback or burn in a contract. Each month, half of that month's fees plus user mint income is used to buy TAPE and send it to the burn address. The month's transaction hash is the record. Official mints are not included.",
  ],
  },
