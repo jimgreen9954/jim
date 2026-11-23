@@ -209,6 +209,17 @@ export type LendView = {
   supplyApr: bigint;
 };
 
+async function paddedGas(chain: LendChain, from: string, to: Hex, data: Hex): Promise<bigint | undefined> {
+  try {
+    const est = await rpc(chain, "eth_estimateGas", [{ from, to, data }]);
+    const n = BigInt(String(est));
+    if (n <= 0n) return undefined;
+    return (n * 13n) / 10n;
+  } catch {
+    return undefined;
+  }
+}
+
 async function rpc(chain: LendChain, method: string, params: unknown[]): Promise<unknown> {
   let last = "rpc";
   for (const url of rpcs[chain]) {
@@ -553,8 +564,10 @@ async function catchUp(chain: LendChain, asset: LendAsset, book?: Hex) {
   const lend = need(chain, asset, book);
   if (await read<boolean>(chain, lend, "fresh").catch(() => false)) return;
   const from = await signer(chain);
+  const data = encodeFunctionData({ abi, functionName: "poke" });
   try {
-    await wait(chain, await send(from, lend, encodeFunctionData({ abi, functionName: "poke" })));
+    const gas = await paddedGas(chain, from, lend, data);
+    await wait(chain, await send(from, lend, data, 0n, gas));
   } catch (err) {
     if (!(err instanceof Error) || err.message !== "revert") throw err;
   }
@@ -678,7 +691,10 @@ export async function pokeLend(chain: LendChain, asset: LendAsset) {
   const spec = lendSpec(chain, asset);
   if (spec.native || spec.mode === 0) throw new Error("live");
   const from = await signer(chain);
-  await wait(chain, await send(from, need(chain, asset), encodeFunctionData({ abi, functionName: "poke" })));
+  const data = encodeFunctionData({ abi, functionName: "poke" });
+  const gas = await paddedGas(chain, from, need(chain, asset), data);
+  await wait(chain, await send(from, need(chain, asset), data, 0n, gas));
+  if (!(await read<boolean>(chain, need(chain, asset), "fresh").catch(() => false))) throw new Error("again");
 }
 
 export function lendText(amount: bigint, decimals: number): string {

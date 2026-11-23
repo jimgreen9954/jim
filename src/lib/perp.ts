@@ -269,7 +269,16 @@ const bookStatAbi = [
   { name: "openNotional", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { name: "openCap", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { name: "fundInsurance", type: "function", stateMutability: "nonpayable", inputs: [{ name: "amount", type: "uint256" }], outputs: [] },
+  { name: "setCap", type: "function", stateMutability: "nonpayable", inputs: [{ name: "next", type: "uint256" }], outputs: [] },
+  { name: "FEE_TO", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
 ] as const;
+
+/** Half the pool inventory measured on 22 Nov 2026. The multisig cap should stay at or under this. */
+export const HALF_BOOK_CAP = {
+  up: 345n * 10n ** 18n,
+  tape: 23n * 1_000_000n,
+  fab: 478n * 1_000_000n,
+} as const;
 
 export type SyncBookState = {
   cap: bigint;
@@ -332,6 +341,19 @@ export async function fundBookInsurance(coin: "up" | "tape" | "fab", whole: numb
     await send(from, token, encodeFunctionData({ abi: erc20, functionName: "approve", args: [book, amount] }));
   }
   const data = encodeFunctionData({ abi: bookStatAbi, functionName: "fundInsurance", args: [amount] });
+  return send(from, book, data);
+}
+
+/** Lower the multisig cap now. A raise still waits a day inside the contract. Only that book's fee multisig can send this. */
+export async function lowerBookCap(coin: "up" | "tape" | "fab"): Promise<Hex> {
+  const which: Desk = coin === "up" ? "bsc" : "xlayer";
+  selectDesk(which);
+  const from = which === "xlayer" ? await connectXLayer() : await connectBsc();
+  const book = coinBook(which, coin) as Hex;
+  const c = await client();
+  const fee = await c.readContract({ address: book, abi: bookStatAbi, functionName: "FEE_TO" });
+  if (from.toLowerCase() !== fee.toLowerCase()) throw new Error("cap");
+  const data = encodeFunctionData({ abi: bookStatAbi, functionName: "setCap", args: [HALF_BOOK_CAP[coin]] });
   return send(from, book, data);
 }
 

@@ -122,7 +122,10 @@ contract FabSyncFork is Test {
         }
         uint256 inventory = _inventory(spot, 97);
         emit log_named_uint("fab inventory", inventory);
-        assertLt(book.cap() * 1e12, inventory);
+        SyncTierTapeRisk live = SyncTierTapeRisk(0xb87A0D23A9D5c1F63C2DeA9331fBaA1B0C027D0A);
+        emit log_named_uint("live cap", live.cap());
+        emit log_named_uint("live open", live.openCap());
+        assertLe(live.openCap() * 1e12, inventory / 2);
     }
 
     function testForkFabHoldCost() public {

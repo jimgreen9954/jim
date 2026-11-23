@@ -642,7 +642,10 @@ contract SyncCapFork is Test {
         }
         uint256 inventory = _upInventory();
         emit log_named_uint("up inventory", inventory);
-        assertLt(book.cap(), inventory);
+        SyncTierTapeRisk live = SyncTierTapeRisk(0xdCc4F9dF12bD2550a2d9292f8894880A85822734);
+        emit log_named_uint("live cap", live.cap());
+        emit log_named_uint("live open", live.openCap());
+        assertLe(live.openCap(), inventory / 2);
     }
 
     function testForkTapeShipMatchesSpotAndCapLoses() public {
@@ -665,7 +668,10 @@ contract SyncCapFork is Test {
         }
         uint256 inventory = _tapeInventory();
         emit log_named_uint("tape inventory", inventory);
-        assertLt(book.cap() * 1e12, inventory);
+        SyncTierTapeRisk live = SyncTierTapeRisk(0xE08f0F8e056E65E00b2f80CF63Fbc0bfc78BAB0d);
+        emit log_named_uint("live cap", live.cap());
+        emit log_named_uint("live open", live.openCap());
+        assertLe(live.openCap() * 1e12, inventory / 2);
     }
 
     function testForkHoldCost() public {

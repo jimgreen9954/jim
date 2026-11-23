@@ -647,7 +647,7 @@ export function PoolSpot({
     const tape = nextQuote === 0 ? (live?.bemTape ?? 0n) : (live?.okbTape ?? 0n);
     const quoteSide = nextQuote === 0 ? (live?.bemQuote ?? 0n) : (live?.okbQuote ?? 0n);
     if (nextSide === "sell") {
-      await swapPool(from, nextQuote, true, want);
+      await swapPool(from, nextQuote, true, want, false, nextQuote === 0 ? "BEM" : "OKB");
       markDeskFill(
         "xlayer",
         from,
@@ -660,7 +660,7 @@ export function PoolSpot({
     let amountIn = quoteInForTape(tape, quoteSide, want);
     const out = await previewPool(nextQuote, false, amountIn);
     if (out > 0n && out < want) amountIn = (amountIn * want) / out + 1n;
-    await swapPool(from, nextQuote, false, amountIn);
+    await swapPool(from, nextQuote, false, amountIn, false, "TAPE");
     markDeskFill(
       "xlayer",
       from,

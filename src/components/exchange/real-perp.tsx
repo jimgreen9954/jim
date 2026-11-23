@@ -2947,8 +2947,8 @@ export function RealPerp({
                                                   className: "desk-extra",
                                                   children:
                                                     lang === "zh"
-                                                      ? "TAPE 池子很浅。上限要变大，只能先加流动性。现在的 3000 高于测到的大约 0.058 美元成本。"
-                                                      : "The TAPE pool is thin. The cap grows only after liquidity is added. 3000 is above the measured cost of about 0.058.",
+                                                      ? "TAPE 池子很浅。多签上限如果还是 3000，就高于库存的一半。先在保险金说明里把上限降下来。"
+                                                      : "The TAPE pool is thin. A multisig cap of 3000 is above half the inventory. Lower it from the insurance note first.",
                                                 })
                                               : null,
                                             /* @__PURE__ */ jsx("p", {

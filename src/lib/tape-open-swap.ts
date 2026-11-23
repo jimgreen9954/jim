@@ -32,6 +32,12 @@ const v2 = parseAbi([
 
 export type PoolQuote = 0 | 1;
 
+/** What this pool actually pays. Index 0 is BEM. Index 1 is OKB. It never pays USDT0. */
+export function poolPay(quote: PoolQuote, tapeIn: boolean): "TAPE" | "BEM" | "OKB" {
+  if (!tapeIn) return "TAPE";
+  return quote === 0 ? "BEM" : "OKB";
+}
+
 function chainNum(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   const text = String(value ?? "").trim();
@@ -141,8 +147,16 @@ async function allow(from: string, token: Hex, spender: Hex, need: bigint) {
   await wait(await send(from, token, exact));
 }
 
-/** Swap against the open TAPE pool. Limit orders stay on the workshop book. */
-export async function swapPool(from: string, quote: PoolQuote, tapeIn: boolean, amountIn: bigint, hold = false): Promise<Hex> {
+export async function swapPool(
+  from: string,
+  quote: PoolQuote,
+  tapeIn: boolean,
+  amountIn: bigint,
+  hold = false,
+  expect?: "TAPE" | "BEM" | "OKB",
+): Promise<Hex> {
+  const pay = poolPay(quote, tapeIn);
+  if (expect && expect !== pay) throw new Error("quote");
   const feeTo = await client.readContract({ address: OPEN_POOL, abi: poolAbi, functionName: "FEE_TO" });
   if (feeTo.toLowerCase() !== FEE_TO.toLowerCase()) throw new Error("fee");
   const out = await previewPool(quote, tapeIn, amountIn);
@@ -284,7 +298,7 @@ export async function buyTapeWithUsdt0(from: string, usdtIn: bigint, okbIn: bigi
     const spend = okb < okbIn ? okb : okbIn;
     const capped = spend < room ? spend : room;
     if (capped <= 10n ** 14n) throw new Error("leg");
-    const hash = await swapPool(from, 1, false, capped);
+    const hash = await swapPool(from, 1, false, capped, false, "TAPE");
     clearHop(BUY_HOP);
     return hash;
   }
@@ -333,7 +347,7 @@ export async function sellTapeForUsdt0(from: string, tapeIn: bigint): Promise<He
     return unwindOkb(from, gained);
   }
   const before = await client.getBalance({ address: from as Hex });
-  const hash = await swapPool(from, 1, true, tapeIn, true);
+  const hash = await swapPool(from, 1, true, tapeIn, true, "OKB");
   writeHop(SELL_HOP, { from, hash, before: before.toString() });
   await wait(hash);
   const after = await client.getBalance({ address: from as Hex });

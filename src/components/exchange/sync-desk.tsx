@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fundBookInsurance, syncBookState, type SyncBookState } from "@/lib/perp";
+import { fundBookInsurance, HALF_BOOK_CAP, lowerBookCap, syncBookState, type SyncBookState } from "@/lib/perp";
 
 const COINS = ["up", "tape", "fab"] as const;
 
@@ -15,6 +15,7 @@ function say(err: unknown, zh: boolean): string {
   if (code === "nowallet") return zh ? "先连接钱包。" : "Connect a wallet first.";
   if (code === "amount") return zh ? "金额不对。" : "Bad amount.";
   if (code === "usdt") return zh ? "余额不够。" : "Not enough balance.";
+  if (code === "cap") return zh ? "只有这一本的收费多签能调低上限。" : "Only this book's fee multisig can lower the cap.";
   return zh ? "没发出去。" : "Not sent.";
 }
 
@@ -121,8 +122,8 @@ export function SyncDesk({ zh }: { zh: boolean }) {
               </p>
               <p>
                 {zh
-                  ? `钱进当前选中的这一本，三本互不相通。全体可开名义是上限和保险金 × 20 里较小的那个。1 ${unit} 保险金，这一本全体只能开 20 ${unit} 名义。一个人一个方向最多 600 名义，保险金不够时先被上面的额度卡住。`
-                  : `The payment enters only the selected book. The three books are separate. Open notional is the smaller of the cap and insurance × 20. One ${unit} of insurance lets the whole book open 20 ${unit} of notional. One address and one side stop at 600 of notional, or sooner when insurance is the tighter limit.`}
+                  ? `钱进当前选中的这一本，三本互不相通。全体可开名义是上限和保险金 × 20 里较小的那个。1 ${unit} 保险金，这一本全体只能开 20 ${unit} 名义。一个人一个方向最多是整本上限的五分之一。保险金不够时先被上面的额度卡住。多签上限现在如果高于库存的一半，可以用下面的按钮调低。调高要等 1 天。`
+                  : `The payment enters only the selected book. The three books are separate. Open notional is the smaller of the cap and insurance × 20. One ${unit} of insurance lets the whole book open 20 ${unit} of notional. One address on one side stops at one fifth of the cap, or sooner when insurance is tighter. If the multisig cap is above half the pool, the button below lowers it. A raise waits one day.`}
               </p>
               <p>
                 {zh
@@ -132,8 +133,8 @@ export function SyncDesk({ zh }: { zh: boolean }) {
               {coin === "tape" ? (
                 <p>
                   {zh
-                    ? "TAPE 池子很浅。把价格压过约 1% 再买回，测到的成本大约 0.058 美元。整本上限 3000 高于这条。上限要提高，先得给池子加流动性。"
-                    : "The TAPE pool is thin. A measured round trip through about 1% cost about 0.058 dollars. The 3000 cap is above that. Raising the cap takes liquidity in the pool first."}
+                    ? "TAPE 池子很浅。把价格压过约 1% 再买回，测到的成本大约 0.058 美元。多签上限如果还是 3000，就高于库存的一半。先把上限降下来，再谈加流动性。"
+                    : "The TAPE pool is thin. A measured round trip through about 1% cost about 0.058 dollars. A multisig cap of 3000 is above half the inventory. Lower the cap before adding liquidity."}
                 </p>
               ) : null}
             </div>
@@ -163,6 +164,16 @@ export function SyncDesk({ zh }: { zh: boolean }) {
             >
               {zh ? "存入 50" : "Deposit 50"}
             </button>
+            {row && row.cap > HALF_BOOK_CAP[coin] ? (
+              <button
+                type="button"
+                disabled={busy}
+                className="min-h-11 border border-gold px-3 text-xs disabled:opacity-40"
+                onClick={() => run(() => lowerBookCap(coin), zh ? "上限已降到库存的一半以下。" : "The cap is now at or under half the inventory.")}
+              >
+                {zh ? `上限降到 ${whole(HALF_BOOK_CAP[coin], row.decimals)}` : `Lower cap to ${whole(HALF_BOOK_CAP[coin], row.decimals)}`}
+              </button>
+            ) : null}
           </div>
         </>
       ) : null}

@@ -230,6 +230,17 @@ function emptySnap(chain: TermChain, address: Hex | null): TermSnap {
   };
 }
 
+async function paddedGas(chain: TermChain, from: string, to: Hex, data: Hex): Promise<bigint | undefined> {
+  try {
+    const est = await rpc(chain, "eth_estimateGas", [{ from, to, data }]);
+    const n = BigInt(String(est));
+    if (n <= 0n) return undefined;
+    return (n * 13n) / 10n;
+  } catch {
+    return undefined;
+  }
+}
+
 async function rpc(chain: TermChain, method: string, params: unknown[]): Promise<unknown> {
   let last = "rpc";
   for (const url of BOOK[chain].rpc) {
@@ -761,7 +772,9 @@ export async function pokeTerm(chain: TermChain, id: number, which?: Hex) {
     const pool = await read<readonly [bigint, bigint, bigint, bigint, bigint, number, boolean]>(chain, book, "pool", [needId]);
     if (!pool[6]) throw new Error("price");
   }
-  await wait(chain, await send(from, book, encodeFunctionData({ abi, functionName: "poke", args: [id] })));
+  const data = encodeFunctionData({ abi, functionName: "poke", args: [id] });
+  const gas = await paddedGas(chain, from, book, data);
+  await wait(chain, await send(from, book, data, 0n, gas));
 }
 
 export function hourlyWad(kind: TermKind, mul: number): bigint {

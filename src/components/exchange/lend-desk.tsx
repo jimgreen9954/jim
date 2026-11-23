@@ -43,7 +43,7 @@ function failText(err: unknown, zh: boolean): string {
   if (code === "live") return zh ? "这口借贷还没部署。" : "This market is not deployed.";
   if (code === "posted") return zh ? "这一口还没有你的抵押。质押页锁上的不能拿来借。" : "This market has none of your collateral. A stake on the stake page cannot be borrowed against.";
   if (code === "dry") return zh ? "这口池子里现在没有这么多可借的稳定币。" : "This pool does not have that much stablecoin to lend.";
-  if (code === "sync") return zh ? "价格同步中。这次已经记了一笔，大约 30 秒后再点一次。" : "Price is catching up. This tap posted one sample. Wait about 30 seconds and tap again.";
+  if (code === "sync" || code === "again") return zh ? "还需再记一次。大约 30 秒后再点记账，先不要存入或借入。" : "One more price post is needed. Wait about 30 seconds, tap Post, and do not supply or borrow yet.";
   if (code === "leader") return zh ? "这个钱包不是多签的签名地址。" : "This wallet is not a signer of the multisig.";
   if (code === "second") return zh ? "已记下这个地址的签名。换成另一个签名地址再点一次，才会从多签发出。" : "This signature is saved. Switch to the other signer and tap again. Then it is sent from the multisig.";
   if (code === "nowallet") return zh ? "先连接钱包。" : "Connect a wallet first.";
@@ -382,10 +382,10 @@ export function LendDesk({ zh, account }: { zh: boolean; account: string | null 
                   : mode === "borrow"
                     ? `${zh ? "还能借" : "Room"} ${money(borrowRoom)} ${market.usdtSym}${view && !view.fresh ? (zh ? " · 价格还没跟上，现在不能借" : " · price has not caught up, borrow is closed") : ""}`
                     : `${zh ? "可用" : "Available"} ${money(view?.walletUsdt)} ${market.usdtSym}`}
-          {view && !view.fresh && (mode === "out" || mode === "in" || mode === "free")
+          {view && !view.fresh && (mode === "out" || mode === "in" || mode === "free" || mode === "borrow" || mode === "lock")
             ? zh
-              ? " 价格同步中。这一次会先记一笔价，还没跟上就等大约 30 秒再点。"
-              : " Price is catching up. This tap posts one sample. If it has not caught up, wait about 30 seconds and tap again."
+              ? " 价格还没跟上。先点下面的记账。记完如果还是过期，大约 30 秒后再记一次，不要直接存或借。"
+              : " The price has not caught up. Tap Post below. If it is still stale, wait about 30 seconds and post again. Do not supply or borrow yet."
             : ""}
           <input
             value={amount}
@@ -398,7 +398,7 @@ export function LendDesk({ zh, account }: { zh: boolean; account: string | null 
             }}
           />
         </label>
-        <button type="button" disabled={busy} className="mt-2 min-h-11 w-full bg-ink text-paper disabled:opacity-40" onClick={() => run(act, zh ? "已完成。" : "Done.")}>
+        <button type="button" disabled={busy || Boolean(view && !view.fresh && mode !== "repay" && !market.native && market.mode !== 0)} className="mt-2 min-h-11 w-full bg-ink text-paper disabled:opacity-40" onClick={() => run(act, zh ? "已完成。" : "Done.")}>
           {mode === "in" ? (zh ? "存入" : "Supply") : mode === "out" ? (zh ? "取出" : "Withdraw") : mode === "lock" ? (zh ? "抵押" : "Lock") : mode === "free" ? (zh ? "取回" : "Unlock") : mode === "borrow" ? (zh ? "借入" : "Borrow") : zh ? "还款" : "Repay"}
         </button>
         {live && !prior && !market.native && market.mode !== 0 ? (

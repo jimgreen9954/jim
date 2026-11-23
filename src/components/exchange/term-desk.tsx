@@ -251,7 +251,6 @@ export function TermDesk({ zh, account }: { zh: boolean; account: string | null 
               >
                 {zh ? "记" : "Post"} {row.symbol}
                 {postMark(book, now, zh)}
-                {gapMark(book, now, zh)}
               </button>
             );
           })}
@@ -453,17 +452,13 @@ export function TermDesk({ zh, account }: { zh: boolean; account: string | null 
 
 function postMark(book: TermPool | undefined, now: number, zh: boolean): string {
   if (freshAt(book, now)) return zh ? " · 可用" : " · ready";
-  if (book && book.price > 0n && book.stamp >= 3 && book.at > 0 && now - book.at > 30 * 60) return zh ? " · 已过期" : " · expired";
-  if (book && book.price > 0n) return ` · ${book.stamp}/3`;
-  return zh ? " · 还没有" : " · none";
-}
-
-function gapMark(book: TermPool | undefined, now: number, zh: boolean): string {
-  if (!book || book.price <= 0n || book.stamp >= 3 || book.at <= 0) return "";
-  const left = book.at + 10 * 60 - now;
-  if (left <= 0) return zh ? " · 可以再记" : " · can post again";
-  if (left < 60) return zh ? " · 不到 1 分钟后可再记" : " · under 1 min";
-  return zh ? ` · ${Math.ceil(left / 60)} 分钟后可再记` : ` · ${Math.ceil(left / 60)} min until the next post`;
+  if (!book || book.price <= 0n) return zh ? " · 还需记价 3 次，约 20 分钟" : " · 3 posts left, about 20 min";
+  if (book.stamp >= 3) return zh ? " · 已过期，还需记价 1 次" : " · expired, 1 post left";
+  const need = Math.max(1, 3 - book.stamp);
+  const wait = Math.max(0, book.at + 10 * 60 - now);
+  const total = wait + (need - 1) * 10 * 60;
+  const mins = Math.max(1, Math.ceil(total / 60));
+  return zh ? ` · 还需记价 ${need} 次，约 ${mins} 分钟` : ` · ${need} posts left, about ${mins} min`;
 }
 
 function poolBalance(pool: TermPool | undefined, decimals: number): string {
