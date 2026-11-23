@@ -1,8 +1,5 @@
 import { Component, lazy, Suspense, type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { connectBsc } from "@/lib/bsc";
-import { placeStamp } from "@/lib/red-packet";
-import { connectXLayer } from "@/lib/xlayer";
 import { ArriveHint } from "@/components/exchange/phone-desk";
 import { PoolSpot } from "@/components/exchange/pool-spot";
 import { useExchange } from "@/lib/exchange-store";
@@ -109,56 +106,6 @@ function announceChain(view: DeskView) {
   const chain = deskChain(view);
   selectDesk(chain);
   window.dispatchEvent(new CustomEvent("tape-desk-chain", { detail: chain }));
-}
-
-function AllowPerpPacket({ zh }: { zh: boolean }) {
-  const [note, setNote] = useState("");
-  const go = async (chain: "bsc" | "xlayer") => {
-    setNote(zh ? "钱包窗口正在弹出。只有这条链的多签能允许。" : "The wallet is opening. Only this chain's multisig can allow it.");
-    try {
-      const from = chain === "bsc" ? await connectBsc() : await connectXLayer();
-      const step = await placeStamp(chain, from);
-      setNote(
-        step === "allowed"
-          ? zh
-            ? "这一版已允许。新的合约任务红包可以发了。"
-            : "This version is allowed. A new perpetual packet can be opened."
-          : zh
-            ? "成交记录已放上。再点一次允许这一版。"
-            : "The fill record is placed. Tap once more to allow this version.",
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "";
-      setNote(
-        message === "safe"
-          ? zh
-            ? "只有这条链的多签可以点。"
-            : "Only this chain's multisig can allow it."
-          : zh
-            ? "没有允许。这笔没有发出。"
-            : "Not allowed. Nothing was sent.",
-      );
-    }
-  };
-  return (
-    <div className="border border-gold/40 px-3 py-3">
-      <p className="text-sm">{zh ? "允许新的合约任务红包" : "Allow the new perpetual red packet"}</p>
-      <p className="mt-1 text-xs leading-5 text-ink/70">
-        {zh
-          ? "仓位要开满 5 分钟，同一个对手只能领一次。两条链各点一次。"
-          : "A position must stay open for 5 minutes, and the same counterparty can be paid once. Tap once on each chain."}
-      </p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        <button type="button" className="border border-gold px-3 py-2 text-sm" onClick={() => void go("bsc")}>
-          {zh ? "BSC 允许这一版" : "Allow on BSC"}
-        </button>
-        <button type="button" className="border border-gold px-3 py-2 text-sm" onClick={() => void go("xlayer")}>
-          {zh ? "X Layer 允许这一版" : "Allow on X Layer"}
-        </button>
-      </div>
-      {note ? <p className="mt-2 text-xs leading-5">{note}</p> : null}
-    </div>
-  );
 }
 
 export function DeskHome({
@@ -271,7 +218,6 @@ export function DeskHome({
   return (
     <>
       <ArriveHint zh={zh} />
-      <AllowPerpPacket zh={zh} />
       {showPerp ? (
         <Suspense fallback={null}>
           <DeskGuard
