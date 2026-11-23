@@ -110,8 +110,8 @@ function RevokeOldPacket({ zh }: { zh: boolean }) {
   const go = async (chain: "bsc" | "xlayer") => {
     setNote(
       zh
-        ? "新版已经允许。钱包再确认两次，把两个旧版撤回。只有多签能完成。"
-        : "This version is already allowed. The wallet confirms twice more, to revoke the two older ones. Only the multisig can finish it.",
+        ? "没有 5 分钟限制的那一版已经撤回。钱包再确认一次，把上一版也撤回。"
+        : "The version with no 5-minute wait is revoked. The wallet confirms once more, for the previous version.",
     );
     try {
       const from = chain === "bsc" ? await connectBsc() : await connectXLayer();
@@ -139,8 +139,8 @@ function RevokeOldPacket({ zh }: { zh: boolean }) {
       <p className="text-sm">{zh ? "撤回旧版合约任务红包" : "Revoke the old perpetual red packet"}</p>
       <p className="mt-1 text-xs leading-5 text-ink/70">
         {zh
-          ? "新版已经允许。两个旧版还在，没有 5 分钟限制的那一版也能领。两条链各点一次，每次确认两次。"
-          : "This version is allowed. The two older ones are still allowed, including the one with no 5-minute wait. Tap once on each chain. The wallet confirms twice."}
+          ? "没有 5 分钟限制的旧版已经撤回。上一版还开着，领奖要分两笔。两条链各再点一次，每次确认一次。"
+          : "The version with no 5-minute wait is revoked. The previous version is still allowed and pays in two transactions. Tap once more on each chain. The wallet confirms once.",}
       </p>
       <div className="mt-2 flex flex-wrap gap-2">
         <button type="button" className="border border-gold px-3 py-2 text-sm" onClick={() => void go("bsc")}>
