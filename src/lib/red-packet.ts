@@ -453,7 +453,15 @@ export function boothOf(chain: GiftChain): Hex {
 
 export const RED_STAMP = "0x30E48e1FA7B8FF93E213814d7EA3BbF35B28731A" as Hex;
 const STAMP_SALT = keccak256(stringToHex("TAPELIQUID-red-stamp-v1"));
-const stampAbi = parseAbi(["function ok(bytes32) view returns (bool)", "function allow(bytes32)"]);
+const stampAbi = parseAbi([
+  "function ok(bytes32) view returns (bool)",
+  "function allow(bytes32)",
+  "function revoke(bytes32)",
+]);
+const OLD_PERP_CODE: Record<GiftChain, Hex> = {
+  bsc: "0xf3e39c896ea131c4ef93fa17f4d289f01cb2ca709e455d6ab545e5cf4a9de638",
+  xlayer: "0xfd5cdb793998f74254bef092e420d5aedface9f11d84827670faf8ed9954b88a",
+};
 
 /** True once this chain's multisig has allowed the current perp-packet code. */
 export async function stampReady(chain: GiftChain): Promise<boolean> {
@@ -486,6 +494,39 @@ export async function placeStamp(chain: GiftChain, from: string): Promise<"deplo
   const hash = await send(chain, from, RED_STAMP, data);
   await wait(chain, hash);
   return "allowed";
+}
+
+/** Stop the previous perp-packet code. A fill already stamped stays stamped. */
+export async function revokeOldPerp(chain: GiftChain, from: string): Promise<void> {
+  if (from.toLowerCase() !== giftDeployer(chain).toLowerCase()) throw new Error("safe");
+  const data = encodeFunctionData({ abi: stampAbi, functionName: "revoke", args: [OLD_PERP_CODE[chain]] });
+  await preflight(chain, from, RED_STAMP, data);
+  const hash = await send(chain, from, RED_STAMP, data);
+  await wait(chain, hash);
+}
+
+const notedAbi = parseAbi(["function noted(uint256) view returns (uint256)"]);
+
+/** Unix time this wallet's newest qualifying fill was noted. 0 if it is not waiting. */
+export async function perpNoted(
+  chain: GiftChain,
+  pool: Hex,
+  from: string,
+  hi: bigint,
+  gate: number,
+  need: bigint,
+  cursor: bigint,
+): Promise<number> {
+  if (hi === 0n || need <= 0n) return 0;
+  const book = getAddress(`0x${hi.toString(16).padStart(40, "0")}`);
+  const found = await scanPerpDeal(chain, book, from, gate, need, cursor);
+  if (typeof found !== "bigint") return 0;
+  try {
+    const at = await client(chain).readContract({ address: pool, abi: notedAbi, functionName: "noted", args: [found] });
+    return Number(at);
+  } catch {
+    return 0;
+  }
 }
 
 async function perpCode(chain: GiftChain, pool: Hex): Promise<"new" | "old" | "other"> {

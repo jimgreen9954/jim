@@ -28,6 +28,7 @@ import {
   taskStake,
   tradeRed,
   tradedNow,
+  perpNoted,
   walletHold,
   withdrawRed,
   type GiftAsset,
@@ -299,8 +300,8 @@ export function RedGift({
       else if (message === "hold")
         setNote(
           zh
-            ? "仓位已记下。再保持开着 5 分钟，然后点一次领取。这一次还没有奖金。"
-            : "The position is noted. Keep it open for 5 minutes, then tap Claim once more. No prize moved this time.",
+            ? "已登记，请保持仓位，5 分钟后再点领取。提前平仓，这张仓就作废。这一次还没有奖金。"
+            : "Noted. Keep the position open and claim after 5 minutes. If you close it first, this fill is void. No prize moved this time.",
         );
       else if (message === "stamped")
         setNote(
@@ -577,8 +578,8 @@ export function RedGift({
       if (book.prizeOf <= 0n && taskStake(book.chain, book.hi).perp && !(await tradedNow(book.chain, from, book.lane, book.address))) {
         setNote(
           zh
-            ? "钱包正在弹出。仓位要先记下，开满 5 分钟后再领。请确认。"
-            : "The wallet is opening. The position is noted first. Come back after 5 minutes to claim. Confirm it.",
+            ? "钱包正在弹出。这一次只登记。请保持仓位，5 分钟后再点领取。提前平仓，这张仓就作废。"
+            : "The wallet is opening. This only notes the fill. Keep the position open and claim after 5 minutes. If you close it first, this fill is void.",
         );
         await tradeRed(book.chain, from, book.lane, book.address);
       }
@@ -1164,6 +1165,8 @@ function PacketCard({
     tradedToday ? "check" : "join",
   );
   const [hold, setHold] = useState("");
+  const [notedAt, setNotedAt] = useState(0);
+  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
   const gate = useRef(false);
   useEffect(() => {
     const need = book.spotNeed > book.perpNeed ? book.spotNeed : book.perpNeed;
@@ -1184,6 +1187,31 @@ function PacketCard({
     if (book.tradedDay === BigInt(sgDay()) && book.lastDay !== BigInt(sgDay()))
       setStep((now) => (now === "join" || now === "ask" || now === "go" ? "check" : now));
   }, [book.tradedDay, book.lastDay]);
+  useEffect(() => {
+    if (!self || !stake.perp || owed) {
+      setNotedAt(0);
+      return;
+    }
+    const need = book.spotNeed > book.perpNeed ? book.spotNeed : book.perpNeed;
+    let dead = false;
+    void perpNoted(book.chain, book.address, self, book.hi, book.gate, need, book.lo)
+      .then((at) => {
+        if (!dead) setNotedAt(at);
+      })
+      .catch(() => {
+        if (!dead) setNotedAt(0);
+      });
+    return () => {
+      dead = true;
+    };
+  }, [self, stake.perp, owed, busy, book.chain, book.address, book.hi, book.gate, book.spotNeed, book.perpNeed, book.lo]);
+  useEffect(() => {
+    if (notedAt <= 0 || owed) return;
+    const id = window.setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);
+    return () => window.clearInterval(id);
+  }, [notedAt, owed]);
+  const wait = notedAt > 0 && !owed;
+  const left = wait ? Math.max(0, notedAt + 300 - now) : 0;
   const ask = () => {
     if (!self) {
       say(
@@ -1343,6 +1371,32 @@ function PacketCard({
         >
           {mineToday ? (zh ? "已领取" : "Claimed") : zh ? "已结束" : "Ended"}
         </button>
+      ) : wait ? (
+        <>
+          <p className="mt-3 text-sm leading-5 text-ink">
+            {left > 0
+              ? zh
+                ? `已登记，请保持仓位，5 分钟后再点领取。还剩 ${Math.floor(left / 60)}:${(left % 60).toString().padStart(2, "0")}。提前平仓，这张仓就作废。`
+                : `Noted. Keep the position open, then claim after 5 minutes. ${Math.floor(left / 60)}:${(left % 60).toString().padStart(2, "0")} left. Closing it first voids this fill.`
+              : zh
+                ? "5 分钟已到。仓位还开着再点领取。钱包会再确认两次：一次核对仓位，一次把奖金打进钱包。提前平掉的仓已经作废。"
+                : "5 minutes are up. Claim only if the position is still open. The wallet confirms twice: once to check the fill, once to pay. A closed fill is already void."}
+          </p>
+          <button
+            type="button"
+            className="gift-go disabled:opacity-40"
+            disabled={busy || left > 0}
+            onClick={() => openSeal(book)}
+          >
+            {left > 0
+              ? zh
+                ? "请保持仓位"
+                : "Keep it open"
+              : zh
+                ? "领取"
+                : "Claim"}
+          </button>
+        </>
       ) : step === "join" ? (
         <button
           type="button"

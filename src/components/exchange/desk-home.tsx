@@ -1,5 +1,8 @@
 import { Component, lazy, Suspense, type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { connectBsc } from "@/lib/bsc";
+import { revokeOldPerp } from "@/lib/red-packet";
+import { connectXLayer } from "@/lib/xlayer";
 import { ArriveHint } from "@/components/exchange/phone-desk";
 import { PoolSpot } from "@/components/exchange/pool-spot";
 import { useExchange } from "@/lib/exchange-store";
@@ -100,6 +103,52 @@ export function jumpChain(chain: Desk): DeskView {
   window.dispatchEvent(new CustomEvent("tape-chain", { detail: next }));
   window.dispatchEvent(new CustomEvent("tape-desk-chain", { detail: chain }));
   return next;
+}
+
+function RevokeOldPacket({ zh }: { zh: boolean }) {
+  const [note, setNote] = useState("");
+  const go = async (chain: "bsc" | "xlayer") => {
+    setNote(zh ? "钱包窗口正在弹出。只有这条链的多签能撤回。" : "The wallet is opening. Only this chain's multisig can revoke it.");
+    try {
+      const from = chain === "bsc" ? await connectBsc() : await connectXLayer();
+      await revokeOldPerp(chain, from);
+      setNote(
+        zh
+          ? "旧版已撤回。已经盖过章的仓不受影响。新版仍然可以发。"
+          : "The old version is revoked. A fill already stamped is unchanged. The new version can still be opened.",
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      setNote(
+        message === "safe"
+          ? zh
+            ? "只有这条链的多签可以点。"
+            : "Only this chain's multisig can revoke it."
+          : zh
+            ? "没有撤回。这笔没有发出。"
+            : "Not revoked. Nothing was sent.",
+      );
+    }
+  };
+  return (
+    <div className="border border-gold/40 px-3 py-3">
+      <p className="text-sm">{zh ? "撤回旧版合约任务红包" : "Revoke the old perpetual red packet"}</p>
+      <p className="mt-1 text-xs leading-5 text-ink/70">
+        {zh
+          ? "旧版没有 5 分钟限制。两条链各点一次。已经盖过章的仓不受影响。"
+          : "The old version has no 5-minute wait. Tap once on each chain. A fill already stamped is unchanged."}
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button type="button" className="border border-gold px-3 py-2 text-sm" onClick={() => void go("bsc")}>
+          {zh ? "BSC 撤回旧版" : "Revoke on BSC"}
+        </button>
+        <button type="button" className="border border-gold px-3 py-2 text-sm" onClick={() => void go("xlayer")}>
+          {zh ? "X Layer 撤回旧版" : "Revoke on X Layer"}
+        </button>
+      </div>
+      {note ? <p className="mt-2 text-xs leading-5">{note}</p> : null}
+    </div>
+  );
 }
 
 function announceChain(view: DeskView) {
@@ -218,6 +267,7 @@ export function DeskHome({
   return (
     <>
       <ArriveHint zh={zh} />
+      <RevokeOldPacket zh={zh} />
       {showPerp ? (
         <Suspense fallback={null}>
           <DeskGuard
