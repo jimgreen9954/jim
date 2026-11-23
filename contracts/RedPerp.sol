@@ -65,7 +65,8 @@ contract RedPerp {
     uint256 public perpNeed;
     uint256 public endsAt;
     uint256 public quoteScale = 1;
-    uint256 public lastClaimAt;
+    /// Each person waits, not the whole packet.
+    mapping(address => uint256) public lastClaimAt;
     uint256 public claimDay;
     uint256 public claimedToday;
     mapping(address => uint256) public prizeOf;
@@ -208,27 +209,32 @@ contract RedPerp {
         used[dealId] = true;
         _owe(day);
         emit Traded(msg.sender, day, dealId, margin);
+        _pay(msg.sender);
         locked = 0;
     }
 
     function claim() external {
         require(tx.origin == msg.sender, "bot");
         require(ready, "rule");
-        uint256 pay = prizeOf[msg.sender];
+        _pay(msg.sender);
+    }
+
+    function _pay(address who) internal {
+        uint256 pay = prizeOf[who];
         require(pay > 0, "task");
-        require(block.timestamp >= lastClaimAt + PACE, "pace");
-        lastDay[msg.sender] = sgDay(block.timestamp);
-        prizeOf[msg.sender] = 0;
-        prizeUntil[msg.sender] = 0;
+        require(block.timestamp >= lastClaimAt[who] + PACE, "pace");
+        lastDay[who] = sgDay(block.timestamp);
+        prizeOf[who] = 0;
+        prizeUntil[who] = 0;
         reserved -= pay;
-        lastClaimAt = block.timestamp;
+        lastClaimAt[who] = block.timestamp;
         if (token == address(0)) {
-            (bool ok,) = msg.sender.call{value: pay}("");
+            (bool ok,) = who.call{value: pay}("");
             require(ok, "prize");
         } else {
-            _push(token, msg.sender, pay);
+            _push(token, who, pay);
         }
-        emit Claimed(msg.sender, sgDay(block.timestamp), pay);
+        emit Claimed(who, sgDay(block.timestamp), pay);
     }
 
     function _cash() internal view returns (uint256 bal) {

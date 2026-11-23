@@ -1,7 +1,7 @@
 import { Component, lazy, Suspense, type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { connectBsc } from "@/lib/bsc";
-import { revokeOldPerp } from "@/lib/red-packet";
+import { shipPerpCode } from "@/lib/red-packet";
 import { connectXLayer } from "@/lib/xlayer";
 import { ArriveHint } from "@/components/exchange/phone-desk";
 import { PoolSpot } from "@/components/exchange/pool-spot";
@@ -108,14 +108,18 @@ export function jumpChain(chain: Desk): DeskView {
 function RevokeOldPacket({ zh }: { zh: boolean }) {
   const [note, setNote] = useState("");
   const go = async (chain: "bsc" | "xlayer") => {
-    setNote(zh ? "钱包窗口正在弹出。只有这条链的多签能撤回。" : "The wallet is opening. Only this chain's multisig can revoke it.");
+    setNote(
+      zh
+        ? "钱包会连续确认三次：先允许这一版，再撤回两个旧版。只有多签能完成。"
+        : "The wallet confirms three times: allow this version, then revoke the two older ones. Only the multisig can finish it.",
+    );
     try {
       const from = chain === "bsc" ? await connectBsc() : await connectXLayer();
-      await revokeOldPerp(chain, from);
+      await shipPerpCode(chain, from);
       setNote(
         zh
-          ? "旧版已撤回。已经盖过章的仓不受影响。新版仍然可以发。"
-          : "The old version is revoked. A fill already stamped is unchanged. The new version can still be opened.",
+          ? "这一版已允许，两个旧版已撤回。已经盖过章的仓不受影响。"
+          : "This version is allowed and the two older ones are revoked. A fill already stamped is unchanged.",
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : "";
@@ -123,27 +127,27 @@ function RevokeOldPacket({ zh }: { zh: boolean }) {
         message === "safe"
           ? zh
             ? "只有这条链的多签可以点。"
-            : "Only this chain's multisig can revoke it."
+            : "Only this chain's multisig can do this."
           : zh
-            ? "没有撤回。这笔没有发出。"
-            : "Not revoked. Nothing was sent.",
+            ? "没有换完。再点一次。已经签过的那一步再签一次也没有关系。"
+            : "Not finished. Tap again. Signing a finished step again does no harm.",
       );
     }
   };
   return (
     <div className="border border-gold/40 px-3 py-3">
-      <p className="text-sm">{zh ? "撤回旧版合约任务红包" : "Revoke the old perpetual red packet"}</p>
+      <p className="text-sm">{zh ? "换上新的合约任务红包" : "Switch on the new perpetual red packet"}</p>
       <p className="mt-1 text-xs leading-5 text-ink/70">
         {zh
-          ? "旧版没有 5 分钟限制。两条链各点一次。已经盖过章的仓不受影响。"
-          : "The old version has no 5-minute wait. Tap once on each chain. A fill already stamped is unchanged."}
+          ? "满 5 分钟后一笔领走，每人自己隔 3 分钟。两条链各点一次。每次钱包确认三次。"
+          : "After 5 minutes one transaction pays, and each person waits 3 minutes. Tap once on each chain. The wallet confirms three times."}
       </p>
       <div className="mt-2 flex flex-wrap gap-2">
         <button type="button" className="border border-gold px-3 py-2 text-sm" onClick={() => void go("bsc")}>
-          {zh ? "BSC 撤回旧版" : "Revoke on BSC"}
+          {zh ? "BSC 换上这一版" : "Switch BSC"}
         </button>
         <button type="button" className="border border-gold px-3 py-2 text-sm" onClick={() => void go("xlayer")}>
-          {zh ? "X Layer 撤回旧版" : "Revoke on X Layer"}
+          {zh ? "X Layer 换上这一版" : "Switch X Layer"}
         </button>
       </div>
       {note ? <p className="mt-2 text-xs leading-5">{note}</p> : null}

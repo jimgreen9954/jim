@@ -61,7 +61,7 @@ const zhBody: Section[] = [
  h: "奖励和回购",
  ps: [
  "返佣先到先得，不为每个人预留。多签取走返佣要先排队，满 24 小时才能取。",
- "合约任务红包只认发出之后才开的仓，同一张仓只能领一次。仓位还要再开着 5 分钟，而且同一个对手只能领一次。旧红包已停发。X Layer 志愿红包 0x1A0567219e796Df983Fe584d44E7245B69E72836 还有 3 USDT0，BSC 志愿红包 0x2F0E6F04E7ABeF8140f98c5d8cCDbdc47BA94cD2 还有 0.06 BEM，资助人可以取回。",
+ "合约任务红包只认发出之后才开的仓，同一张仓只能领一次。仓位还要再开着 5 分钟，满时后一笔领走。每个人自己隔 3 分钟，不是整份红包一起等。同一个对手只能领一次。旧红包已停发。X Layer 志愿红包 0x1A0567219e796Df983Fe584d44E7245B69E72836 还有 3 USDT0，BSC 志愿红包 0x2F0E6F04E7ABeF8140f98c5d8cCDbdc47BA94cD2 还有 0.06 BEM，资助人可以取回。",
  "回购和销毁没有合约强制执行。每个自然月，用当月手续费的 50% 加上用户铸造收入买入 TAPE，再打进黑洞。以当月成交哈希为准。官方铸造不进回购。",
  ],
  },
@@ -120,7 +120,7 @@ const en: Section[] = [
  h: "Rewards and buyback",
  ps: [
  "The rebate is first come, first served. Nothing is reserved per user. The multisig queues a withdrawal and waits 24 hours.",
- "A perpetual task packet counts only a position opened after the packet, and that position can be claimed once. It must stay open for 5 minutes, and the same counterparty can be paid only once. Old packets are closed. The X Layer volunteer packet 0x1A0567219e796Df983Fe584d44E7245B69E72836 still holds 3 USDT0. The BSC volunteer packet 0x2F0E6F04E7ABeF8140f98c5d8cCDbdc47BA94cD2 still holds 0.06 BEM. The funder can take the rest back.",
+ "A perpetual task packet counts only a position opened after the packet, and that position can be claimed once. It must stay open for 5 minutes, then one transaction pays it. Each person waits 3 minutes, not the whole packet. The same counterparty can be paid only once. Old packets are closed. The X Layer volunteer packet 0x1A0567219e796Df983Fe584d44E7245B69E72836 still holds 3 USDT0. The BSC volunteer packet 0x2F0E6F04E7ABeF8140f98c5d8cCDbdc47BA94cD2 still holds 0.06 BEM. The funder can take the rest back.",
  "There is no forced buyback or burn in a contract. Each month, half of that month's fees plus user mint income is used to buy TAPE and send it to the burn address. The month's transaction hash is the record. Official mints are not included.",
  ],
  },

@@ -39,7 +39,8 @@ import {
 import { PhoneChrome, wantedPane } from "@/components/exchange/phone-desk";
 import { CoinMark } from "@/components/exchange/coin-mark";
 import { announceFill, readPrefs, useDeskPrefs } from "@/lib/desk-prefs";
-import { markDeskFill } from "@/lib/red-packet";
+import { markDeskFill, perpRedState } from "@/lib/red-packet";
+import { PerpRedBar } from "@/components/exchange/red-gift";
 import { TradeLog } from "@/components/exchange/trade-foot";
 import { nickOf, readNicks } from "@/lib/nicks";
 import { clearArm, easyBand, readArm, writeArm, type Arm } from "@/lib/stops";
@@ -463,6 +464,7 @@ export function RealPerp({
   const lock = useFeeLock();
   const firing = useRef(false);
   const closeArm = useRef("");
+  const redArm = useRef("");
   const candleCache = useRef(new Map());
   useEffect(() => {
     if (coin === "tape" || coin === "fab") {
@@ -1031,6 +1033,26 @@ export function RealPerp({
     setBad(true);
   };
   const run = async (task, kind) => {
+    if ((kind === "close" || kind === "close-all" || kind === "close-row") && account && /^0x[a-fA-F0-9]{40}$/.test(perp)) {
+      if (redArm.current !== kind) {
+        const risk = await perpRedState(chain === "xlayer" ? "xlayer" : "bsc", perp, account).catch(() => null);
+        if (risk && risk.phase === "wait" && risk.readyAt * 1000 > Date.now()) {
+          redArm.current = kind;
+          const left = Math.max(0, risk.readyAt - Math.floor(Date.now() / 1000));
+          const clock = `${Math.floor(left / 60)}:${(left % 60).toString().padStart(2, "0")}`;
+          setNote(
+            lang === "zh"
+              ? `现在平仓将放弃红包奖励，还差 ${clock}。再点一次仍然平仓。`
+              : `Closing now gives up the red packet. ${clock} left. Tap again to close anyway.`,
+          );
+          setBad(false);
+          window.setTimeout(() => {
+            if (redArm.current === kind) redArm.current = "";
+          }, 6000);
+          return;
+        }
+      } else redArm.current = "";
+    }
     if ((kind === "close" || kind === "close-all" || kind === "close-row") && readPrefs().closeConfirm) {
       if (closeArm.current !== kind) {
         closeArm.current = kind;
@@ -1477,6 +1499,13 @@ export function RealPerp({
         children: /* @__PURE__ */ jsxs("div", {
           className: "flex flex-col gap-3 p-0",
           children: [
+            /* @__PURE__ */ jsx(PerpRedBar, {
+              chain: chain === "xlayer" ? "xlayer" : "bsc",
+              book: perp,
+              account,
+              zh: lang === "zh",
+              pulse: hash || "",
+            }),
             /* @__PURE__ */ jsxs("div", {
               className:
                 "flex flex-nowrap items-center gap-x-4 border-b border-gold px-3 py-2",

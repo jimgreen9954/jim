@@ -29,6 +29,7 @@ import {
   tradeRed,
   tradedNow,
   perpNoted,
+  perpRedState,
   walletHold,
   withdrawRed,
   type GiftAsset,
@@ -578,10 +579,25 @@ export function RedGift({
       if (book.prizeOf <= 0n && taskStake(book.chain, book.hi).perp && !(await tradedNow(book.chain, from, book.lane, book.address))) {
         setNote(
           zh
-            ? "钱包正在弹出。这一次只登记。请保持仓位，5 分钟后再点领取。提前平仓，这张仓就作废。"
-            : "The wallet is opening. This only notes the fill. Keep the position open and claim after 5 minutes. If you close it first, this fill is void.",
+            ? "钱包正在弹出。满 5 分钟后只签一次，奖金直接进钱包。请保持仓位。"
+            : "The wallet is opening. After 5 minutes one signature pays the prize. Keep the position open.",
         );
         await tradeRed(book.chain, from, book.lane, book.address);
+        if (book.prizeOf <= 0n) {
+          const text = book.asset ? `${giftText(book.fixedAmt, book.asset)} ${zh ? book.asset.zh : book.asset.en}` : "";
+          noteClaim(from, {
+            chain: book.chain,
+            lane: book.lane,
+            amount: book.asset ? giftText(book.fixedAmt, book.asset) : "",
+            name: book.asset ? (zh ? book.asset.zh : book.asset.en) : "",
+            at: Date.now(),
+            tx: "",
+          });
+          setLogStamp((n) => n + 1);
+          setSeal(null);
+          setPop({ name: book.asset ? (zh ? book.asset.zh : book.asset.en) : "", amount: text });
+          return "cheer" as const;
+        }
       }
       setNote(
         zh
@@ -1379,8 +1395,8 @@ function PacketCard({
                 ? `已登记，请保持仓位，5 分钟后再点领取。还剩 ${Math.floor(left / 60)}:${(left % 60).toString().padStart(2, "0")}。提前平仓，这张仓就作废。`
                 : `Noted. Keep the position open, then claim after 5 minutes. ${Math.floor(left / 60)}:${(left % 60).toString().padStart(2, "0")} left. Closing it first voids this fill.`
               : zh
-                ? "5 分钟已到。仓位还开着再点领取。钱包会再确认两次：一次核对仓位，一次把奖金打进钱包。提前平掉的仓已经作废。"
-                : "5 minutes are up. Claim only if the position is still open. The wallet confirms twice: once to check the fill, once to pay. A closed fill is already void."}
+                ? "5 分钟已到。点领取，钱包只确认一次，奖金直接进钱包。仓位已经平掉的话，这一张作废。"
+                : "5 minutes are up. One signature pays the prize. A closed position cannot be claimed."}
           </p>
           <button
             type="button"
@@ -1777,6 +1793,104 @@ function MineFunds({
             );
           })
         : null}
+    </div>
+  );
+}
+
+export function PerpRedBar({
+  chain,
+  book,
+  account,
+  zh,
+  pulse,
+}: {
+  chain: GiftChain;
+  book: string;
+  account: string | null;
+  zh: boolean;
+  pulse: string;
+}) {
+  const [row, setRow] = useState<{ pool: `0x${string}`; lane: GiftLane; phase: "note" | "wait" | "claim"; readyAt: number } | null>(null);
+  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!account || !book.startsWith("0x")) {
+      setRow(null);
+      return;
+    }
+    let dead = false;
+    void perpRedState(chain, book as `0x${string}`, account)
+      .then((next) => {
+        if (!dead) setRow(next);
+      })
+      .catch(() => {
+        if (!dead) setRow(null);
+      });
+    return () => {
+      dead = true;
+    };
+  }, [chain, book, account, pulse, note]);
+  useEffect(() => {
+    if (!row || row.phase !== "wait") return;
+    const id = window.setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);
+    return () => window.clearInterval(id);
+  }, [row]);
+  if (!row) return null;
+  const left = row.phase === "wait" ? Math.max(0, row.readyAt - now) : 0;
+  const phase = row.phase === "wait" && left === 0 ? "claim" : row.phase;
+  const clock = `${Math.floor(left / 60)}:${(left % 60).toString().padStart(2, "0")}`;
+  const go = async () => {
+    if (!account || busy) return;
+    setBusy(true);
+    setNote(
+      phase === "note"
+        ? zh
+          ? "钱包只确认这一次登记。登记后照常交易。"
+          : "The wallet confirms the registration once. Then keep trading."
+        : zh
+          ? "钱包只确认一次，奖金直接进钱包。"
+          : "One signature pays the prize into this wallet.",
+    );
+    try {
+      await tradeRed(chain, account, row.lane, row.pool);
+      setNote(zh ? "奖金已进钱包。" : "The prize is in the wallet.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      setNote(
+        message === "hold"
+          ? zh
+            ? "已登记。请保持仓位，到点再领。提前平仓将放弃奖励。"
+            : "Noted. Keep the position open. Closing it early gives up the prize."
+          : zh
+            ? "没有完成。可以再点一次。"
+            : "Not finished. Tap again.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gold/40 px-3 py-2 text-xs">
+      <p>
+        {phase === "note"
+          ? zh
+            ? "有红包可以登记。签一次名即可，然后照常交易。"
+            : "A red packet can be registered. One signature, then keep trading."
+          : phase === "wait"
+            ? zh
+              ? `奖励 ${clock} 后可领`
+              : `Reward in ${clock}`
+            : zh
+              ? "可领取"
+              : "Ready to claim"}
+      </p>
+      {phase === "wait" ? null : (
+        <button type="button" className="border border-gold px-2 py-1" disabled={busy} onClick={() => void go()}>
+          {phase === "note" ? (zh ? "登记红包任务" : "Register") : zh ? "可领取" : "Claim"}
+        </button>
+      )}
+      {note ? <p className="w-full text-ink/70">{note}</p> : null}
     </div>
   );
 }

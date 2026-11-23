@@ -458,9 +458,15 @@ const stampAbi = parseAbi([
   "function allow(bytes32)",
   "function revoke(bytes32)",
 ]);
-const OLD_PERP_CODE: Record<GiftChain, Hex> = {
-  bsc: "0xf3e39c896ea131c4ef93fa17f4d289f01cb2ca709e455d6ab545e5cf4a9de638",
-  xlayer: "0xfd5cdb793998f74254bef092e420d5aedface9f11d84827670faf8ed9954b88a",
+const RETIRED_PERP: Record<GiftChain, Hex[]> = {
+  bsc: [
+    "0xf3e39c896ea131c4ef93fa17f4d289f01cb2ca709e455d6ab545e5cf4a9de638",
+    "0x9b2eefca769b0112c3820bb18ff61002d4e71dc5ff014bf78d16f3a1fd650cfb",
+  ],
+  xlayer: [
+    "0xfd5cdb793998f74254bef092e420d5aedface9f11d84827670faf8ed9954b88a",
+    "0x4569d669767795846444bd7fac928d111a18f59e69dea573631e97f780edbe6a",
+  ],
 };
 
 /** True once this chain's multisig has allowed the current perp-packet code. */
@@ -496,13 +502,17 @@ export async function placeStamp(chain: GiftChain, from: string): Promise<"deplo
   return "allowed";
 }
 
-/** Stop the previous perp-packet code. A fill already stamped stays stamped. */
-export async function revokeOldPerp(chain: GiftChain, from: string): Promise<void> {
+/** Allow this version, then stop the two older ones. A fill already stamped stays stamped. */
+export async function shipPerpCode(chain: GiftChain, from: string): Promise<void> {
   if (from.toLowerCase() !== giftDeployer(chain).toLowerCase()) throw new Error("safe");
-  const data = encodeFunctionData({ abi: stampAbi, functionName: "revoke", args: [OLD_PERP_CODE[chain]] });
-  await preflight(chain, from, RED_STAMP, data);
-  const hash = await send(chain, from, RED_STAMP, data);
-  await wait(chain, hash);
+  const allowData = encodeFunctionData({ abi: stampAbi, functionName: "allow", args: [RED_PERP_CODE[chain]] });
+  await preflight(chain, from, RED_STAMP, allowData);
+  await wait(chain, await send(chain, from, RED_STAMP, allowData));
+  for (const code of RETIRED_PERP[chain]) {
+    const data = encodeFunctionData({ abi: stampAbi, functionName: "revoke", args: [code] });
+    await preflight(chain, from, RED_STAMP, data);
+    await wait(chain, await send(chain, from, RED_STAMP, data));
+  }
 }
 
 const notedAbi = parseAbi(["function noted(uint256) view returns (uint256)"]);
@@ -527,6 +537,42 @@ export async function perpNoted(
   } catch {
     return 0;
   }
+}
+
+export type PerpRedPhase = "note" | "wait" | "claim";
+
+/** The live perp packet on this book, if this wallet can register or claim it. */
+export async function perpRedState(
+  chain: GiftChain,
+  book: Hex,
+  from: string,
+): Promise<{ pool: Hex; lane: GiftLane; phase: PerpRedPhase; readyAt: number } | null> {
+  const rows = await readSpawned(chain, from);
+  const now = Math.floor(Date.now() / 1000);
+  const day = BigInt(sgDay());
+  for (const row of rows) {
+    if (!taskStake(chain, row.hi).perp) continue;
+    let bookAddr: Hex;
+    try {
+      bookAddr = getAddress(`0x${row.hi.toString(16).padStart(40, "0")}`);
+    } catch {
+      continue;
+    }
+    if (bookAddr.toLowerCase() !== book.toLowerCase()) continue;
+    if (row.endsAt > 0n && Number(row.endsAt) <= now) continue;
+    if (row.lastDay === day || row.tradedDay === day) continue;
+    if (row.packetsLeft <= 0n) continue;
+    if ((await perpCode(chain, row.address)) !== "new") continue;
+    const need = row.spotNeed > row.perpNeed ? row.spotNeed : row.perpNeed;
+    const found = await scanPerpDeal(chain, bookAddr, from, row.gate, need, row.lo);
+    if (typeof found !== "bigint") continue;
+    const noted = await perpNoted(chain, row.address, from, row.hi, row.gate, need, row.lo);
+    if (noted <= 0) return { pool: row.address, lane: row.lane, phase: "note", readyAt: 0 };
+    const readyAt = noted + 300;
+    if (now < readyAt) return { pool: row.address, lane: row.lane, phase: "wait", readyAt };
+    return { pool: row.address, lane: row.lane, phase: "claim", readyAt };
+  }
+  return null;
 }
 
 async function perpCode(chain: GiftChain, pool: Hex): Promise<"new" | "old" | "other"> {
@@ -1290,7 +1336,23 @@ async function tradePerp(chain: GiftChain, from: string, gate: number, need: big
   const data = encodeFunctionData({ abi: RED_PACKET_ABI, functionName: "trade", args: [found, 0n] });
   await preflight(chain, from, pool, data);
   const hash = await send(chain, from, pool, data);
-  await wait(chain, hash);
+  let receipt;
+  try {
+    receipt = await client(chain).waitForTransactionReceipt({ hash, timeout: 120_000 });
+  } catch {
+    throw new TxPending(hash);
+  }
+  if (receipt.status !== "success") throw new Error("revert");
+  let paid = false;
+  for (const log of receipt.logs) {
+    try {
+      const parsed = decodeEventLog({ abi: RED_PACKET_ABI, data: log.data, topics: log.topics });
+      if (parsed.eventName === "Claimed") paid = true;
+    } catch {
+      /* not this event */
+    }
+  }
+  if (paid) return hash;
   const prize = await client(chain).readContract({
     address: pool,
     abi: parseAbi(["function prizeOf(address) view returns (uint256)"]),
@@ -1303,8 +1365,8 @@ async function tradePerp(chain: GiftChain, from: string, gate: number, need: big
 
 const CHECKED_RED = "0x7761ac208268aaeb74761267dec2e23504676028dd92264c2e07663cad7520c9" as Hex;
 const RED_PERP_CODE: Record<GiftChain, Hex> = {
-  bsc: "0x9b2eefca769b0112c3820bb18ff61002d4e71dc5ff014bf78d16f3a1fd650cfb",
-  xlayer: "0x4569d669767795846444bd7fac928d111a18f59e69dea573631e97f780edbe6a",
+  bsc: "0xbcf49f6ed15431bc60316cfd16381371ff651eb23d27e3244a69a40d12bd857a",
+  xlayer: "0x02f01c1b0db05a210053e4c1d8bb7b7509753a44ce09f0b95741becedb0d561d",
 };
 const RED_RUNTIME: Record<GiftChain, Hex> = {
   xlayer: "0x9f6a07ce7e33186652a2ace00d89929db9efa8eb5d2a0de7e70c67b981e2e186",
@@ -1317,6 +1379,8 @@ const TRUSTED_RED = new Set<string>([
   RED_PERP_CODE.xlayer,
   "0xf3e39c896ea131c4ef93fa17f4d289f01cb2ca709e455d6ab545e5cf4a9de638",
   "0xfd5cdb793998f74254bef092e420d5aedface9f11d84827670faf8ed9954b88a",
+  "0x9b2eefca769b0112c3820bb18ff61002d4e71dc5ff014bf78d16f3a1fd650cfb",
+  "0x4569d669767795846444bd7fac928d111a18f59e69dea573631e97f780edbe6a",
   RED_RUNTIME.xlayer,
   RED_RUNTIME.bsc,
   "0x0ec34e5d71fe7e47355e2510d9f5bc10fa058d96c78695b3eecb136f82f04872",
