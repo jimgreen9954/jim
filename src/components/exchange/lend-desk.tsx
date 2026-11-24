@@ -160,6 +160,9 @@ export function LendDesk({ zh, account }: { zh: boolean; account: string | null 
     if (!view.fresh) return 0n;
     return view.maxBorrow > view.cash ? view.cash : view.maxBorrow;
   })();
+  const priceBlocks =
+    Boolean(view && !view.fresh && !market.native && market.mode !== 0) &&
+    (mode === "in" || mode === "out" || mode === "borrow" || (mode === "free" && (view?.debt ?? 0n) > 0n));
 
   const act = () => {
     const book = prior ?? undefined;
@@ -219,6 +222,78 @@ export function LendDesk({ zh, account }: { zh: boolean; account: string | null 
             </button>
           ))}
         </div>
+        <div className="mt-3 flex flex-wrap gap-1">
+          {([
+            ["in", zh ? "存入" : "Supply"],
+            ["out", zh ? "取出" : "Withdraw"],
+            ["lock", zh ? "抵押" : "Lock"],
+            ["free", zh ? "取回" : "Unlock"],
+            ["borrow", zh ? "借入" : "Borrow"],
+            ["repay", zh ? "还款" : "Repay"],
+          ] as const)
+            .filter(([id]) => !prior || id === "out" || id === "free" || id === "repay")
+            .map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              className={`min-h-9 border px-2 text-xs ${mode === id ? "border-ink bg-ink text-paper" : "border-gold/50 text-ink"}`}
+              onClick={() => setMode(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <label className="mt-2 block text-xs text-ink/55">
+          {mode === "in"
+            ? `${zh ? "可用" : "Available"} ${money(view?.walletUsdt)} ${market.usdtSym}`
+            : mode === "out"
+              ? `${zh ? "现在可取" : "Withdrawable"} ${money(view && view.supply < view.cash ? view.supply : view?.cash)} ${market.usdtSym}`
+              : mode === "lock"
+                ? `${zh ? "可用" : "Available"} ${money(market.native ? gasFree : view?.walletColl, market.collDec)} ${market.collSym}`
+                : mode === "free"
+                  ? `${zh ? "可取回" : "Free"} ${money(view?.freeColl, market.collDec)} ${market.collSym}`
+                  : mode === "borrow"
+                    ? `${zh ? "还能借" : "Room"} ${money(borrowRoom)} ${market.usdtSym}`
+                    : `${zh ? "可用" : "Available"} ${money(view?.walletUsdt)} ${market.usdtSym}`}
+          <input
+            value={amount}
+            inputMode="decimal"
+            placeholder={collMode ? market.collSym : market.usdtSym}
+            className="mt-1 min-h-11 w-full border border-gold/40 bg-transparent px-2 text-sm text-ink"
+            onChange={(event) => {
+              setCloseAll(false);
+              setAmount(event.target.value);
+            }}
+          />
+        </label>
+        {priceBlocks ? (
+          <p className="mt-2 text-xs text-sell">
+            {zh
+              ? "价格过期。取出、存入和借入先不能用。点记账，大约 30 秒后如果还是过期再记一次。抵押不用等这次价格。"
+              : "The price is stale. Withdraw, supply and borrow stay closed. Tap Post, and if it is still stale wait about 30 seconds and post again. Lock does not wait on this price."}
+          </p>
+        ) : null}
+        <button type="button" disabled={busy || priceBlocks} className="mt-2 min-h-11 w-full bg-ink text-paper disabled:opacity-40" onClick={() => run(act, zh ? "已完成。" : "Done.")}>
+          {mode === "in" ? (zh ? "存入" : "Supply") : mode === "out" ? (zh ? "取出" : "Withdraw") : mode === "lock" ? (zh ? "抵押" : "Lock") : mode === "free" ? (zh ? "取回" : "Unlock") : mode === "borrow" ? (zh ? "借入" : "Borrow") : zh ? "还款" : "Repay"}
+        </button>
+        {live && !prior && !market.native && market.mode !== 0 ? (
+          <button
+            type="button"
+            disabled={busy}
+            className={`mt-2 min-h-11 w-full disabled:opacity-40 ${priceBlocks ? "border border-ink text-sm text-ink" : "text-xs text-ink/70"}`}
+            onClick={() => run(() => pokeLend(chain, asset), zh ? "已完成。" : "Done.")}
+          >
+            {zh ? "记账" : "Post"}
+          </button>
+        ) : null}
+        {prior ? (
+          <p className="mt-2 text-xs text-ink/70">
+            {zh
+              ? "这是旧池。只能取出、取回抵押和还款。新的存入和借款走上面的新池。"
+              : "This is the previous pool. You can only withdraw, unlock and repay. New deposits and borrows use the new pool."}
+          </p>
+        ) : null}
+        {note ? <p className={`mt-2 text-xs ${bad ? "text-down" : "text-ink/70"}`}>{note}</p> : null}
         <dl className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
           <Cell k={zh ? "池子现金" : "Cash"} v={`${money(view?.cash)} ${market.usdtSym}`} />
           <Cell k={zh ? "池子已借出" : "Pool lent"} v={`${money(view ? view.assets - view.cash : undefined)} ${market.usdtSym}`} />
@@ -348,77 +423,6 @@ export function LendDesk({ zh, account }: { zh: boolean; account: string | null 
           account={account}
           onLiquidate={(row) => run(() => liquidateLend(row.chain, row.asset, row.account), zh ? "已平仓。" : "Liquidated.")}
         />
-        <div className="mt-3 flex flex-wrap gap-1">
-          {([
-            ["in", zh ? "存入" : "Supply"],
-            ["out", zh ? "取出" : "Withdraw"],
-            ["lock", zh ? "抵押" : "Lock"],
-            ["free", zh ? "取回" : "Unlock"],
-            ["borrow", zh ? "借入" : "Borrow"],
-            ["repay", zh ? "还款" : "Repay"],
-          ] as const)
-            .filter(([id]) => !prior || id === "out" || id === "free" || id === "repay")
-            .map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              disabled={Boolean(prior) && (id === "in" || id === "lock" || id === "borrow")}
-              className={`min-h-9 px-2 text-xs ${mode === id ? "bg-ink text-paper" : "text-ink/60"} disabled:opacity-30`}
-              onClick={() => setMode(id)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <label className="mt-2 block text-xs text-ink/55">
-          {mode === "in"
-            ? `${zh ? "可用" : "Available"} ${money(view?.walletUsdt)} ${market.usdtSym}`
-            : mode === "out"
-              ? `${zh ? "现在可取" : "Withdrawable"} ${money(view && view.supply < view.cash ? view.supply : view?.cash)} ${market.usdtSym}`
-              : mode === "lock"
-                ? `${zh ? "可用" : "Available"} ${money(market.native ? gasFree : view?.walletColl, market.collDec)} ${market.collSym}`
-                : mode === "free"
-                  ? `${zh ? "可取回" : "Free"} ${money(view?.freeColl, market.collDec)} ${market.collSym}`
-                  : mode === "borrow"
-                    ? `${zh ? "还能借" : "Room"} ${money(borrowRoom)} ${market.usdtSym}${view && !view.fresh ? (zh ? " · 价格还没跟上，现在不能借" : " · price has not caught up, borrow is closed") : ""}`
-                    : `${zh ? "可用" : "Available"} ${money(view?.walletUsdt)} ${market.usdtSym}`}
-          {view && !view.fresh && (mode === "out" || mode === "in" || mode === "free" || mode === "borrow" || mode === "lock")
-            ? zh
-              ? " 价格还没跟上。先点下面的记账。记完如果还是过期，大约 30 秒后再记一次，不要直接存或借。"
-              : " The price has not caught up. Tap Post below. If it is still stale, wait about 30 seconds and post again. Do not supply or borrow yet."
-            : ""}
-          <input
-            value={amount}
-            inputMode="decimal"
-            placeholder={collMode ? market.collSym : market.usdtSym}
-            className="mt-1 min-h-11 w-full border border-gold/40 bg-transparent px-2 text-sm text-ink"
-            onChange={(event) => {
-              setCloseAll(false);
-              setAmount(event.target.value);
-            }}
-          />
-        </label>
-        <button type="button" disabled={busy || Boolean(view && !view.fresh && mode !== "repay" && !market.native && market.mode !== 0)} className="mt-2 min-h-11 w-full bg-ink text-paper disabled:opacity-40" onClick={() => run(act, zh ? "已完成。" : "Done.")}>
-          {mode === "in" ? (zh ? "存入" : "Supply") : mode === "out" ? (zh ? "取出" : "Withdraw") : mode === "lock" ? (zh ? "抵押" : "Lock") : mode === "free" ? (zh ? "取回" : "Unlock") : mode === "borrow" ? (zh ? "借入" : "Borrow") : zh ? "还款" : "Repay"}
-        </button>
-        {live && !prior && !market.native && market.mode !== 0 ? (
-          <button
-            type="button"
-            disabled={busy}
-            className="mt-2 min-h-9 w-full text-xs text-ink/70 disabled:opacity-40"
-            onClick={() => run(() => pokeLend(chain, asset), zh ? "已完成。" : "Done.")}
-          >
-            {zh ? "记账" : "Post"}
-          </button>
-        ) : null}
-        {prior ? (
-          <p className="mt-2 text-xs text-ink/70">
-            {zh
-              ? "这是旧池。只能取出、取回抵押和还款。新的存入和借款走上面的新池。"
-              : "This is the previous pool. You can only withdraw, unlock and repay. New deposits and borrows use the new pool."}
-          </p>
-        ) : null}
-        {note ? <p className={`mt-2 text-xs ${bad ? "text-down" : "text-ink/70"}`}>{note}</p> : null}
       </article>
     </section>
   );
