@@ -28,6 +28,21 @@ interface ISwapV3 {
     function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut);
 }
 
+/// X Layer SwapRouter02. The hop has no deadline; the other router on BSC does.
+interface IXLayerV3 {
+    struct ExactInputSingleParams {
+        address tokenIn;
+        address tokenOut;
+        uint24 fee;
+        address recipient;
+        uint256 amountIn;
+        uint256 amountOutMinimum;
+        uint160 sqrtPriceLimitX96;
+    }
+
+    function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut);
+}
+
 interface ISwapV2 {
     function swapExactETHForTokens(uint256 amountOutMin, address[] calldata path, address to, uint256 deadline)
         external
@@ -53,7 +68,7 @@ interface ITape {
 
 /// One spawned spot packet. BSC (kind 0) swaps on the fee stored at publish,
 /// which is the pool that actually has the coin. A 0.01% hop is only the
-/// BNB/USDT leg. X Layer (kind 1) uses the TAPE pool or the V2 router.
+/// BNB/USDT leg. X Layer (kind 1) uses the TAPE pool, the BEM V3 pool, or the V2 router.
 contract RedNext {
     uint256 public constant PACE = 180;
     address public constant BOOTH = 0x284Fa8819980A229622B711A52BF66bD9cDCbC2d;
@@ -61,6 +76,9 @@ contract RedNext {
     address internal constant UP_TOKEN = 0xEd99445d72787Adb627cD8588586984DF548CD2F;
     address internal constant UP_POOL = 0xDf40529fa3E797c992272e27B811E59E5f1827Ae;
     address internal constant UP_BEM = 0x5ce033B2bFCa3Af30b3e8C8457DeaF776A8b695a;
+    /// X Layer BEM/OKB. The V2 router stored in `router` has no WOKB/BEM pair.
+    address internal constant X_V3 = 0x4f0C28f5926AFDA16bf2506D5D9e57Ea190f9bcA;
+    uint24 internal constant BEM_FEE = 10000;
 
     address public immutable router;
     address public immutable quote;
@@ -374,6 +392,10 @@ contract RedNext {
             _push(task, msg.sender, got);
             return;
         }
+        if (kind == 1 && task == tapeBem) {
+            _buyBem(amountIn, minOut);
+            return;
+        }
         if (kind == 1) {
             address[] memory path = new address[](2);
             path[0] = wrapped;
@@ -402,6 +424,10 @@ contract RedNext {
             require(ok, "prize");
             return;
         }
+        if (kind == 1 && task == tapeBem) {
+            _sellBem(amountIn, minOut);
+            return;
+        }
         if (kind == 1) {
             _approve(task, router, amountIn);
             address[] memory path = new address[](2);
@@ -424,6 +450,50 @@ contract RedNext {
         require(out >= minOut && out >= spotNeed, "buy");
         IWETH(wrapped).withdraw(out);
         (bool ok,) = msg.sender.call{value: out}("");
+        require(ok, "prize");
+    }
+
+    /// Native OKB goes straight to the V3 router, which wraps it. Same call the spot desk uses.
+    function _buyBem(uint256 amountIn, uint256 minOut) internal {
+        uint256 beforeBal = IERC20(tapeBem).balanceOf(msg.sender);
+        try IXLayerV3(X_V3).exactInputSingle{value: amountIn}(
+            IXLayerV3.ExactInputSingleParams({
+                tokenIn: wrapped,
+                tokenOut: tapeBem,
+                fee: BEM_FEE,
+                recipient: msg.sender,
+                amountIn: amountIn,
+                amountOutMinimum: minOut,
+                sqrtPriceLimitX96: 0
+            })
+        ) {} catch {
+            revert("buy");
+        }
+        uint256 got = IERC20(tapeBem).balanceOf(msg.sender) - beforeBal;
+        require(got >= minOut && got > 0, "buy");
+    }
+
+    /// BEM comes back as WOKB to this packet, then as OKB to the trader. Do not sweep the router.
+    function _sellBem(uint256 amountIn, uint256 minOut) internal {
+        _approve(tapeBem, X_V3, amountIn);
+        uint256 beforeW = IERC20(wrapped).balanceOf(address(this));
+        try IXLayerV3(X_V3).exactInputSingle(
+            IXLayerV3.ExactInputSingleParams({
+                tokenIn: tapeBem,
+                tokenOut: wrapped,
+                fee: BEM_FEE,
+                recipient: address(this),
+                amountIn: amountIn,
+                amountOutMinimum: minOut,
+                sqrtPriceLimitX96: 0
+            })
+        ) {} catch {
+            revert("buy");
+        }
+        uint256 got = IERC20(wrapped).balanceOf(address(this)) - beforeW;
+        require(got >= minOut && got >= spotNeed, "buy");
+        IWETH(wrapped).withdraw(got);
+        (bool ok,) = msg.sender.call{value: got}("");
         require(ok, "prize");
     }
 

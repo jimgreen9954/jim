@@ -388,7 +388,7 @@ async function send(chain: GiftChain, from: string, to: Hex, data: Hex, value = 
     gas = `0x${((est * 12n) / 10n).toString(16)}`;
   } catch (err) {
     const text = err instanceof Error ? err.message : "";
-    if (/exceeds the balance|insufficient funds/i.test(text)) throw new Error("funds");
+    if (/exceeds the balance|insufficient funds|OutOfFunds/i.test(text)) throw new Error("funds");
     const known = ["deployer", "creator", "amount", "life", "mode", "range", "packets", "dust", "rule", "late", "empty", "day", "cap", "early", "credit", "token", "native", "bot", "pace", "task", "buy", "fee", "pull", "prize", "closed", "begun", "desk", "placed"];
     const hit = known.find((item) => text === item || text.includes(`: ${item}`) || text.includes(`"${item}"`));
     if (hit) throw new Error(hit);
@@ -410,7 +410,7 @@ async function preflight(chain: GiftChain, from: string, to: Hex, data: Hex, val
     const which = await Promise.race([call, slow]);
     if (which === "ok" || which === "slow") return;
     const text = which instanceof Error ? which.message : "";
-    if (/exceeds the balance|insufficient funds/i.test(text)) throw new Error("funds");
+    if (/exceeds the balance|insufficient funds|OutOfFunds/i.test(text)) throw new Error("funds");
     const known = ["deployer", "creator", "amount", "life", "mode", "range", "packets", "dust", "rule", "late", "empty", "day", "cap", "early", "credit", "token", "native", "bot", "pace", "task", "buy", "fee", "pull", "prize", "closed", "desk", "placed", "owed", "used", "code", "safe"];
     const hit = known.find((item) => text === item || text.includes(`: ${item}`) || text.includes(`"${item}"`));
     throw new Error(hit ?? "revert");
@@ -992,26 +992,11 @@ export function swapFeeOf(chain: GiftChain, hi: bigint): number {
 
 const previewAbi = parseAbi(["function previewSwap(uint8 quote, bool tapeIn, uint256 amountIn) view returns (uint256 fee, uint256 out)"]);
 const v2QuoteAbi = parseAbi(["function getAmountsOut(uint256 amountIn, address[] path) view returns (uint256[] amounts)"]);
-const spotAbi = parseAbi(["function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16, uint16, uint16, uint8, bool)"]);
-const BEM_POOL = "0x2CcF8aa17F5DF9Fb5D51C9de12135a913fF29f7A" as Hex;
-const Q96 = 1n << 96n;
-
-async function spotOut(zeroForOne: boolean, amountIn: bigint): Promise<bigint> {
-  const row = await xClient.readContract({ address: BEM_POOL, abi: spotAbi, functionName: "slot0" });
-  const sqrt = row[0];
-  if (sqrt <= 0n || amountIn <= 0n) return 0n;
-  if (zeroForOne) {
-    const step = (amountIn * sqrt) / Q96;
-    return (step * sqrt) / Q96;
-  }
-  const step = (amountIn * Q96) / sqrt;
-  return (step * Q96) / sqrt;
-}
 
 async function quoteBuy(chain: GiftChain, hi: bigint, amountIn: bigint): Promise<bigint> {
   const task = taskAsset(chain, hi);
   if (!task || amountIn <= 0n || task.id.endsWith("perp")) return 0n;
-  if (chain === "xlayer" && task.id === "bem") return spotOut(false, amountIn);
+  if (chain === "xlayer" && task.id === "bem") return quoteBemOkb("buy", amountIn);
   if (chain === "xlayer" && task.id === "fab") {
     const bem = await quoteBemOkb("buy", amountIn);
     return bem > 0n ? quoteFab("buy", bem) : 0n;
@@ -1164,7 +1149,7 @@ async function sellAmount(chain: GiftChain, hi: bigint, need: bigint): Promise<b
     }
     return sellSearch(need, (amount) => quoteWithBnb(task.token, swapFeeOf(chain, hi), "sell", amount), 10n ** BigInt(task.decimals) / 100n);
   }
-  if (chain === "xlayer" && task.id === "bem") return sellSearch(need, (amount) => spotOut(true, amount), 10n ** 6n);
+  if (chain === "xlayer" && task.id === "bem") return sellSearch(need, (amount) => quoteBemOkb("sell", amount), 10n ** 6n);
   if (task.id === "fab") {
     return sellSearch(need, async (amount) => {
       const bem = await quoteFab("sell", amount);
@@ -1198,7 +1183,7 @@ export async function sellPreview(chain: GiftChain, hi: bigint, need: bigint): P
     if (chain === "bsc") native = task.token.toLowerCase() === BSC.usdt.toLowerCase()
       ? await quoteExact(BSC.usdt, BSC.wbnb, amountIn, 100)
       : await quoteWithBnb(task.token, swapFeeOf(chain, hi), "sell", amountIn);
-    else if (task.id === "bem") native = await spotOut(true, amountIn);
+    else if (task.id === "bem") native = await quoteBemOkb("sell", amountIn);
     else if (task.id === "fab") {
       const bem = await quoteFab("sell", amountIn);
       native = bem > 0n ? await quoteBemOkb("sell", bem) : 0n;
@@ -1378,6 +1363,11 @@ const RED_RUNTIME: Record<GiftChain, Hex> = {
   xlayer: "0x9f6a07ce7e33186652a2ace00d89929db9efa8eb5d2a0de7e70c67b981e2e186",
   bsc: "0x50b8507ab02ffeefe66e153e71ee4d63b861a37d34e72a91f9e9667b4d9d51b5",
 };
+/** X Layer BEM uses the 1% V3 pool. Older spot runtimes stay trusted, but that task cannot fill. */
+const RED_V3_RUNTIME: Record<GiftChain, Hex> = {
+  xlayer: "0xa3d2344912248bb86f637d3a16c18c5d9b793d88df13d482a1494d80e4d9339b",
+  bsc: "0xf97e2b8f7786be062ccc40a1f5ea713014021cfdfdf05cb5a742233763b27bfb",
+};
 /** Runtimes this app ships or has already checked. A factory row with any other code is not a red packet. */
 const TRUSTED_RED = new Set<string>([
   CHECKED_RED,
@@ -1389,6 +1379,8 @@ const TRUSTED_RED = new Set<string>([
   "0x4569d669767795846444bd7fac928d111a18f59e69dea573631e97f780edbe6a",
   RED_RUNTIME.xlayer,
   RED_RUNTIME.bsc,
+  RED_V3_RUNTIME.xlayer,
+  RED_V3_RUNTIME.bsc,
   "0x0ec34e5d71fe7e47355e2510d9f5bc10fa058d96c78695b3eecb136f82f04872",
   "0xbbb52e1c7fcefd16904831f2f57fa1a041f8d8aca5bdba3ffc537cbaa49e8947",
   "0x44b4d3286ad28656d02bbc21f573ed24dbbc53cab9f1cf7cfb0c39f3ed9b8f6b",
@@ -1457,6 +1449,10 @@ export async function tradeRed(chain: GiftChain, from: string, lane: GiftLane = 
     noteDeskTask(chain, from, pool);
     markDeskFill(chain, from, "spot", Number(formatUnits(need, 18)) || 0, deskTask.id);
     return hash;
+  }
+  if (deskTask?.id === "bem" && chain === "xlayer") {
+    const code = (await client(chain).getBytecode({ address: pool }))?.toLowerCase() ?? "";
+    if (!code.includes("4f0c28f5926afda16bf2506d5d9e57ea190f9bca")) throw new Error("old-bem");
   }
   if (here.gate === 0) {
     const bal = await client(chain).getBalance({ address: from as Hex });

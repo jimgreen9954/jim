@@ -456,6 +456,12 @@ export function RedGift({
             ? "这份已经发出的 UP 现货，买入后 UP 还在官方池账上，没有提出来，所以交易过不了，领不了。请再重新发一份。这两份里的 UP 等倒计时结束再取回。"
             : "This published UP spot packet leaves the bought UP inside the official pool, so the trade cannot finish and the prize cannot be claimed. Publish it once more. The UP in these ones comes back when the timer ends.",
         );
+      else if (message === "old-bem")
+        setNote(
+          zh
+            ? "这张已经发出的 BEM 红包走旧的兑换，链上没有那条池子，做不了。倒计时结束由发布的人取回，再发一张新的。"
+            : "This published BEM packet uses the old route. That pool is not on the chain, so the task cannot be done. The publisher takes it back when the timer ends, then sends a new one.",
+        );
       else if (message === "task" || message === "buy" || message === "pull")
         setNote(
           zh
