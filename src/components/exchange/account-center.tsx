@@ -1910,6 +1910,14 @@ function say(error: unknown, zh: boolean): string {
   if (message === "owner") return zh ? "这片不是这个钱包的。" : "This wallet does not own it.";
   if (message === "contract")
     return zh ? "这个地址是合约，收不了晶体管。换成普通钱包地址。" : "That address is a contract. Transistors need a normal wallet.";
+  if (message === "leader")
+    return zh ? "只有这个多签的两个钱包能给它装上接收器。" : "Only the two multisig wallets can turn receiving on.";
+  if (message === "second")
+    return zh
+      ? "这个钱包已经签了。用另一个多签钱包打开这一页，再点一次。"
+      : "This wallet has signed. Open this page with the other multisig wallet and press it again.";
+  if (message === "armed")
+    return zh ? "接收器已装上。换回有晶体管的钱包，再点一次。" : "Receiving is on. Switch back to the wallet that holds the transistors and press it again.";
   if (message === "nowallet") return zh ? "钱包没连上。重新连接后再转。" : "The wallet is not connected. Connect it, then send.";
   if (message === "xlayer" || message === "bsc") return zh ? "钱包没有切到这条链。" : "The wallet did not switch chain.";
   if (message.includes("rejected") || message.includes("denied") || message.includes("取消"))

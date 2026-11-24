@@ -4,13 +4,14 @@ import {
   defineChain,
   encodeFunctionData,
   formatEther,
+  hashTypedData,
   http,
   parseEther,
   toHex,
   type Hex,
 } from "viem";
 
-import { XLAYER as X_BASE } from "@/lib/chain-marks";
+import { XLAYER as X_BASE, XLAYER_SAFE } from "@/lib/chain-marks";
 
 export const XLAYER = {
   ...X_BASE,
@@ -547,6 +548,208 @@ function recipient(from: string, to: string): Hex {
   return to as Hex;
 }
 
+const SAFE_HANDLER = "0xfd0732Dc9E303f09fCEf3a7388Ad10A83459Ec99" as Hex;
+const SAFE_HANDLER_SLOT = "0x6c9a6c4a39284e37ed1cf53d337577d14212a4870fb976a4366c693b939918d5" as Hex;
+const ZERO_ADDR = "0x0000000000000000000000000000000000000000" as Hex;
+
+const safeAbi = [
+  { name: "getOwners", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "address[]" }] },
+  { name: "getThreshold", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { name: "nonce", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  {
+    name: "getTransactionHash",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "value", type: "uint256" },
+      { name: "data", type: "bytes" },
+      { name: "operation", type: "uint8" },
+      { name: "safeTxGas", type: "uint256" },
+      { name: "baseGas", type: "uint256" },
+      { name: "gasPrice", type: "uint256" },
+      { name: "gasToken", type: "address" },
+      { name: "refundReceiver", type: "address" },
+      { name: "_nonce", type: "uint256" },
+    ],
+    outputs: [{ type: "bytes32" }],
+  },
+  {
+    name: "execTransaction",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "value", type: "uint256" },
+      { name: "data", type: "bytes" },
+      { name: "operation", type: "uint8" },
+      { name: "safeTxGas", type: "uint256" },
+      { name: "baseGas", type: "uint256" },
+      { name: "gasPrice", type: "uint256" },
+      { name: "gasToken", type: "address" },
+      { name: "refundReceiver", type: "address" },
+      { name: "signatures", type: "bytes" },
+    ],
+    outputs: [{ type: "bool" }],
+  },
+  {
+    name: "setFallbackHandler",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "handler", type: "address" }],
+    outputs: [],
+  },
+] as const;
+
+function normalizeSig(sig: string): Hex {
+  const hex = (sig.startsWith("0x") ? sig : `0x${sig}`).toLowerCase();
+  if (!/^0x[0-9a-f]{130}$/.test(hex)) throw new Error("revert");
+  const v = Number.parseInt(hex.slice(-2), 16);
+  const fixed = v < 27 ? v + 27 : v;
+  return `${hex.slice(0, 130)}${fixed.toString(16).padStart(2, "0")}` as Hex;
+}
+
+/** Both multisig owners sign once. The official Safe handler is what lets transistors land in the safe. */
+async function armSafeReceiver(from: string, safe: Hex): Promise<"ready" | "installed"> {
+  const slot = await client.getStorageAt({ address: safe, slot: SAFE_HANDLER_SLOT });
+  const current = `0x${(slot ?? "0x").slice(-40)}`.toLowerCase();
+  if (current !== ZERO_ADDR) return "ready";
+  const [ownerRows, threshold, nonce] = await Promise.all([
+    client.readContract({ address: safe, abi: safeAbi, functionName: "getOwners" }),
+    client.readContract({ address: safe, abi: safeAbi, functionName: "getThreshold" }),
+    client.readContract({ address: safe, abi: safeAbi, functionName: "nonce" }),
+  ]);
+  const owners = ownerRows.map((row) => row.toLowerCase());
+  const who = from.toLowerCase();
+  if (!owners.includes(who)) throw new Error("leader");
+  const data = encodeFunctionData({ abi: safeAbi, functionName: "setFallbackHandler", args: [SAFE_HANDLER] });
+  const typed = hashTypedData({
+    domain: { chainId: XLAYER.chainId, verifyingContract: safe },
+    types: {
+      SafeTx: [
+        { name: "to", type: "address" },
+        { name: "value", type: "uint256" },
+        { name: "data", type: "bytes" },
+        { name: "operation", type: "uint8" },
+        { name: "safeTxGas", type: "uint256" },
+        { name: "baseGas", type: "uint256" },
+        { name: "gasPrice", type: "uint256" },
+        { name: "gasToken", type: "address" },
+        { name: "refundReceiver", type: "address" },
+        { name: "nonce", type: "uint256" },
+      ],
+    },
+    primaryType: "SafeTx",
+    message: {
+      to: safe,
+      value: 0n,
+      data,
+      operation: 0,
+      safeTxGas: 0n,
+      baseGas: 0n,
+      gasPrice: 0n,
+      gasToken: ZERO_ADDR,
+      refundReceiver: ZERO_ADDR,
+      nonce,
+    },
+  });
+  const onchain = await client.readContract({
+    address: safe,
+    abi: safeAbi,
+    functionName: "getTransactionHash",
+    args: [safe, 0n, data, 0, 0n, 0n, 0n, ZERO_ADDR, ZERO_ADDR, nonce],
+  });
+  if (onchain.toLowerCase() !== typed.toLowerCase()) throw new Error("revert");
+  const storeKey = `tapeliquid-safe-receive-${safe.toLowerCase()}-${nonce}-${typed}`;
+  let bag: Record<string, string> = {};
+  try {
+    bag = JSON.parse(window.localStorage.getItem(storeKey) || "{}") as Record<string, string>;
+  } catch {
+    bag = {};
+  }
+  if (!bag[who]) {
+    const eth = await ensureProvider();
+    if (remoteWallet()) await armChain(196);
+    else await ensureXLayer();
+    const signed = (await eth.request({
+      method: "eth_signTypedData_v4",
+      params: [
+        from,
+        JSON.stringify({
+          types: {
+            EIP712Domain: [
+              { name: "chainId", type: "uint256" },
+              { name: "verifyingContract", type: "address" },
+            ],
+            SafeTx: [
+              { name: "to", type: "address" },
+              { name: "value", type: "uint256" },
+              { name: "data", type: "bytes" },
+              { name: "operation", type: "uint8" },
+              { name: "safeTxGas", type: "uint256" },
+              { name: "baseGas", type: "uint256" },
+              { name: "gasPrice", type: "uint256" },
+              { name: "gasToken", type: "address" },
+              { name: "refundReceiver", type: "address" },
+              { name: "nonce", type: "uint256" },
+            ],
+          },
+          domain: { chainId: XLAYER.chainId, verifyingContract: safe },
+          primaryType: "SafeTx",
+          message: {
+            to: safe,
+            value: "0",
+            data,
+            operation: 0,
+            safeTxGas: "0",
+            baseGas: "0",
+            gasPrice: "0",
+            gasToken: ZERO_ADDR,
+            refundReceiver: ZERO_ADDR,
+            nonce: nonce.toString(),
+          },
+        }),
+      ],
+    })) as string;
+    bag[who] = normalizeSig(signed);
+    window.localStorage.setItem(storeKey, JSON.stringify(bag));
+  }
+  if (owners.filter((owner) => bag[owner]).length < Number(threshold)) throw new Error("second");
+  const signatures = `0x${owners
+    .filter((owner) => bag[owner])
+    .sort()
+    .map((owner) => bag[owner].slice(2))
+    .join("")}` as Hex;
+  const exec = encodeFunctionData({
+    abi: safeAbi,
+    functionName: "execTransaction",
+    args: [safe, 0n, data, 0, 0n, 0n, 0n, ZERO_ADDR, ZERO_ADDR, signatures],
+  });
+  const eth = await ensureProvider();
+  if (remoteWallet()) await armChain(196);
+  else await ensureXLayer();
+  let gas: Hex | undefined;
+  try {
+    const est = await within(client.estimateGas({ account: from as Hex, to: safe, data: exec }));
+    gas = toHex(est + est / 2n);
+  } catch (error) {
+    const text = error instanceof Error ? `${error.name} ${error.message}` : "";
+    if (/revert/i.test(text)) throw new Error("revert");
+  }
+  const tx: { from: string; to: Hex; data: Hex; chainId: Hex; gas?: Hex } = {
+    from,
+    to: safe,
+    data: exec,
+    chainId: XLAYER.hex as Hex,
+  };
+  if (gas) tx.gas = gas;
+  const hash = (await eth.request({ method: "eth_sendTransaction", params: [tx] })) as Hex;
+  const receipt = await client.waitForTransactionReceipt({ hash, timeout: 120_000 });
+  if (receipt.status !== "success") throw new Error("revert");
+  window.localStorage.removeItem(storeKey);
+  return "installed";
+}
+
 function within<T>(work: Promise<T>): Promise<T> {
   return Promise.race([
     work,
@@ -586,11 +789,15 @@ async function transistorFee(from: Hex, dest: Hex, data: Hex): Promise<{ gas?: b
 export async function transferTransistor(from: string, to: string, id: 0 | 1, amount: bigint): Promise<Hex> {
   if (amount < 1n) throw new Error("amount");
   const dest = recipient(from, to);
+  let installed = false;
+  if (dest.toLowerCase() === XLAYER_SAFE.toLowerCase()) {
+    installed = (await armSafeReceiver(from, XLAYER_SAFE)) === "installed";
+  }
   try {
     const held = await transistorHeld(from);
-    if ((id === 0 ? held.nand : held.latch) < amount) throw new Error("short");
+    if ((id === 0 ? held.nand : held.latch) < amount) throw new Error(installed ? "armed" : "short");
   } catch (error) {
-    if (error instanceof Error && error.message === "short") throw error;
+    if (error instanceof Error && (error.message === "short" || error.message === "armed")) throw error;
   }
   const data = encodeFunctionData({
     abi: transferAbi,
