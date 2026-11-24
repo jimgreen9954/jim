@@ -20,7 +20,7 @@ import { getOfficialBooks } from "@/lib/official-books";
 import { transferBscCircuit, transferBscTransistor } from "@/lib/official-trade";
 import { okbPrice, OKB, readOkbPurse } from "@/lib/okb";
 import { BSC_REBATE, KNOWN_XPERP, readPerp } from "@/lib/perp";
-import { connectKind, currentAccount, disconnectWallet, getProvider, onAccount, onOpenLink, onPairUri, tapBlank } from "@/lib/wallet";
+import { connectKind, currentAccount, disconnectWallet, ensureProvider, onAccount, onOpenLink, onPairUri, tapBlank } from "@/lib/wallet";
 import { connectXLayer, transferCircuit, transferTransistor, XLAYER } from "@/lib/xlayer";
 import { LOCK_TERMS, readLocks, type LockSeat } from "@/lib/tape-lock";
 import {
@@ -694,8 +694,14 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
   }
 
   const sendChip = async (row: ChipRow) => {
+    if (!ack) {
+      setBad(true);
+      setNote(zh ? "先勾上确认，再转。" : "Tick the confirmation before sending.");
+      return;
+    }
     setBusy(true);
     setBad(false);
+    setNote(zh ? "正在打开钱包。留在这一页。" : "Opening the wallet. Stay on this page.");
     try {
       const n = BigInt(nandQty || "0");
       const l = BigInt(latchQty || "0");
@@ -730,6 +736,11 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
   };
 
   const sendMany = async (row: ChipRow) => {
+    if (!ack) {
+      setBad(true);
+      setNote(zh ? "先勾上确认，再转。" : "Tick the confirmation before sending.");
+      return;
+    }
     const lines = many
       .map((item) => ({
         to: item.to.trim(),
@@ -776,6 +787,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
     }
     setBusy(true);
     setBad(false);
+    setNote(zh ? "正在打开钱包。留在这一页。" : "Opening the wallet. Stay on this page.");
     try {
       for (let i = 0; i < jobs.length; i += 1) {
         const job = jobs[i];
@@ -811,6 +823,11 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
   };
 
   const sendPicked = async () => {
+    if (!ack) {
+      setBad(true);
+      setNote(zh ? "先勾上确认，再转。" : "Tick the confirmation before sending.");
+      return;
+    }
     const chosen = circuits.filter(
       (row) => row.id && !row.listed && picks[`${row.chain}:${row.circuits}:${row.id}`]?.on,
     );
@@ -836,6 +853,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
     }
     setBusy(true);
     setBad(false);
+    setNote(zh ? "正在打开钱包。留在这一页。" : "Opening the wallet. Stay on this page.");
     try {
       for (let i = 0; i < jobs.length; i += 1) {
         const job = jobs[i];
@@ -956,15 +974,17 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
     setBusy(true);
     setBad(false);
     setSent([]);
+    setNote(zh ? "正在打开钱包。留在这一页。" : "Opening the wallet. Stay on this page.");
     const chainId = picked.chain === "bsc" ? BSC.hex : XLAYER.hex;
     const done: string[] = [];
     try {
-      const eth = getProvider();
-      if (!eth) throw new Error("nowallet");
-      const now = await eth.request({ method: "eth_chainId" }).catch(() => "");
-      if (String(now).toLowerCase() !== chainId.toLowerCase()) {
-        if (picked.chain === "bsc") await connectBsc();
-        else await connectXLayer();
+      const eth = await ensureProvider();
+      if (picked.kind !== "chip" && picked.kind !== "hash") {
+        const now = await eth.request({ method: "eth_chainId" }).catch(() => "");
+        if (String(now).toLowerCase() !== chainId.toLowerCase()) {
+          if (picked.chain === "bsc") await connectBsc();
+          else await connectXLayer();
+        }
       }
       for (let i = 0; i < jobs.length; i += 1) {
         const job = jobs[i];
@@ -1330,9 +1350,9 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
                       </label>
                       <button
                         type="button"
-                        disabled={busy || !sendAck}
+                        disabled={busy}
                         className="min-h-12 bg-ink text-sm text-paper disabled:opacity-40"
-                        onClick={sendHolding}
+                        onClick={() => void sendHolding()}
                       >
                         {busy
                           ? zh
@@ -1543,11 +1563,17 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
                           </label>
                           <button
                             type="button"
-                            disabled={!ack || busy}
+                            disabled={busy}
                             onClick={() => void sendChip(row)}
                             className="min-h-10 bg-ink text-paper disabled:opacity-40"
                           >
-                            {zh ? "签名转出" : "Sign and send"}
+                            {busy
+                              ? zh
+                                ? "正在打开钱包"
+                                : "Opening the wallet"
+                              : zh
+                                ? "签名转出"
+                                : "Sign and send"}
                           </button>
                         </div>
                       ) : (
@@ -1634,14 +1660,23 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
                           </label>
                           <button
                             type="button"
-                            disabled={!ack || busy}
+                            disabled={busy}
                             onClick={() => void sendMany(row)}
                             className="min-h-10 bg-ink text-paper disabled:opacity-40"
                           >
-                            {zh ? "按行签名" : "Sign each row"}
+                            {busy
+                              ? zh
+                                ? "正在打开钱包"
+                                : "Opening the wallet"
+                              : zh
+                                ? "按行签名"
+                                : "Sign each row"}
                           </button>
                         </div>
                       )}
+                      {note ? (
+                        <p className={`text-sm leading-6 ${bad ? "text-sell" : ""}`}>{note}</p>
+                      ) : null}
                     </div>
                   ) : null}
                 </article>
@@ -1735,17 +1770,23 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
             </label>
             <button
               type="button"
-              disabled={busy || !ack}
+              disabled={busy}
               onClick={() => void sendPicked()}
               className="min-h-11 bg-ink text-paper disabled:opacity-40"
             >
-              {zh ? "按片签名转出" : "Sign each circuit"}
+              {busy
+                ? zh
+                  ? "正在打开钱包"
+                  : "Opening the wallet"
+                : zh
+                  ? "按片签名转出"
+                  : "Sign each circuit"}
             </button>
+            {note ? <p className={`text-sm leading-6 ${bad ? "text-sell" : ""}`}>{note}</p> : null}
           </div>
         ) : null}
 
         {tab === "hash" ? <HashWallet zh={zh} account={account} /> : null}
-        {note ? <p className={`text-sm ${bad ? "text-sell" : ""}`}>{note}</p> : null}
       </div>
     </section>
   );
@@ -1867,7 +1908,9 @@ function say(error: unknown, zh: boolean): string {
   if (message === "short" || message === "amount")
     return zh ? "数量不对。" : "That amount does not work.";
   if (message === "owner") return zh ? "这片不是这个钱包的。" : "This wallet does not own it.";
-  if (message.includes("rejected") || message.includes("denied"))
+  if (message === "nowallet") return zh ? "钱包没连上。重新连接后再转。" : "The wallet is not connected. Connect it, then send.";
+  if (message === "xlayer" || message === "bsc") return zh ? "钱包没有切到这条链。" : "The wallet did not switch chain.";
+  if (message.includes("rejected") || message.includes("denied") || message.includes("取消"))
     return zh ? "你取消了。" : "You cancelled.";
   return zh ? "没有转出。" : "It did not send.";
 }

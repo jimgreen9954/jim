@@ -297,7 +297,7 @@ export function HashWallet({ zh, account }: { zh: boolean; account: string | nul
     }
     setBusy(true);
     setBad(false);
-    setNote("");
+    setNote(zh ? "正在打开钱包。留在这一页。" : "Opening the wallet. Stay on this page.");
     transferShare(account, BigInt(seat.id), (to[seat.id] ?? "").trim(), amount)
       .then(() => {
         setNote(zh ? "转账已提交。还没领的 TAPE 留在这个地址，到赚取里领。" : "Sent. Unclaimed TAPE stays here. Claim it under Earn.");

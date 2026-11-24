@@ -2,7 +2,7 @@ import { createPublicClient, encodeFunctionData, http, parseAbi, type Hex } from
 import { BSC, BSC_SAFE, DESK_FEE_BPS, TxPending, connectBsc, waitOk, waitReceipt } from "@/lib/bsc";
 import { OFFICIAL } from "@/lib/official-books";
 import type { CircuitSigned } from "@/lib/circuit-board";
-import { armChain, getProvider, remoteWallet } from "@/lib/wallet";
+import { armChain, ensureProvider, remoteWallet } from "@/lib/wallet";
 import { deskParts } from "@/lib/invite-cut";
 import { sendFeeAndSwap } from "@/lib/fee-pack";
 import { sayTradeStep } from "@/lib/trade-step";
@@ -37,8 +37,7 @@ function feeOf(notional: bigint): bigint {
 }
 
 async function send(from: string, to: Hex, data: Hex, value = 0n): Promise<Hex> {
-  const eth = getProvider();
-  if (!eth) throw new Error("nowallet");
+  const eth = await ensureProvider();
   if (remoteWallet()) await armChain(56);
   else await connectBsc();
   return (await eth.request({
@@ -164,14 +163,17 @@ function destOf(from: string, to: string): Hex {
 export async function transferBscTransistor(from: string, token: Hex, id: 0 | 1, amount: bigint, to: string): Promise<Hex> {
   if (amount < 1n) throw new Error("amount");
   const dest = destOf(from, to);
-  const held = await client.readContract({ address: token, abi: moveAbi, functionName: "balanceOf", args: [from as Hex, BigInt(id)] });
-  if (held < amount) throw new Error("short");
+  try {
+    const held = await client.readContract({ address: token, abi: moveAbi, functionName: "balanceOf", args: [from as Hex, BigInt(id)] });
+    if (held < amount) throw new Error("short");
+  } catch (error) {
+    if (error instanceof Error && error.message === "short") throw error;
+  }
   const data = encodeFunctionData({
     abi: moveAbi,
     functionName: "safeTransferFrom",
     args: [from as Hex, dest, BigInt(id), amount, "0x"],
   });
-  await client.call({ account: from as Hex, to: token, data });
   const hash = await send(from, token, data);
   const receipt = await waitReceipt(hash);
   if (receipt.status !== "success") throw new Error("revert");
@@ -181,10 +183,13 @@ export async function transferBscTransistor(from: string, token: Hex, id: 0 | 1,
 /** Move one official BSC circuit this wallet owns. */
 export async function transferBscCircuit(from: string, token: Hex, id: bigint, to: string): Promise<Hex> {
   const dest = destOf(from, to);
-  const who = await client.readContract({ address: token, abi: moveAbi, functionName: "ownerOf", args: [id] });
-  if (who.toLowerCase() !== from.toLowerCase()) throw new Error("owner");
+  try {
+    const who = await client.readContract({ address: token, abi: moveAbi, functionName: "ownerOf", args: [id] });
+    if (who.toLowerCase() !== from.toLowerCase()) throw new Error("owner");
+  } catch (error) {
+    if (error instanceof Error && error.message === "owner") throw error;
+  }
   const data = encodeFunctionData({ abi: moveAbi, functionName: "transferFrom", args: [from as Hex, dest, id] });
-  await client.call({ account: from as Hex, to: token, data });
   const hash = await send(from, token, data);
   const receipt = await waitReceipt(hash);
   if (receipt.status !== "success") throw new Error("revert");

@@ -538,16 +538,18 @@ function recipient(from: string, to: string): Hex {
 export async function transferTransistor(from: string, to: string, id: 0 | 1, amount: bigint): Promise<Hex> {
   if (amount < 1n) throw new Error("amount");
   const dest = recipient(from, to);
-  const held = await transistorHeld(from);
-  if ((id === 0 ? held.nand : held.latch) < amount) throw new Error("short");
+  try {
+    const held = await transistorHeld(from);
+    if ((id === 0 ? held.nand : held.latch) < amount) throw new Error("short");
+  } catch (error) {
+    if (error instanceof Error && error.message === "short") throw error;
+  }
   const data = encodeFunctionData({
     abi: transferAbi,
     functionName: "safeTransferFrom",
     args: [from as Hex, dest, BigInt(id), amount, "0x"],
   });
-  await client.call({ account: from as Hex, to: DEPLOYED.transistors, data });
-  const eth = ethereum();
-  if (!eth) throw new Error("nowallet");
+  const eth = await ensureProvider();
   if (remoteWallet()) await armChain(196);
   else await ensureXLayer();
   const hash = (await eth.request({
@@ -562,16 +564,18 @@ export async function transferTransistor(from: string, to: string, id: 0 | 1, am
 /** Move one TAPELIQUID circuit this wallet owns. Official BSC circuits are not this function. */
 export async function transferCircuit(from: string, to: string, id: bigint): Promise<Hex> {
   const dest = recipient(from, to);
-  const who = await client.readContract({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "ownerOf", args: [id] });
-  if (who.toLowerCase() !== from.toLowerCase()) throw new Error("owner");
+  try {
+    const who = await client.readContract({ address: DEPLOYED.circuits, abi: circuitAbi, functionName: "ownerOf", args: [id] });
+    if (who.toLowerCase() !== from.toLowerCase()) throw new Error("owner");
+  } catch (error) {
+    if (error instanceof Error && error.message === "owner") throw error;
+  }
   const data = encodeFunctionData({
     abi: transferAbi,
     functionName: "transferFrom",
     args: [from as Hex, dest, id],
   });
-  await client.call({ account: from as Hex, to: DEPLOYED.circuits, data });
-  const eth = ethereum();
-  if (!eth) throw new Error("nowallet");
+  const eth = await ensureProvider();
   if (remoteWallet()) await armChain(196);
   else await ensureXLayer();
   const hash = (await eth.request({
