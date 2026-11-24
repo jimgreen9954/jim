@@ -566,7 +566,18 @@ async function send(from: string, to: Hex | undefined, data: Hex, gasLimit?: big
     price = desk === "xlayer" ? 1_000_000n : 50_000_000n;
   }
   if (desk === "bsc" && price < 50_000_000n) price = 50_000_000n;
-  const gas = hexQty(gasLimit ?? (to ? 800_000n : 2_200_000n));
+  let cap = gasLimit ?? (to ? 800_000n : 2_200_000n);
+  // X Layer open/take observes the pool twice and needs about 1.03M. 800k makes the wallet simulation revert, so the order never lands.
+  if (desk === "xlayer" && to && gasLimit === undefined) {
+    try {
+      const est = await rpc.estimateGas({ account: from as Hex, to, data });
+      const buffered = est + est / 5n + 30_000n;
+      if (buffered > cap) cap = buffered > 4_000_000n ? 4_000_000n : buffered;
+    } catch {
+      if (cap < 2_000_000n) cap = 2_000_000n;
+    }
+  }
+  const gas = hexQty(cap);
   if (desk === "xlayer") {
     const plain: {
       from: string;
