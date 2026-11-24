@@ -1908,6 +1908,8 @@ function say(error: unknown, zh: boolean): string {
   if (message === "short" || message === "amount")
     return zh ? "数量不对。" : "That amount does not work.";
   if (message === "owner") return zh ? "这片不是这个钱包的。" : "This wallet does not own it.";
+  if (message === "contract")
+    return zh ? "这个地址是合约，收不了晶体管。换成普通钱包地址。" : "That address is a contract. Transistors need a normal wallet.";
   if (message === "nowallet") return zh ? "钱包没连上。重新连接后再转。" : "The wallet is not connected. Connect it, then send.";
   if (message === "xlayer" || message === "bsc") return zh ? "钱包没有切到这条链。" : "The wallet did not switch chain.";
   if (message.includes("rejected") || message.includes("denied") || message.includes("取消"))

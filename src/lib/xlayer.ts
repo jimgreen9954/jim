@@ -515,6 +515,19 @@ const transferAbi = [
     outputs: [],
   },
   {
+    name: "safeBatchTransferFrom",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "from", type: "address" },
+      { name: "to", type: "address" },
+      { name: "ids", type: "uint256[]" },
+      { name: "amounts", type: "uint256[]" },
+      { name: "data", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
     name: "transferFrom",
     type: "function",
     stateMutability: "nonpayable",
@@ -534,6 +547,41 @@ function recipient(from: string, to: string): Hex {
   return to as Hex;
 }
 
+function within<T>(work: Promise<T>): Promise<T> {
+  return Promise.race([
+    work,
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("rpc")), 6000)),
+  ]);
+}
+
+/** OKX's send-token screen calls name and decimals. This contract has neither, so the fee stays blank and the send is blocked.
+ *  A batch transfer is the same move. Gas is filled in here. A contract that cannot take these tokens never opens the wallet. */
+async function transistorFee(from: Hex, dest: Hex, data: Hex): Promise<{ gas?: bigint; gasPrice?: bigint }> {
+  try {
+    await within(client.call({ account: from, to: DEPLOYED.transistors, data }));
+  } catch (error) {
+    const text = error instanceof Error ? `${error.name} ${error.message}` : "";
+    if (!/revert/i.test(text)) return {};
+    let code = "0x";
+    try {
+      code = (await client.getBytecode({ address: dest })) ?? "0x";
+    } catch {
+      throw new Error("revert");
+    }
+    if (code !== "0x") throw new Error("contract");
+    throw new Error("revert");
+  }
+  try {
+    const [est, price] = await Promise.all([
+      within(client.estimateGas({ account: from, to: DEPLOYED.transistors, data })),
+      within(client.getGasPrice()),
+    ]);
+    return { gas: est + est / 2n, gasPrice: price > 0n ? price * 2n : undefined };
+  } catch {
+    return { gas: 160_000n };
+  }
+}
+
 /** Move this wallet's TAPELIQUID NAND or LATCH. The transistor contract is fixed. */
 export async function transferTransistor(from: string, to: string, id: 0 | 1, amount: bigint): Promise<Hex> {
   if (amount < 1n) throw new Error("amount");
@@ -546,15 +594,24 @@ export async function transferTransistor(from: string, to: string, id: 0 | 1, am
   }
   const data = encodeFunctionData({
     abi: transferAbi,
-    functionName: "safeTransferFrom",
-    args: [from as Hex, dest, BigInt(id), amount, "0x"],
+    functionName: "safeBatchTransferFrom",
+    args: [from as Hex, dest, [BigInt(id)], [amount], "0x"],
   });
+  const fee = await transistorFee(from as Hex, dest, data);
   const eth = await ensureProvider();
   if (remoteWallet()) await armChain(196);
   else await ensureXLayer();
+  const tx: { from: string; to: Hex; data: Hex; chainId: Hex; gas?: Hex; gasPrice?: Hex } = {
+    from,
+    to: DEPLOYED.transistors,
+    data,
+    chainId: XLAYER.hex as Hex,
+  };
+  if (fee.gas) tx.gas = toHex(fee.gas);
+  if (fee.gasPrice) tx.gasPrice = toHex(fee.gasPrice);
   const hash = (await eth.request({
     method: "eth_sendTransaction",
-    params: [{ from, to: DEPLOYED.transistors, data, chainId: XLAYER.hex }],
+    params: [tx],
   })) as Hex;
   const receipt = await client.waitForTransactionReceipt({ hash, timeout: 120_000 });
   if (receipt.status !== "success") throw new Error("revert");
