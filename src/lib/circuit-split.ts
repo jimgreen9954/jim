@@ -1,7 +1,7 @@
 import { createPublicClient, encodeFunctionData, http, parseAbi, parseUnits, type Hex } from "viem";
-import { DEPLOYED, xClient } from "@/lib/xlayer";
+import { DEPLOYED, XLAYER, xClient } from "@/lib/xlayer";
 import { TAPE_USDT } from "@/lib/tape-pool";
-import { ensureProvider } from "@/lib/wallet";
+import { armChain, ensureProvider, remoteWallet } from "@/lib/wallet";
 
 export const CIRCUIT_SPLIT = "0x08bd11220b6a87f1d16b54b5521d4e90bb0d1b1b" as Hex;
 
@@ -37,16 +37,19 @@ const client = createPublicClient({
 
 async function send(from: string, to: Hex, data: Hex): Promise<Hex> {
   const eth = await ensureProvider();
-  const chain = (await eth.request({ method: "eth_chainId" })) as string;
-  if (chain.toLowerCase() !== "0xc4") {
-    await eth.request({
-      method: "wallet_switchEthereumChain",
-      params: [{ chainId: "0xc4" }],
-    });
+  if (remoteWallet()) await armChain(196);
+  else {
+    const chain = await eth.request({ method: "eth_chainId" }).catch(() => "");
+    if (String(chain).toLowerCase() !== XLAYER.hex) {
+      await eth.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: XLAYER.hex }],
+      });
+    }
   }
   return (await eth.request({
     method: "eth_sendTransaction",
-    params: [{ from, to, data, value: "0x0" }],
+    params: [{ from, to, data, value: "0x0", chainId: XLAYER.hex }],
   })) as Hex;
 }
 
@@ -289,8 +292,9 @@ export function sharePrice(text: string): bigint {
 }
 
 export function shareSize(text: string): bigint {
-  if (!/^[1-9]\d*$/.test(text.trim())) throw new Error("amount");
-  return BigInt(text.trim());
+  const raw = text.trim().replace(/,/g, "");
+  if (!/^[1-9]\d*$/.test(raw)) throw new Error("amount");
+  return BigInt(raw);
 }
 
 async function approveUsdt(from: string, need: bigint) {

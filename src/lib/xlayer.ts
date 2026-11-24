@@ -60,7 +60,7 @@ const abi = [
   },
 ] as const;
 
-import { accountOf, ensureProvider, getProvider, grantedAccount, rememberAccount } from "@/lib/wallet";
+import { accountOf, armChain, ensureProvider, getProvider, grantedAccount, rememberAccount, remoteWallet } from "@/lib/wallet";
 
 export function hasWallet(): boolean {
   return Boolean(getProvider());
@@ -548,10 +548,11 @@ export async function transferTransistor(from: string, to: string, id: 0 | 1, am
   await client.call({ account: from as Hex, to: DEPLOYED.transistors, data });
   const eth = ethereum();
   if (!eth) throw new Error("nowallet");
-  await ensureXLayer();
+  if (remoteWallet()) await armChain(196);
+  else await ensureXLayer();
   const hash = (await eth.request({
     method: "eth_sendTransaction",
-    params: [{ from, to: DEPLOYED.transistors, data }],
+    params: [{ from, to: DEPLOYED.transistors, data, chainId: XLAYER.hex }],
   })) as Hex;
   const receipt = await client.waitForTransactionReceipt({ hash, timeout: 120_000 });
   if (receipt.status !== "success") throw new Error("revert");
@@ -571,10 +572,11 @@ export async function transferCircuit(from: string, to: string, id: bigint): Pro
   await client.call({ account: from as Hex, to: DEPLOYED.circuits, data });
   const eth = ethereum();
   if (!eth) throw new Error("nowallet");
-  await ensureXLayer();
+  if (remoteWallet()) await armChain(196);
+  else await ensureXLayer();
   const hash = (await eth.request({
     method: "eth_sendTransaction",
-    params: [{ from, to: DEPLOYED.circuits, data }],
+    params: [{ from, to: DEPLOYED.circuits, data, chainId: XLAYER.hex }],
   })) as Hex;
   const receipt = await client.waitForTransactionReceipt({ hash, timeout: 120_000 });
   if (receipt.status !== "success") throw new Error("revert");

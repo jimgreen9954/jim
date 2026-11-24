@@ -2,7 +2,7 @@ import { createPublicClient, encodeFunctionData, http, parseAbi, type Hex } from
 import { BSC, BSC_SAFE, DESK_FEE_BPS, TxPending, connectBsc, waitOk, waitReceipt } from "@/lib/bsc";
 import { OFFICIAL } from "@/lib/official-books";
 import type { CircuitSigned } from "@/lib/circuit-board";
-import { getProvider } from "@/lib/wallet";
+import { armChain, getProvider, remoteWallet } from "@/lib/wallet";
 import { deskParts } from "@/lib/invite-cut";
 import { sendFeeAndSwap } from "@/lib/fee-pack";
 import { sayTradeStep } from "@/lib/trade-step";
@@ -39,10 +39,11 @@ function feeOf(notional: bigint): bigint {
 async function send(from: string, to: Hex, data: Hex, value = 0n): Promise<Hex> {
   const eth = getProvider();
   if (!eth) throw new Error("nowallet");
-  await connectBsc();
+  if (remoteWallet()) await armChain(56);
+  else await connectBsc();
   return (await eth.request({
     method: "eth_sendTransaction",
-    params: [{ from, to, data, value: `0x${value.toString(16)}` }],
+    params: [{ from, to, data, value: `0x${value.toString(16)}`, chainId: BSC.hex }],
   })) as Hex;
 }
 

@@ -919,7 +919,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
       }
       let amount: bigint;
       try {
-        amount = parseUnits(row.amt.trim(), picked.decimals);
+        amount = parseUnits(row.amt.trim().replace(/,/g, ""), picked.decimals);
       } catch {
         setBad(true);
         setNote(zh ? "有一行数量不对。" : "One amount is not valid.");
@@ -1295,7 +1295,7 @@ export function AccountCenter({ giftOpen = false }: { giftOpen?: boolean }) {
                             const others = sendMode === "one" ? [] : sends.slice(1);
                             const used = others.reduce((sum, row) => {
                               try {
-                                return sum + parseUnits(row.amt.trim() || "0", picked.decimals!);
+                                return sum + parseUnits((row.amt.trim() || "0").replace(/,/g, ""), picked.decimals!);
                               } catch {
                                 return sum;
                               }
