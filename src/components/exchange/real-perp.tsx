@@ -1868,15 +1868,6 @@ export function RealPerp({
                           setNote(lang === "zh" ? "挂单价已偏离，请重新挂。" : "The posted price has moved away. Post it again.");
                           return;
                         }
-                        if (!withinSlip(px, [markN, settle], slipBps)) {
-                          setBad(true);
-                          setNote(
-                            lang === "zh"
-                              ? "这张单离标记价太远，没有吃。把滑点放到不限再点一次。"
-                              : "That quote is too far from the mark. Set slippage to none and tap again.",
-                          );
-                          return;
-                        }
                         run((from) =>
                           takePerp(
                             from,
@@ -3295,7 +3286,7 @@ export function RealPerp({
                                                       : withinSlip(
                                                           awayPx,
                                                           [want, markN, settle].filter((n) => n > 0),
-                                                          slipBps,
+                                                          100,
                                                         );
                                                   if (crosses && awayPx > 0)
                                                     return takePerp(
