@@ -1104,10 +1104,10 @@ export function RealPerp({
           setNote(
             lang === "zh"
               ? coin === "up" || coin === "tape" || coin === "fab"
-                ? "更新了一次价格，没有开仓。差着的话等 30 秒再点。不会自己连着更新。"
+                ? "记上一步，没有开仓。标记大约只走 0.5%。等 30 秒再点。差还在 1% 以外时，按钮仍是「更新价格」。"
                 : "只记下了一次价格，没有开仓。要是还差着，等一会儿再点。不会自己连着记。"
               : coin === "up" || coin === "tape" || coin === "fab"
-                ? "The price moved one step. Nothing was opened. If the gap is still there, wait 30 seconds and tap again. It does not keep going."
+                ? "One step was recorded. Nothing was opened. The mark moves about 0.5%. Wait 30 seconds and tap again. The button stays “Update the price” until the gap is inside 1%."
                 : "One price was recorded. Nothing was opened. If the gap is still there, wait and tap again. It does not keep recording.",
           );
           setBad(false);
@@ -1223,13 +1223,15 @@ export function RealPerp({
     coin === "btc" || coin === "eth" || coin === "zec" || coin === "up" || coin === "tape" || coin === "fab" || chain === "xlayer";
   const markN = alt
     ? coinPx || lastClose
-    : markFar
-      ? poolPx
-      : ownMark
-        ? settle || poolPx
-        : live && live > 0
-          ? live
-          : settle || poolPx;
+    : (coin === "up" || coin === "tape" || coin === "fab") && settle > 0
+      ? settle
+      : markFar
+        ? poolPx
+        : ownMark
+          ? settle || poolPx
+          : live && live > 0
+            ? live
+            : settle || poolPx;
   const priceOk =
     orderStyle === "scale"
       ? Number(scaleA) > 0 && Number(scaleB) > 0
@@ -1616,7 +1618,7 @@ export function RealPerp({
                       v: markN > 0 ? pxTextN(markN) : mkt?.px > 0 ? pxTextN(mkt.px) : "—",
                       tone: "text-up",
                     },
-                    { k: lang === "zh" ? "预言机" : "Oracle", v: lastBar ? pxTextN(lastBar.c) : "—" },
+                    { k: lang === "zh" ? "预言机" : "Oracle", v: coin === "up" && coinPx > 0 ? pxTextN(coinPx) : lastBar ? pxTextN(lastBar.c) : "—" },
                     {
                       k: lang === "zh" ? "24小时变化" : "24h change",
                       v: driftKnown ? `${drift >= 0 ? "+" : ""}${(drift * 100).toFixed(2)}%` : "—",
@@ -2994,6 +2996,21 @@ export function RealPerp({
                                     ? /* @__PURE__ */ jsx("p", {
                                         className: "desk-extra",
                                         children: c.badPrice,
+                                      })
+                                    : null,
+                                  needMark && (coin === "up" || coin === "tape" || coin === "fab")
+                                    ? /* @__PURE__ */ jsx("p", {
+                                        className: "text-xs text-ink/70",
+                                        children: (() => {
+                                          const left = bookStat?.steps;
+                                          return lang === "zh"
+                                            ? left != null && left > 0
+                                              ? `开不了。标记和现价差超过约 1%。钱包确认一次只走约 0.5%，还要 ${left} 次，每 30 秒一次。这一下不开仓。`
+                                              : "开不了。标记和现价差超过约 1%。钱包确认一次只走约 0.5%。这一下不开仓。"
+                                            : left != null && left > 0
+                                              ? `Cannot open. The mark and spot differ by more than about 1%. One wallet confirmation moves about 0.5%. ${left} more, once every 30 seconds. This tap does not open.`
+                                              : "Cannot open. The mark and spot differ by more than about 1%. One wallet confirmation moves about 0.5%. This tap does not open.";
+                                        })(),
                                       })
                                     : null,
                                   <button
