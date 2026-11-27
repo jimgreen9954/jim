@@ -3316,6 +3316,7 @@ export function bootLaunch(host: HTMLElement): () => void {
     if (feed) paintActivity(feed);
   };
   window.addEventListener("cpunk-feed", onCpunkFeed);
+  onCpunkFeed();
   const stopEnglish = watchEnglish(host);
 
   return () => {

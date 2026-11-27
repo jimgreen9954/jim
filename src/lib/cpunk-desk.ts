@@ -1891,94 +1891,98 @@ export function bootCpunk(
   }
   paintHolders();
   const boughtTopic = "0xd2728f908c7e0feb83c6278798370fcb86b62f236c9dbf1a3f541096c2159040" as const;
-  let saleCursor = 0n;
-  let saleFloor = 0n;
   let salesArchiveTip = 0n;
-  let saleHead = 0n;
-  let saleLive = false;
-  let saleScanning = false;
-  const scanSales = async () => {
-    if (saleScanning || signal.aborted) return;
-    saleScanning = true;
+  let liveHead = 0n;
+  let backCursor = 0n;
+  let liveBusy = false;
+  let backBusy = false;
+  const publishSales = () => {
+    rememberFeed();
+    paintFeed();
+  };
+  const scanLive = async () => {
+    if (liveBusy || signal.aborted) return;
+    liveBusy = true;
+    const before = feedRows.length;
     try {
       const latest = await client.getBlockNumber();
-      if (!saleLive) {
-        if (saleCursor === 0n) {
-          const head = await client.getBlock({ blockNumber: latest });
-          const earlierBlock = latest > 40_000n ? latest - 40_000n : born;
-          const earlier = await client.getBlock({ blockNumber: earlierBlock }).catch(() => null);
-          const elapsed = earlier ? Number(head.timestamp - earlier.timestamp) : 40_000;
-          const span = Number(latest - earlierBlock);
-          const secondsPerBlock = span > 0 && elapsed > 0 ? elapsed / span : 1;
-          const blocks = BigInt(Math.max(1, Math.ceil((2 * 24 * 60 * 60) / secondsPerBlock)));
-          saleFloor = latest > blocks ? latest - blocks : born;
-          if (salesArchiveTip > saleFloor) saleFloor = salesArchiveTip;
-          saleHead = latest;
-          saleCursor = latest;
-        }
+      if (liveHead === 0n) {
+        liveHead = latest > 40n ? latest - 40n : 0n;
+        if (backCursor === 0n) backCursor = latest;
+        if (salesArchiveTip > 0n) void scanBack();
+      }
+      if (latest > liveHead) {
         const spans: [bigint, bigint][] = [];
-        let end = saleCursor;
-        for (let step = 0; step < 6 && end > saleFloor; step += 1) {
-          const from = end > saleFloor + 99n ? end - 99n : saleFloor + 1n;
-          if (from > end) break;
-          spans.push([from, end]);
-          end = from - 1n;
-        }
-        const parts = await Promise.all(spans.map(([from, to]) => pullLogs(from, to, 0, boughtTopic)));
-        for (const part of parts) await takeLogs(part);
-        saleCursor = end;
-        if (saleCursor <= saleFloor) saleLive = true;
-      } else if (latest > saleHead) {
-        const spans: [bigint, bigint][] = [];
-        let from = saleHead + 1n;
+        let from = liveHead + 1n;
         for (let step = 0; step < 4 && from <= latest; step += 1) {
           const end = latest > from + 99n ? from + 99n : latest;
           spans.push([from, end]);
           from = end + 1n;
         }
-        const parts = await Promise.all(spans.map(([start, end]) => pullLogs(start, end, 0, boughtTopic)));
+        const parts = await Promise.all(spans.map(([start, end]) => pullLogs(start, end)));
         for (const part of parts) await takeLogs(part);
-        saleHead = spans.length ? spans[spans.length - 1][1] : saleHead;
+        liveHead = spans.length ? spans[spans.length - 1][1] : liveHead;
       }
-      const found = feedRows.filter((row) => row.kind === "成交").length;
-      feedNote = saleLive ? `成交跟着新区块走，大约每 2 秒对一次。已有 ${found} 笔。` : `正在补最近的成交，已有 ${found} 笔。`;
-      rememberFeed();
-      paintFeed();
+      if (feedRows.length !== before) publishSales();
     } catch {
-      feedNote = "成交这一段节点忙，停在原地再读。";
-      paintFeed();
+      /* keep the cursor and try the same blocks again */
     } finally {
-      saleScanning = false;
-      if (!signal.aborted) window.setTimeout(() => void scanSales(), saleLive ? 2_000 : 250);
+      liveBusy = false;
+      if (!signal.aborted) window.setTimeout(() => void scanLive(), 2_000);
     }
   };
-  void scanSales();
+  const scanBack = async () => {
+    if (backBusy || signal.aborted) return;
+    const floor = salesArchiveTip;
+    if (floor === 0n || backCursor <= floor) return;
+    backBusy = true;
+    const before = feedRows.length;
+    try {
+      const spans: [bigint, bigint][] = [];
+      let end = backCursor;
+      for (let step = 0; step < 6 && end > floor; step += 1) {
+        const from = end > floor + 99n ? end - 99n : floor + 1n;
+        if (from > end) break;
+        spans.push([from, end]);
+        end = from - 1n;
+      }
+      const parts = await Promise.all(spans.map(([start, stop]) => pullLogs(start, stop, 0, boughtTopic)));
+      for (const part of parts) await takeLogs(part);
+      backCursor = end;
+      if (feedRows.length !== before) publishSales();
+    } catch {
+      /* leave the cursor so the next pass retries this slice */
+    } finally {
+      backBusy = false;
+      if (!signal.aborted && backCursor > salesArchiveTip) window.setTimeout(() => void scanBack(), 250);
+    }
+  };
+  void scanLive();
   void fetch("/tape-launch/sales.json")
     .then((res) => (res.ok ? res.json() : null))
     .then((body: { tip?: string; rows?: { id: number; buyer?: string; quote?: string; tx?: string; unix?: number }[] } | null) => {
-      if (!body?.rows?.length || signal.aborted) return;
-      for (const row of body.rows) {
-        if (!Number.isInteger(row.id) || !row.tx) continue;
-        const key = `成交:${row.id}:${row.tx}`;
-        if (seenFeed.has(key)) continue;
-        seenFeed.add(key);
-        const quote = BigInt(row.quote || "0");
-        feedRows.push({
-          kind: "成交",
-          id: row.id,
-          px: `${bemText(quote)} BEM + ${bemText(quote * 1000n)} TAPE`,
-          who: cut(row.buyer || ""),
-          tx: row.tx,
-          time: row.unix ? clock(row.unix) : "",
-          unix: row.unix || 0,
-        });
+      if (signal.aborted) return;
+      if (body?.rows?.length) {
+        for (const row of body.rows) {
+          if (!Number.isInteger(row.id) || !row.tx) continue;
+          const key = `成交:${row.id}:${row.tx}`;
+          if (seenFeed.has(key)) continue;
+          seenFeed.add(key);
+          const quote = BigInt(row.quote || "0");
+          feedRows.push({
+            kind: "成交",
+            id: row.id,
+            px: `${bemText(quote)} BEM + ${bemText(quote * 1000n)} TAPE`,
+            who: cut(row.buyer || ""),
+            tx: row.tx,
+            time: row.unix ? clock(row.unix) : "",
+            unix: row.unix || 0,
+          });
+        }
+        publishSales();
       }
-      if (body.tip && /^[0-9]+$/.test(body.tip)) salesArchiveTip = BigInt(body.tip);
-      if (salesArchiveTip > saleFloor) saleFloor = salesArchiveTip;
-      const found = feedRows.filter((row) => row.kind === "成交").length;
-      feedNote = `历史成交 ${found} 笔。新的买成会补在上面。`;
-      rememberFeed();
-      paintFeed();
+      if (body?.tip && /^[0-9]+$/.test(body.tip)) salesArchiveTip = BigInt(body.tip);
+      if (backCursor > salesArchiveTip) void scanBack();
     })
     .catch(() => {});
   host.querySelector("#cp-log-q")?.addEventListener("input", () => {
