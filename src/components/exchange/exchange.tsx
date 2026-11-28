@@ -598,6 +598,17 @@ function Header({
     setDesk(side);
     go("desk", side);
   };
+  const tapeSite = () => (
+    <a
+      href="https://tapetape.org/"
+      target="_blank"
+      rel="noreferrer"
+      title={zh ? "去 TapeTape 交易" : "Trade on TapeTape"}
+      className="inline-flex h-8 shrink-0 items-center rounded-md border border-gold px-2 text-xs"
+    >
+      TapeTape
+    </a>
+  );
   return (
     <header className="desk-header sticky top-0 z-50 border-b border-gold px-2 sm:px-3 pt-[env(safe-area-inset-top)]">
       <div className="flex h-12 items-center gap-1 lg:hidden">
@@ -628,8 +639,9 @@ function Header({
             className="size-6 rounded-full"
           />
         </button>
-        <div className="ml-auto flex items-center">
+        <div className="ml-auto flex items-center gap-1">
           <ChainSwitch compact onJump={openDesk} />
+          {tapeSite()}
           <ConnectButton compact />
         </div>
       </div>
@@ -663,6 +675,7 @@ function Header({
         </nav>
         <div className="ml-auto flex shrink-0 items-center gap-1">
           <ChainSwitch onJump={openDesk} />
+          {tapeSite()}
           <ConnectButton />
           {wide ? <SettingsMenu zh={zh} /> : null}
           {floor === "paper" ? (
@@ -776,6 +789,14 @@ function Header({
                     <FeeBook />
                   </Suspense>
                 </div>
+                <a
+                  className="flex h-12 items-center px-4 text-[15px] text-ink/80"
+                  href="https://tapetape.org/"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  TapeTape
+                </a>
                 <a
                   className="flex h-12 items-center px-4 text-[15px] text-ink/80"
                   href="https://x.com/TAPELIQUID"
